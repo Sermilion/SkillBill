@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
@@ -187,4 +187,4 @@ fun featureTaskRuntimeAppendImplementationAttempt(
   return ordered.filterIndexed { index, _ -> index !in dropped }
 }
 
-private fun implementationAttemptError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+private fun implementationAttemptError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)

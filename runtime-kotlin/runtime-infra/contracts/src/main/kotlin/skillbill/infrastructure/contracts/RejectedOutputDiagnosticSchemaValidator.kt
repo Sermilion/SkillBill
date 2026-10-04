@@ -3,7 +3,7 @@ import com.networknt.schema.JsonSchema
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.output.REJECTED_OUTPUT_DIAGNOSTIC_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
+import skillbill.error.shellcontent.invalidRejectedOutputDiagnosticSchemaError
 import skillbill.infrastructure.contracts.locator.RejectedOutputDiagnosticSchemaPaths
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
@@ -32,7 +32,7 @@ class RejectedOutputDiagnosticSchemaValidator : RejectedOutputDiagnosticMetadata
       }
     val violations = ClasspathContractSchemaLoader.validate(rejectedOutputDiagnosticSchema(), instance)
     if (violations.isNotEmpty()) {
-      throw InvalidRejectedOutputDiagnosticSchemaError(
+      throw invalidRejectedOutputDiagnosticSchemaError(
         "Rejected output diagnostic '${metadata.identity.ifBlank { "<invalid>" }}' fails canonical " +
           "contract $REJECTED_OUTPUT_DIAGNOSTIC_CONTRACT_VERSION.",
       )
@@ -53,18 +53,18 @@ private fun rejectedOutputDiagnosticSchema(): JsonSchema =
       classLoader = RejectedOutputDiagnosticSchemaValidator::class.java.classLoader,
       classpathResource = RejectedOutputDiagnosticSchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidRejectedOutputDiagnosticSchemaError(
+        invalidRejectedOutputDiagnosticSchemaError(
           "Canonical rejected-output diagnostic schema resource is missing.",
         )
       },
       processingFailure = { cause ->
-        InvalidRejectedOutputDiagnosticSchemaError(
+        invalidRejectedOutputDiagnosticSchemaError(
           cause.message ?: cause::class.simpleName.orEmpty(),
         )
       },
       loadFailureLogger = {},
       expectedSchemaId = RejectedOutputDiagnosticSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = REJECTED_OUTPUT_DIAGNOSTIC_CONTRACT_VERSION,
-      identityFailure = { reason -> InvalidRejectedOutputDiagnosticSchemaError(reason) },
+      identityFailure = { reason -> invalidRejectedOutputDiagnosticSchemaError(reason) },
     ),
   )

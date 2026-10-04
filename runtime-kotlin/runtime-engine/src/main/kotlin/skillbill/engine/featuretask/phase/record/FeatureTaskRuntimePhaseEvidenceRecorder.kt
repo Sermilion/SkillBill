@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.resolvedBranchFromWorkflowArtifacts
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -232,7 +232,7 @@ fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineEntriesFrom(
   val raw = family.value(artifacts) ?: return emptyList()
   val map =
     JsonCodec.anyToStringAnyMap(raw)
-      ?: throw InvalidWorkflowStateSchemaError("Feature-task-runtime quarantine record must be an object.")
+      ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime quarantine record must be an object.")
   quarantineValidator.validate(
     FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD,
     FeatureTaskRuntimeWorkflowArtifactMap.from(map),

@@ -2,7 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import java.sql.Connection
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRow
@@ -127,7 +127,7 @@ internal class FeatureTaskExecutionLookupStore(
             val workflowId = rows.getString(SharedPayloadKeys.WORKFLOW_ID)
             val workflow =
               connection.getFeatureTaskWorkflowRow(workflowId)
-                ?: throw InvalidWorkflowStateSchemaError(
+                ?: throw invalidWorkflowStateSchemaError(
                   "Feature-task identity '$workflowId' has no workflow row.",
                 )
             add(FeatureTaskWorkflowCandidate(connection.featureTaskIdentity(workflowId), workflow))

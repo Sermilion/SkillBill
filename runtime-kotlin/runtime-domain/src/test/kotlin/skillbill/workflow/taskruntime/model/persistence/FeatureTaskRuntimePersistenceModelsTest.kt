@@ -3,12 +3,6 @@ package skillbill.workflow.taskruntime.model.persistence
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
@@ -17,7 +11,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_RUN_INVARIANTS_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.FeatureTaskRuntimeCommitPushResultArtifact
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.goalContinuationOutcomeArtifact
@@ -72,6 +66,12 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePersistenceModelsTest {
   @Test
@@ -102,16 +102,16 @@ class FeatureTaskRuntimePersistenceModelsTest {
 
     assertEquals(mapOf("plan" to record), artifacts.phaseRecords())
     assertEquals(listOf(ledger), artifacts.phaseLedger())
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to null),
       ).phaseRecords()
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY to null),
       ).phaseLedger()
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -196,12 +196,24 @@ class FeatureTaskRuntimePersistenceModelsTest {
     assertEquals(8, reader.requiredInt("decimal"))
     assertEquals(9, reader.requiredInt("string"))
     assertEquals(10, durableArtifactMapReader(mapOf("whole" to 10.0)).requiredInt("whole"))
-    assertFailsWith<InvalidWorkflowStateSchemaError> { reader.optionalInt("fractional") }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { reader.optionalLong("overflow") }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
-      durableArtifactMapReader(mapOf("nonFinite" to Double.NaN)).requiredInt("nonFinite")
+    assertFailsWith<SkillBillRuntimeException> {
+      reader.optionalInt("fractional")
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { 2.7.asGoalRunnerIntOrNull() }
+    assertFailsWith<SkillBillRuntimeException> {
+      reader.optionalLong("overflow")
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      durableArtifactMapReader(mapOf("nonFinite" to Double.NaN)).requiredInt("nonFinite")
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
+      2.7.asGoalRunnerIntOrNull()
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
   }
 
   @Test
@@ -238,10 +250,10 @@ class FeatureTaskRuntimePersistenceModelsTest {
       )
 
     assertEquals(manifest, artifacts.decompositionRuntime())
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(mapOf(DECOMPOSITION_RUNTIME_ARTIFACT_KEY to null))
         .decompositionRuntime()
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -262,11 +274,11 @@ class FeatureTaskRuntimePersistenceModelsTest {
         ),
       ).decompositionManifestProjectionFailure(),
     )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY to null),
       ).decompositionManifestProjectionFailure()
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -379,15 +391,15 @@ class FeatureTaskRuntimePersistenceModelsTest {
       ).toArtifactMap()
     val legacy = current - setOf("contract_version", "record_kind", "first_started_at", "execution_origin")
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseRecord.fromArtifactMap(legacy)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertTrue(error.message.orEmpty().contains("restart the active run"))
     assertTrue(error.message.orEmpty().contains("out-of-band migration"))
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(current + ("execution_origin" to "fabricated"))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseLedgerEntry.fromArtifactMap(
         mapOf(
           "action" to "complete",
@@ -398,7 +410,7 @@ class FeatureTaskRuntimePersistenceModelsTest {
           "execution_origin" to "fabricated",
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -502,21 +514,21 @@ class FeatureTaskRuntimePersistenceModelsTest {
 
   @Test
   fun `resolved-branch decode loud-fails on a blank branch`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeResolvedBranch.fromArtifactMap(mapOf("branch" to ""))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `resolved-branch decode rejects malformed list elements with a typed schema error`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeResolvedBranch.fromArtifactMap(
         mapOf(
           "branch" to "feat/example",
           "baseline_owned_paths" to listOf("tracked.kt", 7),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -583,9 +595,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         startedAt = "2026-06-02T10:00:00Z",
         resolvedAgentId = "agent-plan-1",
       ).toArtifactMap()
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(current - "first_started_at")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -597,9 +609,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         "started_at" to "2026-06-02T10:00:00Z",
         "resolved_agent_id" to "agent-plan-1",
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -612,9 +624,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         "started_at" to "2026-06-02T10:00:00Z",
         "resolved_agent_id" to "agent-plan-1",
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -682,9 +694,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         resolvedAgentId = "agent-implement-1",
       )
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseRecord.fromArtifactMap(record.toArtifactMap() + ("phase_id" to "plan_fix"))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertTrue(error.message.orEmpty().contains("plan_fix"))
   }
 
@@ -699,9 +711,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         attemptCount = 1,
       )
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseLedgerEntry.fromArtifactMap(entry.toArtifactMap() + ("phase_id" to "plan_fix"))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertTrue(error.message.orEmpty().contains("plan_fix"))
   }
 
@@ -729,12 +741,12 @@ class FeatureTaskRuntimePersistenceModelsTest {
         FeatureTaskRuntimePhaseRecord.fromArtifactMap(map + ("review_pass_number" to pass)).reviewPassNumber,
       )
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(map + ("review_pass_number" to 0))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(map + ("phase_id" to "audit"))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -770,9 +782,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         loopId = "review-fix",
         edgeIteration = 1,
       ).toArtifactMap() + ("edge_iteration" to 0)
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -807,9 +819,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
 
   @Test
   fun `unknown ledger action loud-fails with a typed schema error`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseLedgerAction.fromWire("teleport")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -824,9 +836,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         "code_review_mode" to "auto",
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeRunInvariantsFromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -842,9 +854,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
       )
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeRunInvariantsFromArtifactMap(malformed)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertIs<IllegalArgumentException>(error.cause)
     assertTrue(error.message.orEmpty().contains("supports at most 999 criteria"))
@@ -871,12 +883,12 @@ class FeatureTaskRuntimePersistenceModelsTest {
         acceptanceCriteria = listOf("AC-1"),
         mandatesAndOverrides = emptyList(),
       ).toArtifactMap()
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeRunInvariantsFromArtifactMap(invalid + ("code_review_mode" to "DELEGATED"))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeRunInvariantsFromArtifactMap(invalid - "code_review_mode")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -902,14 +914,14 @@ class FeatureTaskRuntimePersistenceModelsTest {
       ).toArtifactMap()
 
     val unversioned =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeRunInvariantsFromArtifactMap(current - "contract_version")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertTrue(unversioned.message.orEmpty().contains("contract_version"))
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeRunInvariantsFromArtifactMap(current + ("contract_version" to "0.0"))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -922,9 +934,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         "phase_id" to "plan",
         "attempt_count" to 0,
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseLedgerEntry.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -936,9 +948,9 @@ class FeatureTaskRuntimePersistenceModelsTest {
         "phase_id" to "plan",
         "attempt_count" to 1,
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseLedgerEntry.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -995,11 +1007,11 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
       FeatureTaskRuntimeCommitPushResultArtifact("abc123", true),
       artifacts.commitPushResultArtifact(),
     )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(DecompositionManifestPayloadKeys.COMMIT_PUSH_RESULT to null),
       ).commitPushResultArtifact()
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -1030,18 +1042,18 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
         mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to valid.toArtifactMap()),
       ).goalContinuationArtifact(),
     )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
             valid.toArtifactMap() + ("subtask_id" to 2.7),
         ),
       ).goalContinuationArtifact()
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to null))
         .goalContinuationArtifact()
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -1118,26 +1130,26 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
         codeReviewMode = CodeReviewExecutionMode.INLINE,
       ).toArtifactMap()
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete - "code_review_mode")
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("unexpected" to true))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("parallel_review_agent" to ""))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("validation_depth" to "partial"))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(complete + ("code_review_mode" to "partial"))
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(
         complete + ("quality_gate_selection" to "unknown"),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -1151,9 +1163,9 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
         "code_review_mode" to "inline",
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -1250,9 +1262,9 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
         "last_resumable_step" to "commit_push",
         "participating_agent_ids" to listOf("codex", 7),
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationOutcome.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -1266,8 +1278,8 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
         "last_resumable_step" to "commit_push",
         "participating_agent_ids" to "codex",
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeGoalContinuationOutcome.fromArtifactMap(malformed)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 }

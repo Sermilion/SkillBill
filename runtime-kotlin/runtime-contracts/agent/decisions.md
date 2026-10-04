@@ -1,8 +1,26 @@
+## [2026-10-04] Preserve workflow-state family after class removal
+Context: SKILL-399 subtask 7 removes InvalidWorkflowStateSchemaError after subtask 6 converted its checkpoint-version subclass to a distinct code.
+Decision: Classify both WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA and FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION through isInvalidWorkflowStateFailure. Register WorkflowFailureCode in shell-content classification.
+Reason: The former inheritance relationship routed both failures through workflow-state recovery. Both codes must retain that handling, including checkpoint remediation refusal, while unrelated failures propagate.
+
+## [2026-10-04] Retain code-checked catches around shared workflow decoders
+Context: Workflow open, input update, persistence, verification and parent discovery use shared decoders that throw workflow-state failures.
+Decision: Keep code-checked catches and their existing fallback values and diagnostic records. Keep the workflow update catch outside the database transaction.
+Reason: The transaction needs the throw to roll back. Changing the shared decoders to return values would expand this conversion into a decoder refactor, which the subtask excludes.
+Alternatives considered: Return null, emptyMap or an Error result at decode boundaries. The settled plan retains catches because these decoders have many throwing sites and shared callers.
+
+## [2026-10-04] Keep input-driven workflow and record failures coded
+Context: SKILL-399 subtask 7 replaces eight workflow exception classes while preserving their messages and handling boundaries.
+Decision: Use WorkflowFailureCode with SkillBillRuntimeException for all eight conditions. Keep one message function per former class, including message-only failures.
+Reason: Stored records, rows, issue-key input, retired prose state, agent output and goal limits can trigger these failures. Defect assertions would misclassify them; message functions follow the landed conversion pattern and keep the many state-error constructions short.
+Alternatives considered: Replace failures with require, check or error. The plan reserves those mechanisms for conditions that only a code defect can trigger.
+
 ## [2026-10-04] Preserve checkpoint-version workflow-state handling
 Context: SKILL-399 subtask 6 removes a checkpoint-version exception that inherited InvalidWorkflowStateSchemaError, while Workflow-class conversion belongs to subtask 7.
 Decision: Keep a distinct checkpoint-version code and classify it through isInvalidWorkflowStateFailure alongside the legacy workflow-state type. Retarget former catches to the predicate and rethrow unrelated failures.
 Reason: Inheritance previously routed unsupported checkpoint versions through workflow-state recovery. Remediation must still refuse unsupported semantics instead of treating the checkpoint as absent, and transaction failures must still roll back.
 Revisit when: Subtask 7 converts the workflow-state class. Extend the predicate with its state code while retaining checkpoint-version membership.
+Superseded by: Preserve workflow-state family after class removal (2026-10-04)
 
 ## [2026-10-04] Pass failure context and violation reasons explicitly
 Context: SKILL-399 subtask 6 removes reason, fieldPath and payloadFreeReason properties used by five receipt, review-state, gate-integrity, persistence and shared-evidence re-wrap sites.

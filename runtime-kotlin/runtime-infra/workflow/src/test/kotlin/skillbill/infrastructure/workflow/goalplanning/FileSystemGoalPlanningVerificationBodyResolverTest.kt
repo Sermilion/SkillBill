@@ -1,14 +1,15 @@
 package skillbill.infrastructure.workflow.goalplanning
 
-import skillbill.contracts.time.JvmSystemClock
-import skillbill.error.shellcontent.GoalVerificationBoundaryCapExceededError
-import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryBodyResolutionCaps
-import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryHeading
-import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDate
 import java.time.ZoneOffset
+import skillbill.contracts.time.JvmSystemClock
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryBodyResolutionCaps
+import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryHeading
+import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,7 +33,7 @@ class FileSystemGoalPlanningVerificationBodyResolverTest {
     val selected = catalog.map(GoalPlanningBoundaryHeading::headingId)
 
     val error =
-      assertFailsWith<GoalVerificationBoundaryCapExceededError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FileSystemGoalPlanningBoundaryBodyResolver().resolve(
           repo,
           selected,
@@ -40,7 +41,7 @@ class FileSystemGoalPlanningVerificationBodyResolverTest {
           caps = GoalPlanningBoundaryBodyResolutionCaps.VERIFICATION,
           loudFailOnCapExceeded = true,
         )
-      }
+      }.also { assertEquals(WorkflowFailureCode.GOAL_VERIFICATION_BOUNDARY_CAP_EXCEEDED, it.code) }
     assertEquals(
       "finding verification boundary body resolution exceeded max_selected_bodies or max_total_body_bytes",
       error.message,

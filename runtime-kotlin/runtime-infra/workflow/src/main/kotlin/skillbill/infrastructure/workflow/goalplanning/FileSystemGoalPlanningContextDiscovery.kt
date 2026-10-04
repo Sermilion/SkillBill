@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.goalplanning
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.GoalVerificationBoundaryCapExceededError
+import skillbill.error.shellcontent.goalVerificationBoundaryCapExceededError
 import skillbill.goalrunner.planning.GoalPlanningExcludedPaths
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryHeading
@@ -126,7 +126,7 @@ class FileSystemGoalPlanningContextDiscovery(
     val headings = perFile.flatMapIndexed { index, headings -> headings.take(quotas[index]) }
     truncated = truncated || perFile.indices.any { index -> quotas[index] < perFile[index].size }
     if (loudFailOnCapExceeded && truncated) {
-      throw GoalVerificationBoundaryCapExceededError(
+      throw goalVerificationBoundaryCapExceededError(
         "finding verification boundary discovery exceeded a verification cap",
       )
     }

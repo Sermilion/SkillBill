@@ -1,12 +1,14 @@
 package skillbill.engine.featuretask.review.finding
 
+import java.nio.file.Path
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemorySection
-import skillbill.error.shellcontent.GoalVerificationBoundaryCapExceededError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryBodyResolutionCaps
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import java.nio.file.Path
 
 fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDispositionBoundaryBodies(
   repoRoot: Path,
@@ -43,7 +45,8 @@ private fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.dispositionBound
       selectedHeadingIds = selections.map(FeatureTaskRuntimeVerificationBoundaryHeadingProvenance::headingId),
     )
     null
-  } catch (error: GoalVerificationBoundaryCapExceededError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.code == WorkflowFailureCode.GOAL_VERIFICATION_BOUNDARY_CAP_EXCEEDED)
     error.message ?: "finding verification boundary body resolution exceeded a verification cap."
   }
 }

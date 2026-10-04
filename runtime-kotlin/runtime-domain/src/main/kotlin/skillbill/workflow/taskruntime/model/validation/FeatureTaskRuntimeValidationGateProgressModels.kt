@@ -4,7 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.model.persistence.artifact.asExactLongOrNull
 
@@ -18,7 +18,7 @@ enum class FeatureTaskRuntimeValidationGateRepairWindowPhase(val wireValue: Stri
       when (value) {
         null, NONE.wireValue -> NONE
         FINDINGS_OPEN.wireValue -> FINDINGS_OPEN
-        else -> throw InvalidWorkflowStateSchemaError(
+        else -> throw invalidWorkflowStateSchemaError(
           "FeatureTaskRuntimeValidationGateProgress.repair_window_phase must be 'none' or 'findings_open'.",
         )
       }
@@ -151,7 +151,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeValidationGateProgress =
       try {
         if (raw[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
-          throw InvalidWorkflowStateSchemaError("Unsupported validation gate progress contract_version.")
+          throw invalidWorkflowStateSchemaError("Unsupported validation gate progress contract_version.")
         }
         FeatureTaskRuntimeValidationGateProgress(
           gateRunCount = raw.asStarMap().gateProgressInt(ValidationEvidencePayloadKeys.GATE_RUN_COUNT),
@@ -171,7 +171,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
             ),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "FeatureTaskRuntimeValidationGateProgress is incoherent: ${error.message.orEmpty()}",
           error,
         )
@@ -209,7 +209,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
             executedChecksRecorded = map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS),
           )
         } catch (error: IllegalArgumentException) {
-          throw InvalidWorkflowStateSchemaError(
+          throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: ${error.message.orEmpty()}",
             error,
           )
@@ -222,11 +222,11 @@ data class FeatureTaskRuntimeValidationGateProgress(
       val raw = map[ValidationEvidencePayloadKeys.EXECUTED_CHECKS]
       val list =
         raw as? List<*>
-          ?: throw InvalidWorkflowStateSchemaError(
+          ?: throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress gate run executed_checks must be a list.",
           )
       return list.mapIndexed { index, entry ->
-        entry as? String ?: throw InvalidWorkflowStateSchemaError(
+        entry as? String ?: throw invalidWorkflowStateSchemaError(
           "FeatureTaskRuntimeValidationGateProgress gate run executed_checks[$index] must be a string.",
         )
       }
@@ -239,11 +239,11 @@ data class FeatureTaskRuntimeValidationGateProgress(
       if (raw == null) return emptyList()
       val list =
         raw as? List<*>
-          ?: throw InvalidWorkflowStateSchemaError(
+          ?: throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.$field must be a list.",
           )
       return list.mapIndexed { index, entry ->
-        entry as? String ?: throw InvalidWorkflowStateSchemaError(
+        entry as? String ?: throw invalidWorkflowStateSchemaError(
           "FeatureTaskRuntimeValidationGateProgress.$field[$index] must be a string.",
         )
       }
@@ -256,13 +256,13 @@ data class FeatureTaskRuntimeValidationGateProgress(
       if (raw == null) return emptyList()
       val list =
         raw as? List<*>
-          ?: throw InvalidWorkflowStateSchemaError(
+          ?: throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.$field must be a list.",
           )
       return list.mapIndexed { index, entry ->
         val map =
           entry as? Map<*, *>
-            ?: throw InvalidWorkflowStateSchemaError(
+            ?: throw invalidWorkflowStateSchemaError(
               "FeatureTaskRuntimeValidationGateProgress.$field[$index] must be a mapping.",
             )
         linkedMapOf(
@@ -279,15 +279,15 @@ data class FeatureTaskRuntimeValidationGateProgress(
 internal fun Map<String, Any?>.asStarMap(): Map<*, *> = this
 
 internal fun Map<*, *>.gateProgressString(key: String): String =
-  this[key] as? String ?: throw InvalidWorkflowStateSchemaError("Missing required string field '$key'.")
+  this[key] as? String ?: throw invalidWorkflowStateSchemaError("Missing required string field '$key'.")
 
 internal fun Map<*, *>.gateProgressInt(key: String): Int =
   this[key].asExactIntOrNull()
-    ?: throw InvalidWorkflowStateSchemaError("Missing required int field '$key'.")
+    ?: throw invalidWorkflowStateSchemaError("Missing required int field '$key'.")
 
 internal fun Map<*, *>.gateProgressLong(key: String): Long =
   this[key].asExactLongOrNull()
-    ?: throw InvalidWorkflowStateSchemaError("Missing required long field '$key'.")
+    ?: throw invalidWorkflowStateSchemaError("Missing required long field '$key'.")
 
 internal fun Map<*, *>.gateProgressOptionalInt(key: String): Int? {
   if (!containsKey(key) || this[key] == null) {
@@ -301,4 +301,4 @@ internal fun Map<*, *>.gateProgressOptionalString(key: String): String? {
   return gateProgressString(key)
 }
 
-private fun invalidGateRuns(reason: String): Nothing = throw InvalidWorkflowStateSchemaError(reason)
+private fun invalidGateRuns(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)

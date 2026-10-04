@@ -15,7 +15,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -530,7 +530,7 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.recordPhaseState(
         FeatureTaskRuntimePhaseStateRequest(
           workflowId = workflowId,
@@ -541,7 +541,7 @@ class ApplicationPersistencePortWorkflowTest {
           finished = false,
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -572,9 +572,9 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.appendPlanLedger(workflowId, FeatureTaskRuntimePhaseLedgerAction.RESUME)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -598,9 +598,9 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.appendPlanLedger(workflowId, FeatureTaskRuntimePhaseLedgerAction.RESUME)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

@@ -1,5 +1,8 @@
 package skillbill.application.diagnostics
 
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticConfig
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
@@ -8,7 +11,8 @@ import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
-import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidRejectedOutputDiagnosticSchemaError
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -18,9 +22,6 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -179,7 +180,11 @@ class RejectedOutputDiagnosticServiceTest {
         metadata = metadata.copy(sha256 = "not-a-digest"),
       )
 
-    assertFailsWith<InvalidRejectedOutputDiagnosticSchemaError> { service.readRaw(metadata.identity) }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.readRaw(metadata.identity)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA, it.code)
+    }
   }
 
   @Test
@@ -209,7 +214,7 @@ class RejectedOutputDiagnosticServiceTest {
     metadataValidator =
       RejectedOutputDiagnosticMetadataValidator { metadata ->
         if (!Regex("[0-9a-f]{64}").matches(metadata.sha256)) {
-          throw InvalidRejectedOutputDiagnosticSchemaError("sha256 is invalid")
+          throw invalidRejectedOutputDiagnosticSchemaError("sha256 is invalid")
         }
       },
     config = RejectedOutputDiagnosticConfig(maximumPayloadBytes = maximumPayloadBytes),

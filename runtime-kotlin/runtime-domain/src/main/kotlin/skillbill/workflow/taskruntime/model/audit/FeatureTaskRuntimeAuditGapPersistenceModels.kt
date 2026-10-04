@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.model.audit
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 
@@ -62,13 +62,13 @@ internal data class FeatureTaskRuntimeAuditGapPause(
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeAuditGapPause {
       requireExactAuditGapPauseFields(raw)
       if (raw[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap pause artifact uses unsupported persistence contract " +
             "version '${raw[SharedPayloadKeys.CONTRACT_VERSION]}'; $FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )
       }
       if (raw["record_kind"] != "audit_gap_pause") {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap pause artifact must have kind 'audit_gap_pause'.",
         )
       }
@@ -98,7 +98,7 @@ internal data class FeatureTaskRuntimeAuditGapPause(
         )
       val unexpected = raw.keys - expected
       if (unexpected.isNotEmpty()) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap pause artifact contains unsupported fields; " +
             "$FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )
@@ -123,13 +123,13 @@ internal data class FeatureTaskRuntimeAuditGapProgress(
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeAuditGapProgress {
       requireExactAuditGapProgressFields(raw)
       if (raw[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap progress artifact uses unsupported persistence contract " +
             "version '${raw[SharedPayloadKeys.CONTRACT_VERSION]}'; $FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )
       }
       if (raw["record_kind"] != "audit_gap_progress") {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap progress artifact must have kind 'audit_gap_progress'.",
         )
       }
@@ -150,7 +150,7 @@ internal data class FeatureTaskRuntimeAuditGapProgress(
         )
       val unexpected = raw.keys - expected
       if (unexpected.isNotEmpty()) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime audit-gap progress artifact contains unsupported fields; " +
             "$FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )

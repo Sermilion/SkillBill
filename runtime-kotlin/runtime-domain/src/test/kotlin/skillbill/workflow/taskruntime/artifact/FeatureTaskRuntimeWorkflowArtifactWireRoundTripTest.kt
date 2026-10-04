@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
@@ -102,8 +103,8 @@ class FeatureTaskRuntimeWorkflowArtifactWireRoundTripTest {
 
   @Test
   fun `malformed workflow artifacts fail instead of being treated as absent`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       phaseRecordsFromWorkflowArtifacts(listOf("not an artifact object"))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 }

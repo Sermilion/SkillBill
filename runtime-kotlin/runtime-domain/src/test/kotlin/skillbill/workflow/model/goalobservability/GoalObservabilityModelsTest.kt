@@ -1,13 +1,9 @@
 package skillbill.workflow.model.goalobservability
 
 import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.goalObservabilityHistory
 import skillbill.goalrunner.goalObservabilityLatestEvent
@@ -23,6 +19,10 @@ import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_K
 import skillbill.workflow.engine.model.GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class GoalObservabilityModelsTest {
   @Test
@@ -53,9 +53,9 @@ class GoalObservabilityModelsTest {
     assertFailsWith<SkillBillRuntimeException> {
       GoalProgressOutcome.fromWire("not-an-outcome")
     }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalAttemptLedgerAction.fromWire("not-an-action")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

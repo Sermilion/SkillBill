@@ -6,7 +6,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -20,7 +20,7 @@ fun DurableWorkflowArtifacts.goalContinuationArtifact(): FeatureTaskRuntimeGoalC
   if (!containsKey(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY)) return null
   val raw =
     JsonCodec.anyToStringAnyMap(this[FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY])
-      ?: throw InvalidWorkflowStateSchemaError(
+      ?: throw invalidWorkflowStateSchemaError(
         "Goal-continuation artifact must decode to an object.",
       )
   return FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(raw)
@@ -109,7 +109,7 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
       val reader = durableArtifactMapReader(raw)
       val subtaskId = reader.requiredInt(SharedPayloadKeys.SUBTASK_ID)
       if (subtaskId < 1) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Goal-continuation artifact field '${SharedPayloadKeys.SUBTASK_ID}' must be positive.",
         )
       }
@@ -118,7 +118,7 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
         subtaskId = subtaskId,
         suppressPr =
           reader.optionalBoolean(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUPPRESS_PR)
-            ?: throw InvalidWorkflowStateSchemaError(
+            ?: throw invalidWorkflowStateSchemaError(
               "Goal-continuation artifact field " +
                 "'${FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUPPRESS_PR}' must be a boolean.",
             ),
@@ -231,11 +231,11 @@ private fun goalContinuationSchemaError(
   detail: String,
   cause: Throwable? = null,
 ): Nothing {
-  throw InvalidWorkflowStateSchemaError(detail, cause)
+  throw invalidWorkflowStateSchemaError(detail, cause)
 }
 
 private fun rejectUnknownGoalContinuationKeys(raw: Map<String, Any?>) {
   raw.keys.firstOrNull { it !in goalContinuationKeys }?.let { key ->
-    throw InvalidWorkflowStateSchemaError("Goal-continuation artifact field '$key' is not supported.")
+    throw invalidWorkflowStateSchemaError("Goal-continuation artifact field '$key' is not supported.")
   }
 }

@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
@@ -70,7 +70,7 @@ data class FeatureTaskRuntimeDeliveredProjectionRecord(
           SharedPayloadKeys.CONTRACT_VERSION,
         )
       if (contractVersion != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime delivered projection uses unsupported persistence contract version " +
             "'$contractVersion'; $FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )
@@ -79,7 +79,7 @@ data class FeatureTaskRuntimeDeliveredProjectionRecord(
 
     private fun requireDeliveredProjectionRecordKind(raw: Map<String, Any?>) {
       if (raw["record_kind"] != "delivered_projection") {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime prompt-facing persistence record must have kind 'delivered_projection'; " +
             "private evidence cannot be read through this API.",
         )
@@ -125,7 +125,7 @@ data class FeatureTaskRuntimeDeliveredProjectionRecord(
         checkpoint[ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT] as? String
           ?: missing("repository_checkpoint.fingerprint")
       if (persistedFingerprint != record.repositoryCheckpointFingerprint) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime delivered projection checkpoint identity does not match its validated envelope; " +
             "restart the consumer phase from current repository state.",
         )
@@ -146,7 +146,7 @@ data class FeatureTaskRuntimeDeliveredProjectionRecord(
         )
       val unexpected = raw.keys - expected
       if (unexpected.isNotEmpty()) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime delivered-projection record contains unsupported fields; " +
             "$FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
         )
@@ -154,7 +154,7 @@ data class FeatureTaskRuntimeDeliveredProjectionRecord(
     }
 
     private fun missing(field: String): Nothing =
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Feature-task-runtime delivered-projection record is missing field '$field'; " +
           "$FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
       )

@@ -1,11 +1,6 @@
 package skillbill.engine.featuretask.persist
 
 import java.time.Clock
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testDecompositionManifestValidator
@@ -23,11 +18,16 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.WorkflowIssueKeyConflictError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 class WorkflowIssueKeyPersistenceTest {
   @Test
@@ -141,12 +141,13 @@ class WorkflowIssueKeyPersistenceTest {
     assertEquals("SKILL-117", healed.issueKey)
 
     val conflict =
-      assertFailsWith<WorkflowIssueKeyConflictError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.openTestWorkflow("wftr-117", "session-117", issueKey = "SKILL-118")
-      }
-    assertEquals("wftr-117", conflict.workflowId)
-    assertEquals("SKILL-117", conflict.persistedIssueKey)
-    assertEquals("SKILL-118", conflict.requestedIssueKey)
+      }.also { assertEquals(WorkflowFailureCode.WORKFLOW_ISSUE_KEY_CONFLICT, it.code) }
+    assertEquals(
+      "Workflow 'wftr-117' is already associated with issue key 'SKILL-117', not 'SKILL-118'.",
+      conflict.message,
+    )
     assertEquals("SKILL-117", assertNotNull(workflows.runtimeRecord("wftr-117")).issueKey)
   }
 }

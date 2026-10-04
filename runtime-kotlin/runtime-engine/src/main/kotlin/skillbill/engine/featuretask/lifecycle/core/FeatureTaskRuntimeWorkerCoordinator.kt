@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.migration.RuntimeMigrationReceipt
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -107,7 +107,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
         if (existing != null) return@transaction UnownedClaim.Recover(existing)
         val row =
           unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-            ?: throw InvalidWorkflowStateSchemaError("Feature-task runtime worker workflow '$workflowId' is missing.")
+            ?: throw invalidWorkflowStateSchemaError("Feature-task runtime worker workflow '$workflowId' is missing.")
         if (row.workflowStatus.workflowStatus() in TERMINAL_WORKFLOW_STATUSES) {
           error(
             "Cannot acquire worker ownership for terminal workflow '$workflowId' (${row.workflowStatus}).",
@@ -124,7 +124,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
         receipt = execution.migrationReceipt
         val admittedRow =
           unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-            ?: throw InvalidWorkflowStateSchemaError(
+            ?: throw invalidWorkflowStateSchemaError(
               "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
             )
         val ownership =

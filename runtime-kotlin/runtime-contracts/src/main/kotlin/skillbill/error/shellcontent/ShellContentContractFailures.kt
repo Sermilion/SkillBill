@@ -16,9 +16,10 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is GovernedReviewFailureCode ||
     failureCode is GoalTelemetryRowFailureCode ||
     failureCode is InstallFailureCode ||
-    failureCode is FeatureTaskRuntimeFailureCode
+    failureCode is FeatureTaskRuntimeFailureCode ||
+    failureCode is WorkflowFailureCode
 }
 
 fun Throwable.isInvalidWorkflowStateFailure(): Boolean =
-  this is InvalidWorkflowStateSchemaError ||
+  (this as? SkillBillRuntimeException)?.code == WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA ||
     (this as? SkillBillRuntimeException)?.code == FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION

@@ -1,3 +1,15 @@
+## [2026-10-04] SKILL-399 workflow state and record failure codes
+Areas: runtime-contracts/error/shellcontent, runtime-domain/workflow/goalrunner, runtime-ports/workflow, runtime-application/work/workflow, runtime-engine/featuretask/goalrunner/work, runtime-infra/contracts/sqlite/workflow/skills, runtime-core architecture baseline and persistence tests
+- Replaced eight workflow state, work-list, issue-key, retired-prose, output-schema and verification-cap exception classes with WorkflowFailureCode and coded SkillBillRuntimeException message functions.
+- Registered WorkflowFailureCode in shell-content classification. The workflow-state predicate handles the state code and preserves checkpoint-version membership from subtask 6.
+- Followed exact code checks and guarded rethrows. Merged IDE status and rejected-output recorder catches retain their existing result branches and degradation handling.
+- Reusable: WorkflowFailureCode, message functions and the workflow-state predicate provide shared failure handling for domain, ports, application, engine and infrastructure consumers.
+- Converted existing exception assertions to code assertions and removed only the eight owned custom-throwable baseline rows.
+- Breaking change: removed exception types have no aliases. User-visible messages, causes, stored payloads, contract versions, transaction rollback and fallback behavior remain unchanged.
+- Limit: this entry covers subtask 7 only. The two decomposition-manifest exceptions belong to subtask 8; legacy bases and codeless support remain while other subclasses or callers exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-04] SKILL-399 feature-task runtime evidence and record failure codes
 Areas: runtime-contracts/error/shellcontent, runtime-domain/workflow/taskruntime/goalreview, runtime-engine/featuretask/goalrunner/verify/work, runtime-application/workflow, runtime-ports/taskruntime/featuretask, runtime-infra/contracts/sqlite/workflow, runtime-core architecture baseline
 - Replaced sixteen evidence, record, execution-identity, worker-ownership and operator-rejection exception classes with FeatureTaskRuntimeFailureCode and coded SkillBillRuntimeException factories.

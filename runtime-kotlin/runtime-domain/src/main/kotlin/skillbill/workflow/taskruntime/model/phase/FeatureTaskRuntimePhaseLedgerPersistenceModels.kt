@@ -4,7 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
@@ -17,7 +17,7 @@ enum class FeatureTaskRuntimePhaseExecutionOrigin(val wireValue: String) {
   companion object {
     fun fromWireValue(value: String): FeatureTaskRuntimePhaseExecutionOrigin =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime artifact field 'execution_origin' has unsupported value '$value'.",
         )
   }
@@ -52,7 +52,7 @@ enum class FeatureTaskRuntimePhaseLedgerAction(val wireValue: String) {
   companion object {
     fun fromWire(value: String): FeatureTaskRuntimePhaseLedgerAction =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Unknown feature-task-runtime phase ledger action '$value'. " +
             "Allowed: ${entries.joinToString { it.wireValue }}.",
         )
@@ -140,7 +140,7 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
       val reader = durableArtifactMapReader(raw)
       val attemptCount = reader.requiredInt("attempt_count")
       if (attemptCount < 1) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime phase ledger entry attempt_count must be >= 1, was $attemptCount.",
         )
       }
@@ -169,7 +169,7 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
           edgeIteration = reader.optionalInt("edge_iteration"),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime phase ledger entry is invalid.",
           error,
         )

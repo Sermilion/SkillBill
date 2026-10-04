@@ -4,7 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.work.model.WorkListItem
 import skillbill.application.work.model.WorkListItemKind
 import skillbill.application.work.model.WorkListResult
-import skillbill.error.shellcontent.InvalidWorkListRowError
+import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
@@ -42,7 +42,7 @@ class WorkListService(
       items.forEach { item ->
         val snapshot =
           snapshots[item.workflowId]
-            ?: throw InvalidWorkListRowError(
+            ?: throw invalidWorkListRowError(
               "Work-list row '${item.workflowId}' has no matching ${item.workflowKind.wireValue} workflow snapshot.",
             )
         workflowEngine.summaryView(family.definition, snapshot)

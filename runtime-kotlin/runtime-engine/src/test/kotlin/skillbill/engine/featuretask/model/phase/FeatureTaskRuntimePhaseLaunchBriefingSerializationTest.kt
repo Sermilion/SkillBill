@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.model.phase
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
@@ -45,9 +46,9 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
         ("upstream_outputs_by_phase_id" to mapOf("plan" to "raw payload"))
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(legacyRow)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "upstream_outputs_by_phase_id")
     assertContains(error.message.orEmpty(), "Restart")
@@ -58,9 +59,9 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
   fun `a row missing the handoff envelope loud-fails rather than defaulting to an empty delivery`() {
     val rowWithoutEnvelope = briefing().briefingArtifactWireMap() - "handoff_envelope"
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(rowWithoutEnvelope)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -68,9 +69,9 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
     val incompatible = briefing().briefingArtifactWireMap() + ("future_field" to "private body")
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(incompatible)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "unsupported fields")
     assertContains(error.message.orEmpty(), "Restart")
@@ -83,9 +84,9 @@ class FeatureTaskRuntimePhaseLaunchBriefingSerializationTest {
       briefing().briefingArtifactWireMap() - "contract_version",
       briefing().briefingArtifactWireMap() + ("contract_version" to "9.9"),
     ).forEach { incompatible ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(incompatible)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     }
   }
 

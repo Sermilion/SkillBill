@@ -5,16 +5,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset.UTC
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -73,9 +63,10 @@ import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -144,6 +135,16 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private fun WorkflowService.openTestRuntime(
   sessionId: String = "",
@@ -619,7 +620,7 @@ class WorkflowServiceTest {
           snapshot: WorkflowStateSnapshot,
           slug: String,
         ): Unit =
-          throw InvalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
+          throw invalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
       }
     val service =
       WorkflowService(
@@ -634,12 +635,12 @@ class WorkflowServiceTest {
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.get(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -659,7 +660,7 @@ class WorkflowServiceTest {
           snapshot: WorkflowStateSnapshot,
           slug: String,
         ): Unit =
-          throw InvalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
+          throw invalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
       }
     val service =
       WorkflowService(
@@ -788,12 +789,24 @@ class WorkflowServiceTest {
     val service = newService(workflows)
     val progress = testWorkflowGoalRunnerOutcomeStore(database, testWorkflowSnapshotValidator)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> { service.resume(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId) }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { service.get(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId) }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
-      service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    assertFailsWith<SkillBillRuntimeException> {
+      service.resume(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { progress.progress(row.workflowId) }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.get(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
+      progress.progress(row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
     assertEquals(row, workflows.getFeatureTaskWorkflowAsMode(row.workflowId, RUNTIME))
   }
 
@@ -3390,7 +3403,7 @@ class WorkflowGoalRunnerProgressStoreTest {
           )
         }
 
-      assertFailsWith<InvalidWorkflowStateSchemaError>("subtask_id $identity must be rejected.") {
+      assertFailsWith<SkillBillRuntimeException>("subtask_id $identity must be rejected.") {
         FakeDatabaseSessionFactory(workflows, goalRunnerControls = controls).transaction { unitOfWork ->
           testWorkflowEngine.persistParentDecompositionRuntime(
             malformed,
@@ -3399,7 +3412,7 @@ class WorkflowGoalRunnerProgressStoreTest {
             testDecompositionManifestValidator,
           )
         }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
       assertNull(controls.reviewPolicy("wfl-malformed-parent"))
       assertEquals(emptyMap(), controls.outOfBandAcceptances("wfl-malformed-parent"))

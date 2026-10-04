@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.core
 
+import java.time.Clock
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
@@ -13,8 +14,7 @@ import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.error.core.rejectedOutputDiagnosticInvalidRequestMessage
-import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
-import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
@@ -32,7 +32,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionCapOf
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionViolationClassOf
-import java.time.Clock
 
 private fun SkillBillRuntimeException.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
   when (code as? RejectedOutputDiagnosticFailureCode) {
@@ -202,12 +201,13 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       } else {
         FeatureTaskRuntimeProducerOutputRead.Found(evidence)
       }
-    } catch (_: InvalidProducerOutputEvidenceSchemaError) {
-      unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
-    } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
-      unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (error: SkillBillRuntimeException) {
-      unreadable(error.degradableFailureClass() ?: throw error)
+      when (error.code) {
+        WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA ->
+          unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+        else -> unreadable(error.degradableFailureClass() ?: throw error)
+      }
     }
   }
 
@@ -232,12 +232,13 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     }
     return try {
       DiagnosticWriteOutcome.Written(block())
-    } catch (_: InvalidProducerOutputEvidenceSchemaError) {
-      degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
-    } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
-      degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (error: SkillBillRuntimeException) {
-      degrade(error.degradableFailureClass() ?: throw error)
+      when (error.code) {
+        WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA ->
+          degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+        else -> degrade(error.degradableFailureClass() ?: throw error)
+      }
     }
   }
 

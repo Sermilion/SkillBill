@@ -1,6 +1,6 @@
 package skillbill.workflow.model.validation
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 
 data class FeatureTaskRuntimeVerdict(
   val wireValue: String,
@@ -46,7 +46,7 @@ data class FeatureTaskRuntimeVerdict(
     ): FeatureTaskRuntimeVerdict {
       val verdict = fromWire(value)
       if (verdict in REMOVED_VERDICTS) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime verdict '$value' is removed ($context); records naming it must be regenerated.",
         )
       }
@@ -57,7 +57,7 @@ data class FeatureTaskRuntimeVerdict(
 
     fun fromWire(value: String): FeatureTaskRuntimeVerdict =
       value.takeIf(String::isNotBlank)?.let(::FeatureTaskRuntimeVerdict)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime verdict wire value must be a non-blank string, was '$value'.",
         )
   }

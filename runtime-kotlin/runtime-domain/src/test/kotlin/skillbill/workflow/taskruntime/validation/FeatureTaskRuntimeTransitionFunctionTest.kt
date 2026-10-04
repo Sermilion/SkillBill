@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.validation
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.model.goalreview.blocksAdvance
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -141,17 +142,21 @@ class FeatureTaskRuntimeTransitionFunctionTest {
 
   @Test
   fun `verdict fromWire loud-fails on a blank wire value`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> { FeatureTaskRuntimeVerdict.fromWire("  ") }
+    assertFailsWith<SkillBillRuntimeException> {
+      FeatureTaskRuntimeVerdict.fromWire("  ")
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
   }
 
   @Test
   fun `removed verdicts loud-fail through rejectRemovedVerdict`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeVerdict.rejectRemovedVerdict("escalated", "test")
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeVerdict.rejectRemovedVerdict("repair_planned", "test")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   private val loopPipeline = listOf("plan", "impl", "fix", "review", "audit")

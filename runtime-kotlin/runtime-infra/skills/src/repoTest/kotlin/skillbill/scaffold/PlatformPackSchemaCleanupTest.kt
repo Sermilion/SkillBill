@@ -1,22 +1,19 @@
 package skillbill.scaffold
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.InstallPlanSchemaPaths
@@ -28,6 +25,10 @@ import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPa
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.testing.repoRootFromTest
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class PlatformPackSchemaCleanupTest {
   @Test
@@ -108,11 +109,11 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(mismatchedIdYaml)
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(node, WorkflowStateSchemaPaths.EXPECTED_SCHEMA_ID, WORKFLOW_STATE_CONTRACT_VERSION) {
-          InvalidWorkflowStateSchemaError(it)
+          invalidWorkflowStateSchemaError(it)
         }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val message = error.message.orEmpty()
     assertContains(message, "https://malicious.example/shadow-workflow-state.yaml")
     assertContains(message, WorkflowStateSchemaPaths.EXPECTED_SCHEMA_ID)
@@ -132,11 +133,11 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(mismatchedConstYaml)
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(node, WorkflowStateSchemaPaths.EXPECTED_SCHEMA_ID, WORKFLOW_STATE_CONTRACT_VERSION) {
-          InvalidWorkflowStateSchemaError(it)
+          invalidWorkflowStateSchemaError(it)
         }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val message = error.message.orEmpty()
     assertContains(message, "9.99")
     assertContains(message, WORKFLOW_STATE_CONTRACT_VERSION)
@@ -150,7 +151,7 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(Files.readString(schemaPath))
 
     validateIdentity(node, WorkflowStateSchemaPaths.EXPECTED_SCHEMA_ID, WORKFLOW_STATE_CONTRACT_VERSION) {
-      InvalidWorkflowStateSchemaError(it)
+      invalidWorkflowStateSchemaError(it)
     }
   }
 

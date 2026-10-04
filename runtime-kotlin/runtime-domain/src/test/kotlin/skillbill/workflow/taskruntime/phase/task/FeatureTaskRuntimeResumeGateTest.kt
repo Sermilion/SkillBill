@@ -1,7 +1,9 @@
 package skillbill.workflow.taskruntime.phase.task
 
+import java.time.Instant
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
@@ -13,7 +15,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -205,13 +206,13 @@ class FeatureTaskRuntimeResumeGateTest {
         finishedAt = "",
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeRequiredArtifactPresenceResolver.missingRequiredArtifacts(
         snapshot = snapshot,
         resumeStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
         requiredArtifacts = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   private fun runtimeSnapshot(

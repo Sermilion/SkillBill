@@ -8,7 +8,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -103,7 +103,7 @@ private fun parseAcceptanceJsonElement(raw: String): JsonElement =
   }
 
 private fun invalidAcceptanceJson(cause: Throwable): Nothing =
-  throw InvalidWorkflowStateSchemaError(
+  throw invalidWorkflowStateSchemaError(
     "Goal runner control state: acceptance durable record is not valid JSON.",
     cause,
   )

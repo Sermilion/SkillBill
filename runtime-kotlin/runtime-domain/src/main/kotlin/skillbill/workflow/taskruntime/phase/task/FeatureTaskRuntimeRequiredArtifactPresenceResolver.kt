@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 import skillbill.workflow.engine.model.RequiredArtifactPresenceResolver
@@ -78,12 +78,12 @@ internal object FeatureTaskRuntimeRequiredArtifactPresenceResolver : RequiredArt
         ?: return null
     val rawMap =
       raw as? Map<*, *>
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime goal-continuation artifact must decode to an object.",
         )
     val continuationMap =
       JsonCodec.anyToStringAnyMap(rawMap)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime goal-continuation artifact must decode to an object with string keys.",
         )
     return FeatureTaskRuntimeGoalContinuationArtifact.fromArtifactMap(continuationMap).qualityGateSelection
@@ -98,7 +98,7 @@ internal object FeatureTaskRuntimeRequiredArtifactPresenceResolver : RequiredArt
     val raw = snapshot.artifacts[FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY] ?: return emptyMap()
     val rawMap =
       raw as? Map<*, *>
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY' must decode to a map.",
         )
     return rawMap.entries.associate { (key, value) -> decodePhaseRecordEntry(key, value) }
@@ -110,13 +110,13 @@ internal object FeatureTaskRuntimeRequiredArtifactPresenceResolver : RequiredArt
   ): Pair<String, FeatureTaskRuntimePhaseRecord> {
     val phaseId =
       key as? String
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY' must have string keys; " +
             "found '$key'.",
         )
     val entryMap =
       JsonCodec.anyToStringAnyMap(value)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY' entry for " +
             "'$phaseId' must decode to a map.",
         )

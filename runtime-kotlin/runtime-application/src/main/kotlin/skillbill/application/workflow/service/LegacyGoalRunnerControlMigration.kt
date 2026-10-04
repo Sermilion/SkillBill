@@ -8,7 +8,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
@@ -36,7 +36,7 @@ internal fun migrateLegacyGoalRunnerControls(
 }
 
 private fun legacyControlSchemaError(message: String): Nothing =
-  throw InvalidWorkflowStateSchemaError("Legacy goal runner control artifact: $message")
+  throw invalidWorkflowStateSchemaError("Legacy goal runner control artifact: $message")
 
 private fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts): GoalRunnerReviewPolicy? {
   val artifactFamily = DurableWorkflowArtifactFamily.GOAL_REVIEW_POLICY
@@ -62,7 +62,7 @@ private fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts)
     try {
       CodeReviewExecutionMode.fromWire(mode)
     } catch (error: IllegalArgumentException) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
         error,
       )

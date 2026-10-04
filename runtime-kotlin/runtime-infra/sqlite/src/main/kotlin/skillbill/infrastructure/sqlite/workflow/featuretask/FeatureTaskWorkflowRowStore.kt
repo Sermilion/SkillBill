@@ -1,6 +1,6 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.ProseFeatureTaskWorkflowWriteRefusedError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.proseFeatureTaskWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.workflow.FeatureTaskWorkflowUpsertRequest
 import skillbill.infrastructure.sqlite.workflow.defaultContractVersion
 import skillbill.infrastructure.sqlite.workflow.defaultImplementationSkill
@@ -24,7 +24,7 @@ internal class FeatureTaskWorkflowRowStore(
     mode: FeatureTaskWorkflowMode,
   ) {
     if (mode == FeatureTaskWorkflowMode.PROSE) {
-      throw ProseFeatureTaskWorkflowWriteRefusedError(row.workflowId)
+      throw proseFeatureTaskWorkflowWriteRefusedError(row.workflowId)
     }
     connection.upsertFeatureTaskWorkflowRow(
       row = row,
@@ -48,7 +48,7 @@ internal class FeatureTaskWorkflowRowStore(
   ): WorkflowStateRecord? {
     val row = connection.getFeatureTaskWorkflowRow(workflowId) ?: return null
     if (row.mode != mode) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Feature-task workflow '$workflowId' is mode='${row.mode?.wireValue.orEmpty()}', not '${mode.wireValue}'.",
       )
     }

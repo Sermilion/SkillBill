@@ -1,6 +1,6 @@
 package skillbill.workflow.taskruntime.model.core
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 
 const val MAX_REPOSITORY_FINGERPRINT_LENGTH: Int = 256
@@ -30,7 +30,7 @@ enum class FeatureTaskRuntimeDiagnosticFailureClass(val wireValue: String) {
   companion object {
     fun fromWire(raw: String): FeatureTaskRuntimeDiagnosticFailureClass =
       entries.firstOrNull { it.wireValue == raw }
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime diagnostic failure class '$raw' is not a declared class.",
         )
   }

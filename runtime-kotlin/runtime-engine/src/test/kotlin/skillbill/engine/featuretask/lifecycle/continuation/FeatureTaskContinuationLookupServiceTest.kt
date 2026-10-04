@@ -2,13 +2,6 @@ package skillbill.engine.featuretask.lifecycle.continuation
 
 import java.time.Clock
 import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.decomposition.baseBranch
@@ -31,7 +24,7 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.manifest
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.LegacyProseWorkflowError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
@@ -51,6 +44,13 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val DECOMPOSITION_RUNTIME_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()
@@ -226,9 +226,9 @@ class FeatureTaskContinuationLookupServiceTest {
     val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
     fixture.states.saveFeatureTaskWorkflow(row.copy(mode = PROSE), RUNTIME)
 
-    assertFailsWith<LegacyProseWorkflowError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
-    }
+    }.also { assertEquals(WorkflowFailureCode.LEGACY_PROSE_WORKFLOW, it.code) }
   }
 
   @Test

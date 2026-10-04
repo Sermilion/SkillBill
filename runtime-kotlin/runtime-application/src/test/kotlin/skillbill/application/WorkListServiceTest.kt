@@ -1,7 +1,11 @@
 package skillbill.application
 
+import java.nio.file.Path
+import java.time.Instant
 import skillbill.application.work.WorkListService
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -22,8 +26,6 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Path
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -53,7 +55,7 @@ class WorkListServiceTest {
         override fun validate(
           snapshot: WorkflowStateSnapshot,
           slug: String,
-        ): Unit = throw InvalidWorkflowStateSchemaError("Workflow '$slug' fails snapshot validation.")
+        ): Unit = throw invalidWorkflowStateSchemaError("Workflow '$slug' fails snapshot validation.")
       }
     val service =
       WorkListService(
@@ -76,7 +78,11 @@ class WorkListServiceTest {
         workflowSnapshotValidator = validator,
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> { service.list() }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.list()
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
   }
 
   @Test

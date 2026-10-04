@@ -2,7 +2,8 @@ package skillbill.engine.featuretask.validation
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
@@ -77,7 +78,11 @@ class FeatureTaskRuntimeValidationGateTest {
         progress + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
       )
     invalid.forEach { artifact ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> { decodeValidationGateProgressFromArtifact(artifact) }
+      assertFailsWith<SkillBillRuntimeException> {
+        decodeValidationGateProgressFromArtifact(artifact)
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
   }
 

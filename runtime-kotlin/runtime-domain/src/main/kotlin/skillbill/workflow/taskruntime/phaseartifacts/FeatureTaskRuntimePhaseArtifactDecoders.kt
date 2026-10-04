@@ -2,7 +2,7 @@ package skillbill.workflow.taskruntime.phaseartifacts
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_ARTIFACT_KEY
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
@@ -16,7 +16,7 @@ import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR
 import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
-fun schemaError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+fun schemaError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)
 
 fun <T> decodeStrictKeyedArtifactMap(
   artifacts: FeatureTaskRuntimeWorkflowArtifactMap,

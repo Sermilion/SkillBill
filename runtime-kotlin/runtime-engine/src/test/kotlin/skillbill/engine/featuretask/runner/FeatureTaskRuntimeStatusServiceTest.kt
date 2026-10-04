@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import java.nio.file.Path
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
@@ -20,7 +21,8 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -65,7 +67,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -123,9 +124,9 @@ class FeatureTaskRuntimeStatusServiceTest {
       requireNotNull(harness.repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)).copy(artifactsJson = "{")
     harness.repository.saveFeatureTaskWorkflow(row, RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertEquals(row, harness.repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
   }
 
@@ -685,9 +686,9 @@ class FeatureTaskRuntimeStatusServiceTest {
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.seedDiagnosticSignalsArtifact("not-an-array")
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   private companion object {

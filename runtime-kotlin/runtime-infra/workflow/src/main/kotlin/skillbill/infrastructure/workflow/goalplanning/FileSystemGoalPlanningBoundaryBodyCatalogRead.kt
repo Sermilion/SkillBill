@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.goalplanning
 
-import skillbill.error.shellcontent.GoalVerificationBoundaryCapExceededError
+import skillbill.error.shellcontent.goalVerificationBoundaryCapExceededError
 import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryBody
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import java.nio.file.Path
@@ -67,7 +67,7 @@ private fun capExceededStep(
 }
 
 private fun throwBoundaryCapExceeded(message: String) {
-  throw GoalVerificationBoundaryCapExceededError(message)
+  throw goalVerificationBoundaryCapExceededError(message)
 }
 
 private fun entryForBoundary(

@@ -1,13 +1,14 @@
 package skillbill.workflow.engine
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import java.time.Instant
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,12 +33,16 @@ class WorkflowEngineUpdateTest {
         input.copy(stepUpdates = WorkflowStepUpdates.from(listOf(step(), step()))),
       )
     invalid.forEach { update ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> { engine.updateRecord(definition, initial, update) }
+      assertFailsWith<SkillBillRuntimeException> {
+        engine.updateRecord(definition, initial, update)
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
     val restricted = definition.copy(stepStatusEnums = setOf(WorkflowStepStatus.PENDING))
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       engine.updateRecord(restricted, initial, input.copy(stepUpdates = updates("gather_diff", "running", 1)))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertEquals(WorkflowStatus.RUNNING, initial.workflowStatus)
     assertEquals(1, initial.steps.single { it.stepId == "gather_diff" }.attemptCount)
   }
@@ -45,7 +50,11 @@ class WorkflowEngineUpdateTest {
   @Test
   fun `terminal updates require an instant retain it on repeat and clear it when reopened`() {
     val terminal = input.copy(workflowStatus = WorkflowStatus.COMPLETED)
-    assertFailsWith<InvalidWorkflowStateSchemaError> { engine.updateRecord(definition, initial, terminal) }
+    assertFailsWith<SkillBillRuntimeException> {
+      engine.updateRecord(definition, initial, terminal)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
     val time = Instant.parse("2026-06-02T10:00:00.123456789Z")
     val completed = engine.updateRecord(definition, initial, terminal.copy(terminalInstant = time))
     val repeated = engine.updateRecord(definition, completed, terminal.copy(terminalInstant = time.plusSeconds(10)))

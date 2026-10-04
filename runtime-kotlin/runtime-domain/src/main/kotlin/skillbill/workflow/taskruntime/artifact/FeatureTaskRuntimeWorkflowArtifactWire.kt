@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.artifact
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedgerEntry
@@ -47,7 +47,7 @@ private fun artifactsMap(artifacts: Any?): Map<String, Any?> =
     artifacts == null -> emptyMap()
     else ->
       JsonCodec.anyToStringAnyMap(artifacts)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime workflow artifacts must decode to an object.",
         )
   }

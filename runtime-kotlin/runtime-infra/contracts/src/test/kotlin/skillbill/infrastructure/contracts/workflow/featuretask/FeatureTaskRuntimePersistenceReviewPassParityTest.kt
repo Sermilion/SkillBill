@@ -1,10 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePhaseRecordFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
@@ -13,6 +10,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimePersistenceReviewPassParityTest {
   @Test
@@ -41,9 +41,9 @@ class FeatureTaskRuntimePersistenceReviewPassParityTest {
     assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePersistenceSchemaValidator.validate(wireMap, "review.record")
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       decodePhaseRecordFromArtifact(wireMap)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

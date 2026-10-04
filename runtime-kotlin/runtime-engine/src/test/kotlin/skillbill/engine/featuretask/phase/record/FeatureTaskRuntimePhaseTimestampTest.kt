@@ -1,13 +1,14 @@
 package skillbill.engine.featuretask.phase.record
 
+import java.time.Instant
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.goalrunner.status.completed
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.artifact.decodePhaseRecordFromArtifact
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,9 +33,9 @@ class FeatureTaskRuntimePhaseTimestampTest {
       )
     assertEquals(Instant.parse("2026-06-02T10:00:00Z"), completed.startedAt)
     assertEquals(1250L, completed.durationMillis)
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       decodePhaseRecordFromArtifact(JsonCodec.parseValue(phaseJson("broken")))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   private fun phaseJson(start: String) =

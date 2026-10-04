@@ -1,6 +1,11 @@
 package skillbill.engine.featuretask.persist
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import java.nio.file.Files
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
@@ -12,10 +17,6 @@ import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
-import java.nio.file.Files
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -63,12 +64,12 @@ class WorkflowStateValidationPersistenceTest {
         ),
       )
     invalidInputs.forEach { input ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.transaction { unit ->
           val source = assertNotNull(unit.workflowStates.get(WorkflowFamily.VERIFY, "wfv-strict"))
           unit.workflowStates.save(WorkflowFamily.VERIFY, engine.updateRecord(definition, source, input))
         }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(beforeRow, database.read { it.workflowStates.get(WorkflowFamily.VERIFY, "wfv-strict")?.toRecord() })
     }
     val invalidRows =
@@ -83,9 +84,9 @@ class WorkflowStateValidationPersistenceTest {
         ),
       )
     invalidRows.forEach { invalid ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.transaction { it.workflowStates.saveRecord(WorkflowFamily.VERIFY, invalid) }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(beforeRow, database.read { it.workflowStates.get(WorkflowFamily.VERIFY, "wfv-strict")?.toRecord() })
     }
   }

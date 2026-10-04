@@ -1,9 +1,10 @@
 package skillbill.workflow.model.persistence.artifact
 
+import java.math.BigDecimal
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import java.math.BigDecimal
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -11,9 +12,9 @@ import kotlin.test.assertFailsWith
 class FeatureTaskRuntimePersistenceMapFieldsTest {
   @Test
   fun `exact int coercion rejects lossy big decimal`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       durableArtifactMapReader(mapOf("n" to BigDecimal("1.5"))).requiredInt("n")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

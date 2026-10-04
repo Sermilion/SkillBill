@@ -16,7 +16,7 @@ import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
-import skillbill.error.shellcontent.LegacyProseWorkflowError
+import skillbill.error.shellcontent.legacyProseWorkflowError
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -221,7 +221,7 @@ class FeatureTaskContinuationLookupService(
     }
 
     if (identity.mode == FeatureTaskWorkflowMode.PROSE) {
-      throw LegacyProseWorkflowError(candidate.workflow.workflowId, candidate.workflow.issueKey)
+      throw legacyProseWorkflowError(candidate.workflow.workflowId, candidate.workflow.issueKey)
     }
     val definition = FeatureTaskRuntimePhaseWorkflowDefinition.definition
     workflowSnapshotValidator.validate(candidate.workflow.toSnapshot(), definition.workflowName)

@@ -6,7 +6,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.error.core.rejectedOutputDiagnosticCorruptMessage
 import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
-import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
+import skillbill.error.shellcontent.invalidProducerOutputEvidenceSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -358,7 +358,7 @@ private fun ResultSet.toProducerEvidence(): ProducerOutputEvidence {
   val attempt = getInt("attempt")
   val generation = getInt("generation")
   if (getObject("generation") == null || generation < 0) {
-    throw InvalidProducerOutputEvidenceSchemaError(
+    throw invalidProducerOutputEvidenceSchemaError(
       "Producer output evidence '$workflowId:$phaseId:$attempt' carries an unusable generation.",
     )
   }

@@ -2,7 +2,7 @@ package skillbill.workflow.decomposition.runtime
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestProjectionFailurePayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 
@@ -16,7 +16,7 @@ internal fun DurableWorkflowArtifacts.decompositionManifestProjectionFailure():
   if (!containsKey(DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY)) return null
   val raw =
     JsonCodec.anyToStringAnyMap(this[DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY])
-      ?: throw InvalidWorkflowStateSchemaError(
+      ?: throw invalidWorkflowStateSchemaError(
         "Decomposition manifest projection failure must decode to an object.",
       )
   val operation = raw.requiredFailureField(DecompositionManifestProjectionFailurePayloadKeys.OPERATION, "operation")
@@ -33,6 +33,6 @@ private fun Map<String, Any?>.requiredFailureField(
   label: String,
 ): String =
   (this[key] as? String)?.takeIf(String::isNotBlank)
-    ?: throw InvalidWorkflowStateSchemaError(
+    ?: throw invalidWorkflowStateSchemaError(
       "Decomposition manifest projection failure $label is required.",
     )

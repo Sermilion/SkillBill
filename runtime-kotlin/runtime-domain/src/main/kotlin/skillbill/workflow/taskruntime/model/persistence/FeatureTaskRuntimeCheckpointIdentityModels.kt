@@ -6,7 +6,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeCheckpointIdentityVersion
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
@@ -229,4 +229,4 @@ fun featureTaskRuntimeAppendCheckpointIdentity(
   }
 }
 
-private fun checkpointIdentityError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+private fun checkpointIdentityError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)

@@ -1,7 +1,7 @@
 package skillbill.application
 
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -216,7 +216,7 @@ class InMemoryWorkflowStates : WorkflowStateRepositoryDefaults() {
     val row = getFeatureTaskWorkflow(workflowId) ?: return null
     val effectiveMode = row.mode ?: FeatureTaskWorkflowMode.PROSE
     if (effectiveMode != mode) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Feature-task workflow '$workflowId' is mode='${effectiveMode.wireValue}', not '${mode.wireValue}'.",
       )
     }

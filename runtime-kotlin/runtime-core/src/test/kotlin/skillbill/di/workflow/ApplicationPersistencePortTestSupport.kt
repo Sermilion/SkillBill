@@ -37,7 +37,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.testExecutionPlan
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -1226,7 +1226,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
     getFeatureTaskWorkflow(workflowId)?.also { row ->
       val actualMode = row.mode ?: PROSE
       if (actualMode != mode) {
-        throw InvalidWorkflowStateSchemaError("Unexpected feature-task workflow mode.")
+        throw invalidWorkflowStateSchemaError("Unexpected feature-task workflow mode.")
       }
     }
 

@@ -1,19 +1,20 @@
 package skillbill.infrastructure.sqlite
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.Statement
 import org.junit.jupiter.api.Assumptions
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkListRowError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import java.nio.file.Files
-import java.nio.file.Path
-import java.sql.Connection
-import java.sql.DriverManager
-import java.sql.Statement
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -427,7 +428,11 @@ internal fun assertLegacyStateEntryFallbacks(connection: Connection) {
   )
   assertEstimatedMissingStateEntries(connection, "feature_task_workflows", "workflow_id", "wfl-no-time")
   assertEstimatedMissingStateEntries(connection, "goal_issue_progress", "parent_workflow_id", "goal-no-time")
-  assertFailsWith<InvalidWorkListRowError> { SQLiteWorkListRepository(connection).list() }
+  assertFailsWith<SkillBillRuntimeException> {
+    SQLiteWorkListRepository(connection).list()
+  }.also {
+    assertEquals(WorkflowFailureCode.INVALID_WORK_LIST_ROW, it.code)
+  }
 }
 
 internal fun assertStateEntryFallbacks(
