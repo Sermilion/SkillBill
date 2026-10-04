@@ -96,6 +96,16 @@ internal object StandaloneReviewReportAdmission {
       if (rawOutput.lineSequence().count { it.trim().startsWith("verdict:") } != 1) {
         add("report must contain exactly one verdict line")
       }
+      if (rawOutput.lineSequence().lastOrNull { it.isNotBlank() }?.trim()?.startsWith("verdict:") != true) {
+        add("report verdict must be the last nonblank line")
+      }
+      if (
+        rawOutput.lineSequence().map(String::trim)
+          .filter { it.isNotEmpty() && it != "NO_FINDINGS" && !it.startsWith("verdict:") }
+          .any { !ParallelReviewFindingParser.parallelFindingPattern.matches(it) }
+      ) {
+        add("report contains unexpected content outside finding entries")
+      }
     }
 
   private fun integrationRejections(outcome: ReviewIntegrationPassOutcome): List<String> =

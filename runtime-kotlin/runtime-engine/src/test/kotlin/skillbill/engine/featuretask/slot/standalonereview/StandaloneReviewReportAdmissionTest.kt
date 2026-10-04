@@ -17,6 +17,65 @@ import kotlin.test.assertTrue
 
 class StandaloneReviewReportAdmissionTest {
   @Test
+  fun `an incomplete review warning cannot be discarded to approve a report`() {
+    val result =
+      ParallelCodeReviewResult(
+        mergeResult = ParallelReviewMergeResult(emptyList(), ""),
+        lane1 = ParallelReviewLaneStatus("codex", true),
+      )
+    val warning = "Review incomplete: could not inspect the diff"
+    val invalidOutputs =
+      listOf(
+        "NO_FINDINGS\nverdict: approved\n$warning",
+        "$warning\nNO_FINDINGS\nverdict: approved",
+        "NO_FINDINGS\n$warning\nverdict: approved",
+        "verdict: approved\nNO_FINDINGS",
+      )
+
+    invalidOutputs.forEach { rawOutput ->
+      val report = StandaloneReviewReportAdmission.admit(rawOutput, result, false)
+
+      assertFalse(report.admitted, rawOutput)
+      assertTrue(report.rejectionReasons.isNotEmpty(), rawOutput)
+      assertEquals(rawOutput, report.rawOutput)
+    }
+  }
+
+  @Test
+  fun `complete reports admit both verdicts with blank lines and trailing whitespace`() {
+    val finding =
+      ParallelReviewMergedFinding(
+        "F-001",
+        listOf("codex"),
+        ParallelReviewSeverity.MAJOR,
+        "High",
+        "src/Auth.kt:1",
+        "broken authorization",
+      )
+    val validOutputs =
+      listOf(
+        "\nNO_FINDINGS\n\nverdict: approved \n\t\n" to emptyList(),
+        "\n- [F-001] Major | High | src/Auth.kt:1 | broken authorization\n\n" +
+          "verdict: changes_requested \n\t\n" to listOf(finding),
+      )
+
+    validOutputs.forEach { (rawOutput, findings) ->
+      val result =
+        ParallelCodeReviewResult(
+          mergeResult = ParallelReviewMergeResult(findings, ""),
+          lane1 = ParallelReviewLaneStatus("codex", true),
+        )
+
+      val report = StandaloneReviewReportAdmission.admit(rawOutput, result, false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertEquals(findings, report.findings)
+      assertEquals(rawOutput, report.rawOutput)
+      assertEquals(if (findings.isEmpty()) "approved" else "changes_requested", report.verdict)
+    }
+  }
+
+  @Test
   fun `a new integration Major completes with changes requested and preserves parent output`() {
     val parentOutput = "NO_FINDINGS\nverdict: approved"
     val integrationOutput = "- [F-001] Major | High | commits=first,second | src/Auth.kt:1 | broken authorization"
