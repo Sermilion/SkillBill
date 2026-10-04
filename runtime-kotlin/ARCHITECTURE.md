@@ -57,7 +57,7 @@ prepared-launch operation. `PhaseStrategyRegistration` pairs each strategy with 
 registry. The accepted attempt host resolves that runner only after required persistence. Ordinary
 and gate strategies receive no raw runner. Goal planning resolves a runner for its accepted
 planning call after required start persistence; its phase-bound launch state rejects another step.
-Review strategies retain their review launch dependency inside the review slot. Strategies cannot
+The in-memory `standalone_review` definition selects one report-only `present_findings` step. Its accepted review binding pins the target and records the report. A valid register exits successfully for either verdict; invalid or failed output blocks with retained findings. The durable `code_review` slot keeps review, verification, remediation, and checkpoint ownership on `PhaseRunState`. Review strategies retain their review launch dependency inside the review slot. Strategies cannot
 recover the host, records, gate context or finalization context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
 and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
 
@@ -331,6 +331,16 @@ Neither a green source scan nor an archived spec establishes universal complianc
 with Clean Architecture, SOLID, or YAGNI.
 
 ## DB-first feature-task continuation
+
+Parent-workflow discovery uses `findFeatureTaskWorkflowsForIssue`, filtering the
+requested issue and any supplied repository identity in SQLite before decoding
+records. Legacy parents without an issue column use the decomposition manifest's
+issue key. Repository binding comes from planning preparation, goal controls, or
+execution identity. Unbound legacy parents retain their existing recovery path.
+Unrelated records are never decoded or validated during this lookup. Corrupt
+matching records still fail at their owning read boundary. Dispatcher intake
+launches readable local specs directly and never enumerates the global work list.
+
 
 Feature-task continuation is repository-scoped and database-authoritative. At workflow creation, an immutable identity row binds the workflow id to a normalized issue key, canonical real-path Git-root identity, repository-relative governed spec path, persisted mode, and standalone/goal-child route scope. Read-only lookup never chooses among multiple eligible rows by timestamp.
 
@@ -1275,10 +1285,11 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
-  `STANDALONE` has every slot; `GOAL_CHILD` omits `pull_request`.
-  `forRun(goalContinuation)` picks one. The declaration derived from a
+  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `STANDALONE` uses
+  all nine and `GOAL_CHILD` omits `pull_request`. `standalone_review` is outside
+  that list. `forRun(goalContinuation)` picks one. The declaration derived from a
   definition equals the phase workflow's, and a reorder raises a typed error.
-  `REVIEW` (the `code_review` slot), `VALIDATION` (the `quality_gate` slot),
+  `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `PLAN` (`preplan` and `plan`), `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
   `IN_MEMORY`) that a phase run drives on its own. Each carries a
@@ -1324,9 +1335,16 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
   uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
   A target that names no commit is a usage error, and a worktree status that
-  cannot be read blocks the review step. `skill-bill code-review` routes
-  through `PhaseRunEntry` too, so both modes find, verify, and fix Blocker and
-  Major findings before it reports. `PhaseInstructions` carries the operator
+  cannot be read blocks the review step. `skill-bill code-review` routes through
+  `PhaseRunEntry` too. Both entry points pin the requested target through the
+  accepted review binding and run only `present_findings`. Inline, auto, and
+  omitted mode use one agent session; delegated mode uses
+  `ParallelCodeReviewRunner`. The runtime admits one canonical findings register
+  and verdict. Either valid verdict exits 0. Invalid, incomplete, or failed output
+  exits 1 with available findings and a block reason. Standalone review does not
+  edit or commit. Full runs keep `CODE_REVIEW` with review, verification, and
+  repair; durable checkpoint commits remain owned by the full-run `PhaseRunState`.
+  `PhaseInstructions` carries the operator
   instructions a phase run adds to its step prompts.
   `PhaseRunIntakeResolver` turns the intake into the run's issue key and run
   invariants as the definition's intake requirement says. An optional-intake
@@ -1433,8 +1451,10 @@ Composition:
   | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
-  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps `inline` and `auto` here, and `RuntimeOwnedReviewMode` rejects a requested `delegated` |
-  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; the `REVIEW` definition selects it for `delegated`, standalone and goal-child runs do not |
+  | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
+  | `delegated` | `slot.codereview` | The full-run CodeReviewSlot, with a review step that runs ParallelCodeReviewRunner lanes inside its PhaseRunner session; full-run repair and checkpoint behavior stays here |
+  | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one agent session, no repair or checkpoint path |
+  | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition; no repair or checkpoint path |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |

@@ -32,6 +32,8 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
@@ -60,6 +62,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
@@ -90,6 +93,7 @@ class PhaseStrategyCompositionTest {
         strategies +
           listOf(
             DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
+            DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
             GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
@@ -111,6 +115,7 @@ class PhaseStrategyCompositionTest {
       ImplementThenSimplifyStrategy(),
       AcceptanceAuditStrategy(),
       InlineReviewStrategy(runner),
+      InlineStandaloneReviewStrategy(runner),
       PackBuildStrategy(),
       PackValidationStrategy(),
       AgentValidateStrategy(),
@@ -194,15 +199,16 @@ class PhaseStrategyCompositionTest {
 
   @Test
   fun `execution rejects a slot step outside the resolved plan`() {
+    val definition = SkeletonDefinition("code-review", listOf(PhaseSlot.CODE_REVIEW))
     val selectedReview = CompositionTestStrategy(PhaseSlot.CODE_REVIEW, "review-only", listOf(PHASE_REVIEW))
     val registry = PhaseStrategyRegistry(listOf(selectedReview))
     val selection =
       PhaseStrategySelection(
         registry,
-        mapOf(SkeletonDefinition.REVIEW to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("review-only"))),
+        mapOf(definition to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("review-only"))),
       )
     val lookup = PhaseStrategyLookup(registry, selection)
-    val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, emptySet()))
+    val plan = lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
 
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
       lookup.strategyFor(PHASE_VERIFY_FINDINGS, plan)
@@ -217,7 +223,14 @@ class PhaseStrategyCompositionTest {
 
     SkeletonDefinition.entries.forEach { definition ->
       val reviewModes: List<CodeReviewExecutionMode?> =
-        if (PhaseSlot.CODE_REVIEW in definition.slots) CodeReviewExecutionMode.entries.map { it } else listOf(null)
+        if (definition.slots.any {
+            it == PhaseSlot.CODE_REVIEW || it == PhaseSlot.STANDALONE_REVIEW
+          }
+        ) {
+          CodeReviewExecutionMode.entries.map { it }
+        } else {
+          listOf(null)
+        }
       val qualityGates: List<FeatureTaskRuntimeQualityGateSelection?> =
         if (definition == SkeletonDefinition.GOAL_CHILD) {
           FeatureTaskRuntimeQualityGateSelection.entries.map { it }
@@ -259,7 +272,12 @@ class PhaseStrategyCompositionTest {
             PhaseStrategySelectionFacts(
               definition,
               buildSet {
-                if (PhaseSlot.CODE_REVIEW in definition.slots) add(CodeReviewExecutionMode.INLINE)
+                if (definition.slots.any {
+                    it == PhaseSlot.CODE_REVIEW || it == PhaseSlot.STANDALONE_REVIEW
+                  }
+                ) {
+                  add(CodeReviewExecutionMode.INLINE)
+                }
                 gate?.let(::add)
               },
             ),
@@ -459,6 +477,7 @@ class PhaseStrategyCompositionTest {
         PHASE_AUDIT_PLAN_FIX to policy(SINGLE, READ_ONLY_IDLE),
         PHASE_AUDIT_IMPLEMENT_FIX to policy(MUTATING, FILE_MUTATING).extendingInventory(),
         PHASE_REVIEW to policy(FILE_MUTATING, GENERATION_SCOPED),
+        PHASE_PRESENT_FINDINGS to policy(SINGLE, READ_ONLY_IDLE),
         PHASE_VERIFY_FINDINGS to policy(READ_ONLY_IDLE, FILE_MUTATING),
         PHASE_IMPLEMENT_FIX to
           policy(MUTATING, FILE_MUTATING, GENERATION_SCOPED).extendingInventory(),
@@ -526,7 +545,7 @@ class PhaseStrategyCompositionTest {
         } else {
           InlineReviewStrategy.ID
         },
-        lookup.strategyFor(PHASE_REVIEW, plan).strategyId,
+        lookup.strategyFor(PHASE_PRESENT_FINDINGS, plan).strategyId,
       )
     }
     if (definition == SkeletonDefinition.GOAL_PLANNING) {

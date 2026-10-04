@@ -67,6 +67,7 @@ harness's launch behavior.
 
 ## Shared Delegation Rules
 
+- Standalone phase review is report-only. Return recommendations without applying fixes, staging, committing, amending, resetting, or launching another review command. Project these restrictions into every assigned specialist lane, including provider-native lanes, using the authoritative specialist contract.
 - Every delegated specialist starts in a fresh conversation. Native Codex launches MUST set `fork_turns: "none"`. Other harnesses retain their existing launch behavior, and no harness may hand a specialist the parent conversation.
 - Project exactly one compact specialist contract, one applicable rubric, immutable review identifiers and revisions, assigned paths and hunks, relevant criteria references, matched rules, named evidence targets, broker identifiers, and a budget summary into each launch. The parent transcript, full phase briefing, unrelated criteria or rubrics, and unrelated diff are forbidden.
 - Specialists use the bounded evidence surface and do not execute status, scope, stack, routing, or broad-diff discovery. Out-of-assignment access requires a nonblank reachability reason and consumes a bounded expansion.

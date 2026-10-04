@@ -235,6 +235,8 @@ internal fun Connection.getFeatureTaskWorkflowRowAsMode(
 internal fun Connection.listFeatureTaskWorkflowRows(
   mode: FeatureTaskWorkflowMode,
   limit: Int,
+  normalizedIssueKey: String? = null,
+  repositoryIdentity: String? = null,
 ): List<WorkflowStateRecord> {
   val normalizedLimit = limit.coerceAtLeast(0)
   return prepareStatement(
@@ -258,11 +260,36 @@ internal fun Connection.listFeatureTaskWorkflowRows(
       finished_at
     FROM feature_task_workflows
     WHERE mode = ?
+      AND (? IS NULL OR UPPER(TRIM(issue_key)) = ? OR (
+        issue_key IS NULL AND CASE WHEN json_valid(artifacts_json)
+          THEN UPPER(TRIM(COALESCE(json_extract(artifacts_json, '$.decomposition_runtime.issue_key'),
+            json_extract(artifacts_json, '$.goal_continuation.issue_key')))) = ?
+          ELSE 0 END
+      ))
+      AND (? IS NULL OR COALESCE(
+        (SELECT repository_identity FROM goal_planning_preparations
+          WHERE parent_goal_workflow_id = feature_task_workflows.workflow_id LIMIT 1),
+        (SELECT CASE WHEN json_valid(control_state_json)
+          THEN json_extract(control_state_json, '$.repository_identity') END
+          FROM goal_runner_controls WHERE parent_workflow_id = feature_task_workflows.workflow_id),
+        (SELECT repository_identity FROM feature_task_execution_identities
+          WHERE workflow_id = feature_task_workflows.workflow_id),
+        ?
+      ) = ?)
     ORDER BY updated_at DESC, rowid DESC
     LIMIT ?
     """.trimIndent(),
   ).use { statement ->
-    statement.bindAll(mode.wireValue, normalizedLimit)
+    statement.bindAll(
+      mode.wireValue,
+      normalizedIssueKey,
+      normalizedIssueKey,
+      normalizedIssueKey,
+      repositoryIdentity,
+      repositoryIdentity,
+      repositoryIdentity,
+      normalizedLimit,
+    )
     statement.executeQuery().use { resultSet ->
       buildList {
         while (resultSet.next()) {

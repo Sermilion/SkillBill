@@ -24,9 +24,13 @@ intake still requires a key and requirements; the dispatcher allocates the key
 before calling it and does not reserve keys by writing placeholder specs or
 workflow rows. Supplied requirements are authoritative and need no tracker.
 For a tracker reference without requirements, the dispatcher first searches
-local specs and repository-matched persisted workflows. Existing work resumes
-without replacement or tracker lookup. Database inspection failures block
-existing-work resolution rather than count as absent work. Only an unresolved
+local specs. A readable local spec launches directly, without `work status` or
+`work list`. Without a local spec, intake may use `goal status <issue-key>` with
+the current repository root to inspect that goal alone. Runtime discovery filters
+by the requested issue and repository before decoding workflow records. An
+unrelated workflow never participates in admission or blocks new work. Existing
+work resumes without replacement or tracker lookup. A lookup failure for the
+requested goal blocks resolution rather than counts as absent work. Only an unresolved
 tracker reference without requirements uses its connected tracker. Lookup
 failure asks for requirements, never infers them. Local key allocation does not
 query the workflow database or a tracker.
@@ -54,7 +58,7 @@ supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
 
-`skill-bill phase <review|validation|plan|pr>` and `skill-bill code-review` run one in-memory phase through the same run loop, with no workflow row, new branch, or checkpoint commit. `skill-bill code-review` finds, verifies, and fixes findings in both modes. `phase plan <KEY> [description]` writes a governed spec bundle that `skill-bill goal` runs, and a direct plan blocks. Implementation and simplification run inside workflows and consume their plan output. `phase pr` composes `commit_push -> pr`. It refuses a detached, protected, or base branch before staging. The runtime commits all staged, unstaged, and untracked changes, excluding ignored and runtime-private files, then pushes before creating or updating the pull request. A clean retry pushes the existing commit without creating an empty one. `commit_push` and the durable definitions are not runnable on their own.
+`skill-bill phase review` and `skill-bill code-review` run the in-memory, report-only `standalone_review` slot. They print the findings register and exit 0 for either valid verdict. Invalid, incomplete, or failed reports print available findings and a block reason, then exit 1. They never edit or commit. Full feature runs keep the `code_review` slot, which verifies findings and can fix Blocker and Major findings before reporting the rest. Other standalone phases also run in-memory, with no workflow row, new branch, or checkpoint commit. `phase plan <KEY> [description]` writes a governed spec bundle that `skill-bill goal` runs, and a direct plan blocks. Implementation and simplification run inside workflows and consume their plan output. `phase pr` composes `commit_push -> pr`. It refuses a detached, protected, or base branch before staging. The runtime commits all staged, unstaged, and untracked changes, excluding ignored and runtime-private files, then pushes before creating or updating the pull request. A clean retry pushes the existing commit without creating an empty one. `commit_push` and the durable definitions are not runnable on their own.
 
 Standalone validation always selects the platform gate from the current branch's
 tracked files and runs full branch validation, regardless of which files changed.

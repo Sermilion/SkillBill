@@ -24,6 +24,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_WRITE_HISTORY: String = FeatureTaskRuntimePhaseIds.WRITE_HISTORY
   const val PHASE_COMMIT_PUSH: String = FeatureTaskRuntimePhaseIds.COMMIT_PUSH
   const val PHASE_PR: String = FeatureTaskRuntimePhaseIds.PR
+  const val PHASE_PRESENT_FINDINGS: String = FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS
 
   const val DERIVED_CONTEXT_DIFF: String = "diff"
   const val DERIVED_CONTEXT_SCOPED_REPOSITORY_STATE: String = "scoped_repository_state"

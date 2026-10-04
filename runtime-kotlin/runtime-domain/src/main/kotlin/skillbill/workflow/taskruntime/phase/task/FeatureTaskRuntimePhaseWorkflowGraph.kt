@@ -5,7 +5,7 @@ import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFA
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object FeatureTaskRuntimePhaseWorkflowGraph {
   val definition: WorkflowDefinition =
@@ -50,7 +50,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.ABANDONED,
         ),
       defaultInitialStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-      stepIds = FeatureTaskRuntimePhaseIds.all,
+      stepIds = SkeletonDefinition.FEATURE_RUN_SLOTS.flatMap { it.steps },
       stepLabels =
         mapOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to "Phase 1: Pre-plan",

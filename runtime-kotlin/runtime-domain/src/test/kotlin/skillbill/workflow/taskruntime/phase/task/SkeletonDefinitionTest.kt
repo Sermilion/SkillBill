@@ -116,26 +116,12 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `review keeps the capped review_fix loop and no gate from implementation or audit`() {
+  fun `standalone review has one report step and no repair loop`() {
     val declaration = SkeletonDefinition.REVIEW.declaration()
 
-    assertEquals(listOf("review", "verify_findings", "implement_fix"), declaration.forwardPhaseIds)
-    assertEquals(
-      todaysDeclaration(goalChildForward).backwardEdges.filter {
-        it.loopId == "review_fix"
-      },
-      declaration.backwardEdges,
-    )
-    assertEquals(
-      listOf(
-        FeatureTaskRuntimePhaseEntryGate(
-          "implement_fix",
-          "verify_findings",
-          FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
-        ),
-      ),
-      declaration.entryGates,
-    )
+    assertEquals(listOf("present_findings"), declaration.forwardPhaseIds)
+    assertEquals(emptyList(), declaration.backwardEdges)
+    assertEquals(emptyList(), declaration.entryGates)
     assertEquals(SkeletonRunStateKind.IN_MEMORY, SkeletonDefinition.REVIEW.runStateKind)
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.STANDALONE.runStateKind)
   }

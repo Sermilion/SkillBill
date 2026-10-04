@@ -60,6 +60,13 @@ internal class FeatureTaskWorkflowRowStore(
     limit: Int,
   ): List<WorkflowStateRecord> = connection.listFeatureTaskWorkflowRows(mode, limit)
 
+  fun findFeatureTaskWorkflowsForIssue(
+    mode: FeatureTaskWorkflowMode,
+    normalizedIssueKey: String,
+    repositoryIdentity: String?,
+  ): List<WorkflowStateRecord> =
+    connection.listFeatureTaskWorkflowRows(mode, Int.MAX_VALUE, normalizedIssueKey, repositoryIdentity)
+
   fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     listFeatureTaskWorkflows(mode, 1).firstOrNull()
 

@@ -29,6 +29,7 @@ class PhaseSlotTest {
         "write_history",
         "commit_push",
         "pull_request",
+        "standalone_review",
       ),
       PhaseSlot.entries.map { it.wireValue },
     )

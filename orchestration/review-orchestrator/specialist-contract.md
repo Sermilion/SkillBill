@@ -25,6 +25,7 @@ Do not reference this repo-relative path directly from installable skills — us
 - Confidence: `High | Medium | Low`
 - Keep each specialist review pass to at most 7 findings
 - Include a minimal concrete fix for each finding
+- In standalone phase review, concrete fixes are recommendations. Do not apply them, stage, commit, amend, or reset files.
 
 ## Packet Consumer Contract
 

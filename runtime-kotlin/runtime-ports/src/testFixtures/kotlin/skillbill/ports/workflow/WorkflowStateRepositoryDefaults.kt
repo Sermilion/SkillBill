@@ -1,5 +1,7 @@
 package skillbill.ports.workflow
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -7,6 +9,7 @@ import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -58,6 +61,23 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     mode: FeatureTaskWorkflowMode,
     limit: Int,
   ): List<WorkflowStateRecord> = emptyList()
+
+  open override fun findFeatureTaskWorkflowsForIssue(
+    mode: FeatureTaskWorkflowMode,
+    normalizedIssueKey: String,
+    repositoryIdentity: String?,
+  ): List<WorkflowStateRecord> =
+    listFeatureTaskWorkflows(mode, Int.MAX_VALUE).filter { row ->
+      val key =
+        row.issueKey ?: run {
+          val artifacts = JsonCodec.parseValue(row.artifactsJson) as Map<*, *>
+          val runtime = artifacts[DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()] as? Map<*, *>
+          val continuation =
+            artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.label()] as? Map<*, *>
+          (runtime?.get(SharedPayloadKeys.ISSUE_KEY) ?: continuation?.get(SharedPayloadKeys.ISSUE_KEY))?.toString()
+        }
+      key?.trim()?.uppercase() == normalizedIssueKey
+    }
 
   open override fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     listFeatureTaskWorkflows(mode, 1).firstOrNull()

@@ -61,7 +61,7 @@ class GoalRunnerSpecDriftRecovery(
         "previous_hash=${drift.previousHash} current_hash=${drift.currentHash} " +
         "cascaded_subtask_ids=${result.cascadedPlanSubtaskIds.joinToString(",")}",
     )
-    return requireNotNull(manifestStore.loadDurableByIssueKey(request.issueKey)) {
+    return requireNotNull(manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)) {
       "Goal '${request.issueKey}' disappeared after spec drift recovery."
     }.copy(repoRoot = request.repoRoot)
   }

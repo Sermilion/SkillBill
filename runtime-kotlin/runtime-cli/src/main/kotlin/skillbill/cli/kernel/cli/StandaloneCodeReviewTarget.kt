@@ -6,29 +6,30 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 internal data class StandaloneCodeReviewTarget(
   val scope: ParallelReviewScope,
   val commitRevision: String?,
+  val omitted: Boolean = false,
 )
 
 internal const val DEFAULT_CODE_REVIEW_SCOPE = "branch"
 
 internal fun resolveStandaloneCodeReviewTarget(
   positional: String?,
-  scopeToken: String,
+  scopeToken: String?,
 ): StandaloneCodeReviewTarget {
   val positionalToken = positional?.trim()?.takeIf { it.isNotBlank() }
   val optionScope = parsedReviewScope(scopeToken)
   if (positionalToken == null) {
-    return StandaloneCodeReviewTarget(optionScope, null)
+    return StandaloneCodeReviewTarget(optionScope, null, omitted = scopeToken == null)
   }
   val namedScope = namedStandaloneScope(positionalToken)
   if (namedScope != null) {
-    if (scopeToken != DEFAULT_CODE_REVIEW_SCOPE && optionScope != namedScope) {
+    if (scopeToken != null && optionScope != namedScope) {
       throw UsageError(
         "A positional '$positionalToken' cannot be combined with --scope '$scopeToken'.",
       )
     }
     return StandaloneCodeReviewTarget(namedScope, null)
   }
-  if (scopeToken != DEFAULT_CODE_REVIEW_SCOPE) {
+  if (scopeToken != null) {
     throw UsageError(
       "A commit target cannot be combined with --scope '$scopeToken'; use the default branch scope.",
     )
@@ -36,8 +37,8 @@ internal fun resolveStandaloneCodeReviewTarget(
   return StandaloneCodeReviewTarget(ParallelReviewScope.BRANCH, lastCommitRevision(positionalToken))
 }
 
-internal fun parsedReviewScope(scope: String): ParallelReviewScope =
-  when (scope) {
+internal fun parsedReviewScope(scope: String?): ParallelReviewScope =
+  when (scope ?: DEFAULT_CODE_REVIEW_SCOPE) {
     "staged" -> ParallelReviewScope.STAGED
     "unstaged" -> ParallelReviewScope.UNSTAGED
     "uncommitted" -> ParallelReviewScope.UNCOMMITTED
