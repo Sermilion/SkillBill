@@ -3,6 +3,7 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.error.core.ReviewAttributionFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.PhaseSlotFailureCode
@@ -16,7 +17,6 @@ import skillbill.mcp.shared.invalidMcpToolArgument
 import skillbill.mcp.telemetry.TELEMETRY_EVENT_CONTRACT_VERSION
 import skillbill.mcp.telemetry.TelemetryEventSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.review.model.ReviewAttributionFailureCode
 import kotlin.coroutines.cancellation.CancellationException
 
 internal object McpToolDispatcher {

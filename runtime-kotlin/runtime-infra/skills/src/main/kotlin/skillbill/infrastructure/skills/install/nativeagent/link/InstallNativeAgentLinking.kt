@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.infrastructure.skills.install.apply.createNewSymlinkWithGuidance
-import skillbill.infrastructure.skills.install.apply.createReplacementSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.apply.tryCreateNewSymlinkWithGuidance
+import skillbill.infrastructure.skills.install.apply.tryCreateReplacementSymlinkWithGuidance
 import skillbill.infrastructure.skills.install.nativeagent.InstallNativeAgentResult
 import skillbill.infrastructure.skills.install.nativeagent.inventory.isCanonicalNativeAgentArtifactTarget
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -67,14 +67,19 @@ private fun applyInstallDecision(
     InstallAction.AlreadyLinked -> InstallNativeAgentResult.Skipped(linkPath, "already linked to $resolvedSource")
     InstallAction.Replace, InstallAction.Create -> {
       beforeMutation(linkPath)
-      when (decision) {
-        InstallAction.Replace -> createReplacementSymlinkWithGuidance(linkPath, resolvedSource)
-        InstallAction.Create -> createNewSymlinkWithGuidance(linkPath, resolvedSource)
-        InstallAction.Skip,
-        InstallAction.AlreadyLinked,
-        -> error("Unexpected native-agent install decision '$decision'.")
+      val failure =
+        when (decision) {
+          InstallAction.Replace -> tryCreateReplacementSymlinkWithGuidance(linkPath, resolvedSource)
+          InstallAction.Create -> tryCreateNewSymlinkWithGuidance(linkPath, resolvedSource)
+          InstallAction.Skip,
+          InstallAction.AlreadyLinked,
+          -> error("Unexpected native-agent install decision '$decision'.")
+        }
+      if (failure == null) {
+        InstallNativeAgentResult.Linked(linkPath)
+      } else {
+        InstallNativeAgentResult.Failed(failure.path, failure.error)
       }
-      InstallNativeAgentResult.Linked(linkPath)
     }
   }
 

@@ -240,3 +240,7 @@ fun incompatibleGoalPlanningPreparationRecoveryError(
     "Goal planning preparation '$workflowId' subtask $subtaskId cannot be recovered: $reason",
     cause,
   )
+
+enum class SkillRemoveFailureCode : RuntimeFailureCode {
+  ROLLBACK_INCOMPLETE,
+}

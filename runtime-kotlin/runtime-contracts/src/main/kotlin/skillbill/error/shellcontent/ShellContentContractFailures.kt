@@ -7,36 +7,39 @@ import skillbill.error.core.FailureWireCode
 import skillbill.error.core.FailureWireDecodeCode
 import skillbill.error.core.GoalTelemetryRowFailureCode
 import skillbill.error.core.JsonFailureCode
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.PhaseSlotFailureCode
 
 fun Throwable.isShellContentContractFailure(): Boolean {
-  if (this is ShellContentContractException) return true
   val failureCode = (this as? SkillBillRuntimeException)?.code
-  return failureCode is FailureWireCode ||
-    failureCode is JsonFailureCode ||
-    failureCode is FailureWireDecodeCode ||
-    failureCode is ManifestFailureCode ||
-    failureCode is SkillStagingFailureCode ||
-    failureCode is ReviewContextFailureCode ||
-    failureCode is AgentAddonFailureCode ||
-    failureCode is GovernedReviewFailureCode ||
-    failureCode is GoalTelemetryRowFailureCode ||
-    failureCode is ExternalPlatformPackFailureCode ||
-    failureCode is ExternalAddonFailureCode ||
-    failureCode == PhaseSlotFailureCode.VALIDATION_SCOPE ||
-    failureCode == PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION ||
-    failureCode == PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET ||
-    failureCode == PhaseSlotFailureCode.INTAKE_REQUIRED ||
-    failureCode == PhaseSlotFailureCode.PULL_REQUEST_BRANCH_REFUSED ||
-    failureCode == PhaseSlotFailureCode.UNKNOWN_PHASE_STRATEGY ||
-    failureCode is InstallFailureCode ||
-    failureCode is DurableInstallStateFailureCode ||
-    failureCode is FeatureTaskRuntimeFailureCode ||
-    failureCode is FeatureTaskRuntimeExecutionPlanAdmissionCode ||
-    failureCode is WorkflowFailureCode
+  return when (failureCode) {
+    is FailureWireCode,
+    is JsonFailureCode,
+    is FailureWireDecodeCode,
+    is ManifestFailureCode,
+    is SkillStagingFailureCode,
+    is ReviewContextFailureCode,
+    is AgentAddonFailureCode,
+    is GovernedReviewFailureCode,
+    is GoalTelemetryRowFailureCode,
+    is ExternalPlatformPackFailureCode,
+    is ExternalAddonFailureCode,
+    is InstallFailureCode,
+    is DurableInstallStateFailureCode,
+    is FeatureTaskRuntimeFailureCode,
+    is FeatureTaskRuntimeExecutionPlanAdmissionCode,
+    is WorkflowFailureCode,
+    -> true
+    PhaseSlotFailureCode.VALIDATION_SCOPE,
+    PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION,
+    PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
+    PhaseSlotFailureCode.INTAKE_REQUIRED,
+    PhaseSlotFailureCode.PULL_REQUEST_BRANCH_REFUSED,
+    PhaseSlotFailureCode.UNKNOWN_PHASE_STRATEGY,
+    -> true
+    else -> false
+  }
 }
 
 fun Throwable.isInvalidWorkflowStateFailure(): Boolean =

@@ -320,7 +320,8 @@ internal class CodeReviewStep(
             if (resolved !is WorkflowGitOperationResult.Ok) {
               throw SkillBillRuntimeException(
                 PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
-                "Review target '${target.sha}' does not name a commit in this repository; expected HEAD, uncommitted, " +
+                "Review target '${target.sha}' does not name a commit in this repository; " +
+                  "expected HEAD, uncommitted, " +
                   "pr, staged, unstaged, or a commit sha, branch, or tag.",
               )
             }

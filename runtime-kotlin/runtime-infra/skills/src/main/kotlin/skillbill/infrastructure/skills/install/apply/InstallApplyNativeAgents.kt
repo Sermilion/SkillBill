@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOutcome
@@ -64,10 +65,26 @@ private fun applyNativeAgentProvider(
   runCatching {
     installer.link(nativeAgentLinkRequest(context))
   }.fold(
-    onSuccess = { outcome -> nativeAgentProviderOutcomes(installer, outcome) },
+    onSuccess = { outcome ->
+      val failure = outcome.failure
+      if (failure == null) {
+        nativeAgentProviderOutcomes(installer, outcome)
+      } else {
+        listOf(
+          failedNativeAgentOutcome(
+            installer.agent,
+            installer.provider,
+            failure.error,
+            failure.path,
+          ).also { nativeOutcome ->
+            nativeOutcome.issue?.let(context.failures::add)
+          },
+        )
+      }
+    },
     onFailure = { error ->
       listOf(
-        failedNativeAgentOutcome(installer, error).also { nativeOutcome ->
+        failedNativeAgentOutcome(installer.agent, installer.provider, error, null).also { nativeOutcome ->
           nativeOutcome.issue?.let(context.failures::add)
         },
       )
@@ -137,25 +154,28 @@ private fun nativeAgentProviderOutcomes(
   }
 }
 
-private fun failedNativeAgentOutcome(
-  installer: NativeAgentInstaller,
+internal fun failedNativeAgentOutcome(
+  agent: SupportedAgent,
+  provider: NativeAgentProviderId,
   error: Throwable,
+  failedPath: Path?,
 ): NativeAgentApplyOutcome {
-  val symlinkError = error as? InstallSymlinkException
+  val symlinkFailure = (error as? SkillBillRuntimeException)?.code == InstallApplyFailureCode.SYMLINK
+  val path = failedPath?.toFileLocation()
   val issue =
     InstallApplyIssue(
       kind = InstallApplyIssueKind.NATIVE_AGENT_LINK_FAILED,
       message = error.message.orEmpty(),
-      agent = installer.agent,
-      path = symlinkError?.linkPath?.toFileLocation(),
-      guidance = symlinkError?.guidance,
+      agent = agent,
+      path = path,
+      guidance = windowsSymlinkGuidance().takeIf { symlinkFailure },
       causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return NativeAgentApplyOutcome(
-    provider = installer.provider,
-    agent = installer.agent,
+    provider = provider,
+    agent = agent,
     status = NativeAgentApplyStatus.FAILED,
-    path = symlinkError?.linkPath?.toFileLocation(),
+    path = path,
     message = error.message.orEmpty(),
     issue = issue,
   )

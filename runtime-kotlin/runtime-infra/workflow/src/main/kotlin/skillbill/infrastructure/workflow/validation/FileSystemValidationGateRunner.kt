@@ -1,12 +1,13 @@
 package skillbill.infrastructure.workflow.validation
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmResolver
-import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
-import skillbill.infrastructure.host.jvm.GateJvmUnresolvedException
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.applyTo
+import skillbill.infrastructure.host.jvm.gateJvmStartupFailure
+import skillbill.infrastructure.host.jvm.gateJvmUnresolved
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
@@ -47,12 +48,13 @@ class FileSystemValidationGateRunner(
           ),
         )
       if (processResult.timedOut) {
-        throw ValidationGateProcessException(
+        throw SkillBillRuntimeException(
+          ValidationGateProcessFailureCode.TIMED_OUT,
           "Validation gate command timed out after ${GATE_TIMEOUT_MINUTES}m: ${request.argv.joinToString(" ")}",
         )
       }
       if (processResult.launchFailure) {
-        throw ValidationGateProcessException(processResult.output)
+        throw SkillBillRuntimeException(ValidationGateProcessFailureCode.LAUNCH_FAILED, processResult.output)
       }
       val stdout = processResult.output
       val durationMs = ((System.nanoTime() - started) / NANOS_PER_MILLIS).coerceAtLeast(0L)
@@ -107,17 +109,12 @@ class FileSystemValidationGateRunner(
   }
 }
 
-internal class ValidationGateProcessException(message: String, cause: Throwable? = null) : RuntimeException(
-  message,
-  cause,
-)
-
 internal fun applyResolvedGateJvm(
   environment: MutableMap<String, String>,
   disposition: GateJvmDisposition,
 ) {
   if (disposition is GateJvmDisposition.Unresolved) {
-    throw GateJvmUnresolvedException(disposition.rejectedCandidate, disposition.requiredMajor)
+    throw gateJvmUnresolved(disposition.rejectedCandidate, disposition.requiredMajor)
   }
   disposition.applyTo(environment)
 }
@@ -137,7 +134,7 @@ internal fun rejectGateJvmStartupFailure(
 ) {
   if (exitCode == 0 || parsedFindings.isNotEmpty()) return
   if (JVM_STARTUP_FAILURE_MARKERS.none { marker -> stdout.contains(marker) }) return
-  throw GateJvmStartupFailureException(resolvedGateJvmLabel(disposition), gateStdoutExcerpt(stdout))
+  throw gateJvmStartupFailure(resolvedGateJvmLabel(disposition), gateStdoutExcerpt(stdout))
 }
 
 private fun resolvedGateJvmLabel(disposition: GateJvmDisposition): String =

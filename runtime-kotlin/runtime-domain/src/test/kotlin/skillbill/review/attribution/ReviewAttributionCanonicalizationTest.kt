@@ -1,8 +1,8 @@
 package skillbill.review.attribution
 
+import skillbill.error.core.ReviewAttributionFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.review.model.CanonicalScope
-import skillbill.review.model.ReviewAttributionFailureCode
 import skillbill.review.model.ReviewExecutionMode
 import skillbill.review.model.UNRESOLVED_ATTRIBUTION
 import kotlin.test.Test

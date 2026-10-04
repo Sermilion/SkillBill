@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.scaffold.rendering
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
 import skillbill.infrastructure.skills.scaffold.runtime.service.areaFocus
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
 
 private val FRONTMATTER_BLOCK_LEADING = Regex("""(?s)\A---\n.*?\n---\n""")
@@ -117,6 +118,7 @@ internal fun renderContentBody(
   contentBody?.let { raw ->
     if (FRONTMATTER_BLOCK_LEADING.containsMatchIn(raw.trimStart())) {
       throw SkillBillRuntimeException(
+        ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
         "skill-bill new payload content_body for '${context.skillName}' must not start with a " +
           "YAML frontmatter block; the canonical block is rendered from the payload's name/" +
           "description.",

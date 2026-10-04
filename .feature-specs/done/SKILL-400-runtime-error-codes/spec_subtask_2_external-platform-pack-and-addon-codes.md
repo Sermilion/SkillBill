@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 2 - external-platform-pack-and-addon-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope
@@ -18,7 +18,7 @@ Convert `ExternalPlatformPackErrors.kt` (`ExternalPlatformPackConfigError`, `Amb
   - Drop the payload construction in `InstallNativeAgentOperationsLinkCatalog.kt`, and replace those four assertions with a `PUBLISH` code assertion.
   - This is a deliberate edit beyond type-to-code. Name it in the summary, and record it in the decision entry below.
 - **Pinned labels:** `ExternalPlatformPackTelemetryPolicyTest:27` and `ConfigExternalPlatformPackCommandTest:111` assert the `failureCodeLabel()` value where they pinned a class name.
-- **Decision:** add a newest-first entry to `runtime-kotlin/agent/decisions.md`, "SKILL-400 subtask 2: external pack codes and the dropped publish payload".
+- **Decision:** add a newest-first entry to `../../../runtime-kotlin/agent/decisions.md`, "SKILL-400 subtask 2: external pack codes and the dropped publish payload".
 
 ## Acceptance Criteria
 
@@ -53,7 +53,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Exist
 
 ## Implementation Details
 
-This plan uses only the upstream preplan digest and this sub-spec. No discovery is repeated during planning. The digest identifies all six failures as input-driven shell-content failures, so all six remain coded rather than becoming defects. There are no dependencies or open external decisions. Main paths below are relative to `runtime-kotlin/`; test paths use the owning module's `src/test/kotlin/` and the same package unless stated otherwise.
+This plan uses only the upstream preplan digest and this sub-spec. No discovery is repeated during planning. The digest identifies all six failures as input-driven shell-content failures, so all six remain coded rather than becoming defects. There are no dependencies or open external decisions. Main paths below are relative to `../../../runtime-kotlin`; test paths use the owning module's `src/test/kotlin/` and the same package unless stated otherwise.
 
 ### Ordered tasks
 
@@ -95,7 +95,7 @@ This plan uses only the upstream preplan digest and this sub-spec. No discovery 
 
    Validate runs the affected existing tests named above, detekt, formatting, and runtime-core repoTest, including `FailureCodeTotalityArchitectureTest`, through the installed runtime's full validation strategy. It checks A1 and A2 ownership, A4 declaration-only ports, A7 propagation, A9 and A10 placement, and G7 baseline shrinkage. Preserve the nonempty real-tree throwable scan. Spotless runs in a plain clone. Build proof belongs only to build. Plan and implement run no compilation, tests, or check suite; validation repairs may touch required production wiring, test setup, formatting, or lint while preserving behavior and architecture rules.
 
-   The write_history phase adds the requested newest-first decision in `runtime-kotlin/agent/decisions.md`, titled "SKILL-400 subtask 2: external pack codes and the dropped publish payload". It records the contracts ownership, preserved handled sets, unchanged telemetry families, and deliberate removal of the publish payload because only tests read it. The final implementation summary must name that payload removal. History, commit, push, and PR settlement remain with their owning phases and runtime.
+   The write_history phase adds the requested newest-first decision in `../../../runtime-kotlin/agent/decisions.md`, titled "SKILL-400 subtask 2: external pack codes and the dropped publish payload". It records the contracts ownership, preserved handled sets, unchanged telemetry families, and deliberate removal of the publish payload because only tests read it. The final implementation summary must name that payload removal. History, commit, push, and PR settlement remain with their owning phases and runtime.
 
 ### Constraints and rollout
 

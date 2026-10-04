@@ -242,7 +242,10 @@ fun featureTaskRuntimePhaseOrderViolationMessage(
     "'$requiredVerdict', but it settled with " +
     "'${observedVerdict ?: "<no completed verdict>"}'; the run fails loudly rather than silently advancing."
 
-fun invalidFeatureTaskRuntimeExecutionPlanSchema(reason: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidFeatureTaskRuntimeExecutionPlanSchema(
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA,
     "Invalid feature-task runtime execution plan: $reason",

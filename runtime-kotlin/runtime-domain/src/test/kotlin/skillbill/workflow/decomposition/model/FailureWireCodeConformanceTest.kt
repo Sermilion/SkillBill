@@ -36,7 +36,8 @@ class FailureWireCodeConformanceTest {
       }
     assertEquals(FailureWireDecodeCode.UNRECOGNIZED, error.code)
     assertEquals(
-      "Unrecognized failure wire code 'not_a_real_failure_code' for hierarchy 'FeatureTaskRuntimePhaseOutputFailureCode'.",
+      "Unrecognized failure wire code 'not_a_real_failure_code' for hierarchy " +
+        "'FeatureTaskRuntimePhaseOutputFailureCode'.",
       error.message,
     )
   }

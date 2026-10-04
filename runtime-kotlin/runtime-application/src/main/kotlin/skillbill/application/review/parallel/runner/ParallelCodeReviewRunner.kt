@@ -19,6 +19,7 @@ import skillbill.application.review.parallel.verification.ParallelCodeReviewRunn
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
+import skillbill.error.core.CursorReviewStreamFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.ports.review.launch.ReviewNativeAgentPreflightPort
@@ -137,6 +138,7 @@ class ParallelCodeReviewRunner(
       action()
     } catch (error: SkillBillRuntimeException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
+      if (error.code is CursorReviewStreamFailureCode) throw error
       if (!standaloneReportOnly(initial)) throw error
       onFailure(error)
     }
@@ -198,12 +200,8 @@ class ParallelCodeReviewRunner(
       )
     } catch (error: SkillBillRuntimeException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
-      if (
-        initial.request.reportContract !=
-        ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY
-      ) {
-        throw error
-      }
+      if (error.code is CursorReviewStreamFailureCode) throw error
+      if (!standaloneReportOnly(initial)) throw error
       result.copy(
         lane1 =
           result.lane1.copy(

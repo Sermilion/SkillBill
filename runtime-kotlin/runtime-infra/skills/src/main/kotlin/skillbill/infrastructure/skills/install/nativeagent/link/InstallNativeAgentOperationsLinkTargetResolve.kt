@@ -37,14 +37,10 @@ internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): Nati
       ),
     )
   val managedRoots = listOfNotNull(generated.cacheRoot, args.request.overrides.legacyManagedRoot)
-  publishInstalledReviewCatalog(
-    args.request.platformPacksRoot,
-    args.request.selectedPlatforms,
-    generated.cacheRoot,
-    args.journal,
-    args.effectivePackRoots,
-  )
   val linkResults = linkGeneratedNativeAgentFiles(args, generated, managedRoots)
+  if (linkResults.failure != null) {
+    return NativeAgentLinkOutcome(linkResults.linked, linkResults.skipped, linkResults.failure)
+  }
   val desired =
     desiredNativeAgentInventory(
       provider = args.provider,
@@ -54,6 +50,13 @@ internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): Nati
       validationRoot = args.validationRoot,
     )
   desired.forEach(::verifyInstalledNativeAgent)
+  publishInstalledReviewCatalog(
+    args.request.platformPacksRoot,
+    args.request.selectedPlatforms,
+    generated.cacheRoot,
+    args.journal,
+    args.effectivePackRoots,
+  )
   NativeAgentLinkInventory.reconcile(
     NativeAgentLinkInventoryReconcileRequest(
       home = args.resolvedHome,
@@ -68,7 +71,11 @@ internal fun linkProviderAgentsBody(args: NativeAgentLinkProviderBodyArgs): Nati
   return NativeAgentLinkOutcome(linkResults.linked, linkResults.skipped)
 }
 
-private data class NativeAgentFileLinkResults(val linked: List<Path>, val skipped: List<NativeAgentSkippedLink>)
+private data class NativeAgentFileLinkResults(
+  val linked: List<Path>,
+  val skipped: List<NativeAgentSkippedLink>,
+  val failure: NativeAgentLinkFailure? = null,
+)
 
 private fun linkGeneratedNativeAgentFiles(
   args: NativeAgentLinkProviderBodyArgs,
@@ -78,8 +85,8 @@ private fun linkGeneratedNativeAgentFiles(
   val linked = mutableListOf<Path>()
   val skipped = mutableListOf<NativeAgentSkippedLink>()
   val artifactsByPath = generated.artifacts.associateBy { it.path }
-  args.targets.forEach { target ->
-    generated.generatedFiles.forEach { file ->
+  for (target in args.targets) {
+    for (file in generated.generatedFiles) {
       when (
         val result =
           installNativeAgentFile(
@@ -97,6 +104,12 @@ private fun linkGeneratedNativeAgentFiles(
       ) {
         is InstallNativeAgentResult.Linked -> linked.add(result.link)
         is InstallNativeAgentResult.Skipped -> skipped.add(NativeAgentSkippedLink(result.link, result.reason))
+        is InstallNativeAgentResult.Failed ->
+          return NativeAgentFileLinkResults(
+            linked,
+            skipped,
+            NativeAgentLinkFailure(result.failedPath, result.error),
+          )
       }
     }
   }
@@ -160,7 +173,14 @@ internal fun effectivePackRootsForInstall(
 internal fun linkProviderAgentsWithJournal(
   journal: ProviderMutationJournal,
   block: () -> NativeAgentLinkOutcome,
-): NativeAgentLinkOutcome =
-  runCatching(block).onFailure { error ->
-    journal.restore().forEach { suppressed -> error.addSuppressed(suppressed) }
-  }.getOrThrow()
+): NativeAgentLinkOutcome {
+  val result = runCatching(block)
+  result.exceptionOrNull()?.let { error ->
+    journal.restore().forEach(error::addSuppressed)
+  }
+  val outcome = result.getOrThrow()
+  outcome.failure?.error?.let { error ->
+    journal.restore().forEach(error::addSuppressed)
+  }
+  return outcome
+}

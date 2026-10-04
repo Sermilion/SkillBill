@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 4 - phase-slot-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope
@@ -99,7 +99,7 @@ This plan uses only the upstream preplan digest from checkout `6e512ed9ca1d0bf43
 
    Remove the 18 deleted whole rows by hand from `runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`; retain all unrelated rows and earlier subtask edits. Preserve `FailureCodeTotalityArchitectureTest`, its synthetic rejection fixture, and its nonempty real-tree scan. Leave `ArchitectureScanSupport.kt` unchanged.
 
-   Implement confirms the transition condition across main, test, and testFixtures source sets after conversion. The digest establishes remaining classes owned by other subtasks, so this plan assumes the transition stays open. If implement finds no remaining subclass or codeless constructor caller, apply the shared transition-finish rule without weakening guarded catches: remove only the legacy base and constructor machinery, make the shared exception final, remove its baseline row and legacy classification term, and reconcile `runtime-kotlin/ARCHITECTURE.md` and stale documentation references. Otherwise leave those declarations intact and name the remaining caller or subclass in the implementation handoff. This conditional work does not convert another subtask's classes.
+   Implement confirms the transition condition across main, test, and testFixtures source sets after conversion. The digest establishes remaining classes owned by other subtasks, so this plan assumes the transition stays open. If implement finds no remaining subclass or codeless constructor caller, apply the shared transition-finish rule without weakening guarded catches: remove only the legacy base and constructor machinery, make the shared exception final, remove its baseline row and legacy classification term, and reconcile `../../../runtime-kotlin/ARCHITECTURE.md` and stale documentation references. Otherwise leave those declarations intact and name the remaining caller or subclass in the implementation handoff. This conditional work does not convert another subtask's classes.
 
 6. Hand off validation obligations without executing them in plan or implement. Serves AC-001 through AC-004 and all common criteria.
 

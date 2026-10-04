@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 6 - domain-and-mcp-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope
@@ -58,7 +58,7 @@ skill-bill goal SKILL-400
 
 This plan uses only the upstream preplan digest. Subtask 6 has no dependencies and does not introduce a new decomposition. The digest settles attribution vocabulary as input-driven: `ReviewServiceLaneComposition.kt` combines port-provided pack skill names and platform slugs with canonical defaults before `ImportedReview.withCanonicalAttribution(...)`. Use a coded failure, not the conditional defect alternative in Scope. Keep the two domain code families in runtime-domain and the MCP-only family in runtime-mcp, as this subtask explicitly requires.
 
-Paths below are relative to `runtime-kotlin/`. Production paths use the named module's `src/main/kotlin/`; unit-test paths use its `src/test/kotlin/`.
+Paths below are relative to `../../../runtime-kotlin`. Production paths use the named module's `src/main/kotlin/`; unit-test paths use its `src/test/kotlin/`.
 
 1. Convert review-attribution failure construction. Serves AC-001 and AC-002, plus message and typed-property parity. In runtime-domain `skillbill/review/model/ReviewAttributionModels.kt`, delete `ReviewAttributionResolutionError` and nested `MalformedVocabulary`. Add `ReviewAttributionFailureCode.MALFORMED_VOCABULARY` implementing the existing `RuntimeFailureCode` in `skillbill.review.model`. Put its factory beside the enum and preserve the full message generated from `rawValue`, `vocabulary`, and `offendingEntry`. Update private vocabulary validation in `skillbill/review/attribution/ReviewAttributionCanonicalization.kt`, preserving `resolveCanonicalRoutedSkill(...)` and `resolveCanonicalStack(...)` results. Do not replace `offendingEntry` with a new exception property. The digest does not supply the factory's name or exact message literal; use `malformedReviewAttributionVocabulary(rawValue, vocabulary, offendingEntry)` and have implement copy the existing message byte-for-byte. Retarget reachable former IAE handlers to exact code discrimination, rethrowing unrelated shared failures. Convert `ReviewAttributionCanonicalizationTest` and runtime-mcp `ReviewAttributionResolutionParityTest` to shared-exception and exact-code assertions; retain offending text through the unchanged message or local test input. These existing tests protect malformed external vocabulary and canonicalization parity; no duplicate test obligation is added.
 

@@ -278,7 +278,8 @@ abstract class StandaloneReviewStrategy(
       if (gitOperations.resolveCommit(run.request.repoRoot, revision) !is WorkflowGitOperationResult.Ok) {
         throw SkillBillRuntimeException(
           PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
-          "Review target '$revision' does not name a commit in this repository; expected HEAD, uncommitted, pr, staged, " +
+          "Review target '$revision' does not name a commit in this repository; " +
+            "expected HEAD, uncommitted, pr, staged, " +
             "unstaged, or a commit sha, branch, or tag.",
         )
       }

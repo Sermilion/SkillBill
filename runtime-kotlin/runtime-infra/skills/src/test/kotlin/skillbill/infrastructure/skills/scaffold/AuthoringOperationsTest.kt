@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringOperations
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import java.nio.file.Files
@@ -33,6 +34,7 @@ class AuthoringOperationsTest {
       }
 
     assertContains(error.message.orEmpty(), "content.md must already carry a YAML frontmatter block")
+    assertEquals(ScaffoldAuthoringFailureCode.AUTHORING_FAILURE, error.code)
     val after = Files.readAllBytes(contentFile)
     assertEquals(before.toList(), after.toList(), "content.md must be untouched when fill fails fast")
   }

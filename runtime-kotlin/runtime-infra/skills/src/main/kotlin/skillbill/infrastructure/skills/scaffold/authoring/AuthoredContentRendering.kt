@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.infrastructure.skills.scaffold.validation.shape.markdownBodyAfterFrontmatter
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,12 +19,14 @@ internal fun authoredContentFrontmatterBlock(
   val normalized = normalizeMarkdownLineEndings(contentText)
   if (!normalized.startsWith("---\n")) {
     throw SkillBillRuntimeException(
+      ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
       "$contentFile: content.md for skill '$skillName' is missing YAML frontmatter.",
     )
   }
   val end = normalized.indexOf("\n---", startIndex = FRONTMATTER_PREFIX_LENGTH)
   if (end < 0) {
     throw SkillBillRuntimeException(
+      ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
       "$contentFile: content.md for skill '$skillName' is missing YAML frontmatter.",
     )
   }

@@ -1,6 +1,7 @@
 package skillbill.mcp.core
 
 import skillbill.contracts.learning.LearningPayloadKeys
+import skillbill.error.core.ReviewAttributionFailureCode
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.telemetryProxyRequestFailure
@@ -12,7 +13,6 @@ import skillbill.mcp.shared.decodeJsonObject
 import skillbill.mcp.shared.enabledTelemetryEnvironment
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.transport.RemoteTransportPort
-import skillbill.review.model.ReviewAttributionFailureCode
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -161,7 +161,10 @@ class McpCaptureDiagnosticsTest {
       )
 
     assertEquals("add_learning", error["tool"])
-    assertEquals("Unknown learning source 'rvw-missing:F-missing'. Import the review and finding first.", error["error"])
+    assertEquals(
+      "Unknown learning source 'rvw-missing:F-missing'. Import the review and finding first.",
+      error["error"],
+    )
     assertEquals(emptyList(), capturedErrorTypes(dbPath, "add_learning"))
   }
 

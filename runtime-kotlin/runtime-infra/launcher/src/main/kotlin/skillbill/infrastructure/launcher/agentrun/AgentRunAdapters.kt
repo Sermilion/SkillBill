@@ -1,6 +1,8 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import skillbill.error.core.CursorReviewStreamFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessProbeFields
@@ -10,7 +12,6 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunProcessReviewFie
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessRunner
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessTimingFields
 import skillbill.infrastructure.launcher.process.support.launcherSha256Hex
-import skillbill.infrastructure.launcher.review.CursorReviewStreamMalformedError
 import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.agentLauncherUnavailableMessage
@@ -227,7 +228,8 @@ interface AgentRunOutputDecoder {
       object : AgentRunOutputDecoder {
         override fun decode(stdout: String): DecodedAgentRunOutput = decodeCursorStreamJson(stdout)
 
-        override fun undecodable(error: Throwable): Boolean = error is CursorReviewStreamMalformedError
+        override fun undecodable(error: Throwable): Boolean =
+          error is SkillBillRuntimeException && error.code == CursorReviewStreamFailureCode.MALFORMED
       }
 
     private fun decoder(body: (String) -> DecodedAgentRunOutput): AgentRunOutputDecoder =

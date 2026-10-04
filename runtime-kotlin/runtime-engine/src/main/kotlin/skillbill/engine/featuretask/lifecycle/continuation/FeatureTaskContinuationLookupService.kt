@@ -98,20 +98,27 @@ class FeatureTaskContinuationLookupService(
         if (states.claimFeatureTaskContinuation(candidate.workflowId, candidate.updatedAt)) plan else null
       }
     } catch (error: SkillBillRuntimeException) {
-      val reason =
-        when (val code = error.code) {
-          is FeatureTaskRuntimeExecutionPlanAdmissionCode -> code.wireValue
-          is FeatureTaskRuntimeRegenerationRefusal -> code.wireValue
-          FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA -> "invalid_route_identity"
-          else -> throw error
-        }
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
-          " reason=$reason",
-      )
+      recordAdmissionRefusal(error, candidate)
       throw error
     }
+
+  private fun recordAdmissionRefusal(
+    error: SkillBillRuntimeException,
+    candidate: FeatureTaskContinuationCandidate,
+  ) {
+    val reason =
+      when (val code = error.code) {
+        is FeatureTaskRuntimeExecutionPlanAdmissionCode -> code.wireValue
+        is FeatureTaskRuntimeRegenerationRefusal -> code.wireValue
+        FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA -> "invalid_route_identity"
+        else -> throw error
+      }
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
+        " reason=$reason",
+    )
+  }
 
   private fun WorkflowStateRecord.matchesContinuationCandidate(candidate: FeatureTaskContinuationCandidate): Boolean =
     updatedAt == candidate.updatedAt && workflowStatus == candidate.status && currentStepId == candidate.currentStep &&

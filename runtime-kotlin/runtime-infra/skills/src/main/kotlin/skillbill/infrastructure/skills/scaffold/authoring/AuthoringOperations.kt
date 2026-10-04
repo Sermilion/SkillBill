@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompos
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentRegenerationRequest
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.ports.scaffold.model.ScaffoldSkillStatus
 import skillbill.scaffold.model.CodeReviewComposition
 import skillbill.scaffold.model.GovernedAddonSelection
@@ -174,7 +175,10 @@ object AuthoringOperations {
       if (validate) {
         val issues = targets.flatMap { target -> validateTarget(target, resolvedRoot) }
         if (issues.isNotEmpty()) {
-          throw SkillBillRuntimeException("Validator failed after upgrade:\n${issues.joinToString("\n")}")
+          throw SkillBillRuntimeException(
+            ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
+            "Validator failed after upgrade:\n${issues.joinToString("\n")}",
+          )
         }
       }
       AuthoringUpgradeResult(

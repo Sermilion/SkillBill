@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillRemoveFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.skillremove.SkillRemoveFileSystem
-import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.model.AgentSymlinkUnlink
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.ManifestEdit

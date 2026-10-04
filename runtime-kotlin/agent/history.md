@@ -1,3 +1,15 @@
+## [2026-10-04] SKILL-400 subtask 7: infra host, launcher, skills and workflow failure codes
+Areas: runtime-infra/host JVM, launcher review/agentrun, skills install/nativeagent and scaffold, workflow validation; runtime-contracts failure vocabulary; runtime-application review/scaffold; runtime-domain review; runtime-engine continuation/review; runtime-cli and runtime-mcp failure boundaries; runtime-core architecture baseline; runtime-kotlin/ARCHITECTURE.md
+- Converted gate-JVM, Cursor stream, validation-process, install-symlink and scaffold-authoring failures to owner codes on SkillBillRuntimeException. Release-license validation keeps its existing result route.
+- Preserved failure messages, MCP capture routes and handled sets. Cursor MALFORMED remains undecodable; symlink issues retain kind, message, path and Windows guidance, with causeClass rendered as the code label.
+- Native-agent link results carry the actual failed temporary path. Returned and thrown failures restore the provider journal, retain secondary restoration failures and stop before catalog promotion or inventory reconciliation; existing throwing adapters remain.
+- Followed the shared-code ownership rule for Cursor stream, review-attribution and skill-removal consumers. Message factories stay with their owners; no import guard or architecture rule was weakened.
+- reusable: owner-code enums and factories, existing failureCodeLabel and shell-content guards, and the extended native-agent failure result flow.
+- Finished the legacy transition after its callers disappeared. SkillBillRuntimeException is final; the codeless constructor, LegacyFailureCode, ShellContentContractException and owned throwable-baseline rows are gone. Shell-content code classification remains.
+- Limits: Kotlin callers must use coded construction and the returned native-agent failure variant. Deleted throwable classes and typed failure properties are unavailable; no persisted wire-format or schema-version change.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-04] SKILL-400 subtask 2: external platform pack and add-on failure codes
 Areas: runtime-contracts error/core and error/shellcontent; runtime-infra/skills externalplatformpack, externaladdon, scaffold and install/nativeagent/link; runtime-domain scaffold/policy/platformpack; runtime-core architecture baseline
 - Replaced six external platform pack and add-on throwable classes with ExternalPlatformPackFailureCode, ExternalAddonFailureCode and message factories returning SkillBillRuntimeException.

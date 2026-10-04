@@ -20,14 +20,16 @@ class PhaseRunErrorMappingTest {
         runPhase(state) {
           throw SkillBillRuntimeException(
             PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
-            "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, uncommitted, pr, " +
+            "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, " +
+              "uncommitted, pr, " +
               "staged, unstaged, or a commit sha, branch, or tag.",
           )
         }
       }
 
     assertEquals(
-      "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, uncommitted, pr, " +
+      "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, " +
+        "uncommitted, pr, " +
         "staged, unstaged, or a commit sha, branch, or tag.",
       error.message,
     )

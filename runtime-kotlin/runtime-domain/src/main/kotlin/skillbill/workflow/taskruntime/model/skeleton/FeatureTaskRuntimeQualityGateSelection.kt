@@ -11,7 +11,6 @@ enum class FeatureTaskRuntimeQualityGateSelection(val wireValue: String, val ste
     get() = PhaseSlot.QUALITY_GATE.steps.toSet() - stepId
 
   companion object {
-    fun fromWire(value: String): FeatureTaskRuntimeQualityGateSelection? =
-      entries.firstOrNull { it.wireValue == value }
+    fun fromWire(value: String): FeatureTaskRuntimeQualityGateSelection? = entries.firstOrNull { it.wireValue == value }
   }
 }

@@ -1,11 +1,11 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import com.fasterxml.jackson.databind.JsonNode
-import skillbill.infrastructure.launcher.review.CursorReviewStreamError
-import skillbill.infrastructure.launcher.review.CursorReviewStreamForbiddenOperationError
-import skillbill.infrastructure.launcher.review.CursorReviewStreamMalformedError
-import skillbill.infrastructure.launcher.review.CursorReviewStreamProviderFailureError
-import skillbill.infrastructure.launcher.review.CursorReviewStreamTerminationError
+import skillbill.infrastructure.launcher.review.cursorReviewProviderFailure
+import skillbill.infrastructure.launcher.review.cursorReviewTermination
+import skillbill.infrastructure.launcher.review.cursorReviewUnknown
+import skillbill.infrastructure.launcher.review.forbiddenCursorReviewOperation
+import skillbill.infrastructure.launcher.review.malformedCursorReviewStream
 import skillbill.review.parallel.ParallelReviewFindingParser
 
 internal fun decodeCursorStreamJson(stdout: String): DecodedAgentRunOutput {
@@ -51,7 +51,7 @@ private fun parseCursorStreamLines(lines: List<String>): CursorStreamParse {
   }.filter(String::isNotBlank).forEach { line ->
     val event =
       runCatching { structuredOutputMapper.readTree(line) }.getOrElse {
-        throw CursorReviewStreamMalformedError(
+        throw malformedCursorReviewStream(
           "Malformed Cursor stream JSONL line: ${line.take(CURSOR_STREAM_MALFORMED_LINE_PREVIEW_CHARS)}",
           it,
         )
@@ -92,19 +92,19 @@ private fun cursorStreamError(
 ): Throwable =
   when (errorType) {
     "forbidden_operation" ->
-      CursorReviewStreamForbiddenOperationError(
+      forbiddenCursorReviewOperation(
         errorMessage ?: "Cursor reported a forbidden operation",
       )
     "provider_failure" ->
-      CursorReviewStreamProviderFailureError(
+      cursorReviewProviderFailure(
         errorMessage ?: "Cursor reported a provider failure",
       )
     "termination" ->
-      CursorReviewStreamTerminationError(
+      cursorReviewTermination(
         errorMessage ?: "Cursor process terminated prematurely",
       )
     else ->
-      CursorReviewStreamError(
+      cursorReviewUnknown(
         errorMessage ?: "Cursor reported an unknown error",
       )
   }

@@ -3,8 +3,8 @@ package skillbill.application.scaffold
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.shellcontent.SkillRemoveFailureCode
 import skillbill.ports.skillremove.SkillRemoveFileSystem
-import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.TargetValidation
 import skillbill.skillremove.model.SkillRemovalPreview
 import skillbill.skillremove.model.SkillRemovalRefusalReason

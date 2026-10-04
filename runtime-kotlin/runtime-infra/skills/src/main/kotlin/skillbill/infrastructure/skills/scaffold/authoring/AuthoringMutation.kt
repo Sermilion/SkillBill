@@ -4,6 +4,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
@@ -23,7 +24,10 @@ internal fun mutateContent(
     Files.writeString(target.contentFile, replacementText)
     val issues = validateTarget(target, repoRoot)
     if (issues.isNotEmpty()) {
-      throw SkillBillRuntimeException("Validator failed after content update:\n${issues.joinToString("\n")}")
+      throw SkillBillRuntimeException(
+        ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
+        "Validator failed after content update:\n${issues.joinToString("\n")}",
+      )
     }
     renderAuthoringTarget(repoRoot, target)
     AuthoringMutationResult(

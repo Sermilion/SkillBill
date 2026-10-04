@@ -304,6 +304,7 @@ class FileSystemInstallNativeAgentLinks(
         NativeAgentLinkProvider.JUNIE -> InstallNativeAgentOperations.linkJunieAgents(fsRequest)
         NativeAgentLinkProvider.CURSOR -> InstallNativeAgentOperations.linkCursorAgents(fsRequest)
       }
+    outcome.failure?.let { failure -> throw failure.error }
     return InstallNativeAgentLinkOperationResult(
       outcome =
         NativeAgentLinkOutcome(

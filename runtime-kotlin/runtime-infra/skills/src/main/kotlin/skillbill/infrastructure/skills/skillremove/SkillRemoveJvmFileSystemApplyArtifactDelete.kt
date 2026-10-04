@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.skillremove
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.shellcontent.SkillRemoveFailureCode
 import skillbill.infrastructure.skills.install.nativeagent.link.unlinkProviderAgents
 import skillbill.infrastructure.skills.scaffold.manifest.removeAddonReferences
 import skillbill.infrastructure.skills.scaffold.manifest.removeCodeReviewArea
@@ -11,7 +12,6 @@ import skillbill.infrastructure.skills.scaffold.manifest.removePointersBlockKey
 import skillbill.infrastructure.skills.scaffold.manifest.removeSkillClassPointer
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.ReadmeCatalogEdits
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.ReadmeEditOutcome
-import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.ManifestEdit
 import skillbill.skillremove.model.ManifestEditKind

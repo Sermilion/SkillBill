@@ -2,13 +2,13 @@ package skillbill.mcp.review
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
+import skillbill.error.core.ReviewAttributionFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.callToolPayload
 import skillbill.review.attribution.canonicalPlatformSlugs
 import skillbill.review.attribution.resolveCanonicalRoutedSkill
 import skillbill.review.attribution.resolveCanonicalStack
-import skillbill.review.model.ReviewAttributionFailureCode
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path

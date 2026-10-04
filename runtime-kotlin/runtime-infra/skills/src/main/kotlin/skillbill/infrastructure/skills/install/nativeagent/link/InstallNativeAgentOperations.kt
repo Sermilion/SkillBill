@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCodexAgentTomls
 import skillbill.infrastructure.skills.install.nativeagent.uninstallCursorAgentMarkdown
@@ -17,7 +18,10 @@ import java.nio.file.Path
 data class NativeAgentLinkOutcome(
   val linked: List<Path>,
   val skipped: List<NativeAgentSkippedLink>,
+  val failure: NativeAgentLinkFailure? = null,
 )
+
+data class NativeAgentLinkFailure(val path: Path, val error: SkillBillRuntimeException)
 
 data class NativeAgentSkippedLink(val path: Path, val reason: String)
 

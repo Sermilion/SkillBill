@@ -316,6 +316,5 @@ class PhaseStrategyLookup(
     val facts: List<String>,
   )
 
-  private fun invalidComposition(reason: String): Nothing =
-    throw invalidPhaseStrategyCompositionFailure(reason)
+  private fun invalidComposition(reason: String): Nothing = throw invalidPhaseStrategyCompositionFailure(reason)
 }

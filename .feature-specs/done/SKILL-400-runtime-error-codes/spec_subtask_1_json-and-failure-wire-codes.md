@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 1 - json-and-failure-wire-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope
@@ -68,7 +68,7 @@ This plan uses only the upstream preplan digest for repository knowledge. Its di
 
 1. Replace the four declarations with owner codes and factories. Serves AC-001 and AC-002.
 
-   In `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/core/`, rename `MalformedJsonTextError.kt` to `JsonFailureCode.kt`. Declare `JsonFailureCode` implementing `RuntimeFailureCode` with `MALFORMED_TEXT`, `WRONG_ROOT_TYPE`, and `UNSUPPORTED_VALUE`. Its factories return `SkillBillRuntimeException`: `malformedJsonText(cause: Throwable)`, `jsonWrongRootType(expectedRoot: String)`, and `unsupportedJsonValue(message: String)`. Preserve respectively `"JSON text is malformed: ${cause.message.orEmpty()}"`, `"JSON root must be $expectedRoot"`, and the supplied message. Preserve the original cause for malformed text.
+   In `../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/core`, rename `MalformedJsonTextError.kt` to `JsonFailureCode.kt`. Declare `JsonFailureCode` implementing `RuntimeFailureCode` with `MALFORMED_TEXT`, `WRONG_ROOT_TYPE`, and `UNSUPPORTED_VALUE`. Its factories return `SkillBillRuntimeException`: `malformedJsonText(cause: Throwable)`, `jsonWrongRootType(expectedRoot: String)`, and `unsupportedJsonValue(message: String)`. Preserve respectively `"JSON text is malformed: ${cause.message.orEmpty()}"`, `"JSON root must be $expectedRoot"`, and the supplied message. Preserve the original cause for malformed text.
 
    In `FailureWireCodeContract.kt`, replace `UnrecognizedFailureWireCodeError` with `FailureWireDecodeCode.UNRECOGNIZED`. The enum implements `RuntimeFailureCode`, never `FailureWireCode`. Add a factory taking `hierarchy: String` and `rejectedToken: String`, returning the shared exception with `"Unrecognized failure wire code '$rejectedToken' for hierarchy '$hierarchy'."`. The digest does not name this factory. Use `unrecognizedFailureWireCode(hierarchy, rejectedToken)` as the planning assumption for implement to confirm against local naming conventions. Keep the existing generic signature and constraints of `EnumEntries<E>.failureWireByValue(value, hierarchy)` unchanged and route its failure through this factory.
 
@@ -76,7 +76,7 @@ This plan uses only the upstream preplan digest for repository knowledge. Its di
 
 2. Convert JSON construction and its internal recovery boundary. Serves AC-002 and AC-003.
 
-   Update `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/JsonCodec.kt` to use the three JSON factories. Preserve the public behavior of `parseObjectOrNull`, `parseJsonArrayStrict`, `anyToStringAnyMap`, `valueToJsonElement`, and `parseValue`. Keep finite-number, unsupported-type, and string-map-key messages and serialization unchanged. Replace its malformed-text catch with a `SkillBillRuntimeException` catch guarded by `JsonFailureCode.MALFORMED_TEXT`; rethrow the same exception for every other code. Retain existing null or empty results without introducing a returning-decode refactor.
+   Update `../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/JsonCodec.kt` to use the three JSON factories. Preserve the public behavior of `parseObjectOrNull`, `parseJsonArrayStrict`, `anyToStringAnyMap`, `valueToJsonElement`, and `parseValue`. Keep finite-number, unsupported-type, and string-map-key messages and serialization unchanged. Replace its malformed-text catch with a `SkillBillRuntimeException` catch guarded by `JsonFailureCode.MALFORMED_TEXT`; rethrow the same exception for every other code. Retain existing null or empty results without introducing a returning-decode refactor.
 
 3. Convert the listed consumer catches without broadening their handled sets. Serves AC-003 and the common message and propagation criteria.
 
@@ -96,7 +96,7 @@ This plan uses only the upstream preplan digest for repository knowledge. Its di
 
    In runtime-contracts `src/main/kotlin/skillbill/error/shellcontent/ShellContentContractFailures.kt`, register both `JsonFailureCode` and `FailureWireDecodeCode` in `Throwable.isShellContentContractFailure()`. Preserve all existing families, the deliberate Scaffold exclusion, and the legacy term while the transition remains open. Existing guarded edge handlers must continue to recognize these four failures without absorbing unrelated runtime codes. Their MCP no-capture route follows this predicate, so no new MCP-only registration or top-level error-arm change is needed.
 
-   Remove only the four deleted whole rows for `MalformedJsonTextError`, `JsonWrongRootTypeError`, `UnsupportedJsonValueError`, and `UnrecognizedFailureWireCodeError` from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Preserve all unrelated rows, the nonempty real-tree scan, and the synthetic rejection fixture of `FailureCodeTotalityArchitectureTest`. Leave `ArchitectureScanSupport.kt` unchanged.
+   Remove only the four deleted whole rows for `MalformedJsonTextError`, `JsonWrongRootTypeError`, `UnsupportedJsonValueError`, and `UnrecognizedFailureWireCodeError` from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Preserve all unrelated rows, the nonempty real-tree scan, and the synthetic rejection fixture of `FailureCodeTotalityArchitectureTest`. Leave `ArchitectureScanSupport.kt` unchanged.
 
    The digest establishes that other SKILL-400 throwable classes and transition callers remain. This slice therefore leaves `ShellContentContractException`, `LegacyFailureCode`, and the codeless constructor in place. Implement checks the transition-finish condition in all source sets after its edits as required by Shared Rules. Retire the transition only if that condition actually holds because intervening work removed every remaining caller; otherwise name that it remains open. Never weaken coded edge guards to make retirement possible.
 

@@ -168,9 +168,10 @@ class PhaseReviewRunTest {
     val directives = mutableListOf<String>()
     val entry = inlineEntryOver(launcher, directiveRecordingReviewRunner(directives))
 
-    val error = assertFailsWith<SkillBillRuntimeException> {
-      entry.run(reviewRequest(mode = null, target = ReviewTarget.Commit(MISSING_BRANCH)))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        entry.run(reviewRequest(mode = null, target = ReviewTarget.Commit(MISSING_BRANCH)))
+      }
     assertEquals(PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET, error.code)
     assertTrue(directives.isEmpty(), "no review agent may launch")
     assertTrue(launcher.requests.isEmpty(), "no step agent may launch")

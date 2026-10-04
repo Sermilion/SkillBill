@@ -1,10 +1,10 @@
 package skillbill.infrastructure.workflow.validation
 
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmEnvironmentKeys
-import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
-import skillbill.infrastructure.host.jvm.GateJvmUnresolvedException
+import skillbill.infrastructure.host.jvm.GateJvmFailureCode
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
@@ -631,15 +631,19 @@ class FileSystemValidationGateRunnerTest {
   fun `an unresolvable gate JVM raises a typed error instead of reaching finding parsing`() {
     val environment = mutableMapOf(GateJvmEnvironmentKeys.JAVA_HOME to "/opt/skill-bill/runtime")
     val failure =
-      assertFailsWith<GateJvmUnresolvedException> {
+      assertFailsWith<SkillBillRuntimeException> {
         applyResolvedGateJvm(
           environment,
           GateJvmDisposition.Unresolved(rejectedCandidate = "/opt/skill-bill/runtime", requiredMajor = "21"),
         )
       }
 
-    assertEquals("/opt/skill-bill/runtime", failure.rejectedCandidate)
-    assertEquals("21", failure.requiredMajor)
+    assertEquals(GateJvmFailureCode.UNRESOLVED, failure.code)
+    assertEquals(
+      "No Java 21+ runtime resolved for the pack gate command; rejected candidate: /opt/skill-bill/runtime. " +
+        "Set SKILL_BILL_JAVA_HOME to a Java 21+ installation and retry.",
+      failure.message,
+    )
     assertEquals("/opt/skill-bill/runtime", environment[GateJvmEnvironmentKeys.JAVA_HOME])
   }
 
@@ -661,7 +665,7 @@ class FileSystemValidationGateRunnerTest {
       )
 
       val failure =
-        assertFailsWith<GateJvmStartupFailureException> {
+        assertFailsWith<SkillBillRuntimeException> {
           FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
             request(
               repo,
@@ -671,6 +675,7 @@ class FileSystemValidationGateRunnerTest {
           )
         }
 
+      assertEquals(GateJvmFailureCode.STARTUP_FAILURE, failure.code)
       assertTrue(
         failure.message.orEmpty().contains("Error occurred during initialization of VM"),
         "the typed error must carry the gate output that identified it: ${failure.message}",

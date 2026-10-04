@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.install.model.InstallAgentLinkStatus
@@ -116,7 +117,7 @@ private fun failedSkillLinkOutcome(
   context: SkillLinkContext,
   error: Throwable,
 ): InstallAgentSkillLinkOutcome {
-  val symlinkError = error as? InstallSymlinkException
+  val symlinkFailure = (error as? SkillBillRuntimeException)?.code == InstallApplyFailureCode.SYMLINK
   val issue =
     InstallApplyIssue(
       kind = InstallApplyIssueKind.SKILL_LINK_FAILED,
@@ -124,7 +125,7 @@ private fun failedSkillLinkOutcome(
       skillName = context.skillName,
       agent = context.agentTarget.agent,
       path = context.linkPath.toFileLocation(),
-      guidance = symlinkError?.guidance,
+      guidance = windowsSymlinkGuidance().takeIf { symlinkFailure },
       causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return skillLinkOutcome(

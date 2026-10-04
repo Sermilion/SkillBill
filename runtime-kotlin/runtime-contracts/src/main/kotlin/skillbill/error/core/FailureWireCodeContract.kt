@@ -7,7 +7,8 @@ interface FailureWireCode {
 }
 
 enum class FailureWireDecodeCode : RuntimeFailureCode {
-  UNRECOGNIZED;
+  UNRECOGNIZED,
+  ;
 
   companion object {
     fun unrecognizedFailureWireCode(

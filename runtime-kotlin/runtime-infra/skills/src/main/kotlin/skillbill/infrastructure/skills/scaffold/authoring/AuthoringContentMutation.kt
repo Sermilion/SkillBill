@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold.authoring
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.REQUIRED_GOVERNED_SECTIONS
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import java.nio.file.Files
 
 internal fun replaceSectionBody(
@@ -25,6 +26,7 @@ internal fun replaceSectionBody(
   if (!matched) {
     val available = sections.joinToString(", ") { (heading, _) -> heading.removePrefix("## ").trim() }
     throw SkillBillRuntimeException(
+      ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
       "Unknown content section '${sectionHeadingLabel(sectionName)}'. Available sections: $available.",
     )
   }
@@ -37,7 +39,7 @@ internal fun coerceFullContentText(
 ): String {
   val stripped = bodyText.trim()
   if (stripped.isBlank()) {
-    throw SkillBillRuntimeException("Filled content must be non-empty.")
+    throw SkillBillRuntimeException(ScaffoldAuthoringFailureCode.AUTHORING_FAILURE, "Filled content must be non-empty.")
   }
 
   val (existingFrontmatter, _) = splitFrontmatter(Files.readString(target.contentFile))
@@ -45,6 +47,7 @@ internal fun coerceFullContentText(
   val frontmatter =
     suppliedFrontmatter ?: existingFrontmatter
       ?: throw SkillBillRuntimeException(
+        ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
         "${target.contentFile}: content.md must already carry a YAML frontmatter block before " +
           "fill/edit (and the supplied body does not provide one). Run `skill-bill render " +
           "--skill-name ${target.skillName}` to regenerate the canonical frontmatter, or restore " +
@@ -91,7 +94,7 @@ private fun fullContentTitle(target: AuthoringTarget): String =
 private fun normalizeSectionHeading(sectionName: String): String {
   val heading = sectionName.trim()
   if (heading.isBlank()) {
-    throw SkillBillRuntimeException("Section name must be non-empty.")
+    throw SkillBillRuntimeException(ScaffoldAuthoringFailureCode.AUTHORING_FAILURE, "Section name must be non-empty.")
   }
   return if (heading.startsWith("## ")) heading else "## $heading"
 }
@@ -103,6 +106,7 @@ private fun rejectGeneratedWrapperSectionEdit(normalizedHeading: String) {
       heading.removePrefix("## ").trim().equals(label, ignoreCase = true)
     } ?: return
   throw SkillBillRuntimeException(
+    ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
     "Cannot edit generated wrapper section '$generatedHeading' through content.md. " +
       "Descriptor, Execution, and Ceremony are generated into SKILL.md render/install output. " +
       "Edit authored content.md sections for behavior changes, or update content.md frontmatter " +

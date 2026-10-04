@@ -59,7 +59,7 @@ class GateJvmResolver(
       GateJvmResolver::class.java.classLoader
         .getResourceAsStream(GUARD_CLASSPATH_RESOURCE)
         ?.use { stream -> stream.readBytes() }
-        ?: throw GateJvmGuardResourceMissingException(GUARD_CLASSPATH_RESOURCE)
+        ?: throw gateJvmGuardResourceMissing(GUARD_CLASSPATH_RESOURCE)
     val guard = Files.createTempFile("skill-bill-java-guard", ".sh", OWNER_ONLY)
     Files.write(guard, bytes)
     return guard
@@ -81,13 +81,13 @@ class GateJvmResolver(
         ),
       )
     if (result.launchFailure) {
-      throw GateJvmGuardExecutionException(
+      throw gateJvmGuardExecution(
         "no POSIX sh available to evaluate $guard",
         result.readFailure ?: IOException(result.output),
       )
     }
     if (result.timedOut) {
-      throw GateJvmGuardTimeoutException(GUARD_TIMEOUT_SECONDS)
+      throw gateJvmGuardTimeout(GUARD_TIMEOUT_SECONDS)
     }
     return GuardEvaluation(status = result.exitCode, stdout = result.output)
   }
@@ -107,7 +107,7 @@ class GateJvmResolver(
     if (output.reachedRemediation) {
       return GateJvmDisposition.Unresolved(rejectedCandidate, output.requiredMajor)
     }
-    throw GateJvmGuardExecutionException(
+    throw gateJvmGuardExecution(
       "guard exited with status ${evaluation.status} without reaching its no-qualifying-JDK branch",
     )
   }
@@ -116,7 +116,7 @@ class GateJvmResolver(
     val lines = evaluation.stdout.split("\n")
     val requiredMajor = lines.getOrNull(1)?.trim().orEmpty()
     if (lines.size < GUARD_OUTPUT_LINES || requiredMajor.isEmpty()) {
-      throw GateJvmGuardOutputException("exit=${evaluation.status} output=${evaluation.stdout.trim()}")
+      throw gateJvmGuardOutput("exit=${evaluation.status} output=${evaluation.stdout.trim()}")
     }
     return GuardOutput(
       resolvedHome = lines[0].trim(),

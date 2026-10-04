@@ -32,7 +32,10 @@ object ReviewRunLaneSegmentAccountingJson {
       } catch (error: SkillBillRuntimeException) {
         when (error.code) {
           JsonFailureCode.MALFORMED_TEXT, JsonFailureCode.WRONG_ROOT_TYPE ->
-            throw segmentAccountingSchemaError("Segment accounting JSON is malformed: ${error.message.orEmpty()}", error)
+            throw segmentAccountingSchemaError(
+              "Segment accounting JSON is malformed: ${error.message.orEmpty()}",
+              error,
+            )
           else -> throw error
         }
       }

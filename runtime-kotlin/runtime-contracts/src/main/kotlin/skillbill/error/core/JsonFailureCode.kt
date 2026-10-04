@@ -3,7 +3,8 @@ package skillbill.error.core
 enum class JsonFailureCode : RuntimeFailureCode {
   MALFORMED_TEXT,
   WRONG_ROOT_TYPE,
-  UNSUPPORTED_VALUE;
+  UNSUPPORTED_VALUE,
+  ;
 
   companion object {
     fun malformedJsonText(cause: Throwable): SkillBillRuntimeException =

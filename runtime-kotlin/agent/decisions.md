@@ -1,11 +1,32 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-04] SKILL-400: keep cross-module failure codes in runtime-contracts
+Context: Review attribution and skill removal need code classification across module boundaries.
+Decision: Keep `ReviewAttributionFailureCode` beside shared review vocabulary in runtime-contracts and `SkillRemoveFailureCode` beside shared install vocabulary there.
+Reason: Domain canonicalization produces the attribution code and MCP classifies it. Application removal policy and the skills filesystem adapter both consume the removal code. Shared ownership satisfies A1 and A2 without widening import guards or domain package rules.
+
+## [2026-10-04] SKILL-400 subtask 7: return symlink context through the existing result flow
+Context: Removing exception properties would lose the actual failed temporary path needed by native-agent install issues. Returning a failure also bypasses throw-only rollback.
+Decision: Carry the failed path and coded error through the existing link results. Derive Windows guidance only for SYMLINK. Restore the provider journal for returned and thrown failures before further publication; suppress restoration failures on the original error and rethrow thrown errors, including cancellation. Keep throwing adapters for existing callers.
+Reason: Only the link operation knows the temporary path. Passing its result preserves issue fields without message parsing or new exception state. Restoring both failure routes prevents catalog promotion and inventory reconciliation after partial mutation, as required by A7.
+
+## [2026-10-04] SKILL-400 review: preserve Cursor failure propagation in standalone review
+Context: Cursor stream failures now use `SkillBillRuntimeException`. Standalone integration and analysis handlers previously let these failures escape because they extended `Exception` directly.
+Decision: Rethrow Cursor stream codes before those handlers construct incomplete review results. Declare `CursorReviewStreamFailureCode` in runtime-contracts, where the launcher and application review handlers can both read it. Keep message factories in the launcher.
+Reason: Conversion must preserve the existing handled set. The application needs the code family to distinguish these failures without depending on an infrastructure module.
+
+## [2026-10-04] SKILL-400 subtask 7: retire the shared legacy exception transition
+Context: The final runtime-infra conversions removed the last main, test, and testFixtures caller of the codeless constructor and `ShellContentContractException`.
+Decision: Make `SkillBillRuntimeException` final, remove `LegacyFailureCode` and `ShellContentContractException`, and retain shell-content classification through its owner-declared codes.
+Reason: No failure site needs an unclassified throwable or a subclass to preserve its handled set.
+Supersedes: The transitional exception model recorded by SKILL-398 subtasks 4 and 5.
+
 ## [2026-10-04] SKILL-400 subtask 2: external pack codes and the dropped publish payload
 Context: Six external platform pack and add-on failures cross infrastructure, domain policy and guarded CLI boundaries. The publish failure's remotePayload had no production reader; only a catalog integration test read it.
 Decision: Keep both owner-code enums and message factories in runtime-contracts error/core. Register them as shell-content failures, preserve handled sets and telemetry family values, and drop the publish payload without a replacement carrier.
 Reason: Shared consumers need the codes in the kernel. Shell-content classification and exact code checks retain the existing boundary behavior; preserving a test-only payload would keep unused production state after deleting its throwable class.
 Alternatives considered: Replacing remotePayload with another exception property, message parsing or a result object would preserve data no production caller needs.
-Revisit when: The remaining shell-content subclasses and codeless callers are gone, allowing retirement of the shared legacy transition.
+Retired: SKILL-400 subtask 7 removed the shared legacy transition on 2026-10-04.
 
 ## [2026-10-04] Separate standalone reporting from full-run repair, SKILL-402
 Context: A dirty standalone review reached the full repair slot, staged operator changes, then failed because its in-memory state cannot commit a checkpoint.
@@ -85,7 +106,7 @@ Revisit when: SKILL-400 finishes and the legacy bases retire, at which point `re
 Context: The first implement attempt for subtask 4 blocked because all 97 shell-content classes were too much for one phase. The conversion is split into the shared transition pieces plus the two smallest areas here, and the other seven areas in SKILL-399.
 Decision: (1) Coded failures render `<CodeEnum>.<ENTRY>` through `Throwable.failureCodeLabel()` wherever a caught throwable's class name was rendered; uncoded throwables render as before. Pure null-message fallbacks (`message ?: x::class.simpleName`) are left alone, because a coded failure always carries a message and the label could never render there. (2) `isShellContentContractFailure()` is a transitional classification: each area conversion adds its code enum, and it is removed when `ShellContentContractException` retires. `ScaffoldFailureCode` is never added. (3) The shell-content conversion is split between SKILL-398 subtask 4 (AgentAddon, GovernedReview, edge sites) and SKILL-399 (the other seven areas).
 Reason: Catch sites that name `ShellContentContractException` would miss a plain coded `SkillBillRuntimeException`, so the predicate keeps them handling the same failures until the class retires.
-Revisit when: `ShellContentContractException` retires, or `LegacyFailureCode` is removed.
+Retired: SKILL-400 subtask 7 removed `ShellContentContractException` and `LegacyFailureCode` on 2026-10-04.
 
 ## [2026-10-02] SKILL-398: Failure model: results for expected outcomes, one runtime failure type with owner codes, defects via require/check
 Context: The census in .feature-specs/SKILL-398-runtime-exception-reduction/investigation.md found 231 custom throwables in main, and 62% are never discriminated by type.

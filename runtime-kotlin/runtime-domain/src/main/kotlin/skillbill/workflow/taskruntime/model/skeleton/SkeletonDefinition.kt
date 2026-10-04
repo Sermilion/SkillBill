@@ -85,7 +85,8 @@ data class SkeletonDefinition(
       entries.firstOrNull { it.id == id }
         ?: throw SkillBillRuntimeException(
           PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION,
-          "Unknown skeleton definition '$id'; expected one of ${entries.map(SkeletonDefinition::id).joinToString(", ")}.",
+          "Unknown skeleton definition '$id'; expected one of " +
+            "${entries.map(SkeletonDefinition::id).joinToString(", ")}.",
         )
   }
 }

@@ -24,7 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSupport() {
@@ -342,15 +342,13 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
       Assumptions.assumeFalse(canStillCreateSymlink, "read-only directory still allows symlink creation")
 
       val failure =
-        runCatching {
-          installNativeAgentFile(
-            source = newSource,
-            agentTarget = AgentTarget("codex", targetDir.toFileLocation()),
-            managedSourceRoots = listOf(managedRoot),
-          )
-        }.exceptionOrNull()
+        installNativeAgentFile(
+          source = newSource,
+          agentTarget = AgentTarget("codex", targetDir.toFileLocation()),
+          managedSourceRoots = listOf(managedRoot),
+        )
 
-      assertNotNull(failure, "replacement should fail in read-only target dir")
+      assertIs<InstallNativeAgentResult.Failed>(failure, "replacement should fail in read-only target dir")
       assertEquals(oldSource.toAbsolutePath().normalize(), readSymlinkTarget(linkPath))
     } finally {
       Files.setPosixFilePermissions(targetDir, originalPermissions)

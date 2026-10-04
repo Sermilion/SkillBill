@@ -6,6 +6,7 @@ import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.addonUsageFor
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ScaffoldAuthoringFailureCode
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.displayNameFromSlug
 import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
@@ -28,7 +29,10 @@ internal fun selectedTargets(
   }
   val missing = skillNames.toSet() - targets.keys
   if (missing.isNotEmpty()) {
-    throw SkillBillRuntimeException("Unknown content-managed skill(s): ${missing.sorted().joinToString(", ")}.")
+    throw SkillBillRuntimeException(
+      ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
+      "Unknown content-managed skill(s): ${missing.sorted().joinToString(", ")}.",
+    )
   }
   return skillNames.map { skillName -> targets.getValue(skillName) }
 }
@@ -70,6 +74,7 @@ internal fun resolveTarget(
 ): AuthoringTarget =
   discoverTargets(repoRoot, externalDiscovery = externalDiscovery)[skillName]
     ?: throw SkillBillRuntimeException(
+      ScaffoldAuthoringFailureCode.AUTHORING_FAILURE,
       "Skill '$skillName' is not a content-managed skill with a sibling content.md file.",
     )
 

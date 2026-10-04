@@ -3,14 +3,14 @@ contract_version: "0.5"
 issue_key: "SKILL-400"
 feature_name: "runtime-error-codes"
 parent_spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-400-runtime-error-codes"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 6
-  action: "resume"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "json-and-failure-wire-codes"
@@ -80,12 +80,12 @@ subtasks:
 - id: 6
   name: "domain-and-mcp-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_6_domain-and-mcp-codes.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261004-190933-rbn8"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -93,12 +93,12 @@ subtasks:
 - id: 7
   name: "infra-host-launcher-skills-workflow-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_7_infra-host-launcher-skills-workflow-codes.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261004-193253-fp18"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

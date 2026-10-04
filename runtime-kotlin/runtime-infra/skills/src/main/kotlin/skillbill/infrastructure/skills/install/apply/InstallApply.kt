@@ -270,7 +270,7 @@ private fun WindowsSymlinkApplyOutcome.withSymlinkFailureState(
   if (fallbackState == WindowsSymlinkFallbackState.USER_ACTION_REQUIRED) {
     return this
   }
-  val symlinkCause = InstallSymlinkException::class.qualifiedName
+  val symlinkCause = "InstallApplyFailureCode.SYMLINK"
   val hasSymlinkFailure = failures.any { issue -> issue.causeClass == symlinkCause }
   return if (hasSymlinkFailure) {
     copy(fallbackState = WindowsSymlinkFallbackState.LINK_FAILED, guidance = windowsSymlinkGuidance())

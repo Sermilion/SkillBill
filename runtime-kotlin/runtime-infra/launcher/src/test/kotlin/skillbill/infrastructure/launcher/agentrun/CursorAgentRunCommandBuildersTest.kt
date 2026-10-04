@@ -1,8 +1,10 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import skillbill.error.core.CursorReviewStreamFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
-import skillbill.infrastructure.launcher.review.CursorReviewStreamError
-import skillbill.infrastructure.launcher.review.CursorReviewStreamMalformedError
+import skillbill.infrastructure.launcher.review.cursorReviewUnknown
+import skillbill.infrastructure.launcher.review.malformedCursorReviewStream
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -195,10 +197,10 @@ class CursorAgentRunCommandBuildersTest {
   fun `cursor decoder declares an undecodable stream so the launcher degrades to an empty harvest`() {
     val decoder = AgentRunOutputDecoder.CURSOR_STREAM_JSON
 
-    assertTrue(decoder.undecodable(CursorReviewStreamMalformedError("truncated", RuntimeException())))
-    assertFalse(decoder.undecodable(CursorReviewStreamError("provider said no")))
+    assertTrue(decoder.undecodable(malformedCursorReviewStream("truncated", RuntimeException())))
+    assertFalse(decoder.undecodable(cursorReviewUnknown("provider said no")))
     assertFalse(
-      AgentRunOutputDecoder.PLAIN.undecodable(CursorReviewStreamMalformedError("truncated", RuntimeException())),
+      AgentRunOutputDecoder.PLAIN.undecodable(malformedCursorReviewStream("truncated", RuntimeException())),
       "the default policy keeps propagating; only a decoder that owns the transport may degrade",
     )
   }
@@ -209,18 +211,22 @@ class CursorAgentRunCommandBuildersTest {
 {"type":"result","result":"success","usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8}}
 more invalid"""
 
-    assertFailsWith<CursorReviewStreamMalformedError> {
-      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
+      }
+    assertEquals(CursorReviewStreamFailureCode.MALFORMED, failure.code)
   }
 
   @Test
   fun `cursor decoder on fully malformed input throws typed error`() {
     val malformed = "not json at all"
 
-    assertFailsWith<CursorReviewStreamMalformedError> {
-      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(malformed)
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(malformed)
+      }
+    assertEquals(CursorReviewStreamFailureCode.MALFORMED, failure.code)
   }
 
   @Test
@@ -234,9 +240,11 @@ more invalid"""
   fun `cursor decoder on error event throws typed error`() {
     val jsonl = """{"type":"error","error":"Provider error occurred"}"""
 
-    assertFailsWith<CursorReviewStreamError> {
-      AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        AgentRunOutputDecoder.CURSOR_STREAM_JSON.decode(jsonl)
+      }
+    assertEquals(CursorReviewStreamFailureCode.UNKNOWN, failure.code)
   }
 
   @Test

@@ -14,25 +14,38 @@ internal fun createReplacementSymlinkWithGuidance(
   linkPath: Path,
   linkTarget: Path,
 ) {
-  createManagedSymlinkWithGuidance(linkPath, linkTarget, replaceExisting = true)
+  tryCreateReplacementSymlinkWithGuidance(linkPath, linkTarget)?.let { throw it.error }
 }
 
 internal fun createNewSymlinkWithGuidance(
   linkPath: Path,
   linkTarget: Path,
 ) {
-  createManagedSymlinkWithGuidance(linkPath, linkTarget, replaceExisting = false)
+  tryCreateNewSymlinkWithGuidance(linkPath, linkTarget)?.let { throw it.error }
 }
+
+internal fun tryCreateReplacementSymlinkWithGuidance(
+  linkPath: Path,
+  linkTarget: Path,
+): InstallSymlinkFailure? = createManagedSymlinkWithGuidance(linkPath, linkTarget, replaceExisting = true)
+
+internal fun tryCreateNewSymlinkWithGuidance(
+  linkPath: Path,
+  linkTarget: Path,
+): InstallSymlinkFailure? = createManagedSymlinkWithGuidance(linkPath, linkTarget, replaceExisting = false)
 
 private fun createManagedSymlinkWithGuidance(
   linkPath: Path,
   linkTarget: Path,
   replaceExisting: Boolean,
-) {
+): InstallSymlinkFailure? {
   val tempLink = linkPath.parent.resolve(".${linkPath.fileName}.tmp-${UUID.randomUUID()}").normalize()
   val oldTarget = if (replaceExisting) readSymlinkTargetOrNull(linkPath) else null
   try {
-    createSymbolicLinkWithGuidance(tempLink, linkTarget)
+    createSymbolicLinkWithGuidance(tempLink, linkTarget)?.let { failure ->
+      restoreOriginalLinkIfNeeded(replaceExisting, oldTarget, linkPath)
+      return failure
+    }
     if (replaceExisting) {
       Files.deleteIfExists(linkPath)
     }
@@ -46,6 +59,7 @@ private fun createManagedSymlinkWithGuidance(
   } finally {
     runCatching { rollbackDeleteIfExists(tempLink) }
   }
+  return null
 }
 
 private fun restoreOriginalLinkIfNeeded(
@@ -61,13 +75,14 @@ private fun restoreOriginalLinkIfNeeded(
 private fun createSymbolicLinkWithGuidance(
   linkPath: Path,
   linkTarget: Path,
-) {
+): InstallSymlinkFailure? {
   try {
     Files.createSymbolicLink(linkPath, linkTarget)
+    return null
   } catch (error: UnsupportedOperationException) {
-    throw symbolicLinkFailure(linkPath, error)
+    return InstallSymlinkFailure(linkPath, symbolicLinkFailure(linkPath, error))
   } catch (error: FileSystemException) {
-    throw symbolicLinkFailure(linkPath, error)
+    return InstallSymlinkFailure(linkPath, symbolicLinkFailure(linkPath, error))
   }
 }
 

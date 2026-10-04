@@ -1,14 +1,23 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.error.core.failureCodeLabel
+import skillbill.infrastructure.skills.install.apply.InstallApplyFailureCode
 import skillbill.infrastructure.skills.install.apply.createNewSymlinkWithGuidance
 import skillbill.infrastructure.skills.install.apply.currentNativeAgentApplyCacheRoot
+import skillbill.infrastructure.skills.install.apply.failedNativeAgentOutcome
+import skillbill.infrastructure.skills.install.apply.windowsSymlinkGuidance
 import skillbill.infrastructure.skills.install.nativeagent.InstallNativeAgentResult
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
+import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkFailure
+import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOutcome
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOwnership
+import skillbill.infrastructure.skills.install.nativeagent.link.ProviderMutationJournal
 import skillbill.infrastructure.skills.install.nativeagent.link.installNativeAgentFile
+import skillbill.infrastructure.skills.install.nativeagent.link.linkProviderAgentsWithJournal
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallAgentLinkStatus
+import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.NativeAgentApplyStatus
@@ -244,6 +253,56 @@ class InstallNativeAgentLinkApplyJunieTest : InstallNativeAgentLinkApplyTestSupp
     assertNotNull(failure, "new link creation should fail when destination exists")
     assertEquals("user owned", Files.readString(linkPath))
     assertFalse(Files.isSymbolicLink(linkPath), "user-owned file should not be replaced")
+  }
+
+  @Test
+  fun `native agent symlink failure returns the failed temporary path and coded guidance`() {
+    val targetDir = Files.createTempDirectory("skillbill-native-failure-target").also(tempDirs::add)
+    val source = Files.createTempFile("skillbill-native-failure-source", ".md").also(tempDirs::add)
+    Files.writeString(source, "source")
+    var mutationCount = 0
+
+    val journal = ProviderMutationJournal()
+    val result =
+      linkProviderAgentsWithJournal(journal) {
+        val installed =
+          installNativeAgentFile(
+            source = source,
+            agentTarget = AgentTarget("codex", targetDir.toFileLocation()),
+            managedSourceRoots = emptyList(),
+            beforeMutation = { path ->
+              journal.beforeMutation(path)
+              mutationCount += 1
+              if (mutationCount == 2) targetDir.toFile().deleteRecursively()
+            },
+          )
+        assertTrue(installed is InstallNativeAgentResult.Failed)
+        val failure = installed
+        NativeAgentLinkOutcome(
+          linked = emptyList(),
+          skipped = emptyList(),
+          failure = NativeAgentLinkFailure(failure.failedPath, failure.error),
+        )
+      }
+
+    assertTrue(Files.isDirectory(targetDir), "the provider journal restores the directory removed before linking")
+    assertTrue(Files.notExists(targetDir.resolve(source.fileName)))
+    val failure = result.failure
+    assertNotNull(failure)
+    assertEquals(targetDir, failure.path.parent)
+    assertTrue(failure.path.fileName.toString().startsWith(".${source.fileName}.tmp-"))
+    val error = failure.error
+    assertEquals(InstallApplyFailureCode.SYMLINK, error.code)
+    assertTrue(error.message.orEmpty().contains("On Windows, enable Developer Mode"))
+    val outcome = failedNativeAgentOutcome(SupportedAgent.CODEX, NativeAgentProviderId.CODEX, error, failure.path)
+    val issue = assertNotNull(outcome.issue)
+    assertEquals(NativeAgentApplyStatus.FAILED, outcome.status)
+    assertEquals(InstallApplyIssueKind.NATIVE_AGENT_LINK_FAILED, issue.kind)
+    assertEquals(error.message, issue.message)
+    assertEquals(failure.path.toFileLocation(), issue.path)
+    assertEquals(windowsSymlinkGuidance(), issue.guidance)
+    assertEquals(error.failureCodeLabel(), issue.causeClass)
+    assertEquals(failure.path.toFileLocation(), outcome.path)
   }
 
   @Test

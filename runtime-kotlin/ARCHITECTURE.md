@@ -404,8 +404,7 @@ runtime-core
   phase-output failure wire tokens and their coarse `FeatureTaskRuntimePhaseOutputFailureKind`
   mapping; `coarseFailureKindForPhaseOutputWireCode` sits beside it and delegates to that
   enum. The `skillbill.error.*` packages are acyclic: `SkillBillRuntimeException`,
-  `RuntimeFailureCode`, the transitional `LegacyFailureCode`, `ShellContentContractException`, and
-  the `FailureWireCode` contract live in `skillbill.error.core`, feature-task failure
+  `RuntimeFailureCode` and the `FailureWireCode` contract live in `skillbill.error.core`, feature-task failure
   vocabulary in `skillbill.error.featuretask`, and per-surface shell-content errors in
   `skillbill.error.shellcontent`, which depends on both.
 - `runtime-domain`: pure agent-add-on, learning, review, telemetry, workflow,
