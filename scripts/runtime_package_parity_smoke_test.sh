@@ -8,7 +8,8 @@ cleanup_calls=0
 clean_install_state_if_requested() { return 0; }
 run_pre_install_uninstall() { cleanup_calls=$((cleanup_calls + 1)); }
 err() { printf '%s\n' "$*" >&2; }
-source <(sed -n '/^stage_packaged_runtime_distribution() {/,/^}/p; /^install_packaged_runtime_pair() {/,/^}/p' "$repo_root/install.sh")
+sed -n '/^stage_packaged_runtime_distribution() {/,/^}/p; /^install_packaged_runtime_pair() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/runtime-pair-functions.sh"
+source "$task_dir/runtime-pair-functions.sh"
 RUNTIME_CLI_INSTALL_DIR="$task_dir/live/runtime-cli"
 RUNTIME_MCP_INSTALL_DIR="$task_dir/live/runtime-mcp"
 mkdir -p "$task_dir/cli/bin" "$task_dir/mcp/bin" "$RUNTIME_CLI_INSTALL_DIR" "$RUNTIME_MCP_INSTALL_DIR"
@@ -36,7 +37,8 @@ for kind in cli mcp; do
   [[ ! -e "$RUNTIME_CLI_INSTALL_DIR.tmp" && ! -e "$RUNTIME_MCP_INSTALL_DIR.tmp" ]]
   rm "$task_dir/$kind/invalid-contract"
 done
-source <(sed -n '/^install_packaged_runtime_distributions() {/,/^}/p; /^build_kotlin_runtime_distributions() {/,/^}/p; /^install_runtime_distributions() {/,/^}/p' "$repo_root/install.sh")
+sed -n '/^install_packaged_runtime_distributions() {/,/^}/p; /^build_kotlin_runtime_distributions() {/,/^}/p; /^install_runtime_distributions() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/runtime-install-functions.sh"
+source "$task_dir/runtime-install-functions.sh"
 info() { return 0; }
 warn() { return 0; }
 ok() { err "Source install reported success after rejecting a package."; exit 1; }
