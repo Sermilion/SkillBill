@@ -1,11 +1,12 @@
 package skillbill.infrastructure.skills.skillremove
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.host.jvm.rollbackDeletePathEntry
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkRequest
 import skillbill.install.model.SupportedAgent
-import skillbill.skillremove.SkillBillRollbackException
+import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.SkillRemovalPreview
 import skillbill.skillremove.model.SkillRemovalRequest
@@ -95,7 +96,10 @@ internal class SkillRemoveJvmFileSystemApply(
     }
     if (failures.isNotEmpty()) {
       val summary = failures.joinToString(separator = "; ") { "${it.provider.name}: ${it.message}" }
-      throw SkillBillRollbackException("Agent symlink unlink failed for: $summary")
+      throw SkillBillRuntimeException(
+        SkillRemoveFailureCode.ROLLBACK_INCOMPLETE,
+        "Agent symlink unlink failed for: $summary",
+      )
     }
     return unlinked
   }

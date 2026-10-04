@@ -1,3 +1,9 @@
+## [2026-10-04] Treat malformed attribution vocabulary as an input failure
+Context: SKILL-400 subtask 6 replaces the attribution exception while review composition combines port-provided pack skill names and platform slugs with canonical defaults.
+Decision: Domain canonicalization throws `SkillBillRuntimeException` with `ReviewAttributionFailureCode.MALFORMED_VOCABULARY` for malformed entries.
+Reason: The vocabulary includes external input, so malformed entries can occur without a runtime composition bug. A coded failure preserves that distinction and lets MCP retain the former argument-error classification.
+Alternatives considered: Plain `IllegalArgumentException` is reserved here for code-owned vocabulary defects; the plan establishes that this vocabulary is input-driven.
+
 ## [2026-10-04] Carry the original manifest failure through validation rejection
 Context: SKILL-399 subtask 8 removes caught-exception reason and failureCode reads from schema validation while preserving the messages emitted by requireAccepted.
 Decision: Rejected carries an optional SkillBillRuntimeException. Schema validation stores the original failure and its full message; requireAccepted rethrows it when present and constructs a coded failure otherwise.

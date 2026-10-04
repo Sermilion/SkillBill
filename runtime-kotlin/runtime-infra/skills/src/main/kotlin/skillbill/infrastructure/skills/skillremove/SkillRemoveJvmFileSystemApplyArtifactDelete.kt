@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.skillremove
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.unlinkProviderAgents
 import skillbill.infrastructure.skills.scaffold.manifest.removeAddonReferences
@@ -10,7 +11,7 @@ import skillbill.infrastructure.skills.scaffold.manifest.removePointersBlockKey
 import skillbill.infrastructure.skills.scaffold.manifest.removeSkillClassPointer
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.ReadmeCatalogEdits
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.ReadmeEditOutcome
-import skillbill.skillremove.SkillBillRollbackException
+import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.ManifestEdit
 import skillbill.skillremove.model.ManifestEditKind
@@ -139,7 +140,8 @@ internal fun SkillRemoveJvmFileSystemApply.handleApplyCascadeFailure(
   logApplyCascadeFailure(error)
   val rollbackOk = attemptRollback(rollbackStash)
   if (!rollbackOk) {
-    throw SkillBillRollbackException(
+    throw SkillBillRuntimeException(
+      SkillRemoveFailureCode.ROLLBACK_INCOMPLETE,
       "Skill removal failed AND rollback could not fully restore the repo: ${error.message.orEmpty()}",
       error,
     )

@@ -2,12 +2,13 @@ package skillbill.mcp.review
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.callToolPayload
 import skillbill.review.attribution.canonicalPlatformSlugs
 import skillbill.review.attribution.resolveCanonicalRoutedSkill
 import skillbill.review.attribution.resolveCanonicalStack
-import skillbill.review.model.ReviewAttributionResolutionError
+import skillbill.review.model.ReviewAttributionFailureCode
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
@@ -78,16 +79,26 @@ class ReviewAttributionResolutionParityTest {
     val malformedCatalog = setOf("Bill KMP Code Review")
 
     val routedFailure =
-      assertFailsWith<ReviewAttributionResolutionError.MalformedVocabulary> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolveCanonicalRoutedSkill("bill-kmp-code-review", malformedCatalog)
       }
     val stackFailure =
-      assertFailsWith<ReviewAttributionResolutionError.MalformedVocabulary> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolveCanonicalStack("kotlin", canonicalPlatformSlugs + "Kotlin JVM")
       }
 
-    assertEquals("Bill KMP Code Review", routedFailure.offendingEntry)
-    assertEquals("Kotlin JVM", stackFailure.offendingEntry)
+    assertEquals(ReviewAttributionFailureCode.MALFORMED_VOCABULARY, routedFailure.code)
+    assertEquals(
+      "Review attribution vocabulary 'pack_skill_names' contains the malformed entry 'Bill KMP Code Review' " +
+        "while resolving 'bill-kmp-code-review'.",
+      routedFailure.message,
+    )
+    assertEquals(ReviewAttributionFailureCode.MALFORMED_VOCABULARY, stackFailure.code)
+    assertEquals(
+      "Review attribution vocabulary 'platform_slugs' contains the malformed entry 'Kotlin JVM' " +
+        "while resolving 'kotlin'.",
+      stackFailure.message,
+    )
   }
 
   private fun importedAttributionViaCli(

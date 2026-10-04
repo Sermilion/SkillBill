@@ -8,13 +8,15 @@ import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.learning.InvalidLearningSourceReason
 import skillbill.error.shellcontent.isShellContentContractFailure
-import skillbill.mcp.shared.InvalidMcpToolArgumentError
 import skillbill.mcp.shared.McpComponent
+import skillbill.mcp.shared.McpToolArgumentFailureCode
 import skillbill.mcp.shared.McpToolArguments
 import skillbill.mcp.shared.McpToolPayloadKeys
+import skillbill.mcp.shared.invalidMcpToolArgument
 import skillbill.mcp.telemetry.TELEMETRY_EVENT_CONTRACT_VERSION
 import skillbill.mcp.telemetry.TelemetryEventSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.review.model.ReviewAttributionFailureCode
 import kotlin.coroutines.cancellation.CancellationException
 
 internal object McpToolDispatcher {
@@ -44,6 +46,8 @@ internal object McpToolDispatcher {
     isShellContentContractFailure() ||
       (this as? SkillBillRuntimeException)?.code is FeatureTaskRuntimeRegenerationRefusal ||
       (this as? SkillBillRuntimeException)?.code is InvalidLearningSourceReason ||
+      (this as? SkillBillRuntimeException)?.code is ReviewAttributionFailureCode ||
+      (this as? SkillBillRuntimeException)?.code is McpToolArgumentFailureCode ||
       (this as? SkillBillRuntimeException)?.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION ||
       this is IllegalArgumentException ||
       this is IllegalStateException
@@ -55,13 +59,13 @@ internal object McpToolDispatcher {
   ): Map<String, Any?> {
     val tool =
       McpToolRegistry.toolNamed(toolName)
-        ?: throw InvalidMcpToolArgumentError(
+        ?: throw invalidMcpToolArgument(
           toolName = toolName,
           argumentKey = "tool",
           detail = "unknown tool",
         )
     tool.runtimeOwnedArgumentKeys.firstOrNull(rawArguments::containsKey)?.let { key ->
-      throw InvalidMcpToolArgumentError(tool.name, key, "is runtime-owned")
+      throw invalidMcpToolArgument(tool.name, key, "is runtime-owned")
     }
     val arguments = tool.normalize?.invoke(rawArguments) ?: rawArguments
     TelemetryEventSchemaValidator.validate(

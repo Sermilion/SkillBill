@@ -8,7 +8,7 @@ import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.skillremove.SkillRemoveFileSystem
-import skillbill.skillremove.SkillBillRollbackException
+import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.model.AgentSymlinkUnlink
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.ManifestEdit
@@ -238,11 +238,11 @@ class SkillRemoveTest {
   }
 
   @Test
-  fun `executeRemoval Failed maps SkillBillRollbackException to rollbackComplete=false`() {
+  fun `executeRemoval Failed maps incomplete rollback code to rollbackComplete=false`() {
     val fs =
       FakeSkillRemoveFileSystem(
         filesystemPaths = listOf("skills/bill-foo"),
-        applyThrows = SkillBillRollbackException("rollback failed"),
+        applyThrows = SkillBillRuntimeException(SkillRemoveFailureCode.ROLLBACK_INCOMPLETE, "rollback failed"),
       )
     val request =
       SkillRemovalRequest(

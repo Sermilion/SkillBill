@@ -12,6 +12,7 @@ import skillbill.mcp.shared.decodeJsonObject
 import skillbill.mcp.shared.enabledTelemetryEnvironment
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.transport.RemoteTransportPort
+import skillbill.review.model.ReviewAttributionFailureCode
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -70,12 +71,45 @@ class McpCaptureDiagnosticsTest {
         requester = failingRequester(IllegalStateException("transport misconfigured")),
         environment = environment,
       ).callToolError(CAPTURED_TOOL)
+    val invalidArgument =
+      McpRuntimeContext(environment = environment)
+        .callToolError("review_stats", mapOf("review_run_id" to 7))
 
     assertEquals(CAPTURED_TOOL, unsupported["tool"])
     assertEquals("transport unsupported", unsupported["error"])
     assertEquals(CAPTURED_TOOL, clientError["tool"])
     assertEquals("transport misconfigured", clientError["error"])
+    assertEquals("review_stats", invalidArgument["tool"])
+    assertEquals(
+      "MCP tool 'review_stats' argument 'review_run_id': must be a string",
+      invalidArgument["error"],
+    )
     assertEquals(listOf("UnsupportedOperationException"), capturedErrorTypes(dbPath))
+    assertEquals(emptyList(), capturedErrorTypes(dbPath, "review_stats"))
+  }
+
+  @Test
+  fun `dispatcher returns coded malformed attribution errors without capturing telemetry`() {
+    val tempDir = Files.createTempDirectory("skillbill-mcp-capture-attribution")
+    val environment = enabledTelemetryEnvironment(tempDir)
+    val dbPath = tempDir.resolve("metrics.db")
+    ensureTestDatabase(dbPath).close()
+    val message =
+      "Review attribution vocabulary 'pack_skill_names' contains the malformed entry 'Bad Name' " +
+        "while resolving 'bill-kmp-code-review'."
+
+    val error =
+      McpRuntimeContext(
+        requester =
+          failingRequester(
+            SkillBillRuntimeException(ReviewAttributionFailureCode.MALFORMED_VOCABULARY, message),
+          ),
+        environment = environment,
+      ).callToolError(CAPTURED_TOOL)
+
+    assertEquals(CAPTURED_TOOL, error["tool"])
+    assertEquals(message, error["error"])
+    assertEquals(emptyList(), capturedErrorTypes(dbPath))
   }
 
   @Test

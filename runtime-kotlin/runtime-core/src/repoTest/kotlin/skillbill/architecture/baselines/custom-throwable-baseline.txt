@@ -1,8 +1,5 @@
 runtime-contracts:ShellContentContractException
 runtime-contracts:SkillBillRuntimeException
-runtime-domain:ReviewAttributionResolutionError
-runtime-domain:ReviewAttributionResolutionError.MalformedVocabulary
-runtime-domain:SkillBillRollbackException
 runtime-infra:host:GateJvmGuardExecutionException
 runtime-infra:host:GateJvmGuardOutputException
 runtime-infra:host:GateJvmGuardResourceMissingException
@@ -17,4 +14,3 @@ runtime-infra:launcher:CursorReviewStreamProviderFailureError
 runtime-infra:launcher:CursorReviewStreamTerminationError
 runtime-infra:skills:InstallSymlinkException
 runtime-infra:workflow:ValidationGateProcessException
-runtime-mcp:InvalidMcpToolArgumentError

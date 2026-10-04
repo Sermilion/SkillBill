@@ -4,7 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.ports.skillremove.SkillRemoveFileSystem
-import skillbill.skillremove.SkillBillRollbackException
+import skillbill.skillremove.SkillRemoveFailureCode
 import skillbill.skillremove.TargetValidation
 import skillbill.skillremove.model.SkillRemovalPreview
 import skillbill.skillremove.model.SkillRemovalRefusalReason
@@ -137,8 +137,12 @@ class SkillRemove(
   private fun mapSkillRemovalFailure(error: Throwable): SkillRemovalResult {
     if (error is CancellationException) throw error
     if (error is Error) throw error
-    if (error is SkillBillRollbackException) return removalFailed(error, rollbackComplete = false)
-    if (error is SkillBillRuntimeException) return removalFailed(error, rollbackComplete = true)
+    if (error is SkillBillRuntimeException) {
+      return removalFailed(
+        error,
+        rollbackComplete = error.code != SkillRemoveFailureCode.ROLLBACK_INCOMPLETE,
+      )
+    }
     return removalFailed(error, rollbackComplete = false)
   }
 

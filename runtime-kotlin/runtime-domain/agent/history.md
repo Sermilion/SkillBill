@@ -1,5 +1,15 @@
 # Boundary History — runtime-domain
 
+## [2026-10-04] SKILL-400 subtask 6 - Domain and MCP failure codes
+Areas: runtime-domain/review, runtime-domain/skillremove, runtime-application/scaffold, runtime-infra/skills/skillremove, runtime-mcp/core, runtime-mcp/shared, runtime-core/architecture
+- Replaced four attribution, rollback and MCP argument throwable declarations with owner-declared failure codes on `SkillBillRuntimeException`.
+- Skill removal sets `rollbackComplete` false for `ROLLBACK_INCOMPLETE`; attribution and argument failures retain their MCP error results and no-capture behavior. Rollback failures remain captured.
+- Followed the shared coded-failure pattern with unchanged messages and rollback cause. Domain owns attribution and removal codes; runtime-mcp owns its argument code.
+- Added `invalidMcpToolArgument`, reusable for MCP argument failures with the existing blank-tool fallback and optional cause.
+- Exception-type consumers must use code checks. Persisted formats are unchanged; the shared exception transition remains open while other legacy subclasses or codeless callers remain.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-01] SKILL-397 subtask 2 — Domain-owned aggregate transitions
 Areas: runtime-domain/workflow/decomposition, runtime-domain/workflow/model, runtime-domain/goalrunner, runtime-engine/goalrunner, runtime-application/decomposition
 - Decomposition manifest subtask transitions (attempt, complete, stop, resume, branch setup, branch selection, runtime-state preservation) now live in the domain as pure functions on the manifest aggregate.

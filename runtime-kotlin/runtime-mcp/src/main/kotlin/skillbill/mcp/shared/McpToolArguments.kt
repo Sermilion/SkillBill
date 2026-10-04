@@ -79,5 +79,5 @@ internal class McpToolArguments(
   fun invalid(
     name: String,
     detail: String,
-  ): Nothing = throw InvalidMcpToolArgumentError(toolName, name, detail)
+  ): Nothing = throw invalidMcpToolArgument(toolName, name, detail)
 }

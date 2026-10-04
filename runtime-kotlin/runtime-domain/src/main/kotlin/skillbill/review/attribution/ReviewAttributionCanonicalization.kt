@@ -1,9 +1,10 @@
 package skillbill.review.attribution
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.review.model.CanonicalAttribution
 import skillbill.review.model.CanonicalScope
 import skillbill.review.model.ImportedReview
-import skillbill.review.model.ReviewAttributionResolutionError
+import skillbill.review.model.ReviewAttributionFailureCode
 import skillbill.review.model.ReviewExecutionMode
 import skillbill.review.model.UNRESOLVED_ATTRIBUTION
 
@@ -158,7 +159,11 @@ private fun requireWellFormedVocabulary(
 ) {
   entries.forEach { entry ->
     if (!entry.matches(vocabularyEntryPattern)) {
-      throw ReviewAttributionResolutionError.MalformedVocabulary(rawValue, vocabulary, entry)
+      throw SkillBillRuntimeException(
+        ReviewAttributionFailureCode.MALFORMED_VOCABULARY,
+        "Review attribution vocabulary '$vocabulary' contains the malformed entry '$entry' " +
+          "while resolving '${rawValue.orEmpty()}'.",
+      )
     }
   }
 }

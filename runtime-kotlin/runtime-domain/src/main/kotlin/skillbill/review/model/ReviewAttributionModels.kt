@@ -17,14 +17,3 @@ data class CanonicalAttribution(
 ) {
   val resolved: Boolean get() = canonical != UNRESOLVED_ATTRIBUTION
 }
-
-sealed class ReviewAttributionResolutionError(message: String) : IllegalArgumentException(message) {
-  class MalformedVocabulary(
-    val rawValue: String?,
-    val vocabulary: String,
-    val offendingEntry: String,
-  ) : ReviewAttributionResolutionError(
-      "Review attribution vocabulary '$vocabulary' contains the malformed entry '$offendingEntry' " +
-        "while resolving '${rawValue.orEmpty()}'.",
-    )
-}

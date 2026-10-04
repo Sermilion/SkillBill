@@ -1,7 +1,8 @@
 package skillbill.review.attribution
 
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.review.model.CanonicalScope
-import skillbill.review.model.ReviewAttributionResolutionError
+import skillbill.review.model.ReviewAttributionFailureCode
 import skillbill.review.model.ReviewExecutionMode
 import skillbill.review.model.UNRESOLVED_ATTRIBUTION
 import kotlin.test.Test
@@ -84,19 +85,24 @@ class ReviewAttributionCanonicalizationTest {
   }
 
   @Test
-  fun `a malformed vocabulary entry raises the typed resolver contract failure`() {
+  fun `a malformed vocabulary entry raises its coded resolver failure`() {
     val failure =
-      assertFailsWith<ReviewAttributionResolutionError.MalformedVocabulary> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolveCanonicalRoutedSkill("bill-kmp-code-review", setOf("Bill KMP Code Review"))
       }
 
-    assertEquals("bill-kmp-code-review", failure.rawValue)
-    assertEquals("pack_skill_names", failure.vocabulary)
-    assertEquals("Bill KMP Code Review", failure.offendingEntry)
+    assertEquals(ReviewAttributionFailureCode.MALFORMED_VOCABULARY, failure.code)
+    assertEquals(
+      "Review attribution vocabulary 'pack_skill_names' contains the malformed entry 'Bill KMP Code Review' " +
+        "while resolving 'bill-kmp-code-review'.",
+      failure.message,
+    )
 
-    assertFailsWith<ReviewAttributionResolutionError.MalformedVocabulary> {
-      resolveCanonicalStack("kotlin", setOf("Kotlin/JVM"))
-    }
+    val stackFailure =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolveCanonicalStack("kotlin", setOf("Kotlin/JVM"))
+      }
+    assertEquals(ReviewAttributionFailureCode.MALFORMED_VOCABULARY, stackFailure.code)
   }
 
   @Test

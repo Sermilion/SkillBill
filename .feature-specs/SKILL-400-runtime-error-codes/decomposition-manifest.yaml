@@ -9,7 +9,7 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-400-runtime-error-codes"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 5
+  subtask_id: 6
   action: "resume"
 subtasks:
 - id: 1
@@ -67,12 +67,12 @@ subtasks:
 - id: 5
   name: "execution-plan-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_5_execution-plan-codes.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261004-182746-2enj"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -80,10 +80,10 @@ subtasks:
 - id: 6
   name: "domain-and-mcp-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_6_domain-and-mcp-codes.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261004-190933-rbn8"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null
