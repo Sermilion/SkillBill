@@ -202,9 +202,16 @@ internal class PhaseAttemptRunHost(
     backingRunState.pinnedReviewTarget(resolve.also { requireReviewOwner() })
 
   private fun requireReviewOwner() {
+    val owner = backingRunState.selectedOwnerOf(boundPhaseId)
     check(
-      boundPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW &&
-        backingRunState.selectedOwnerOf(boundPhaseId)?.slot == PhaseSlot.CODE_REVIEW,
+      (
+        boundPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW &&
+          owner?.slot == PhaseSlot.CODE_REVIEW
+      ) ||
+        (
+          boundPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS &&
+            owner?.slot == PhaseSlot.STANDALONE_REVIEW
+        ),
     ) {
       "Review persistence belongs to the accepted review step."
     }

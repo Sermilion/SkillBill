@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 5 - execution-plan-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope

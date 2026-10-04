@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 7 - infra-host-launcher-skills-workflow-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope

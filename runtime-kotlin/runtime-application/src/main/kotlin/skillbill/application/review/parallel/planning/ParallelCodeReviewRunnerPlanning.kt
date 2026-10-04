@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.review.learnings.ReviewLearningsResolver
 import skillbill.application.review.model.ParallelCodeReviewPlanned
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
@@ -31,17 +32,21 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
+import skillbill.ports.review.model.ReviewIntegrationPassOutcome
 import skillbill.ports.review.repository.ReviewSpecialistContractProvider
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.review.context.ReviewExecutionModePolicy
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
 import skillbill.review.context.model.execution.toCodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
+import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
 @Inject
@@ -175,14 +180,41 @@ class ParallelCodeReviewRunnerPlanning(
         recordAdjudicationBoundary(runId)
       }
     }
+    val reportOnly = request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY
+    val output = if (reportOnly) "NO_FINDINGS\nverdict: approved" else "NO_FINDINGS"
     return ParallelCodeReviewResult(
-      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = "NO_FINDINGS"),
+      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = output),
       lane1 =
         ParallelReviewLaneStatus(
           agentId = request.agent1Id,
           success = true,
           reviewDisposition = ReviewLaneReviewDisposition.COMPLETE,
         ),
+      integration =
+        if (reportOnly) {
+          val skipReason = "The resolved review input is empty, so no specialist or integration assignment exists."
+          ReviewIntegrationPassOutcome(
+            commitSequenceDigest = sha256HexUtf8("resolved-empty-review-input"),
+            terminalOutcome = ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE,
+            summarizedLaneCount = 0,
+            skipReason = skipReason,
+          )
+        } else {
+          null
+        },
+      coverage =
+        if (reportOnly) {
+          ReviewCoverageReport(
+            emptyList(),
+            emptyList(),
+            false,
+            "The resolved review input is empty, so no specialist or integration assignment exists.",
+          )
+        } else {
+          null
+        },
+      reviewSessionId = request.reviewSessionId.takeIf { reportOnly },
+      rawOutput = if (reportOnly) output else "",
     )
   }
 

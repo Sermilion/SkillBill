@@ -1,7 +1,5 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -41,6 +39,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import java.nio.file.Files
 import java.nio.file.Path
@@ -49,7 +48,6 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -73,60 +71,58 @@ class PhaseReviewRunTest {
   }
 
   @Test
-  fun `inline phase review finds, verifies, and fixes without a commit, a checkpoint ref, or workflow state`() {
+  fun `inline phase review reports defects and preserves the reviewed file without launching repair`() {
     var reviews = 0
     val launcher = fixLauncher()
-    val entry =
-      inlineEntry(launcher) {
-        reviews += 1
-        if (isFixed()) APPROVED_REVIEW else BLOCKER_REVIEW
-      }
-
-    val result = entry.run(reviewRequest(CodeReviewExecutionMode.INLINE, reviewRunId = REVIEW_RUN_ID))
-
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(FIXED_SOURCE, Files.readString(source), "implement_fix must change the reviewed file")
-    assertEquals(1, reviews, "review_fix allows one fix and advances without a re-review, as in a full run")
-    assertEquals(1, launchedPhases(launcher).count { it == PHASE_IMPLEMENT_FIX })
-    git.assertNoCommitOrCheckpointRef(headBefore)
-    database.assertNoDurableWorkflowState()
-    assertReviewRecordShape(INLINE_FIXTURES)
-  }
-
-  @Test
-  fun `delegated phase review finds, verifies, and fixes without a commit, a checkpoint ref, or workflow state`() {
-    val lanes = LaneScript()
-    val launcher = fixLauncher(onFix = { lanes.fixed = true })
-    val entry = delegatedEntry(launcher, lanes)
-
-    val result = entry.run(reviewRequest(CodeReviewExecutionMode.DELEGATED, reviewRunId = REVIEW_RUN_ID))
-
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertFalse(PHASE_REVIEW in launchedPhases(launcher), "the delegated review runs through bounded lanes")
-    assertTrue(lanes.launches.any { it.skillRunRequest.issueKey == DELEGATED_SPECIALIST_ISSUE_KEY })
-    assertEquals(FIXED_SOURCE, Files.readString(source), "implement_fix must change the reviewed file")
-    assertEquals(1, launchedPhases(launcher).count { it == PHASE_IMPLEMENT_FIX })
-    git.assertNoCommitOrCheckpointRef(headBefore)
-    database.assertNoDurableWorkflowState()
-    assertReviewRecordShape(DELEGATED_FIXTURES)
-    assertStageDegradationsPerRun(DELEGATED_FIXTURES)
-  }
-
-  @Test
-  fun `a phase review whose findings survive the fix stops at the review_fix cap`() {
-    var reviews = 0
-    val launcher = fixLauncher(verifyEveryPass = true)
-    val entry =
+    val result =
       inlineEntry(launcher) {
         reviews += 1
         BLOCKER_REVIEW
       }
-
-    val result = entry.run(reviewRequest(CodeReviewExecutionMode.INLINE))
+        .run(reviewRequest(CodeReviewExecutionMode.INLINE, reviewRunId = REVIEW_RUN_ID))
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(1, launchedPhases(launcher).count { it == PHASE_IMPLEMENT_FIX }, "review_fix allows one fix")
-    assertEquals(1, reviews, "the capped loop advances after the fix without a re-review, as in a full run")
+    assertEquals(listOf(PHASE_PRESENT_FINDINGS), result.completedStepIds)
+    assertEquals(LEAKY_SOURCE, Files.readString(source))
+    assertEquals(1, reviews)
+    assertTrue(launcher.requests.isEmpty(), "report-only review must never launch verification or repair")
+    assertTrue(requireNotNull(result.reviewResult).output.contains("verdict: changes_requested"))
+    git.assertNoCommitOrCheckpointRef(headBefore)
+    database.assertNoDurableWorkflowState()
+    assertReportRecorded()
+  }
+
+  @Test
+  fun `delegated phase review reports defects through bounded lanes and preserves the reviewed file`() {
+    val lanes = LaneScript()
+    val launcher = fixLauncher()
+    val result =
+      delegatedEntry(launcher, lanes)
+        .run(reviewRequest(CodeReviewExecutionMode.DELEGATED, reviewRunId = REVIEW_RUN_ID))
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(listOf(PHASE_PRESENT_FINDINGS), result.completedStepIds)
+    assertTrue(lanes.launches.any { it.skillRunRequest.issueKey == DELEGATED_SPECIALIST_ISSUE_KEY })
+    assertEquals(LEAKY_SOURCE, Files.readString(source))
+    assertTrue(launcher.requests.isEmpty(), "report-only review must never launch verification or repair")
+    assertTrue(requireNotNull(result.reviewResult).output.contains("verdict: changes_requested"))
+    git.assertNoCommitOrCheckpointRef(headBefore)
+    database.assertNoDurableWorkflowState()
+    assertReportRecorded()
+  }
+
+  @Test
+  fun `an incomplete report blocks with retained findings and never launches repair`() {
+    val launcher = fixLauncher()
+    val result =
+      inlineEntry(launcher) { BLOCKER_REVIEW.substringBefore("\nverdict:") }
+        .run(reviewRequest(CodeReviewExecutionMode.INLINE))
+
+    assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(result.reason.contains("verdict"))
+    assertTrue(requireNotNull(result.reviewResult).output.contains("F-001"))
+    assertEquals(LEAKY_SOURCE, Files.readString(source))
+    assertTrue(launcher.requests.isEmpty())
     git.assertNoCommitOrCheckpointRef(headBefore)
     database.assertNoDurableWorkflowState()
   }
@@ -217,8 +213,6 @@ class PhaseReviewRunTest {
       }
     }
 
-  private fun isFixed(): Boolean = Files.readString(source) == FIXED_SOURCE
-
   private fun fixLauncher(
     verifyEveryPass: Boolean = false,
     onFix: () -> Unit = {},
@@ -299,41 +293,12 @@ class PhaseReviewRunTest {
     )
   }
 
-  private fun launchedPhases(launcher: RuntimeRecordingLauncher): List<String> =
-    launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.map(::phaseIdFromPrompt)
-
-  private fun assertReviewRecordShape(fixtures: ReviewFixtures) {
-    val tables = requireNotNull(JsonCodec.anyToStringAnyMap(slotBaselineFixture(fixtures.reviewRuns)))
-    val fixtureRun = rowsOf(tables["review_runs"]).first()
-    val reviewRuns = SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs")
-    assertTrue(reviewRuns.isNotEmpty(), "the review must write a review_runs record")
-    reviewRuns.forEach { row -> assertEquals(fixtureRun.keys, row.keys, "review_runs columns") }
-    val recordedRunIds = reviewRuns.map { it["review_run_id"] }.toSet()
-    assertTrue(REVIEW_RUN_ID in recordedRunIds, "the requested review run id keys a review_runs row: $recordedRunIds")
+  private fun assertReportRecorded() {
+    val rows = SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs")
+    assertEquals(1, rows.size)
+    assertEquals(REVIEW_RUN_ID, rows.single()["review_run_id"])
     assertTrue(SlotBaselineSqlite.rows(database.resolveDbPath(), "review_run_pass_claims").isNotEmpty())
-
-    val fixtureEvents = rowsOf(slotBaselineFixture(fixtures.telemetry))
-    val fixturePayload = requireNotNull(JsonCodec.anyToStringAnyMap(fixtureEvents.first()["payload_json"]))
-    val events = database.outboxPayloads(TelemetryOutboxEvent.REVIEW_STAGE_DEGRADATION.wireValue)
-    assertTrue(events.isNotEmpty(), "the review must emit review stage telemetry")
-    events.forEach { payload ->
-      assertEquals(fixturePayload.keys, payload.keys, "review telemetry payload")
-      assertTrue(payload["review_run_id"] in recordedRunIds, "telemetry names a recorded review run: $payload")
-    }
-    database.assertOnlyOutboxEvents(fixtureEvents.map { it["event_name"] as String }.toSet())
   }
-
-  private fun assertStageDegradationsPerRun(fixtures: ReviewFixtures) {
-    val eventName = TelemetryOutboxEvent.REVIEW_STAGE_DEGRADATION.wireValue
-    val fixtureCount = rowsOf(slotBaselineFixture(fixtures.telemetry)).count { it["event_name"] == eventName }
-    val perRun = database.outboxPayloads(eventName).groupingBy { it["review_run_id"] }.eachCount()
-    SlotBaselineSqlite.rows(database.resolveDbPath(), "review_runs").forEach { row ->
-      assertEquals(fixtureCount, perRun[row["review_run_id"]], "stage degradations of ${row["review_run_id"]}")
-    }
-  }
-
-  private fun rowsOf(value: Any?): List<Map<String, Any?>> =
-    (value as List<*>).map { row -> requireNotNull(JsonCodec.anyToStringAnyMap(row)) }
 
   private class RecordingRunLoopEntry : TestFeatureTaskRuntimeRunLoopEntry() {
     val runStates = mutableListOf<PhaseRunState>()
@@ -347,34 +312,18 @@ class PhaseReviewRunTest {
     }
   }
 
-  private data class ReviewFixtures(
-    val reviewRuns: String,
-    val telemetry: String,
-  )
-
   private companion object {
     const val REVIEW_AGENT = "claude"
     const val LEAKY_SOURCE = "val connection = open()\n"
     const val FIXED_SOURCE = "open().use { connection -> connection }\n"
     const val BLOCKER_REVIEW =
       "- [F-001] Blocker | High | $DELEGATED_REVIEWED_PATH:1 | $REVIEW_BLOCKER_MESSAGE\nverdict: changes_requested"
-    const val APPROVED_REVIEW = "verdict: approved"
+    const val APPROVED_REVIEW = "NO_FINDINGS\nverdict: approved"
     const val REVIEW_RUN_ID = "rvw-20260927-120000-phrv"
     const val DIRTY_STATUS = " M src/Foo.kt"
     const val MISSING_BRANCH = "no-such-branch"
     const val UNCOMMITTED_OPENING_LINE =
       "Review the uncommitted changes in this repository workspace against `HEAD`, including untracked files."
     const val HEAD_OPENING_LINE = "Review commit `HEAD` against its first parent `HEAD^`."
-    const val CODE_REVIEW_FIXTURES = "featuretask/slotbaseline/code-review"
-    val INLINE_FIXTURES =
-      ReviewFixtures(
-        "$CODE_REVIEW_FIXTURES/review-runs-inline.json",
-        "$CODE_REVIEW_FIXTURES/review-telemetry-inline.json",
-      )
-    val DELEGATED_FIXTURES =
-      ReviewFixtures(
-        "$CODE_REVIEW_FIXTURES/review-runs-delegated.json",
-        "$CODE_REVIEW_FIXTURES/review-telemetry-delegated.json",
-      )
   }
 }

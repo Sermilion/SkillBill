@@ -1,5 +1,6 @@
 package skillbill.application.review.parallel.runner
 
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewDelegatedStageLaunch
 import skillbill.application.review.model.ReviewEvidenceReadCount
@@ -50,6 +51,7 @@ internal data class LaunchedBoundParentArgs(
 
 internal data class ParallelResultArgs(
   val agent1Id: String,
+  val reportOnly: Boolean,
   val outcomes: ParallelReviewLaneRunResult,
   val integration: ReviewIntegrationPassOutcome,
   val coverage: ReviewCoverageReport?,
@@ -92,9 +94,20 @@ internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegate
     brokerId = agent1Id,
     repoRoot = request.repoRoot,
     timeout = request.timeout,
-    promptSuffix = request.selectedAgentAddonsSection,
+    promptSuffix =
+      if (request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+        listOf(request.selectedAgentAddonsSection, STANDALONE_REPORT_ONLY_PROMPT_RULES)
+          .filter(String::isNotBlank)
+          .joinToString("\n\n")
+      } else {
+        request.selectedAgentAddonsSection
+      },
     laneProgressIdleTimeout = request.laneProgressIdleTimeout,
   )
+
+private const val STANDALONE_REPORT_ONLY_PROMPT_RULES: String =
+  "This review is report-only. Do not edit, stage, commit, amend, or reset files, " +
+    "and do not launch another review command."
 
 internal data class ParallelCodeReviewCompiledLaunches(
   val all: List<ReviewSpecialistLaunchRequest>,

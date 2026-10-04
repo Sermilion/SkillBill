@@ -1,6 +1,6 @@
 # SKILL-400 Subtask 2 - external-platform-pack-and-addon-codes
 
-Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-400-runtime-error-codes/spec.md](spec.md)
 Issue key: SKILL-400
 
 ## Scope
@@ -18,7 +18,7 @@ Convert `ExternalPlatformPackErrors.kt` (`ExternalPlatformPackConfigError`, `Amb
   - Drop the payload construction in `InstallNativeAgentOperationsLinkCatalog.kt`, and replace those four assertions with a `PUBLISH` code assertion.
   - This is a deliberate edit beyond type-to-code. Name it in the summary, and record it in the decision entry below.
 - **Pinned labels:** `ExternalPlatformPackTelemetryPolicyTest:27` and `ConfigExternalPlatformPackCommandTest:111` assert the `failureCodeLabel()` value where they pinned a class name.
-- **Decision:** add a newest-first entry to `runtime-kotlin/agent/decisions.md`, "SKILL-400 subtask 2: external pack codes and the dropped publish payload".
+- **Decision:** add a newest-first entry to `../../../runtime-kotlin/agent/decisions.md`, "SKILL-400 subtask 2: external pack codes and the dropped publish payload".
 
 ## Acceptance Criteria
 

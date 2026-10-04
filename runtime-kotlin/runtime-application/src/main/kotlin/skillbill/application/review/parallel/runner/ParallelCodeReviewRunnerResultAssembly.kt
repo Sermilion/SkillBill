@@ -84,6 +84,7 @@ class ParallelCodeReviewRunnerResultAssembly(
           packet = packet,
           lanes = lanes,
           launch = initial.delegatedStageLaunch(),
+          reportContract = initial.request.reportContract,
         ),
       )
     runtimeOwnedPersistence.recordIntegrationBoundary(initial.request.reviewRunId, outcome)
@@ -285,7 +286,9 @@ class ParallelCodeReviewRunnerResultAssembly(
         findings = args.outcomes.lane1.findings,
       )
     val integrationLane =
-      args.integration.findings.takeIf { it.isNotEmpty() }?.let {
+      args.integration.findings.takeIf {
+        it.isNotEmpty() && (args.integration.completed || args.reportOnly)
+      }?.let {
         ParallelReviewLaneResult(ReviewIntegrationPassRunner.INTEGRATION_LANE, it)
       }
     val merged =
@@ -312,6 +315,9 @@ class ParallelCodeReviewRunnerResultAssembly(
       coverage = args.coverage,
       stageResume = args.stageResume,
       citationDiagnostics = citationDiagnostics,
+      rawOutput = args.outcomes.lane1.rawOutput.takeIf { args.reportOnly }.orEmpty(),
+      reportTruncated = args.reportOnly && args.outcomes.lane1.outputTruncated,
+      rejectedCandidateCount = if (args.reportOnly) args.outcomes.lane1.rejectedCandidateCount else 0,
     )
   }
 }

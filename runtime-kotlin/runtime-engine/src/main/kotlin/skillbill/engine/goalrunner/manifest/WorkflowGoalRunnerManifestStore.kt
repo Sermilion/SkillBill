@@ -109,14 +109,15 @@ class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
       if (manifestLoader.shouldRefreshFromCompleteProjection(stored, projected)) {
         return save(
           requireNotNull(stored).copy(manifest = requireNotNull(projected), repoRoot = repoRoot),
         )
       }
       return stored?.copy(repoRoot = repoRoot) ?: projected?.let { manifest ->
-        manifestLoader.importFromManifestProjection(manifest)?.copy(repoRoot = repoRoot)
+        manifestLoader.importFromManifestProjection(manifest, identity)?.copy(repoRoot = repoRoot)
       }
     }
 
@@ -125,7 +126,8 @@ class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
@@ -137,12 +139,19 @@ class WorkflowGoalRunnerManifestStore
         repoRoot?.let { root ->
           manifestLoader.findProjectedManifest(root, issueKey, recoverPending = false)
         }
-      val stored = manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected, identity)
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
-    override fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState? =
-      manifestLoader.loadFromWorkflowStore(issueKey, currentProjectedManifest = null)
+    override fun loadDurableByIssueKey(
+      issueKey: String,
+      repoRoot: Path?,
+    ): GoalRunnerManifestState? =
+      manifestLoader.loadFromWorkflowStore(
+        issueKey,
+        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
+      )
 
     override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? =
       controls.requestPause(

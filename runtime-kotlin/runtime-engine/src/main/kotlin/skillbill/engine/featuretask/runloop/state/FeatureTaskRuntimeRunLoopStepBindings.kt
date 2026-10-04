@@ -462,7 +462,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
       environment.goalContinuationRecorder,
       PersistPhaseArgs(
         write = PhaseStateWriteArgs(run, iteration, STATUS_RUNNING, false, null),
-        reviewRunId = reviewRunId,
+        reviewRunId =
+          reviewRunId.takeIf {
+            environment.selectedOwnerOf(acceptedPhaseId)?.slot == PhaseSlot.CODE_REVIEW
+          },
       ),
     )
   }
@@ -798,7 +801,7 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
   ): PhaseAcceptedStepExecution {
     val owner = launchEnvironment.selectedOwnerOf(run.phaseId)
     return when {
-      owner?.slot == PhaseSlot.CODE_REVIEW ->
+      owner?.slot == PhaseSlot.CODE_REVIEW || owner?.slot == PhaseSlot.STANDALONE_REVIEW ->
         when (owner.executionBindingKind(run.phaseId)) {
           PhaseExecutionBindingKind.REVIEW -> {
             val remediationEnvironment = launchEnvironment

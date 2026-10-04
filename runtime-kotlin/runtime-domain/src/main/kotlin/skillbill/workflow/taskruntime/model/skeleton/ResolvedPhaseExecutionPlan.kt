@@ -60,7 +60,9 @@ class ResolvedPhaseExecutionPlan(
   val resumeInterpretationIdentities: Map<String, String> = immutableMap(resumeInterpretationIdentities)
   val selectedStepIds: Set<String> = Collections.unmodifiableSet(this.dispatchStrategyByStep.keys.toSet())
   val unselectedStepIds: Set<String> =
-    Collections.unmodifiableSet(PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet() - selectedStepIds)
+    Collections.unmodifiableSet(
+      SkeletonDefinition.FEATURE_RUN_SLOTS.flatMap(PhaseSlot::steps).toSet() - selectedStepIds,
+    )
   val traversal: FeatureTaskRuntimeTransitionDeclaration =
     traversal.copy(
       forwardPhaseIds = immutableList(traversal.forwardPhaseIds),

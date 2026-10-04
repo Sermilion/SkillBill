@@ -52,28 +52,32 @@ internal class WorkflowGoalRunnerManifestLoader(
   fun loadFromWorkflowStore(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
+    repositoryIdentity: String? = null,
   ): GoalRunnerManifestState? =
     database.read { unitOfWork ->
-      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest)
+      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
   fun loadFromWorkflowStoreIfPresent(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
+    repositoryIdentity: String? = null,
   ): GoalRunnerManifestState? =
     database.readIfPresent { unitOfWork ->
-      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest)
+      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
   fun loadFromWorkflowUnitOfWork(
     unitOfWork: UnitOfWork,
     issueKey: String,
     currentProjectedManifest: DecompositionManifest?,
+    repositoryIdentity: String?,
   ): GoalRunnerManifestState? {
     val record =
       unitOfWork.workflowStates.findDecomposedParentWorkflow(
         issueKey,
         currentProjectedManifest,
+        repositoryIdentity,
       ) ?: return null
     val snapshot = record.toSnapshot()
     val manifest = snapshot.decompositionRuntime() ?: return null
@@ -85,12 +89,16 @@ internal class WorkflowGoalRunnerManifestLoader(
     )
   }
 
-  fun importFromManifestProjection(manifest: DecompositionManifest): GoalRunnerManifestState? =
+  fun importFromManifestProjection(
+    manifest: DecompositionManifest,
+    repositoryIdentity: String? = null,
+  ): GoalRunnerManifestState? =
     database.transaction { unitOfWork ->
       val existingRecord =
         unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(
           manifest.issueKey,
           manifest,
+          repositoryIdentity,
         )
       existingRecord?.requireRuntimeModeForEngineWrite()
       val existing = existingRecord?.toSnapshot()

@@ -204,6 +204,12 @@ internal class FeatureTaskWorkflowStateStore(
     limit: Int,
   ): List<WorkflowStateRecord> = rows.listFeatureTaskWorkflows(mode, limit)
 
+  override fun findFeatureTaskWorkflowsForIssue(
+    mode: FeatureTaskWorkflowMode,
+    normalizedIssueKey: String,
+    repositoryIdentity: String?,
+  ): List<WorkflowStateRecord> = rows.findFeatureTaskWorkflowsForIssue(mode, normalizedIssueKey, repositoryIdentity)
+
   override fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     rows.latestFeatureTaskWorkflow(mode)
 }

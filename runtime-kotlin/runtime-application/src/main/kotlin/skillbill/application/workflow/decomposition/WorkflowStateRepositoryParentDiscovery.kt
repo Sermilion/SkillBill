@@ -1,5 +1,6 @@
 package skillbill.application.workflow.decomposition
 
+import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -19,10 +20,11 @@ import skillbill.workflow.model.workflowStatus
 fun WorkflowStateRepository.findDecomposedParentOrCorruptFallback(
   issueKey: String,
   currentProjectedManifest: DecompositionManifest?,
+  repositoryIdentity: String? = null,
 ): WorkflowStateRecord? {
-  val normalizedIssueKey = issueKey.trim()
+  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
   val candidates =
-    listFeatureTaskWorkflowsForParentDiscovery().mapNotNull { row ->
+    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
       parentDiscoveryCandidate(row, normalizedIssueKey)
     }
   val validCandidates =
@@ -80,12 +82,17 @@ private fun WorkflowStateRecord.decompositionRuntimeOrNull(): DecompositionManif
     null
   }
 
-private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(): List<WorkflowStateRecord> {
+private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(
+  normalizedIssueKey: String,
+  repositoryIdentity: String?,
+): List<WorkflowStateRecord> {
   val byId = LinkedHashMap<String, WorkflowStateRecord>()
-  listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, Int.MAX_VALUE).forEach { row ->
+  findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.RUNTIME, normalizedIssueKey, repositoryIdentity).forEach {
+      row ->
     byId[row.workflowId] = row
   }
-  listFeatureTaskWorkflows(FeatureTaskWorkflowMode.PROSE, Int.MAX_VALUE).forEach { row ->
+  findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.PROSE, normalizedIssueKey, repositoryIdentity).forEach {
+      row ->
     byId.putIfAbsent(row.workflowId, row)
   }
   return byId.values.toList()
@@ -94,10 +101,11 @@ private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery()
 fun WorkflowStateRepository.findDecomposedParentWorkflow(
   issueKey: String,
   currentProjectedManifest: DecompositionManifest? = null,
+  repositoryIdentity: String? = null,
 ): WorkflowStateRecord? {
-  val normalizedIssueKey = issueKey.trim()
+  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
   val candidates =
-    listFeatureTaskWorkflowsForParentDiscovery().mapNotNull { row ->
+    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
       val snapshot = row.toSnapshot()
       if (snapshot.isGoalContinuationChildWorkflow()) return@mapNotNull null
       val manifest = snapshot.artifacts.decompositionRuntime() ?: return@mapNotNull null
@@ -155,7 +163,11 @@ private fun DecompositionManifest.sameRuntimeIdentity(other: DecompositionManife
 fun WorkflowStateRepository.findDecomposedParentWorkflowForRuntime(
   manifest: DecompositionManifest,
 ): WorkflowStateRecord? =
-  listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, Int.MAX_VALUE).firstOrNull { row ->
+  findFeatureTaskWorkflowsForIssue(
+    FeatureTaskWorkflowMode.RUNTIME,
+    normalizeRequiredIssueKey(manifest.issueKey),
+  ).firstOrNull {
+      row ->
     val snapshot = row.toSnapshot()
     !snapshot.isGoalContinuationChildWorkflow() &&
       (snapshot.hasDecompositionPlan() || row.issueKey?.trim() == manifest.issueKey) &&

@@ -1,7 +1,7 @@
 # SKILL-400 - runtime-error-codes
 
 Issue key: SKILL-400
-Origin: split out of SKILL-398 subtask 5 (`../done/SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
+Origin: split out of SKILL-398 subtask 5 (`../SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
 
 ## Outcome
 
@@ -35,7 +35,7 @@ Former supertypes matter for the edge rules below. Most classes in subtasks 1–
 
 ## Target failure model
 
-The model is SKILL-398's (`../done/SKILL-398-runtime-exception-reduction`, "Target failure model"):
+The model is SKILL-398's (`../SKILL-398-runtime-exception-reduction`, "Target failure model"):
 
 ```kotlin
 package skillbill.error.core
@@ -85,7 +85,7 @@ These come from SKILL-398 subtasks 4 and 5. A subtask that finds one missing add
 - **MCP capture parity.** A code whose former class was on the no-capture side joins `uncapturedAtMcp()` unless `isShellContentContractFailure()` already covers it. The no-capture side is shell-content, `InvalidLearningSourceError`, IAE and ISE. A code whose former class was captured stays out. The enum must be visible to runtime-mcp; runtime-mcp depends on runtime-contracts, -core, -domain, -application, -engine and -ports, but not on runtime-infra. If an infra-owned code can reach an MCP tool and must stay uncaptured, its enum moves to `skillbill.error.core`.
 - **Accepted framing change.** A former `RuntimeException`, `Exception` or ISE class that reaches `CliRuntime` now prints through the `SkillBillRuntimeException` arm, without the `ClassName: ` prefix or the diagnostics record. Its message text does not change. Pinned class names rendered through `failureCodeLabel()` become the code label.
 - **Tests.** `assertFailsWith<FormerClass>` becomes `assertFailsWith<SkillBillRuntimeException>` plus `assertEquals(<Code>.<ENTRY>, error.code)`. For a class that became a defect it becomes `assertFailsWith<IllegalArgumentException>` or `<IllegalStateException>`. Message, `contains`, payload and exit-code assertions stay byte-for-byte. Tests that construct a former class switch to the message function. Do not use `relaxed = true` mocks, `environment = emptyMap()` or a new test-helper module.
-- **Baseline.** Remove each deleted class's row from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Row format is `module:Class`; compare whole rows and edit no other row.
+- **Baseline.** Remove each deleted class's row from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Row format is `module:Class`; compare whole rows and edit no other row.
 
 ## Transition finish
 
@@ -95,7 +95,7 @@ After its own edits, every subtask checks the tree. If no class in main extends 
 - remove the `is ShellContentContractException` term from `isShellContentContractFailure()`;
 - keep the guarded edge sites and their rethrow, so each site handles exactly the failures it handled before;
 - retarget any `ShellContentContractException` catch, function type or `is` check left in main or tests to `SkillBillRuntimeException`, under the same guard;
-- update the `skillbill.error.*` package description in `runtime-kotlin/ARCHITECTURE.md`, and grep `docs/`, `AGENTS.md` and `ARCHITECTURE.md` for `ShellContentContractException`.
+- update the `skillbill.error.*` package description in `../../../runtime-kotlin/ARCHITECTURE.md`, and grep `docs/`, `AGENTS.md` and `ARCHITECTURE.md` for `ShellContentContractException`.
 
 Widening a guarded catch to every `SkillBillRuntimeException` is not allowed: it would absorb database, runtime-owned fact, gate-JVM and validation-gate failures that propagate today. If a subclass remains, the subtask leaves the transition open and says so in its summary.
 
@@ -126,7 +126,7 @@ Split reason: the single remaining-errors subtask blocked as too large to implem
 
 The feature is done when every subtask's criteria hold. Together:
 
-1. No production main source outside `skillbill.error.shellcontent` declares a custom `Throwable` other than `SkillBillRuntimeException`, classes owned by SKILL-398 or SKILL-399 that are still present, and classes whose retention reason is recorded in `runtime-kotlin/agent/decisions.md`.
+1. No production main source outside `skillbill.error.shellcontent` declares a custom `Throwable` other than `SkillBillRuntimeException`, classes owned by SKILL-398 or SKILL-399 that are still present, and classes whose retention reason is recorded in `../../../runtime-kotlin/agent/decisions.md`.
 2. Every former failure throws a coded `SkillBillRuntimeException` or is a `require`/`check`/`error()` defect. runtime-contracts declares no MCP-only code.
 3. Messages, payloads and rendered labels for uncoded throwables are byte-identical, and MCP telemetry capture happens for exactly the failures it happened for before.
 4. No main code reads a typed property from a caught exception.

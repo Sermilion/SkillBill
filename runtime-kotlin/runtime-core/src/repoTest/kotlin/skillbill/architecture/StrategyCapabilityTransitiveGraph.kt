@@ -40,7 +40,9 @@ internal object StrategyCapabilityTransitiveGraph {
     return findings.toList()
   }
 
-  private fun reviewConsumer(path: String): Boolean = "/slot/codereview/" in path || path.startsWith("codereview/")
+  private fun reviewConsumer(path: String): Boolean =
+    "/slot/codereview/" in path || path.startsWith("codereview/") ||
+      "/slot/standalonereview/" in path || path.startsWith("standalonereview/")
 
   private val rawAuthority =
     setOf(

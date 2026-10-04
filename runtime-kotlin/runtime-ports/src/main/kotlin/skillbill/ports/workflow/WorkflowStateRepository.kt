@@ -102,6 +102,12 @@ interface FeatureTaskWorkflowStateRepository : FeatureTaskExecutionLookupReposit
     limit: Int = 20,
   ): List<WorkflowStateRecord>
 
+  fun findFeatureTaskWorkflowsForIssue(
+    mode: FeatureTaskWorkflowMode,
+    normalizedIssueKey: String,
+    repositoryIdentity: String? = null,
+  ): List<WorkflowStateRecord>
+
   fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord?
 }
 

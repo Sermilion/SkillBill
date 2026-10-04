@@ -88,7 +88,14 @@ internal class LaneScript(
       agent = SupportedAgent.fromNormalizedId(request.invokedAgentId, label = "agentId"),
       stdout =
         when (lane.issueKey) {
-          DELEGATED_SPECIALIST_ISSUE_KEY -> if (fixed) "NO_FINDINGS" else DELEGATED_FINDING_REGISTER
+          DELEGATED_SPECIALIST_ISSUE_KEY -> {
+            val register = if (fixed) "NO_FINDINGS" else DELEGATED_FINDING_REGISTER
+            if (lane.promptOverride.orEmpty().contains("End with exactly one canonical verdict line")) {
+              "$register\nverdict: ${if (fixed) "approved" else "changes_requested"}"
+            } else {
+              register
+            }
+          }
           ReviewClaimVerificationRunner.ISSUE_KEY -> """{"claim_verdict":"confirmed"}"""
           ReviewSpecAdjudicationRunner.ISSUE_KEY -> """{"scope_disposition":"in_scope"}"""
           else -> "NO_FINDINGS"

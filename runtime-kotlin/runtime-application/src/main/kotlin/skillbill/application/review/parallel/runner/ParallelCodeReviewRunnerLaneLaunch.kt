@@ -3,6 +3,7 @@ package skillbill.application.review.parallel.runner
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.idestatus.AgentActivityStampWriter
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
@@ -85,6 +86,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
             selected,
             args.routedManifests,
             args.agentId,
+            args.request.reportContract,
           ),
         bundleState = parallelCodeReviewAggregateBundleCompletion(bundleStates),
       )
@@ -128,7 +130,8 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 issueKey = "code-review",
                 repoRoot = args.request.repoRoot,
                 timeout = args.request.timeout,
-                promptOverride = args.request.withSelectedAgentAddons(args.launch.prompt),
+                promptOverride =
+                  standaloneReportOnlyPrompt(args.request, args.launch.prompt),
                 modelOverride = args.modelOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
@@ -139,7 +142,8 @@ class ParallelCodeReviewRunnerLaneLaunch(
       when (outcome) {
         is UnsupportedAgentRunLaunch -> unsupportedParentOutcome(args.launch, outcome)
         is AgentRunLaunchDenied -> error("Parallel code review lane launch never carries a spawn authorization.")
-        is AgentRunLaunchFacts -> launchedParentOutcome(args.launch, outcome, args.budget, args.bound.broker)
+        is AgentRunLaunchFacts ->
+          launchedParentOutcome(args.launch, outcome, args.budget, args.bound.broker, args.request)
       }
     }
 
@@ -168,6 +172,20 @@ class ParallelCodeReviewRunnerLaneLaunch(
         ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
         ParallelCodeReviewGovernedEvidenceBindFault.ENDPOINT,
       )
+    }
+  }
+
+  private fun standaloneReportOnlyPrompt(
+    request: ParallelCodeReviewRequest,
+    prompt: String,
+  ): String {
+    val composed = request.withSelectedAgentAddons(prompt)
+    return if (request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+      composed.trimEnd() +
+        "\n\nStandalone review is report-only. Do not apply fixes, edit, stage, commit, amend, reset, " +
+        "or launch another review command."
+    } else {
+      composed
     }
   }
 
@@ -207,6 +225,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
     outcome: AgentRunLaunchFacts,
     budget: ReviewContextBudgetPolicy,
     evidenceBroker: ReviewEvidenceBroker,
+    request: ParallelCodeReviewRequest,
   ): ParallelReviewLaneOutcome {
     val bundleState = launch.bundleState
     val budgetOutcome =
@@ -237,7 +256,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
         )
       }
     val softAdmission =
-      if (launchReason == null) {
+      if (launchReason == null || request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
         failureAdmission.softAdmitFindings(outcome.stdout, launch)
       } else {
         ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
@@ -265,6 +284,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
       unreviewedUnits = completion.unreviewedUnits,
       rejectedCandidateCount = softAdmission.rejectedCandidateCount,
       citationDiagnostics = softAdmission.citationDiagnostics,
+      outputTruncated = outcome.stdoutTruncated,
     )
   }
 

@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import java.nio.file.Files
@@ -132,7 +133,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
       )
     expected.forEach { (mode, strategyId) ->
       val facts = PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, setOf(mode))
-      assertEquals(strategyId, strategies.strategyFor(PHASE_REVIEW, facts).strategyId, "$mode")
+      assertEquals(strategyId, strategies.strategyFor(PHASE_PRESENT_FINDINGS, facts).strategyId, "$mode")
     }
     assertEquals(
       setOf(PHASE_VALIDATE),

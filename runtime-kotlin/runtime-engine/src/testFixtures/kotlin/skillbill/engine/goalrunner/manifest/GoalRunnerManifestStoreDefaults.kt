@@ -30,7 +30,10 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
     repoRoot: Path?,
   ): GoalRunnerManifestState? = readByIssueKey(issueKey, repoRoot)
 
-  override fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState? = loadByIssueKey(issueKey, null)
+  override fun loadDurableByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): GoalRunnerManifestState? = loadByIssueKey(issueKey, repoRoot)
 
   override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? = null
 

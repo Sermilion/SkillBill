@@ -128,14 +128,17 @@ including ignored and untracked files. Use
 Match the issue key and read the matching `spec.md`. A filename search that
 honors ignore rules does not prove that a spec is absent. If several bundles match, ask for the intended spec path.
 
-For a full run, also read the local workflow database through
-`skill-bill work status --repo-root <repo-root> --format json`. Match both the
-issue key and repository identity. If the snapshot selects a different issue or
-reports no matching work, use `skill-bill work list --format json` and correlate
-matching workflow IDs with the current repository's spec and decomposition
-manifest. Do not resume work from another repository just because its issue key
-matches. A database inspection error is not evidence that no workflow exists;
-report it rather than falling through to a tracker lookup.
+A readable local spec launches directly through the full runtime. Do not run
+`work status` or `work list` during intake. The runtime looks up only workflows
+for the requested issue and repository before deciding whether to resume or
+start new work. Unrelated workflows and their contract versions cannot block
+this lookup.
+
+When no readable local spec exists, inspect only the requested goal with
+`skill-bill goal status <issue-key> --repo-root <repo-root>`. This targeted
+intake lookup is permitted before launch. A matching persisted goal takes
+precedence over tracker lookup. Report a lookup error for the requested goal;
+never replace it with a global workflow scan or treat it as absent work.
 
 When a readable local spec or matching persisted goal exists, launch the full
 runtime with the existing spec path or original issue reference. Let the runtime
@@ -242,7 +245,7 @@ the user to run the command manually.
 Await the launched process through the harness completion primitive. Relay its
 output verbatim, adding nothing. Do not poll, sleep, tail logs, re-read status,
 launch an observer, or compose monitoring, completion, summary, or progress
-output. Run goal status only when the user explicitly asks.
+output. Run goal status only for the targeted intake lookup above or when the user explicitly asks.
 
 ## Phase Forms
 
@@ -259,9 +262,13 @@ output. There is no standalone implementation phase.
 
 ## Phase Review
 
-`phase:review` runs `skill-bill phase review` from Forms and Routing. The
-sections from Review mode argument through Present the register govern its
-arguments and its output. An omitted target reviews uncommitted changes when
+`phase:review` runs the report-only `standalone_review` slot through the existing
+run loop. It prints the findings register and exits 0 for either valid verdict.
+Invalid or incomplete output and execution failures retain available findings,
+explain the block, and exit 1. This operator review never edits or commits. Full
+feature runs keep the separate `code_review` slot and its verification and repair
+steps. The sections from Review mode argument through Present the register govern
+standalone review arguments and output. An omitted target reviews uncommitted changes when
 the worktree is dirty and HEAD otherwise. Where they say to invoke the driver, run the
 `phase:review` command instead of `skill-bill code-review`: forward the review
 target as `target:<value>` and the review mode as `mode:<value>`. The accepted
@@ -331,10 +338,12 @@ Display the driver's stdout as the review result. It already includes the risk
 register with provenance labels and any recorded stage verdicts. Do not rewrite
 findings, invent a second merge, or re-run the review in this session.
 
-The driver runs the in-memory review phase: it verifies the findings and fixes
-Blocker and Major findings in the working tree before it reports the rest. Do
-not apply those fixes again. A `# Review phase blocked` line means the phase
-stopped before it finished; report it and exit non-zero.
+The driver runs the report-only standalone review. A valid report exits 0 for
+either verdict. Invalid or incomplete output and execution failures retain
+available findings, explain the block, and exit 1. The operator review never
+launches repair. Full feature runs retain their separate review, verification,
+and repair steps. A `# Review phase blocked` line means the phase stopped before
+it finished; report it and exit non-zero.
 
 ## Phase PR
 

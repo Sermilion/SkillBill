@@ -23,6 +23,8 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
@@ -67,6 +69,8 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseStrategyRegistry {
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
+    val standaloneInlineRunner = runner()
+    val standaloneDelegatedRunner = runner()
     return PhaseStrategyRegistry(
       listOf(
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
@@ -78,6 +82,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(
           DelegatedReviewStrategy(delegatedReviewRunner, reviewRunner),
           delegatedReviewRunner,
+        ),
+        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(standaloneInlineRunner), standaloneInlineRunner),
+        PhaseStrategyRegistration(
+          DelegatedStandaloneReviewStrategy(standaloneDelegatedRunner, reviewRunner),
+          standaloneDelegatedRunner,
         ),
         PhaseStrategyRegistration(PackBuildStrategy(), runner()),
         PhaseStrategyRegistration(PackValidationStrategy(), runner()),

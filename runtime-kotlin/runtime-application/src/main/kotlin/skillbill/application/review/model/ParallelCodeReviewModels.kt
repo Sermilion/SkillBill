@@ -13,6 +13,8 @@ import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
+import skillbill.review.model.ReviewStage
+import skillbill.review.model.ReviewStageDegradationReason
 import skillbill.review.model.ReviewStageResumeReport
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -39,6 +41,7 @@ data class ParallelCodeReviewRequest(
   val specPath: Path? = null,
   val selectedAgentAddonsSection: String = "",
   val laneProgressIdleTimeout: Duration = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
+  val reportContract: ParallelCodeReviewReportContract = ParallelCodeReviewReportContract.DEFAULT,
 ) {
   init {
     reviewRunId?.let { require(it.isNotBlank()) { "reviewRunId must be non-blank when provided." } }
@@ -90,6 +93,11 @@ data class ParallelCodeReviewRequest(
   }
 }
 
+enum class ParallelCodeReviewReportContract {
+  DEFAULT,
+  STANDALONE_REPORT_ONLY,
+}
+
 data class ReviewPrelaunchExpansion(
   val lane: String,
   val path: String,
@@ -112,9 +120,25 @@ data class ParallelCodeReviewResult(
   val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
   val reviewSessionId: String? = null,
   val appliedLearnings: String? = null,
+  val rawOutput: String = "",
+  val reportTruncated: Boolean = false,
+  val rejectedCandidateCount: Int = 0,
+  val analysisStageFailures: List<ParallelReviewAnalysisStageFailure> = emptyList(),
 ) {
   val output: String
     get() = mergeResult.output
+}
+
+data class ParallelReviewAnalysisStageFailure(
+  val stage: ReviewStage,
+  val reason: ReviewStageDegradationReason,
+  val detail: String,
+  val findingRef: String? = null,
+) {
+  init {
+    require(detail.isNotBlank()) { "An analysis-stage failure must include a non-blank detail." }
+    require(findingRef == null || findingRef.isNotBlank()) { "A finding reference must not be blank." }
+  }
 }
 
 data class ParallelReviewLaneStatus(

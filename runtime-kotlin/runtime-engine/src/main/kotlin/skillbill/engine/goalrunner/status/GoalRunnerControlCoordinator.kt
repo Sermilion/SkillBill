@@ -354,6 +354,7 @@ internal fun GoalRunnerControlCoordinator.requestPauseByIssueKey(
     val parent =
       unitOfWork.workflowStates.findDecomposedParentWorkflow(
         issueKey,
+        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
       ) ?: return@transaction null
     val existing = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
     if (repoRoot != null) {

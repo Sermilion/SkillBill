@@ -2,9 +2,7 @@
     "blocked_reason": null,
     "blocked_step_id": null,
     "completed_step_ids": [
-        "review",
-        "verify_findings",
-        "implement_fix"
+        "present_findings"
     ],
     "invocation_id": "__NORMALIZED_INVOCATION_ID__",
     "review_result": {
@@ -12,9 +10,9 @@
             "aggregate_counters": {
                 "evidence_bytes": 0,
                 "expansions": 0,
-                "launch_bytes": 2686,
+                "launch_bytes": 2237,
                 "model_turns": 1,
-                "result_bytes": 166,
+                "result_bytes": 193,
                 "tool_calls": 0
             },
             "commit_routing_accounting": {
@@ -54,9 +52,9 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2686,
+                        "launch_bytes": 2237,
                         "model_turns": 1,
-                        "result_bytes": 166,
+                        "result_bytes": 193,
                         "tool_calls": 0
                     },
                     "lane": "parallel-agent-1",
@@ -67,7 +65,7 @@
                         {
                             "composition_digest": "__NORMALIZED_SHA64__",
                             "entry_count": 1,
-                            "measured_bytes": 9811,
+                            "measured_bytes": 9936,
                             "segment_id": "seg-000"
                         }
                     ],
@@ -82,20 +80,20 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2686,
+                        "launch_bytes": 2237,
                         "model_turns": 1,
-                        "result_bytes": 166,
+                        "result_bytes": 193,
                         "tool_calls": 0
                     },
                     "lane": "claude",
-                    "launch_bytes": 2686,
+                    "launch_bytes": 2237,
                     "model_turns": 1,
-                    "result_bytes": 166,
+                    "result_bytes": 193,
                     "segment_accounting": [
                         {
                             "composition_digest": "__NORMALIZED_SHA64__",
                             "entry_count": 1,
-                            "measured_bytes": 9811,
+                            "measured_bytes": 9936,
                             "segment_id": "seg-000"
                         }
                     ],
@@ -111,9 +109,9 @@
                 "inclusive_counters": {
                     "evidence_bytes": 0,
                     "expansions": 0,
-                    "launch_bytes": 2686,
+                    "launch_bytes": 2237,
                     "model_turns": 1,
-                    "result_bytes": 166,
+                    "result_bytes": 193,
                     "tool_calls": 0
                 },
                 "lane": "parallel-review",
@@ -139,17 +137,9 @@
             "failure_reason": null,
             "success": true
         },
-        "output": "- [F-001] Blocker | High | specialist=bill-kotlin-code-review-architecture | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path",
+        "output": "Actionable\n- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path | specialists=bill-kotlin-code-review-architecture; origins=kotlin | claim_verdict=confirmed\nverdict: changes_requested",
         "review_session_id": "__NORMALIZED_REVIEW_SESSION_ID__"
     },
     "status": "completed",
-    "value": {
-        "contract_version": "0.7",
-        "phase_id": "implement_fix",
-        "produced_outputs": {
-            "value": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
-        },
-        "status": "completed",
-        "summary": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
-    }
+    "value": "Actionable\n- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path | specialists=bill-kotlin-code-review-architecture; origins=kotlin | claim_verdict=confirmed\nverdict: changes_requested"
 }

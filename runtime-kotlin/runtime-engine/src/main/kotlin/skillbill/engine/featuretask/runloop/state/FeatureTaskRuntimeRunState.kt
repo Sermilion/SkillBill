@@ -410,7 +410,8 @@ internal class FeatureTaskRuntimeRunState(
 
   override val completedPhaseIds: List<String>
     get() =
-      FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.filter { it in completedPhases }
+      (FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds + transitions.forwardPhaseIds)
+        .distinct().filter { it in completedPhases }
 
   override fun fixLoopIterationFor(
     phaseId: String,

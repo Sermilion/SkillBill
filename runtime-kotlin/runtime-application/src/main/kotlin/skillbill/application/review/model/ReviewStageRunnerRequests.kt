@@ -54,4 +54,5 @@ internal data class ReviewIntegrationPassRunRequest(
   val packet: ReviewContextPacket,
   val lanes: List<ReviewLaneIntegrationInput>,
   val launch: ReviewDelegatedStageLaunch,
+  val reportContract: ParallelCodeReviewReportContract = ParallelCodeReviewReportContract.DEFAULT,
 )

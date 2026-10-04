@@ -29,4 +29,5 @@ data class ParallelReviewLaneOutcome(
   val rejectedCandidateCount: Int = 0,
   val unboundSeam: String? = null,
   val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
+  val outputTruncated: Boolean = false,
 )
