@@ -1,18 +1,10 @@
 package skillbill.di.goal
 
-import java.nio.file.Files
-import java.time.Clock
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -27,7 +19,14 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import kotlin.test.assertFalse
+import java.nio.file.Files
+import java.time.Clock
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 class GoalPlanningPreparationCheckpointTest {
@@ -135,12 +134,12 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness()
     val invalid = validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawShared(invalid)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.findSharedPreplan(identity())
-    }
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recheckpointSharedPreplan(validShared())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(invalid.preplanPayload, harness.readShared()?.preplanPayload)
   }
 
@@ -149,12 +148,12 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val invalid = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawPlan(invalid)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.findSubtaskPlan(identity(), 1, descriptor().governedSubSpecPath)
-    }
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recheckpointSubtaskPlan(validPlan())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(invalid.planPayload, harness.readPlan()?.planPayload)
   }
 
@@ -195,9 +194,9 @@ class GoalPlanningPreparationCheckpointTest {
     val plan = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawShared(shared)
     harness.storeRawPlan(plan)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recoveryProgress(identity(), listOf(descriptor()), provenance())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(shared.preplanPayload, harness.readShared()?.preplanPayload)
     assertEquals(plan.planPayload, harness.readPlan()?.planPayload)
   }
@@ -224,7 +223,7 @@ class GoalPlanningPreparationCheckpointTest {
         harness.checkpoint.checkpointSubtaskPlan(escape)
       }
 
-    assertContains(error.message.orEmpty(), "produced_outputs")
+    assertContains(error.message.orEmpty(), "plan_payload")
     assertNull(harness.readPlan(), "a projection-invalid plan must leave no durable row behind")
   }
 

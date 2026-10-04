@@ -50,7 +50,17 @@ internal class GoalSubtaskPlanSql(
       statement.bindAll(identity.parentGoalWorkflowId)
       statement.executeQuery().use { rows ->
         buildList {
-          while (rows.next()) add(rows.toPlan(identity, rows.getString("governed_sub_spec_path")))
+          while (rows.next()) {
+            when (val result = rows.toPlan(identity, rows.getString("governed_sub_spec_path"))) {
+              is GoalSubtaskPlanLookupResult.Found -> add(requireNotNull(result.plan))
+              is GoalSubtaskPlanLookupResult.Conflicted ->
+                throw invalidGoalPlanningPreparationSchemaError(
+                  identity.parentGoalWorkflowId,
+                  "",
+                  result.conflict.reason,
+                )
+            }
+          }
         }
       }
     }

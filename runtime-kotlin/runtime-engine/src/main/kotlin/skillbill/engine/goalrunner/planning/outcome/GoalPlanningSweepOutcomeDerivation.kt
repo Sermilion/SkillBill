@@ -53,7 +53,8 @@ fun projectionRejectedReason(
     "${error.message.orEmpty()}. Preserve the saved record. Use a runtime that supports its contract or " +
     "restore or repair the identified record and its digest before resuming."
 
-fun preparationStateReadReason(error: Throwable): String = goalPlanningPreparationStateReadStopReason(error)
+fun preparationStateReadReason(error: Throwable): String =
+  "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
 
 fun preparationStateReadReason(
   conflict: GoalPlanningPreparationConflict,

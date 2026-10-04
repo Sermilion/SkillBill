@@ -13,6 +13,8 @@ import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionMa
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
@@ -410,9 +412,15 @@ private class MigrationFixture(
 
   fun child() = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow("wftr-migration-child")) }
 
-  fun shared() = database.read { requireNotNull(it.goalPlanningPreparations.findSharedPreplan(identity)) }
+  fun shared() =
+    database.read {
+      requireNotNull(it.goalPlanningPreparations.findSharedPreplan(identity).foundCheckpoint())
+    }
 
-  fun plan() = database.read { requireNotNull(it.goalPlanningPreparations.findSubtaskPlan(identity, 1, spec)) }
+  fun plan() =
+    database.read {
+      requireNotNull(it.goalPlanningPreparations.findSubtaskPlan(identity, 1, spec).foundPlan())
+    }
 
   fun sql(statement: String) {
     ensureTestDatabase(path).use { it.createStatement().use { s -> s.execute(statement) } }

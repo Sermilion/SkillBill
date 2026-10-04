@@ -11,8 +11,6 @@ import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_HISTORICAL_PH
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
-import java.util.logging.Level
-import java.util.logging.Logger
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
@@ -23,6 +21,8 @@ import skillbill.infrastructure.contracts.review.violationOrdering
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputMigrator
 import skillbill.infrastructure.contracts.workflow.issue.inlineIssueKeySchemaRefs
+import java.util.logging.Level
+import java.util.logging.Logger
 
 private val goalPlanningPreparationLog: Logger =
   Logger.getLogger("skillbill.contracts.workflow.GoalPlanningPreparationSchemaValidator")

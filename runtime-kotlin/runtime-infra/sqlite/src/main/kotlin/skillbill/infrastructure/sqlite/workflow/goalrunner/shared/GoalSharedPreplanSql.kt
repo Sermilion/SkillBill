@@ -1,10 +1,6 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.shared
 import skillbill.contracts.workflow.goal.GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
-
-import java.security.MessageDigest
-import java.sql.Connection
-import java.sql.ResultSet
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.decodeState
@@ -30,6 +26,9 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import java.security.MessageDigest
+import java.sql.Connection
+import java.sql.ResultSet
 
 internal const val INVALIDATED_SHARED_PREPLAN_PAYLOAD = GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 

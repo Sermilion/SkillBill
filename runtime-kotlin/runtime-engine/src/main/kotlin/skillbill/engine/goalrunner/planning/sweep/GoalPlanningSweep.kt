@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.planning.outcome.preSweepStopped
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
 import skillbill.engine.goalrunner.planning.outcome.sharedContextReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningMissingSharedContextPacketStopReason
+import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
 import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunFacts
@@ -71,9 +72,9 @@ class DefaultGoalPlanningSweep(
     val sharedRead =
       try {
         sharedPreplanProduction.findAdmittedSharedPreplan(identity)
-      } catch (error: Throwable) {
+      } catch (error: SkillBillRuntimeException) {
         error.rethrowIfCooperativeCancellationOrInterruption()
-        return preSweepStopped(request, preparationStateReadReason(error))
+        return preSweepStopped(request, goalPlanningPreparationStateReadStopReason(error, request.issueKey, 0))
       }
     val existingShared =
       when (val result = sharedRead) {

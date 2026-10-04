@@ -3,13 +3,12 @@ package skillbill.engine.goalrunner.planning.recovery
 import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 
 class GoalPlanningRecoveryClassificationTest {
   @Test

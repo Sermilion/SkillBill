@@ -8,10 +8,6 @@ import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPreparationProgress
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
-import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
-import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -122,7 +118,11 @@ class GoalPlanningPreparationCheckpoint(
   fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
     when (val result = database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }) {
       is SharedGoalPreplanLookupResult.Found ->
-        SharedGoalPreplanLookupResult.Found(result.checkpoint?.takeUnless { it.isExplicitlyDiscarded() }?.also(gate::validateSharedPreplan))
+        SharedGoalPreplanLookupResult.Found(
+          result.checkpoint?.takeUnless {
+            it.isExplicitlyDiscarded()
+          }?.also(gate::validateSharedPreplan),
+        )
       is SharedGoalPreplanLookupResult.Conflicted -> result
     }
 
@@ -215,9 +215,9 @@ class GoalPlanningPreparationCheckpoint(
       }
     requireRecoverablePlan(identity, plan, descriptor)?.let { return PlanRecoveryRead.Conflicted(it) }
     val incompleteReason = nonCompletedPlanPayloadReason(plan.planPayload)
-    if (incompleteReason != null) return PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
-    gate.validateSubtaskPlan(plan)
+    if (incompleteReason == null) gate.validateSubtaskPlan(plan)
     return when {
+      incompleteReason != null -> PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
       plan.provenance != expectedProvenance ->
         PlanRecoveryRead.Conflicted(
           GoalPlanningPreparationConflict(
@@ -300,12 +300,6 @@ class GoalPlanningPreparationProjectionGate(
     requirePlanningPayloadHash(checkpoint.payloadSha256, checkpoint.planPayload, label)
     readStoredPlanningRecord(checkpoint.planPayload, "plan", label)
   }
-
-  fun sharedPreplanRejection(checkpoint: SharedGoalPreplanCheckpoint): String? =
-    planningRecordRejection { validateSharedPreplan(checkpoint) }
-
-  fun subtaskPlanRejection(checkpoint: GoalSubtaskPlanCheckpoint): String? =
-    planningRecordRejection { validateSubtaskPlan(checkpoint) }
 }
 
 private fun requirePlanningPayloadHash(
@@ -321,19 +315,6 @@ private fun requirePlanningPayloadHash(
     )
   }
 }
-
-private fun planningRecordRejection(compute: () -> Unit): String? =
-  try {
-    compute()
-    null
-  } catch (error: SkillBillRuntimeException) {
-    error.rethrowUnless(
-      error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA ||
-        error.code == InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE ||
-        error.code is FeatureTaskRuntimePhaseOutputFailureCode,
-    )
-    "stored record failed its durable contract: ${error.message.orEmpty()}"
-  }
 
 internal fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(

@@ -1,9 +1,9 @@
 package skillbill.engine.goalrunner.planning.recovery
 
+import skillbill.engine.goalplanning.toFailure
 import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.engine.goalplanning.toFailure
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
@@ -22,11 +22,12 @@ internal fun classifyGoalPlanningRecovery(cause: Throwable?): GoalPlanningRecove
     if ((current as? SkillBillRuntimeException)?.code is FeatureTaskRuntimeMigrationFailureCode) {
       return GoalPlanningRecoveryKind.BLOCKED
     }
-    if ((current as? SkillBillRuntimeException)?.code in setOf(
+    if ((current as? SkillBillRuntimeException)?.code in
+      setOf(
         InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
         InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
       ) ||
-      current is InvalidFeatureTaskRuntimePhaseOutputSchemaError
+      (current as? SkillBillRuntimeException)?.code is FeatureTaskRuntimePhaseOutputFailureCode
     ) {
       return GoalPlanningRecoveryKind.BLOCKED
     }

@@ -68,13 +68,14 @@ fun goalPlanningPreparationStateReadStopReason(
   error: Throwable,
   issueKey: String,
   subtaskId: Int?,
-): String = goalPlanningPreparationStateReadStopReason(
-  error.message.orEmpty(),
-  subtaskId ?: 0,
-  issueKey,
-  subtaskId,
-  classifyGoalPlanningRecovery(error),
-)
+): String =
+  goalPlanningPreparationStateReadStopReason(
+    error.message.orEmpty(),
+    subtaskId ?: 0,
+    issueKey,
+    subtaskId,
+    classifyGoalPlanningRecovery(error),
+  )
 
 fun goalPlanningPreparationStateReadStopReason(
   conflict: GoalPlanningPreparationConflict,
@@ -95,7 +96,7 @@ internal fun goalPlanningPreparationStateReadStopReason(
   recordedSubtaskId: Int,
   issueKey: String,
   subtaskId: Int?,
-  kind: GoalPlanningRecoveryKind,
+  kind: GoalPlanningRecoveryKind = GoalPlanningRecoveryKind.SCOPED_REPLAN,
 ): String {
   val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recordedSubtaskId.takeIf { it > 0 }
   return "Goal planning preparation state could not be read: $reason. " +

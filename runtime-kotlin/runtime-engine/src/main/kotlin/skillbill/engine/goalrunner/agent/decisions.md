@@ -10,7 +10,7 @@ Context: SQLite transactions commit returned values, including Conflicted. Prepa
 Decision: Run conflict checks and read-only child hydration before parent, child, cascade or checkpoint writes. Keep SQL faults throwing through the transaction and write manifest projections only for saved children.
 Reason: Returning a conflict after a write would commit partial preparation state. Checking first leaves durable state unchanged on refusal; throwing on a mid-write SQL fault preserves rollback.
 
-## [2026-10-04] Preserve hard-reset classification during code migration
-Context: Recovery previously inspected typed schema-error properties for contract mismatches. JSON-schema constant rejections and phase-output legacy errors still reach this classifier.
-Decision: Explicit stored-contract mismatch producers emit GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE. Walk the cause chain for that code and retain the existing message classifier for schema, conflict and phase-output failures.
-Reason: The code identifies explicit incompatibility without exception-specific properties. Retaining the bounded message fallback preserves existing hard-reset cases while later subtasks replace the remaining phase-output exception class.
+## [2026-10-04] Preserve migration before classifying recovery failures
+Context: The base branch added transactional planning and phase-output migration while SKILL-399 replaced schema exception classes and preparation repository return types.
+Decision: Keep migration admission before planning reads and child ownership acquisition. Adapt its reads and guarded catches to the coded failures and typed results. Preserve source checks, transaction ownership, rollback, and import history. Use scoped replan for stale planning conflicts. Unsupported or corrupt records retain their saved bytes and report the repair needed to resume.
+Reason: A version mismatch with a supported conversion must recover through migration before classification can stop execution. Hard-reset guidance and exception-message classification would bypass that recovery. This preserves the base behavior under A7 and P5 without widening a catch or weakening a guard.

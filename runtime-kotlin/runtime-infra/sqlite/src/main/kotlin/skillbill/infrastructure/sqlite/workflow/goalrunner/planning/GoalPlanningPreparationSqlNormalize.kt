@@ -6,9 +6,9 @@ import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERS
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
 import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity

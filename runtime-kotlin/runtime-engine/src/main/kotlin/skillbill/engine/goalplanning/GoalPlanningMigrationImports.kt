@@ -9,8 +9,9 @@ import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
@@ -128,7 +129,8 @@ class GoalPlanningMigrationImports(
       snapshotValidator.validate(child, sourceChild.workflowName)
       child.artifacts.phaseRecords()
       child.artifacts.phaseLedger()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
         "Imported child workflow failed its source snapshot contract. Preserve the original record.",
@@ -160,7 +162,8 @@ class GoalPlanningMigrationImports(
       )
       DurableWorkflowArtifacts.fromMap(targetArtifacts).phaseRecords()
       DurableWorkflowArtifacts.fromMap(targetArtifacts).phaseLedger()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.INVALID_TARGET,
         "Migrated child workflow failed target snapshot validation. Preserve the source transaction.",
@@ -345,7 +348,8 @@ class GoalPlanningMigrationImports(
             )
         try {
           session.workflowStates.migrateFeatureTaskArtifacts(replacement.source, JsonCodec.valueToJsonString(artifacts))
-        } catch (error: InvalidWorkflowStateSchemaError) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.code == WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA)
           throw SkillBillRuntimeException(
             FeatureTaskRuntimeMigrationFailureCode.INVALID_TARGET,
             "Migrated child workflow failed target snapshot validation. Preserve the source transaction.",

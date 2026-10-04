@@ -15,7 +15,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -82,7 +83,9 @@ class GoalRunnerSpecDriftRecoveryTest {
   fun `corrupt payload stays with contract recovery instead of spec drift reset`() {
     val fixture = SpecDriftFixture(corrupt = true)
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { fixture.refresh() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.refresh()
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(0, fixture.store.scopedReplanCount)
     assertEquals(setOf(1, 2), fixture.store.plannedSubtaskIds)
     assertTrue(fixture.messages.isEmpty())
