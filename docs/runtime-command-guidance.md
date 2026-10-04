@@ -24,9 +24,13 @@ intake still requires a key and requirements; the dispatcher allocates the key
 before calling it and does not reserve keys by writing placeholder specs or
 workflow rows. Supplied requirements are authoritative and need no tracker.
 For a tracker reference without requirements, the dispatcher first searches
-local specs and repository-matched persisted workflows. Existing work resumes
-without replacement or tracker lookup. Database inspection failures block
-existing-work resolution rather than count as absent work. Only an unresolved
+local specs. A readable local spec launches directly, without `work status` or
+`work list`. Without a local spec, intake may use `goal status <issue-key>` with
+the current repository root to inspect that goal alone. Runtime discovery filters
+by the requested issue and repository before decoding workflow records. An
+unrelated workflow never participates in admission or blocks new work. Existing
+work resumes without replacement or tracker lookup. A lookup failure for the
+requested goal blocks resolution rather than counts as absent work. Only an unresolved
 tracker reference without requirements uses its connected tracker. Lookup
 failure asks for requirements, never infers them. Local key allocation does not
 query the workflow database or a tracker.

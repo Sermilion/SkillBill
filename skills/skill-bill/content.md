@@ -128,14 +128,17 @@ including ignored and untracked files. Use
 Match the issue key and read the matching `spec.md`. A filename search that
 honors ignore rules does not prove that a spec is absent. If several bundles match, ask for the intended spec path.
 
-For a full run, also read the local workflow database through
-`skill-bill work status --repo-root <repo-root> --format json`. Match both the
-issue key and repository identity. If the snapshot selects a different issue or
-reports no matching work, use `skill-bill work list --format json` and correlate
-matching workflow IDs with the current repository's spec and decomposition
-manifest. Do not resume work from another repository just because its issue key
-matches. A database inspection error is not evidence that no workflow exists;
-report it rather than falling through to a tracker lookup.
+A readable local spec launches directly through the full runtime. Do not run
+`work status` or `work list` during intake. The runtime looks up only workflows
+for the requested issue and repository before deciding whether to resume or
+start new work. Unrelated workflows and their contract versions cannot block
+this lookup.
+
+When no readable local spec exists, inspect only the requested goal with
+`skill-bill goal status <issue-key> --repo-root <repo-root>`. This targeted
+intake lookup is permitted before launch. A matching persisted goal takes
+precedence over tracker lookup. Report a lookup error for the requested goal;
+never replace it with a global workflow scan or treat it as absent work.
 
 When a readable local spec or matching persisted goal exists, launch the full
 runtime with the existing spec path or original issue reference. Let the runtime
@@ -242,7 +245,7 @@ the user to run the command manually.
 Await the launched process through the harness completion primitive. Relay its
 output verbatim, adding nothing. Do not poll, sleep, tail logs, re-read status,
 launch an observer, or compose monitoring, completion, summary, or progress
-output. Run goal status only when the user explicitly asks.
+output. Run goal status only for the targeted intake lookup above or when the user explicitly asks.
 
 ## Phase Forms
 

@@ -85,7 +85,7 @@ class GoalRunnerResetReplanCoordinator(
 
   private fun loadResetState(request: GoalRunnerResetRequest): GoalRunnerManifestState? =
     if (request.deleteChildWorkflow) {
-      manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     } else {
       manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
     }
@@ -161,7 +161,7 @@ class GoalRunnerResetReplanCoordinator(
 
   fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
     val loaded =
-      manifestStore.loadDurableByIssueKey(request.issueKey)
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return null
     val selected = requireReplanTarget(loaded.manifest, request)
     requireIdleForScopedReplan(loaded, request)

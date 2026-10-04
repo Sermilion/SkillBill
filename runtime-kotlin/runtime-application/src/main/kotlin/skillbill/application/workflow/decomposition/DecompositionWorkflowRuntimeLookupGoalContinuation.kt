@@ -16,7 +16,7 @@ fun WorkflowStateRepository.goalContinuationFor(
   repositoryIdentity: String,
 ): GoalContinuationCandidate? {
   val record =
-    findDecomposedParentWorkflow(issueKey)
+    findDecomposedParentWorkflow(issueKey, repositoryIdentity = repositoryIdentity)
       ?.takeIf { it.workflowStatus.workflowStatus() !in IMPLEMENT_TERMINAL_STATUSES }
       ?: return null
   val manifest =

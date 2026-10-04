@@ -99,6 +99,16 @@ class SkillBillDispatcherRoutingTest {
     assertFalse(dispatcher.contains("bill-feature"), "the dispatcher must not name the retired feature skill")
   }
 
+  @Test
+  fun `existing spec intake launches directly without a global workflow scan`() {
+    val resolution = section(dispatcher, "Issue resolution")
+    assertContains(resolution, "A readable local spec launches directly through the full runtime.")
+    assertContains(resolution, "Do not run `work status` or `work list` during intake.")
+    assertFalse(resolution.contains("skill-bill work list"))
+    assertFalse(resolution.contains("skill-bill work status"))
+    assertContains(resolution, "skill-bill goal status <issue-key> --repo-root <repo-root>")
+  }
+
   private fun section(
     text: String,
     heading: String,

@@ -356,6 +356,7 @@ internal data class GoalCliFixture(
   ): CliRuntimeContext =
     CliRuntimeContext(
       userHome = tempDir.also { installFakeRuntimeMcpBin(it) },
+      repositoryRoot = tempDir,
       environment = isolatedCliEnvironment(tempDir),
       requester = requester,
       workflowGitOperations = workflowGitOperations,

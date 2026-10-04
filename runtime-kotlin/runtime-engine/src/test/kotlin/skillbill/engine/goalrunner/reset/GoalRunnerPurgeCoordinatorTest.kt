@@ -64,8 +64,10 @@ class GoalRunnerPurgeCoordinatorTest {
     var purgeCalled = false
     val guardedStore =
       object : GoalRunnerManifestStore by store {
-        override fun loadDurableByIssueKey(issueKey: String) =
-          store.loadDurableByIssueKey(issueKey)?.copy(parentWorkflowId = "wf-parent")
+        override fun loadDurableByIssueKey(
+          issueKey: String,
+          repoRoot: Path?,
+        ) = store.loadDurableByIssueKey(issueKey)?.copy(parentWorkflowId = "wf-parent")
 
         override fun purgeDecomposedGoal(parentWorkflowId: String) {
           purgeCalled = true

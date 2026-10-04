@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.execution.support.maxHistorySequence
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -26,13 +27,14 @@ import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.progressToken
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GOAL_PROGRESS_HISTORY_LIMIT
@@ -254,9 +256,13 @@ internal class WorkflowGoalRunnerProgressRecording(
 
   override fun ledgerSequenceWatermarks(issueKey: String): GoalRunnerLedgerSequenceWatermarks =
     database.read { unitOfWork ->
-      val normalizedIssueKey = issueKey.trim()
+      val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
       val backwardEdgeCounts = mutableMapOf<String, Int>()
-      unitOfWork.workflowStates.list(WorkflowFamily.TASK_RUNTIME, Int.MAX_VALUE).forEach { snapshot ->
+      unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
+        FeatureTaskWorkflowMode.RUNTIME,
+        normalizedIssueKey,
+      ).forEach { row ->
+        val snapshot = row.toSnapshot()
         val artifacts = snapshot.artifacts
         if (DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()?.issueKey != normalizedIssueKey) {
           return@forEach
@@ -284,23 +290,25 @@ internal class WorkflowGoalRunnerProgressRecording(
 
   override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
     database.read { unitOfWork ->
-      val normalizedIssueKey = issueKey.trim()
+      val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
       val entries =
         buildList {
-          listOf(WorkflowFamily.TASK_RUNTIME).forEach { family ->
-            unitOfWork.workflowStates.list(family, Int.MAX_VALUE).forEach { snapshot ->
-              val artifacts = snapshot.artifacts
-              if (
-                DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()?.issueKey != normalizedIssueKey
-              ) {
-                return@forEach
-              }
-              (DurableWorkflowArtifactFamily.GOAL_ATTEMPT_LEDGER.value(artifacts) as? List<*>)
-                .orEmpty()
-                .forEach { item ->
-                  (item as? Map<*, *>)?.let(::add)
-                }
+          unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
+            FeatureTaskWorkflowMode.RUNTIME,
+            normalizedIssueKey,
+          ).forEach { row ->
+            val snapshot = row.toSnapshot()
+            val artifacts = snapshot.artifacts
+            if (
+              DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()?.issueKey != normalizedIssueKey
+            ) {
+              return@forEach
             }
+            (DurableWorkflowArtifactFamily.GOAL_ATTEMPT_LEDGER.value(artifacts) as? List<*>)
+              .orEmpty()
+              .forEach { item ->
+                (item as? Map<*, *>)?.let(::add)
+              }
           }
         }
       summarizeAttemptLedgerFromEntries(entries)
@@ -321,9 +329,13 @@ internal class WorkflowGoalRunnerProgressRecording(
         unitOfWork.workflowStates.get(family, workflowId)
           ?: return@transaction false
       val artifacts = record.artifacts
-      val normalizedIssueKey = issueKey.trim()
+      val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
       var highest = maxHistorySequence(artifacts, historyFamily, null)
-      unitOfWork.workflowStates.list(WorkflowFamily.TASK_RUNTIME, Int.MAX_VALUE).forEach { snapshot ->
+      unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
+        FeatureTaskWorkflowMode.RUNTIME,
+        normalizedIssueKey,
+      ).forEach { row ->
+        val snapshot = row.toSnapshot()
         if (
           DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation()?.issueKey == normalizedIssueKey
         ) {

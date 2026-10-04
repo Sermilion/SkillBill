@@ -33,7 +33,10 @@ interface GoalRunnerManifestQueries {
     repoRoot: Path? = null,
   ): GoalRunnerManifestState?
 
-  fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState?
+  fun loadDurableByIssueKey(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): GoalRunnerManifestState?
 
   fun controlState(parentWorkflowId: String): GoalRunnerControlState
 
