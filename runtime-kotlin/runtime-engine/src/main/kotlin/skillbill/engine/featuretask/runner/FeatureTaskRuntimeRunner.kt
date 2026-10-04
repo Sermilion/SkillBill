@@ -5,7 +5,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -38,7 +39,7 @@ class FeatureTaskRuntimeRunner(
       throw invalidFeatureTaskExecutionIdentitySchema(request.workflowId, "admission does not match run request")
     }
     if (request.transitionsOverride != null && request.transitionsOverride != admitted.plan.traversal) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
   }
 }

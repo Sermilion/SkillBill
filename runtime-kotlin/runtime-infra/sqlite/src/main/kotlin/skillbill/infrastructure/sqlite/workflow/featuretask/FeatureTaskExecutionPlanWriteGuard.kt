@@ -1,6 +1,6 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
+import skillbill.error.shellcontent.featureTaskRuntimeExecutionPlanConflict
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -14,6 +14,6 @@ internal fun requireUnchangedExecutionPlan(
   val before = existing.toSnapshot().artifacts
   val after = proposed.toSnapshot().artifacts
   if (family.contains(before) != family.contains(after) || family.value(before) != family.value(after)) {
-    throw FeatureTaskRuntimeExecutionPlanConflictError()
+    throw featureTaskRuntimeExecutionPlanConflict()
   }
 }

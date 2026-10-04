@@ -2,7 +2,8 @@ package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
@@ -32,14 +33,14 @@ class FeatureTaskExecutionPlanWriteGuardTest {
         before.copy(artifactsJson = JsonCodec.mapToJsonString(mapOf(family.entry(null)))),
         legacyBefore.copy(artifactsJson = descriptor("definition-1")),
       ).forEach { proposed ->
-        assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+        assertFailsWith<SkillBillRuntimeException> {
           database.transaction { unit ->
             unit.workflowStates.saveFeatureTaskWorkflow(
               proposed.copy(workflowStatus = WorkflowStatus.RUNNING.wireValue, currentStepId = "implement"),
               RUNTIME,
             )
           }
-        }
+        }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
         database.read { unit ->
           assertEquals(before, unit.workflowStates.getFeatureTaskWorkflow(original.workflowId))
           assertEquals(legacyBefore, unit.workflowStates.getFeatureTaskWorkflow(legacy.workflowId))
@@ -72,13 +73,13 @@ class FeatureTaskExecutionPlanWriteGuardTest {
       database.transaction { it.workflowStates.saveFeatureTaskWorkflow(original, RUNTIME) }
       val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(original.workflowId)) }
       val child = row("wftr-child").copy(artifactsJson = descriptor("definition-1"))
-      assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.transaction { unit ->
           unit.workflowStates.saveFeatureTaskWorkflow(child, RUNTIME)
           unit.workflowStates.saveFeatureTaskExecutionIdentity(goalChildIdentity(child))
           unit.workflowStates.saveFeatureTaskWorkflow(before.copy(artifactsJson = descriptor("definition-2")), RUNTIME)
         }
-      }
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
       database.read { unit ->
         assertNull(unit.workflowStates.getFeatureTaskWorkflow(child.workflowId))
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(child.workflowId))

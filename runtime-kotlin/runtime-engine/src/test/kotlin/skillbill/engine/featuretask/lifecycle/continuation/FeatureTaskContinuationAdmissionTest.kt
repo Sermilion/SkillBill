@@ -14,11 +14,7 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -42,8 +38,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.error as failDiagnosticSink
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
+import kotlin.error as failDiagnosticSink
 
 class FeatureTaskContinuationAdmissionTest {
   @Test
@@ -88,20 +84,21 @@ class FeatureTaskContinuationAdmissionTest {
         )
       val cases =
         listOf(
-          null to MissingFeatureTaskRuntimeExecutionPlanError::class,
-          "unreadable-descriptor" to CorruptFeatureTaskRuntimeExecutionPlanError::class,
-          (descriptor + (Keys.CONTRACT_VERSION to "9.0")) to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
-          revised to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
-          changed to IncompatibleFeatureTaskRuntimeExecutionPlanError::class,
+          null to FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR,
+          "unreadable-descriptor" to FeatureTaskRuntimeExecutionPlanAdmissionCode.CORRUPT_DESCRIPTOR,
+          (descriptor + (Keys.CONTRACT_VERSION to "9.0")) to
+            FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR,
+          revised to FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR,
+          changed to FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR,
         )
-      cases.forEach { (value, expectedType) ->
+      cases.forEach { (value, expectedCode) ->
         fixture.replaceDescriptor(original, value)
         val before = fixture.row()
         val error =
-          assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError> {
+          assertFailsWith<SkillBillRuntimeException> {
             fixture.lookup.claim(fixture.candidate(), fixture.execution.inputs)
           }
-        assertEquals(expectedType, error::class)
+        assertEquals(expectedCode, error.code)
         assertEquals(before, fixture.row())
         assertEquals(0, fixture.execution.launches)
         assertIs<FeatureTaskContinuationLookupResult.Resumable>(fixture.lookup.lookup("SKILL-384", REPOSITORY))
@@ -129,9 +126,9 @@ class FeatureTaskContinuationAdmissionTest {
       val before = fixture.row()
       assertEquals(candidate.updatedAt, before.updatedAt)
 
-      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.lookup.claim(candidate, fixture.execution.inputs)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
 
       assertEquals(before, fixture.row())
       assertEquals(0, fixture.execution.launches)
@@ -232,9 +229,9 @@ class FeatureTaskContinuationAdmissionTest {
           },
         )
       val before = fixture.row()
-      assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         lookup.claim(fixture.candidate(), fixture.execution.inputs)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR, it.code) }
       assertEquals(before, fixture.row())
       assertEquals(0, fixture.execution.launches)
     }

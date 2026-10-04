@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.error.featuretask.regenerationRefused
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -88,7 +88,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
           edgeIteration,
         )
       if (!invalidated) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.MISSING_WORKFLOW)
+        throw regenerationRefused(FeatureTaskRuntimeRegenerationRefusal.MISSING_WORKFLOW)
       }
       context.runState.coupledRunTransitions.invalidateProducerOutputForRegeneration(destinationPhaseId)
     }

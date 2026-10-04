@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
@@ -173,9 +173,9 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
     Files.writeString(envelope, Files.readString(envelope).replace("\"fp-addressed\"", "\"fp-recorded\""))
 
     val error =
-      assertFailsWith<FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.resolved(request("fp-addressed"), ThrowingDeriver)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.SHARED_EVIDENCE_FINGERPRINT_CONTRADICTION, it.code) }
 
     assertTrue(error.message!!.contains("fp-addressed"), error.message)
     assertTrue(error.message!!.contains("fp-recorded"), error.message)

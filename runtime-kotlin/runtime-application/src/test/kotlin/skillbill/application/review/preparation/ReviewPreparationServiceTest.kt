@@ -13,9 +13,10 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.REVIEW_HUNK_EVIDENCE_INTEGRITY
 import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.error.shellcontent.featureTaskRuntimeSharedEvidenceFingerprintContradiction
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
@@ -595,23 +596,26 @@ class ReviewPreparationServiceTest {
     var workerLaunches = 0
     val storePath = ".skill-bill/run-evidence/code-review/fp-wrong"
     val failure =
-      assertFailsWith<FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         storePrepare(
           listOf(hunkA),
           oversizedPatch("src/A.kt"),
           storePath,
           reader =
             ThrowingLocatorReader {
-              throw FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError(
+              throw featureTaskRuntimeSharedEvidenceFingerprintContradiction(
                 addressedFingerprint = "fp-wrong",
                 recordedFingerprint = "fp-other",
                 sourceLabel = storePath,
               )
             },
         )
-      }
-    assertEquals("fp-wrong", failure.addressedFingerprint)
-    assertEquals("fp-other", failure.recordedFingerprint)
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.SHARED_EVIDENCE_FINGERPRINT_CONTRADICTION, it.code) }
+    assertEquals(
+      "Shared review evidence at '$storePath' is addressed by fingerprint 'fp-wrong' but " +
+        "records fingerprint 'fp-other'; refusing to serve evidence for a contradicted checkpoint.",
+      failure.message,
+    )
     assertEquals(0, workerLaunches)
   }
 

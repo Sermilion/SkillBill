@@ -15,8 +15,9 @@ import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Conflicted
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult.Hydrated
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.featureTaskRuntimeExecutionPlanConflict
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.persistence.UnitOfWork
@@ -141,7 +142,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     existingChild: WorkflowStateSnapshot,
     expectedIdentity: FeatureTaskExecutionIdentity,
   ): GoalPlanningPreparationConflict? {
-    val executionPlan = setup.executionPlan ?: throw FeatureTaskRuntimeExecutionPlanConflictError()
+    val executionPlan = setup.executionPlan ?: throw featureTaskRuntimeExecutionPlanConflict()
     executionAdmission.requireCompatibleDescriptor(unitOfWork.workflowStates, setup.workflowId, executionPlan)
     val persistedIdentity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(setup.workflowId)
     if (persistedIdentity != expectedIdentity) {
@@ -355,5 +356,6 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
       )
     }
 
-  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
+  private fun missingPlan(): Nothing =
+    throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
 }

@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.review.core
 
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.featureTaskRuntimeSharedEvidenceFingerprintContradiction
 import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
@@ -256,21 +258,24 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
   fun `a fingerprint contradiction from the port loud-fails instead of becoming a silent null omit`() {
     val contradicted =
       FeatureTaskRuntimeSharedEvidenceResolverPort { _, _ ->
-        throw FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError(
+        throw featureTaskRuntimeSharedEvidenceFingerprintContradiction(
           addressedFingerprint = "fp-addressed",
           recordedFingerprint = "fp-recorded",
           sourceLabel = "envelope.json",
         )
       }
     val error =
-      assertFailsWith<FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeSharedReviewEvidenceResolver(
           contradicted,
           FakeGit(emptyMap()),
         ).resolve(repoRoot, "wf-1", checkpoint("fp-addressed"), "audit")
-      }
-    assertEquals("fp-addressed", error.addressedFingerprint)
-    assertEquals("fp-recorded", error.recordedFingerprint)
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.SHARED_EVIDENCE_FINGERPRINT_CONTRADICTION, it.code) }
+    assertEquals(
+      "Shared review evidence at 'envelope.json' is addressed by fingerprint 'fp-addressed' but " +
+        "records fingerprint 'fp-recorded'; refusing to serve evidence for a contradicted checkpoint.",
+      error.message,
+    )
   }
 
   @Test

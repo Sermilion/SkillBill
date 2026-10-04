@@ -7,8 +7,8 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationReason
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -137,7 +137,7 @@ class FeatureTaskRuntimeCrashReconciler(
         )
       val encoded =
         artifact?.let { value -> JsonCodec.valueToJsonString(value).toByteArray(Charsets.UTF_8) }
-          ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+          ?: throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
       val recordedPlan = executionPlanCompatibility.requireSupportedComposition(encoded)
       val repositoryPath =
         identity.repositoryIdentity.removePrefix(
@@ -147,7 +147,7 @@ class FeatureTaskRuntimeCrashReconciler(
       val admittedPlan = executionPlanCompatibility.requireSupportedRecovery(encoded, effectiveInputs)
       val expectedDefinition = SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
       if (admittedPlan.definitionId != expectedDefinition.id) {
-        throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+        throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
       }
       CrashCandidateAdmission(identity, encoded)
     }

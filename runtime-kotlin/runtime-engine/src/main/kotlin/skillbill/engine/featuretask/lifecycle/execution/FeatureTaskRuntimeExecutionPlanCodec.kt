@@ -4,9 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -26,9 +26,9 @@ class FeatureTaskRuntimeExecutionPlanCodec(
     val definition =
       SkeletonDefinition.entries.singleOrNull {
         it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision
-      } ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      } ?: throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
     if (plan.traversal != definition.traversal(plan.selectedStepIds, plan.selectedEntryStepIds)) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
     return encode(
       plan.withEffectivePolicies(FeatureTaskRuntimeEffectivePolicies.resolve(plan, effectiveInputs)),
@@ -112,7 +112,7 @@ class FeatureTaskRuntimeExecutionPlanCodec(
     return try {
       decodeExecutionPlan(payload)
     } catch (_: IllegalArgumentException) {
-      throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
+      throw invalidFeatureTaskRuntimeExecutionPlanSchema("execution plan cannot be reconstructed")
     }
   }
 

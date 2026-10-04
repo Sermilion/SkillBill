@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.validation.reviewFallbackPackWithoutGate
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
@@ -80,12 +80,12 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ValidationDepth.FULL,
         7.minutes,
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.execution.compatibility.requireSupportedExecution(
         fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
         changed,
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     val validation =
       resolver.resolveCreation(
         FeatureTaskRuntimeExecutionPlanCreationRequest(
@@ -104,14 +104,18 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   fun `creation refuses unknown routing and missing build commands before implementation`() {
     val fixture = Fixture()
     fixture.inventory = WorkflowGitNameListResult.Failed("inventory unavailable")
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.create()
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "ios/Main.swift"))
     fixture.packs = fixture.packs +
       fixture.packs.single().copy(
         slug = "ios",
         routingSignals = RoutingSignals(listOf("*.swift"), emptyList(), listOf("*.swift")),
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.create()
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
     assertFailsWith<SkillBillRuntimeException> {
@@ -150,7 +154,9 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     }
     fixture.inventory = WorkflowGitNameListResult.Listed(emptyList())
     fixture.tracked = WorkflowGitNameListResult.Failed("ls-files unavailable")
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.create()
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
   }
 
   @Test
@@ -200,7 +206,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       fixture.packs.map { pack ->
         pack.copy(validationGate = requireNotNull(pack.validationGate).copy(buildCommand = listOf("other-build")))
       }
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       resolver.resolveInputs(
         root,
         FeatureTaskRuntimeQualityGateSelection.BUILD,
@@ -208,7 +214,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         7.minutes,
         "wftr-clean",
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     assertEquals(0, fixture.execution.launches)
   }
 

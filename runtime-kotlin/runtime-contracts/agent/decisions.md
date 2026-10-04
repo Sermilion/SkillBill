@@ -1,3 +1,14 @@
+## [2026-10-04] Keep execution-plan codes with their shared vocabulary owners
+Context: SKILL-400 subtask 5 removes execution-plan failures produced or read by engine, application and infrastructure, with MCP also classifying regeneration refusals.
+Decision: Keep admission and regeneration codes in runtime-contracts/error/featuretask. Add schema, conflict and fingerprint entries to the existing FeatureTaskRuntimeFailureCode family, with message factories beside their owning enums.
+Reason: These codes have production consumers in several modules. Reusing the family established by SKILL-399 avoids a competing execution-failure enum, and factories preserve constructor context and message text without typed exception properties.
+Alternatives considered: Create a separate execution-failure enum. The spec requires extending the existing family when it is present.
+
+## [2026-10-04] Preserve regeneration's separate failure classification
+Context: Admission and execution failures were shell-content exceptions; regeneration refusal was an IllegalStateException. Both now use SkillBillRuntimeException.
+Decision: Classify admission and execution codes as shell-content failures. Keep regeneration outside that classification and mark its family uncaptured at MCP. Admission and continuation retain exact reason mapping, bounded warnings and rethrow of the original failure.
+Reason: The former supertypes selected different handling routes. Adding regeneration to shell-content classification would widen recovery, while omitting its MCP code check would introduce telemetry capture. Exact code checks keep unrelated failures propagating.
+
 ## [2026-10-04] Keep durable and request code classification distinct
 Context: SKILL-400 subtask 3 replaces durable-install, evidence-request, agent-ID, feature-spec-request and learning-source exception types with shared coded failures.
 Decision: Register DurableInstallStateFailureCode in shell-content classification and extend the existing governed-review and agent-add-on families. Keep feature-spec-request and learning-source codes outside that classification; MCP skips capture only for the learning-source family.

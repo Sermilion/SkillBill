@@ -7,8 +7,9 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -64,7 +65,7 @@ internal object FeatureTaskRuntimeEffectivePolicies {
         policy("resume-budgets", resumeInputs(recorded)),
       )
     if (previous.any { expected -> recorded.effectivePolicies.singleOrNull { it.id == expected.id } != expected }) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
     val replacements =
       listOf(
@@ -99,7 +100,7 @@ internal object FeatureTaskRuntimeEffectivePolicies {
 internal fun effectivePolicyDigest(inputs: Any?): String {
   val encoded = JsonCodec.valueToJsonString(inputs).toByteArray(Charsets.UTF_8)
   if (encoded.size > EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT) {
-    throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+    throw invalidFeatureTaskRuntimeExecutionPlanSchema(
       "effective policy inputs exceed $EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT UTF-8 bytes",
     )
   }

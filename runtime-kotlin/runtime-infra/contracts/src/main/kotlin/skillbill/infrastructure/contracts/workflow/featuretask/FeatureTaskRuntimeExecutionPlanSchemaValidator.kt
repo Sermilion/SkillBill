@@ -13,8 +13,9 @@ import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.error.core.JsonFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
@@ -59,7 +60,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
       version.isTextual && version.asText().matches(Regex("[0-9]{1,8}\\.[0-9]{1,8}")) &&
       version.asText() != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
     ) {
-      throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
     }
     validateInstance(instance)
     return JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(canonicalExecutionPlan(instance).toString()))
@@ -75,7 +76,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
         JsonCodec.mapToJsonString(payload).toByteArray(Charsets.UTF_8)
       } catch (error: SkillBillRuntimeException) {
         if (error.code != JsonFailureCode.UNSUPPORTED_VALUE) throw error
-        throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("unsupported JSON value")
+        throw invalidFeatureTaskRuntimeExecutionPlanSchema("unsupported JSON value")
       }
     return JsonCodec.mapToJsonString(read(encoded, sourceLabel)).toByteArray(Charsets.UTF_8)
   }
@@ -90,7 +91,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
   private fun validateInstance(instance: JsonNode) {
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema(), instance)
     if (errors.isNotEmpty()) {
-      throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+      throw invalidFeatureTaskRuntimeExecutionPlanSchema(
         "execution plan violates its schema",
       )
     }
@@ -105,17 +106,17 @@ private fun schema(): JsonSchema =
       classLoader = FeatureTaskRuntimeExecutionPlanSchemaValidator::class.java.classLoader,
       classpathResource = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+        invalidFeatureTaskRuntimeExecutionPlanSchema(
           "Canonical schema is missing: ${FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE}",
         )
       },
       processingFailure = { cause ->
-        InvalidFeatureTaskRuntimeExecutionPlanSchemaError(cause.message ?: cause::class.simpleName.orEmpty())
+        invalidFeatureTaskRuntimeExecutionPlanSchema(cause.message ?: cause::class.simpleName.orEmpty())
       },
       loadFailureLogger = {},
       expectedSchemaId = FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
-      identityFailure = ::InvalidFeatureTaskRuntimeExecutionPlanSchemaError,
+      identityFailure = ::invalidFeatureTaskRuntimeExecutionPlanSchema,
     ),
   )
 
@@ -128,8 +129,8 @@ private val STRICT_JSON =
 
 private fun requireBoundedBytes(encoded: ByteArray) {
   if (encoded.size > MAXIMUM_ENCODED_BYTES) {
-    throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan exceeds $MAXIMUM_ENCODED_BYTES UTF-8 bytes")
+    throw invalidFeatureTaskRuntimeExecutionPlanSchema("execution plan exceeds $MAXIMUM_ENCODED_BYTES UTF-8 bytes")
   }
 }
 
-private fun invalidPlan(reason: String): Nothing = throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(reason)
+private fun invalidPlan(reason: String): Nothing = throw invalidFeatureTaskRuntimeExecutionPlanSchema(reason)

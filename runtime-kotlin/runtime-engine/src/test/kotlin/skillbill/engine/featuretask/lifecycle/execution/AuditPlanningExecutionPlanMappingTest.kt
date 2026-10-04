@@ -4,7 +4,8 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -107,27 +108,27 @@ class AuditPlanningExecutionPlanMappingTest {
       old.withTraversal(
         old.traversal.copy(backwardEdges = old.traversal.backwardEdges.map { it.copy(perEdgeCap = 9) }),
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.compatibility.requireSupportedComposition(fixture.codec.encode(changed))
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     val changedPolicy =
       old.withEffectivePolicies(
         old.effectivePolicies.map {
           if (it.id == "retry-budgets") it.copy(semanticDigest = "0".repeat(64)) else it
         },
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.compatibility.requireSupportedComposition(fixture.codec.encode(changedPolicy))
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     val changedFinalization =
       old.withEffectivePolicies(
         old.effectivePolicies.map {
           if (it.id == "finalization") it.copy(semanticDigest = "0".repeat(64)) else it
         },
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.compatibility.requireSupportedExecution(fixture.codec.encode(changedFinalization), fixture.inputs)
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
   }
 
   private fun archive(

@@ -22,6 +22,9 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   FEATURE_TASK_RUNTIME_CONTRACT_REJECTED,
+  INVALID_EXECUTION_PLAN_SCHEMA,
+  EXECUTION_PLAN_CONFLICT,
+  SHARED_EVIDENCE_FINGERPRINT_CONTRADICTION,
 }
 
 fun invalidFeatureTaskRuntimeRepairReceipt(
@@ -238,3 +241,29 @@ fun featureTaskRuntimePhaseOrderViolationMessage(
   "Feature-task-runtime phase '$phaseId' is unreachable until '$requiredPhaseId' settles with the verdict " +
     "'$requiredVerdict', but it settled with " +
     "'${observedVerdict ?: "<no completed verdict>"}'; the run fails loudly rather than silently advancing."
+
+fun invalidFeatureTaskRuntimeExecutionPlanSchema(reason: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA,
+    "Invalid feature-task runtime execution plan: $reason",
+    cause,
+  )
+
+fun featureTaskRuntimeExecutionPlanConflict(): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT,
+    "The immutable execution plan cannot be replaced, removed, or adopted after workflow creation.",
+  )
+
+fun featureTaskRuntimeSharedEvidenceFingerprintContradiction(
+  addressedFingerprint: String,
+  recordedFingerprint: String,
+  sourceLabel: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.SHARED_EVIDENCE_FINGERPRINT_CONTRADICTION,
+    "Shared review evidence at '$sourceLabel' is addressed by fingerprint '$addressedFingerprint' but " +
+      "records fingerprint '$recordedFingerprint'; refusing to serve evidence for a contradicted checkpoint.",
+    cause,
+  )

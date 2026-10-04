@@ -13,9 +13,9 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -193,12 +193,12 @@ class QuarantinedProducerRecoveryRefusalTest {
         return
       }
       if (case.changedDescriptorAfterAdmission) {
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError>(case.toString()) {
+        assertFailsWith<SkillBillRuntimeException>(case.toString()) {
           recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_gate", 1, admitted)
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
       } else {
         val error =
-          assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
+          assertFailsWith<SkillBillRuntimeException>(case.toString()) {
             recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_gate", 1, admitted)
           }
         val expected =
@@ -207,7 +207,7 @@ class QuarantinedProducerRecoveryRefusalTest {
             case.missingPayload -> FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE
             else -> FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS
           }
-        assertEquals(expected, error.refusal, case.toString())
+        assertEquals(expected, error.code, case.toString())
       }
 
       database.read { assertEquals(before, it.workflowStates.getFeatureTaskWorkflow(workflowId), case.toString()) }
@@ -274,11 +274,11 @@ class QuarantinedProducerRecoveryRefusalTest {
       val checkpoints = recorder.loadCheckpointIdentities(workflowId)
 
       val error =
-        assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
+        assertFailsWith<SkillBillRuntimeException>(case.toString()) {
           recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_implement", 1)
         }
 
-      assertEquals(case.refusal, error.refusal)
+      assertEquals(case.refusal, error.code)
       database.read { assertEquals(before, it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
       assertEquals(records, recorder.loadPhaseRecords(workflowId))
       assertEquals(ledger, recorder.loadPhaseLedger(workflowId))

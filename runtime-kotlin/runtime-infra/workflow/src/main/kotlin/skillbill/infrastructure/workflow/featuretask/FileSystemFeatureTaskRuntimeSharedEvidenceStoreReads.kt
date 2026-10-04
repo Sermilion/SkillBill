@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.shellcontent.featureTaskRuntimeSharedEvidenceFingerprintContradiction
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceResolution
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
@@ -48,7 +48,7 @@ private fun recordedFingerprint(
     return degraded("stored_envelope_fingerprint", "re-derive", addressed, "blank at $envelopeLabel")
   }
   if (recorded != addressed) {
-    throw FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError(
+    throw featureTaskRuntimeSharedEvidenceFingerprintContradiction(
       addressedFingerprint = addressed,
       recordedFingerprint = recorded,
       sourceLabel = envelopeLabel,

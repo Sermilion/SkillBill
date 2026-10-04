@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.review.core
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.error.featuretask.regenerationRefused
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStepStatus
@@ -45,6 +45,6 @@ internal fun requireAdmittedGateRegenerationBoundary(
       checkpoints.none { it.phaseId in downstreamBeyondConsumer }
   val provenBoundary = position >= 0 && consumerIsSafeBoundary && producerIsProven
   if (!provenBoundary || !retainedProducerCheckpoint || !untouchedDownstream) {
-    throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
+    throw regenerationRefused(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
   }
 }

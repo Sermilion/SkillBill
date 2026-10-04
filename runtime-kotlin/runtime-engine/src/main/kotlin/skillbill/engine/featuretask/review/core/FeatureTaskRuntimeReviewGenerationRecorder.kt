@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.reviewGenerationFrom
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.error.featuretask.regenerationRefused
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.reviewRunIdOf
@@ -124,10 +124,10 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@transaction false
       if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW)
+        throw regenerationRefused(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW)
       }
       if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps && admitted == null) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
+        throw regenerationRefused(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
       }
       admitted?.requireCurrent(unitOfWork.workflowStates, workflowId)
       val artifacts = record.artifacts
@@ -142,13 +142,13 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
         decodePhaseLedger(artifacts).any { it.phaseId in irreversibleSteps } ||
         checkpointIdentities.any { it.phaseId in irreversibleSteps }
       ) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(
+        throw regenerationRefused(
           FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED,
         )
       }
       val previous =
         existingRecords[producerPhaseId]
-          ?: throw UnsafeFeatureTaskRuntimeRegenerationError(
+          ?: throw regenerationRefused(
             FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE,
           )
       if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps) {
@@ -161,7 +161,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
             previous.resolvedAgentId,
           )
         if (evidence?.payload == null) {
-          throw UnsafeFeatureTaskRuntimeRegenerationError(
+          throw regenerationRefused(
             FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE,
           )
         }

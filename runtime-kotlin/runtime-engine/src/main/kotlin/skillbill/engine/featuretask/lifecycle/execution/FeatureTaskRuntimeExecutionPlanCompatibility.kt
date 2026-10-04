@@ -5,12 +5,10 @@ import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.PhaseSlotFailureCode
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -31,7 +29,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, effectiveInputs).sortedBy { it.id }
     val supportedById = supported.associateBy { it.id }
     if (plan.effectivePolicies.any { supportedById[it.id]?.semanticRevision != it.semanticRevision }) {
-      throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
     }
     if (plan.effectivePolicies != supported) incompatible()
     if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
@@ -45,7 +43,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val plan = requireSupportedComposition(encoded)
     val expected =
       expectedDescriptor
-        ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+        ?: throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
     val expectedPlan = requireSupportedComposition(expected.encoded())
     requireSupportedPolicies(expectedPlan.effectivePolicies)
     if (!codec.encode(plan).contentEquals(codec.encode(expectedPlan))) incompatible()
@@ -68,7 +66,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   }
 
   fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
-    if (encoded == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
+    if (encoded == null) throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
     val recorded = decodePlan(encoded)
     val mapping =
       try {
@@ -89,7 +87,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val definition =
       SkeletonDefinition.entries.singleOrNull {
         it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision
-      } ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      } ?: throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
     if (plan.selectedSlots != definition.slots) incompatible()
     requireSupportedStrategies(plan, definition)
     val selectionMatches =
@@ -115,8 +113,11 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   private fun decodePlan(encoded: ByteArray): ResolvedPhaseExecutionPlan =
     try {
       codec.decode(encoded)
-    } catch (error: InvalidFeatureTaskRuntimeExecutionPlanSchemaError) {
-      throw CorruptFeatureTaskRuntimeExecutionPlanError().also { it.addSuppressed(error) }
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA)
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.CORRUPT_DESCRIPTOR).also {
+        it.addSuppressed(error)
+      }
     }
 
   private fun requireSupportedStrategies(
@@ -125,11 +126,11 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   ) {
     plan.selectedStrategies.forEach { identity ->
       if (!strategies.registry.contains(identity.slot, identity.strategyId)) {
-        throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+        throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
       }
       val strategy = strategies.registry.strategy(identity.slot, identity.strategyId)
       if (strategy.semanticRevision != identity.semanticRevision) {
-        throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+        throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
       }
       if (
         identity.entryStep != strategy.entryStep ||
@@ -161,9 +162,10 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
         "finalization",
       )
     if (policies.map { it.id }.toSet() != supported || policies.any { it.semanticRevision != 1 }) {
-      throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
     }
   }
 
-  private fun incompatible(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+  private fun incompatible(): Nothing =
+    throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
 }

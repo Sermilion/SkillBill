@@ -2,7 +2,8 @@ package skillbill.engine.featuretask.runner
 
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.validJsonOutput
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -75,9 +76,9 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
     harness.seedPhase("simplify", "completed", 1, phaseAgent("simplify"), SIMPLIFY_OUTPUT)
 
     val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.runner.run(harness.request(truncated))
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     assertEquals(records, harness.recorder.loadPhaseRecords(WORKFLOW_ID))
     assertTrue(
       harness.launchedPromptPhaseOrder().none { it == "implement" },

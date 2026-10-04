@@ -13,12 +13,12 @@ import skillbill.engine.goalplanning.GoalPlanningMigration
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.featuretask.regenerationRefused
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
@@ -128,14 +128,18 @@ class FeatureTaskRuntimeExecutionAdmission(
         requireNotNull(descriptor),
         receipt,
       )
-    } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
-      warn(request.workflowId, error.reasonCode)
-      throw error
-    } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
-      warn(request.workflowId, error.refusal.wireValue)
-      throw error
     } catch (error: SkillBillRuntimeException) {
-      reportAdmissionFailure(error, request)
+      when (val code = error.code) {
+        is FeatureTaskRuntimeExecutionPlanAdmissionCode -> {
+          warn(request.workflowId, code.wireValue)
+          throw error
+        }
+        is FeatureTaskRuntimeRegenerationRefusal -> {
+          warn(request.workflowId, code.wireValue)
+          throw error
+        }
+        else -> reportAdmissionFailure(error, request)
+      }
     }
 
   private fun reportAdmissionFailure(
@@ -188,10 +192,10 @@ class FeatureTaskRuntimeExecutionAdmission(
     requestedReviewSelection: RuntimeReviewSelection?,
   ) {
     if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
     if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
   }
 
@@ -442,8 +446,9 @@ class FeatureTaskRuntimeExecutionAdmission(
         descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
         expected,
       )
-    } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
-      warn(workflowId, error.reasonCode)
+    } catch (error: SkillBillRuntimeException) {
+      val code = error.code as? FeatureTaskRuntimeExecutionPlanAdmissionCode ?: throw error
+      warn(workflowId, code.wireValue)
       throw error
     }
 
@@ -512,7 +517,7 @@ internal fun requireCompletedGateOutputEvidence(
         ?.let { it != WorkflowStepStatus.COMPLETED } == true
     }
   if (missingCompletedOutput || inconsistentCompletedOutput) {
-    throw UnsafeFeatureTaskRuntimeRegenerationError(
+    throw regenerationRefused(
       if (missingCompletedOutput) {
         FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE
       } else {

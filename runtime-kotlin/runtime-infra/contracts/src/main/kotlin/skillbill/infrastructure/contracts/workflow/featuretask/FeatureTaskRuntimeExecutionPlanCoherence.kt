@@ -2,7 +2,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 internal fun validateExecutionPlanCoherence(instance: JsonNode) {
@@ -130,7 +130,7 @@ private fun dispatchIdentity(node: JsonNode): Triple<String, String, Int> =
   )
 
 private fun incoherentPlan(): Nothing =
-  throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+  throw invalidFeatureTaskRuntimeExecutionPlanSchema(
     "execution plan has incoherent selected ownership or traversal references",
   )
 

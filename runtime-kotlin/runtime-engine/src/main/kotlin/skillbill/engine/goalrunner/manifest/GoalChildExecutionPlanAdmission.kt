@@ -3,7 +3,7 @@ package skillbill.engine.goalrunner.manifest
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
+import skillbill.error.shellcontent.featureTaskRuntimeExecutionPlanConflict
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
@@ -17,7 +17,7 @@ internal fun requireCompatibleChildPlan(
   val parent = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
   val manifest = parent?.decompositionRuntime()
   val workflowId = manifest?.workflowIdFor(manifest.currentSubtaskIntent.subtaskId)?.takeIf(String::isNotBlank)
-  if (workflowId != admission?.workflowId) throw FeatureTaskRuntimeExecutionPlanConflictError()
+  if (workflowId != admission?.workflowId) throw featureTaskRuntimeExecutionPlanConflict()
   if (admission == null) return
   executionAdmission.requireCompatibleDescriptor(unitOfWork.workflowStates, admission.workflowId, admission.expected)
 }

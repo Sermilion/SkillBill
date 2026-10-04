@@ -37,11 +37,8 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.PhaseSlotFailureCode
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
@@ -331,31 +328,33 @@ class PhaseStrategyCompositionTest {
       )
     val original = validator.read(encoded, "original")
 
-    assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> { compatibility.requireSupportedComposition(null) }
-    assertFailsWith<CorruptFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
+      compatibility.requireSupportedComposition(null)
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedComposition("{".toByteArray())
-    }
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.CORRUPT_DESCRIPTOR, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedComposition(
         JsonCodec.mapToJsonString(original + (Keys.CONTRACT_VERSION to "9.9")).toByteArray(),
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
     assertUnsupportedSelections(original, compatibility, validator)
     listOf(Keys.STEP_POLICIES, Keys.RESUME_INTERPRETATIONS).forEach { field ->
       val rows = requireNotNull(original[field] as? List<*>)
       val first = requireNotNull(JsonCodec.anyToStringAnyMap(rows.first()))
       val changed = first + (Keys.IDENTITY to "unknown-private-policy")
       val corrupt = original + (field to listOf(changed))
-      assertFailsWith<CorruptFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         compatibility.requireSupportedComposition(validator.write(corrupt, "corrupt digest"))
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.CORRUPT_DESCRIPTOR, it.code) }
       val unsupportedPolicy = changed + (Keys.SEMANTIC_DIGEST to executionPolicyDigest("unknown-private-policy"))
       val error =
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+        assertFailsWith<SkillBillRuntimeException> {
           compatibility.requireSupportedComposition(
             validator.write(original + (field to listOf(unsupportedPolicy)), "unsupported policy"),
           )
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
       assertFalse(error.message.orEmpty().contains("unknown-private-policy"))
       assertContentEquals(
         encoded,
@@ -394,14 +393,14 @@ class PhaseStrategyCompositionTest {
         EffectiveGatePolicyInputs(ValidationGateCommandFamily.BUILD, null, null, null, ValidationDepth.FULL, null),
       )
     val original = validator.read(encoded, "original")
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedComposition(
         validator.write(
           original + (Keys.QUALITY_GATE_SELECTION to FeatureTaskRuntimeQualityGateSelection.VALIDATE.wireValue),
           "changed gate selection",
         ),
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     assertContentEquals(encoded, codec.encode(compatibility.requireSupportedComposition(encoded)))
   }
 
@@ -565,14 +564,14 @@ class PhaseStrategyCompositionTest {
     validator: FeatureTaskRuntimeExecutionPlanSchemaValidator,
   ) {
     val definition = requireNotNull(JsonCodec.anyToStringAnyMap(original[Keys.DEFINITION]))
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedComposition(
         validator.write(
           original + (Keys.DEFINITION to (definition + (Keys.SEMANTIC_REVISION to 2))),
           "unsupported revision",
         ),
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
     val changedStrategyRevision = original.toMutableMap()
     listOf(Keys.SELECTED_STRATEGIES, Keys.DISPATCH_OWNERSHIP).forEach { field ->
       changedStrategyRevision[field] =
@@ -580,11 +579,11 @@ class PhaseStrategyCompositionTest {
           requireNotNull(JsonCodec.anyToStringAnyMap(it)) + (Keys.SEMANTIC_REVISION to 2)
         }
     }
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedComposition(
         validator.write(changedStrategyRevision, "unsupported strategy revision"),
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
   }
 
   private fun expectedQualityGate(

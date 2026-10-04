@@ -8,8 +8,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -33,6 +32,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -207,13 +207,13 @@ class WorkerTakeoverFencingTest {
             FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
           var launches = 0
 
-          assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError> {
+          assertFailsWith<SkillBillRuntimeException> {
             coordinator.runOwned(
               original.workflowId,
               execution.inputs,
               execution.identity(original.workflowId),
             ) { launches++ }
-          }
+          }.also { assertIs<FeatureTaskRuntimeExecutionPlanAdmissionCode>(it.code) }
 
           assertEquals(0, launches)
           assertEquals(0, supervisor.terminations)
@@ -275,13 +275,13 @@ class WorkerTakeoverFencingTest {
           FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
         var launches = 0
 
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+        assertFailsWith<SkillBillRuntimeException> {
           coordinator.runOwned(
             original.workflowId,
             execution.inputs,
             execution.identity(original.workflowId),
           ) { launches++ }
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
 
         assertEquals(0, launches)
         assertEquals(0, supervisor.heartbeats)

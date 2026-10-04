@@ -5,8 +5,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.featureTaskRuntimeExecutionPlanConflict
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.workflowIssueKeyConflictError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -76,13 +77,15 @@ class FeatureTaskRuntimeWorkflowPersistence
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(
               existing.toSnapshot().artifacts,
             )
-          if (storedPlan == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
+          if (storedPlan == null) {
+            throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
+          }
           if (executionPlan != null && storedPlan !=
             JsonCodec.parseValue(
               executionPlan.encoded().toString(Charsets.UTF_8),
             )
           ) {
-            throw FeatureTaskRuntimeExecutionPlanConflictError()
+            throw featureTaskRuntimeExecutionPlanConflict()
           }
           val persistedIssueKey =
             existing.issueKey
@@ -109,7 +112,9 @@ class FeatureTaskRuntimeWorkflowPersistence
           }
           return@transaction true
         }
-        if (executionPlan == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
+        if (executionPlan == null) {
+          throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR)
+        }
         val opened =
           engine.openRecord(
             WorkflowFamily.TASK_RUNTIME.definition,

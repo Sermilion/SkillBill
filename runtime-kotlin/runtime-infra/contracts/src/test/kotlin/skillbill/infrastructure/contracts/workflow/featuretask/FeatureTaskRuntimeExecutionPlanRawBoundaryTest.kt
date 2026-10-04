@@ -2,8 +2,9 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -22,16 +23,21 @@ class FeatureTaskRuntimeExecutionPlanRawBoundaryTest {
       )
     oversized.forEach { raw ->
       val error =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           validator.read(raw.toByteArray(Charsets.UTF_8), "untrusted-source")
         }
-      assertEquals("execution plan exceeds 65536 UTF-8 bytes", error.reason)
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, error.code)
+      assertEquals(
+        "Invalid feature-task runtime execution plan: execution plan exceeds 65536 UTF-8 bytes",
+        error.message,
+      )
     }
     val boundary =
-      assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.read(("{}" + " ".repeat(65534)).toByteArray(), "untrusted-source")
       }
-    assertEquals("execution plan violates its schema", boundary.reason)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, boundary.code)
+    assertEquals("Invalid feature-task runtime execution plan: execution plan violates its schema", boundary.message)
   }
 
   @Test
@@ -45,23 +51,26 @@ class FeatureTaskRuntimeExecutionPlanRawBoundaryTest {
       )
     malformed.forEach { raw ->
       val error =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           validator.read(raw.toByteArray(), "source")
         }
-      assertEquals("malformed or ambiguous JSON", error.reason)
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, error.code)
+      assertEquals("Invalid feature-task runtime execution plan: malformed or ambiguous JSON", error.message)
     }
     listOf("[]", "null", "true", "\"text\"").forEach { raw ->
       val error =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           validator.read(raw.toByteArray(), "source")
         }
-      assertEquals("execution plan must be a JSON object", error.reason)
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, error.code)
+      assertEquals("Invalid feature-task runtime execution plan: execution plan must be a JSON object", error.message)
     }
     val invalidEncoding =
-      assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.read(byteArrayOf(0xc3.toByte(), 0x28), "source")
       }
-    assertEquals("invalid UTF-8 encoding", invalidEncoding.reason)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, invalidEncoding.code)
+    assertEquals("Invalid feature-task runtime execution plan: invalid UTF-8 encoding", invalidEncoding.message)
   }
 
   @Test
@@ -69,14 +78,15 @@ class FeatureTaskRuntimeExecutionPlanRawBoundaryTest {
     val payload = mapOf(FeatureTaskRuntimeExecutionPlanKeys.CONTRACT_VERSION to "9.9")
     val encoded = JsonCodec.mapToJsonString(payload).toByteArray(Charsets.UTF_8)
     val readerFailure =
-      assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.read(encoded, "private-source")
       }
     val writerFailure =
-      assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.write(payload, "private-source")
       }
-    assertEquals(readerFailure.reasonCode, writerFailure.reasonCode)
+    assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, readerFailure.code)
+    assertEquals(readerFailure.code, writerFailure.code)
     assertFalse(readerFailure.message.orEmpty().contains("9.9"))
     assertFalse(readerFailure.message.orEmpty().contains("private-source"))
   }
@@ -86,19 +96,22 @@ class FeatureTaskRuntimeExecutionPlanRawBoundaryTest {
     val secret = "private-command-argument"
     val payload = mapOf(FeatureTaskRuntimeExecutionPlanKeys.CONTRACT_VERSION to secret)
     val readError =
-      assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.read(JsonCodec.mapToJsonString(payload).toByteArray(), secret.repeat(1000))
       }
     val writeError =
-      assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.write(payload, secret.repeat(1000))
       }
-    assertEquals(readError.reason, writeError.reason)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, readError.code)
+    assertEquals(readError.code, writeError.code)
+    assertEquals(readError.message, writeError.message)
     assertFalse(readError.message.orEmpty().contains(secret))
     val unsupported =
-      assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.write(mapOf(FeatureTaskRuntimeExecutionPlanKeys.DEFINITION to Any()), "source")
       }
-    assertEquals("unsupported JSON value", unsupported.reason)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, unsupported.code)
+    assertEquals("Invalid feature-task runtime execution plan: unsupported JSON value", unsupported.message)
   }
 }

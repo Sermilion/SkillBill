@@ -29,10 +29,9 @@ import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
@@ -126,9 +125,9 @@ class FeatureTaskExecutionPlanCreationTest {
   @Test
   fun `standalone creation without a descriptor leaves no workflow or route identity`() =
     withDatabase { database ->
-      assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(database).openFeatureTask(openArgs(null))
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR, it.code) }
       database.read { unit ->
         assertNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(CHILD))
@@ -157,9 +156,9 @@ class FeatureTaskExecutionPlanCreationTest {
           execution.validator,
         )
 
-      assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+      assertFailsWith<SkillBillRuntimeException> {
         persistence.ensureWorkflowOpen(CHILD, "replacement-session", ISSUE, changed)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
 
       database.read { assertEquals(first, it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
     }
@@ -168,9 +167,9 @@ class FeatureTaskExecutionPlanCreationTest {
   fun `direct executable workflow creation without a descriptor leaves no row`() =
     withDatabase { database ->
       val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
-      assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR, it.code) }
       database.read { assertNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
     }
 
@@ -248,26 +247,25 @@ class FeatureTaskExecutionPlanCreationTest {
         val parentBefore = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(PARENT)) }
         val childBefore = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
         val store = fixture.store()
-        assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError>(invalidKind) {
+        assertFailsWith<SkillBillRuntimeException>(invalidKind) {
           store.acquireExecutionLeaseWithChildAdmission(
             PARENT,
             parentLease.copy(ownerToken = "new-parent-owner", generation = 2),
             parentLease.ownerToken,
             GoalRunnerChildExecutionPlanAdmission(CHILD, assertNotNull(fixture.setup.executionPlan)),
           )
-        }
-        val error = assertFailsWith<RuntimeException>(invalidKind) { fixture.save(database) }
+        }.also { assertIs<FeatureTaskRuntimeExecutionPlanAdmissionCode>(it.code) }
+        val error = assertFailsWith<SkillBillRuntimeException>(invalidKind) { fixture.save(database) }
         if (invalidKind == "incompatible") {
-          assertIs<IncompatibleFeatureTaskRuntimeExecutionPlanError>(error)
+          assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, error.code)
         } else {
-          val admissionError = assertIs<FeatureTaskRuntimeExecutionPlanAdmissionError>(error)
           assertEquals(
             when (invalidKind) {
-              "missing" -> "missing_descriptor"
-              "corrupt" -> "corrupt_descriptor"
-              else -> "unsupported_descriptor"
+              "missing" -> FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR
+              "corrupt" -> FeatureTaskRuntimeExecutionPlanAdmissionCode.CORRUPT_DESCRIPTOR
+              else -> FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR
             },
-            admissionError.reasonCode,
+            error.code,
           )
         }
         database.read { unit ->
@@ -294,17 +292,17 @@ class FeatureTaskExecutionPlanCreationTest {
       val next = parentLease.copy(ownerToken = "new-parent-owner", generation = 2)
 
       assertFalse(store.acquireExecutionLeaseWithChildAdmission(PARENT, next, "stale-owner", admission))
-      assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.acquireExecutionLeaseWithChildAdmission(
           PARENT,
           next,
           parentLease.ownerToken,
           admission.copy(workflowId = "stale-child"),
         )
-      }
-      assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
+      assertFailsWith<SkillBillRuntimeException> {
         store.acquireExecutionLease(PARENT, next, parentLease.ownerToken)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
       assertEquals(controls, store.controlState(PARENT))
       val childBefore = database.read { it.workflowStates.getFeatureTaskWorkflow(CHILD) }
       assertTrue(store.acquireExecutionLeaseWithChildAdmission(PARENT, next, parentLease.ownerToken, admission))
@@ -335,15 +333,15 @@ class FeatureTaskExecutionPlanCreationTest {
           fixture.execution.validator,
         )
 
-      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.save(database, fixture.setup.copy(executionPlan = changed))
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
       database.read { unit ->
         assertEquals(before, unit.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { it.toRecord() })
       }
-      assertFailsWith<FeatureTaskRuntimeExecutionPlanConflictError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.save(database, fixture.setup.copy(executionPlan = null))
-      }
+      }.also { assertEquals(FeatureTaskRuntimeFailureCode.EXECUTION_PLAN_CONFLICT, it.code) }
       database.read { unit ->
         assertEquals(before, unit.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { it.toRecord() })
         val child = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
@@ -373,7 +371,7 @@ class FeatureTaskExecutionPlanCreationTest {
         val expectedPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(execution.encoded, execution.validator)
         val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), testHarnessClock)
 
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError>(changedFact) {
+        assertFailsWith<SkillBillRuntimeException>(changedFact) {
           database.transaction { unit ->
             writes.reopenBlockedPhaseForOperatorResume(
               unit,
@@ -383,7 +381,7 @@ class FeatureTaskExecutionPlanCreationTest {
               expectedPlan,
             )
           }
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
 
         database.read { unit ->
           assertEquals(before, unit.workflowStates.getFeatureTaskWorkflow(workflowId), changedFact)
@@ -448,7 +446,7 @@ class FeatureTaskExecutionPlanCreationTest {
           }
         val ownerBefore = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(CHILD) }
 
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError>(changedFact) {
+        assertFailsWith<SkillBillRuntimeException>(changedFact) {
           fixture.save(
             database,
             fixture.setup.copy(
@@ -456,7 +454,7 @@ class FeatureTaskExecutionPlanCreationTest {
               operatorResumeReason = "operator resumed after blocked stop",
             ),
           )
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
 
         database.read { unit ->
           assertEquals(before.first, unit.workflowStates.getFeatureTaskWorkflow(PARENT), changedFact)
@@ -479,9 +477,9 @@ class FeatureTaskExecutionPlanCreationTest {
             100,
           ).map { row -> row.toRecord() }
         }
-      assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.save(database, fixture.setup.copy(executionPlan = null))
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.MISSING_DESCRIPTOR, it.code) }
       database.read {
         assertEquals(before, it.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { row -> row.toRecord() })
       }

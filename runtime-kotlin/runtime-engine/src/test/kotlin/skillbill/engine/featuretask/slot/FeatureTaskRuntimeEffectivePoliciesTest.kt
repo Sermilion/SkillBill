@@ -9,9 +9,9 @@ import skillbill.engine.featuretask.lifecycle.execution.effectivePolicyDigest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsLocator
@@ -47,18 +47,18 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         ),
       )
     assertNotEquals(plan.traversal, changed.traversal)
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.codec.encodeExecution(changed, fixture.inputs)
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     val encoded =
       fixture.codec.encode(
         changed.withEffectivePolicies(
           FeatureTaskRuntimeEffectivePolicies.resolve(changed, fixture.inputs),
         ),
       )
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.compatibility.requireSupportedExecution(encoded, fixture.inputs)
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
     assertContentEquals(fixture.encoded, fixture.codec.encodeExecution(plan, fixture.inputs))
   }
 
@@ -73,10 +73,10 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     assertEquals(plan.traversal, restored.traversal)
     assertEquals(plan.dispatchStrategyByStep, restored.dispatchStrategyByStep)
     assertContentEquals(original, codec.encode(restored))
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedExecution(codec.encode(plan), inputs)
-    }
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       compatibility.requireSupportedExecution(
         codec.encode(
           restored.withEffectivePolicies(
@@ -85,7 +85,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         ),
         inputs,
       )
-    }
+    }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
     restored.effectivePolicies.forEach { selected ->
       val changed =
         restored.effectivePolicies.map {
@@ -97,14 +97,14 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
             it
           }
         }
-      assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(changed)), inputs)
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
       val revised = restored.effectivePolicies.map { if (it == selected) it.copy(semanticRevision = 2) else it }
-      assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      assertFailsWith<SkillBillRuntimeException> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(revised)), inputs)
-      }
-      assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
+      assertFailsWith<SkillBillRuntimeException> {
         compatibility.requireSupportedExecution(
           codec.encode(
             restored.withEffectivePolicies(
@@ -113,7 +113,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
           ),
           inputs,
         )
-      }
+      }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR, it.code) }
     }
     assertContentEquals(original, codec.encode(restored))
   }
@@ -161,9 +161,9 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       )
     changed.forEach { current ->
       val error =
-        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+        assertFailsWith<SkillBillRuntimeException> {
           compatibility.requireSupportedExecution(original, current)
-        }
+        }.also { assertEquals(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR, it.code) }
       assertFalse(error.message.orEmpty().contains("gradlew"))
     }
     assertNotEquals(effectivePolicyDigest(null), effectivePolicyDigest(emptyList<String>()))
@@ -184,12 +184,12 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     val payload = validator.read(original, "original")
     val rows = requireNotNull(payload[Keys.EFFECTIVE_POLICIES] as? List<*>)
     val duplicate = payload + (Keys.EFFECTIVE_POLICIES to (rows + rows.first()))
-    assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validator.read(JsonCodec.mapToJsonString(duplicate).toByteArray(), "duplicate policy")
-    }
-    assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+    }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       validator.write(duplicate, "duplicate policy")
-    }
+    }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
     val maximum =
       resolved.withEffectivePolicies(
         (1..254).map { ResolvedExecutionPolicy("policy-$it", 1, "a".repeat(64)) },
@@ -199,13 +199,17 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       maximum.withEffectivePolicies(
         maximum.effectivePolicies + ResolvedExecutionPolicy("policy-255", 1, "a".repeat(64)),
       )
-    assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encode(excessive) }
+    assertFailsWith<SkillBillRuntimeException> {
+      codec.encode(excessive)
+    }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
     val oversized = inputs.copy(declaration = declaration.copy(suppressionMarkers = listOf("x".repeat(65536))))
-    assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encodeExecution(plan, oversized) }
+    assertFailsWith<SkillBillRuntimeException> {
+      codec.encodeExecution(plan, oversized)
+    }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
     val malformed = rows.map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) + (Keys.SEMANTIC_REVISION to 0) }
-    assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validator.write(payload + (Keys.EFFECTIVE_POLICIES to malformed), "invalid policy revision")
-    }
+    }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
   }
 
   private val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()

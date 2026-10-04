@@ -1,6 +1,9 @@
 package skillbill.error.featuretask
 
-enum class FeatureTaskRuntimeRegenerationRefusal(val wireValue: String) {
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+
+enum class FeatureTaskRuntimeRegenerationRefusal(val wireValue: String) : RuntimeFailureCode {
   MISSING_WORKFLOW("missing_workflow"),
   TERMINAL_WORKFLOW("terminal_workflow"),
   UNPROVEN_GATE_SEMANTICS("unproven_gate_semantics"),
@@ -8,9 +11,9 @@ enum class FeatureTaskRuntimeRegenerationRefusal(val wireValue: String) {
   MISSING_PRODUCER_EVIDENCE("missing_producer_evidence"),
 }
 
-class UnsafeFeatureTaskRuntimeRegenerationError(
-  val refusal: FeatureTaskRuntimeRegenerationRefusal,
-) : IllegalStateException(
+fun regenerationRefused(refusal: FeatureTaskRuntimeRegenerationRefusal): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    refusal,
     "Receipt regeneration refused: ${refusal.wireValue}. " +
       "Retain the workflow and inspect its evidence with a compatible runtime.",
   )

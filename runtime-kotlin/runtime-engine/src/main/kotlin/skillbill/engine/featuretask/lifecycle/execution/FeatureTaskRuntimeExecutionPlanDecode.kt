@@ -1,8 +1,9 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -70,7 +71,7 @@ internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecu
               (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong(),
           )
         } catch (error: IllegalArgumentException) {
-          throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+          throw invalidFeatureTaskRuntimeExecutionPlanSchema(
             "execution plan settings are invalid: ${error.message}",
           ).also { it.addSuppressed(error) }
         }
@@ -90,7 +91,7 @@ private fun decodePolicies(
 
 private fun planSlot(payload: Map<String, Any?>): PhaseSlot =
   PhaseSlot.entries.singleOrNull { it.wireValue == payload[Keys.SLOT] }
-    ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+    ?: throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.UNSUPPORTED_DESCRIPTOR)
 
 private fun planRevision(payload: Map<String, Any?>): Int =
   (payload[Keys.SEMANTIC_REVISION] as? Number)?.toInt() ?: invalidPlanValue()
@@ -113,4 +114,4 @@ internal fun planStrings(
 ): List<String> = (payload[key] as? List<*>)?.map { it as? String ?: invalidPlanValue() } ?: invalidPlanValue()
 
 private fun invalidPlanValue(): Nothing =
-  throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan contains an invalid semantic value or digest")
+  throw invalidFeatureTaskRuntimeExecutionPlanSchema("execution plan contains an invalid semantic value or digest")

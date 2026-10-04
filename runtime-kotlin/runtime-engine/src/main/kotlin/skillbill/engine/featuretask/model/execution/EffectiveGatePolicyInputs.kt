@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.model.execution
 
 import skillbill.config.model.applyValidationGateGradleWrapper
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeExecutionPlanSchema
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.model.ValidationDepth
@@ -60,10 +60,10 @@ data class EffectiveGatePolicyInputs(
       packSlug != null &&
       (packSlug.length !in 1..PACK_IDENTITY_LENGTH_LIMIT || !packSlug.matches(Regex("[a-z0-9][a-z0-9-]*")))
     ) {
-      throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("effective policy has an invalid pack identity")
+      throw invalidFeatureTaskRuntimeExecutionPlanSchema("effective policy has an invalid pack identity")
     }
     if (phaseTimeoutMillis != null && phaseTimeoutMillis < 0) {
-      throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("effective policy has a negative timeout")
+      throw invalidFeatureTaskRuntimeExecutionPlanSchema("effective policy has a negative timeout")
     }
     return listOf(
       commandFamily.name,

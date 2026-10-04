@@ -6,7 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
-import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,9 +80,9 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       val plan = descriptor()
       corrupt(plan)
       val error =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError>(name) {
+        assertFailsWith<SkillBillRuntimeException>(name) {
           validate(plan)
-        }
+        }.also { assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, it.code) }
       assertFalse(error.message.orEmpty().contains("private-payload"), name)
     }
   }
@@ -148,11 +149,11 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       val plan = descriptor().also(corrupt)
       val payload = checkNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(plan.toString())))
       val readFailure =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError>(name) {
+        assertFailsWith<SkillBillRuntimeException>(name) {
           validator.read(plan.toString().toByteArray(Charsets.UTF_8), name)
         }
       val writeFailure =
-        assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError>(name) {
+        assertFailsWith<SkillBillRuntimeException>(name) {
           validator.write(payload, name)
         }
       val expected =
@@ -161,8 +162,10 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
         } else {
           "execution plan violates its schema"
         }
-      assertEquals(expected, readFailure.reason, name)
-      assertEquals(readFailure.reason, writeFailure.reason, name)
+      assertEquals(FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_PLAN_SCHEMA, readFailure.code, name)
+      assertEquals(readFailure.code, writeFailure.code, name)
+      assertEquals("Invalid feature-task runtime execution plan: $expected", readFailure.message, name)
+      assertEquals(readFailure.message, writeFailure.message, name)
     }
   }
 

@@ -1,3 +1,16 @@
+## [2026-10-04] SKILL-400 execution-plan failure codes
+Areas: runtime-contracts/error/featuretask and error/shellcontent; runtime-engine/featuretask/lifecycle, persistence, review, runloop and runner, goalrunner/manifest, persistence and reset; runtime-application/workflow; runtime-infra/contracts, sqlite and workflow; runtime-mcp/core; runtime-core architecture baseline
+- Replaced nine execution-plan admission, schema, conflict, fingerprint and regeneration throwable declarations with coded SkillBillRuntimeException factories.
+- FeatureTaskRuntimeExecutionPlanAdmissionCode retains four descriptor wire reasons. FeatureTaskRuntimeRegenerationRefusal now implements RuntimeFailureCode; three execution failures reuse FeatureTaskRuntimeFailureCode.
+- Admission and continuation classify exact codes, retain bounded workflow warnings and rethrow the original failure. Compatibility handles only invalid execution-plan schema and preserves the suppressed cause.
+- Admission and execution failures retain shell-content classification. Regeneration stays outside that classification and retains its separate MCP no-capture route.
+- reusable: shared owner-code factories preserve message text and producer context across engine, application and infrastructure consumers without caught exception properties.
+- Retargeted existing regression assertions to exact codes and removed the nine deleted-class throwable-baseline rows.
+- Breaking source change: removed exception types have no aliases. Persisted payloads, contract versions, immutable descriptors and stored evidence keep their existing contracts.
+- Limit: this entry covers subtask 5. Legacy exception bases and codeless support remain while other subtasks still own subclasses or callers.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-04] SKILL-400 durable decode and request failure codes
 Areas: runtime-contracts/error/core, error/learning and error/shellcontent; runtime-domain/featurespec, install/model and learnings; runtime-engine/featuretask/prepare, planning and goalrunner/intake; runtime-infra/launcher/review, skills/install and scaffold, sqlite/core/schema; runtime-mcp/core; runtime-core architecture baseline and persistence tests
 - Removed nine exception classes. Durable state, evidence requests, agent IDs, feature-spec requests and learning sources now use owner-coded SkillBillRuntimeException factories; unresolved environment sentinels use error().

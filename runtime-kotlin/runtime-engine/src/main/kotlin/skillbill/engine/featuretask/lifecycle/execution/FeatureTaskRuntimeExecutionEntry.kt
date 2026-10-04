@@ -6,7 +6,8 @@ import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -70,7 +71,7 @@ class FeatureTaskRuntimeExecutionEntry(
     if (!matchingTraversal || !matchingSettings ||
       request.runInvariants.codeReviewMode.toRuntimeSelection() != accepted.plan.reviewSelection
     ) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
     }
   }
 

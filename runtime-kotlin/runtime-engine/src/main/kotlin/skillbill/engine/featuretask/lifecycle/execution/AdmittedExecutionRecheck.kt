@@ -2,7 +2,8 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.executionPlanRefused
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.toSnapshot
@@ -21,7 +22,7 @@ fun AdmittedFeatureTaskRuntimeExecution.requireCurrent(
       ?: missingAdmittedWorkflow(workflowId)
   val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(row.toSnapshot().artifacts)
   if (descriptor != JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(this.descriptorJson)))) {
-    throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
   }
 }
 

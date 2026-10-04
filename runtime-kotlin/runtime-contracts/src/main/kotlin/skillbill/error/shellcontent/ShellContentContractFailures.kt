@@ -9,6 +9,7 @@ import skillbill.error.core.GoalTelemetryRowFailureCode
 import skillbill.error.core.JsonFailureCode
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
 import skillbill.error.featuretask.PhaseSlotFailureCode
 
 fun Throwable.isShellContentContractFailure(): Boolean {
@@ -34,6 +35,7 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is InstallFailureCode ||
     failureCode is DurableInstallStateFailureCode ||
     failureCode is FeatureTaskRuntimeFailureCode ||
+    failureCode is FeatureTaskRuntimeExecutionPlanAdmissionCode ||
     failureCode is WorkflowFailureCode
 }
 

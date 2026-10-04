@@ -1,22 +1,18 @@
 package skillbill.error.featuretask
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-sealed class FeatureTaskRuntimeExecutionPlanAdmissionError(
-  val reasonCode: String,
-) : ShellContentContractException(
-    "Durable execution plan refused: $reasonCode. Retain the original workflow and its evidence. " +
+enum class FeatureTaskRuntimeExecutionPlanAdmissionCode(val wireValue: String) : RuntimeFailureCode {
+  MISSING_DESCRIPTOR("missing_descriptor"),
+  CORRUPT_DESCRIPTOR("corrupt_descriptor"),
+  UNSUPPORTED_DESCRIPTOR("unsupported_descriptor"),
+  INCOMPATIBLE_DESCRIPTOR("incompatible_descriptor"),
+}
+
+fun executionPlanRefused(code: FeatureTaskRuntimeExecutionPlanAdmissionCode): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
+    "Durable execution plan refused: ${code.wireValue}. Retain the original workflow and its evidence. " +
       "Inspect status and use a compatible runtime or a separately reviewed semantic mapping.",
   )
-
-class MissingFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecutionPlanAdmissionError("missing_descriptor")
-
-class CorruptFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecutionPlanAdmissionError("corrupt_descriptor")
-
-class UnsupportedFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecutionPlanAdmissionError(
-  "unsupported_descriptor",
-)
-
-class IncompatibleFeatureTaskRuntimeExecutionPlanError : FeatureTaskRuntimeExecutionPlanAdmissionError(
-  "incompatible_descriptor",
-)

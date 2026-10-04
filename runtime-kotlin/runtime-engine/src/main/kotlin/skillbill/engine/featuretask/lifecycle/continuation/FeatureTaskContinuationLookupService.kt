@@ -11,10 +11,9 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
-import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionCode
+import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
+import skillbill.error.featuretask.executionPlanRefused
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.error.shellcontent.legacyProseWorkflowError
@@ -93,31 +92,23 @@ class FeatureTaskContinuationLookupService(
             identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD,
           ).id
         ) {
-          throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+          throw executionPlanRefused(FeatureTaskRuntimeExecutionPlanAdmissionCode.INCOMPATIBLE_DESCRIPTOR)
         }
         requireCompletedGateOutputEvidence(snapshot.artifacts, plan)
         if (states.claimFeatureTaskContinuation(candidate.workflowId, candidate.updatedAt)) plan else null
       }
-    } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
-          " reason=${error.reasonCode}",
-      )
-      throw error
     } catch (error: SkillBillRuntimeException) {
-      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA)
+      val reason =
+        when (val code = error.code) {
+          is FeatureTaskRuntimeExecutionPlanAdmissionCode -> code.wireValue
+          is FeatureTaskRuntimeRegenerationRefusal -> code.wireValue
+          FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA -> "invalid_route_identity"
+          else -> throw error
+        }
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
-          " reason=invalid_route_identity",
-      )
-      throw error
-    } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
-          " reason=${error.refusal.wireValue}",
+          " reason=$reason",
       )
       throw error
     }
