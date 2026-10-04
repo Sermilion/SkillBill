@@ -4,7 +4,7 @@
 # MCP registration did not fail. Reuses the already-installed runtime (no download) and
 # never touches the caller's real agent directories.
 #
-# Usage: scripts/agent_install_smoke_test.sh [agent ...]   (default: all seven)
+# Usage: scripts/agent_install_smoke_test.sh [agent ...]   (default: all four)
 #   SKILL_BILL_BIN, SKILL_BILL_RUNTIME_ROOT override discovery.
 set -uo pipefail
 
@@ -54,6 +54,7 @@ requests = [
         "params": {
             "name": "feature_verify_workflow_open",
             "arguments": {
+                "session_id": "",
                 "issue_key": "SMOKE-1",
                 "repository_identity": "repo-root-realpath-v1:/install-smoke",
                 "governed_spec_path": ".feature-specs/SMOKE-1/spec.md",
@@ -146,7 +147,8 @@ try:
         (
             "typed_unknown_tool",
             unknown_result["isError"] is True
-            and "Unknown MCP tool 'feature_task_runtime_stats'" in unknown_payload["error"],
+            and unknown_payload["tool"] == "feature_task_runtime_stats"
+            and "argument 'tool': unknown tool" in unknown_payload["error"],
         )
     )
 except Exception as error:
