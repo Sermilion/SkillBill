@@ -50,7 +50,12 @@ fun reviewRoutingPhaseRunner(
       input: PhaseStepInput,
       state: PhaseLaunchState,
     ): PhaseStepOutput =
-      if (input.stepName == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+      if (input.stepName in
+        setOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS,
+        )
+      ) {
         review.run(input, state)
       } else {
         others.run(input, state)

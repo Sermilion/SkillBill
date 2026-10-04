@@ -22,7 +22,7 @@ class CodeReviewPhaseRequestTest {
         CodeReviewFlags(
           agentId = "claude",
           repoRoot = repoRoot,
-          target = resolveStandaloneCodeReviewTarget("abc1234", DEFAULT_CODE_REVIEW_SCOPE),
+          target = resolveStandaloneCodeReviewTarget("abc1234", null),
           executionMode = CodeReviewExecutionMode.DELEGATED.wireValue,
           reviewRunId = "rvw-20260927-120000-abcd",
           reviewSessionId = "rss-1",

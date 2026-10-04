@@ -1,5 +1,22 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-04] Separate standalone reporting from full-run repair, SKILL-402
+Context: A dirty standalone review reached the full repair slot, staged operator changes, then failed because its in-memory state cannot commit a checkpoint.
+Decision: Keep the shared run loop and give standalone review its own read-only `standalone_review` slot with only `present_findings`. Full runs retain `code_review` and its repair steps.
+Reason: A slot runs every step it owns. Separate ownership prevents standalone review from reaching staging and checkpoint code without branching inside full-run strategies or weakening the in-memory commit refusal.
+Alternatives considered: Making in-memory checkpoint commits succeed or no-op would hide an invalid path; a separate review driver would duplicate the run loop.
+
+## [2026-10-04] Keep feature-run composition independent of operator slots, SKILL-402
+Context: Deriving full-run slots and unselected steps from every PhaseSlot entry would add present_findings to durable execution descriptors and snapshots.
+Decision: Declare the existing nine feature-run slots once as FEATURE_RUN_SLOTS. Derive full-run, goal-child, and unselected-step composition from that list.
+Reason: Standalone operator slots must not change full-run plans, handoffs, or fixtures merely by joining the enum. One declaration prevents the three consumers from drifting.
+
+## [2026-10-04] Admit standalone reports independently of findings verdicts, SKILL-402
+Context: A report-only command must distinguish valid changes_requested findings from failed execution, malformed output, or incomplete delegated review.
+Decision: Apply strict register and verdict admission locally to standalone review. Either valid verdict completes with exit 0; failed or rejected reports block with retained findings and exit 1. Delegated requests select an explicit report-only prompt contract.
+Reason: Findings are the requested result and must not trigger repair. Permissive full-run extraction could falsely approve missing output, while parent process success alone cannot prove complete lane coverage or integration. Local admission preserves existing full-run behavior.
+Alternatives considered: Reusing the full-run verdict default would accept incomplete reports; changing its admission globally would alter the existing repair contract.
+
 ## [2026-10-03] Reject mixed runtime packages before install promotion
 Context: A packaged producer and its bundled schema disagreed on version pins. Checksums alone did not detect the mismatch that prompted LOCAL-274870733146662.
 Decision: Check both staged CLI and MCP images against their own current and historical resource pins through database-free runtime-core composition before promoting either image.
@@ -2458,6 +2475,7 @@ Decision: `PhaseRunEntry` (`skillbill.engine.featuretask.phaserun`) drives an `I
 Reason: One loop and one strategy set means a phase run cannot drift from the full run. A second, review-only driver would duplicate the review, verify, and fix edges.
 Alternatives considered: Run a phase over a throwaway durable workflow row (rejected: leaves rows and branches behind and needs cleanup). A dedicated review driver (rejected: duplicates the slot strategies).
 Revisit when: a phase run needs resume, or phase-run lifecycle events are wanted (they wait for a telemetry contract-version bump, which would also carry a phase invocation id).
+Superseded by: Separate standalone reporting from full-run repair, SKILL-402 (2026-10-04)
 
 ## [2026-09-27] Phase validation keeps pack-build's triage and repair cap (SKILL-380)
 
@@ -2621,3 +2639,9 @@ Decision: After a client exits, publish that exit code. A still-running owned de
 Reason: The one-shot runner's contract is complete-or-killed. Killing leftover children is teardown. Publishing the client's exit code is the result. Repo-wide daemon settings were rejected because they apply to direct Gradle invocations as well as the gate runner.
 
 Revisit when: A caller needs to distinguish a leaked child from an intentional daemon without adding process-identity branches to the shared runner.
+## [2026-10-04] Admit standalone review strategy consumers, SKILL-402
+Context: The report-only review strategies live under `skillbill.engine.featuretask.slot.standalonereview` and use the accepted review binding.
+Decision: Admit only the `standalonereview` slot package and matching relative source root in `StrategyCapabilityTransitiveGraph.reviewConsumer`.
+Reason: The new consumers require the existing review launch-runner allowance and review role authority. Their separate package must receive the same bounded traversal as `codereview`; raw run state, records, host, transition owner, and context prohibitions stay in force.
+Alternatives considered: A blanket slot exemption or admitting non-review packages (rejected: either removes transitive capability checks from unrelated strategies).
+Revisit when: The standalone review consumer package moves or its accepted binding authority changes.

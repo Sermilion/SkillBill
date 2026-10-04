@@ -1,3 +1,15 @@
+## [2026-10-04] SKILL-402 standalone review slot
+Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask slots and bindings; runtime-application review; runtime-ports review; runtime-core composition and architecture guards; runtime-cli review; orchestration review guidance; docs; skills/skill-bill
+- Both standalone review commands now run only `standalone_review` with `present_findings`. Inline, auto, and omitted mode use one session; delegated mode uses the existing parallel review runner with report-only parent and lane instructions.
+- Read-only step policies avoid staging and checkpoint paths. Omitted targets select uncommitted changes for a dirty worktree and HEAD for a clean one; explicit target handling stays available.
+- The explicit nine-slot `FEATURE_RUN_SLOTS` list preserves full-run and goal-child composition. Their `code_review` steps retain verification, repair, and durable checkpoint ownership.
+- Standalone admission requires a canonical register and verdict, explicit NO_FINDINGS for empty reports, and complete delegated coverage and integration. Valid verdicts exit 0; invalid or failed reports retain available findings and explain the block with exit 1.
+- Accepted review bindings pin targets and record passes. Architecture guards admit the standalone review package while retaining rejection of unrelated consumers and raw state access.
+- reusable: existing target resolution, findings parsing and merging, parallel review launch components, and a shared standalone CLI output renderer.
+- Breaking behavior: standalone review no longer repairs findings. Automatic repair remains in full feature runs; standalone review remains in-memory with no resume or report-and-fix mode.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-10-03] LOCAL-274870733146662 automatic durable schema migration
 Areas: runtime-kotlin/runtime-{engine,contracts,domain,ports,core,cli,mcp}, runtime-kotlin/runtime-infra/{contracts,sqlite}, orchestration/contracts, docs, install.sh, scripts, .github/workflows
 - Preparation 0.2 with planning provenance 0.2 now admits phase-output 0.6 and converts it to 0.7 before recovery or child execution. Independent feature-task admission uses the same conversion.

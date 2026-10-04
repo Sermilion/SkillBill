@@ -262,9 +262,13 @@ output. There is no standalone implementation phase.
 
 ## Phase Review
 
-`phase:review` runs `skill-bill phase review` from Forms and Routing. The
-sections from Review mode argument through Present the register govern its
-arguments and its output. An omitted target reviews uncommitted changes when
+`phase:review` runs the report-only `standalone_review` slot through the existing
+run loop. It prints the findings register and exits 0 for either valid verdict.
+Invalid or incomplete output and execution failures retain available findings,
+explain the block, and exit 1. This operator review never edits or commits. Full
+feature runs keep the separate `code_review` slot and its verification and repair
+steps. The sections from Review mode argument through Present the register govern
+standalone review arguments and output. An omitted target reviews uncommitted changes when
 the worktree is dirty and HEAD otherwise. Where they say to invoke the driver, run the
 `phase:review` command instead of `skill-bill code-review`: forward the review
 target as `target:<value>` and the review mode as `mode:<value>`. The accepted
@@ -334,10 +338,12 @@ Display the driver's stdout as the review result. It already includes the risk
 register with provenance labels and any recorded stage verdicts. Do not rewrite
 findings, invent a second merge, or re-run the review in this session.
 
-The driver runs the in-memory review phase: it verifies the findings and fixes
-Blocker and Major findings in the working tree before it reports the rest. Do
-not apply those fixes again. A `# Review phase blocked` line means the phase
-stopped before it finished; report it and exit non-zero.
+The driver runs the report-only standalone review. A valid report exits 0 for
+either verdict. Invalid or incomplete output and execution failures retain
+available findings, explain the block, and exit 1. The operator review never
+launches repair. Full feature runs retain their separate review, verification,
+and repair steps. A `# Review phase blocked` line means the phase stopped before
+it finished; report it and exit non-zero.
 
 ## Phase PR
 

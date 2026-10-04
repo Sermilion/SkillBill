@@ -2,9 +2,7 @@
     "blocked_reason": null,
     "blocked_step_id": null,
     "completed_step_ids": [
-        "review",
-        "verify_findings",
-        "implement_fix"
+        "present_findings"
     ],
     "invocation_id": "rvs-slot-baseline-inln",
     "review_result": {
@@ -17,17 +15,9 @@
             "failure_reason": null,
             "success": true
         },
-        "output": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\nverdict: changes_requested",
-        "review_session_id": "rvs-slot-baseline-inln"
+        "output": "- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | Foo.kt leaks a connection in the error path\nverdict: changes_requested",
+        "review_session_id": null
     },
     "status": "completed",
-    "value": {
-        "contract_version": "0.7",
-        "phase_id": "implement_fix",
-        "produced_outputs": {
-            "value": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
-        },
-        "status": "completed",
-        "summary": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
-    }
+    "value": "- [F-001] [claude] Blocker | High | path=\"src/Foo.kt\" | line=1 | Foo.kt leaks a connection in the error path\nverdict: changes_requested"
 }

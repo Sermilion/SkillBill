@@ -17,6 +17,8 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -59,6 +61,11 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
         PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner), codeReviewRunner),
+        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(codeReviewRunner), codeReviewRunner),
+        delegatedReviewRunner?.let {
+          val delegatedRunner = runner()
+          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)
+        },
         delegatedReviewRunner?.let {
           val delegatedRunner = runner()
           PhaseStrategyRegistration(DelegatedReviewStrategy(delegatedRunner, it), delegatedRunner)
@@ -174,7 +181,7 @@ fun testPhaseStrategyBindings(
       ),
     SkeletonDefinition.REVIEW to
       mapOf(
-        PhaseSlot.CODE_REVIEW to
+        PhaseSlot.STANDALONE_REVIEW to
           PhaseStrategyBinding.ByFact(
             CodeReviewExecutionMode.entries.associateWith { mode ->
               if (mode == CodeReviewExecutionMode.DELEGATED) codeReviewStrategyId else InlineReviewStrategy.ID

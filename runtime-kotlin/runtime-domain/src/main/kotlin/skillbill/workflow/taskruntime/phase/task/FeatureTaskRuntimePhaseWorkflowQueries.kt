@@ -38,6 +38,13 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
   ): FeatureTaskRuntimePhaseDeclaration {
+    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS) {
+      return FeatureTaskRuntimePhaseDeclaration(
+        phaseId = phaseId,
+        projectionDeclarations = emptyList(),
+        derivedContextKeys = emptyList(),
+      )
+    }
     val base =
       FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations[phaseId]
         ?: error("No phase declaration for runtime phase '$phaseId'.")

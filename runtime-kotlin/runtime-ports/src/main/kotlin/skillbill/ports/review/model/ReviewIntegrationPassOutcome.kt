@@ -15,6 +15,8 @@ data class ReviewIntegrationPassOutcome(
   val resultBytes: Long = 0,
   val modelTurns: Int = 0,
   val failureReason: String? = null,
+  val rawOutput: String = "",
+  val outputTruncated: Boolean = false,
 ) {
   init {
     require(commitSequenceDigest.isNotBlank()) { "Integration outcome must name the sequence it covered." }

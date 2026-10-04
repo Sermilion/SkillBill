@@ -20,6 +20,8 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class PhaseStrategyTraversalTest {
+  private val repairDefinition = SkeletonDefinition("code-review", listOf(PhaseSlot.CODE_REVIEW))
+
   @Test
   fun `optional definition projection preserves dispatch and rejects a missing mandatory step`() {
     val definition =
@@ -72,8 +74,8 @@ class PhaseStrategyTraversalTest {
     listOf(listOf(PHASE_REVIEW, PHASE_IMPLEMENT_FIX), listOf(PHASE_REVIEW, PHASE_VERIFY_FINDINGS)).forEach { steps ->
       val strategy = CompositionTestStrategy(PhaseSlot.CODE_REVIEW, "incomplete-review", steps)
       assertFailsWith<InvalidPhaseStrategyCompositionError> {
-        lookup(SkeletonDefinition.REVIEW, strategy)
-          .executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, emptySet()))
+        lookup(repairDefinition, strategy)
+          .executionPlan(PhaseStrategySelectionFacts(repairDefinition, emptySet()))
       }
     }
   }
@@ -81,8 +83,8 @@ class PhaseStrategyTraversalTest {
   @Test
   fun `loop-only remediation is accepted but unreachable steps and entries are rejected`() {
     val strategy = CompositionTestStrategy(PhaseSlot.CODE_REVIEW, "review", PhaseSlot.CODE_REVIEW.steps)
-    val lookup = lookup(SkeletonDefinition.REVIEW, strategy)
-    val facts = PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, emptySet())
+    val lookup = lookup(repairDefinition, strategy)
+    val facts = PhaseStrategySelectionFacts(repairDefinition, emptySet())
     val plan = lookup.executionPlan(facts)
 
     assertEquals(setOf(PHASE_IMPLEMENT_FIX), plan.traversal.loopOnlyPhaseIds)
@@ -132,8 +134,8 @@ class PhaseStrategyTraversalTest {
   @Test
   fun `traversal overrides reject conflicting remediation dispatch and gate requirements`() {
     val strategy = CompositionTestStrategy(PhaseSlot.CODE_REVIEW, "review", PhaseSlot.CODE_REVIEW.steps)
-    val lookup = lookup(SkeletonDefinition.REVIEW, strategy)
-    val facts = PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, emptySet())
+    val lookup = lookup(repairDefinition, strategy)
+    val facts = PhaseStrategySelectionFacts(repairDefinition, emptySet())
     val traversal = lookup.executionPlan(facts).traversal
     val edge = traversal.backwardEdges.single()
     val gate = traversal.entryGates.single()

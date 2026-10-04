@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.ConfigResolutionService
+import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.service.RequestedReviewMode
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
@@ -13,6 +14,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.namedStandaloneScope
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.standaloneReportText
 import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -188,7 +190,12 @@ private fun writePhaseResult(
   definitionId: String,
   result: PhaseRunResult,
 ) {
-  val register = result.reviewResult?.output
+  val review = result.reviewResult
+  val register =
+    when {
+      result is PhaseRunResult.Completed && review != null -> review.standaloneReportText()
+      else -> review?.rawOutput?.takeIf(String::isNotBlank) ?: review?.output
+    }
   when (result) {
     is PhaseRunResult.Completed ->
       state.completeText(
@@ -208,8 +215,10 @@ private fun writePhaseResult(
     is PhaseRunResult.Blocked ->
       state.completeText(
         listOfNotNull(
-          register,
+          register?.let { "Unaccepted report output:\n$it" },
+          review?.output?.takeIf { it.isNotBlank() && it != register }?.let { "Retained findings:\n$it" },
           "Phase '$definitionId' blocked at '${result.stepId}': ${result.reason}",
+          review?.let(::blockedReviewDetails)?.takeIf(String::isNotBlank),
           "Phase invocation ID: ${result.invocationId}",
         ).joinToString("\n"),
         emptyMap(),
@@ -217,3 +226,19 @@ private fun writePhaseResult(
       )
   }
 }
+
+private fun blockedReviewDetails(review: ParallelCodeReviewResult): String =
+  listOfNotNull(
+    review.integration?.failureReason,
+    review.integration?.takeIf { it.rawOutput.isNotBlank() }?.let { integration ->
+      "Unaccepted integration output:\n${integration.rawOutput}" +
+        if (integration.outputTruncated) "\nIntegration output was truncated." else ""
+    },
+    review.coverage?.render()?.takeIf(String::isNotBlank),
+    review.rejectedCandidateCount.takeIf { it > 0 }?.let { "Rejected finding candidates: $it." },
+    review.citationDiagnostics.takeIf {
+      it.isNotEmpty()
+    }?.take(MAX_CITATION_DIAGNOSTICS)?.joinToString("\n") { it.toString() },
+  ).joinToString("\n")
+
+private const val MAX_CITATION_DIAGNOSTICS = 5
