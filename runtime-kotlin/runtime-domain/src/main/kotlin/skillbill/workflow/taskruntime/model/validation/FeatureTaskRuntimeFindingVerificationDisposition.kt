@@ -96,8 +96,7 @@ data class FeatureTaskRuntimeFindingVerificationDisposition(
     private fun invalid(
       path: String,
       field: String,
-    ): Nothing =
-      throw invalidFeatureTaskRuntimeFindingVerificationRecord("$path.$field must be a non-blank string.")
+    ): Nothing = throw invalidFeatureTaskRuntimeFindingVerificationRecord("$path.$field must be a non-blank string.")
   }
 }
 

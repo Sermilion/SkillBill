@@ -1,8 +1,6 @@
 
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.error.shellcontent.missingManifest
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.infrastructure.skills.scaffold.validation.review.ReviewSkillStructureValidator
@@ -11,6 +9,8 @@ import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.GovernedAddonFile
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal fun loadPlatformManifest(
   packRoot: Path,

@@ -1,12 +1,12 @@
 package skillbill.infrastructure.contracts.review
 
+import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ReviewContextFailureCode
 
 class ReviewContextStageDefinitionSeamTest {
   @Test

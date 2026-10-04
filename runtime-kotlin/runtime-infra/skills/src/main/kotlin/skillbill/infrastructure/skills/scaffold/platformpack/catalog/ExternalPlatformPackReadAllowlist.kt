@@ -1,13 +1,13 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.catalog
 
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
 import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
 
 internal fun assertExternalPackContentPresent(manifest: PlatformManifest) {
   val declared = listOfNotNull(manifest.declaredFiles.baseline) + manifest.declaredFiles.areas.values

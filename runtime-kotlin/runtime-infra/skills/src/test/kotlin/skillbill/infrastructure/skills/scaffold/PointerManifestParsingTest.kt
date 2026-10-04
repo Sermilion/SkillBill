@@ -1,5 +1,8 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -8,9 +11,6 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ManifestFailureCode
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 
 class PointerManifestParsingTest {
   private val temp: Path = Files.createTempDirectory("skillbill-pointer-manifest-")

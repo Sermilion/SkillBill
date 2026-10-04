@@ -1,8 +1,5 @@
 package skillbill.application.diagnostics
 
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticConfig
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
@@ -22,6 +19,9 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

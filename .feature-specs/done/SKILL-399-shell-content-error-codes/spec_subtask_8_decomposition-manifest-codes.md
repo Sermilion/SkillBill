@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 8 - decomposition-manifest-codes
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -59,7 +59,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Exist
 
 ## Implementation Details
 
-The upstream preplan digest is the only source for this plan. AC-001 to AC-004 are the four numbered Acceptance Criteria above. All paths are relative to `runtime-kotlin/`. This plan adds no new decomposition and needs no dependency work.
+The upstream preplan digest is the only source for this plan. AC-001 to AC-004 are the four numbered Acceptance Criteria above. All paths are relative to `../../../runtime-kotlin`. This plan adds no new decomposition and needs no dependency work.
 
 **The digest corrects the Facts above.** Implement follows the corrections:
 

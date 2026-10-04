@@ -1,7 +1,6 @@
 
 package skillbill.engine.featuretask.phase.briefing
 
-import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runner.AUDIT_GAP_MESSAGE
 import skillbill.error.core.SkillBillRuntimeException
@@ -20,6 +19,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReview
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 

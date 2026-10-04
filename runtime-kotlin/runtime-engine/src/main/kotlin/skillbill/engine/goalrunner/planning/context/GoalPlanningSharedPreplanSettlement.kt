@@ -21,6 +21,7 @@ import skillbill.engine.goalrunner.planning.recovery.preplanProsePromptHash
 import skillbill.engine.goalrunner.planning.recovery.preplanProseValueHash
 import skillbill.engine.goalrunner.planning.recovery.refuseRefreshReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
@@ -176,10 +177,10 @@ class GoalPlanningSharedPreplanSettlement(
     val read =
       try {
         checkpoint.findSharedPreplanResult(args.identity)
-      } catch (error: Throwable) {
+      } catch (error: SkillBillRuntimeException) {
         error.rethrowIfCooperativeCancellationOrInterruption()
         return SharedPreplanAfterRefresh.Halt(
-          preSweepStopped(args.request, preparationStateReadReason(error, args.request.issueKey, 0)),
+          preSweepStopped(args.request, preparationStateReadReason(error)),
         )
       }
     return when (read) {

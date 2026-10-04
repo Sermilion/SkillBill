@@ -1,17 +1,17 @@
 package skillbill.infrastructure.contracts
 
-import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.infrastructure.contracts.locator.GoalProgressEventSchemaPaths
 import skillbill.infrastructure.contracts.workflow.goal.GOAL_PROGRESS_EVENT_SCHEMA_CLASSPATH_RESOURCE
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class ClasspathContractSchemaLoaderTest {
   @Test

@@ -1,11 +1,11 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.useDirectoryEntries
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.error.shellcontent.missingManifest
 import skillbill.scaffold.model.SkillClassManifest
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.useDirectoryEntries
 
 internal const val SKILL_CLASSES_DIR = "orchestration/skill-classes"
 

@@ -31,7 +31,8 @@ internal fun validateSkillClassContractVersion(
   contractVersion: String,
 ) {
   if (contractVersion != SHELL_CONTRACT_VERSION) {
-    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Skill class '$classId': declares contract_version '$contractVersion' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

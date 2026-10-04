@@ -1,12 +1,12 @@
 package skillbill.workflow.taskruntime.model.validation
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeValidationEvidenceTest {
   @Test
@@ -19,13 +19,15 @@ class FeatureTaskRuntimeValidationEvidenceTest {
         ),
       )
 
-    val commandError = assertFailsWith<SkillBillRuntimeException> {
-      evidence.requireSuccessfulCommand("./gradlew check", "validate")
-    }
+    val commandError =
+      assertFailsWith<SkillBillRuntimeException> {
+        evidence.requireSuccessfulCommand("./gradlew check", "validate")
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, commandError.code)
-    val resultError = assertFailsWith<SkillBillRuntimeException> {
-      evidence.requireSuccessfulResult("validate")
-    }
+    val resultError =
+      assertFailsWith<SkillBillRuntimeException> {
+        evidence.requireSuccessfulResult("validate")
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, resultError.code)
   }
 
@@ -48,38 +50,41 @@ class FeatureTaskRuntimeValidationEvidenceTest {
 
   @Test
   fun `missing and malformed evidence fail with typed errors`() {
-    val missingError = assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeValidationEvidence.fromArtifactMap(emptyMap(), "missing")
-    }
+    val missingError =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeValidationEvidence.fromArtifactMap(emptyMap(), "missing")
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, missingError.code)
-    val malformedError = assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
-        mapOf(
-          ValidationEvidencePayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
-          ValidationEvidencePayloadKeys.RESULTS to
-            listOf(
-              mapOf(ValidationEvidencePayloadKeys.COMMAND to "./gradlew check"),
-            ),
-        ),
-        "malformed",
-      )
-    }
-    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, malformedError.code)
-    val fractionalExitCodeError = assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
-        mapOf(
-          ValidationEvidencePayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
-          ValidationEvidencePayloadKeys.RESULTS to
-            listOf(
-              mapOf(
-                ValidationEvidencePayloadKeys.COMMAND to "./gradlew check",
-                ValidationEvidencePayloadKeys.EXIT_CODE to 2.7,
+    val malformedError =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
+          mapOf(
+            ValidationEvidencePayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
+            ValidationEvidencePayloadKeys.RESULTS to
+              listOf(
+                mapOf(ValidationEvidencePayloadKeys.COMMAND to "./gradlew check"),
               ),
-            ),
-        ),
-        "fractional-exit-code",
-      )
-    }
+          ),
+          "malformed",
+        )
+      }
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, malformedError.code)
+    val fractionalExitCodeError =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
+          mapOf(
+            ValidationEvidencePayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
+            ValidationEvidencePayloadKeys.RESULTS to
+              listOf(
+                mapOf(
+                  ValidationEvidencePayloadKeys.COMMAND to "./gradlew check",
+                  ValidationEvidencePayloadKeys.EXIT_CODE to 2.7,
+                ),
+              ),
+          ),
+          "fractional-exit-code",
+        )
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, fractionalExitCodeError.code)
   }
 
@@ -90,9 +95,10 @@ class FeatureTaskRuntimeValidationEvidenceTest {
         listOf(FeatureTaskRuntimeValidationCommandResult("./gradlew check", 1)),
       )
 
-    val completionError = assertFailsWith<SkillBillRuntimeException> {
-      evidence.requireSuccessfulResult("test")
-    }
+    val completionError =
+      assertFailsWith<SkillBillRuntimeException> {
+        evidence.requireSuccessfulResult("test")
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, completionError.code)
   }
 
@@ -106,9 +112,10 @@ class FeatureTaskRuntimeValidationEvidenceTest {
         ),
       )
 
-    val commandError = assertFailsWith<SkillBillRuntimeException> {
-      evidence.requireSuccessfulCommand("./gradlew check", "test")
-    }
+    val commandError =
+      assertFailsWith<SkillBillRuntimeException> {
+        evidence.requireSuccessfulCommand("./gradlew check", "test")
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, commandError.code)
   }
 
@@ -158,15 +165,16 @@ class FeatureTaskRuntimeValidationEvidenceTest {
 
   @Test
   fun `unsupported evidence version is actionable`() {
-    val unsupportedVersionError = assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
-        mapOf(
-          ValidationEvidencePayloadKeys.CONTRACT_VERSION to "9.9",
-          ValidationEvidencePayloadKeys.RESULTS to emptyList<Any?>(),
-        ),
-        "legacy",
-      )
-    }
+    val unsupportedVersionError =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeValidationEvidence.fromArtifactMap(
+          mapOf(
+            ValidationEvidencePayloadKeys.CONTRACT_VERSION to "9.9",
+            ValidationEvidencePayloadKeys.RESULTS to emptyList<Any?>(),
+          ),
+          "legacy",
+        )
+      }
     assertEquals(FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA, unsupportedVersionError.code)
   }
 }

@@ -1,11 +1,5 @@
 package skillbill.engine.goalrunner
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
@@ -29,7 +23,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.install.model.ExternalAgentAddonSource
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
@@ -47,6 +41,12 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class GoalPreflightServiceTest {
   @Test
@@ -146,7 +146,7 @@ class GoalPreflightServiceTest {
     Files.createDirectories(manifestPath.parent)
     Files.writeString(manifestPath, "feature_name: malformed\n")
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service(
         database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
         manifestState = null,
@@ -169,14 +169,14 @@ class GoalPreflightServiceTest {
     )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(
           database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           manifestState = null,
         ).preflight(request(root))
       }
 
-    assertEquals("issue_key_mismatch", error.failureCode)
+    assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_ISSUE_KEY_MISMATCH, error.code)
   }
 
   @Test
@@ -196,14 +196,14 @@ class GoalPreflightServiceTest {
     }
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(
           database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
           manifestState = null,
         ).preflight(request(root))
       }
 
-    assertEquals("duplicate_active", error.failureCode)
+    assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_DUPLICATE_ACTIVE, error.code)
   }
 
   @Test

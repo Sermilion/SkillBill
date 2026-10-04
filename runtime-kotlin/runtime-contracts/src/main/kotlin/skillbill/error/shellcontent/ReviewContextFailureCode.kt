@@ -81,7 +81,10 @@ fun reviewHunkEvidenceLocatorMissingError(storePath: String): SkillBillRuntimeEx
     "review_hunk_evidence_locator_missing: store_path '$storePath' is missing; refusing to compose or launch.",
   )
 
-fun reviewHunkEvidenceLocatorUnreadableError(storePath: String, reason: String): SkillBillRuntimeException =
+fun reviewHunkEvidenceLocatorUnreadableError(
+  storePath: String,
+  reason: String,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(
     ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE,
     "review_hunk_evidence_locator_unreadable: store_path '$storePath' is unreadable ($reason); " +
@@ -110,7 +113,10 @@ fun unreadableSpecIntentProjectionError(
     cause,
   )
 
-fun reviewAggregationIntegrityError(reason: String, lanes: List<String> = emptyList()): SkillBillRuntimeException =
+fun reviewAggregationIntegrityError(
+  reason: String,
+  lanes: List<String> = emptyList(),
+): SkillBillRuntimeException =
   SkillBillRuntimeException(
     ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY,
     "Delegated review aggregation rejected the lane results: $reason" +

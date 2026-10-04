@@ -20,6 +20,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -87,12 +88,11 @@ class FeatureTaskRuntimeStatelessAuditTest {
       )
     val report = harness.runner.run(harness.request())
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-    assertEquals("review", blocked.lastIncompletePhase)
-    assertEquals(
-      "Feature-task-runtime phase 'review' is unreachable until 'audit' settles with the verdict 'satisfied', " +
-        "but it settled with 'gaps_found'; the run fails loudly rather than silently advancing.",
-      blocked.blockedReason,
-    )
+    assertEquals("audit", blocked.lastIncompletePhase)
+    assertContains(blocked.blockedReason, "Phase 'audit' produced schema-invalid output")
+    val diagnostic = harness.io.database.rejectedDiagnostics().single { it.metadata.phaseId == "audit" }
+    assertContains(diagnostic.metadata.reason, "verdict 'gaps_found' is removed")
+    assertContains(diagnostic.metadata.reason, "audit phase output")
     assertEquals(1, auditLaunches)
     assertTrue("review" !in harness.launchOrder())
     assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement" })

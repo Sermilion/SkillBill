@@ -2,12 +2,6 @@ package skillbill.mcp.telemetry
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import skillbill.application.decomposition.branchName
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
@@ -15,6 +9,12 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.mcp.core.McpToolRegistry
 import skillbill.review.model.ReviewStageDegradationReason
 import skillbill.testing.repoRootFromTest
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class GoalTelemetryEmissionEventParityTest {
   private val schemaNode: JsonNode by lazy {

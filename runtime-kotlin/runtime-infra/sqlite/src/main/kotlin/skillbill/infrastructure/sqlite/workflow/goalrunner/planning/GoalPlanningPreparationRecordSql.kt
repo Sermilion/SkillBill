@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.sql.Connection
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
@@ -8,6 +7,7 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationStatus
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
+import java.sql.Connection
 
 internal class GoalPlanningPreparationRecordSql(
   private val connection: Connection,

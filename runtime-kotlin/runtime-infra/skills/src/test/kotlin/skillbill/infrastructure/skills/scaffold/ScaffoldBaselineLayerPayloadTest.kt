@@ -1,12 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -21,6 +14,13 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class ScaffoldBaselineLayerPayloadTest {
   @Test

@@ -1,8 +1,5 @@
 package skillbill.application.review.spec
 
-import java.io.IOException
-import java.nio.file.Path
-import java.security.MessageDigest
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
@@ -19,6 +16,9 @@ import skillbill.review.context.model.execution.SpecIntentProvenance
 import skillbill.review.context.model.execution.SpecIntentSurroundingContext
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
+import java.io.IOException
+import java.nio.file.Path
+import java.security.MessageDigest
 
 @Inject
 class SpecIntentProjectionExtractor(

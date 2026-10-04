@@ -1,15 +1,15 @@
 package skillbill.learnings
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.context.model.hunk.REVIEW_LEARNING_TITLE_MAX_CHARS
 import skillbill.review.context.model.hunk.REVIEW_RULE_EXCERPT_MAX_CHARS
 import skillbill.review.context.model.hunk.ReviewLearningsReference
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ReviewLearningsScopeAndBoundTest {
   @Test fun `every origin URL form normalizes to the same owner and name scope key`() {

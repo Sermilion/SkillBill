@@ -1,21 +1,12 @@
 package skillbill.error.shellcontent
 
 import skillbill.error.core.RuntimeFailureCode
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
 
-enum class WorkflowFailureCode : RuntimeFailureCode {
-  INVALID_WORKFLOW_STATE_SCHEMA,
-  PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED,
-  INVALID_WORK_LIST_ROW,
-  WORKFLOW_ISSUE_KEY_CONFLICT,
-  LEGACY_PROSE_WORKFLOW,
-  INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA,
-  INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
-  GOAL_VERIFICATION_BOUNDARY_CAP_EXCEEDED,
-}
-
-fun invalidWorkflowStateSchemaError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidWorkflowStateSchemaError(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, message, cause)
 
 fun proseFeatureTaskWorkflowWriteRefusedError(
@@ -30,8 +21,10 @@ fun proseFeatureTaskWorkflowWriteRefusedError(
     cause,
   )
 
-fun invalidWorkListRowError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORK_LIST_ROW, message, cause)
+fun invalidWorkListRowError(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORK_LIST_ROW, message, cause)
 
 fun workflowIssueKeyConflictError(
   workflowId: String,
@@ -43,7 +36,10 @@ fun workflowIssueKeyConflictError(
     "Workflow '$workflowId' is already associated with issue key '$persistedIssueKey', not '$requestedIssueKey'.",
   )
 
-fun legacyProseWorkflowError(workflowId: String, issueKey: String?): SkillBillRuntimeException =
+fun legacyProseWorkflowError(
+  workflowId: String,
+  issueKey: String?,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(
     WorkflowFailureCode.LEGACY_PROSE_WORKFLOW,
     "Workflow '$workflowId' is a legacy prose-mode row; the prose engine is retired and this row " +
@@ -60,22 +56,26 @@ fun invalidProducerOutputEvidenceSchemaError(message: String): SkillBillRuntimeE
 fun goalVerificationBoundaryCapExceededError(message: String): SkillBillRuntimeException =
   SkillBillRuntimeException(WorkflowFailureCode.GOAL_VERIFICATION_BOUNDARY_CAP_EXCEEDED, message)
 
-class InvalidDecompositionManifestSchemaError(
-  val sourceLabel: String,
-  val reason: String,
-  val failureCode: String? = null,
+fun invalidDecompositionManifestSchema(
+  sourceLabel: String,
+  reason: String,
+  code: RuntimeFailureCode,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
     "Decomposition manifest '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 
-class InvalidDecompositionManifestBundleJournalError(
-  val sourceLabel: String,
-  val reason: String,
-  val failureCode: String? = null,
+fun invalidDecompositionManifestBundleJournal(
+  sourceLabel: String,
+  reason: String,
+  code: RuntimeFailureCode,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
     "Decomposition manifest bundle journal '${sourceLabel.ifBlank { "<unknown>" }}' is invalid: $reason",
     cause,
   )

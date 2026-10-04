@@ -1,5 +1,11 @@
 package skillbill.infrastructure.workflow.featuretask
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -11,12 +17,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
-import skillbill.error.shellcontent.ReviewContextFailureCode
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 
 class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   private val repoRoot: Path = createTempDirectory("shared-evidence-store")

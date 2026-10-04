@@ -1,7 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.adapters
 
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingRequiredSection
 import skillbill.infrastructure.skills.agentaddon.discoverAgentAddons
@@ -21,6 +19,8 @@ import skillbill.ports.scaffold.repo.model.ScaffoldAuthoringValidationResult
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
+import java.nio.file.Files
+import java.nio.file.Path
 import skillbill.scaffold.policy.parseBaselineLayerPayload as policyParseBaselineLayerPayload
 
 class FileSystemScaffoldRepoValidation(

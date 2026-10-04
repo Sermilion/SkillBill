@@ -1,7 +1,5 @@
 package skillbill.engine.goalrunner.reset
 
-import java.nio.file.Path
-import java.time.Clock
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.contracts.JsonCodec
@@ -40,6 +38,8 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import java.nio.file.Path
+import java.time.Clock
 
 internal data class SavedGoalChildWorkflow(
   internal val state: GoalRunnerManifestState,
@@ -84,13 +84,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     }
     val hydration =
       if (existingChild == null) {
-        when (val result = planningHydrator.hydrate(
-          unitOfWork,
-          setup,
-          requireNotNull(setup.planningHydration) {
-            "Prepared goal child '${setup.subtaskId}' requires planning hydration."
-          },
-        )) {
+        when (val result = hydrateNewChild(unitOfWork, setup)) {
           is Conflicted -> return GoalChildWorkflowSaveResult.Conflicted(result.conflict)
           is Hydrated -> result.result
         }
@@ -128,6 +122,17 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
       ),
     )
   }
+
+  private fun hydrateNewChild(
+    unitOfWork: UnitOfWork,
+    setup: GoalRunnerChildWorkflowSetup,
+  ) = planningHydrator.hydrate(
+    unitOfWork,
+    setup,
+    requireNotNull(setup.planningHydration) {
+      "Prepared goal child '${setup.subtaskId}' requires planning hydration."
+    },
+  )
 
   private fun existingChildConflict(
     unitOfWork: UnitOfWork,
@@ -189,7 +194,9 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
         "hydration ${failures.joinToString()} does not match child setup",
         null,
       )
-    } else null
+    } else {
+      null
+    }
   }
 
   private fun canonicalGovernedSpecPath(
@@ -223,7 +230,9 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
         "existing child goal continuation conflicts with child setup",
         null,
       )
-    } else null
+    } else {
+      null
+    }
   }
 
   private fun updateParentForChildWorkflow(

@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.preflight
 
-import java.nio.file.Path
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.parentSpecPath
@@ -31,6 +30,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource.LINEAR
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import java.nio.file.Path
 
 class GoalPreflightGateBlockBuilder(
   private val manifestStore: GoalRunnerManifestStore,

@@ -1,11 +1,12 @@
 package skillbill.engine.goalrunner.preflight
 
-import java.nio.file.Path
 import skillbill.contracts.issuekey.normalizeIssueKey
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Path
 
 object GoalPreflightInputValidation {
   fun requireInvokedAgentId(invokedAgentId: String) {
@@ -51,10 +52,10 @@ object GoalPreflightInputValidation {
     requestedIssueKey: String,
   ) {
     if (manifestIssueKey != requestedIssueKey) {
-      throw InvalidDecompositionManifestSchemaError(
+      throw invalidDecompositionManifestSchema(
         sourceLabel = requestedIssueKey,
         reason = "manifest issue_key '$manifestIssueKey' does not match the requested issue key.",
-        failureCode = "issue_key_mismatch",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_ISSUE_KEY_MISMATCH,
       )
     }
   }

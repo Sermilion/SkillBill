@@ -3,17 +3,17 @@ package skillbill.infrastructure.skills.install.nativeagent.inventory
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
-import java.nio.channels.FileChannel
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidNativeAgentLinkInventorySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.NativeAgentLinkInventorySchemaPaths
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 
 data class NativeAgentLinkInventoryEntry(
   val logicalName: String,

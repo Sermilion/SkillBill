@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.outcome
 
-import java.nio.file.Path
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
@@ -10,6 +9,7 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import java.nio.file.Path
 
 fun preSweepStopped(
   request: GoalRunnerRunRequest,
@@ -53,11 +53,7 @@ fun projectionRejectedReason(
     "${error.message.orEmpty()}. Preserve the saved record. Use a runtime that supports its contract or " +
     "restore or repair the identified record and its digest before resuming."
 
-fun preparationStateReadReason(
-  error: Throwable,
-  issueKey: String,
-  subtaskId: Int,
-): String = goalPlanningPreparationStateReadStopReason(error, issueKey, subtaskId)
+fun preparationStateReadReason(error: Throwable): String = goalPlanningPreparationStateReadStopReason(error)
 
 fun preparationStateReadReason(
   conflict: GoalPlanningPreparationConflict,

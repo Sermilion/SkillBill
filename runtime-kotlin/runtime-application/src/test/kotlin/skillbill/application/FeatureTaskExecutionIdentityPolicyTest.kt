@@ -1,12 +1,12 @@
 package skillbill.application
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 
 class FeatureTaskExecutionIdentityPolicyTest {
   @Test

@@ -1,12 +1,5 @@
 package skillbill.workflow.taskruntime.model.repair
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
@@ -24,6 +17,13 @@ import skillbill.workflow.model.goalreview.featureTaskRuntimeRemediationRoundNum
 import skillbill.workflow.model.goalreview.omittedCarriedFindings
 import skillbill.workflow.model.goalreview.withoutRefutedFindings
 import skillbill.workflow.taskruntime.artifact.decodeRepairReceiptFromArtifactWithObservations
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeRepairReceiptTest {
   private val sha = "a".repeat(40)

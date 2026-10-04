@@ -1,10 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.payload.detectKind
@@ -20,6 +15,11 @@ import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_CODE_REVIEW_AREA
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_PACK
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ScaffoldPayloadMapPolicyTest {
   @Test

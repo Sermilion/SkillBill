@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.state
 
-import java.util.concurrent.ConcurrentHashMap
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
@@ -28,6 +27,7 @@ import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureRea
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
@@ -40,6 +40,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class GoalPlanningRunScope(
   val state: GoalRunnerManifestState,
@@ -145,7 +146,7 @@ internal class GoalPlanningRunProgress(
       }
     return try {
       recoveredPendingUnits(settled)
-    } catch (error: Throwable) {
+    } catch (error: SkillBillRuntimeException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
       PhaseFanOutUnits.Stopped(
         halt(
@@ -202,8 +203,9 @@ internal class GoalPlanningRunProgress(
       }
       is GoalPlanningRecoveryProgress.Conflicted -> {
         val conflict = recovery.conflict
-        val phaseId = GoalPlanningSweepConstants.PHASE_PLAN.takeIf { conflict.subtaskId != 0 }
-          ?: GoalPlanningSweepConstants.PHASE_PREPLAN
+        val phaseId =
+          GoalPlanningSweepConstants.PHASE_PLAN.takeIf { conflict.subtaskId != 0 }
+            ?: GoalPlanningSweepConstants.PHASE_PREPLAN
         PhaseFanOutUnits.Stopped(
           halt(
             stopped(

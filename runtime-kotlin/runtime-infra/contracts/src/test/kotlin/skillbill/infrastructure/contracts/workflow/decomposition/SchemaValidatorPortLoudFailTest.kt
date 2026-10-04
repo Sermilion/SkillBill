@@ -1,14 +1,9 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.install.model.InstallPlanWireMap
 import skillbill.ports.install.InstallPlanWireValidator
@@ -24,6 +19,10 @@ import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.requireAccepted
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SchemaValidatorPortLoudFailTest {
   private val installValidator: InstallPlanWireValidator = InstallPlanSchemaValidator()
@@ -52,19 +51,19 @@ class SchemaValidatorPortLoudFailTest {
   @Test
   fun `malformed decomposition YAML loud-fails through the injected port`() {
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         decompositionValidator.validateYamlText("contract_version: [", "malformed.yaml")
       }
-    assertContains(error.reason, "YAML is malformed")
+    assertContains(error.message.orEmpty(), "YAML is malformed")
   }
 
   @Test
   fun `non-object decomposition root loud-fails through the injected port`() {
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         decompositionValidator.validateYamlText("- contract_version: 0.2", "array.yaml")
       }
-    assertContains(error.reason, "<root> must be an object")
+    assertContains(error.message.orEmpty(), "<root> must be an object")
   }
 
   @Test
@@ -73,10 +72,10 @@ class SchemaValidatorPortLoudFailTest {
     wireMap.remove("contract_version")
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         decompositionValidator.validate(DecompositionManifestWireMap.from(wireMap), "missing-contract")
       }
-    assertContains(error.reason, "contract_version")
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
@@ -90,10 +89,10 @@ class SchemaValidatorPortLoudFailTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, decompositionValidator, fileStore)
       }
-    assertContains(error.reason, "Duplicate subtask id '1'")
+    assertContains(error.message.orEmpty(), "Duplicate subtask id '1'")
   }
 
   @Test
@@ -107,20 +106,20 @@ class SchemaValidatorPortLoudFailTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, decompositionValidator, fileStore)
       }
-    assertContains(error.reason, "earlier declared subtask")
+    assertContains(error.message.orEmpty(), "earlier declared subtask")
   }
 
   @Test
   fun `same-branch manifest without feature branch loud-fails through the injected port`() {
     val manifest = validSameBranchManifest().copy(featureBranch = null)
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, decompositionValidator, fileStore)
       }
-    assertContains(error.reason, "feature_branch")
+    assertContains(error.message.orEmpty(), "feature_branch")
   }
 
   @Test
@@ -136,10 +135,10 @@ class SchemaValidatorPortLoudFailTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, decompositionValidator, fileStore)
       }
-    assertContains(error.reason, "one branch per subtask in subtask order")
+    assertContains(error.message.orEmpty(), "one branch per subtask in subtask order")
   }
 
   private fun subtask(

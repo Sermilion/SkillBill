@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
-import java.nio.file.Path
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
@@ -10,6 +9,7 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
 import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
+import java.nio.file.Path
 
 class PullRequestReadinessGate(
   private val readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,

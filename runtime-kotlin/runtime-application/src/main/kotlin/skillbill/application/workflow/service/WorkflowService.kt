@@ -1,7 +1,5 @@
 package skillbill.application.workflow.service
 
-import java.time.Clock
-import kotlin.random.Random
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
@@ -63,6 +61,8 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
+import java.time.Clock
+import kotlin.random.Random
 
 @Inject
 class WorkflowService(

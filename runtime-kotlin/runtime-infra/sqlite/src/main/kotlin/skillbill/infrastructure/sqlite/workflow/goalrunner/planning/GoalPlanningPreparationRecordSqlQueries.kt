@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.sql.Connection
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -8,6 +7,7 @@ import skillbill.infrastructure.sqlite.workflow.featuretask.encodeWorkflowArtifa
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationStatus
+import java.sql.Connection
 
 internal object GoalPlanningPreparationRecordSqlQueries
 

@@ -1,7 +1,7 @@
 package skillbill.workflow.decomposition
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -72,10 +72,10 @@ class DecompositionManifestCodecTest {
     wireMap["spec_source"] = "github"
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestWireCodec.decode(wireMap, "codec-spec-source")
       }
-    assertContains(error.reason, "spec_source 'github' is not supported")
+    assertContains(error.message.orEmpty(), "spec_source 'github' is not supported")
   }
 
   @Test
@@ -84,11 +84,11 @@ class DecompositionManifestCodecTest {
     wireMap["issue_key"] = 42
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestWireCodec.decode(wireMap, "codec-type-mapping")
       }
-    assertContains(error.reason, "issue_key")
-    assertContains(error.reason, "string")
+    assertContains(error.message.orEmpty(), "issue_key")
+    assertContains(error.message.orEmpty(), "string")
   }
 
   @Test
@@ -146,10 +146,10 @@ class DecompositionManifestCodecTest {
     wireMap["subtasks"] = subtasks
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestWireCodec.decode(wireMap, "codec-agent-attribution")
       }
-    assertContains(error.reason, "participating_agent_ids must be a list of strings")
+    assertContains(error.message.orEmpty(), "participating_agent_ids must be a list of strings")
   }
 
   @Test
@@ -162,10 +162,10 @@ class DecompositionManifestCodecTest {
     wireMap["subtasks"] = subtasks
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestWireCodec.decode(wireMap, "codec-blank-agent-element")
       }
-    assertContains(error.reason, "participating_agent_ids must be a list of non-blank strings")
+    assertContains(error.message.orEmpty(), "participating_agent_ids must be a list of non-blank strings")
   }
 
   @Test

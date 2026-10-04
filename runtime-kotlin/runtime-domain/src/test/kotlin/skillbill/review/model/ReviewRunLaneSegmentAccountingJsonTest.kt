@@ -1,13 +1,13 @@
 package skillbill.review.model
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.context.model.packet.ReviewLaneSegmentAccounting
 import skillbill.review.context.model.packet.ReviewRunLaneSegmentAccountingJson
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class ReviewRunLaneSegmentAccountingJsonTest {
   @Test

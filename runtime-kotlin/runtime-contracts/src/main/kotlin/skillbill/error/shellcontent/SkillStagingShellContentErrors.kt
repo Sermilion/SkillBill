@@ -32,43 +32,68 @@ fun internalSkillSidecarCollision(
     cause,
   )
 
-fun invalidAuthoredSkillSidecar(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidAuthoredSkillSidecar(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.INVALID_AUTHORED_SKILL_SIDECAR, message, cause)
 
-fun invalidReviewSkillStructure(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidReviewSkillStructure(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, message, cause)
 
-fun missingContentFile(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(SkillStagingFailureCode.MISSING_CONTENT_FILE, message, cause)
+fun missingContentFile(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.MISSING_CONTENT_FILE, message, cause)
 
-fun composedNativeAgentBudgetExceeded(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun composedNativeAgentBudgetExceeded(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.COMPOSED_NATIVE_AGENT_BUDGET_EXCEEDED, message, cause)
 
-fun missingRequiredSection(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun missingRequiredSection(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, message, cause)
 
-fun invalidSkillMdShape(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, message, cause)
+fun invalidSkillMdShape(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, message, cause)
 
-fun invalidNativeAgentLinkInventorySchema(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(SkillStagingFailureCode.SKILL_STAGING_FAILURE, message, cause)
+fun invalidNativeAgentLinkInventorySchema(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.SKILL_STAGING_FAILURE, message, cause)
+
+data class MissingInstalledNativeAgentContext(
+  val logicalName: String,
+  val provider: String,
+  val expectedPath: String,
+  val reason: String,
+  val repairCommand: String,
+)
 
 fun missingInstalledNativeAgent(
-  logicalName: String,
-  provider: String,
-  expectedPath: String,
-  reason: String,
-  repairCommand: String,
+  context: MissingInstalledNativeAgentContext,
   cause: Throwable? = null,
 ): SkillBillRuntimeException =
   SkillBillRuntimeException(
     SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT,
-    "Native agent '$logicalName' for provider '$provider' failed preflight at '$expectedPath': $reason. " +
-      "Repair with: $repairCommand",
+    "Native agent '${context.logicalName}' for provider '${context.provider}' " +
+      "failed preflight at '${context.expectedPath}': ${context.reason}. Repair with: ${context.repairCommand}",
     cause,
   )
 
-fun invalidInternalSkillClassification(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidInternalSkillClassification(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, message, cause)
 
 fun missingBaselinePlatformSelection(
@@ -86,5 +111,8 @@ fun missingBaselinePlatformSelection(
     cause,
   )
 
-fun invalidFallbackCapability(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidFallbackCapability(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, message, cause)

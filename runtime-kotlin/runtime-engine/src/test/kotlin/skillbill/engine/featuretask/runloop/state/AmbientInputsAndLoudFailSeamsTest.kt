@@ -151,9 +151,10 @@ class AmbientInputsAndLoudFailSeamsTest {
         payload = "not a json object",
       )
 
-    val error = assertFailsWith<SkillBillRuntimeException> {
-      state.parsedOutput(output)
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        state.parsedOutput(output)
+      }
     assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
   }
 

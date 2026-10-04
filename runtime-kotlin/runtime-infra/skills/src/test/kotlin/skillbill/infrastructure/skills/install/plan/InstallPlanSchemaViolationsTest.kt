@@ -1,13 +1,13 @@
 package skillbill.infrastructure.skills.install.plan
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class InstallPlanSchemaViolationsTest {
   private class ValidInstallPlanFixture {

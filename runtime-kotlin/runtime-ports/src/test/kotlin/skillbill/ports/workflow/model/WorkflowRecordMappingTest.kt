@@ -1,6 +1,5 @@
 package skillbill.ports.workflow.model
 
-import java.time.Instant
 import org.junit.jupiter.api.Test
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
@@ -15,6 +14,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePhaseLedgerEntryFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodePhaseRecordFromArtifact
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull

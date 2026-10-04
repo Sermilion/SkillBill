@@ -11,7 +11,15 @@ fun assembleFeatureTaskRuntimeBriefing(
   agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   scope: FeatureTaskRuntimeBriefingScope = FeatureTaskRuntimeBriefingScope(),
 ): FeatureTaskRuntimePhaseLaunchBriefing =
-  when (val result = FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff, workflowId, agentAddonSelection, scope)) {
+  when (
+    val result =
+      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+        handoff,
+        workflowId,
+        agentAddonSelection,
+        scope,
+      )
+  ) {
     is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> result.briefing
     is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
       throw invalidFeatureTaskRuntimeHandoffProjection(result.context)

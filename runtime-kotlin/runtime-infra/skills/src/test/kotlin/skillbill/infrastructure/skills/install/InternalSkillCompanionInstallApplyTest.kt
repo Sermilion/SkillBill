@@ -1,15 +1,15 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.install.model.InstallApplyStatus
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.SupportedAgent
+import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import skillbill.install.model.InstallApplyStatus
-import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
-import skillbill.install.model.SupportedAgent
-import skillbill.model.toPath
 
 class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
   @Test

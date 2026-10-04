@@ -204,13 +204,15 @@ class GoalPlanningPreparationCheckpoint(
     descriptor: GovernedGoalSubtaskDescriptor,
     expectedProvenance: GoalPlanningContractProvenance,
   ): PlanRecoveryRead {
-    val read = database.read {
+    val read =
+      database.read {
         it.goalPlanningPreparations.findSubtaskPlan(identity, descriptor.subtaskId, descriptor.governedSubSpecPath)
       }
-    val plan = when (read) {
-      is GoalSubtaskPlanLookupResult.Conflicted -> return PlanRecoveryRead.Conflicted(read.conflict)
-      is GoalSubtaskPlanLookupResult.Found -> read.plan ?: return PlanRecoveryRead.Absent
-    }
+    val plan =
+      when (read) {
+        is GoalSubtaskPlanLookupResult.Conflicted -> return PlanRecoveryRead.Conflicted(read.conflict)
+        is GoalSubtaskPlanLookupResult.Found -> read.plan ?: return PlanRecoveryRead.Absent
+      }
     requireRecoverablePlan(identity, plan, descriptor)?.let { return PlanRecoveryRead.Conflicted(it) }
     val incompleteReason = nonCompletedPlanPayloadReason(plan.planPayload)
     if (incompleteReason != null) return PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
@@ -219,10 +221,10 @@ class GoalPlanningPreparationCheckpoint(
       plan.provenance != expectedProvenance ->
         PlanRecoveryRead.Conflicted(
           GoalPlanningPreparationConflict(
-          identity.parentGoalWorkflowId,
-          descriptor.subtaskId,
-          "stored plan provenance differs from the governing shared preplan",
-          null,
+            identity.parentGoalWorkflowId,
+            descriptor.subtaskId,
+            "stored plan provenance differs from the governing shared preplan",
+            null,
           ),
         )
       else -> PlanRecoveryRead.Prepared(plan)

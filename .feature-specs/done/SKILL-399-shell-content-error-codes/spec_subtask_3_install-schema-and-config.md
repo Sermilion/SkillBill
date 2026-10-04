@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 3 - install-schema-and-config
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -62,7 +62,7 @@ This plan comes from the current preplan digest for SKILL-399. That digest says 
 1. **Confirm no owned declaration remains.** Serves AC-001 and the baseline criterion.
    - Inspect `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/InstallShellContentErrors.kt`. None of the 16 classes in Scope may be declared, and no typealias may carry a deleted class name.
    - `InvalidGoalPlanningPreparationSchemaError` and `IncompatibleGoalPlanningPreparationRecoveryError` may remain. Leave them and their baseline rows for subtask 4.
-   - Confirm that `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` has no `runtime-contracts:<Class>` row for any of the 16.
+   - Confirm that `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` has no `runtime-contracts:<Class>` row for any of the 16.
    - If a row survives, delete only that whole row. Edit no other row.
    - Residue rule: if one of the 16 classes still exists, convert it under `spec.md` "Conversion rules". Use the matching `InstallFailureCode` entry from Scope and a message function or coded constructor with byte-identical text, then delete its row.
 

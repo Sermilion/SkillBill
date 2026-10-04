@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.hydration
 
-import java.time.Clock
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
@@ -15,8 +14,8 @@ import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
@@ -38,6 +37,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import java.time.Clock
 
 private data class PreparedGoalPlanning(
   val shared: SharedGoalPreplanCheckpoint,
@@ -61,10 +61,11 @@ class GoalChildPlanningHydrator(
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
   ): GoalChildPlanningHydrationOutcome {
-    val prepared = when (val loaded = loadRequiredPreparation(unitOfWork, setup, request)) {
-      is PreparationRead.Conflicted -> return Conflicted(loaded.conflict)
-      is PreparationRead.Prepared -> loaded.value
-    }
+    val prepared =
+      when (val loaded = loadRequiredPreparation(unitOfWork, setup, request)) {
+        is PreparationRead.Conflicted -> return Conflicted(loaded.conflict)
+        is PreparationRead.Prepared -> loaded.value
+      }
     requireMatchingPreparation(setup, request, prepared)?.let { return Conflicted(it) }
     payloadValidator.requireValid(
       "preplan",
@@ -100,22 +101,27 @@ class GoalChildPlanningHydrator(
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
   ): PreparationRead {
-    val shared = when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
-      is SharedGoalPreplanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
-      is SharedGoalPreplanLookupResult.Found -> result.checkpoint
-    } ?: throw invalidGoalPlanningPreparationSchemaError(
-          setup.workflowId,
-          "preplan",
-          "shared preplan is missing",
-        )
-    val plan = when (val result = unitOfWork.goalPlanningPreparations.findSubtaskPlan(
-        request.identity,
-        request.descriptor.subtaskId,
-        request.descriptor.governedSubSpecPath,
-      )) {
-      is GoalSubtaskPlanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
-      is GoalSubtaskPlanLookupResult.Found -> result.plan
-    } ?: throw invalidGoalPlanningPreparationSchemaError(
+    val shared =
+      when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
+        is SharedGoalPreplanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+      } ?: throw invalidGoalPlanningPreparationSchemaError(
+        setup.workflowId,
+        "preplan",
+        "shared preplan is missing",
+      )
+    val plan =
+      when (
+        val result =
+          unitOfWork.goalPlanningPreparations.findSubtaskPlan(
+            request.identity,
+            request.descriptor.subtaskId,
+            request.descriptor.governedSubSpecPath,
+          )
+      ) {
+        is GoalSubtaskPlanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
+        is GoalSubtaskPlanLookupResult.Found -> result.plan
+      } ?: throw invalidGoalPlanningPreparationSchemaError(
         setup.workflowId,
         "plan",
         "subtask plan is missing",
@@ -141,7 +147,9 @@ class GoalChildPlanningHydrator(
         "stored planning provenance or selected subtask descriptor differs from the hydration request",
         null,
       )
-    } else null
+    } else {
+      null
+    }
   }
 
   private fun createHydration(
@@ -271,18 +279,23 @@ private class GoalChildPlanningImportMatcher(
     val expected =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
         ?: return conflict(request, setup, "child carries no goal planning import artifact")
-    val shared = when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
-      is SharedGoalPreplanLookupResult.Conflicted -> return result.conflict
-      is SharedGoalPreplanLookupResult.Found -> result.checkpoint
-    }
-    val plan = when (val result = unitOfWork.goalPlanningPreparations.findSubtaskPlan(
-        request.identity,
-        request.descriptor.subtaskId,
-        request.descriptor.governedSubSpecPath,
-      )) {
-      is GoalSubtaskPlanLookupResult.Conflicted -> return result.conflict
-      is GoalSubtaskPlanLookupResult.Found -> result.plan
-    }
+    val shared =
+      when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
+        is SharedGoalPreplanLookupResult.Conflicted -> return result.conflict
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+      }
+    val plan =
+      when (
+        val result =
+          unitOfWork.goalPlanningPreparations.findSubtaskPlan(
+            request.identity,
+            request.descriptor.subtaskId,
+            request.descriptor.governedSubSpecPath,
+          )
+      ) {
+        is GoalSubtaskPlanLookupResult.Conflicted -> return result.conflict
+        is GoalSubtaskPlanLookupResult.Found -> result.plan
+      }
     val payloadConflict = validateAvailablePayloads(shared, plan, setup, request)
     val provenanceDivergence = provenanceDivergence(expected, request)
     return when {

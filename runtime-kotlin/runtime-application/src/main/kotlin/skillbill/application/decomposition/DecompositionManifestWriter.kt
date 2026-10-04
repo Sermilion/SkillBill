@@ -8,8 +8,9 @@ import skillbill.application.decomposition.model.DecompositionPlanManifestInput
 import skillbill.application.decomposition.model.PreparedDecompositionManifestWrite
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.issueAndFeature
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.rethrowUnless
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -18,6 +19,7 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestPlan
+import skillbill.workflow.decomposition.model.isDecompositionManifestSchemaFailure
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
@@ -281,7 +283,8 @@ private fun assertParentSpecIsNotDecomposedSubtask(
             loadDecompositionManifest(manifestPath, fileStore, validator)
           } catch (error: IOException) {
             invalidParentSpecManifestLoad(parentSpecPath, manifestPath, parentSpecLabel, error)
-          } catch (error: InvalidDecompositionManifestSchemaError) {
+          } catch (error: SkillBillRuntimeException) {
+            error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
             invalidParentSpecManifestLoad(parentSpecPath, manifestPath, parentSpecLabel, error)
           }
         val matchingSubtask =

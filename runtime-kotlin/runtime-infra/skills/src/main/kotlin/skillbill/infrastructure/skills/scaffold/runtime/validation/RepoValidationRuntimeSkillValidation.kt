@@ -1,11 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.relativeTo
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.SkillStagingFailureCode
@@ -16,6 +10,12 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.relativeTo
 
 internal val repoValidationNonPortableReviewPatterns =
   listOf(

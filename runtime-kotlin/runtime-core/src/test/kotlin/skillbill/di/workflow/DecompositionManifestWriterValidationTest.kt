@@ -6,12 +6,13 @@ import skillbill.application.decomposition.model.DecompositionManifestWorkflowPr
 import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decompositionPlanningPlan
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import java.nio.file.Files
@@ -47,7 +48,7 @@ class DecompositionManifestWriterValidationTest {
     assertNotNull(initial)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writer.writeFromWorkflowUpdate(
           DecompositionManifestWorkflowProjectionInput(
             repoRoot = repoRoot,
@@ -58,9 +59,10 @@ class DecompositionManifestWriterValidationTest {
         )
       }
 
-    assertEquals("decomposition_runtime", error.sourceLabel)
-    assertContains(error.reason, "contract_version")
-    assertContains(error.reason, "offending value: invalid-contract")
+    assertEquals(DecompositionManifestValidationFailureCode.SCHEMA_INVALID, error.code)
+    assertContains(error.message.orEmpty(), "Decomposition manifest 'decomposition_runtime' fails schema validation:")
+    assertContains(error.message.orEmpty(), "contract_version")
+    assertContains(error.message.orEmpty(), "offending value: invalid-contract")
   }
 
   @Test
@@ -84,7 +86,7 @@ class DecompositionManifestWriterValidationTest {
     assertNotNull(initial)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writer.writeProjectionFromWorkflowState(
           repoRoot = repoRoot,
           artifacts = invalidDurableRuntimeArtifacts(initial.manifest),
@@ -93,9 +95,10 @@ class DecompositionManifestWriterValidationTest {
         )
       }
 
-    assertEquals("decomposition_runtime", error.sourceLabel)
-    assertContains(error.reason, "contract_version")
-    assertContains(error.reason, "offending value: invalid-contract")
+    assertEquals(DecompositionManifestValidationFailureCode.SCHEMA_INVALID, error.code)
+    assertContains(error.message.orEmpty(), "Decomposition manifest 'decomposition_runtime' fails schema validation:")
+    assertContains(error.message.orEmpty(), "contract_version")
+    assertContains(error.message.orEmpty(), "offending value: invalid-contract")
   }
 
   private fun invalidDurableRuntimeArtifacts(manifest: DecompositionManifest): DurableWorkflowArtifacts {

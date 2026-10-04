@@ -1,9 +1,5 @@
 package skillbill.cli.scaffold.payload
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import skillbill.application.scaffold.decodeScaffoldCommandRequest
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
@@ -11,6 +7,10 @@ import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.command.ScaffoldCommandRequest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 private fun parseScaffoldCommandRequest(payload: Map<String, Any?>): ScaffoldCommandRequest =
   decodeScaffoldCommandRequest(JsonCodec.mapToJsonString(payload))

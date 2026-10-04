@@ -3,8 +3,10 @@ package skillbill.workflow.decomposition.model
 import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_VALIDATION_CONTRACT_VERSION
 import skillbill.error.core.FailureWireCode
 import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureWireByValue
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.review.context.model.hunk.SHA256_HEX
 
 private const val DECOMPOSITION_MANIFEST_VALIDATION_VERSION: String =
@@ -44,6 +46,20 @@ enum class DecompositionManifestValidationFailureCode(
         else -> entries.failureWireByValue(value, HIERARCHY)
       }
   }
+}
+
+private val decompositionManifestSchemaFailureCodes =
+  setOf(
+    WorkflowFailureCode.DECOMPOSITION_MANIFEST_INVALID_SHAPE,
+    WorkflowFailureCode.DECOMPOSITION_MANIFEST_ISSUE_KEY_MISMATCH,
+    WorkflowFailureCode.DECOMPOSITION_MANIFEST_DUPLICATE_ACTIVE,
+    WorkflowFailureCode.DECOMPOSITION_MANIFEST_MISSING_MANIFEST,
+    WorkflowFailureCode.DECOMPOSITION_MANIFEST_INCOMPLETE_BUNDLE,
+  )
+
+fun Throwable.isDecompositionManifestSchemaFailure(): Boolean {
+  val code = (this as? SkillBillRuntimeException)?.code
+  return code is DecompositionManifestValidationFailureCode || code in decompositionManifestSchemaFailureCodes
 }
 
 data class DecompositionManifestValidationSourceLocation(
@@ -111,6 +127,7 @@ sealed interface DecompositionManifestValidationResult {
     val code: DecompositionManifestValidationFailureCode,
     val reason: String,
     val sourceLocation: DecompositionManifestValidationSourceLocation? = null,
+    val failure: SkillBillRuntimeException? = null,
   ) : DecompositionManifestValidationResult
 }
 
@@ -118,9 +135,6 @@ fun DecompositionManifestValidationResult.requireAccepted(sourceLabel: String): 
   when (this) {
     is DecompositionManifestValidationResult.AcceptedUnchanged -> manifest
     is DecompositionManifestValidationResult.AcceptedAfterRepair -> manifest
-    is DecompositionManifestValidationResult.Rejected -> throw InvalidDecompositionManifestSchemaError(
-      sourceLabel = sourceLabel,
-      reason = reason,
-      failureCode = code.wireValue,
-    )
+    is DecompositionManifestValidationResult.Rejected ->
+      throw failure ?: invalidDecompositionManifestSchema(sourceLabel, reason, code)
   }

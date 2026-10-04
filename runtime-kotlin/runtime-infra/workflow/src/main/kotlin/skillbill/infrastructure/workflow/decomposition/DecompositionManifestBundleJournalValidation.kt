@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.decomposition
 
-import skillbill.error.shellcontent.InvalidDecompositionManifestBundleJournalError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestBundleJournal
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestBundleJournalSchemaValidator
 import skillbill.infrastructure.host.jvm.pathContainedIn
@@ -28,14 +29,16 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         marker.toString(),
         error.message ?: "Journal could not be read.",
-        "journal_read_error",
-      ).also { it.initCause(error) }
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_JOURNAL_READ_ERROR,
+        error,
+      )
     } catch (error: SecurityException) {
       throw journalError(
         marker.toString(),
         error.message ?: "Journal could not be read or validated.",
-        "journal_read_error",
-      ).also { it.initCause(error) }
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_JOURNAL_READ_ERROR,
+        error,
+      )
     }
   }
 
@@ -59,7 +62,11 @@ internal object DecompositionManifestBundleJournalValidation {
   ): List<DecompositionManifestBundleEntry> {
     val rawEntries =
       parsed[DecompositionManifestBundleJournalPayloadKeys.ENTRIES] as? List<*>
-        ?: throw journalError(sourceLabel, "entries must be a non-empty array.", "entries_missing")
+        ?: throw journalError(
+          sourceLabel,
+          "entries must be a non-empty array.",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRIES_MISSING,
+        )
     return rawEntries.map { rawEntry ->
       parseEntry(rawEntry, sourceLabel, stagingDirectory, markerParent)
     }
@@ -73,7 +80,11 @@ internal object DecompositionManifestBundleJournalValidation {
   ): DecompositionManifestBundleEntry {
     val entry =
       rawEntry as? Map<*, *>
-        ?: throw journalError(sourceLabel, "Malformed bundle journal entry.", "entry_not_object")
+        ?: throw journalError(
+          sourceLabel,
+          "Malformed bundle journal entry.",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_NOT_OBJECT,
+        )
     val target =
       pathValue(
         entry[DecompositionManifestBundleJournalPayloadKeys.TARGET],
@@ -91,7 +102,7 @@ internal object DecompositionManifestBundleJournalValidation {
         ?: throw journalError(
           sourceLabel,
           "Journal entry field '${DecompositionManifestBundleJournalPayloadKeys.SHA256}' is missing or not a string.",
-          "entry_field_invalid",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
         )
     validateEntryPaths(
       DecompositionManifestBundleEntry(target, staged, sha256),
@@ -118,10 +129,18 @@ internal object DecompositionManifestBundleJournalValidation {
     sourceLabel: String,
   ) {
     if (target.parent != markerParent) {
-      throw journalError(sourceLabel, "Journal target '$target' is outside the marker parent.", "target_outside_parent")
+      throw journalError(
+        sourceLabel,
+        "Journal target '$target' is outside the marker parent.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_OUTSIDE_PARENT,
+      )
     }
     if (!pathContainedIn(target, markerParent)) {
-      throw journalError(sourceLabel, "Journal target '$target' escapes the marker parent.", "target_escape")
+      throw journalError(
+        sourceLabel,
+        "Journal target '$target' escapes the marker parent.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_ESCAPE,
+      )
     }
   }
 
@@ -134,11 +153,15 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "Journal staged path '$staged' is outside staging_directory.",
-        "staged_outside_staging",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_STAGED_OUTSIDE_STAGING,
       )
     }
     if (!pathContainedIn(staged, stagingDirectory)) {
-      throw journalError(sourceLabel, "Journal staged path '$staged' escapes staging_directory.", "staged_escape")
+      throw journalError(
+        sourceLabel,
+        "Journal staged path '$staged' escapes staging_directory.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_STAGED_ESCAPE,
+      )
     }
   }
 
@@ -152,7 +175,7 @@ internal object DecompositionManifestBundleJournalValidation {
         ?: throw journalError(
           sourceLabel,
           "Journal entry field '$fieldName' is missing or not a string.",
-          "entry_field_invalid",
+          WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_FIELD_INVALID,
         )
     return try {
       Path.of(raw)
@@ -160,8 +183,9 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "Journal entry field '$fieldName' is not a valid path.",
-        "entry_path_invalid",
-      ).also { it.initCause(error) }
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_PATH_INVALID,
+        error,
+      )
     }
   }
 
@@ -171,7 +195,11 @@ internal object DecompositionManifestBundleJournalValidation {
   ) {
     val normalizedTargets = entries.map { it.target }
     if (normalizedTargets.distinct().size != normalizedTargets.size) {
-      throw journalError(sourceLabel, "Journal entries repeat the same normalized target path.", "duplicate_target")
+      throw journalError(
+        sourceLabel,
+        "Journal entries repeat the same normalized target path.",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_DUPLICATE_TARGET,
+      )
     }
   }
 
@@ -184,7 +212,7 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "Journal entries repeat the same normalized staged path.",
-        "duplicate_staged",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_DUPLICATE_STAGED,
       )
     }
   }
@@ -204,7 +232,7 @@ internal object DecompositionManifestBundleJournalValidation {
       else -> throw journalError(
         sourceLabel,
         "Bundle journal entry for '${entry.target}' is incomplete; neither staged nor target bytes are present.",
-        "entry_incomplete",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ENTRY_INCOMPLETE,
       )
     }
   }
@@ -218,7 +246,7 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "Staged file '${entry.staged}' does not match the recorded digest for '${entry.target}'.",
-        "staged_digest_mismatch",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_STAGED_DIGEST_MISMATCH,
       )
     }
   }
@@ -232,7 +260,7 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "Applied target '${entry.target}' does not match the recorded digest.",
-        "target_digest_mismatch",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_TARGET_DIGEST_MISMATCH,
       )
     }
   }
@@ -244,7 +272,7 @@ internal object DecompositionManifestBundleJournalValidation {
     transactionIdFromMarker(marker) ?: throw journalError(
       sourceLabel,
       "Marker file name does not match the bundle journal naming contract.",
-      "invalid_marker_name",
+      WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_INVALID_MARKER_NAME,
     )
 
   private fun stagingDirectory(parsed: Map<String, Any?>): Path =
@@ -263,14 +291,14 @@ internal object DecompositionManifestBundleJournalValidation {
       throw journalError(
         sourceLabel,
         "staging_directory does not match the transaction id encoded in the marker file name.",
-        "staging_directory_mismatch",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_STAGING_DIRECTORY_MISMATCH,
       )
     }
     if (!pathContainedIn(stagingDirectory, markerParent)) {
       throw journalError(
         sourceLabel,
         "staging_directory escapes the marker parent directory.",
-        "staging_directory_escape",
+        WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_STAGING_DIRECTORY_ESCAPE,
       )
     }
   }
@@ -300,10 +328,12 @@ internal object DecompositionManifestBundleJournalValidation {
   private fun journalError(
     sourceLabel: String,
     reason: String,
-    failureCode: String,
-  ) = InvalidDecompositionManifestBundleJournalError(
+    code: WorkflowFailureCode,
+    cause: Throwable? = null,
+  ) = invalidDecompositionManifestBundleJournal(
     sourceLabel = sourceLabel,
     reason = reason,
-    failureCode = failureCode,
+    code = code,
+    cause = cause,
   )
 }

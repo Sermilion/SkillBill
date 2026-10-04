@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 5 - feature-task-runtime-phase-output
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -55,7 +55,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Exist
 
 ## Implementation Details
 
-This plan comes from the shared preplan digest. Paths are relative to `runtime-kotlin/`. Line numbers are digest anchors; implement applies each step to the code wherever it is now. Earlier plan drafts in this file are replaced by this section.
+This plan comes from the shared preplan digest. Paths are relative to `../../../runtime-kotlin`. Line numbers are digest anchors; implement applies each step to the code wherever it is now. Earlier plan drafts in this file are replaced by this section.
 
 ### Corrections to the Scope anchors (settled from the digest)
 

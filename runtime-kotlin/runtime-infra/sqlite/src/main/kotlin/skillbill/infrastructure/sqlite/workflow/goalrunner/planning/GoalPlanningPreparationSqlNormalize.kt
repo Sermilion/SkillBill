@@ -1,7 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.sql.Connection
-import java.sql.SQLException
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
@@ -16,6 +14,8 @@ import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
+import java.sql.Connection
+import java.sql.SQLException
 
 internal object GoalPlanningPreparationSqlNormalize
 
@@ -98,8 +98,7 @@ internal fun requirePositiveSubtaskId(
 internal fun throwNormalizedIdentityFailure(
   sourceLabel: String,
   failure: Pair<String, String>,
-): Nothing =
-  throw invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+): Nothing = throw invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
 
 internal fun throwNormalizedProvenanceFailure(
   sourceLabel: String,

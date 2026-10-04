@@ -1,8 +1,5 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import java.nio.file.Files
-import java.nio.file.LinkOption.NOFOLLOW_LINKS
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceBrokerReadState
@@ -12,6 +9,9 @@ import skillbill.infrastructure.workflow.review.broker.resolveRepositoryFile
 import skillbill.infrastructure.workflow.review.broker.validateRepositoryMapping
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
 import skillbill.ports.review.model.ReviewEvidenceCoordinates
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.Path
 
 internal fun bindReviewCoordinates(
   root: Path,

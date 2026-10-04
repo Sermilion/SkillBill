@@ -8,8 +8,6 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.long
-import java.nio.file.Path
-import kotlin.time.Duration.Companion.minutes
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
@@ -37,6 +35,8 @@ import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.minutes
 
 @Inject
 class CodeReviewCommand(

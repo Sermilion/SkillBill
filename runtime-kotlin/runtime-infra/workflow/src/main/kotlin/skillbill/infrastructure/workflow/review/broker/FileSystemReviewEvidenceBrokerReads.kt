@@ -1,8 +1,5 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.infrastructure.workflow.featuretask.storePath
@@ -23,6 +20,9 @@ import skillbill.review.context.model.execution.ReviewRequestedOperation
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.model.requireRepositoryRelativePath
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal class FileSystemReviewEvidenceBrokerReads(
   private val state: FileSystemReviewEvidenceBrokerReadState,

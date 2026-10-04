@@ -1,7 +1,5 @@
 package skillbill.engine.work
 
-import java.nio.file.Path
-import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
@@ -29,6 +27,8 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.decompositionStatus
+import java.nio.file.Path
+import java.time.Clock
 
 @Inject
 class IdeStatusService(

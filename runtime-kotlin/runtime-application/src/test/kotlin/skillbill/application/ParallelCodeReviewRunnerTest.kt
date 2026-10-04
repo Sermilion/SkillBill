@@ -1,20 +1,5 @@
 package skillbill.application
 
-import java.lang.reflect.Proxy
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
@@ -46,6 +31,7 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.config.model.RepoLocalConfig
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.GovernedReviewFailureCode
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.goalrunner.terminalStatus
@@ -121,6 +107,21 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
+import java.lang.reflect.Proxy
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class ParallelCodeReviewRunnerTest {
   @Test
@@ -643,11 +644,13 @@ class ParallelCodeReviewCursorDelegatedLaunchTest {
         nativeAgentPreflight =
           ReviewNativeAgentPreflightPort {
             throw missingInstalledNativeAgent(
-              "bill-kotlin-code-review-testing",
-              "cursor",
-              "/missing",
-              "managed inventory entry is missing",
-              "skill-bill install apply",
+              MissingInstalledNativeAgentContext(
+                "bill-kotlin-code-review-testing",
+                "cursor",
+                "/missing",
+                "managed inventory entry is missing",
+                "skill-bill install apply",
+              ),
             )
           },
       )

@@ -1,10 +1,5 @@
 package skillbill.infrastructure.skills.install.staging
 
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.text.Normalizer
-import java.util.Locale
 import skillbill.error.shellcontent.internalSkillSidecarCollision
 import skillbill.error.shellcontent.invalidAuthoredSkillSidecar
 import skillbill.infrastructure.skills.scaffold.authoring.discoverTargets
@@ -16,6 +11,11 @@ import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformMan
 import skillbill.install.model.InstallPlanSkill
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.text.Normalizer
+import java.util.Locale
 
 internal data class InternalSidecarTarget(
   val skillName: String,

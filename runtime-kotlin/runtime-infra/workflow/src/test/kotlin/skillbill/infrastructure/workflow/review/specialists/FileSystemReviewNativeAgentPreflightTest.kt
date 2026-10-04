@@ -1,15 +1,5 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
@@ -45,6 +35,16 @@ import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
 import skillbill.testing.seedConformingPlatformPack
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 private const val INLINE_WORKER = "bill-code-review-inline"
 

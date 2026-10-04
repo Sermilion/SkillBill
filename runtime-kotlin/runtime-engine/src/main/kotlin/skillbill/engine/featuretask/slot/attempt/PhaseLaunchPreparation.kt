@@ -5,6 +5,7 @@ import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
+import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.auditProseValue
@@ -243,7 +244,6 @@ object PhaseLaunchPreparation {
   ): LaunchPreparation {
     val run = args.run
     val state = args.state
-    val iteration = args.iteration
     val priorCorrection = args.priorCorrection
     val measurementContext = args.context
     val repositoryCheckpoint = args.context.repositoryCheckpoint
@@ -286,36 +286,12 @@ object PhaseLaunchPreparation {
         )
       }
       val briefing = (assembly as FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted).briefing
-      if (!run.policy.singleAgentSession) {
-        val write =
-          recorder.recordPhaseBriefing(
-            run.request.workflowId,
-            briefing,
-            sharedEvidence?.measurement,
-            iteration ?: 1,
-          )
-        when (write) {
-          is RequiredPhaseWrite.Rejected -> {
-            val handoffRejection = write.handoffRejection
-            if (handoffRejection != null) {
-              return PhaseLaunchPreparation.rejectedHandoffLaunch(
-                recorder,
-                run,
-                state,
-                handoffRejection,
-                measurementContext,
-              )
-            }
-            return LaunchRequiredWriteRejected(write)
-          }
-          RequiredPhaseWrite.Acknowledged -> Unit
-        }
-      }
+      recordLaunchBriefing(context, args, briefing, sharedEvidence)?.let { return it }
       val inputs =
         PhaseLaunchPreparation
           .run { context.composeLaunchPromptInputs(run, handoff, priorCorrection, briefing, args.boundStep) }
           .copy(
-            phaseSettlement = iteration?.let(::phaseSettlementTarget),
+            phaseSettlement = args.iteration?.let(::phaseSettlementTarget),
           )
       return PreparedLaunchReady(
         PreparedLaunch(
@@ -323,6 +299,30 @@ object PhaseLaunchPreparation {
           PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
         ),
       )
+    }
+  }
+
+  private fun recordLaunchBriefing(
+    context: PhaseAttemptLaunchPreparationContext,
+    args: DeclaredLaunchArgs,
+    briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    sharedEvidence: FeatureTaskRuntimeSharedReviewEvidenceResolved?,
+  ): LaunchPreparation? {
+    if (args.run.policy.singleAgentSession) return null
+    return when (
+      val write =
+        context.recorder.recordPhaseBriefing(
+          args.run.request.workflowId,
+          briefing,
+          sharedEvidence?.measurement,
+          args.iteration ?: 1,
+        )
+    ) {
+      is RequiredPhaseWrite.Rejected ->
+        write.handoffRejection?.let {
+          rejectedHandoffLaunch(context.recorder, args.run, args.state, it, args.context)
+        } ?: LaunchRequiredWriteRejected(write)
+      RequiredPhaseWrite.Acknowledged -> null
     }
   }
 

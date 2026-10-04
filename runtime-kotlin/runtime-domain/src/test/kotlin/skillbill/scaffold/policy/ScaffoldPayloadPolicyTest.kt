@@ -1,11 +1,11 @@
 package skillbill.scaffold.policy
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.scaffold.model.SkillKind
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class ScaffoldPayloadPolicyTest {
   @Test

@@ -1,7 +1,5 @@
 package skillbill.engine.goalrunner.persist
 
-import java.time.Clock
-import kotlin.random.Random
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -31,6 +29,8 @@ import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestSt
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import java.time.Clock
+import kotlin.random.Random
 
 data class OutcomeStoreTestArtifactPorts(
   val goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator =

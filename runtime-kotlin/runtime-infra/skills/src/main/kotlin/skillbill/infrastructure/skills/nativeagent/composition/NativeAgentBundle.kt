@@ -4,8 +4,8 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.error.YAMLException
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
 import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
 import java.nio.file.Files
 import java.nio.file.Path

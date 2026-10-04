@@ -1,9 +1,8 @@
 
 package skillbill.infrastructure.workflow.review.specialists
 
-import java.nio.file.Files
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256HexOfFile
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
@@ -15,6 +14,8 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.review.launch.ReviewNativeAgentPreflightPort
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
+import java.nio.file.Files
+import java.nio.file.Path
 
 @Inject
 class FileSystemReviewNativeAgentPreflight(
@@ -29,11 +30,13 @@ class FileSystemReviewNativeAgentPreflight(
       val logicalName = assignment.logicalName
       val provider =
         provider(agentId) ?: throw missingInstalledNativeAgent(
-          logicalName,
-          agentId,
-          environment.userHome.toString(),
-          "provider does not support native-agent selection",
-          REPAIR_COMMAND,
+          MissingInstalledNativeAgentContext(
+            logicalName,
+            agentId,
+            environment.userHome.toString(),
+            "provider does not support native-agent selection",
+            REPAIR_COMMAND,
+          ),
         )
       val entries = inventory.filter { it.provider == provider.name.lowercase() && it.logicalName == logicalName }
       if (entries.isEmpty()) {
@@ -122,11 +125,13 @@ class FileSystemReviewNativeAgentPreflight(
     cause: Throwable? = null,
   ): Nothing =
     throw missingInstalledNativeAgent(
-      logicalName,
-      provider.name.lowercase(),
-      path.toString(),
-      reason,
-      REPAIR_COMMAND,
+      MissingInstalledNativeAgentContext(
+        logicalName,
+        provider.name.lowercase(),
+        path.toString(),
+        reason,
+        REPAIR_COMMAND,
+      ),
       cause,
     )
 

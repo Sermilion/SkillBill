@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
-import java.nio.file.Path
 import skillbill.error.shellcontent.composedNativeAgentBudgetExceeded
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
@@ -11,6 +10,7 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentAddon
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGovernedAddonActivation
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Path
 
 internal fun composeGovernedAgentBody(
   repoRoot: Path,

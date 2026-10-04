@@ -1,14 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.nio.file.Files
-import java.sql.DriverManager
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalPlanningStatusState
@@ -26,6 +17,15 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import java.nio.file.Files
+import java.sql.DriverManager
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GoalPlanningPreparationStoreTest {
   @Test
@@ -150,7 +150,10 @@ class GoalPlanningPreparationStoreTest {
       store.checkpointSubtaskPlan(planCheckpoint(1, 0))
       val descriptors = listOf(descriptor(1, 0), descriptor(2, 1), descriptor(3, 2))
 
-      assertEquals(listOf(1, 2), store.listSubtaskPlansOrdered(identity(), descriptors).foundPlans().map { it.subtaskId })
+      assertEquals(
+        listOf(1, 2),
+        store.listSubtaskPlansOrdered(identity(), descriptors).foundPlans().map { it.subtaskId },
+      )
       assertEquals(GoalPlanningPreparationCountResult.Applied(2), store.preparedPlanCount(identity(), descriptors))
 
       val conflictedDescriptors =
@@ -178,9 +181,11 @@ class GoalPlanningPreparationStoreTest {
       assertNotNull(store.findSharedPreplan(identity()).foundCheckpoint())
       val descriptors = listOf(descriptor(1, 0), descriptor(2, 1))
       assertEquals(GoalPlanningPreparationCountResult.Applied(1), store.preparedPlanCount(identity(), descriptors))
-      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(store.checkpointSharedPreplan(
+      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(
+        store.checkpointSharedPreplan(
           sharedCheckpoint().copy(provenance = provenance().copy(parentSpecHash = "f".repeat(64))),
-        ))
+        ),
+      )
     }
   }
 
@@ -221,9 +226,11 @@ class GoalPlanningPreparationStoreTest {
       store.checkpointSharedPreplan(sharedCheckpoint())
       store.checkpointSubtaskPlan(original)
 
-      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(store.checkpointSubtaskPlan(
+      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(
+        store.checkpointSubtaskPlan(
           original.copy(payloadSha256 = "f".repeat(64), planPayload = "changed-plan"),
-        ))
+        ),
+      )
       assertEquals(
         original.planPayload,
         store.findSubtaskPlan(identity(), 1, original.governedSubSpecPath).foundPlan()?.planPayload,
@@ -601,7 +608,9 @@ class GoalPlanningPreparationStoreMutationTest {
     DatabaseRuntime.ensureDatabase(tempDb()).use { connection ->
       val store = GoalPlanningPreparationStore(connection)
 
-      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(store.replaceSharedPreplan(sharedCheckpoint(), sharedCheckpoint().payloadSha256))
+      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(
+        store.replaceSharedPreplan(sharedCheckpoint(), sharedCheckpoint().payloadSha256),
+      )
 
       assertNull(store.findSharedPreplan(identity()).foundCheckpoint())
     }
@@ -614,10 +623,12 @@ class GoalPlanningPreparationStoreMutationTest {
       store.checkpointSharedPreplan(sharedCheckpoint())
       store.checkpointSubtaskPlan(planCheckpoint(1, 0))
 
-      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(store.replaceSharedPreplan(
+      assertIs<GoalPlanningPreparationWriteResult.Conflicted>(
+        store.replaceSharedPreplan(
           sharedCheckpoint().copy(payloadSha256 = "9".repeat(64), preplanPayload = "regenerated-preplan"),
           "8".repeat(64),
-        ))
+        ),
+      )
 
       assertEquals("preplan-payload", store.findSharedPreplan(identity()).foundCheckpoint()?.preplanPayload)
       assertEquals(
@@ -639,7 +650,10 @@ class GoalPlanningPreparationStoreMutationTest {
 
       assertEquals(1, store.deleteSubtaskPlan("goal-1", 3))
       assertNull(store.findSubtaskPlan(identity(), 3, descriptor(3, 2).governedSubSpecPath).foundPlan())
-      assertEquals(listOf(1, 2), store.listSubtaskPlansOrdered(identity(), descriptors).foundPlans().map { it.subtaskId })
+      assertEquals(
+        listOf(1, 2),
+        store.listSubtaskPlansOrdered(identity(), descriptors).foundPlans().map { it.subtaskId },
+      )
       assertNotNull(store.findSharedPreplan(identity()).foundCheckpoint())
       assertEquals(GoalPlanningStatusState.PARTIALLY_PLANNED, store.boundedStatus("goal-1", listOf(1, 2, 3)).state)
       assertEquals(2, store.boundedStatus("goal-1", listOf(1, 2, 3)).plannedSubtaskCount)
@@ -718,9 +732,18 @@ class GoalPlanningPreparationStoreMutationTest {
       assertEquals("preplan-payload", shared.preplanPayload)
       assertEquals(sharedCheckpoint().payloadSha256, shared.payloadSha256)
       assertEquals(advanced, shared.provenance)
-      assertEquals(advanced, store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan()?.provenance)
-      assertEquals(advanced, store.findSubtaskPlan(identity(), 2, descriptor(2, 1).governedSubSpecPath).foundPlan()?.provenance)
-      assertEquals("plan-1", store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan()?.planPayload)
+      assertEquals(
+        advanced,
+        store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan()?.provenance,
+      )
+      assertEquals(
+        advanced,
+        store.findSubtaskPlan(identity(), 2, descriptor(2, 1).governedSubSpecPath).foundPlan()?.provenance,
+      )
+      assertEquals(
+        "plan-1",
+        store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan()?.planPayload,
+      )
     }
   }
 
@@ -761,7 +784,8 @@ class GoalPlanningPreparationStoreMutationTest {
 
       assertEquals("regenerated-preplan", store.findSharedPreplan(identity()).foundCheckpoint()?.preplanPayload)
       assertNull(store.findSubtaskPlan(identity(), 2, descriptor(2, 1).governedSubSpecPath).foundPlan())
-      val survivor = requireNotNull(store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan())
+      val survivor =
+        requireNotNull(store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan())
       assertEquals("plan-1", survivor.planPayload)
       assertEquals(replacement.provenance, survivor.provenance)
     }
@@ -815,7 +839,10 @@ class GoalPlanningPreparationStoreMutationTest {
         "regenerated-plan",
         store.findSubtaskPlan(identity(), 1, descriptor(1, 0).governedSubSpecPath).foundPlan()?.planPayload,
       )
-      assertEquals("plan-2", store.findSubtaskPlan(identity(), 2, descriptor(2, 1).governedSubSpecPath).foundPlan()?.planPayload)
+      assertEquals(
+        "plan-2",
+        store.findSubtaskPlan(identity(), 2, descriptor(2, 1).governedSubSpecPath).foundPlan()?.planPayload,
+      )
     }
   }
 
@@ -852,8 +879,6 @@ class GoalPlanningPreparationStoreMutationTest {
 private fun SharedGoalPreplanLookupResult.foundCheckpoint() =
   assertIs<SharedGoalPreplanLookupResult.Found>(this).checkpoint
 
-private fun GoalSubtaskPlanLookupResult.foundPlan() =
-  assertIs<GoalSubtaskPlanLookupResult.Found>(this).plan
+private fun GoalSubtaskPlanLookupResult.foundPlan() = assertIs<GoalSubtaskPlanLookupResult.Found>(this).plan
 
-private fun GoalSubtaskPlanListResult.foundPlans() =
-  assertIs<GoalSubtaskPlanListResult.Found>(this).plans
+private fun GoalSubtaskPlanListResult.foundPlans() = assertIs<GoalSubtaskPlanListResult.Found>(this).plans

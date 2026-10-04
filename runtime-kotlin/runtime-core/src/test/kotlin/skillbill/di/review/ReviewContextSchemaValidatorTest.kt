@@ -1,9 +1,5 @@
 package skillbill.di.review
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import skillbill.application.review.model.ReviewPreparationRequest
 import skillbill.application.review.packet.toAssignmentEnvelope
 import skillbill.application.review.packet.toIntegrationLaunchEnvelope
@@ -43,6 +39,10 @@ import skillbill.review.context.model.launch.ReviewSpecialistSummary
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract
 import skillbill.review.model.ReviewLaneReviewDisposition
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ReviewContextSchemaValidatorTest {
   private val hunkA = ReviewChangedHunk("src/A.kt", 1, 1, 1, 2, "+alpha")

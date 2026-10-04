@@ -45,9 +45,10 @@ class FeatureTaskRuntimePhaseOutputValidationModelsTest {
       )
 
     assertEquals(evidence, FeatureTaskRuntimePhaseOutputRepairEvidence.fromArtifactMap(evidence.toArtifactMap()))
-    val error = assertFailsWith<SkillBillRuntimeException> {
-      FeatureTaskRuntimePhaseOutputRepairEvidence.fromArtifactMap(evidence.toArtifactMap() + ("unexpected" to true))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimePhaseOutputRepairEvidence.fromArtifactMap(evidence.toArtifactMap() + ("unexpected" to true))
+      }
     assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
   }
 }

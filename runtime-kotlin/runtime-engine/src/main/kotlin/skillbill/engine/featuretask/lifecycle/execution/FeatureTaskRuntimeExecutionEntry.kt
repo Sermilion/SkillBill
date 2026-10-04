@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
@@ -18,6 +17,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeExecutionEntry(

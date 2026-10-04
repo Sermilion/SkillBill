@@ -19,7 +19,7 @@ class GoalPlanningRecoveryClassificationTest {
         workflowId = "wftr-parent",
         subtaskId = 2,
         reason =
-            "stored import provenance differs from the hydration request at " +
+          "stored import provenance differs from the hydration request at " +
             "phase_output_contract_version",
         cause =
           SkillBillRuntimeException(

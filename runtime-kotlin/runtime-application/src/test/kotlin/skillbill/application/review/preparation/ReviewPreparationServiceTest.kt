@@ -1,12 +1,5 @@
 package skillbill.application.review.preparation
 
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 import skillbill.application.review.model.ReviewPreparationRequest
 import skillbill.application.review.model.ReviewPreparationResult
 import skillbill.application.review.parallel.planning.criteriaReferences
@@ -49,6 +42,13 @@ import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.model.ReviewLaneReviewDisposition
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 private fun focusedMatrix(
   scope: ReviewScopeFacts,

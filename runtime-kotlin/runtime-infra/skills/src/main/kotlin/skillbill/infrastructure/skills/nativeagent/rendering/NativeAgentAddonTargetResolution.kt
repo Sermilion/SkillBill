@@ -1,8 +1,5 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.name
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
@@ -14,6 +11,9 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGover
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPointerSpec
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.name
 
 internal const val NATIVE_AGENT_ADDON_ENTRYPOINT_SLOT = "entrypoint"
 

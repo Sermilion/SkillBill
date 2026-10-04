@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.model.core
 
-import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 
 const val MAX_REPOSITORY_FINGERPRINT_LENGTH: Int = 256
 

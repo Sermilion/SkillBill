@@ -1,7 +1,5 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.error.core.ExternalAddonOverlayError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -9,6 +7,8 @@ import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.scaffold.model.GovernedAddonSelection
 import skillbill.scaffold.model.PointerSpec
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal fun <T> wrapParserErrors(
   slug: String,

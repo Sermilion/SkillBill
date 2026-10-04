@@ -1,10 +1,5 @@
 package skillbill.engine.featuretask.persist
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset.UTC
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -62,8 +57,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
@@ -113,6 +108,7 @@ import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
@@ -135,6 +131,11 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset.UTC
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -1245,7 +1246,7 @@ class WorkflowServiceGoalManifestStoreTest {
     Files.writeString(brokenPath, LEGACY_CONTRACT_MANIFEST_YAML.replace("SKILL-80", "SKILL-8"))
     val store = manifestStore(rejecting = setOf(brokenPath.toString()))
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.loadByIssueKey("SKILL-8", repoRoot = repoRoot)
     }
   }
@@ -1576,7 +1577,7 @@ class WorkflowServiceGoalManifestStoreTest {
       )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.loadByIssueKey("SKILL-52.1", repoRoot = repoRoot)
       }
 
@@ -3595,7 +3596,11 @@ private fun rejectingDecompositionManifestValidator(rejectedSources: Set<String>
       sourceLabel: String,
     ): DecompositionManifest {
       if (sourceLabel in rejectedSources) {
-        throw InvalidDecompositionManifestSchemaError(sourceLabel, "contract_version: must be '0.5'")
+        throw invalidDecompositionManifestSchema(
+          sourceLabel,
+          "contract_version: must be '0.5'",
+          DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+        )
       }
       return testDecompositionManifestValidator.validateYamlText(yamlText, sourceLabel)
     }

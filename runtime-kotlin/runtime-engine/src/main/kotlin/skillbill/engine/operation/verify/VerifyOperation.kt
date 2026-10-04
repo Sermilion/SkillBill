@@ -1,6 +1,5 @@
 package skillbill.engine.operation.verify
 
-import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -37,6 +36,7 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.WorkflowContinueStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import java.time.Clock
 
 @Inject
 class VerifyOperation(

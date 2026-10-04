@@ -15,11 +15,11 @@ import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFor
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.outcome.planningProgressMessage
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
-import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
 internal fun launchPlanningAttempt(
@@ -82,11 +82,12 @@ internal inline fun composePlanningPrompt(
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
-  val briefing = when (assembly) {
-    is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> assembly.briefing
-    is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
-      throw invalidFeatureTaskRuntimeHandoffProjection(assembly.context)
-  }
+  val briefing =
+    when (assembly) {
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> assembly.briefing
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+        throw invalidFeatureTaskRuntimeHandoffProjection(assembly.context)
+    }
   val write = (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
   if (write is RequiredPhaseWrite.Rejected) {
     val handoffRejection = write.handoffRejection

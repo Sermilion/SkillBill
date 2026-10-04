@@ -185,6 +185,7 @@ private class BoundedExternalProcessSession(
 
   private fun settleOutput() {
     val active = process ?: return
+    attemptCleanup { destroyProcessTree(active) }
     val outputDeadlineNanos =
       if (timedOut) {
         System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_CLEANUP_BUDGET_SECONDS)

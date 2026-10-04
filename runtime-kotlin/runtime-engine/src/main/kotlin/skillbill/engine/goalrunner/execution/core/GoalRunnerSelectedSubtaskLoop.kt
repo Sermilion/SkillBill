@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.execution.core
 
-import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
@@ -27,6 +26,7 @@ import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import java.time.Clock
 
 private sealed interface SubtaskLaunchResult {
   data class Launched(
@@ -145,7 +145,16 @@ class GoalRunnerSelectedSubtaskLoop(
       )
     }
     val reviewBaseline = requireNotNull(baselineCapture.baseline)
-    return when (val prepared = launchPrepare.prepareAttemptedLaunch(state, subtaskId, request, reviewBaseline, planning)) {
+    return when (
+      val prepared =
+        launchPrepare.prepareAttemptedLaunch(
+          state,
+          subtaskId,
+          request,
+          reviewBaseline,
+          planning,
+        )
+    ) {
       is GoalSubtaskLaunchPrepareResult.Prepared ->
         SelectedSubtaskPreparation.Ready(
           subtaskId = subtaskId,

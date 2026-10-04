@@ -1,13 +1,5 @@
 package skillbill.cli
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.install.apply.installApplyPayload
 import skillbill.cli.install.apply.installPlanPayload
@@ -52,6 +44,14 @@ import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.selectedPlatformSlugs
 import skillbill.ports.repository.toFileLocation
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CliInstallPlanApplyRuntimeTest {
   @Test

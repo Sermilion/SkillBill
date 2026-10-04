@@ -14,17 +14,26 @@ enum class ManifestFailureCode : RuntimeFailureCode {
   MANIFEST_FAILURE,
 }
 
-fun missingManifest(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(ManifestFailureCode.MISSING_MANIFEST, message, cause)
+fun missingManifest(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(ManifestFailureCode.MISSING_MANIFEST, message, cause)
 
-fun invalidManifestSchema(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, message, cause)
+fun invalidManifestSchema(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, message, cause)
 
-fun invalidValidationGateDeclaration(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+fun invalidValidationGateDeclaration(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, message, cause)
 
-fun missingValidationGate(message: String, cause: Throwable? = null): SkillBillRuntimeException =
-  SkillBillRuntimeException(ManifestFailureCode.MANIFEST_FAILURE, message, cause)
+fun missingValidationGate(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(ManifestFailureCode.MANIFEST_FAILURE, message, cause)
 
 fun reviewCompositionCycle(message: String): SkillBillRuntimeException =
   SkillBillRuntimeException(ManifestFailureCode.REVIEW_COMPOSITION_CYCLE, message)

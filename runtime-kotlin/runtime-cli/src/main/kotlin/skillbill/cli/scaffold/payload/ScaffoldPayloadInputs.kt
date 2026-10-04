@@ -1,6 +1,5 @@
 package skillbill.cli.scaffold.payload
 
-import java.nio.file.Path
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -12,6 +11,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliFormat
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.model.SkillKind
+import java.nio.file.Path
 
 internal data class NativeScaffoldRunOptions(
   val dryRun: Boolean,

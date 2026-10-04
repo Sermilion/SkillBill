@@ -65,14 +65,14 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE ->
       invalidFeatureTaskRuntimeHandoffProjection(
         InvalidFeatureTaskRuntimeHandoffProjectionContext(
-            workflowId = null,
-            consumerPhaseId = sourceLabel,
-            projectionName = "<root>",
-            projectionContractId = FeatureTaskRuntimeHandoffEnvelopeSchemaPaths.EXPECTED_SCHEMA_ID,
-            projectionContractVersion = FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION,
-            failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID,
-            reason = reason,
-        )
+          workflowId = null,
+          consumerPhaseId = sourceLabel,
+          projectionName = "<root>",
+          projectionContractId = FeatureTaskRuntimeHandoffEnvelopeSchemaPaths.EXPECTED_SCHEMA_ID,
+          projectionContractVersion = FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION,
+          failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID,
+          reason = reason,
+        ),
       )
     FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT ->
       invalidGoalProgressEventSchemaError(

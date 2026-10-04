@@ -1,9 +1,5 @@
 package skillbill.engine.goalrunner.planning.context
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.engine.goalplanning.toEnvelopeMap
 import skillbill.engine.goalplanning.toGoalPlanningPreparationRecord
 import skillbill.error.core.SkillBillRuntimeException
@@ -11,6 +7,10 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class GoalPlanningPreparationRecordMappingTest {
   @Test

@@ -1,14 +1,5 @@
 package skillbill.infrastructure.skills.externalplatformpack
 
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
@@ -74,6 +65,15 @@ import skillbill.scaffold.model.PointerSpec
 import skillbill.scaffold.model.RoutingSignals
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class ExternalPlatformPackCatalogIntegrationTest {
   @Test

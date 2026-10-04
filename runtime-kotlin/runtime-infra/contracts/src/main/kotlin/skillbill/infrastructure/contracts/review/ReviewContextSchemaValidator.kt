@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
-import java.util.logging.Level
-import java.util.logging.Logger
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
@@ -21,6 +19,8 @@ import skillbill.infrastructure.contracts.locator.ReviewContextSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.review.context.ReviewContextWireMap
+import java.util.logging.Level
+import java.util.logging.Logger
 
 internal const val MAX_REPORTED_VIOLATIONS: Int = 4
 

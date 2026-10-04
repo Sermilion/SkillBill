@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 1 - manifest-and-skill-staging
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -55,7 +55,7 @@ skill-bill goal SKILL-399
 
 ## Implementation Details
 
-The preplan digest records this subtask as already on `feat/SKILL-399-shell-content-error-codes` (history entry `runtime-kotlin/runtime-contracts/agent/history.md#1a51faace563`, decision `runtime-kotlin/runtime-contracts/agent/decisions.md#292a459e575d`). `ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt` already declare only `ManifestFailureCode`, `SkillStagingFailureCode` and message functions. `ShellContentContractFailures.kt` already registers both enums. This plan is therefore verify-only. Implement confirms the landed end state and repairs only a gap it actually finds. It does not redo the conversion. All paths are relative to `runtime-kotlin/`.
+The preplan digest records this subtask as already on `feat/SKILL-399-shell-content-error-codes` (history entry `runtime-kotlin/runtime-contracts/agent/history.md#1a51faace563`, decision `runtime-kotlin/runtime-contracts/agent/decisions.md#292a459e575d`). `ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt` already declare only `ManifestFailureCode`, `SkillStagingFailureCode` and message functions. `ShellContentContractFailures.kt` already registers both enums. This plan is therefore verify-only. Implement confirms the landed end state and repairs only a gap it actually finds. It does not redo the conversion. All paths are relative to `../../../runtime-kotlin`.
 
 1. Confirm the two files hold no class. Serves AC-001.
    - Inspect `runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt`. Each must contain only its enum (implementing `skillbill.error.core.RuntimeFailureCode`) and top-level functions returning `SkillBillRuntimeException`. There must be no `class`, `object`, typealias or subclass of `ShellContentContractException`.

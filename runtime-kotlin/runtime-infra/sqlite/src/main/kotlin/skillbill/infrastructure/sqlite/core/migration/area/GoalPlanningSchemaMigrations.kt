@@ -1,8 +1,8 @@
 package skillbill.infrastructure.sqlite.core.migration.area
 
-import java.sql.Connection
 import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import java.sql.Connection
 
 internal fun rebuildGoalPlanningPlansForPhaseOutputVersion2(connection: Connection) {
   connection.createStatement().use { statement ->

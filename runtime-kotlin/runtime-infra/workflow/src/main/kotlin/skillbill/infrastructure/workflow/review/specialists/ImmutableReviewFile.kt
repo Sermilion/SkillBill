@@ -1,7 +1,5 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
@@ -9,6 +7,8 @@ import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
 import skillbill.infrastructure.workflow.process.GIT_TIMEOUT_SECONDS
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.infrastructure.workflow.review.broker.validateRepositoryMapping
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal fun readImmutableReviewFile(
   root: Path,

@@ -8,6 +8,8 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionResult
 
 object FeatureTaskRuntimeHandoffProjectionValidator {
   const val COMPACT_REFERENCE_MAX_LENGTH: Int = 512
@@ -19,58 +21,18 @@ object FeatureTaskRuntimeHandoffProjectionValidator {
         throw invalidFeatureTaskRuntimeHandoffProjection(result.context)
     }
 
-  fun validateToResult(
-    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
-  ): FeatureTaskRuntimeHandoffProjectionResult {
-    FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectUnselectedStepOutputs(inputs)?.let {
-      return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it)
-    }
-    FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectDuplicateProjectionNames(inputs)?.let {
-      return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it)
-    }
+  fun validateToResult(inputs: FeatureTaskRuntimeHandoffProjectionInputs): FeatureTaskRuntimeHandoffProjectionResult {
+    val declarationRejection =
+      FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectUnselectedStepOutputs(inputs)
+        ?: FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectDuplicateProjectionNames(inputs)
+    declarationRejection?.let { return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it) }
     val projections = mutableListOf<FeatureTaskRuntimeHandoffProjection>()
     for (declaration in inputs.declarations) {
-      FeatureTaskRuntimeHandoffProjectionDeclarationChecks.requireSameConsumer(inputs, declaration)?.let {
-        return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it)
+      when (val result = resolveProjection(inputs, declaration)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected ->
+          return FeatureTaskRuntimeHandoffProjectionResult.Rejected(result.context)
+        is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value?.let(projections::add)
       }
-      FeatureTaskRuntimeHandoffProjectionDeclarationChecks
-        .requireSupportedContractVersion(inputs, declaration)
-        ?.let { return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it) }
-      val resolvedFields =
-        when (val result = FeatureTaskRuntimeHandoffProjectionFieldResolver.resolveFields(inputs, declaration)) {
-          is FeatureTaskRuntimeHandoffProjectionStep.Rejected ->
-            return FeatureTaskRuntimeHandoffProjectionResult.Rejected(result.context)
-          is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value
-        }
-      val checkpointResult =
-        FeatureTaskRuntimeHandoffProjectionEnvelopeWire.enforceCheckpointPolicy(
-          inputs,
-          declaration,
-          resolvedFields.orEmpty(),
-        )
-      val fields =
-        when (checkpointResult) {
-          is FeatureTaskRuntimeHandoffProjectionStep.Rejected ->
-            return FeatureTaskRuntimeHandoffProjectionResult.Rejected(checkpointResult.context)
-          is FeatureTaskRuntimeHandoffProjectionStep.Value -> checkpointResult.value
-        }
-      if (resolvedFields == null) continue
-      FeatureTaskRuntimeHandoffProjectionDeclarationChecks.enforceDeclaredShape(inputs, declaration, fields)?.let {
-        return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it)
-      }
-      FeatureTaskRuntimeHandoffProjectionDeclarationChecks.enforceCompactReferences(inputs, declaration, fields)?.let {
-        return FeatureTaskRuntimeHandoffProjectionResult.Rejected(it)
-      }
-      projections += FeatureTaskRuntimeHandoffProjection(
-        projectionName = declaration.projectionName,
-        sourceRef = declaration.sourceRef,
-        projectionContractId = declaration.projectionContractId,
-        projectionContractVersion = declaration.projectionContractVersion,
-        promptVisibility = declaration.promptVisibility,
-        fields = fields,
-        producerIteration =
-          FeatureTaskRuntimeHandoffProjectionFieldResolver.resolvedProducerIteration(inputs, declaration),
-      )
     }
     return FeatureTaskRuntimeHandoffProjectionResult.Accepted(
       FeatureTaskRuntimeHandoffEnvelope(
@@ -79,6 +41,64 @@ object FeatureTaskRuntimeHandoffProjectionValidator {
         repositoryCheckpoint = inputs.resolvedCheckpoint,
       ),
     )
+  }
+
+  private fun resolveProjection(
+    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
+    declaration: PhaseHandoffProjectionDeclaration,
+  ): FeatureTaskRuntimeHandoffProjectionStep<FeatureTaskRuntimeHandoffProjection?> {
+    val rejection =
+      FeatureTaskRuntimeHandoffProjectionDeclarationChecks.requireSameConsumer(inputs, declaration)
+        ?: FeatureTaskRuntimeHandoffProjectionDeclarationChecks.requireSupportedContractVersion(inputs, declaration)
+    rejection?.let { return FeatureTaskRuntimeHandoffProjectionStep.Rejected(it) }
+    val fields =
+      when (val result = resolveCheckpointFields(inputs, declaration)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> return result
+        is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value
+      }
+    return if (fields == null) {
+      FeatureTaskRuntimeHandoffProjectionStep.Value(null)
+    } else {
+      val shapeRejection =
+        FeatureTaskRuntimeHandoffProjectionDeclarationChecks.enforceDeclaredShape(inputs, declaration, fields)
+          ?: FeatureTaskRuntimeHandoffProjectionDeclarationChecks.enforceCompactReferences(inputs, declaration, fields)
+      shapeRejection?.let { FeatureTaskRuntimeHandoffProjectionStep.Rejected(it) }
+        ?: FeatureTaskRuntimeHandoffProjectionStep.Value(
+          FeatureTaskRuntimeHandoffProjection(
+            projectionName = declaration.projectionName,
+            sourceRef = declaration.sourceRef,
+            projectionContractId = declaration.projectionContractId,
+            projectionContractVersion = declaration.projectionContractVersion,
+            promptVisibility = declaration.promptVisibility,
+            fields = fields,
+            producerIteration =
+              FeatureTaskRuntimeHandoffProjectionFieldResolver.resolvedProducerIteration(inputs, declaration),
+          ),
+        )
+    }
+  }
+
+  private fun resolveCheckpointFields(
+    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
+    declaration: PhaseHandoffProjectionDeclaration,
+  ): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> {
+    val resolvedFields =
+      when (val result = FeatureTaskRuntimeHandoffProjectionFieldResolver.resolveFields(inputs, declaration)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> return result
+        is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value
+      }
+    return when (
+      val checkpoint =
+        FeatureTaskRuntimeHandoffProjectionEnvelopeWire.enforceCheckpointPolicy(
+          inputs,
+          declaration,
+          resolvedFields.orEmpty(),
+        )
+    ) {
+      is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> checkpoint
+      is FeatureTaskRuntimeHandoffProjectionStep.Value ->
+        FeatureTaskRuntimeHandoffProjectionStep.Value(checkpoint.value.takeIf { resolvedFields != null })
+    }
   }
 
   fun privateEvidenceReference(
@@ -109,16 +129,6 @@ internal fun rejectedFeatureTaskRuntimeHandoffProjectionContext(
     failureKind = failureKind,
     reason = reason,
   )
-
-sealed interface FeatureTaskRuntimeHandoffProjectionResult {
-  data class Accepted(
-    val envelope: FeatureTaskRuntimeHandoffEnvelope,
-  ) : FeatureTaskRuntimeHandoffProjectionResult
-
-  data class Rejected(
-    val context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
-  ) : FeatureTaskRuntimeHandoffProjectionResult
-}
 
 internal sealed interface FeatureTaskRuntimeHandoffProjectionStep<out T> {
   data class Value<T>(val value: T) : FeatureTaskRuntimeHandoffProjectionStep<T>

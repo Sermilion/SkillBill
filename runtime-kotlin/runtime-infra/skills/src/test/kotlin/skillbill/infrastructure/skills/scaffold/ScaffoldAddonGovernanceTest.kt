@@ -1,13 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.isDirectory
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.manifest.renderGovernedAddonManifestRegistration
@@ -17,6 +9,14 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.Templat
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.isDirectory
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class ScaffoldAddonGovernanceTest {
   @Test

@@ -1,8 +1,5 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
@@ -10,6 +7,9 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class GoalProgressEventSchemaValidatorTest {
   @Test

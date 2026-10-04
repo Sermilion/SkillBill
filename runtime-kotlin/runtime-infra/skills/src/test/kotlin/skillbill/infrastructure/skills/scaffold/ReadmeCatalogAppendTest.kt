@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import java.nio.file.Path
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -9,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.manifest.appendReadmeCatalogRow
+import java.nio.file.Path
 
 class ReadmeCatalogAppendTest {
   private val readmeWithCatalog =

@@ -1,5 +1,10 @@
 package skillbill.infrastructure.skills.scaffold
 
+import org.yaml.snakeyaml.Yaml
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseValidationGate
+import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -7,11 +12,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import org.yaml.snakeyaml.Yaml
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ManifestFailureCode
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseValidationGate
-import skillbill.testing.repoRootFromTest
 
 class ShellContentLoaderValidationGateTest {
   @Test

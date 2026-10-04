@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.recovery
 
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
@@ -24,6 +23,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Path
 
 fun interface GoalPlanningStatusReasonCoherence {
   fun align(request: GoalPlanningStatusAlignRequest): GoalPlanningStatusSnapshot

@@ -1,22 +1,5 @@
 package skillbill.engine.goalrunner
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.RecordingSpecScratchStore
@@ -207,6 +190,23 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import skillbill.goalrunner.model.GoalPlanningStatusReasons.NOT_STARTED as NOT_STARTED_REASON
 
 class GoalRunnerTest {
@@ -425,12 +425,13 @@ class GoalRunnerTest {
 
   @Test
   fun `child preparation conflict blocks its selected subtask before launching an agent`() {
-    val store = InMemoryGoalManifestStore(
-      manifest = manifest(subtaskCount = 2).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
-    ).apply {
-      conflictingChildSubtaskId = 2
-      childPreparationConflictReason = "stored plan conflicts with selected child"
-    }
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 2).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      ).apply {
+        conflictingChildSubtaskId = 2
+        childPreparationConflictReason = "stored plan conflicts with selected child"
+      }
     val outcomes = RecordingOutcomeStore()
     val launcher = RecordingSubtaskLauncher { launchFacts() }
     val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))

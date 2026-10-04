@@ -10,7 +10,8 @@ import com.networknt.schema.ValidationMessage
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidDecompositionManifestBundleJournalError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestBundleJournal
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
@@ -39,22 +40,22 @@ object DecompositionManifestBundleJournalSchemaValidator {
   ) {
     val contractVersion = manifest[SharedPayloadKeys.CONTRACT_VERSION]
     if (contractVersion != BUNDLE_JOURNAL_CONTRACT_VERSION) {
-      throw InvalidDecompositionManifestBundleJournalError(
+      throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason =
           "Unsupported contract_version '$contractVersion'. Supported version is " +
             "$BUNDLE_JOURNAL_CONTRACT_VERSION. Back up the marker and its staging directory, " +
             "review evidence manually, then remove the marker only after backup.",
-        failureCode = "unsupported_contract_version",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_UNSUPPORTED_CONTRACT_VERSION,
       )
     }
     val instance: JsonNode = mapper.valueToTree(manifest)
     val errors: Set<ValidationMessage> = schema().validate(instance)
     if (errors.isNotEmpty()) {
-      throw InvalidDecompositionManifestBundleJournalError(
+      throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason = errors.sortedBy { it.message }.joinToString("; ") { it.message },
-        failureCode = "schema_invalid",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_INVALID,
       )
     }
   }
@@ -65,10 +66,10 @@ object DecompositionManifestBundleJournalSchemaValidator {
   ): JsonNode {
     val node = parseYamlNode(yamlText, sourceLabel)
     if (node == null || !node.isObject) {
-      throw InvalidDecompositionManifestBundleJournalError(
+      throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason = "<root> must be an object.",
-        failureCode = "root_not_object",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ROOT_NOT_OBJECT,
       )
     }
     return node
@@ -87,10 +88,10 @@ object DecompositionManifestBundleJournalSchemaValidator {
     } catch (error: CancellationException) {
       throw error
     } catch (error: IOException) {
-      throw InvalidDecompositionManifestBundleJournalError(
+      throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason = error.message ?: "Malformed YAML.",
-        failureCode = "yaml_parse_error",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_YAML_PARSE_ERROR,
         cause = error,
       )
     }
@@ -102,21 +103,19 @@ object DecompositionManifestBundleJournalSchemaValidator {
     try {
       val converted =
         JsonCodec.anyToStringAnyMap(yamlMapper.convertValue(node, Map::class.java))
-          ?: throw InvalidDecompositionManifestBundleJournalError(
+          ?: throw invalidDecompositionManifestBundleJournal(
             sourceLabel = sourceLabel,
             reason = "<root> must be an object.",
-            failureCode = "root_not_object",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_ROOT_NOT_OBJECT,
           )
       converted
     } catch (error: CancellationException) {
       throw error
-    } catch (error: InvalidDecompositionManifestBundleJournalError) {
-      throw error
     } catch (error: IllegalArgumentException) {
-      throw InvalidDecompositionManifestBundleJournalError(
+      throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason = error.message ?: "Malformed YAML object.",
-        failureCode = "yaml_object_error",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_YAML_OBJECT_ERROR,
         cause = error,
       )
     }
@@ -128,17 +127,17 @@ object DecompositionManifestBundleJournalSchemaValidator {
         classLoader = DecompositionManifestBundleJournalSchemaValidator::class.java.classLoader,
         classpathResource = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
         missingResource = {
-          InvalidDecompositionManifestBundleJournalError(
+          invalidDecompositionManifestBundleJournal(
             sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
             reason = "Canonical bundle journal schema resource is missing from the classpath.",
-            failureCode = "schema_resource_missing",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_RESOURCE_MISSING,
           )
         },
         processingFailure = { cause ->
-          InvalidDecompositionManifestBundleJournalError(
+          invalidDecompositionManifestBundleJournal(
             sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
             reason = cause.message ?: cause::class.simpleName.orEmpty(),
-            failureCode = "schema_load_error",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_LOAD_ERROR,
             cause = cause,
           )
         },
@@ -146,10 +145,10 @@ object DecompositionManifestBundleJournalSchemaValidator {
         expectedSchemaId = DecompositionManifestBundleJournalSchemaPaths.EXPECTED_SCHEMA_ID,
         expectedContractVersion = BUNDLE_JOURNAL_CONTRACT_VERSION,
         identityFailure = { reason ->
-          InvalidDecompositionManifestBundleJournalError(
+          invalidDecompositionManifestBundleJournal(
             sourceLabel = DecompositionManifestBundleJournalSchemaPaths.CLASSPATH_RESOURCE,
             reason = reason,
-            failureCode = "schema_identity_error",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_IDENTITY_ERROR,
           )
         },
       ),

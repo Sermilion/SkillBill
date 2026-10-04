@@ -1,6 +1,9 @@
 package skillbill.mcp.telemetry
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -8,9 +11,6 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.testing.repoRootFromTest
 
 class TelemetryEventSchemaCleanupTest {
   @Test

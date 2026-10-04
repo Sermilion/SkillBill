@@ -1,11 +1,11 @@
 package skillbill.engine.goalrunner.planning.recovery
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
 
 class GoalPlanningPreplanProseReadTest {
   @Test

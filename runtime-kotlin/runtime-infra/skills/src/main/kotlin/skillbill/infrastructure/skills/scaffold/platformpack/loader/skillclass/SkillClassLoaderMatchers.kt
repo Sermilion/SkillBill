@@ -1,9 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.coroutines.cancellation.CancellationException
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.error.YAMLException
 import skillbill.error.shellcontent.invalidManifestSchema
@@ -11,6 +7,10 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.SkillClassManifest
 import skillbill.scaffold.model.SkillClassMatcher
 import skillbill.scaffold.model.SkillClassSection
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.coroutines.cancellation.CancellationException
 
 internal fun SkillClassManifest.matchesSkillName(skillName: String): Boolean {
   if (matchers.any { matcher -> matcher.excludeExact.contains(skillName) }) {

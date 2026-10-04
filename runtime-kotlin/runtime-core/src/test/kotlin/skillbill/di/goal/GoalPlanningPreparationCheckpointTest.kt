@@ -27,6 +27,7 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import kotlin.test.assertFalse
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 class GoalPlanningPreparationCheckpointTest {
@@ -267,7 +268,11 @@ class GoalPlanningPreparationCheckpointTest {
 
     fun readPlan(subtaskId: Int = 1): GoalSubtaskPlanCheckpoint? =
       database.read {
-        it.goalPlanningPreparations.findSubtaskPlan(identity(), subtaskId, descriptor(subtaskId).governedSubSpecPath).foundPlan()
+        it.goalPlanningPreparations.findSubtaskPlan(
+          identity(),
+          subtaskId,
+          descriptor(subtaskId).governedSubSpecPath,
+        ).foundPlan()
       }
   }
 

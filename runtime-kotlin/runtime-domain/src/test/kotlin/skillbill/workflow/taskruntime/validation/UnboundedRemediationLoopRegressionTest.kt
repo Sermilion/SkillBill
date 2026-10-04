@@ -39,9 +39,10 @@ class UnboundedRemediationLoopRegressionTest {
           currentPhaseId = def.PHASE_AUDIT,
           verdict = FeatureTaskRuntimeVerdict.GAPS_FOUND,
           edgeIterationCount = consumed,
-          context = FeatureTaskRuntimeTransitionContext(
-            settledVerdictsByPhaseId = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND),
-          ),
+          context =
+            FeatureTaskRuntimeTransitionContext(
+              settledVerdictsByPhaseId = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND),
+            ),
         )
       assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(violation)
     }

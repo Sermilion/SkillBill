@@ -1,11 +1,11 @@
 
 package skillbill.engine.featuretask.phase.prompt.compose
 
-import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
+import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.engine.featuretask.runner.IMPLEMENT_OUTPUT
 import skillbill.engine.featuretask.runner.SIMPLIFY_OUTPUT
 import skillbill.engine.featuretask.runner.phaseDeclaration

@@ -1,16 +1,5 @@
 package skillbill.infrastructure.skills.install
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.logging.Handler
-import java.util.logging.LogRecord
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
@@ -23,6 +12,17 @@ import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SkillReconciliationOutcome
 import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
 import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 private const val STALE_CONTRACT_VERSION: String = "0.9"
 

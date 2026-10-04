@@ -3,9 +3,6 @@ package skillbill.infrastructure.workflow.featuretask
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
@@ -16,6 +13,9 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvide
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceDiffPayloadRef
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceFileEntry
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceHunkEntry
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal fun readStored(
   mapper: ObjectMapper,

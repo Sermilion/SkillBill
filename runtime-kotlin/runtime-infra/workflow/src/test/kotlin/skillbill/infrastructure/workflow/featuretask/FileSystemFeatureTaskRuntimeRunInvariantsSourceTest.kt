@@ -1,12 +1,12 @@
 package skillbill.infrastructure.workflow.featuretask
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 
 class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
   @Test

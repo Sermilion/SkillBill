@@ -4,13 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
-import java.util.logging.Logger
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
+import java.util.logging.Logger
 
 internal val platformPackSchemaLog: Logger =
   Logger.getLogger("skillbill.scaffold.platformpack.PlatformPackSchemaValidator")
@@ -29,7 +29,8 @@ internal class PlatformPackSchemaValidator {
 
     val contractVersionConst = errors.firstOrNull { it.isContractVersionConstMismatch() }
     if (contractVersionConst != null && enforceContractVersion) {
-      throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
+      throw SkillBillRuntimeException(
+        InstallFailureCode.CONTRACT_VERSION_MISMATCH,
         buildContractVersionMismatchMessage(slug, instance, contractVersionConst),
       )
     }

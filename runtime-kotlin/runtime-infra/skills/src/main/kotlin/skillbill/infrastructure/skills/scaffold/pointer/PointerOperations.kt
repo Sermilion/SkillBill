@@ -1,10 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
-import java.io.File
-import java.nio.file.FileSystemException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.host.jvm.atomicWriteBytes
@@ -13,6 +8,11 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_C
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec
+import java.io.File
+import java.nio.file.FileSystemException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
 
 internal data class PointerRegenerationResult(
   val regeneratedFiles: List<Path>,
@@ -129,7 +129,8 @@ private fun writePointerArtifact(
 
 private fun requireMatchingContractVersion(pack: PlatformManifest) {
   if (pack.contractVersion != SHELL_CONTRACT_VERSION) {
-    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack '${pack.slug}': declares contract_version '${pack.contractVersion}' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

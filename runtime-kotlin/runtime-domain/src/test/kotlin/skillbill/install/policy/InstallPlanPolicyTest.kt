@@ -1,9 +1,5 @@
 package skillbill.install.policy
 
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.install.model.InstallAgentDefaultTarget
@@ -34,6 +30,10 @@ import skillbill.model.FileLocation
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class InstallPlanPolicyTest {
   @Test

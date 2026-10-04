@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 2 - scaffold-and-review-context
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -49,7 +49,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Exist
 
 ## Implementation Details
 
-Source: the upstream SKILL-399 preplan digest, which covers all eight subtasks. The digest says subtask 2's conversion is already on `feat/SKILL-399-shell-content-error-codes`. `ScaffoldShellContentErrors.kt` and `ReviewContextShellContentErrors.kt` now declare only code enums and message functions, and `runtime-kotlin/runtime-contracts/agent/history.md#6bd86d675578` records the landing. This plan is therefore verify-only, with a conditional repair step. It replaces the earlier conversion plan, which assumed the classes were still present. Assumption for implement to confirm: the tree still matches the digest. All paths below are relative to `runtime-kotlin/`.
+Source: the upstream SKILL-399 preplan digest, which covers all eight subtasks. The digest says subtask 2's conversion is already on `feat/SKILL-399-shell-content-error-codes`. `ScaffoldShellContentErrors.kt` and `ReviewContextShellContentErrors.kt` now declare only code enums and message functions, and `runtime-kotlin/runtime-contracts/agent/history.md#6bd86d675578` records the landing. This plan is therefore verify-only, with a conditional repair step. It replaces the earlier conversion plan, which assumed the classes were still present. Assumption for implement to confirm: the tree still matches the digest. All paths below are relative to `../../../runtime-kotlin`.
 
 1. Verify the two owned files (AC-001). In `runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ScaffoldShellContentErrors.kt` and `ReviewContextShellContentErrors.kt`, confirm there is no `class`/`object` throwable declaration, only `ScaffoldFailureCode`, `ReviewContextFailureCode` (each implementing `RuntimeFailureCode`) and functions returning `SkillBillRuntimeException`. Confirm no main source declares a typealias named after a deleted scaffold or review-context class. Tests: none to add.
 

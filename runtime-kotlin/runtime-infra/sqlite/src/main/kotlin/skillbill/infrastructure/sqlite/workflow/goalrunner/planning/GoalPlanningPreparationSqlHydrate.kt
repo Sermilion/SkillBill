@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.sql.ResultSet
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.workflow.featuretask.encodeWorkflowArtifact
@@ -9,6 +8,7 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.workflow.taskruntime.artifact.decodePhaseOutputRepairEvidenceFromArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
+import java.sql.ResultSet
 
 internal fun SharedGoalPreplanCheckpoint.repairEvidenceJson(): String? =
   repairEvidence?.let {

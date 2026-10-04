@@ -1,13 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import java.nio.file.FileSystemException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.nio.file.attribute.DosFileAttributeView
-import java.nio.file.attribute.PosixFileAttributeView
-import java.nio.file.attribute.PosixFilePermission
-import kotlin.coroutines.cancellation.CancellationException
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.resolveUserHome
@@ -22,6 +15,14 @@ import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.SupportedAgent
+import java.nio.file.FileSystemException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.attribute.DosFileAttributeView
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
+import kotlin.coroutines.cancellation.CancellationException
 
 internal fun linkProviderAgents(
   provider: NativeAgentProvider,
@@ -130,11 +131,13 @@ internal fun verifyInstalledNativeAgent(entry: NativeAgentLinkInventoryEntry) {
     cause: Throwable? = null,
   ): Nothing =
     throw missingInstalledNativeAgent(
-      logicalName = entry.logicalName,
-      provider = entry.provider,
-      expectedPath = installed.toString(),
-      reason = reason,
-      repairCommand = repair,
+      MissingInstalledNativeAgentContext(
+        logicalName = entry.logicalName,
+        provider = entry.provider,
+        expectedPath = installed.toString(),
+        reason = reason,
+        repairCommand = repair,
+      ),
       cause = cause,
     )
   if (!Files.isSymbolicLink(installed)) fail("managed link is missing")

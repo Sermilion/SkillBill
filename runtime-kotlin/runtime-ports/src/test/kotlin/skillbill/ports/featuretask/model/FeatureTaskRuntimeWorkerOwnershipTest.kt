@@ -1,8 +1,8 @@
 package skillbill.ports.featuretask.model
 
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
 
 class FeatureTaskRuntimeWorkerOwnershipTest {
   @Test

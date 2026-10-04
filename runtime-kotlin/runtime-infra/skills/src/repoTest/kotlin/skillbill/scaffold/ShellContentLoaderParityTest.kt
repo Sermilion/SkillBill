@@ -1,13 +1,5 @@
 package skillbill.scaffold
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.name
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
@@ -20,6 +12,14 @@ import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMd
 import skillbill.model.toPath
 import skillbill.testing.repoRootFromTest
 import skillbill.testing.seedConformingPlatformPack
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.name
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ShellContentLoaderParityTest {
   @Test

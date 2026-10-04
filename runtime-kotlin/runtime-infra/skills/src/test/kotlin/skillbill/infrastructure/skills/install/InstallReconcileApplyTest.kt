@@ -1,5 +1,11 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
+import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
+import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.install.model.BaselineManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -8,12 +14,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
-import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
-import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
-import skillbill.install.model.BaselineManifest
 
 class InstallReconcileApplyTest : InstallApplyTestSupport() {
   private fun roots(repoRoot: Path) =

@@ -150,16 +150,17 @@ object FeatureTaskRuntimeRunLoopDrive {
     edgeIterationCount: Int,
   ): FeatureTaskRuntimeNextPhase? =
     when (
-      val result = FeatureTaskRuntimeTransitionFunction.nextTransition(
-        declaration = traversal(context),
-        currentPhaseId = phaseId,
-        verdict = verdict,
-        edgeIterationCount = edgeIterationCount,
-        context =
-          FeatureTaskRuntimeTransitionContext(
-            settledVerdictsByPhaseId = context.state.settledVerdictsByPhaseId,
-          ),
-      )
+      val result =
+        FeatureTaskRuntimeTransitionFunction.nextTransition(
+          declaration = traversal(context),
+          currentPhaseId = phaseId,
+          verdict = verdict,
+          edgeIterationCount = edgeIterationCount,
+          context =
+            FeatureTaskRuntimeTransitionContext(
+              settledVerdictsByPhaseId = context.state.settledVerdictsByPhaseId,
+            ),
+        )
     ) {
       is FeatureTaskRuntimeTransitionResult.Resolved -> result.next
       is FeatureTaskRuntimeTransitionResult.PhaseOrderViolation -> {

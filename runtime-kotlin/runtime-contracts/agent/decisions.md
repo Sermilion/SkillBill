@@ -1,3 +1,9 @@
+## [2026-10-04] Keep decomposition failure codes with their vocabulary owners
+Context: SKILL-399 subtask 8 removes manifest and bundle-journal exception classes whose failureCode properties mixed domain wire codes with workflow-only conditions.
+Decision: Reuse DecompositionManifestValidationFailureCode entries for existing domain vocabulary. WorkflowFailureCode owns five other manifest conditions and one entry per distinct journal literal.
+Reason: Parallel codes would duplicate the domain vocabulary, and runtime-contracts cannot depend on the domain enum. Missing-manifest and incomplete-bundle conditions need their own workflow entries because neither has a domain wire code.
+Alternatives considered: Pass wire strings or add parallel workflow entries for domain codes. The settled plan passes enum entries directly and keeps each vocabulary with its owner.
+
 ## [2026-10-04] Preserve workflow-state family after class removal
 Context: SKILL-399 subtask 7 removes InvalidWorkflowStateSchemaError after subtask 6 converted its checkpoint-version subclass to a distinct code.
 Decision: Classify both WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA and FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION through isInvalidWorkflowStateFailure. Register WorkflowFailureCode in shell-content classification.

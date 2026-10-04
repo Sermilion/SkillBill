@@ -1,9 +1,5 @@
 package skillbill.di.install
 
-import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.di.core.OptionalCallbacks
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.RuntimeContext
@@ -14,6 +10,10 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.model.EnvironmentContext
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class InstallSelectionRuntimeBoundaryTest {
   @Test

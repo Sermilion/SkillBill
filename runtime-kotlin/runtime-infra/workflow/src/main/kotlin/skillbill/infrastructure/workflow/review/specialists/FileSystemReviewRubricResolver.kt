@@ -1,7 +1,5 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import java.nio.file.Files
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.model.toPath
@@ -11,6 +9,8 @@ import skillbill.ports.review.preparation.ReviewRubricResolver
 import skillbill.review.plan.ReviewAddonSelectionPolicy
 import skillbill.scaffold.model.GovernedAddonSelection
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.Path
 
 @Inject
 class FileSystemReviewRubricResolver : ReviewRubricResolver {

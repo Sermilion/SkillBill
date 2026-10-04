@@ -1,10 +1,10 @@
 package skillbill.review.model
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ReviewContextFailureCode
 
 class ReviewStageStateDurableDecodeTest {
   @Test

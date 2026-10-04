@@ -1,7 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.InvalidAgentAddonAgentIdError
@@ -9,11 +7,7 @@ import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingPlatformPackError
 import skillbill.error.shellcontent.unknownPreShellFamilyError
 import skillbill.infrastructure.skills.agentaddon.AgentAddonSchemaValidator
-import skillbill.infrastructure.skills.scaffold.payload.rejectLeafSubagentSpecialists as policyRejectLeafSubagentSpecialists
 import skillbill.infrastructure.skills.scaffold.payload.requireStringListPayload
-import skillbill.infrastructure.skills.scaffold.payload.requireStringMap as requireString
-import skillbill.infrastructure.skills.scaffold.payload.requireStringOrDefaultMap as requireStringOrDefault
-import skillbill.infrastructure.skills.scaffold.payload.resolvePlatformPackSelection as policyResolvePlatformPackSelection
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.PRE_SHELL_FAMILIES
 import skillbill.install.model.SupportedAgent
@@ -22,6 +16,12 @@ import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_OVERRIDE_PILOTED
 import skillbill.scaffold.policy.model.OptionalSubagents
 import skillbill.scaffold.policy.model.PlatformPackDefaults
+import java.nio.file.Files
+import java.nio.file.Path
+import skillbill.infrastructure.skills.scaffold.payload.rejectLeafSubagentSpecialists as policyRejectLeafSubagentSpecialists
+import skillbill.infrastructure.skills.scaffold.payload.requireStringMap as requireString
+import skillbill.infrastructure.skills.scaffold.payload.requireStringOrDefaultMap as requireStringOrDefault
+import skillbill.infrastructure.skills.scaffold.payload.resolvePlatformPackSelection as policyResolvePlatformPackSelection
 import skillbill.scaffold.policy.platformpack.platformPackNotes as policyPlatformPackNotes
 
 internal data class ScaffoldPlatformOverridePlanArgs(

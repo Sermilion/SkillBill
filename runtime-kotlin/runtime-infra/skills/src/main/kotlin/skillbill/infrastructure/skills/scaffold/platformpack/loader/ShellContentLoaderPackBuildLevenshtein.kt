@@ -1,9 +1,9 @@
 
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
+import java.nio.file.Path
 
 internal fun guardAgainstAnchoredFieldTypos(
   slug: String,

@@ -208,12 +208,13 @@ class ApplicationPersistencePortWorkflowTest {
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
 
-    val rejection = assertIs<RequiredPhaseWrite.Rejected>(
-      recorder.recordPhaseBriefing(
-        workflowId,
-        handoffBriefing(envelope = handoffEnvelope().copy(contractVersion = "9.9")),
-      ),
-    ).handoffRejection
+    val rejection =
+      assertIs<RequiredPhaseWrite.Rejected>(
+        recorder.recordPhaseBriefing(
+          workflowId,
+          handoffBriefing(envelope = handoffEnvelope().copy(contractVersion = "9.9")),
+        ),
+      ).handoffRejection
 
     assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, rejection?.failureKind)
     assertEquals("implement", rejection?.consumerPhaseId)
@@ -228,13 +229,13 @@ class ApplicationPersistencePortWorkflowTest {
     val workflowId = openTaskRuntimeWorkflow(database)
     val rejection =
       InvalidFeatureTaskRuntimeHandoffProjectionContext(
-          workflowId = workflowId,
-          consumerPhaseId = "implement",
-          projectionName = "plan_receipt",
-          projectionContractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE,
-          projectionContractVersion = "0.2",
-          failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
-          reason = "repository checkpoint differs",
+        workflowId = workflowId,
+        consumerPhaseId = "implement",
+        projectionName = "plan_receipt",
+        projectionContractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE,
+        projectionContractVersion = "0.2",
+        failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
+        reason = "repository checkpoint differs",
       )
 
     assertTrue(recorder.recordProjectionRejection(rejection, "checkpoint-2"))

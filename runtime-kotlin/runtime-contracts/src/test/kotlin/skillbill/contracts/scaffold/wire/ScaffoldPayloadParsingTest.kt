@@ -1,10 +1,10 @@
 package skillbill.contracts.scaffold.wire
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ScaffoldFailureCode
 
 class ScaffoldPayloadParsingTest {
   @Test

@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 4 - goal-planning-preparation-results
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -72,7 +72,7 @@ skill-bill goal SKILL-399
 
 ## Implementation Details
 
-All paths are under `runtime-kotlin/`. Line anchors come from the SKILL-399 preplan digest; apply each step to the code wherever it is now. Main sources live under `<module>/src/main/kotlin/skillbill/...`.
+All paths are under `../../../runtime-kotlin`. Line anchors come from the SKILL-399 preplan digest; apply each step to the code wherever it is now. Main sources live under `<module>/src/main/kotlin/skillbill/...`.
 
 ### Settled decisions
 

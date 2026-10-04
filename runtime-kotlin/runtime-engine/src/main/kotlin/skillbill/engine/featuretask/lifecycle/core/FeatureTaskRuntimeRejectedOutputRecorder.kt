@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import java.time.Clock
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
@@ -32,6 +31,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionCapOf
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionViolationClassOf
+import java.time.Clock
 
 private fun SkillBillRuntimeException.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
   when (code as? RejectedOutputDiagnosticFailureCode) {
@@ -204,7 +204,8 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     } catch (error: SkillBillRuntimeException) {
       when (error.code) {
         WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
-        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA ->
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA,
+        ->
           unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
         else -> unreadable(error.degradableFailureClass() ?: throw error)
       }
@@ -235,7 +236,8 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     } catch (error: SkillBillRuntimeException) {
       when (error.code) {
         WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
-        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA ->
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA,
+        ->
           degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
         else -> degrade(error.degradableFailureClass() ?: throw error)
       }

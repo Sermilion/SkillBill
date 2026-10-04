@@ -153,26 +153,27 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
         ),
       )
     }
-    val projected = when (value) {
-      is Iterable<*> ->
-        FeatureTaskRuntimeHandoffProjectionValue.TextList(
-          value.map { item ->
-            when (item) {
-              is String -> item
-              is Map<*, *> ->
-                JsonCodec.mapToJsonString(
-                  item.entries.associate { (key, entryValue) -> key.toString() to entryValue },
-                )
-              else -> item.toString()
-            }
-          },
-        )
-      is Map<*, *> ->
-        FeatureTaskRuntimeHandoffProjectionValue.Text(
-          JsonCodec.mapToJsonString(value.entries.associate { (key, entryValue) -> key.toString() to entryValue }),
-        )
-      else -> FeatureTaskRuntimeHandoffProjectionValue.Text(value.toString())
-    }
+    val projected =
+      when (value) {
+        is Iterable<*> ->
+          FeatureTaskRuntimeHandoffProjectionValue.TextList(
+            value.map { item ->
+              when (item) {
+                is String -> item
+                is Map<*, *> ->
+                  JsonCodec.mapToJsonString(
+                    item.entries.associate { (key, entryValue) -> key.toString() to entryValue },
+                  )
+                else -> item.toString()
+              }
+            },
+          )
+        is Map<*, *> ->
+          FeatureTaskRuntimeHandoffProjectionValue.Text(
+            JsonCodec.mapToJsonString(value.entries.associate { (key, entryValue) -> key.toString() to entryValue }),
+          )
+        else -> FeatureTaskRuntimeHandoffProjectionValue.Text(value.toString())
+      }
     return FeatureTaskRuntimeHandoffProjectionStep.Value(projected)
   }
 }

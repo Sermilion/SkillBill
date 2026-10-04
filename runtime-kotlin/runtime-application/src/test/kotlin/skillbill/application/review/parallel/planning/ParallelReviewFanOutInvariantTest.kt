@@ -1,9 +1,5 @@
 package skillbill.application.review.parallel.planning
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import skillbill.application.review.model.ReviewPreparationRequest
 import skillbill.application.review.model.ReviewPreparationResult
 import skillbill.application.review.preparation.ReviewPreparationService
@@ -28,6 +24,10 @@ import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.context.model.packet.ReviewLaneAssembledBundle
 import skillbill.review.context.model.packet.segmentAssembledBundle
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ParallelReviewFanOutInvariantTest {
   private val hunkTemplate = ReviewChangedHunk("src/A.kt", 1, 1, 1, 2, "+alpha")

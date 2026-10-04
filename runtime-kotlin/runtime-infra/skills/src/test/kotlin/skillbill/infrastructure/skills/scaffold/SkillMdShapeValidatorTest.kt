@@ -1,14 +1,14 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
+import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.SkillStagingFailureCode
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 
 class SkillMdShapeValidatorTest {
   @Test

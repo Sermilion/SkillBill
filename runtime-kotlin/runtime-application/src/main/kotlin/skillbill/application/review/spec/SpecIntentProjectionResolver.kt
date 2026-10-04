@@ -1,14 +1,13 @@
 package skillbill.application.review.spec
 
-import java.io.IOException
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.unreadableSpecIntentProjectionError
 import skillbill.model.toPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -22,6 +21,9 @@ import skillbill.review.context.model.execution.SpecIntentSurroundingContext
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.model.isDecompositionManifestSchemaFailure
+import java.io.IOException
+import java.nio.file.Path
 
 @Inject
 class SpecIntentProjectionResolver(
@@ -133,7 +135,8 @@ class SpecIntentProjectionResolver(
     } catch (error: IOException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
       null
-    } catch (_: InvalidDecompositionManifestSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
       null
     }
   }

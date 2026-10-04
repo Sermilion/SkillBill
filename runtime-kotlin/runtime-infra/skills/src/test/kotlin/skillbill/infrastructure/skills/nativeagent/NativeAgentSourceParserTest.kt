@@ -1,10 +1,5 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionDirective
@@ -14,6 +9,11 @@ import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentB
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentBundle
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class NativeAgentSourceParserTest {
   @Test

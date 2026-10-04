@@ -1,8 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
-import java.sql.Connection
-import java.sql.PreparedStatement
-import java.sql.ResultSet
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
@@ -15,6 +12,9 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import java.sql.Connection
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 
 internal object FeatureTaskWorkflowStateStoreSql
 

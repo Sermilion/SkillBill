@@ -1,8 +1,5 @@
 package skillbill.engine.goalrunner.launch
 
-import java.nio.file.Path
-import java.time.Clock
-import kotlin.random.Random
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
@@ -49,6 +46,9 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
+import java.time.Clock
+import kotlin.random.Random
 
 @Inject
 class GoalRunnerSubtaskLaunchPrepare(
@@ -211,7 +211,8 @@ class GoalRunnerSubtaskLaunchPrepare(
     val attemptedManifest =
       state.manifest.withAttemptedSubtask(subtaskId)
         .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
-    val saved = run {
+    val saved =
+      run {
         val branch =
           attemptedManifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
             ?: attemptedManifest.featureBranch?.takeIf(String::isNotBlank)
@@ -244,7 +245,7 @@ class GoalRunnerSubtaskLaunchPrepare(
                 .takeIf { resumesBlockedChild },
           ),
         )
-    }
+      }
     return when (saved) {
       is GoalRunnerChildWorkflowSaveResult.Conflicted -> GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
       is GoalRunnerChildWorkflowSaveResult.Saved ->

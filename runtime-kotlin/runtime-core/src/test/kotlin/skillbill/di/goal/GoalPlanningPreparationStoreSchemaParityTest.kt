@@ -1,12 +1,5 @@
 package skillbill.di.goal
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
@@ -21,6 +14,13 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class GoalPlanningPreparationStoreSchemaParityTest {
   @Test
@@ -34,7 +34,10 @@ class GoalPlanningPreparationStoreSchemaParityTest {
       store.checkpointSharedPreplan(shared)
       store.checkpointSubtaskPlan(plan)
       assertEquals(shared.provenance, store.findSharedPreplan(identity()).foundCheckpoint()?.provenance)
-      assertEquals(plan.subSpecHash, store.findSubtaskPlan(identity(), 1, plan.governedSubSpecPath).foundPlan()?.subSpecHash)
+      assertEquals(
+        plan.subSpecHash,
+        store.findSubtaskPlan(identity(), 1, plan.governedSubSpecPath).foundPlan()?.subSpecHash,
+      )
     }
   }
 

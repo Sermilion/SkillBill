@@ -1,15 +1,5 @@
 package skillbill.engine.goalrunner.planning.recovery
 
-import java.nio.file.Files
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -36,6 +26,16 @@ import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.text.sha256HexUtf8
+import java.nio.file.Files
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class GoalRunnerSpecDriftRecoveryTest {
   @Test
@@ -149,21 +149,23 @@ private class SpecDriftFixture(
         governedSubSpecPath: String,
       ): GoalSubtaskPlanLookupResult {
         if (subtaskId !in store.plannedSubtaskIds) return GoalSubtaskPlanLookupResult.Found(null)
-        return GoalSubtaskPlanLookupResult.Found(GoalSubtaskPlanCheckpoint(
-          identity = expectedIdentity,
-          subtaskId = subtaskId,
-          manifestOrder = subtaskId - 1,
-          governedSubSpecPath = governedSubSpecPath,
-          subSpecHash = sha256HexUtf8(ORIGINAL_SPEC),
-          provenance =
-            GoalPlanningContractProvenance(
-              "a".repeat(64),
-              "b".repeat(64),
-              GOAL_PLANNING_PREPARATION_SCHEMA_ID,
-            ),
-          payloadSha256 = if (corrupt) "bad-digest" else sha256HexUtf8(PLAN_PAYLOAD),
-          planPayload = PLAN_PAYLOAD,
-        ))
+        return GoalSubtaskPlanLookupResult.Found(
+          GoalSubtaskPlanCheckpoint(
+            identity = expectedIdentity,
+            subtaskId = subtaskId,
+            manifestOrder = subtaskId - 1,
+            governedSubSpecPath = governedSubSpecPath,
+            subSpecHash = sha256HexUtf8(ORIGINAL_SPEC),
+            provenance =
+              GoalPlanningContractProvenance(
+                "a".repeat(64),
+                "b".repeat(64),
+                GOAL_PLANNING_PREPARATION_SCHEMA_ID,
+              ),
+            payloadSha256 = if (corrupt) "bad-digest" else sha256HexUtf8(PLAN_PAYLOAD),
+            planPayload = PLAN_PAYLOAD,
+          ),
+        )
       }
     }
   private val recovery =

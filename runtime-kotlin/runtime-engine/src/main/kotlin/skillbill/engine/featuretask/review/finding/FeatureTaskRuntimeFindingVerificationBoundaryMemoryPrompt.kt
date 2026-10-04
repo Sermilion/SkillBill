@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.review.finding
 
-import java.nio.file.Path
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemorySection
 import skillbill.error.core.SkillBillRuntimeException
@@ -9,6 +8,7 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryBodyResolutionCaps
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
+import java.nio.file.Path
 
 fun FeatureTaskRuntimeFindingVerificationBoundaryMemory.validateDispositionBoundaryBodies(
   repoRoot: Path,

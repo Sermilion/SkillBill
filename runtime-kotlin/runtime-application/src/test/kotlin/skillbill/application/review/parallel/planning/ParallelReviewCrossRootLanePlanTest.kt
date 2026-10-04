@@ -1,10 +1,5 @@
 package skillbill.application.review.parallel.planning
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForChanges
@@ -18,6 +13,11 @@ import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class ParallelReviewCrossRootLanePlanTest {
   private val kotlinAreas = listOf("architecture", "security", "testing")

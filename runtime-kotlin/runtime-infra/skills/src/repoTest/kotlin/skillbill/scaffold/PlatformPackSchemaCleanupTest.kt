@@ -1,7 +1,5 @@
 package skillbill.scaffold
 
-import java.nio.file.Files
-import java.nio.file.Path
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
@@ -25,6 +23,8 @@ import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPa
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.testing.repoRootFromTest
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

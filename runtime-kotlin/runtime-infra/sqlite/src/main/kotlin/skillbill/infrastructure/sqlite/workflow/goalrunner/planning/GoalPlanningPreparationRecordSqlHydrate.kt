@@ -1,9 +1,9 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import java.sql.ResultSet
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import java.sql.ResultSet
 
 internal fun ResultSet.toPreparedRecord(): GoalPlanningPreparationRecord {
   val parentGoalWorkflowId = getString("parent_goal_workflow_id")

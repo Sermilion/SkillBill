@@ -2,7 +2,6 @@ package skillbill.engine.goalrunner.planning.hydration
 
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
-import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.engine.model.WorkflowStateSnapshot

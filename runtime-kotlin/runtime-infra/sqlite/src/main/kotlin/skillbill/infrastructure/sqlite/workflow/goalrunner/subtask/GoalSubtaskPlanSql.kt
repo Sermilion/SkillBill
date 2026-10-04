@@ -1,7 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.subtask
 
-import java.sql.Connection
-import java.sql.ResultSet
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -36,6 +34,8 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import java.sql.Connection
+import java.sql.ResultSet
 
 internal class GoalSubtaskPlanSql(
   private val connection: Connection,
@@ -58,7 +58,9 @@ internal class GoalSubtaskPlanSql(
   fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     requireNormalizedSubtaskPlan(checkpoint)
     return connection.inNestedWriteTransaction(diagnostics) {
-      governingConflict(checkpoint)?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
+      governingConflict(
+        checkpoint,
+      )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
       val inserted = connection.insertSubtaskPlanRow(checkpoint)
       when (val stored = findSubtaskPlan(checkpoint.identity, checkpoint.subtaskId, checkpoint.governedSubSpecPath)) {
         is GoalSubtaskPlanLookupResult.Conflicted -> GoalPlanningPreparationWriteResult.Conflicted(stored.conflict)
@@ -73,7 +75,9 @@ internal class GoalSubtaskPlanSql(
   fun replaceSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     requireNormalizedSubtaskPlan(checkpoint)
     return connection.inNestedWriteTransaction(diagnostics) {
-      governingConflict(checkpoint)?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
+      governingConflict(
+        checkpoint,
+      )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
       connection.prepareStatement(
         "DELETE FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? AND subtask_id = ?",
       ).use { s ->
@@ -152,15 +156,16 @@ internal class GoalSubtaskPlanSql(
     descriptors: Map<Int, GovernedGoalSubtaskDescriptor>,
   ): GoalSubtaskPlanLookupResult {
     val subtaskId = rows.getInt("subtask_id")
-    val descriptor = descriptors[subtaskId]
-      ?: return GoalSubtaskPlanLookupResult.Conflicted(
-        GoalPlanningPreparationConflict(
-          expectedIdentity.parentGoalWorkflowId,
-          subtaskId,
-          "stored plan is not present in the expected governed subtask descriptors",
-          null,
-        ),
-      )
+    val descriptor =
+      descriptors[subtaskId]
+        ?: return GoalSubtaskPlanLookupResult.Conflicted(
+          GoalPlanningPreparationConflict(
+            expectedIdentity.parentGoalWorkflowId,
+            subtaskId,
+            "stored plan is not present in the expected governed subtask descriptors",
+            null,
+          ),
+        )
     return when (val plan = rows.toPlan(expectedIdentity, descriptor.governedSubSpecPath)) {
       is GoalSubtaskPlanLookupResult.Conflicted -> plan
       is GoalSubtaskPlanLookupResult.Found -> {

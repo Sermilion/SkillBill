@@ -38,11 +38,11 @@ internal object FeatureTaskRuntimeHandoffProjectionEnvelopeWire {
       fields.map { field ->
         resolvedCheckpointField(field, resolvedFingerprint, carried)
       }
-    if (
-      REPOSITORY_CHECKPOINT_FIELD in declaration.declaredFieldNames &&
-      refreshed.none { it.name == REPOSITORY_CHECKPOINT_FIELD }
-    ) {
-      return FeatureTaskRuntimeHandoffProjectionStep.Value(
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(
+      if (
+        REPOSITORY_CHECKPOINT_FIELD in declaration.declaredFieldNames &&
+        refreshed.none { it.name == REPOSITORY_CHECKPOINT_FIELD }
+      ) {
         refreshed +
           FeatureTaskRuntimeHandoffProjectionField(
             REPOSITORY_CHECKPOINT_FIELD,
@@ -50,10 +50,11 @@ internal object FeatureTaskRuntimeHandoffProjectionEnvelopeWire {
               kind = FeatureTaskRuntimeCompactReferenceKind.REPOSITORY_CHECKPOINT,
               value = resolvedFingerprint,
             ),
-          ),
-      )
-    }
-    return FeatureTaskRuntimeHandoffProjectionStep.Value(refreshed)
+          )
+      } else {
+        refreshed
+      },
+    )
   }
 
   private fun checkpointPolicyViolation(

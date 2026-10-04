@@ -1,8 +1,5 @@
 package skillbill.review.plan
 
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ManifestFailureCode
@@ -16,6 +13,9 @@ import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.RoutingSignals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class ReviewCrossRootLaneReconciliationTest {
   @Test

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.validation.shape
 
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidSkillMdShape
+import java.nio.file.Path
 
 internal val SKILL_MD_FRONTMATTER_PATTERN = Regex("""(?s)\A---\n(.*?)\n---\n""")
 internal val SKILL_MD_ALLOWED_FRONTMATTER_KEYS = setOf("name", "description", "internal-for")

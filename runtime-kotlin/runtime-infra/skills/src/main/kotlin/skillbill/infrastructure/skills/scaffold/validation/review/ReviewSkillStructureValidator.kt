@@ -1,8 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.validation.review
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.name
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.error.shellcontent.invalidReviewSkillStructure
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_BUNDLE_FILE
@@ -10,6 +7,9 @@ import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentB
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.name
 
 internal object ReviewSkillStructureValidator {
   fun validate(

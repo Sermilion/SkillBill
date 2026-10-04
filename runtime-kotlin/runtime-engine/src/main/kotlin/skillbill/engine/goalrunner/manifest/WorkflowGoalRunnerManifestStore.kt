@@ -1,8 +1,5 @@
 package skillbill.engine.goalrunner.manifest
 
-import java.nio.file.Path
-import java.time.Clock
-import kotlin.random.Random
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
@@ -46,6 +43,9 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.engine.WorkflowEngine
+import java.nio.file.Path
+import java.time.Clock
+import kotlin.random.Random
 
 class WorkflowGoalRunnerManifestStore
   @Inject
@@ -356,9 +356,12 @@ class WorkflowGoalRunnerManifestStore
       state: GoalRunnerManifestState,
       setup: GoalRunnerChildWorkflowSetup,
     ): GoalRunnerChildWorkflowSaveResult {
-      return when (val saved = database.transaction { unitOfWork ->
-        childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
-      }) {
+      return when (
+        val saved =
+          database.transaction { unitOfWork ->
+            childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
+          }
+      ) {
         is GoalChildWorkflowSaveResult.Conflicted -> GoalRunnerChildWorkflowSaveResult.Conflicted(saved.conflict)
         is GoalChildWorkflowSaveResult.Saved -> {
           projectionPersistence.writeProjectionFile(state, saved.saved.projectionArtifacts)

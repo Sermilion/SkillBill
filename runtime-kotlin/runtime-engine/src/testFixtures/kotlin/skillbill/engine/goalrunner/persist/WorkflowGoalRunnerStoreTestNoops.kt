@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.persist
 
-import java.nio.file.Path
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyRequest
@@ -15,6 +14,7 @@ import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
+import java.nio.file.Path
 
 object NoopGoalChildPlanningHydrator : GoalChildPlanningHydratorPort {
   override fun hydrate(

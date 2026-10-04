@@ -1,10 +1,10 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
-import skillbill.error.core.SkillBillRuntimeException
 
 class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
   @Test

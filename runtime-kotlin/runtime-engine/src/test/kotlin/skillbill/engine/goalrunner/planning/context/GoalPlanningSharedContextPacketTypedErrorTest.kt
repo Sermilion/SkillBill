@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.planning.context
 
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
 
 class GoalPlanningSharedContextPacketTypedErrorTest {
   @Test

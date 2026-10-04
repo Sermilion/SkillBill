@@ -1,26 +1,5 @@
 package skillbill.engine.goalrunner.planning.sweep
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneId
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
@@ -121,6 +100,27 @@ import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import java.time.Duration as JavaDuration
 
 class GoalPlanningRequiredPersistenceTest {
@@ -714,7 +714,8 @@ class GoalPlanningSweepPromptTest {
     val state = harness.stateFor(manifest(subtaskCount = 1))
     harness.sweep.prepare(state, harness.request())
     val launchCount = harness.launcher.requests.size
-    val sharedBefore = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedBefore =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     val planBefore =
       requireNotNull(
         harness.fixtures.database.repository.findSubtaskPlan(
@@ -730,7 +731,8 @@ class GoalPlanningSweepPromptTest {
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(outcome)
     assertEquals(launchCount + 1, harness.launcher.requests.size, "exactly one refresh preplan launch")
     assertEquals(listOf("preplan"), harness.launcher.phases.takeLast(1))
-    val sharedAfter = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedAfter =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertEquals(sharedBefore.preplanPayload, sharedAfter.preplanPayload)
     assertEquals(sharedBefore.payloadSha256, sharedAfter.payloadSha256)
     assertEquals(outcome.provenance, sharedAfter.provenance)
@@ -772,7 +774,8 @@ class GoalPlanningSweepPromptTest {
     val state = harness.stateFor(manifest(subtaskCount = 1))
     harness.sweep.prepare(state, harness.request())
     val launchCount = harness.launcher.requests.size
-    val sharedBefore = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedBefore =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertNotNull(
       harness.fixtures.database.repository.findSubtaskPlan(
         harness.identity(),
@@ -786,7 +789,8 @@ class GoalPlanningSweepPromptTest {
     val outcome = harness.sweep.prepare(state, harness.request())
 
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(outcome)
-    val sharedAfter = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedAfter =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertTrue(sharedAfter.preplanPayload != sharedBefore.preplanPayload)
     assertTrue(sharedAfter.payloadSha256 != sharedBefore.payloadSha256)
     assertEquals(1, harness.fixtures.database.repository.cascadeAfterRefreshCalls)
@@ -929,7 +933,8 @@ class GoalPlanningSweepPromptTest {
     val state = harness.stateFor(manifest(subtaskCount = 1))
     harness.sweep.prepare(state, harness.request())
     val launchCount = harness.launcher.requests.size
-    val sharedBefore = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedBefore =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     harness.manifestFileStore.replaceSpec("spec.md", "# Initial feature contract edited while live")
 
     val outcome = harness.sweep.prepare(state, harness.request())
@@ -940,7 +945,8 @@ class GoalPlanningSweepPromptTest {
     assertTrue(stopped.blockedReason.contains("live"))
     assertTrue(stopped.blockedReason.contains("refuse shared-preplan refresh"))
     assertEquals(launchCount, harness.launcher.requests.size)
-    val sharedAfter = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedAfter =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertEquals(sharedBefore.payloadSha256, sharedAfter.payloadSha256)
     assertEquals(sharedBefore.provenance, sharedAfter.provenance)
   }
@@ -1045,7 +1051,8 @@ class GoalPlanningSweepPrepareAndResumeTest {
     )
     harness.sweep.prepare(state, harness.request())
     val launchCount = harness.launcher.requests.size
-    val sharedBefore = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedBefore =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     harness.manifestFileStore.replaceSpec(
       "spec.md",
       "---\nowner: team-b\n---\n# Initial feature contract",
@@ -1055,7 +1062,8 @@ class GoalPlanningSweepPrepareAndResumeTest {
 
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(resumed)
     assertEquals(launchCount + 1, harness.launcher.requests.size)
-    val sharedAfter = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedAfter =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertEquals(sharedBefore.preplanPayload, sharedAfter.preplanPayload)
   }
 
@@ -1072,13 +1080,15 @@ class GoalPlanningSweepPrepareAndResumeTest {
       }
     val state = harness.stateFor(manifest(subtaskCount = 1))
     harness.sweep.prepare(state, harness.request())
-    val sharedBefore = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedBefore =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     discovery.clearCatalog()
 
     val outcome = harness.sweep.prepare(state, harness.request())
 
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(outcome)
-    val sharedAfter = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val sharedAfter =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertEquals(
       sharedBefore.preplanPayload,
       sharedAfter.preplanPayload,
@@ -2075,7 +2085,8 @@ class GoalPlanningSweepTimingTest {
     val outcome = harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 1)), harness.request())
 
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(outcome)
-    val shared = requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
+    val shared =
+      requireNotNull(harness.fixtures.database.repository.findSharedPreplan(harness.identity()).foundCheckpoint())
     assertContains(shared.preplanPayload, "Preplan prose for the whole goal.")
     assertNull(shared.repairEvidence)
   }
@@ -2593,12 +2604,14 @@ private class InMemoryPreparationRepository(
   ): GoalPlanningPreparationWriteResult {
     val shared = sharedPreplan
     if (shared == null || shared.payloadSha256 != expectedPayloadSha256) {
-      return GoalPlanningPreparationWriteResult.Conflicted(GoalPlanningPreparationConflict(
-        checkpoint.identity.parentGoalWorkflowId,
-        0,
-        "shared preplan changed after it was validated for regeneration",
-        null,
-      ))
+      return GoalPlanningPreparationWriteResult.Conflicted(
+        GoalPlanningPreparationConflict(
+          checkpoint.identity.parentGoalWorkflowId,
+          0,
+          "shared preplan changed after it was validated for regeneration",
+          null,
+        ),
+      )
     }
     sharedPreplan = checkpoint
     cascadeSiblingPlansAfterSharedPreplanRefresh(
@@ -2622,12 +2635,14 @@ private class InMemoryPreparationRepository(
       shared.identity.parentGoalWorkflowId != identity.parentGoalWorkflowId ||
       shared.payloadSha256 != expectedPayloadSha256
     ) {
-      return GoalPlanningPreparationWriteResult.Conflicted(GoalPlanningPreparationConflict(
-        identity.parentGoalWorkflowId,
-        0,
-        "shared preplan changed after it was validated for provenance advance",
-        null,
-      ))
+      return GoalPlanningPreparationWriteResult.Conflicted(
+        GoalPlanningPreparationConflict(
+          identity.parentGoalWorkflowId,
+          0,
+          "shared preplan changed after it was validated for provenance advance",
+          null,
+        ),
+      )
     }
     sharedPreplan = shared.copy(provenance = provenance)
     plans.keys.toList().forEach { id ->
@@ -2682,12 +2697,14 @@ private class InMemoryPreparationRepository(
       shared.identity.parentGoalWorkflowId != identity.parentGoalWorkflowId ||
       shared.payloadSha256 != expectedPayloadSha256
     ) {
-      return GoalPlanningPreparationCountResult.Conflicted(GoalPlanningPreparationConflict(
-        identity.parentGoalWorkflowId,
-        0,
-        "shared preplan changed after it was observed for discard",
-        null,
-      ))
+      return GoalPlanningPreparationCountResult.Conflicted(
+        GoalPlanningPreparationConflict(
+          identity.parentGoalWorkflowId,
+          0,
+          "shared preplan changed after it was observed for discard",
+          null,
+        ),
+      )
     }
     sharedPreplan = null
     plans.clear()
@@ -2704,12 +2721,14 @@ private class InMemoryPreparationRepository(
       shared.identity.parentGoalWorkflowId != identity.parentGoalWorkflowId ||
       shared.payloadSha256 != expectedPayloadSha256
     ) {
-      return GoalPlanningPreparationCountResult.Conflicted(GoalPlanningPreparationConflict(
-        identity.parentGoalWorkflowId,
-        0,
-        "shared preplan changed after it was observed for discard",
-        null,
-      ))
+      return GoalPlanningPreparationCountResult.Conflicted(
+        GoalPlanningPreparationConflict(
+          identity.parentGoalWorkflowId,
+          0,
+          "shared preplan changed after it was observed for discard",
+          null,
+        ),
+      )
     }
     sharedPreplan =
       shared.copy(
@@ -2790,13 +2809,31 @@ private class InMemoryPreparationRepository(
     subtaskId: Int,
     governedSubSpecPath: String,
   ): GoalSubtaskPlanLookupResult =
-    GoalSubtaskPlanLookupResult.Found(plans[subtaskId]?.takeIf { it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath })
+    GoalSubtaskPlanLookupResult.Found(
+      plans[subtaskId]?.takeIf {
+        it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath
+      },
+    )
 
   override fun listSubtaskPlansOrdered(
     expectedIdentity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
   ): GoalSubtaskPlanListResult =
-    GoalSubtaskPlanListResult.Found(plans.values.filter { it.identity == expectedIdentity }.sortedBy { it.manifestOrder })
+    GoalSubtaskPlanListResult.Found(
+      plans.values.filter { it.identity == expectedIdentity }.sortedBy { it.manifestOrder },
+    )
+
+  override fun preparedPlanCount(
+    expectedIdentity: GoalPlanningIdentity,
+    orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
+  ): GoalPlanningPreparationCountResult =
+    GoalPlanningPreparationCountResult.Applied(
+      orderedDescriptors.count { descriptor ->
+        plans[descriptor.subtaskId]?.let {
+          it.identity == expectedIdentity && it.governedSubSpecPath == descriptor.governedSubSpecPath
+        } == true
+      },
+    )
 
   override fun markPrepared(record: GoalPlanningPreparationRecord): GoalPlanningPreparationWriteResult {
     records[record.subtaskId] = record

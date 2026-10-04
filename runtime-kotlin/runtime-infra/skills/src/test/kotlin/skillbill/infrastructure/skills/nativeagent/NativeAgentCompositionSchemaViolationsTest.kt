@@ -1,12 +1,12 @@
 package skillbill.infrastructure.skills.nativeagent
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionSchemaValidator
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionSchemaValidator
 
 class NativeAgentCompositionSchemaViolationsTest {
   private val validBundleYaml: String =

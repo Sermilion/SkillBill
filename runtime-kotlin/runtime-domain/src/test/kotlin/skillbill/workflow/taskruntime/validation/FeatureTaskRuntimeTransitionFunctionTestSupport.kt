@@ -17,13 +17,15 @@ internal fun shippedTransition(
   edgeIterationCount: Int = 0,
   settledVerdicts: Map<String, FeatureTaskRuntimeVerdict>,
 ): FeatureTaskRuntimeNextPhase =
-  assertIs<FeatureTaskRuntimeTransitionResult.Resolved>(FeatureTaskRuntimeTransitionFunction.nextTransition(
-    declaration = declaration,
-    currentPhaseId = currentPhaseId,
-    verdict = verdict,
-    edgeIterationCount = edgeIterationCount,
-    context = FeatureTaskRuntimeTransitionContext(settledVerdictsByPhaseId = settledVerdicts),
-  )).next
+  assertIs<FeatureTaskRuntimeTransitionResult.Resolved>(
+    FeatureTaskRuntimeTransitionFunction.nextTransition(
+      declaration = declaration,
+      currentPhaseId = currentPhaseId,
+      verdict = verdict,
+      edgeIterationCount = edgeIterationCount,
+      context = FeatureTaskRuntimeTransitionContext(settledVerdictsByPhaseId = settledVerdicts),
+    ),
+  ).next
 
 internal fun resolvedTransition(
   declaration: FeatureTaskRuntimeTransitionDeclaration,

@@ -1,7 +1,8 @@
 package skillbill.contracts.decomposition
 
 import skillbill.contracts.JsonPayloadContract
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -295,8 +296,8 @@ private fun invalidPlanning(
   sourceLabel: String,
   reason: String,
 ): Nothing =
-  throw InvalidDecompositionManifestSchemaError(
+  throw invalidDecompositionManifestSchema(
     sourceLabel = sourceLabel,
     reason = reason,
-    failureCode = "invalid_shape",
+    code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_INVALID_SHAPE,
   )

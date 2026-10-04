@@ -1,10 +1,7 @@
 package skillbill.infrastructure.launcher
 
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
 import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
@@ -13,6 +10,10 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.review.launch.ReviewLaunchAgentStagingPort
 import skillbill.ports.review.model.ReviewLaunchAgentStagingRequest
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 
 @Inject
 class FileSystemReviewLaunchAgentStaging(
@@ -23,11 +24,13 @@ class FileSystemReviewLaunchAgentStaging(
     val provider =
       provider(request.agentId)
         ?: throw missingInstalledNativeAgent(
-          request.logicalWorkerNames.first(),
-          request.agentId,
-          environment.userHome.toString(),
-          "provider does not support native-agent staging",
-          REPAIR_COMMAND,
+          MissingInstalledNativeAgentContext(
+            request.logicalWorkerNames.first(),
+            request.agentId,
+            environment.userHome.toString(),
+            "provider does not support native-agent staging",
+            REPAIR_COMMAND,
+          ),
         )
     val inventory = NativeAgentLinkInventory.read(environment.userHome, emptyList())
     request.logicalWorkerNames.distinct().forEach { logicalName ->
@@ -93,11 +96,13 @@ class FileSystemReviewLaunchAgentStaging(
     cause: Throwable? = null,
   ): Nothing =
     throw missingInstalledNativeAgent(
-      logicalName,
-      provider.name.lowercase(),
-      path.toString(),
-      reason,
-      REPAIR_COMMAND,
+      MissingInstalledNativeAgentContext(
+        logicalName,
+        provider.name.lowercase(),
+        path.toString(),
+        reason,
+        REPAIR_COMMAND,
+      ),
       cause,
     )
 

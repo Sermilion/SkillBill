@@ -70,16 +70,17 @@ object FeatureTaskRuntimePersistenceSchemaValidator {
   internal fun violation(
     payload: Map<String, Any?>,
     sourceLabel: String,
-  ): String? = violationAgainst(
-    FeatureTaskRuntimeSchemaValidationRequest(
-      payload = payload,
-      classpathResource = FeatureTaskRuntimePersistenceSchemaPaths.CLASSPATH_RESOURCE,
-      expectedId = FeatureTaskRuntimePersistenceSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
-      contractVersionMatches = ::persistenceContractVersionMatches,
-      error = { reason -> invalidFeatureTaskRuntimePersistenceSchema(sourceLabel, reason) },
-    ),
-  )
+  ): String? =
+    violationAgainst(
+      FeatureTaskRuntimeSchemaValidationRequest(
+        payload = payload,
+        classpathResource = FeatureTaskRuntimePersistenceSchemaPaths.CLASSPATH_RESOURCE,
+        expectedId = FeatureTaskRuntimePersistenceSchemaPaths.EXPECTED_SCHEMA_ID,
+        expectedContractVersion = FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
+        contractVersionMatches = ::persistenceContractVersionMatches,
+        error = { reason -> invalidFeatureTaskRuntimePersistenceSchema(sourceLabel, reason) },
+      ),
+    )
 }
 
 internal object FeatureTaskRuntimeProjectionMeasurementSchemaValidator {
@@ -110,15 +111,16 @@ object FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator {
   fun violation(
     payload: Map<String, Any?>,
     sourceLabel: String,
-  ): String? = violationAgainst(
-    FeatureTaskRuntimeSchemaValidationRequest(
-      payload = payload,
-      classpathResource = FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths.CLASSPATH_RESOURCE,
-      expectedId = FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION,
-      error = { reason -> invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema(sourceLabel, reason) },
-    ),
-  )
+  ): String? =
+    violationAgainst(
+      FeatureTaskRuntimeSchemaValidationRequest(
+        payload = payload,
+        classpathResource = FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths.CLASSPATH_RESOURCE,
+        expectedId = FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths.EXPECTED_SCHEMA_ID,
+        expectedContractVersion = FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION,
+        error = { reason -> invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema(sourceLabel, reason) },
+      ),
+    )
 }
 
 object FeatureTaskRuntimeValidationEvidenceSchemaValidator {

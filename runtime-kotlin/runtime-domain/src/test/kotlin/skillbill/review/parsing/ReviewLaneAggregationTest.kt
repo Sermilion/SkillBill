@@ -1,14 +1,14 @@
 package skillbill.review.parsing
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.review.model.ReviewLaneAggregationInput
+import skillbill.review.model.ReviewLaneReviewDisposition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ReviewContextFailureCode
-import skillbill.review.model.ReviewLaneAggregationInput
-import skillbill.review.model.ReviewLaneReviewDisposition
 
 class ReviewLaneAggregationTest {
   private val sequence = "a".repeat(64)

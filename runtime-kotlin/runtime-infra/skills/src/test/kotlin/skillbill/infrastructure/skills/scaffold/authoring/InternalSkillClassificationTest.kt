@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -8,8 +10,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.SkillStagingFailureCode
 
 class InternalSkillClassificationTest {
   private val tempDirs = mutableListOf<Path>()

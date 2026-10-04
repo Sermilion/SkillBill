@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 7 - workflow-state-and-records
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -63,7 +63,7 @@ skill-bill goal SKILL-399
 
 ## Implementation Details
 
-Source: the SKILL-399 preplan digest, sections "Failure model", "Shared conventions" and "Subtask 7". Paths are relative to `runtime-kotlin/`. Line numbers are approximate; apply each rule to the code wherever it is now (parent Execution Rule). Items marked **Assume** are for implement to confirm.
+Source: the SKILL-399 preplan digest, sections "Failure model", "Shared conventions" and "Subtask 7". Paths are relative to `../../../runtime-kotlin`. Line numbers are approximate; apply each rule to the code wherever it is now (parent Execution Rule). Items marked **Assume** are for implement to confirm.
 
 ### Facts this plan relies on
 

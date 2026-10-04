@@ -1,15 +1,5 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermission
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
@@ -31,6 +21,16 @@ import skillbill.testing.HARBOR_COMPANION_NAME
 import skillbill.testing.HARBOR_PACK_SLUG
 import skillbill.testing.HarborAddonPack
 import skillbill.testing.seedHarborAddonPack
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class NativeAgentAddonCompositionFailureTest {
   @Test

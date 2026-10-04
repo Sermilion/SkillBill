@@ -1,10 +1,5 @@
 package skillbill.engine.featuretask.review.finding
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.runner.disposition
 import skillbill.error.core.SkillBillRuntimeException
@@ -14,6 +9,11 @@ import skillbill.workflow.taskruntime.artifact.decodeFindingVerificationDisposit
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDispositionVerdict
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeFindingVerificationOutputTest {
   @Test

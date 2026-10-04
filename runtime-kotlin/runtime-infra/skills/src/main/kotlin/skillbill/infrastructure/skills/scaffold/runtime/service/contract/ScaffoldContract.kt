@@ -1,11 +1,11 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service.contract
 
-import java.nio.file.Path
-import kotlin.io.path.relativeTo
 import skillbill.error.shellcontent.missingSupportingFileTargetError
 import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformManifests
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.featureAddonPointerSpecsFor
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Path
+import kotlin.io.path.relativeTo
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS as POLICY_APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.PLATFORM_PACK_PRESETS as POLICY_PLATFORM_PACK_PRESETS
 import skillbill.scaffold.policy.SCAFFOLD_PAYLOAD_VERSION as POLICY_SCAFFOLD_PAYLOAD_VERSION

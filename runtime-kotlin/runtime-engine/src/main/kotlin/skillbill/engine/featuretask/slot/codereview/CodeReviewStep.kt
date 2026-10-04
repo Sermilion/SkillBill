@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import kotlin.coroutines.cancellation.CancellationException
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
@@ -32,6 +31,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewPassSequence
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import kotlin.coroutines.cancellation.CancellationException
 
 internal class CodeReviewStep(
   private val runner: PhaseRunner,

@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.validation
 
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -19,6 +18,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
+import java.nio.file.Path
 
 private fun WorkflowGitOperations.readinessTreeIdentityOrNull(
   repoRoot: Path,

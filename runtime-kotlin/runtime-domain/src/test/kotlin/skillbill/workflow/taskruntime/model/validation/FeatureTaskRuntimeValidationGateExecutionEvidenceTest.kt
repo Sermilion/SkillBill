@@ -1,12 +1,12 @@
 package skillbill.workflow.taskruntime.model.validation
 
+import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.core.SkillBillRuntimeException
 
 class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
   @Test

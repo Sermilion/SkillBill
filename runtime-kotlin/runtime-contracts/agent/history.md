@@ -1,3 +1,16 @@
+## [2026-10-04] SKILL-399 decomposition-manifest and bundle-journal failure codes
+Areas: runtime-contracts/error/shellcontent, runtime-contracts/contracts/decomposition, runtime-domain/workflow/decomposition, runtime-application/decomposition/review/spec, runtime-engine/goalrunner/preflight, runtime-infra/contracts/workflow/decomposition, runtime-infra/workflow/decomposition/featuretask, runtime-core architecture baseline and decomposition tests
+- Replaced InvalidDecompositionManifestSchemaError and InvalidDecompositionManifestBundleJournalError with coded SkillBillRuntimeException message functions.
+- Reused DecompositionManifestValidationFailureCode for existing schema vocabulary. WorkflowFailureCode owns five additional manifest conditions and one entry per bundle-journal failure literal.
+- Followed guarded code classification. isDecompositionManifestSchemaFailure accepts domain validation codes and the five manifest conditions, excludes journal codes, and rethrows unrelated failures.
+- Reusable: the manifest classifier, message functions and Rejected.failure carrier preserve shared failure handling across domain, application, engine and infrastructure consumers.
+- Schema validation carries the original failure through Rejected; requireAccepted rethrows it without rebuilding its message or cause. Rejections without a carried failure still construct a coded error.
+- Converted existing preflight, schema, journal and writer assertions to codes and removed the two deleted-class baseline rows. Domain remains free of filesystem and ports dependencies.
+- Breaking change: deleted exception types have no aliases. User-visible messages, causes, persisted payloads, contract versions, journal containment and recovery behavior retain their existing contracts.
+- Limit: this entry covers subtask 8. Legacy exception bases and codeless transition support remain while other subclasses or callers exist.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-04] SKILL-399 workflow state and record failure codes
 Areas: runtime-contracts/error/shellcontent, runtime-domain/workflow/goalrunner, runtime-ports/workflow, runtime-application/work/workflow, runtime-engine/featuretask/goalrunner/work, runtime-infra/contracts/sqlite/workflow/skills, runtime-core architecture baseline and persistence tests
 - Replaced eight workflow state, work-list, issue-key, retired-prose, output-schema and verification-cap exception classes with WorkflowFailureCode and coded SkillBillRuntimeException message functions.

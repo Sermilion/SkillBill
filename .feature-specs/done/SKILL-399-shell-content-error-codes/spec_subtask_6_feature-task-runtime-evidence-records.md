@@ -1,6 +1,6 @@
 # SKILL-399 Subtask 6 - feature-task-runtime-evidence-records
 
-Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-399-shell-content-error-codes/spec.md](spec.md)
 Issue key: SKILL-399
 
 ## Scope
@@ -79,7 +79,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Exist
 
 ## Implementation Details
 
-Source: the SKILL-399 preplan digest, subtask 6 section and shared conventions. Paths are relative to `runtime-kotlin/`. Line numbers are hints; apply each rule where the code is now. Steps marked **Confirm** record an assumption implement checks on the tree before editing. The plan runs no build, test or check; build and validate own those.
+Source: the SKILL-399 preplan digest, subtask 6 section and shared conventions. Paths are relative to `../../../runtime-kotlin`. Line numbers are hints; apply each rule where the code is now. Steps marked **Confirm** record an assumption implement checks on the tree before editing. The plan runs no build, test or check; build and validate own those.
 
 ### Task 1 — code enum, message functions, predicate registration (AC-001)
 

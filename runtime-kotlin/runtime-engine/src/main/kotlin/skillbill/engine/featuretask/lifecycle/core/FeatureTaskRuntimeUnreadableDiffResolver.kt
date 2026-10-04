@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.model.ReviewCommitMetadata
 import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
+import java.nio.file.Path
 
 object FeatureTaskRuntimeUnreadableDiffResolver : DiffResolverPort {
   override fun resolveCommit(

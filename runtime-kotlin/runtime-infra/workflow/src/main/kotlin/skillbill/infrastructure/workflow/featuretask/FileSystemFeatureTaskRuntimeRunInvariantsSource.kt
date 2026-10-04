@@ -2,7 +2,8 @@ package skillbill.infrastructure.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.infrastructure.workflow.decomposition.DecompositionManifestBundleJournal
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.review.spec.GovernedSpecSectionParser
@@ -11,6 +12,7 @@ import skillbill.review.spec.GovernedSpecSectionParser.MANDATES_HEADINGS
 import skillbill.workflow.decomposition.decodeDecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
+import skillbill.workflow.decomposition.model.isDecompositionManifestSchemaFailure
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import java.nio.file.Files
@@ -61,7 +63,8 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
       require(manifest.subtasks.any { it.specPath.fileNameOrNull() == normalizedPath.fileName }) {
         "feature-task-runtime spec path '$normalizedPath' is not a subtask selected by '$manifestPath'."
       }
-    } catch (error: InvalidDecompositionManifestSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
       throw IllegalArgumentException(error.message, error)
     }
   }

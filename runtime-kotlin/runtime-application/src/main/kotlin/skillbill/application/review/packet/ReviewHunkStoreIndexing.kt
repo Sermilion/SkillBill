@@ -1,6 +1,5 @@
 package skillbill.application.review.packet
 
-import java.nio.file.Path
 import skillbill.application.reviewevidence.SharedReviewEvidenceCodec
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
@@ -15,6 +14,7 @@ import skillbill.review.context.model.commit.ReviewCommitUnit
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewHunkEvidenceLocator
 import skillbill.text.RECORD_FIELD_SEPARATOR
+import java.nio.file.Path
 
 internal data class IndexedReviewHunks(
   val hunks: List<ReviewChangedHunk>,

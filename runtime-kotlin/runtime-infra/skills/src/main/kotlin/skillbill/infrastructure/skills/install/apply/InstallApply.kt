@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.install.apply
 
-import java.nio.file.Path
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.ReviewContextFailureCode
@@ -28,6 +27,7 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.scaffold.model.PlatformManifest
+import java.nio.file.Path
 
 internal fun applyInstallPlan(
   plan: InstallPlan,

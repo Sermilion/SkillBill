@@ -1,8 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingPlatformPackError
 import skillbill.error.shellcontent.skillAlreadyExistsError
@@ -10,12 +7,6 @@ import skillbill.error.shellcontent.unknownSkillKindError
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.externalplatformpack.resolveExternalPlatformPackSourcePath
-import skillbill.infrastructure.skills.scaffold.payload.optionalSpecialistSubagents as policyOptionalSpecialistSubagents
-import skillbill.infrastructure.skills.scaffold.payload.rejectBaselineLayersForNonPlatformPack as policyRejectBaselineLayersForNonPlatformPack
-import skillbill.infrastructure.skills.scaffold.payload.rejectLeafSubagentSpecialists as policyRejectLeafSubagentSpecialists
-import skillbill.infrastructure.skills.scaffold.payload.requireStringMap as requireString
-import skillbill.infrastructure.skills.scaffold.payload.requireStringOrDefaultMap as requireStringOrDefault
-import skillbill.infrastructure.skills.scaffold.payload.resolvePlatformPackDefaults as policyResolvePlatformPackDefaults
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.APPROVED_CODE_REVIEW_AREAS
@@ -29,6 +20,15 @@ import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_OVERRIDE_PILOTED
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_PACK
 import skillbill.scaffold.policy.sharedContractNote
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import skillbill.infrastructure.skills.scaffold.payload.optionalSpecialistSubagents as policyOptionalSpecialistSubagents
+import skillbill.infrastructure.skills.scaffold.payload.rejectBaselineLayersForNonPlatformPack as policyRejectBaselineLayersForNonPlatformPack
+import skillbill.infrastructure.skills.scaffold.payload.rejectLeafSubagentSpecialists as policyRejectLeafSubagentSpecialists
+import skillbill.infrastructure.skills.scaffold.payload.requireStringMap as requireString
+import skillbill.infrastructure.skills.scaffold.payload.requireStringOrDefaultMap as requireStringOrDefault
+import skillbill.infrastructure.skills.scaffold.payload.resolvePlatformPackDefaults as policyResolvePlatformPackDefaults
 
 internal fun executeScaffold(
   txn: ScaffoldTransaction,

@@ -2,8 +2,8 @@ package skillbill.workflow.taskruntime.validation
 
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,9 +91,10 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   @Test
   fun `entering review with no audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
-    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
-      transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, emptyMap()),
-    )
+    val error =
+      assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+        transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, emptyMap()),
+      )
     assertEquals(def.PHASE_REVIEW, error.phaseId)
     assertEquals(
       "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
@@ -107,9 +108,10 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   fun `entering review with a gaps_found audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val gapsFound = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND)
-    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
-      transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, gapsFound),
-    )
+    val error =
+      assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+        transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, gapsFound),
+      )
     assertEquals(def.PHASE_REVIEW, error.phaseId)
     assertEquals(
       "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
@@ -128,9 +130,10 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
           def.PHASE_REVIEW to FeatureTaskRuntimeVerdict.APPROVED,
           def.PHASE_VERIFY_FINDINGS to FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED,
         )
-    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
-      transitionResult(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, settled),
-    )
+    val error =
+      assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+        transitionResult(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, settled),
+      )
     assertEquals(def.PHASE_IMPLEMENT_FIX, error.phaseId)
     assertEquals(
       "Feature-task-runtime phase '${def.PHASE_IMPLEMENT_FIX}' is unreachable until '${def.PHASE_VERIFY_FINDINGS}' " +

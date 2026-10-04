@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.validation
 
-import java.nio.file.Path
 import skillbill.config.model.RepoLocalConfig
 import skillbill.config.model.ValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
@@ -37,6 +36,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
+import java.nio.file.Path
 
 internal val validationGateTestRepoRoot: Path = Path.of(".").toAbsolutePath().normalize()
 
@@ -60,7 +60,8 @@ internal val validationGateTestDeclaration: ValidationGateDeclaration =
 
 internal fun outOfContractResolver(): ValidationGateResolver =
   ValidationGateResolver {
-    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack 'fallback': declares contract_version '0.1' but the shell expects '1.8'.",
     )
   }

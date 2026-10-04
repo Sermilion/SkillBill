@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.persistence
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -60,8 +61,9 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
         )
       }
 
-    assertEquals("0.2", error.expectedContractVersion)
-    assertEquals("0.1", error.actualContractVersion)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION, error.code)
+    assertContains(error.message.orEmpty(), "unsupported contract version '0.1'")
+    assertContains(error.message.orEmpty(), "this runtime reads '0.2'")
   }
 
   @Test

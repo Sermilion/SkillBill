@@ -1,8 +1,5 @@
 package skillbill.engine.featuretask.runner
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.assertIs
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
@@ -44,6 +41,9 @@ import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.assertIs
 
 internal object SlotBaselineGoalPlanningCapture {
   private const val ISSUE_KEY = "SKILL-380"
@@ -138,10 +138,17 @@ internal object SlotBaselineGoalPlanningCapture {
           assertIs<GoalChildPlanningHydrationOutcome.Hydrated>(
             hydrator.hydrate(unitOfWork, setup, request),
           ).hydration,
-        preplanPayload = requireNotNull(preparations.findSharedPreplan(request.identity).foundCheckpoint()).preplanPayload,
+        preplanPayload =
+          requireNotNull(
+            preparations.findSharedPreplan(request.identity).foundCheckpoint(),
+          ).preplanPayload,
         planPayload =
           requireNotNull(
-            preparations.findSubtaskPlan(request.identity, subtaskId, request.descriptor.governedSubSpecPath).foundPlan(),
+            preparations.findSubtaskPlan(
+              request.identity,
+              subtaskId,
+              request.descriptor.governedSubSpecPath,
+            ).foundPlan(),
           ).planPayload,
       )
     }
