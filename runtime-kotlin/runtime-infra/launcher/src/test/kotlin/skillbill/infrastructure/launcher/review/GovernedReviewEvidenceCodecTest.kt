@@ -2,7 +2,8 @@ package skillbill.infrastructure.launcher.review
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.core.InvalidGovernedReviewEvidenceRequestError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.ports.review.model.ReviewEvidenceBatchResult
 import skillbill.ports.review.model.ReviewEvidenceResult
 import skillbill.review.context.model.execution.ForbiddenReviewOperation
@@ -27,7 +28,7 @@ class GovernedReviewEvidenceCodecTest {
   @Test
   fun `non-object read selector fails with typed request error`() {
     val error =
-      assertFailsWith<InvalidGovernedReviewEvidenceRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         GovernedReviewEvidenceCodec.readRequest(
           lane = "lane-a",
           arguments =
@@ -38,7 +39,11 @@ class GovernedReviewEvidenceCodecTest {
         )
       }
 
-    assertEquals("review-evidence", error.operation)
+    assertEquals(GovernedReviewFailureCode.INVALID_EVIDENCE_REQUEST, error.code)
+    assertEquals(
+      "Governed review evidence request 'review-evidence' is invalid: Each read selector must be an object.",
+      error.message,
+    )
   }
 
   @Test

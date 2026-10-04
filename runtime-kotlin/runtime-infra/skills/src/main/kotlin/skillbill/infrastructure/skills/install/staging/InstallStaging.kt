@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.install.staging
 
-import skillbill.error.core.InvalidInstallStagingError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.invalidInstallStaging
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
@@ -127,14 +127,14 @@ private fun requireWithinSource(
     try {
       path.toRealPath()
     } catch (_: IOException) {
-      throw InvalidInstallStagingError(
+      throw invalidInstallStaging(
         sourceLabel = resolvedSourceSkillDir.toString(),
         reason = "Authored path '$path' could not be resolved to a real path.",
       )
     }
   val realRoot = resolvedSourceSkillDir.toRealPath()
   if (!realPath.startsWith(realRoot)) {
-    throw InvalidInstallStagingError(
+    throw invalidInstallStaging(
       sourceLabel = resolvedSourceSkillDir.toString(),
       reason = "Authored path '$path' resolves to '$realPath' which escapes source skill dir '$realRoot'.",
     )
@@ -213,7 +213,7 @@ private fun invalidStageInstalledSkill(
   input: StageInstalledSkillInput,
   error: Throwable,
 ): Nothing =
-  throw InvalidInstallStagingError(
+  throw invalidInstallStaging(
     sourceLabel = input.sourceSkillDir.toString(),
     reason = error.message ?: error::class.simpleName.orEmpty(),
     cause = error,

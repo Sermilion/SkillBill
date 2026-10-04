@@ -1,3 +1,13 @@
+## [2026-10-04] Keep durable and request code classification distinct
+Context: SKILL-400 subtask 3 replaces durable-install, evidence-request, agent-ID, feature-spec-request and learning-source exception types with shared coded failures.
+Decision: Register DurableInstallStateFailureCode in shell-content classification and extend the existing governed-review and agent-add-on families. Keep feature-spec-request and learning-source codes outside that classification; MCP skips capture only for the learning-source family.
+Reason: Former shell-content subclasses already used guarded handling and MCP no-capture routing. Feature-spec requests were captured, while learning-source failures had a separate no-capture rule. Shared exception construction must preserve each route and exact handled set.
+
+## [2026-10-04] Keep environment composition defects out of shared failure codes
+Context: UnresolvedEnvironmentContextFieldError represented unspecified userHome or environment sentinels at the SQLite opening boundary.
+Decision: Remove the shared exception class and use error() with the same messages in requireResolvedEnvironmentContext. Add no replacement failure-code enum.
+Reason: Only unresolved composition sentinels trigger these failures. The settled plan found no CLI-output assertion requiring a coded route; the existing SQLite test pins construction and message text. A shared input-failure code would misclassify a composition defect.
+
 ## [2026-10-04] Keep JSON recovery within exact code guards
 Context: SKILL-400 subtask 1 replaces JSON exception types used by shared decoders and consumers that wrap errors or return null, empty or unusable results.
 Decision: Retain the existing throwing decoder APIs and recovery results. Each converted catch handles only its former JSON codes and rethrows other failures.

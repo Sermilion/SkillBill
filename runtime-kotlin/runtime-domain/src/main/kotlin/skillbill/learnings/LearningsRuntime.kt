@@ -1,7 +1,7 @@
 package skillbill.learnings
 
-import skillbill.error.learning.InvalidLearningSourceError
 import skillbill.error.learning.InvalidLearningSourceReason
+import skillbill.error.learning.invalidLearningSource
 import skillbill.learnings.model.LearningScope
 import skillbill.learnings.model.LearningSourceReference
 import skillbill.learnings.model.LearningSourceValidation
@@ -51,14 +51,14 @@ object LearningsRuntime {
     latestRejectedOutcome: RejectedLearningSourceOutcome?,
   ): LearningSourceValidation {
     if (!sourceFindingExists) {
-      throw InvalidLearningSourceError(
+      throw invalidLearningSource(
         reason = InvalidLearningSourceReason.UNKNOWN_FINDING,
         reviewRunId = sourceReference.reviewRunId,
         findingId = sourceReference.findingId,
       )
     }
     if (latestRejectedOutcome == null) {
-      throw InvalidLearningSourceError(
+      throw invalidLearningSource(
         reason = InvalidLearningSourceReason.NOT_REJECTED,
         reviewRunId = sourceReference.reviewRunId,
         findingId = sourceReference.findingId,

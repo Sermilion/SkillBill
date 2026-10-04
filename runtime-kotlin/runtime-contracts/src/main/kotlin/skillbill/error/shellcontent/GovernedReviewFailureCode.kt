@@ -9,7 +9,19 @@ enum class GovernedReviewFailureCode : RuntimeFailureCode {
   EVIDENCE_TRANSPORT,
   INLINE_PARALLEL_UNSUPPORTED,
   LAUNCH_CAPABILITY,
+  INVALID_EVIDENCE_REQUEST,
 }
+
+fun invalidGovernedReviewEvidenceRequest(
+  operation: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    GovernedReviewFailureCode.INVALID_EVIDENCE_REQUEST,
+    "Governed review evidence request '${operation.ifBlank { "<unknown>" }}' is invalid: $reason",
+    cause,
+  )
 
 fun governedReviewLaunchCapability(
   provider: String,

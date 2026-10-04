@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.phase.planning
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.invalidFeatureSpecPreparationRequest
 import skillbill.featurespec.model.FeatureSpecPreparationIntake
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -38,7 +38,7 @@ class FeatureTaskRuntimeDecompositionPlanner(
     val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
     val parentSpecPath =
       (resolved as? FeatureSpecPathResolveResult.SingleMatch)?.specPath?.let(Path::of)
-        ?: throw InvalidFeatureSpecPreparationRequestError(
+        ?: throw invalidFeatureSpecPreparationRequest(
           fieldPath = "parent_spec",
           reason = "plan must author exactly one .feature-specs/$issueKey-<slug>/spec.md bundle.",
         )

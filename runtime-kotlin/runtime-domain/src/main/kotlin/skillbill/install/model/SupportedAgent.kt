@@ -1,6 +1,6 @@
 package skillbill.install.model
 
-import skillbill.error.core.InvalidAgentAddonAgentIdError
+import skillbill.error.shellcontent.invalidAgentAddonAgentId
 
 enum class SupportedAgent(
   val wireValue: String,
@@ -43,7 +43,7 @@ enum class SupportedAgent(
     fun parseAgentAddonId(id: String): SupportedAgent {
       val normalized = id.trim().lowercase()
       return entries.firstOrNull { agent -> agent.wireValue == normalized }
-        ?: throw InvalidAgentAddonAgentIdError(
+        ?: throw invalidAgentAddonAgentId(
           agentId = id,
           reason = "Unknown agent. Supported agents: ${supportedIds.joinToString(", ")}.",
         )

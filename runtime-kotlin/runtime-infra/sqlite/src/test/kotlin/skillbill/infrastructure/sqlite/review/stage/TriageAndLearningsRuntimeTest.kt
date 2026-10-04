@@ -2,7 +2,8 @@ package skillbill.infrastructure.sqlite.review.stage
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.learning.LearningEntryDto
-import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.learning.InvalidLearningSourceReason
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteLearningStore
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
@@ -134,7 +135,7 @@ class LearningPromotionTest {
       rejectFinding(connection, review.reviewRunId, "F-002", "Keep the current prompt wording.")
 
       val failure =
-        assertFailsWith<InvalidLearningSourceError> {
+        assertFailsWith<SkillBillRuntimeException> {
           LearningsRuntime.validateLearningSource(
             sourceReviewRunId = review.reviewRunId,
             sourceFindingId = "F-does-not-exist",
@@ -142,6 +143,7 @@ class LearningPromotionTest {
             latestRejectedOutcome = null,
           )
         }
+      assertEquals(InvalidLearningSourceReason.UNKNOWN_FINDING, failure.code)
       assertTrue("F-does-not-exist" in failure.message.orEmpty(), "The failure must name the unresolvable finding.")
       assertEquals(
         0,

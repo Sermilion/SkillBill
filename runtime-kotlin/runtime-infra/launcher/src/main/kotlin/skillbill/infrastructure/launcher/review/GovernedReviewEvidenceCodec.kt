@@ -3,7 +3,7 @@ package skillbill.infrastructure.launcher.review
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.core.InvalidGovernedReviewEvidenceRequestError
+import skillbill.error.shellcontent.invalidGovernedReviewEvidenceRequest
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBatchResult
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
@@ -21,7 +21,7 @@ internal object GovernedReviewEvidenceCodec {
   ): ReviewEvidenceBatchRequest {
     requestMetadata(arguments)
     if (arguments.keys.any { it !in setOf(GovernedReviewEvidencePayloadKeys.REQUESTS) }) {
-      throw InvalidGovernedReviewEvidenceRequestError("review-evidence", "Malformed read operation.")
+      throw invalidGovernedReviewEvidenceRequest("review-evidence", "Malformed read operation.")
     }
     val rawRequests = evidenceReadItems(arguments)
     return ReviewEvidenceBatchRequest(
@@ -47,7 +47,7 @@ internal object GovernedReviewEvidenceCodec {
           )
       }
     ) {
-      throw InvalidGovernedReviewEvidenceRequestError("review-expansion", "Unknown expansion request field.")
+      throw invalidGovernedReviewEvidenceRequest("review-expansion", "Unknown expansion request field.")
     }
     return ReviewExpansionAuthorizationRequest(
       lane =
@@ -107,7 +107,7 @@ internal object GovernedReviewEvidenceCodec {
       JsonCodec.mapToJsonString(arguments).toByteArray(Charsets.UTF_8).size >
       GovernedReviewEvidenceContracts.REQUEST_BYTES
     ) {
-      throw InvalidGovernedReviewEvidenceRequestError("review-evidence", "Request metadata exceeds its byte limit.")
+      throw invalidGovernedReviewEvidenceRequest("review-evidence", "Request metadata exceeds its byte limit.")
     }
   }
 }

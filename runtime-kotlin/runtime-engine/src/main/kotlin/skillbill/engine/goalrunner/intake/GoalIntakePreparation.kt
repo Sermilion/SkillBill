@@ -7,7 +7,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.invalidFeatureSpecPreparationRequest
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
@@ -146,7 +146,7 @@ class GoalIntakePreparation(
   private fun invalidIntake(
     field: String,
     reason: String,
-  ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = field, reason = reason)
+  ): Nothing = throw invalidFeatureSpecPreparationRequest(fieldPath = field, reason = reason)
 
   private fun acceptanceCriteria(intake: String): List<String> {
     val lines = intake.lines()

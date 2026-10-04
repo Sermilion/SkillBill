@@ -2,7 +2,7 @@ package skillbill.engine.goalrunner.intake
 
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.contracts.issuekey.issueAndFeature
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.invalidFeatureSpecPreparationRequest
 
 internal data class GoalIntake(
   val issueKey: String,
@@ -80,7 +80,7 @@ internal data class GoalIntake(
     private fun invalid(
       field: String,
       reason: String,
-    ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = field, reason = reason)
+    ): Nothing = throw invalidFeatureSpecPreparationRequest(fieldPath = field, reason = reason)
 
     private val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
   }

@@ -1,6 +1,6 @@
 package skillbill.featurespec
 
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.invalidFeatureSpecPreparationRequest
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationIntake
 import skillbill.featurespec.model.FeatureSpecPreparationMode
@@ -104,5 +104,5 @@ object FeatureSpecPreparationPolicy {
   private fun invalidRequest(
     fieldPath: String,
     reason: String,
-  ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = fieldPath, reason = reason)
+  ): Nothing = throw invalidFeatureSpecPreparationRequest(fieldPath = fieldPath, reason = reason)
 }

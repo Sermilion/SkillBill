@@ -8,7 +8,8 @@ import skillbill.application.review.snapshot.harnessOrigin
 import skillbill.application.telemetry.service.TelemetryLevelMutationService
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
-import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.learning.InvalidLearningSourceReason
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.learnings.model.LearningScope
 import skillbill.learnings.model.RejectedLearningSourceOutcome
@@ -78,19 +79,21 @@ class ApplicationPersistencePortTest {
     val database = FakeDatabaseSessionFactory(reviews = FakeReviewRepository(sourceFindingExists = true))
     val service = LearningService(database)
 
-    assertFailsWith<InvalidLearningSourceError> {
-      service.add(
-        AddLearningInput(
-          scope = LearningScope.SKILL,
-          scopeKey = "bill-kotlin-code-review",
-          title = "Prefer ports",
-          rule = "Application services should depend on persistence ports.",
-          reason = "Keeps use cases testable.",
-          fromRun = "rvw-1",
-          fromFinding = "F-1",
-        ),
-      )
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        service.add(
+          AddLearningInput(
+            scope = LearningScope.SKILL,
+            scopeKey = "bill-kotlin-code-review",
+            title = "Prefer ports",
+            rule = "Application services should depend on persistence ports.",
+            reason = "Keeps use cases testable.",
+            fromRun = "rvw-1",
+            fromFinding = "F-1",
+          ),
+        )
+      }
+    assertEquals(InvalidLearningSourceReason.NOT_REJECTED, error.code)
   }
 
   @Test

@@ -3,7 +3,6 @@ package skillbill.infrastructure.sqlite
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
 import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
@@ -59,7 +58,7 @@ class SqliteDegradationDiagnosticsTest {
   @Test
   fun `unresolved environment context field fails at factory construction`() {
     val error =
-      assertFailsWith<UnresolvedEnvironmentContextFieldError> {
+      assertFailsWith<IllegalStateException> {
         SQLiteDatabaseSessionFactory(
           EnvironmentContext(),
           Clock.systemUTC(),
@@ -73,7 +72,6 @@ class SqliteDegradationDiagnosticsTest {
           "test-runtime-version",
         )
       }
-    assertEquals("userHome", error.fieldName)
     assertTrue(error.message.orEmpty().contains("EnvironmentContext.userHome"))
   }
 

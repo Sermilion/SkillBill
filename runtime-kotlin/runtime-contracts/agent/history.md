@@ -1,3 +1,16 @@
+## [2026-10-04] SKILL-400 durable decode and request failure codes
+Areas: runtime-contracts/error/core, error/learning and error/shellcontent; runtime-domain/featurespec, install/model and learnings; runtime-engine/featuretask/prepare, planning and goalrunner/intake; runtime-infra/launcher/review, skills/install and scaffold, sqlite/core/schema; runtime-mcp/core; runtime-core architecture baseline and persistence tests
+- Removed nine exception classes. Durable state, evidence requests, agent IDs, feature-spec requests and learning sources now use owner-coded SkillBillRuntimeException factories; unresolved environment sentinels use error().
+- DurableInstallStateFailureCode joins shell-content classification. GovernedReviewFailureCode.INVALID_EVIDENCE_REQUEST and AgentAddonFailureCode.INVALID_AGENT_ID reuse their existing families.
+- InvalidLearningSourceReason is the learning-source code and retains MCP no-capture handling. FeatureSpecPreparationFailureCode.INVALID_REQUEST stays captured and outside shell-content classification.
+- Followed exact code guards and rethrows, preserving handled sets, message text, causes, cancellation, cleanup and suppression behavior.
+- reusable: shared owner-code factories retain producer context across domain, engine and adapter consumers without custom exception properties.
+- Updated regression assertions to exact codes, added learning-source MCP result and no-capture coverage, and removed the nine owned throwable-baseline rows.
+- Breaking change: removed exception types have no aliases. Persisted payloads and contract versions do not change.
+- Limit: this entry covers subtask 3. Legacy bases and codeless transition support remain because other subclasses still exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-04] SKILL-400 JSON and failure-wire decode codes
 Areas: runtime-contracts/contracts and error/core and error/shellcontent, runtime-domain/goalrunner and review/context and workflow/decomposition tests, runtime-ports/workflow, runtime-application/workflow, runtime-cli/workflow, runtime-engine/featuretask/audit, runtime-infra/contracts/workflow/featuretask, runtime-core architecture baseline
 - Replaced four JSON and failure-wire decode exception classes with JsonFailureCode and FailureWireDecodeCode factories returning coded SkillBillRuntimeException failures.

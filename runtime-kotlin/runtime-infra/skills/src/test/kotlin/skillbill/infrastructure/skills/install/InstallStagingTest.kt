@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.core.InvalidInstallStagingError
+import skillbill.error.core.DurableInstallStateFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
@@ -324,9 +324,11 @@ class InstallStagingTest {
     val cacheRoot = installedSkillsCacheRoot(fixture.home)
     val priorChildren = listCacheChildren(cacheRoot)
 
-    assertFailsWith<InvalidInstallStagingError> {
-      stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        stageInstalledSkill(fixture.repoRoot, fixture.skillDir, fixture.home)
+      }
+    assertEquals(DurableInstallStateFailureCode.INSTALL_STAGING, error.code)
     val newChildren = listCacheChildren(cacheRoot) - priorChildren
     assertTrue(
       newChildren.isEmpty(),

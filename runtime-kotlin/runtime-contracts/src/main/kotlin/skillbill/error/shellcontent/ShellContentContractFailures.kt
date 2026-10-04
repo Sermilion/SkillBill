@@ -1,5 +1,6 @@
 package skillbill.error.shellcontent
 
+import skillbill.error.core.DurableInstallStateFailureCode
 import skillbill.error.core.ExternalAddonFailureCode
 import skillbill.error.core.ExternalPlatformPackFailureCode
 import skillbill.error.core.FailureWireCode
@@ -24,6 +25,7 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is ExternalPlatformPackFailureCode ||
     failureCode is ExternalAddonFailureCode ||
     failureCode is InstallFailureCode ||
+    failureCode is DurableInstallStateFailureCode ||
     failureCode is FeatureTaskRuntimeFailureCode ||
     failureCode is WorkflowFailureCode
 }

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.launcher.review
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.InvalidGovernedReviewEvidenceRequestError
+import skillbill.error.shellcontent.invalidGovernedReviewEvidenceRequest
 import skillbill.ports.review.model.ReviewEvidenceRequest
 import skillbill.review.context.model.hunk.ReviewEvidenceLimits
 import skillbill.review.context.model.hunk.ReviewExpansionRecord
@@ -14,12 +14,12 @@ internal object GovernedReviewEvidenceCodecWireParsing {
   ): ReviewEvidenceRequest {
     val map = asMap(raw)
     if (map.keys.any { it !in setOf("path", "selector", "expansion_id", "reachability_reason") }) {
-      throw InvalidGovernedReviewEvidenceRequestError("review-evidence", "Unknown read selector field.")
+      throw invalidGovernedReviewEvidenceRequest("review-evidence", "Unknown read selector field.")
     }
     val expansionId = optionalString(map, "expansion_id")
     val authorized =
       expansionId?.let { id ->
-        expansionById(id) ?: throw InvalidGovernedReviewEvidenceRequestError(
+        expansionById(id) ?: throw invalidGovernedReviewEvidenceRequest(
           "review-evidence",
           "Unknown expansion id for this assignment.",
         )
@@ -39,7 +39,7 @@ internal object GovernedReviewEvidenceCodecWireParsing {
   ): String {
     val value = source[key] as? String
     if (value.isNullOrBlank()) {
-      throw InvalidGovernedReviewEvidenceRequestError(
+      throw invalidGovernedReviewEvidenceRequest(
         "review-evidence",
         "Operation requires string '$key'.",
       )
@@ -50,7 +50,7 @@ internal object GovernedReviewEvidenceCodecWireParsing {
 
   private fun asMap(raw: Any?): Map<String, Any?> =
     raw?.let(JsonCodec::anyToStringAnyMap)
-      ?: throw InvalidGovernedReviewEvidenceRequestError("review-evidence", "Each read selector must be an object.")
+      ?: throw invalidGovernedReviewEvidenceRequest("review-evidence", "Each read selector must be an object.")
 
   private fun optionalString(
     source: Map<String, Any?>,
@@ -58,7 +58,7 @@ internal object GovernedReviewEvidenceCodecWireParsing {
   ): String? =
     source[key]?.let { value ->
       (value as? String)?.takeIf(String::isNotBlank)?.also(ReviewEvidenceLimits::field)
-        ?: throw InvalidGovernedReviewEvidenceRequestError(
+        ?: throw invalidGovernedReviewEvidenceRequest(
           "review-evidence",
           "Optional selector must be a nonblank string.",
         )

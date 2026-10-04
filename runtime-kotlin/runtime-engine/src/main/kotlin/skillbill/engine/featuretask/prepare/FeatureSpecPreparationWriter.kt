@@ -17,7 +17,7 @@ import skillbill.application.decomposition.specSource
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.invalidFeatureSpecPreparationRequest
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
 import skillbill.featurespec.model.FeatureSpecWriteRequest
@@ -439,4 +439,4 @@ private fun subtaskFileName(subtask: FeatureSpecSubtaskPreparation): String =
 private fun invalidRequest(
   fieldPath: String,
   reason: String,
-): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = fieldPath, reason = reason)
+): Nothing = throw invalidFeatureSpecPreparationRequest(fieldPath = fieldPath, reason = reason)

@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.scaffold.runtime.service
 
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.InvalidAgentAddonAgentIdError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingPlatformPackError
 import skillbill.error.shellcontent.unknownPreShellFamilyError
@@ -125,7 +126,8 @@ internal fun planAgentAddon(
 internal fun validateAgentAddonAgentId(id: String) {
   try {
     SupportedAgent.parseAgentAddonId(id)
-  } catch (error: InvalidAgentAddonAgentIdError) {
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code != AgentAddonFailureCode.INVALID_AGENT_ID) throw error
     throw invalidScaffoldPayloadError(error.message ?: "Unknown agent '$id'.", error)
   }
 }

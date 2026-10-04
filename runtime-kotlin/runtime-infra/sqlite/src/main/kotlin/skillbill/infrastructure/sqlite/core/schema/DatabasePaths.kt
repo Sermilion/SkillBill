@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.core.schema
 
-import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.model.EnvironmentContext
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -40,10 +39,10 @@ internal object DatabasePaths {
 
 internal fun requireResolvedEnvironmentContext(context: EnvironmentContext): EnvironmentContext {
   if (context.userHome == EnvironmentContext.UnspecifiedUserHome) {
-    throw UnresolvedEnvironmentContextFieldError("userHome")
+    error("EnvironmentContext.userHome is unresolved; resolve it in the composition root before opening SQLite.")
   }
   if (context.environment === EnvironmentContext.UnspecifiedEnvironment) {
-    throw UnresolvedEnvironmentContextFieldError("environment")
+    error("EnvironmentContext.environment is unresolved; resolve it in the composition root before opening SQLite.")
   }
   return context.copy(
     userHome = context.userHome.toAbsolutePath().normalize(),

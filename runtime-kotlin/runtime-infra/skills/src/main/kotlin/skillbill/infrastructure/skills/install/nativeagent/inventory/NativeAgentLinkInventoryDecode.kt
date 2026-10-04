@@ -3,8 +3,8 @@ package skillbill.infrastructure.skills.install.nativeagent.inventory
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
-import skillbill.error.core.InvalidNativeAgentLinkInventoryDecodeError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.invalidNativeAgentLinkInventoryDecode
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.contracts.sha256Hex
@@ -209,8 +209,8 @@ internal object NativeAgentLinkInventoryDecode {
     path: Path,
     reason: String,
     cause: Throwable? = null,
-  ): InvalidNativeAgentLinkInventoryDecodeError =
-    InvalidNativeAgentLinkInventoryDecodeError(
+  ): SkillBillRuntimeException =
+    invalidNativeAgentLinkInventoryDecode(
       path = path.toString(),
       reason = "$reason. Delete it and reinstall.",
       cause = cause,

@@ -1,7 +1,6 @@
 package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.core.InvalidAgentAddonAgentIdError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.install.model.SupportedAgent
@@ -17,11 +16,12 @@ class AgentAddonSourceLoaderTest {
   @Test
   fun `unknown agent id fails with typed parse error`() {
     val error =
-      assertFailsWith<InvalidAgentAddonAgentIdError> {
+      assertFailsWith<SkillBillRuntimeException> {
         SupportedAgent.parseAgentAddonId("unsupported-agent")
       }
 
-    assertTrue(error.reason.contains("Unknown agent"), error.reason)
+    assertEquals(AgentAddonFailureCode.INVALID_AGENT_ID, error.code)
+    assertTrue(error.message.orEmpty().contains("Unknown agent"), error.message.orEmpty())
   }
 
   @Test

@@ -1,17 +1,19 @@
 package skillbill.error.learning
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 
-enum class InvalidLearningSourceReason {
+enum class InvalidLearningSourceReason : RuntimeFailureCode {
   UNKNOWN_FINDING,
   NOT_REJECTED,
 }
 
-class InvalidLearningSourceError(
-  val reason: InvalidLearningSourceReason,
-  val reviewRunId: String,
-  val findingId: String,
-) : SkillBillRuntimeException(invalidLearningSourceMessage(reason, reviewRunId, findingId))
+fun invalidLearningSource(
+  reason: InvalidLearningSourceReason,
+  reviewRunId: String,
+  findingId: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(reason, invalidLearningSourceMessage(reason, reviewRunId, findingId))
 
 private fun invalidLearningSourceMessage(
   reason: InvalidLearningSourceReason,

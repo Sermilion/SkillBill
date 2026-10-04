@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.core.InvalidNativeAgentLinkInventoryDecodeError
+import skillbill.error.core.DurableInstallStateFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.install.apply.currentNativeAgentApplyCacheRoot
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -39,9 +40,11 @@ class InstallNativeAgentLinkApplyCodexTest : InstallNativeAgentLinkApplyTestSupp
       ),
     )
 
-    assertFailsWith<InvalidNativeAgentLinkInventoryDecodeError> {
-      NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot))
+      }
+    assertEquals(DurableInstallStateFailureCode.NATIVE_AGENT_LINK_INVENTORY_DECODE, error.code)
   }
 
   @Test
@@ -68,9 +71,11 @@ class InstallNativeAgentLinkApplyCodexTest : InstallNativeAgentLinkApplyTestSupp
       """.trimIndent(),
     )
 
-    assertFailsWith<InvalidNativeAgentLinkInventoryDecodeError> {
-      NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        NativeAgentLinkInventory.read(fixture.home, listOf(cacheRoot))
+      }
+    assertEquals(DurableInstallStateFailureCode.NATIVE_AGENT_LINK_INVENTORY_DECODE, error.code)
   }
 
   @Test

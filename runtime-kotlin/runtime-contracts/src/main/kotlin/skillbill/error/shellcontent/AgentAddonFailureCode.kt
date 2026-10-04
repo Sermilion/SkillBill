@@ -9,7 +9,19 @@ enum class AgentAddonFailureCode : RuntimeFailureCode {
   INVALID_SELECTION,
   SELECTION_DRIFT,
   INVALID_DELIVERY,
+  INVALID_AGENT_ID,
 }
+
+fun invalidAgentAddonAgentId(
+  agentId: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    AgentAddonFailureCode.INVALID_AGENT_ID,
+    "Agent add-on agent id '${agentId.ifBlank { "<unknown>" }}' is invalid: $reason",
+    cause,
+  )
 
 fun invalidAgentAddonSchema(
   sourceLabel: String,

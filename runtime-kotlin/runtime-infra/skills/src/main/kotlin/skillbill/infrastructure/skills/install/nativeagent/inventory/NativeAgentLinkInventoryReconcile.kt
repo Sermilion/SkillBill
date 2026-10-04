@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.nativeagent.inventory
 
-import skillbill.error.core.InvalidNativeAgentLinkInventoryReconcileError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.invalidNativeAgentLinkInventoryReconcile
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import java.io.IOException
@@ -63,8 +63,8 @@ private fun reconcileError(
   path: Path,
   reason: String,
   cause: Throwable? = null,
-): InvalidNativeAgentLinkInventoryReconcileError =
-  InvalidNativeAgentLinkInventoryReconcileError(path = path.toString(), reason = reason, cause = cause)
+): SkillBillRuntimeException =
+  invalidNativeAgentLinkInventoryReconcile(path = path.toString(), reason = reason, cause = cause)
 
 private fun loadPreviousNativeAgentLinkInventory(
   path: Path,

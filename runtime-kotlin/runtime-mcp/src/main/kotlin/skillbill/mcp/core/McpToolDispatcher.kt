@@ -3,7 +3,8 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.learning.InvalidLearningSourceReason
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.mcp.shared.InvalidMcpToolArgumentError
 import skillbill.mcp.shared.McpComponent
@@ -39,7 +40,7 @@ internal object McpToolDispatcher {
 
   private fun Throwable.uncapturedAtMcp(): Boolean =
     isShellContentContractFailure() ||
-      this is InvalidLearningSourceError ||
+      (this as? SkillBillRuntimeException)?.code is InvalidLearningSourceReason ||
       this is IllegalArgumentException ||
       this is IllegalStateException
 

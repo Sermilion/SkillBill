@@ -2,8 +2,8 @@ package skillbill.infrastructure.skills.install.nativeagent.inventory
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
-import skillbill.error.core.InvalidNativeAgentLinkInventoryWriteError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.invalidNativeAgentLinkInventoryWrite
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
@@ -79,8 +79,8 @@ internal object NativeAgentLinkInventoryWrite {
     path: Path,
     reason: String,
     cause: Throwable? = null,
-  ): InvalidNativeAgentLinkInventoryWriteError =
-    InvalidNativeAgentLinkInventoryWriteError(path = path.toString(), reason = reason, cause = cause)
+  ): SkillBillRuntimeException =
+    invalidNativeAgentLinkInventoryWrite(path = path.toString(), reason = reason, cause = cause)
 
   private fun invalidWrite(
     path: Path,

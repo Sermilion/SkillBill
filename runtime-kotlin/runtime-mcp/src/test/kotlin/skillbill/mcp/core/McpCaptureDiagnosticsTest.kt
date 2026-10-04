@@ -1,5 +1,6 @@
 package skillbill.mcp.core
 
+import skillbill.contracts.learning.LearningPayloadKeys
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.telemetryProxyRequestFailure
@@ -104,6 +105,33 @@ class McpCaptureDiagnosticsTest {
   }
 
   @Test
+  fun `dispatcher returns learning source errors without capturing telemetry`() {
+    val tempDir = Files.createTempDirectory("skillbill-mcp-capture-learning-source")
+    val environment = enabledTelemetryEnvironment(tempDir)
+    val dbPath = tempDir.resolve("metrics.db")
+    ensureTestDatabase(dbPath).close()
+
+    val error =
+      McpRuntimeContext(
+        requester = failingRequester(UnsupportedOperationException("transport unsupported")),
+        environment = environment,
+      ).callToolError(
+        "add_learning",
+        mapOf(
+          LearningPayloadKeys.SCOPE to "global",
+          LearningPayloadKeys.TITLE to "A learning",
+          LearningPayloadKeys.RULE_TEXT to "Use explicit wording.",
+          LearningPayloadKeys.SOURCE_REVIEW_RUN_ID to "rvw-missing",
+          LearningPayloadKeys.SOURCE_FINDING_ID to "F-missing",
+        ),
+      )
+
+    assertEquals("add_learning", error["tool"])
+    assertEquals("Unknown learning source 'rvw-missing:F-missing'. Import the review and finding first.", error["error"])
+    assertEquals(emptyList(), capturedErrorTypes(dbPath, "add_learning"))
+  }
+
+  @Test
   fun `dispatcher captures a proxy request failure and leaves an illegal argument uncaptured`() {
     val tempDir = Files.createTempDirectory("skillbill-mcp-capture-proxy")
     val environment = enabledTelemetryEnvironment(tempDir)
@@ -129,13 +157,16 @@ class McpCaptureDiagnosticsTest {
   private fun failingRequester(failure: Exception): RemoteTransportPort =
     RemoteTransportPort { _, _, _, _ -> throw failure }
 
-  private fun capturedErrorTypes(dbPath: Path): List<String> =
+  private fun capturedErrorTypes(
+    dbPath: Path,
+    toolName: String = CAPTURED_TOOL,
+  ): List<String> =
     ensureTestDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeQuery("SELECT payload_json FROM telemetry_outbox ORDER BY id").use { resultSet ->
           generateSequence { if (resultSet.next()) resultSet.getString("payload_json") else null }
             .map(::decodeJsonObject)
-            .filter { payload -> payload["workflow_phase"] == CAPTURED_TOOL }
+            .filter { payload -> payload["workflow_phase"] == toolName }
             .map { payload -> payload["error_type"].toString() }
             .toList()
         }

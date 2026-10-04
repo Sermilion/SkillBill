@@ -1,41 +1,46 @@
 package skillbill.featurespec
 
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.FeatureSpecPreparationFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.featurespec.model.FeatureSpecPreparationIntake
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class FeatureSpecPreparationPolicyTest {
   @Test
   fun `prepare loud-fails when issue key is missing`() {
     val error =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureSpecPreparationPolicy.prepare(validIntake().copy(issueKey = " "))
       }
 
-    assertEquals("issue_key", error.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
+    assertTrue(error.message.orEmpty().contains("'issue_key'"))
   }
 
   @Test
   fun `prepare loud-fails when acceptance criteria are missing`() {
     val error =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureSpecPreparationPolicy.prepare(validIntake().copy(acceptanceCriteria = emptyList()))
       }
 
-    assertEquals("acceptance_criteria", error.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
+    assertTrue(error.message.orEmpty().contains("'acceptance_criteria'"))
   }
 
   @Test
   fun `prepare loud-fails when constraints are missing`() {
     val error =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureSpecPreparationPolicy.prepare(validIntake().copy(constraints = emptyList()))
       }
 
-    assertEquals("constraints", error.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
+    assertTrue(error.message.orEmpty().contains("'constraints'"))
   }
 
   @Test

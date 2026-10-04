@@ -12,7 +12,7 @@ import skillbill.application.testDecompositionManifestWriter
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.planning.PlanBundleAuthorization
 import skillbill.engine.goalrunner.manifest
-import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.error.core.FeatureSpecPreparationFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
@@ -81,7 +81,7 @@ class FeatureSpecPreparationWriterTest {
   fun `preparation loud fails when no executable subtask is provided`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-single-subtasks")
     val error =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writer.write(
           repoRoot = repoRoot,
           request =
@@ -94,7 +94,8 @@ class FeatureSpecPreparationWriterTest {
         )
       }
 
-    assertEquals("subtasks", error.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
+    assertContains(error.message.orEmpty(), "'subtasks'")
   }
 
   @Test
@@ -181,7 +182,7 @@ class FeatureSpecPreparationWriterTest {
   fun `linear preparation stamps source and requires every subtask identity`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-linear")
     val missingIdentity =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writer.write(
           repoRoot,
           FeatureSpecWriteRequest(
@@ -194,7 +195,8 @@ class FeatureSpecPreparationWriterTest {
           ),
         )
       }
-    assertEquals("subtasks[0].linear_issue_id", missingIdentity.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, missingIdentity.code)
+    assertContains(missingIdentity.message.orEmpty(), "'subtasks[0].linear_issue_id'")
 
     val result =
       writer.write(
@@ -217,18 +219,20 @@ class FeatureSpecPreparationWriterTest {
   @Test
   fun `invalid dependency leaves no partial prepared feature files`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-prevalidate")
-    assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
-      writer.write(
-        repoRoot,
-        FeatureSpecWriteRequest(
-          decision = decomposedDecision(),
-          featureName = "prevalidated-feature",
-          parentSpecOverview = "No partial files.",
-          validationStrategy = "bill-code-check",
-          subtasks = listOf(singleSubtask().copy(id = 2, dependsOn = listOf(1))),
-        ),
-      )
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        writer.write(
+          repoRoot,
+          FeatureSpecWriteRequest(
+            decision = decomposedDecision(),
+            featureName = "prevalidated-feature",
+            parentSpecOverview = "No partial files.",
+            validationStrategy = "bill-code-check",
+            subtasks = listOf(singleSubtask().copy(id = 2, dependsOn = listOf(1))),
+          ),
+        )
+      }
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
     val directory = repoRoot.resolve(".feature-specs/SKILL-59-prevalidated-feature")
     assertTrue(!Files.exists(directory) || Files.list(directory).use { it.findAny().isEmpty })
   }
@@ -617,11 +621,12 @@ class FeatureSpecPreparationWriterTest {
     Files.writeString(subtask, Files.readString(subtask).substringBefore("## Acceptance Criteria"))
 
     val error =
-      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
       }
 
-    assertEquals("subtasks[0].acceptance_criteria", error.fieldPath)
+    assertEquals(FeatureSpecPreparationFailureCode.INVALID_REQUEST, error.code)
+    assertContains(error.message.orEmpty(), "'subtasks[0].acceptance_criteria'")
   }
 
   @Test

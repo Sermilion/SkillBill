@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install.nativeagent.inventory
 
-import skillbill.error.core.InvalidNativeAgentLinkInventoryDecodeError
+import skillbill.error.core.invalidNativeAgentLinkInventoryDecode
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import java.io.IOException
@@ -121,7 +121,7 @@ internal object NativeAgentLinkInventoryBootstrap {
     return try {
       Files.readSymbolicLink(link)
     } catch (error: IOException) {
-      throw InvalidNativeAgentLinkInventoryDecodeError(
+      throw invalidNativeAgentLinkInventoryDecode(
         path = link.toString(),
         reason = "managed link target could not be read",
         cause = error,
@@ -136,7 +136,7 @@ internal object NativeAgentLinkInventoryBootstrap {
     return try {
       sha256Hex(Files.readAllBytes(resolved))
     } catch (error: IOException) {
-      throw InvalidNativeAgentLinkInventoryDecodeError(
+      throw invalidNativeAgentLinkInventoryDecode(
         path = resolved.toString(),
         reason = "linked artifact is not hashable: ${error.message.orEmpty()}",
         cause = error,
