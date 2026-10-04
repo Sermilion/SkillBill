@@ -16,7 +16,8 @@ import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecover
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
@@ -242,7 +243,7 @@ private class PreparedPlanningPayloadValidator {
     }
     val stored = readStoredPlanningRecord(payload, phaseId, workflowId)
     if (stored.output.value.isBlank()) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+      throw invalidFeatureTaskRuntimePhaseOutputSchema(
         sourceLabel = "$workflowId:$phaseId",
         reason = "produced_outputs.value must contain non-blank prose.",
       )
@@ -335,7 +336,7 @@ private class GoalChildPlanningImportMatcher(
       error.rethrowUnless(
         error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA ||
           error.code == InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE ||
-          error is InvalidFeatureTaskRuntimePhaseOutputSchemaError,
+          error.code is FeatureTaskRuntimePhaseOutputFailureCode,
       )
       return importedPayloadRecoveryError(phaseId, setup, request, error)
     }

@@ -31,7 +31,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -147,11 +147,9 @@ internal class DurablePhaseRunRecords(
   ): RequiredPhaseWrite = recorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
 
   override fun recordProjectionRejection(
-    workflowId: String,
-    consumerPhaseId: String,
-    error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
     repositoryCheckpointFingerprint: String?,
-  ): Boolean = recorder.recordProjectionRejection(workflowId, consumerPhaseId, error, repositoryCheckpointFingerprint)
+  ): Boolean = recorder.recordProjectionRejection(context, repositoryCheckpointFingerprint)
 
   override fun recordProjectionRejection(rejection: FeatureTaskRuntimeProjectionRejection): Boolean =
     recorder.recordProjectionRejection(rejection)

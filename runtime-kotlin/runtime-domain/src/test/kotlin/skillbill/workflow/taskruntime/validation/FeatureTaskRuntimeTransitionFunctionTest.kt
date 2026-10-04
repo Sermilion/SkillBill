@@ -38,7 +38,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `default advance with no matching edge progresses to the next forward index`() {
     listOf("a" to "b", "b" to "c", "c" to "d").forEach { (current, expectedNext) ->
       val transition =
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = cyclic,
           currentPhaseId = current,
           verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -54,7 +54,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `pipeline end terminates with advance`() {
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = cyclic,
         currentPhaseId = "d",
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -68,7 +68,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
     val cap = requireNotNull(edge.perEdgeCap)
     (0 until cap).forEach { alreadyFired ->
       val transition =
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = cyclic,
           currentPhaseId = "c",
           verdict = needsFix,
@@ -85,7 +85,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `matching backward edge at cap blocks loudly with loop id iteration and unresolved verdict`() {
     val cap = requireNotNull(edge.perEdgeCap)
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = cyclic,
         currentPhaseId = "c",
         verdict = needsFix,
@@ -100,7 +100,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `non-triggering verdict at the edge phase falls through to the forward edge`() {
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = cyclic,
         currentPhaseId = "c",
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -116,7 +116,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
       verdicts.forEach { verdict ->
         (0..3).forEach { iteration ->
           val transition =
-            FeatureTaskRuntimeTransitionFunction.nextTransition(
+            resolvedTransition(
               declaration = forwardOnly,
               currentPhaseId = phaseId,
               verdict = verdict,
@@ -174,7 +174,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `forward edge skips a loop-only phase to the next non-loop-only phase`() {
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = loopDeclaration,
         currentPhaseId = "impl",
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -186,7 +186,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `loop-only phase forward-advances to the next non-loop-only phase`() {
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = loopDeclaration,
         currentPhaseId = "fix",
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -199,7 +199,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `loop-only phase is reachable only via a backward edge destination`() {
     loopPipeline.filterNot { it == "fix" }.forEach { phaseId ->
       val transition =
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = loopDeclaration,
           currentPhaseId = phaseId,
           verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -210,7 +210,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
     }
 
     val backward =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = loopDeclaration,
         currentPhaseId = "review",
         verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
@@ -223,7 +223,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `empty loopOnlyPhaseIds leaves the forward advance unchanged`() {
     val noLoopOnly = loopDeclaration.copy(loopOnlyPhaseIds = emptySet())
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = noLoopOnly,
         currentPhaseId = "impl",
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
@@ -245,7 +245,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `review approved forwards past the loop-only fix phase to audit`() {
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = loopDeclaration,
         currentPhaseId = "review",
         verdict = FeatureTaskRuntimeVerdict.APPROVED,
@@ -259,7 +259,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
     val cap = requireNotNull(reviewFixEdge.perEdgeCap)
     (0 until cap).forEach { alreadyFired ->
       val transition =
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = loopDeclaration,
           currentPhaseId = "review",
           verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
@@ -276,7 +276,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `review changes_requested at cap blocks on a blocking exhaustion edge`() {
     val cap = requireNotNull(reviewFixEdge.perEdgeCap)
     val transition =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = loopDeclaration,
         currentPhaseId = "review",
         verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
@@ -399,7 +399,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   fun `each backward edge fires from its own source and iteration without touching the other`() {
     val reviewFix =
       assertIs<FeatureTaskRuntimeNextPhase.Next>(
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = twoEdgeDeclaration,
           currentPhaseId = "review",
           verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
@@ -412,7 +412,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
 
     val auditGap =
       assertIs<FeatureTaskRuntimeNextPhase.Next>(
-        FeatureTaskRuntimeTransitionFunction.nextTransition(
+        resolvedTransition(
           declaration = twoEdgeDeclaration,
           currentPhaseId = "audit",
           verdict = FeatureTaskRuntimeVerdict.GAPS_FOUND,
@@ -427,7 +427,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
   @Test
   fun `audit satisfied forwards while gaps_found remains eligible after many iterations`() {
     val satisfied =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = twoEdgeDeclaration,
         currentPhaseId = "audit",
         verdict = FeatureTaskRuntimeVerdict.SATISFIED,
@@ -436,7 +436,7 @@ class FeatureTaskRuntimeTransitionFunctionTest {
     assertIs<FeatureTaskRuntimeNextPhase.TerminalAdvance>(satisfied)
 
     val reentry =
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
+      resolvedTransition(
         declaration = twoEdgeDeclaration,
         currentPhaseId = "audit",
         verdict = FeatureTaskRuntimeVerdict.GAPS_FOUND,

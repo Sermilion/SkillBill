@@ -1,9 +1,11 @@
 
 package skillbill.engine.featuretask.phase.briefing
 
+import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runner.AUDIT_GAP_MESSAGE
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
@@ -143,7 +145,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
         prose = "   ",
       )
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         assemble(
           BriefingAssembleFixture(
             edge.consumer,
@@ -152,6 +154,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
           ),
         )
       }
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.code)
     assertContains(error.message.orEmpty(), "non-blank prose")
   }
 
@@ -165,7 +168,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
         options = ProseEdgeOptions(omitValue = true),
       )
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         assemble(
           BriefingAssembleFixture(
             edge.consumer,
@@ -174,6 +177,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
           ),
         )
       }
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.code)
     assertContains(error.message.orEmpty(), "non-blank prose")
   }
 
@@ -457,7 +461,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
   )
 
   private fun assemble(fixture: BriefingAssembleFixture) =
-    FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+    assembleFeatureTaskRuntimeBriefing(
       FeatureTaskRuntimeHandoffContract.assembleHandoff(
         FeatureTaskRuntimeHandoffAssemblyRequest(
           declaration =

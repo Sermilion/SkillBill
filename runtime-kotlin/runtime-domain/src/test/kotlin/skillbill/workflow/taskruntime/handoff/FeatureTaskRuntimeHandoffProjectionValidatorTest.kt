@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.handoff
 
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -75,15 +75,15 @@ class FeatureTaskRuntimeHandoffProjectionValidatorTest {
   @Test
   fun `a missing required source is rejected`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs { resolvedUpstream = FeatureTaskRuntimeResolvedUpstreamOutputs(emptyMap()) },
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MISSING_REQUIRED_SOURCE, error.failureKind)
-    assertEquals(HANDOFF_VALIDATOR_TEST_CONSUMER, error.consumerPhaseId)
-    assertEquals("wftr-1", error.workflowId)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MISSING_REQUIRED_SOURCE, error.code)
+    assertContains(error.message.orEmpty(), HANDOFF_VALIDATOR_TEST_CONSUMER)
+    assertContains(error.message.orEmpty(), "wftr-1")
   }
 
   @Test
@@ -438,7 +438,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         ),
       )
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             consumerPhaseId = consumer
@@ -467,7 +467,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
   @Test
   fun `a duplicate projection name is rejected`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations = listOf(handoffProjectionDeclaration(), handoffProjectionDeclaration())
@@ -475,13 +475,13 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.DUPLICATE_PROJECTION_NAME, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.DUPLICATE_PROJECTION_NAME, error.code)
   }
 
   @Test
   fun `a declaration for another consumer phase is rejected as malformed`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations = listOf(handoffProjectionDeclaration { consumerPhaseId = "audit" })
@@ -489,13 +489,13 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.code)
   }
 
   @Test
   fun `an unsupported projection contract version is rejected`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations = listOf(handoffProjectionDeclaration { contractVersion = "9.9" })
@@ -503,14 +503,14 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.UNSUPPORTED_CONTRACT_VERSION, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.UNSUPPORTED_CONTRACT_VERSION, error.code)
     assertContains(error.message.orEmpty(), "9.9")
   }
 
   @Test
   fun `a field outside the declared shape is rejected as undeclared`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations =
@@ -521,7 +521,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.UNDECLARED_FIELD, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.UNDECLARED_FIELD, error.code)
   }
 
   @Test
@@ -581,7 +581,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
   @Test
   fun `refresh_from_repository requires a freshly resolved checkpoint`() {
     val missing =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations =
@@ -619,7 +619,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
   @Test
   fun `an unauthorized private-evidence reference is rejected as an invalid compact reference`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations =
@@ -633,7 +633,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.INVALID_COMPACT_REFERENCE, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.INVALID_COMPACT_REFERENCE, error.code)
   }
 
   @Test
@@ -665,7 +665,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
   @Test
   fun `a private-evidence locator mislabelled as another reference kind is still gated`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             declarations =
@@ -679,7 +679,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
         )
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.INVALID_COMPACT_REFERENCE, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.INVALID_COMPACT_REFERENCE, error.code)
     assertContains(error.message.orEmpty(), "private evidence artifact")
   }
 
@@ -688,7 +688,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
     val consumer = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
     val declaration = FeatureTaskRuntimePhaseWorkflowDefinition.phaseProseDeclaration(consumer)
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeHandoffProjectionValidator.validate(
           handoffProjectionValidatorInputs {
             consumerPhaseId = consumer
@@ -703,7 +703,7 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
           },
         )
       }
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD, error.code)
     assertContains(error.message.orEmpty(), "non-blank prose")
   }
 }

@@ -6,7 +6,6 @@ import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.engine.goalplanning.toFailure
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 
 internal enum class GoalPlanningRecoveryKind {

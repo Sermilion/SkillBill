@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorP
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
@@ -39,6 +40,11 @@ data class OutcomeStoreTestArtifactPorts(
 ) {
   fun wireArtifactValidator(): FeatureTaskRuntimeWireArtifactValidator =
     object : FeatureTaskRuntimeWireArtifactValidator {
+      override fun handoffEnvelopeRejection(
+        payload: FeatureTaskRuntimeWorkflowArtifactMap,
+        sourceLabel: String,
+      ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
       override fun validate(
         kind: FeatureTaskRuntimeWireArtifactKind,
         payload: FeatureTaskRuntimeWorkflowArtifactMap,

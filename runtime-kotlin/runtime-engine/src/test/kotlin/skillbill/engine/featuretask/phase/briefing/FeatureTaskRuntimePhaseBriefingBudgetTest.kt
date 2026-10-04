@@ -44,7 +44,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       )
 
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         handoff,
         workflowId = "wftr-1",
       )
@@ -81,7 +81,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       )
 
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         handoff,
       )
 
@@ -114,7 +114,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       )
 
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         handoff,
       )
 
@@ -140,7 +140,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       )
 
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         handoff,
         workflowId = "wftr-1",
       )
@@ -161,7 +161,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
     val facts = PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, setOf(CodeReviewExecutionMode.INLINE))
 
     fun briefingFor(phaseId: String) =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         FeatureTaskRuntimePhaseHandoff(
           phaseId = phaseId,
           runInvariants = invariants,
@@ -221,7 +221,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       )
 
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      assembleFeatureTaskRuntimeBriefing(
         handoff,
       )
     val serialized = JsonCodec.mapToJsonString(briefing.briefingArtifactWireMap())
@@ -277,7 +277,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
             ),
         )
       val briefing =
-        FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+        assembleFeatureTaskRuntimeBriefing(
           handoff,
           scope = FeatureTaskRuntimeBriefingScope(sharedReviewEvidence = evidence(hunksPerFile)),
         )

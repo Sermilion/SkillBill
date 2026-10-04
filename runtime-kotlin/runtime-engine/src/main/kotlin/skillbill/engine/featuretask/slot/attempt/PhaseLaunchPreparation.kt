@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionReje
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.auditProseValue
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
@@ -38,8 +39,9 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -98,44 +100,25 @@ object PhaseLaunchPreparation {
               ?: declaration.producerIteration
           }.maxByOrNull(FeatureTaskRuntimeProducerIteration::iteration)
           ?: FeatureTaskRuntimeProducerIteration(run.phaseId, 1)
-      return try {
-        LaunchMeasurementContextReady(
-          LaunchRejectionMeasurementContext(
-            producerIteration = producerIteration,
-            repositoryCheckpoint =
-              with(FeatureTaskRuntimeRunLoopOutputVerification) {
-                resolveRepositoryCheckpoint(
-                  RepositoryCheckpointResolutionArgs(
-                    recorder = recorder,
-                    goalContinuationRecorder = goalContinuationRecorder,
-                    gitOperations = gitOperations,
-                    qualityGateCycles = qualityGateCycles,
-                    coupledRunTransitions = coupledRunTransitions,
-                    session = session,
-                    run = run,
-                  ),
-                )
-              },
-          ),
-        )
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        recordLaunchSeamRejection(
-          recorder,
-          LaunchSeamRejectionArgs(
-            run = run,
-            state = settlementCoupling().progress,
-            classification = FeatureTaskRuntimeProjectionFailureClassification.BUDGET_OVERFLOW,
-            sourceLabel = error.projectionName,
-            fallbackProducerIteration = producerIteration,
-            repositoryCheckpoint = null,
-          ),
-        )
-        LaunchPreparationRejected(
-          LaunchResult.projectionRejected(
-            "Feature-task-runtime phase '${run.phaseId}' could not resolve its repository checkpoint: ${error.message}",
-          ),
-        )
-      }
+      return LaunchMeasurementContextReady(
+        LaunchRejectionMeasurementContext(
+          producerIteration = producerIteration,
+          repositoryCheckpoint =
+            with(FeatureTaskRuntimeRunLoopOutputVerification) {
+              resolveRepositoryCheckpoint(
+                RepositoryCheckpointResolutionArgs(
+                  recorder = recorder,
+                  goalContinuationRecorder = goalContinuationRecorder,
+                  gitOperations = gitOperations,
+                  qualityGateCycles = qualityGateCycles,
+                  coupledRunTransitions = coupledRunTransitions,
+                  session = session,
+                  run = run,
+                ),
+              )
+            },
+        ),
+      )
     }
   }
 
@@ -203,8 +186,6 @@ object PhaseLaunchPreparation {
       val measurementContext = args.context
       return try {
         PhaseLaunchPreparation.prepareLaunch(context, args)
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        rejectedHandoffLaunch(recorder, run, state, error, measurementContext)
       } catch (error: InvalidWorkflowStateSchemaError) {
         rejectedDurableBriefingLaunch(recorder, run, state, error, measurementContext)
       }
@@ -215,20 +196,20 @@ object PhaseLaunchPreparation {
     recorder: PhaseRunRecords,
     run: PhaseRun,
     state: FeatureTaskRuntimeProgressSnapshotAccess,
-    error: InvalidFeatureTaskRuntimeHandoffProjectionError,
-    context: LaunchRejectionMeasurementContext,
+    rejection: InvalidFeatureTaskRuntimeHandoffProjectionContext,
+    measurementContext: LaunchRejectionMeasurementContext,
   ): LaunchPreparationRejected =
     launchPreparationRejected(
       recorder,
       LaunchPreparationRejectedArgs(
         run = run,
         state = state,
-        classification = error.failureKind.toMeasurementFailureClassification(),
-        sourceLabel = error.projectionName,
-        measurement = context,
+        classification = rejection.failureKind.toMeasurementFailureClassification(),
+        sourceLabel = rejection.projectionName,
+        measurement = measurementContext,
         message =
           "Feature-task-runtime phase '${run.phaseId}' could not build its declared handoff " +
-            "projection: ${error.message}",
+            "projection: ${invalidFeatureTaskRuntimeHandoffProjection(rejection).message}",
       ),
     )
 
@@ -258,8 +239,10 @@ object PhaseLaunchPreparation {
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
     val run = args.run
+    val state = args.state
     val iteration = args.iteration
     val priorCorrection = args.priorCorrection
+    val measurementContext = args.context
     val repositoryCheckpoint = args.context.repositoryCheckpoint
     val prompt = args.prompt
     with(context) {
@@ -280,7 +263,7 @@ object PhaseLaunchPreparation {
           run,
           repositoryCheckpoint,
         )
-      val briefing =
+      val assembly =
         FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
           run.request.workflowId,
@@ -290,6 +273,16 @@ object PhaseLaunchPreparation {
             briefingInvariantFields(run.phaseId),
           ),
         )
+      if (assembly is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected) {
+        return PhaseLaunchPreparation.rejectedHandoffLaunch(
+          recorder,
+          run,
+          state,
+          assembly.context,
+          measurementContext,
+        )
+      }
+      val briefing = (assembly as FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted).briefing
       if (!run.policy.singleAgentSession) {
         val write =
           recorder.recordPhaseBriefing(
@@ -298,7 +291,22 @@ object PhaseLaunchPreparation {
             sharedEvidence?.measurement,
             iteration ?: 1,
           )
-        if (write is RequiredPhaseWrite.Rejected) return LaunchRequiredWriteRejected(write)
+        when (write) {
+          is RequiredPhaseWrite.Rejected -> {
+            val handoffRejection = write.handoffRejection
+            if (handoffRejection != null) {
+              return PhaseLaunchPreparation.rejectedHandoffLaunch(
+                recorder,
+                run,
+                state,
+                handoffRejection,
+                measurementContext,
+              )
+            }
+            return LaunchRequiredWriteRejected(write)
+          }
+          RequiredPhaseWrite.Acknowledged -> Unit
+        }
       }
       val inputs =
         PhaseLaunchPreparation

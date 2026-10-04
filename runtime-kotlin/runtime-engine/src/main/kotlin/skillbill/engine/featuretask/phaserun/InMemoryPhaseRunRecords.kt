@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFo
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
@@ -178,9 +178,7 @@ internal class InMemoryPhaseRunRecords(
   ): RequiredPhaseWrite = RequiredPhaseWrite.Acknowledged
 
   override fun recordProjectionRejection(
-    workflowId: String,
-    consumerPhaseId: String,
-    error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
     repositoryCheckpointFingerprint: String?,
   ): Boolean = true
 

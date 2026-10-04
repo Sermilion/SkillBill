@@ -10,8 +10,8 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -328,7 +328,7 @@ private fun planningRecordRejection(compute: () -> Unit): String? =
     error.rethrowUnless(
       error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA ||
         error.code == InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE ||
-        error is InvalidFeatureTaskRuntimePhaseOutputSchemaError,
+        error.code is FeatureTaskRuntimePhaseOutputFailureCode,
     )
     "stored record failed its durable contract: ${error.message.orEmpty()}"
   }

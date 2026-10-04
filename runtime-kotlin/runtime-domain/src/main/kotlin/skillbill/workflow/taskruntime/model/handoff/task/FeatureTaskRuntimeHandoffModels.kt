@@ -6,7 +6,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -148,12 +148,12 @@ data class NormalizedFeatureTaskRuntimePhaseOutput(
           .parseObjectOrNull(text)
           ?.let(JsonCodec::jsonElementToValue)
           ?.let(JsonCodec::anyToStringAnyMap)
-          ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+          ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
             sourceLabel = sourceLabel,
             reason = "must be a JSON object.",
           )
       unsupportedHistoricalShape(record)?.let { reason ->
-        throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel = sourceLabel, reason = reason)
+        throw invalidFeatureTaskRuntimePhaseOutputSchema(sourceLabel = sourceLabel, reason = reason)
       }
       return fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(record))
     }

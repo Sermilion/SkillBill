@@ -18,6 +18,17 @@ Decision: Support preparation 0.2 with planning provenance 0.2 and phase-output 
 Reason: Explicit support lets operators resume without discarding completed subtasks or commits. Missing target prose or failure evidence cannot be inferred from summaries or decoder defaults. This transition reuses planning without refresh and replaces blanket historical-version hard-reset guidance.
 Alternatives considered: Version-token-only acceptance, automatic hard reset, speculative planning refresh, and a framework for unrelated schema families were excluded by the spec. Fresh agent prose retains its existing settlement behavior.
 Revisit when: Another concrete transition has an evidenced conversion or requires scoped refresh of unfinished planning.
+## [2026-10-04] SKILL-399: return phase-order violations with their target phase
+Context: An entry-gate violation can target a phase other than the current phase. The run loop previously recovered that phaseId from a caught exception.
+Decision: nextTransition returns Resolved or PhaseOrderViolation carrying phaseId and the unchanged message. The run loop branches on the result and blocks at that phaseId.
+Reason: Phase-order refusal is an expected outcome. Wrapping FeatureTaskRuntimeNextPhase preserves its existing variants and consumers while keeping the violation's target explicit.
+Alternatives considered: Retaining exception-based control flow would keep readers dependent on properties of the deleted throwable.
+
+## [2026-10-04] SKILL-399: return handoff rejection context through validation and recording
+Context: Launch rejection measurements need projection identity and failure classification, including when envelope schema validation rejects a briefing during recording.
+Decision: Add handoffEnvelopeRejection to the validator port and carry rejection contexts through assembly and RequiredPhaseWrite.Rejected. Keep the existing throwing validation entry point for its other callers.
+Reason: A context-returning port preserves the measurement's projection name without reading properties from a caught exception. Carrying that context in the existing write result preserves the recorder's sealed outcome shape.
+Alternatives considered: The digest's recommendation against a result-returning port left no value path for schema rejection details needed by launch measurements.
 
 ## [2026-10-02] Refuse incomplete build gates at admission and retire the active blocker on resume
 

@@ -5,6 +5,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustio
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -16,13 +17,30 @@ internal fun shippedTransition(
   edgeIterationCount: Int = 0,
   settledVerdicts: Map<String, FeatureTaskRuntimeVerdict>,
 ): FeatureTaskRuntimeNextPhase =
-  FeatureTaskRuntimeTransitionFunction.nextTransition(
+  assertIs<FeatureTaskRuntimeTransitionResult.Resolved>(FeatureTaskRuntimeTransitionFunction.nextTransition(
     declaration = declaration,
     currentPhaseId = currentPhaseId,
     verdict = verdict,
     edgeIterationCount = edgeIterationCount,
     context = FeatureTaskRuntimeTransitionContext(settledVerdictsByPhaseId = settledVerdicts),
-  )
+  )).next
+
+internal fun resolvedTransition(
+  declaration: FeatureTaskRuntimeTransitionDeclaration,
+  currentPhaseId: String,
+  verdict: FeatureTaskRuntimeVerdict,
+  edgeIterationCount: Int = 0,
+  context: FeatureTaskRuntimeTransitionContext = FeatureTaskRuntimeTransitionContext(),
+): FeatureTaskRuntimeNextPhase =
+  assertIs<FeatureTaskRuntimeTransitionResult.Resolved>(
+    FeatureTaskRuntimeTransitionFunction.nextTransition(
+      declaration = declaration,
+      currentPhaseId = currentPhaseId,
+      verdict = verdict,
+      edgeIterationCount = edgeIterationCount,
+      context = context,
+    ),
+  ).next
 
 private fun assertReviewFixLoopDeclaration(shipped: FeatureTaskRuntimeTransitionDeclaration) {
   val def = FeatureTaskRuntimePhaseWorkflowDefinition

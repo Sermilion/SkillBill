@@ -1703,9 +1703,9 @@ recorded output with no declaration is never delivered.
 references. It rejects — never truncates — on a missing required source,
 malformed or undeclared field, unsupported contract version, duplicate
 projection name, budget overflow, invalid compact reference, or
-checkpoint-policy violation, each through
-`InvalidFeatureTaskRuntimeHandoffProjectionError` naming the workflow, consumer
-phase, projection, and contract without echoing payload bodies. The envelope has
+checkpoint-policy violation, each through a rejection context. Throwing entry
+points turn that context into a coded runtime exception whose message names the
+workflow, consumer phase, projection, and contract without echoing payload bodies. The envelope has
 its own Draft 2020-12 contract
 (`orchestration/contracts/feature-task-runtime-handoff-envelope-schema.yaml`,
 pinned by `FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION` and
@@ -1837,9 +1837,8 @@ for every edge and `PREPLAN_DIGEST_RECEIPT` (196,608 bytes) for the single
 beyond every observed size, not that an ordinary run outgrew its budget. Re-size
 them from the same measurement when the delivered shape narrows to named fields.
 
-When a projection is rejected anyway, `FeatureTaskRuntimeRunLoop` catches
-`InvalidFeatureTaskRuntimeHandoffProjectionError` at the launch seam and blocks
-the phase through the ordinary `blockAndPersistInPhase` path with a
+When a projection is rejected anyway, the launch seam receives its rejection
+context and blocks the phase through the ordinary `blockAndPersistInPhase` path with a
 `needs_user_action` disposition. The rejection is static declaration or
 configuration drift rather than agent output, so retrying without operator action
 reproduces it; blocking durably keeps the phase row and the run's finalization
@@ -1916,10 +1915,9 @@ Cap exhaustion blocks durably with a reason naming the quarantined record, its
 producing phase, and the attempt count. A record the runtime cannot attribute to
 a producing phase, or whose producer a goal-continuation truncation dropped from
 the resolved pipeline, blocks durably with an actionable reason rather than
-attempting an impossible re-entry. Static declaration/config drift
-(`InvalidFeatureTaskRuntimeHandoffProjectionError`), briefing byte-ceiling
-overflow keep their first-occurrence durable block: re-running a producer cannot
-fix them.
+attempting an impossible re-entry. Static declaration/config drift from a coded
+handoff projection rejection and briefing byte-ceiling overflow keep their
+first-occurrence durable block. Re-running a producer cannot fix them.
 Out-of-band row deletion or migration is the corruption fallback for records the
 edge cannot regenerate. Per-run regeneration telemetry records activation counts,
 attempt counts, and outcome-class tallies on the

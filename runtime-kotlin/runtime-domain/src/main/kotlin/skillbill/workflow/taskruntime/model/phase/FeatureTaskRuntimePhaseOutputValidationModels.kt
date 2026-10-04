@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.model.phase
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.review.context.model.hunk.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
@@ -17,10 +17,9 @@ enum class FeatureTaskRuntimePhaseOutputFormat(val wireValue: String) {
   companion object {
     fun fromWire(value: String): FeatureTaskRuntimePhaseOutputFormat =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+        ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
           sourceLabel = "<wire>",
           reason = "Unrecognized phase-output format wire value '$value'.",
-          payloadFreeReason = "Unrecognized phase-output format wire value.",
         )
   }
 }
@@ -36,10 +35,9 @@ enum class FeatureTaskRuntimePhaseOutputRepairOperation(val wireValue: String) {
   companion object {
     fun fromWire(value: String): FeatureTaskRuntimePhaseOutputRepairOperation =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+        ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
           sourceLabel = "<wire>",
           reason = "Unrecognized phase-output repair-operation wire value '$value'.",
-          payloadFreeReason = "Unrecognized phase-output repair-operation wire value.",
         )
   }
 }
@@ -132,10 +130,9 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
 }
 
 private fun phaseOutputRepairEvidenceSchemaError(reason: String): Nothing =
-  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+  throw invalidFeatureTaskRuntimePhaseOutputSchema(
     sourceLabel = "repair_evidence",
     reason = reason,
-    payloadFreeReason = reason,
   )
 
 private fun requireRepairEvidenceExactFields(raw: Map<String, Any?>) {

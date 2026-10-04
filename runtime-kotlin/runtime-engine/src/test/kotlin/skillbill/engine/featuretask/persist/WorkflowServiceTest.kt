@@ -1,20 +1,5 @@
 package skillbill.engine.featuretask.persist
 
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset.UTC
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -69,9 +54,10 @@ import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
@@ -143,6 +129,21 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset.UTC
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private fun WorkflowService.openTestRuntime(
   sessionId: String = "",
@@ -2924,6 +2925,11 @@ class WorkflowGoalRunnerProgressStoreTest {
           OutcomeStoreTestArtifactPorts(
             goalObservabilityEventValidator =
               object : FeatureTaskRuntimeWireArtifactValidator {
+                override fun handoffEnvelopeRejection(
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
                 override fun validate(
                   kind: FeatureTaskRuntimeWireArtifactKind,
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -3122,6 +3128,11 @@ class WorkflowGoalRunnerProgressStoreTest {
           OutcomeStoreTestArtifactPorts(
             goalProgressEventValidator =
               object : FeatureTaskRuntimeWireArtifactValidator {
+                override fun handoffEnvelopeRejection(
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
                 override fun validate(
                   kind: FeatureTaskRuntimeWireArtifactKind,
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -3473,6 +3484,11 @@ private val testWorkflowEngine: WorkflowEngine = WorkflowEngine()
 
 private val testFeatureTaskRuntimeWireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator =
   object : FeatureTaskRuntimeWireArtifactValidator {
+    override fun handoffEnvelopeRejection(
+      payload: FeatureTaskRuntimeWorkflowArtifactMap,
+      sourceLabel: String,
+    ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
     override fun validate(
       kind: FeatureTaskRuntimeWireArtifactKind,
       payload: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -3718,11 +3734,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val harness = hydrationHarness(variant = "projection_invalid")
 
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         harness.store.saveNewChildWorkflow(harness.state, harness.setup)
       }
 
-    assertContains(error.reason, "value")
+    assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
+    assertContains(error.message.orEmpty(), "value")
     assertNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
     assertNull(harness.workflows.executionIdentity(CHILD_ID))
   }

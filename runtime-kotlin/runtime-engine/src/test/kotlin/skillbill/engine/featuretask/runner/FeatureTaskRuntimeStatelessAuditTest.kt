@@ -86,7 +86,13 @@ class FeatureTaskRuntimeStatelessAuditTest {
         RuntimeHarnessConfig(launcher = launcher),
       )
     val report = harness.runner.run(harness.request())
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
+    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
+    assertEquals("review", blocked.lastIncompletePhase)
+    assertEquals(
+      "Feature-task-runtime phase 'review' is unreachable until 'audit' settles with the verdict 'satisfied', " +
+        "but it settled with 'gaps_found'; the run fails loudly rather than silently advancing.",
+      blocked.blockedReason,
+    )
     assertEquals(1, auditLaunches)
     assertTrue("review" !in harness.launchOrder())
     assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement" })

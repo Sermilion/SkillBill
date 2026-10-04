@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
@@ -32,7 +32,7 @@ internal object RuntimeGateRecordIntegrity {
         requireValidationResult(receipt(produced, ValidationEvidencePayloadKeys.VALIDATION_RESULT, phaseId), phaseId)
       }
     } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(phaseId, error.reason, error)
+      throw invalidFeatureTaskRuntimePhaseOutputSchema(phaseId, error.reason, cause = error)
     }
   }
 

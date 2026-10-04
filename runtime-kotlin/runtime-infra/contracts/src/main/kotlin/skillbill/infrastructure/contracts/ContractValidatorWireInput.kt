@@ -6,7 +6,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeImplementationAttemptSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
@@ -64,9 +64,8 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_SHARED_EVIDENCE_PROJECTION ->
       InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE ->
-      InvalidFeatureTaskRuntimeHandoffProjectionError(
-        context =
-          InvalidFeatureTaskRuntimeHandoffProjectionContext(
+      invalidFeatureTaskRuntimeHandoffProjection(
+        InvalidFeatureTaskRuntimeHandoffProjectionContext(
             workflowId = null,
             consumerPhaseId = sourceLabel,
             projectionName = "<root>",
@@ -74,7 +73,7 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
             projectionContractVersion = FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION,
             failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID,
             reason = reason,
-          ),
+        )
       )
     FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT ->
       invalidGoalProgressEventSchemaError(

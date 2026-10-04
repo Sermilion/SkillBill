@@ -1,73 +1,28 @@
 package skillbill.error.shellcontent
 
 import skillbill.error.core.ShellContentContractException
-import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
-import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.error.featuretask.coarseFailureKindForPhaseOutputWireCode
 
-data class FeatureTaskRuntimePhaseOutputStructuralRepairSource(
-  val label: String,
-  val offset: Int,
-  val line: Int,
-  val column: Int,
-)
-
-data class FeatureTaskRuntimePhaseOutputStructuralRepair(
-  val originalDigest: String,
-  val repairedDigest: String,
-  val format: String,
-  val operation: String,
-  val source: FeatureTaskRuntimePhaseOutputStructuralRepairSource,
-)
-
-class InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-  val sourceLabel: String,
-  val reason: String,
+fun invalidFeatureTaskRuntimePhaseOutputSchema(
+  sourceLabel: String,
+  reason: String,
+  code: FeatureTaskRuntimePhaseOutputFailureCode = FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID,
   cause: Throwable? = null,
-  val payloadFreeReason: String? = null,
-  val failureCode: String = FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID.wireValue,
-  val structuralRepair: FeatureTaskRuntimePhaseOutputStructuralRepair? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
     "Feature-task-runtime phase output '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
-  ) {
-  val failureKind: FeatureTaskRuntimePhaseOutputFailureKind
-    get() = coarseFailureKindForPhaseOutputWireCode(failureCode)
+  )
 
-  val structuralRepairOriginalDigest: String?
-    get() = structuralRepair?.originalDigest
-
-  val structuralRepairRepairedDigest: String?
-    get() = structuralRepair?.repairedDigest
-
-  val structuralRepairFormat: String?
-    get() = structuralRepair?.format
-
-  val structuralRepairOperation: String?
-    get() = structuralRepair?.operation
-
-  val structuralRepairSourceLabel: String?
-    get() = structuralRepair?.source?.label
-
-  val structuralRepairSourceOffset: Int?
-    get() = structuralRepair?.source?.offset
-
-  val structuralRepairSourceLine: Int?
-    get() = structuralRepair?.source?.line
-
-  val structuralRepairSourceColumn: Int?
-    get() = structuralRepair?.source?.column
-
-  val acceptedAfterStructuralRepair: Boolean
-    get() = structuralRepair != null
-}
-
-class InvalidFeatureTaskRuntimeHandoffProjectionError(
-  val context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
+fun invalidFeatureTaskRuntimeHandoffProjection(
+  context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    context.failureKind,
     "Feature-task-runtime handoff projection '${context.projectionName.ifBlank { "<unknown>" }}' " +
       "(contract ${context.projectionContractId.ifBlank { "<unknown>" }}@" +
       "${context.projectionContractVersion.ifBlank { "<unknown>" }}) " +
@@ -75,15 +30,7 @@ class InvalidFeatureTaskRuntimeHandoffProjectionError(
       "in workflow '${context.workflowId?.ifBlank { null } ?: "<unknown>"}' " +
       "was rejected [${context.failureKind}]: ${context.reason}",
     cause,
-  ) {
-  val workflowId: String? get() = context.workflowId
-  val consumerPhaseId: String get() = context.consumerPhaseId
-  val projectionName: String get() = context.projectionName
-  val projectionContractId: String get() = context.projectionContractId
-  val projectionContractVersion: String get() = context.projectionContractVersion
-  val failureKind: FeatureTaskRuntimeHandoffProjectionFailureKind get() = context.failureKind
-  val reason: String get() = context.reason
-}
+  )
 
 class InvalidFeatureTaskRuntimeRepairReceiptError(
   val fieldPath: String,
@@ -208,16 +155,15 @@ class InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError(
     cause,
   )
 
-class FeatureTaskRuntimePhaseOrderViolationError(
-  val phaseId: String,
-  val requiredPhaseId: String,
-  val requiredVerdict: String,
-  val observedVerdict: String?,
-) : ShellContentContractException(
+fun featureTaskRuntimePhaseOrderViolationMessage(
+  phaseId: String,
+  requiredPhaseId: String,
+  requiredVerdict: String,
+  observedVerdict: String?,
+): String =
     "Feature-task-runtime phase '$phaseId' is unreachable until '$requiredPhaseId' settles with the verdict " +
       "'$requiredVerdict', but it settled with " +
-      "'${observedVerdict ?: "<no completed verdict>"}'; the run fails loudly rather than silently advancing.",
-  )
+      "'${observedVerdict ?: "<no completed verdict>"}'; the run fails loudly rather than silently advancing."
 
 class FeatureTaskRuntimeOperatorDecisionRejectedError(
   val workflowId: String,

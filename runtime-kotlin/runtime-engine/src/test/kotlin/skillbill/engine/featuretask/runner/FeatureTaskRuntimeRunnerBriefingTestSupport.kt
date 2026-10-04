@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
@@ -7,7 +8,6 @@ import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
-import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.FINALISED_COMMIT_PUSH_OUTPUT
 import skillbill.engine.featuretask.slot.validJsonOutput
@@ -77,7 +77,7 @@ private fun briefingsForCompletedPhases(
         repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "fixture-checkpoint-1"),
       ),
     )
-  FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
+  assembleFeatureTaskRuntimeBriefing(handoff)
 }
 
 private fun assertBriefingRunInvariants(briefings: Map<String, FeatureTaskRuntimePhaseLaunchBriefing>) {

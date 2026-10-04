@@ -1,16 +1,16 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
-import skillbill.error.core.failureCodeLabel
-import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
   private val validator = FeatureTaskRuntimeWireArtifactValidator()
@@ -34,7 +34,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_SHARED_EVIDENCE_PROJECTION to
           "InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE to
-          "InvalidFeatureTaskRuntimeHandoffProjectionError",
+          "FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT to
           "InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT to
@@ -60,26 +60,26 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
   @Test
   fun `a wrong contract version is rejected`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertSchemaInvalid {
         validateEnvelope(validator, envelope(contractVersion = "9.9"), "wftr-1")
       }
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.failureKind)
-    assertEquals("implement", error.consumerPhaseId)
-    assertEquals("wftr-1", error.workflowId)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.code)
+    assertContains(error.message.orEmpty(), "implement")
+    assertContains(error.message.orEmpty(), "wftr-1")
   }
 
   @Test
   fun `an undeclared wire field is rejected by strict additionalProperties`() {
     val invalid = envelope() + ("upstream_outputs_by_phase_id" to mapOf("plan" to "raw"))
 
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> { validateEnvelope(validator, invalid) }
+    assertSchemaInvalid { validateEnvelope(validator, invalid) }
   }
 
   @Test
   fun `a forbidden raw-context field name is rejected`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertSchemaInvalid {
         validateEnvelope(validator, envelope(fieldName = "payload"))
       }
 
@@ -88,7 +88,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
 
   @Test
   fun `an unknown projection value kind is rejected`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+    assertSchemaInvalid {
       validateEnvelope(
         validator,
         envelope(field = mapOf("name" to "phase_output_receipt", "kind" to "raw_blob", "text" to "x")),
@@ -98,7 +98,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
 
   @Test
   fun `a delivered prior_gap_memory source ref is rejected by the schema gate`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+    assertSchemaInvalid {
       validateEnvelope(validator, priorGapMemoryEnvelope(), "wftr-1")
     }
   }
@@ -131,7 +131,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
 
   @Test
   fun `a compact reference longer than the schema bound is rejected`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+    assertSchemaInvalid {
       validateEnvelope(
         validator,
         envelope(
@@ -181,4 +181,10 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
         ),
       "repository_checkpoint" to mapOf("fingerprint" to "head-abc"),
     )
+
+  private fun assertSchemaInvalid(block: () -> Unit): SkillBillRuntimeException {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.code)
+    return error
+  }
 }

@@ -40,7 +40,8 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -149,16 +150,17 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
                 ?: "main",
           ),
         )
-      return try {
-        FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+      return when (val assembly = FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
           run.request.workflowId,
           run.request.agentAddonSelection,
-        )
-        null
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
-          "'$consumerPhaseId': ${boundedSchemaGateDetail(error.message.orEmpty())}"
+        )) {
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> null
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+          "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
+            "'$consumerPhaseId': ${boundedSchemaGateDetail(
+              invalidFeatureTaskRuntimeHandoffProjection(assembly.context).message.orEmpty(),
+            )}"
       }
     }
   }

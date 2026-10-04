@@ -18,7 +18,9 @@ import skillbill.engine.goalrunner.planning.outcome.stdoutFor
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.time.RuntimeTimingPort
@@ -127,7 +129,8 @@ class GoalPlanningPhaseAttemptGate(
     val prompt =
       try {
         composePlanningPrompt(args) { return GoalPlanningPhaseProduction.RequiredWriteRejected(it) }
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code is FeatureTaskRuntimeHandoffProjectionFailureKind)
         return GoalPlanningPhaseProduction.Stopped(
           stopped(shared, currentSubtaskId, projectionRejectedReason(phaseId, error), phaseId),
         )

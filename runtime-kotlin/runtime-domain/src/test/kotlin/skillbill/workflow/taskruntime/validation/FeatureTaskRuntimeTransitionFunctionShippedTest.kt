@@ -1,12 +1,12 @@
 package skillbill.workflow.taskruntime.validation
 
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -30,6 +30,18 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
       edgeIterationCount,
       settledVerdicts,
     )
+
+  private fun transitionResult(
+    currentPhaseId: String,
+    verdict: FeatureTaskRuntimeVerdict,
+    settledVerdicts: Map<String, FeatureTaskRuntimeVerdict>,
+  ) = FeatureTaskRuntimeTransitionFunction.nextTransition(
+    declaration = shipped,
+    currentPhaseId = currentPhaseId,
+    verdict = verdict,
+    edgeIterationCount = 0,
+    context = FeatureTaskRuntimeTransitionContext(settledVerdictsByPhaseId = settledVerdicts),
+  )
 
   @Test
   fun `a clean run advances implement to simplify to audit to review to verify_findings to validate`() {
@@ -77,33 +89,38 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
-  fun `entering review with no audit verdict loud-fails with the typed phase-order error`() {
+  fun `entering review with no audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
-    val error =
-      assertFailsWith<FeatureTaskRuntimePhaseOrderViolationError> {
-        transition(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, settledVerdicts = emptyMap())
-      }
+    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+      transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, emptyMap()),
+    )
     assertEquals(def.PHASE_REVIEW, error.phaseId)
-    assertEquals(def.PHASE_AUDIT, error.requiredPhaseId)
-    assertEquals("satisfied", error.requiredVerdict)
-    assertTrue(error.message.orEmpty().contains(def.PHASE_REVIEW))
-    assertTrue(error.message.orEmpty().contains(def.PHASE_AUDIT))
+    assertEquals(
+      "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
+        "the verdict 'satisfied', but it settled with '<no completed verdict>'; the run fails loudly rather than " +
+        "silently advancing.",
+      error.message,
+    )
   }
 
   @Test
-  fun `entering review with a gaps_found audit verdict loud-fails with the typed phase-order error`() {
+  fun `entering review with a gaps_found audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val gapsFound = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND)
-    val error =
-      assertFailsWith<FeatureTaskRuntimePhaseOrderViolationError> {
-        transition(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, settledVerdicts = gapsFound)
-      }
+    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+      transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, gapsFound),
+    )
     assertEquals(def.PHASE_REVIEW, error.phaseId)
-    assertEquals("gaps_found", error.observedVerdict)
+    assertEquals(
+      "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
+        "the verdict 'satisfied', but it settled with 'gaps_found'; the run fails loudly rather than " +
+        "silently advancing.",
+      error.message,
+    )
   }
 
   @Test
-  fun `entering implement_fix with no_findings_verified verify verdict loud-fails with the typed phase-order error`() {
+  fun `entering implement_fix with no_findings_verified verify verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val settled =
       satisfiedAudit +
@@ -111,18 +128,16 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
           def.PHASE_REVIEW to FeatureTaskRuntimeVerdict.APPROVED,
           def.PHASE_VERIFY_FINDINGS to FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED,
         )
-    val error =
-      assertFailsWith<FeatureTaskRuntimePhaseOrderViolationError> {
-        transition(
-          def.PHASE_VERIFY_FINDINGS,
-          FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
-          settledVerdicts = settled,
-        )
-      }
+    val error = assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
+      transitionResult(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, settled),
+    )
     assertEquals(def.PHASE_IMPLEMENT_FIX, error.phaseId)
-    assertEquals(def.PHASE_VERIFY_FINDINGS, error.requiredPhaseId)
-    assertEquals("findings_verified", error.requiredVerdict)
-    assertEquals("no_findings_verified", error.observedVerdict)
+    assertEquals(
+      "Feature-task-runtime phase '${def.PHASE_IMPLEMENT_FIX}' is unreachable until '${def.PHASE_VERIFY_FINDINGS}' " +
+        "settles with the verdict 'findings_verified', but it settled with 'no_findings_verified'; the run fails " +
+        "loudly rather than silently advancing.",
+      error.message,
+    )
   }
 
   @Test
