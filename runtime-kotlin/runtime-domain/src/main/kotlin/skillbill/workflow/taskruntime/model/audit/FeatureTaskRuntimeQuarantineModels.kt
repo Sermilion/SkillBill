@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.model.audit
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 
@@ -142,7 +142,7 @@ internal fun featureTaskRuntimeQuarantineRecordToWire(
     "entries" to entries.map { it.toArtifactMap() },
   )
 
-private fun quarantineSchemaError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+private fun quarantineSchemaError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)
 
 internal fun featureTaskRuntimeQuarantineEntriesFromWire(raw: Any?): List<FeatureTaskRuntimeQuarantineEntry> {
   val map =

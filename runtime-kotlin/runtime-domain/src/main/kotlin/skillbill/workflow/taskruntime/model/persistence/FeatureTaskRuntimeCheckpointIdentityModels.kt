@@ -6,8 +6,8 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeCheckpointIdentityVersion
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
@@ -184,7 +184,7 @@ internal fun featureTaskRuntimeCheckpointIdentitiesFromArtifact(raw: Any?): List
       ?: checkpointIdentityError("Feature-task-runtime checkpoint-identity record must be an object.")
   val version = map[SharedPayloadKeys.CONTRACT_VERSION] as? String
   if (version != FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION) {
-    throw InvalidFeatureTaskRuntimeCheckpointIdentityVersionError(
+    throw invalidFeatureTaskRuntimeCheckpointIdentityVersion(
       expectedContractVersion = FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
       actualContractVersion = version.orEmpty(),
     )
@@ -229,4 +229,4 @@ fun featureTaskRuntimeAppendCheckpointIdentity(
   }
 }
 
-private fun checkpointIdentityError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+private fun checkpointIdentityError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)

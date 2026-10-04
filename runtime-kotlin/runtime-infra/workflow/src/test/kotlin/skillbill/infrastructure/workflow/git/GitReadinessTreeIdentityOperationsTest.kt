@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.git
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
@@ -86,7 +86,7 @@ class GitReadinessTreeIdentityOperationsTest {
           ),
       )
     val failure =
-      assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         evidence.requireReady(
           "commit_push",
           expectedSourceTreeSha = "tree-current",

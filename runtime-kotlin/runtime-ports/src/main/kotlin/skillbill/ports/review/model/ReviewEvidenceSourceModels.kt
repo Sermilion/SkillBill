@@ -1,6 +1,6 @@
 package skillbill.ports.review.model
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.review.context.model.commit.ReviewAssignment
 import skillbill.review.context.model.hunk.ReviewEvidenceLimits
 
@@ -13,7 +13,7 @@ data class ReviewEvidenceOwner(
   init {
     listOf(lane, rubricId, unitId).forEach(ReviewEvidenceLimits::field)
     if (listOf(lane, rubricId, unitId).any(String::isBlank) || !assignmentDigest.matches(Regex("[a-f0-9]{64}"))) {
-      throw InvalidReviewContextSchemaError(
+      throw invalidReviewContextSchemaError(
         "review-evidence-owner",
         "Evidence ownership must retain complete provenance.",
       )

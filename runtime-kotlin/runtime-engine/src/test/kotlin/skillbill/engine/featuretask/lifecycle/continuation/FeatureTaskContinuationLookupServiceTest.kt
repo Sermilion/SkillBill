@@ -21,8 +21,8 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.manifest
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.error.shellcontent.LegacyProseWorkflowError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
@@ -162,7 +162,7 @@ class FeatureTaskContinuationLookupServiceTest {
   fun `feature-task creation rejects malformed identity before persistence`() {
     val fixture = fixture()
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
           executionPlan = testExecutionPlan(),
@@ -211,7 +211,7 @@ class FeatureTaskContinuationLookupServiceTest {
     val identity = requireNotNull(fixture.states.executionIdentity(opened.workflowId))
     fixture.states.overwriteExecutionIdentity(identity.copy(normalizedIssueKey = "SKILL-999"))
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
     }
   }
@@ -226,9 +226,9 @@ class FeatureTaskContinuationLookupServiceTest {
     val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
     fixture.states.saveFeatureTaskWorkflow(row.copy(mode = PROSE), RUNTIME)
 
-    assertFailsWith<LegacyProseWorkflowError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
-    }
+    }.also { assertEquals(WorkflowFailureCode.LEGACY_PROSE_WORKFLOW, it.code) }
   }
 
   @Test

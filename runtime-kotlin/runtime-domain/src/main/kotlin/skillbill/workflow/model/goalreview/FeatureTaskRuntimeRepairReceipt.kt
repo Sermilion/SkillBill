@@ -5,7 +5,8 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.taskruntime.model.repair.receiptError
 import skillbill.workflow.taskruntime.model.repair.requireReceiptFileBasename
 import skillbill.workflow.taskruntime.model.repair.requireReceiptIdentityText
@@ -23,20 +24,18 @@ private val GIT_COMMIT_SHA = Regex("^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 
 private fun <T> anchoredToDecodePath(
   path: String,
-  decode: () -> T,
+  onInvalid: (String, SkillBillRuntimeException) -> Nothing = { _, failure -> throw failure },
+  decode: ((String, String) -> Nothing) -> T,
 ): T =
-  try {
-    decode()
-  } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-    if (error.fieldPath.startsWith(path)) {
-      throw error
-    }
-    throw InvalidFeatureTaskRuntimeRepairReceiptError(
-      fieldPath = "$path.${error.fieldPath.substringAfterLast('.')}",
-      reason = error.reason,
-      payloadFreeReason = error.payloadFreeReason,
-      cause = error,
-    )
+  decode { field, reason ->
+    val inner = invalidFeatureTaskRuntimeRepairReceipt(field, reason)
+    val failure =
+      if (field.startsWith(path)) {
+        inner
+      } else {
+        invalidFeatureTaskRuntimeRepairReceipt("$path.${field.substringAfterLast('.')}", reason, inner)
+      }
+    onInvalid(reason, failure)
   }
 
 enum class FeatureTaskRuntimeRepairOutcome(val wireValue: String) {
@@ -47,9 +46,12 @@ enum class FeatureTaskRuntimeRepairOutcome(val wireValue: String) {
   ;
 
   companion object {
-    fun fromWire(value: String): FeatureTaskRuntimeRepairOutcome =
+    fun fromWire(
+      value: String,
+      onInvalid: (String, String) -> Nothing = ::receiptError,
+    ): FeatureTaskRuntimeRepairOutcome =
       entries.firstOrNull { it.wireValue == value }
-        ?: receiptError(
+        ?: onInvalid(
           "outcome",
           "must be one of ${entries.joinToString { it.wireValue }}.",
         )
@@ -93,12 +95,16 @@ data class FeatureTaskRuntimeRepairConstruct(
       path: String,
     ): FeatureTaskRuntimeRepairConstruct {
       raw.requireOnlyReviewStateKeys(setOf("symbol", "file"), path)
-      return anchoredToDecodePath(path) {
+      return anchoredToDecodePath(path) { invalid ->
         val reader = reviewStateReader(raw, path)
         val rawSymbol = reader.requiredString("symbol")
+        val symbol = salvageCompactReceiptSymbol(rawSymbol) ?: rawSymbol
+        val file = reader.optionalString("file")
+        requireReceiptSymbol(symbol, "construct.symbol", invalid)
+        file?.let { requireReceiptFileBasename(it, "construct.file", invalid) }
         FeatureTaskRuntimeRepairConstruct(
-          symbol = salvageCompactReceiptSymbol(rawSymbol) ?: rawSymbol,
-          file = reader.optionalString("file"),
+          symbol = symbol,
+          file = file,
         )
       }
     }
@@ -130,11 +136,25 @@ private data class FeatureTaskRuntimeRepairDisturbedRemedy(
       path: String,
     ): FeatureTaskRuntimeRepairDisturbedRemedy {
       raw.requireOnlyReviewStateKeys(setOf("finding_ref", "reason"), path)
-      return anchoredToDecodePath(path) {
+      return anchoredToDecodePath(path) { invalid ->
         val reader = reviewStateReader(raw, path)
+        val findingRef = reader.requiredString("finding_ref")
+        val reason = reader.requiredString("reason")
+        requireReceiptIdentityText(
+          findingRef,
+          "disturbed_remedies.finding_ref",
+          REPAIR_RECEIPT_MAX_LABEL_UTF8_BYTES,
+          invalid,
+        )
+        requireReceiptSanitizedText(
+          reason,
+          "disturbed_remedies.reason",
+          REPAIR_RECEIPT_MAX_DISTURBANCE_REASON_UTF8_BYTES,
+          invalid,
+        )
         FeatureTaskRuntimeRepairDisturbedRemedy(
-          findingRef = reader.requiredString("finding_ref"),
-          reason = reader.requiredString("reason"),
+          findingRef = findingRef,
+          reason = reason,
         )
       }
     }
@@ -166,26 +186,32 @@ data class FeatureTaskRuntimeRepairReceiptEntry(
       raw: Map<String, Any?>,
       path: String,
       collector: FeatureTaskRuntimeRepairReceiptDecodeObservations.Collector? = null,
+      onInvalid: (String, SkillBillRuntimeException) -> Nothing = { _, failure -> throw failure },
     ): FeatureTaskRuntimeRepairReceiptEntry =
-      anchoredToDecodePath(path) {
+      anchoredToDecodePath(path, onInvalid) { invalid ->
         val reader = reviewStateReader(raw, path)
+        val outcome = FeatureTaskRuntimeRepairOutcome.fromWire(reader.requiredString("outcome"), invalid)
+        val findingId = requireFindingRefAlias(raw, path, invalid)
+        val noEditReason =
+          forwardOptionalReceiptReason(
+            reader.optionalString("no_edit_reason"),
+            "$path.no_edit_reason",
+            REPAIR_RECEIPT_MAX_NO_EDIT_REASON_UTF8_BYTES,
+            collector,
+          )
+        val unresolvedReason =
+          forwardOptionalReceiptReason(
+            reader.optionalString("unresolved_reason"),
+            "$path.unresolved_reason",
+            REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES,
+            collector,
+          )
+        requireReceiptIdentityText(findingId, "finding_id", REPAIR_RECEIPT_MAX_LABEL_UTF8_BYTES, invalid)
         FeatureTaskRuntimeRepairReceiptEntry(
-          outcome = FeatureTaskRuntimeRepairOutcome.fromWire(reader.requiredString("outcome")),
-          findingId = requireFindingRefAlias(raw, path),
-          noEditReason =
-            forwardOptionalReceiptReason(
-              reader.optionalString("no_edit_reason"),
-              "$path.no_edit_reason",
-              REPAIR_RECEIPT_MAX_NO_EDIT_REASON_UTF8_BYTES,
-              collector,
-            ),
-          unresolvedReason =
-            forwardOptionalReceiptReason(
-              reader.optionalString("unresolved_reason"),
-              "$path.unresolved_reason",
-              REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES,
-              collector,
-            ),
+          outcome = outcome,
+          findingId = findingId,
+          noEditReason = noEditReason,
+          unresolvedReason = unresolvedReason,
         )
       }
   }
@@ -198,24 +224,7 @@ data class FeatureTaskRuntimeRepairReceipt(
   val entries: List<FeatureTaskRuntimeRepairReceiptEntry>,
 ) {
   init {
-    if (contractVersion !in ACCEPTED_REPAIR_RECEIPT_CONTRACT_VERSIONS) {
-      receiptError(
-        SharedPayloadKeys.CONTRACT_VERSION,
-        "must be one of ${ACCEPTED_REPAIR_RECEIPT_CONTRACT_VERSIONS.joinToString { "'$it'" }}.",
-      )
-    }
-    if (roundNumber < 1) {
-      receiptError("round_number", "must be a positive integer.")
-    }
-    if (!GIT_COMMIT_SHA.matches(preFixCheckpointSha)) {
-      receiptError(
-        "pre_fix_checkpoint_sha",
-        "must be a 40- or 64-character lowercase commit SHA.",
-      )
-    }
-    if (entries.size > REPAIR_RECEIPT_MAX_ENTRIES) {
-      receiptError("entries", "allows at most $REPAIR_RECEIPT_MAX_ENTRIES entries.")
-    }
+    requireValidFields(contractVersion, roundNumber, preFixCheckpointSha, entries.size)
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -227,10 +236,38 @@ data class FeatureTaskRuntimeRepairReceipt(
     )
 
   companion object {
+    private fun requireValidFields(
+      contractVersion: String,
+      roundNumber: Int,
+      preFixCheckpointSha: String,
+      entryCount: Int,
+      onInvalid: (String, String) -> Nothing = ::receiptError,
+    ) {
+      if (contractVersion !in ACCEPTED_REPAIR_RECEIPT_CONTRACT_VERSIONS) {
+        onInvalid(
+          SharedPayloadKeys.CONTRACT_VERSION,
+          "must be one of ${ACCEPTED_REPAIR_RECEIPT_CONTRACT_VERSIONS.joinToString { "'$it'" }}.",
+        )
+      }
+      if (roundNumber < 1) {
+        onInvalid("round_number", "must be a positive integer.")
+      }
+      if (!GIT_COMMIT_SHA.matches(preFixCheckpointSha)) {
+        onInvalid(
+          "pre_fix_checkpoint_sha",
+          "must be a 40- or 64-character lowercase commit SHA.",
+        )
+      }
+      if (entryCount > REPAIR_RECEIPT_MAX_ENTRIES) {
+        onInvalid("entries", "allows at most $REPAIR_RECEIPT_MAX_ENTRIES entries.")
+      }
+    }
+
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       path: String,
       collector: FeatureTaskRuntimeRepairReceiptDecodeObservations.Collector? = null,
+      onInvalid: (String, SkillBillRuntimeException) -> Nothing = { _, failure -> throw failure },
     ): FeatureTaskRuntimeRepairReceipt {
       raw.requireOnlyReviewStateKeys(
         setOf(
@@ -243,10 +280,8 @@ data class FeatureTaskRuntimeRepairReceipt(
         path,
       )
       if (raw.containsKey("disturbed_remedies")) {
-        receiptError(
-          "disturbed_remedies",
-          "is removed; records naming it must be regenerated.",
-        )
+        val reason = "is removed; records naming it must be regenerated."
+        onInvalid(reason, invalidFeatureTaskRuntimeRepairReceipt("disturbed_remedies", reason))
       }
       val reader = reviewStateReader(raw, path)
       val entries =
@@ -255,13 +290,18 @@ data class FeatureTaskRuntimeRepairReceipt(
             value.toReviewStateMap("$path.entries[$index]"),
             "$path.entries[$index]",
             collector,
+            onInvalid,
           )
         }
-      return anchoredToDecodePath(path) {
+      return anchoredToDecodePath(path, onInvalid) { invalid ->
+        val contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION)
+        val roundNumber = reader.requiredInt("round_number")
+        val preFixCheckpointSha = reader.requiredString("pre_fix_checkpoint_sha")
+        requireValidFields(contractVersion, roundNumber, preFixCheckpointSha, entries.size, invalid)
         FeatureTaskRuntimeRepairReceipt(
-          contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION),
-          roundNumber = reader.requiredInt("round_number"),
-          preFixCheckpointSha = reader.requiredString("pre_fix_checkpoint_sha"),
+          contractVersion = contractVersion,
+          roundNumber = roundNumber,
+          preFixCheckpointSha = preFixCheckpointSha,
           entries = entries,
         )
       }
@@ -336,6 +376,7 @@ private const val FINDING_REF_NUMERIC_WIDTH = 3
 internal fun requireFindingRefAlias(
   raw: Map<String, Any?>,
   path: String,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ): String {
   for (key in FINDING_REF_ALIASES) {
     val value = raw[key] as? String ?: continue
@@ -348,7 +389,7 @@ internal fun requireFindingRefAlias(
   if (!severity.isNullOrBlank() && !label.isNullOrBlank() && !text.isNullOrBlank()) {
     return "legacy:" + listOf(severity, label, text).joinToString("|", transform = ::normalizeIdentityPart)
   }
-  receiptError(
+  onInvalid(
     path,
     "must name the finding under finding_id (aliases finding_ref, id, ref also accepted).",
   )

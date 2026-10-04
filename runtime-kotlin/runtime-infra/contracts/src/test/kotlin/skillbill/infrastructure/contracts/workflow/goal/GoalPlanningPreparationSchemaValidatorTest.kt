@@ -3,7 +3,8 @@ package skillbill.infrastructure.contracts.workflow.goal
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -28,9 +29,12 @@ class GoalPlanningPreparationSchemaValidatorTest {
       sharedEnvelope() + ("unexpected" to true),
       planEnvelope() + ("record_type" to "shared_preplan"),
     ).forEach { envelope ->
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
-        GoalPlanningPreparationSchemaValidator.validate(envelope, "fixture")
-      }
+      assertEquals(
+        InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+        assertFailsWith<SkillBillRuntimeException> {
+          GoalPlanningPreparationSchemaValidator.validate(envelope, "fixture")
+        }.code,
+      )
     }
   }
 
@@ -42,9 +46,12 @@ class GoalPlanningPreparationSchemaValidatorTest {
       sharedEnvelope() + ("payload_sha256" to "not-a-hash"),
       planEnvelope() + ("plan_payload" to ""),
     ).forEach { envelope ->
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
-        GoalPlanningPreparationSchemaValidator.validate(envelope, "fixture")
-      }
+      assertEquals(
+        InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+        assertFailsWith<SkillBillRuntimeException> {
+          GoalPlanningPreparationSchemaValidator.validate(envelope, "fixture")
+        }.code,
+      )
     }
   }
 
@@ -52,13 +59,14 @@ class GoalPlanningPreparationSchemaValidatorTest {
   fun `unsupported provenance fails without destructive reset guidance`() {
     val legacyProvenance = provenance() + ("phase_output_contract_version" to "0.2")
     val error =
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         GoalPlanningPreparationSchemaValidator.validate(
           sharedEnvelope() + ("provenance" to legacyProvenance),
           "goal-1",
         )
       }
 
+    assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "contract validation failed")
     assertEquals(false, error.message.orEmpty().contains("--hard"))
   }

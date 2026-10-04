@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.install.plan
 
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -91,11 +92,11 @@ class InstallPlanSchemaViolationsTest {
     fixture.skills[0]["kind"] = "bogus_kind"
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         InstallPlanSchemaValidator.validate(fixture.wireMap)
-      }
-    assertContains(error.fieldPath, "skills")
-    assertContains(error.fieldPath, "kind")
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "skills")
+    assertContains(error.message.orEmpty(), "kind")
   }
 
   @Test
@@ -103,10 +104,12 @@ class InstallPlanSchemaViolationsTest {
     val wireMap = validBaseWireMap()
     wireMap.remove("staging_root")
 
-    val error = assertFailsWith<InvalidInstallPlanSchemaError> { InstallPlanSchemaValidator.validate(wireMap) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> { InstallPlanSchemaValidator.validate(wireMap) }
+        .also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
 
-    assertEquals("", error.fieldPath)
-    assertContains(error.reason, "staging_root")
+    assertContains(error.message.orEmpty(), "at '<root>'")
+    assertContains(error.message.orEmpty(), "staging_root")
   }
 
   @Test
@@ -114,8 +117,10 @@ class InstallPlanSchemaViolationsTest {
     val wireMap = validBaseWireMap()
     wireMap["contract_version"] = "0.1"
 
-    val error = assertFailsWith<InvalidInstallPlanSchemaError> { InstallPlanSchemaValidator.validate(wireMap) }
-    assertContains(error.fieldPath, "contract_version")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> { InstallPlanSchemaValidator.validate(wireMap) }
+        .also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
@@ -123,9 +128,11 @@ class InstallPlanSchemaViolationsTest {
     val wireMap = validBaseWireMap()
     wireMap["bogus_extra"] = true
 
-    val error = assertFailsWith<InvalidInstallPlanSchemaError> { InstallPlanSchemaValidator.validate(wireMap) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> { InstallPlanSchemaValidator.validate(wireMap) }
+        .also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
 
-    assertContains(error.reason, "bogus_extra")
+    assertContains(error.message.orEmpty(), "bogus_extra")
   }
 
   @Test
@@ -134,10 +141,10 @@ class InstallPlanSchemaViolationsTest {
     fixture.staging[0]["source_dir"] = ""
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         InstallPlanSchemaValidator.validate(fixture.wireMap)
-      }
-    assertContains(error.fieldPath, "staging")
-    assertContains(error.fieldPath, "source_dir")
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "staging")
+    assertContains(error.message.orEmpty(), "source_dir")
   }
 }

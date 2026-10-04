@@ -21,14 +21,13 @@ import skillbill.engine.goalrunner.planning.outcome.SubtaskPlanProduction
 import skillbill.engine.goalrunner.planning.outcome.governedSubSpecReady
 import skillbill.engine.goalrunner.planning.outcome.noSuchSubtaskReason
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
-import skillbill.engine.goalrunner.planning.outcome.recoverySubtaskId
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
@@ -145,19 +144,17 @@ internal class GoalPlanningRunProgress(
           ),
         )
       }
-    return runCatching { recoveredPendingUnits(settled) }.getOrElse { error ->
+    return try {
+      recoveredPendingUnits(settled)
+    } catch (error: SkillBillRuntimeException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
-      val subtaskId = recoverySubtaskId(error)
-      val phaseId =
-        GoalPlanningSweepConstants.PHASE_PLAN.takeIf { subtaskId != 0 }
-          ?: GoalPlanningSweepConstants.PHASE_PREPLAN
       PhaseFanOutUnits.Stopped(
         halt(
           stopped(
             settled.shared,
-            subtaskId,
-            preparationStateReadReason(error, settled.shared.issueKey, subtaskId),
-            phaseId,
+            0,
+            "Goal planning preparation state could not be read: ${error.message.orEmpty()}",
+            GoalPlanningSweepConstants.PHASE_PREPLAN,
           ),
         ),
       )
@@ -184,8 +181,41 @@ internal class GoalPlanningRunProgress(
           ),
         )
       is GoalPlanningRecoveryProgress.Ready -> {
-        requireStoredPlansReady(settled.shared, recovery.progress.missingSubtaskIds)
+        val unreadySubtask = requireStoredPlansReady(settled.shared, recovery.progress.missingSubtaskIds)
+        if (unreadySubtask != null) {
+          return PhaseFanOutUnits.Stopped(
+            halt(
+              stopped(
+                settled.shared,
+                unreadySubtask,
+                goalPlanningPreparationStateReadStopReason(
+                  "stored plan's governed sub-spec has no ready implementation details; replan this subtask",
+                  unreadySubtask,
+                  settled.shared.issueKey,
+                  unreadySubtask,
+                ),
+                GoalPlanningSweepConstants.PHASE_PLAN,
+              ),
+            ),
+          )
+        }
         PhaseFanOutUnits.Pending(recovery.progress.missingSubtaskIds)
+      }
+      is GoalPlanningRecoveryProgress.Conflicted -> {
+        val conflict = recovery.conflict
+        val phaseId =
+          GoalPlanningSweepConstants.PHASE_PLAN.takeIf { conflict.subtaskId != 0 }
+            ?: GoalPlanningSweepConstants.PHASE_PREPLAN
+        PhaseFanOutUnits.Stopped(
+          halt(
+            stopped(
+              settled.shared,
+              conflict.subtaskId,
+              preparationStateReadReason(conflict, settled.shared.issueKey, conflict.subtaskId),
+              phaseId,
+            ),
+          ),
+        )
       }
     }
 
@@ -242,7 +272,7 @@ internal class GoalPlanningRunProgress(
   private fun requireStoredPlansReady(
     shared: GoalPlanningSharedContext,
     missingSubtaskIds: List<Int>,
-  ) {
+  ): Int? {
     scope.activeSubtasks
       .filter { it.id !in missingSubtaskIds && it.status.decompositionStatus() != DecompositionStatus.COMPLETE }
       .forEach { subtask ->
@@ -252,13 +282,10 @@ internal class GoalPlanningRunProgress(
             manifestFileStore.isRegularFile(path) &&
             governedSubSpecReady(manifestFileStore.readText(path))
         if (!ready) {
-          throw IncompatibleGoalPlanningPreparationRecoveryError(
-            scope.identity.parentGoalWorkflowId,
-            subtask.id,
-            "stored plan's governed sub-spec has no ready implementation details; replan this subtask",
-          )
+          return subtask.id
         }
       }
+    return null
   }
 
   private fun halt(outcome: GoalPlanningSweepOutcome.Stopped): PhaseOutcome {

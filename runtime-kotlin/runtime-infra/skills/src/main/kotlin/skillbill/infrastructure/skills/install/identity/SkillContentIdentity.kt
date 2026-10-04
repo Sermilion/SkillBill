@@ -2,8 +2,8 @@ package skillbill.infrastructure.skills.install.identity
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidSkillContentIdentityError
-import skillbill.error.shellcontent.SkillContentIdentityMismatchError
+import skillbill.error.shellcontent.invalidSkillContentIdentityError
+import skillbill.error.shellcontent.skillContentIdentityMismatchError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
 import skillbill.review.parsing.requireMatch
@@ -157,7 +157,7 @@ internal data class SkillContentIdentity(
       installed: SkillContentIdentity,
     ) {
       if (supplied != installed) {
-        throw SkillContentIdentityMismatchError(supplied.compact(), installed.compact())
+        throw skillContentIdentityMismatchError(supplied.compact(), installed.compact())
       }
     }
 
@@ -167,7 +167,7 @@ internal data class SkillContentIdentity(
       sourceLabel: String,
       reason: String,
       cause: Throwable? = null,
-    ): Nothing = throw InvalidSkillContentIdentityError(sourceLabel, reason, cause)
+    ): Nothing = throw invalidSkillContentIdentityError(sourceLabel, reason, cause)
   }
 }
 

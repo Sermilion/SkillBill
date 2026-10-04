@@ -1,6 +1,8 @@
 package skillbill.application.workflow.decomposition
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -73,7 +75,8 @@ private fun parentDiscoveryCandidate(
 private fun WorkflowStateRecord.decompositionRuntimeOrNull(): DecompositionManifest? =
   try {
     toSnapshot().artifacts.decompositionRuntime()
-  } catch (_: InvalidWorkflowStateSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isInvalidWorkflowStateFailure())
     null
   }
 

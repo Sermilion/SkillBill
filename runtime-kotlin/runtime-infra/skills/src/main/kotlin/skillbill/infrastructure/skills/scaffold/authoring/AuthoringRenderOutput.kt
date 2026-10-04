@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
@@ -138,7 +139,8 @@ private fun targetPlatformPackRoot(target: AuthoringTarget): Path? =
 
 private fun requireMatchingRenderContractVersion(pack: PlatformManifest) {
   if (pack.contractVersion != SHELL_CONTRACT_VERSION) {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack '${pack.slug}': declares contract_version '${pack.contractVersion}' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

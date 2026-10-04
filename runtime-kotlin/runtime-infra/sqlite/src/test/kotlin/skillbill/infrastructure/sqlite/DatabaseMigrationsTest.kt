@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
@@ -1616,9 +1617,9 @@ class DatabaseMigrationsReviewAttributionTest {
     )
     val artifactsBefore = legacyGoalParentArtifactsJson(dbPath)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DatabaseRuntime.establishSchemaReadiness(dbPath)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
       assertEquals(

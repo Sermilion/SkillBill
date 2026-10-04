@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.error.shellcontent.missingValidationGate
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.db.DatabaseSessionFactory
@@ -155,7 +155,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       } else {
         " Repair pack routing or its build commands before creating the workflow."
       }
-    throw MissingValidationGateError("$source build gate pack '$pack' has no complete build command pair.$recovery")
+    throw missingValidationGate("$source build gate pack '$pack' has no complete build command pair.$recovery")
   }
 
   private fun recordedPlan(workflowId: String): ResolvedPhaseExecutionPlan =

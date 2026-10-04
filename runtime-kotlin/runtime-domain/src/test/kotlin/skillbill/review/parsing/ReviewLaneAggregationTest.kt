@@ -1,6 +1,7 @@
 package skillbill.review.parsing
 
-import skillbill.error.shellcontent.ReviewAggregationIntegrityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.model.ReviewLaneAggregationInput
 import skillbill.review.model.ReviewLaneReviewDisposition
 import kotlin.test.Test
@@ -34,53 +35,53 @@ class ReviewLaneAggregationTest {
 
   @Test fun `a missing lane result fails loudly instead of reading as no findings`() {
     val failure =
-      assertFailsWith<ReviewAggregationIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLaneAggregation.requireCompleteLaneResults(
           expectedLanes = listOf("security", "testing"),
           results = listOf(result("security")),
           commitSequenceDigest = sequence,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY, it.code) }
 
     assertTrue("produced no result" in failure.message.orEmpty())
-    assertEquals(listOf("testing"), failure.lanes)
+    assertTrue(failure.message.orEmpty().endsWith("(testing)"))
   }
 
   @Test fun `a doubled lane result fails loudly`() {
     val failure =
-      assertFailsWith<ReviewAggregationIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLaneAggregation.requireCompleteLaneResults(
           expectedLanes = listOf("security"),
           results = listOf(result("security"), result("security")),
           commitSequenceDigest = sequence,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY, it.code) }
 
     assertTrue("more than one result" in failure.message.orEmpty())
   }
 
   @Test fun `a result minted against a different commit sequence is never merged`() {
     val failure =
-      assertFailsWith<ReviewAggregationIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLaneAggregation.requireCompleteLaneResults(
           expectedLanes = listOf("security"),
           results = listOf(result("security", commitSequenceDigest = "b".repeat(64))),
           commitSequenceDigest = sequence,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY, it.code) }
 
     assertTrue("different commit sequence" in failure.message.orEmpty())
   }
 
   @Test fun `a result naming an unselected lane fails loudly`() {
     val failure =
-      assertFailsWith<ReviewAggregationIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLaneAggregation.requireCompleteLaneResults(
           expectedLanes = listOf("security"),
           results = listOf(result("security"), result("performance")),
           commitSequenceDigest = sequence,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY, it.code) }
 
     assertTrue("never selected" in failure.message.orEmpty())
   }

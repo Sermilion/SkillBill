@@ -39,6 +39,8 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
@@ -188,10 +190,13 @@ class FeatureTaskExecutionPlanCreationTest {
         assertNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(CHILD))
         assertEquals(listOf(PARENT), unit.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { it.workflowId })
-        assertEquals(fixture.preplan, unit.goalPlanningPreparations.findSharedPreplan(fixture.identity)?.preplanPayload)
+        assertEquals(
+          fixture.preplan,
+          unit.goalPlanningPreparations.findSharedPreplan(fixture.identity).foundCheckpoint()?.preplanPayload,
+        )
         assertEquals(
           fixture.plan,
-          unit.goalPlanningPreparations.findSubtaskPlan(fixture.identity, 1, SPEC)?.planPayload,
+          unit.goalPlanningPreparations.findSubtaskPlan(fixture.identity, 1, SPEC).foundPlan()?.planPayload,
         )
       }
 

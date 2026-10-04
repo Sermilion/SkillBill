@@ -13,7 +13,8 @@ import skillbill.application.review.parallel.planning.criteriaReferences
 import skillbill.application.reviewevidence.ResolvedCommitSequence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -244,7 +245,7 @@ class SpecIntentProjectionResolverTest {
     val repo = tempRepo()
     val missing = repo.resolve("missing-spec.md")
     val error =
-      assertFailsWith<UnreadableSpecIntentProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolver().resolve(
           SpecIntentProjectionResolveRequest(
             repoRoot = repo.toFileLocation(),
@@ -252,9 +253,9 @@ class SpecIntentProjectionResolverTest {
             branchName = "feat/SKILL-191-runtime",
           ),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.UNREADABLE_SPEC_INTENT, it.code) }
     assertTrue("spec_intent_projection" in error.message.orEmpty())
-    assertTrue(missing.toString() in error.specPath)
+    assertTrue(missing.toString() in error.message.orEmpty())
   }
 
   @Test

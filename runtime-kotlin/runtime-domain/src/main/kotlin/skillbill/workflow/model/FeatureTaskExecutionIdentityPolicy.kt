@@ -4,7 +4,7 @@ import skillbill.contracts.issuekey.MAX_ISSUE_KEY_LENGTH
 import skillbill.contracts.issuekey.isWellFormedIssueKey
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_EXECUTION_IDENTITY_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 
 object FeatureTaskExecutionIdentityPolicy {
   const val REPOSITORY_IDENTITY_PREFIX: String = "repo-root-realpath-v1:"
@@ -28,7 +28,7 @@ object FeatureTaskExecutionIdentityPolicy {
           governedSpecPathFailure(identity.governedSpecPath)
         else -> null
       }
-    failure?.let { throw InvalidFeatureTaskExecutionIdentitySchemaError(sourceLabel, it) }
+    failure?.let { throw invalidFeatureTaskExecutionIdentitySchema(sourceLabel, it) }
   }
 
   fun normalizeIssueKey(
@@ -36,7 +36,7 @@ object FeatureTaskExecutionIdentityPolicy {
     sourceLabel: String,
   ): String {
     if (!isWellFormedIssueKey(issueKey)) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(
+      throw invalidFeatureTaskExecutionIdentitySchema(
         sourceLabel,
         issueKeyFailure("issue_key", issueKey),
       )
@@ -72,7 +72,7 @@ object FeatureTaskExecutionIdentityPolicy {
   ): String {
     val normalizedIssueKey = normalizeIssueKey(issueKey, "lookup request")
     if (!validRepositoryIdentity(repositoryIdentity)) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(
+      throw invalidFeatureTaskExecutionIdentitySchema(
         "lookup request",
         repositoryIdentityFailure(repositoryIdentity),
       )

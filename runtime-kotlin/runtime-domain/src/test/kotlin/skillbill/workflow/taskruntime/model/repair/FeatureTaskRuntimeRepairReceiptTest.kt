@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.model.repair
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairConstruct
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -17,6 +18,7 @@ import skillbill.workflow.model.goalreview.omittedCarriedFindings
 import skillbill.workflow.model.goalreview.withoutRefutedFindings
 import skillbill.workflow.taskruntime.artifact.decodeRepairReceiptFromArtifactWithObservations
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
@@ -31,10 +33,10 @@ class FeatureTaskRuntimeRepairReceiptTest {
     FeatureTaskRuntimeRepairConstruct(symbol = "Type")
     FeatureTaskRuntimeRepairConstruct(symbol = "Type.member", file = "Type.kt")
     val pathOnly =
-      assertFailsWith<InvalidFeatureTaskRuntimeRepairReceiptError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeRepairConstruct(symbol = "runtime-kotlin/src/Type.kt")
       }
-    assertTrue(pathOnly.payloadFreeReason.contains("never a repository path"))
+    assertTrue(pathOnly.message.orEmpty().contains("never a repository path"))
     assertTrue(pathOnly.message.orEmpty().none { it == '/' }, "rejection must not echo the path")
   }
 
@@ -82,15 +84,16 @@ class FeatureTaskRuntimeRepairReceiptTest {
         addressedEntry(findingId = "F-${index.toString().padStart(3, '0')}")
       }
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeRepairReceiptError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeRepairReceipt(
           roundNumber = 1,
           preFixCheckpointSha = sha,
           entries = over,
         )
       }
-    assertEquals("entries", error.fieldPath)
-    assertTrue(error.payloadFreeReason.contains("$REPAIR_RECEIPT_MAX_ENTRIES"))
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT, error.code)
+    assertContains(error.message.orEmpty(), "fails at 'entries'")
+    assertTrue(error.message.orEmpty().contains("$REPAIR_RECEIPT_MAX_ENTRIES"))
   }
 
   @Test
@@ -105,7 +108,7 @@ class FeatureTaskRuntimeRepairReceiptTest {
   @Test
   fun `legacy 0_2 repair receipt contract version loud-fails`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeRepairReceiptError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
           mapOf(
             "contract_version" to "0.2",
@@ -116,13 +119,38 @@ class FeatureTaskRuntimeRepairReceiptTest {
           "repair_receipt",
         )
       }
-    assertEquals("repair_receipt.contract_version", error.fieldPath)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT, error.code)
+    assertEquals(
+      "Feature-task-runtime repair receipt fails at 'repair_receipt.contract_version': " +
+        "must be one of '$FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION'.",
+      error.message,
+    )
+    assertContains(assertNotNull(error.cause).message.orEmpty(), "fails at 'contract_version'")
+  }
+
+  @Test
+  fun `invalid entry outcome retains its indexed decode path`() {
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
+          mapOf(
+            "contract_version" to FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION,
+            "round_number" to 1,
+            "pre_fix_checkpoint_sha" to sha,
+            "entries" to listOf(mapOf("finding_id" to "F-001", "outcome" to "unsupported")),
+          ),
+          "repair_receipts[2]",
+        )
+      }
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT, error.code)
+    assertContains(error.message.orEmpty(), "fails at 'repair_receipts[2].entries[0].outcome'")
+    assertContains(assertNotNull(error.cause).message.orEmpty(), "fails at 'outcome'")
   }
 
   @Test
   fun `remediation round number is the completed pass count at implement_fix entry`() {
     assertEquals(2, featureTaskRuntimeRemediationRoundNumber(2))
-    assertFailsWith<InvalidFeatureTaskRuntimeRepairReceiptError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeRemediationRoundNumber(0)
     }
   }

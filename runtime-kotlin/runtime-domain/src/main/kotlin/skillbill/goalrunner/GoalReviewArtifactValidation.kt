@@ -1,6 +1,6 @@
 package skillbill.goalrunner
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.recordedVerdicts
 import skillbill.review.model.ReviewFindingVerdict
@@ -30,7 +30,7 @@ fun validatedGoalReviewPasses(
       pass.unresolvedFindingCount != outcome.unresolvedFindingCount ||
       pass.findings != findings
     ) {
-      throw InvalidGoalSubtaskReviewStateSchemaError(
+      throw invalidGoalSubtaskReviewStateSchemaError(
         sourceLabel = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
         fieldPath = "pass_results.${pass.passNumber}",
         reason =

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.skills.install.FileSystemInstalledPlatformPackCatalog
@@ -76,12 +77,14 @@ class FileSystemReviewNativeAgentPreflightTest {
     )
 
     val error =
-      assertFailsWith<MissingInstalledNativeAgentError> {
+      assertFailsWith<SkillBillRuntimeException> {
         preflight(fixture.home).verify(preflightRequest(fixture.repoRoot, "codex"))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
     assertTrue(error.message.orEmpty().contains("active provider directory is missing"))
-    assertEquals("skill-bill install apply", error.repairCommand)
+    assertContains(error.message.orEmpty(), "Repair with: skill-bill install apply")
   }
 
   @Test
@@ -104,8 +107,10 @@ class FileSystemReviewNativeAgentPreflightTest {
     Files.delete(installed)
 
     val failure =
-      assertFailsWith<MissingInstalledNativeAgentError> {
+      assertFailsWith<SkillBillRuntimeException> {
         preflight(fixture.home).verify(preflightRequest(fixture.repoRoot, "cursor"))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
     assertContains(failure.message.orEmpty(), "skill-bill install apply")

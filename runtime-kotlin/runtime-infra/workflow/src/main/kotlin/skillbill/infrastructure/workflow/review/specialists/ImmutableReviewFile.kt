@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
 import skillbill.infrastructure.host.process.BoundedExternalProcessRunner
@@ -27,11 +27,11 @@ internal fun immutableReviewFileExists(
 ): Boolean {
   validateRepositoryMapping(root, path)
   val entry = runGitCommand(root, "--literal-pathspecs", "ls-tree", revision, "--", path)
-  if (!entry.ok) throw InvalidReviewContextSchemaError("review-expansion", "Immutable revision is unavailable.")
+  if (!entry.ok) throw invalidReviewContextSchemaError("review-expansion", "Immutable revision is unavailable.")
   val row = entry.value.orEmpty()
   if (row.isBlank()) return false
   if (!row.startsWith("100644 blob ") && !row.startsWith("100755 blob ")) {
-    throw InvalidReviewContextSchemaError("review-expansion", "Immutable evidence is not a regular file.")
+    throw invalidReviewContextSchemaError("review-expansion", "Immutable evidence is not a regular file.")
   }
   return true
 }
@@ -68,10 +68,10 @@ internal fun readImmutableReviewCommand(
         ),
       )
     if (result.timedOut) {
-      throw InvalidReviewContextSchemaError("review-expansion", "Immutable evidence read timed out.")
+      throw invalidReviewContextSchemaError("review-expansion", "Immutable evidence read timed out.")
     }
     if (result.exitCode != 0) {
-      throw InvalidReviewContextSchemaError(
+      throw invalidReviewContextSchemaError(
         "review-expansion",
         "Immutable evidence read failed.",
       )

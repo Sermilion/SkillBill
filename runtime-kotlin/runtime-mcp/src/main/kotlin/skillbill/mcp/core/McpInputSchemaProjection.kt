@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import skillbill.error.shellcontent.invalidTelemetryEventSchemaError
 import skillbill.mcp.shared.McpProtocolFramer
 import skillbill.mcp.telemetry.TelemetryEventSchemaValidator
 import java.util.concurrent.ConcurrentHashMap
@@ -22,7 +22,7 @@ internal object McpInputSchemaProjection {
       TelemetryEventSchemaValidator.canonicalSchemaDocument()
         .path(McpProtocolFramer.SCHEMA_DEFS_KEY)
     if (!defs.isObject) {
-      throw InvalidTelemetryEventSchemaError(
+      throw invalidTelemetryEventSchemaError(
         fieldPath = McpProtocolFramer.SCHEMA_DEFS_KEY,
         eventName = tool.name,
         reason = "Canonical telemetry-event schema is missing a \$defs object.",
@@ -47,7 +47,7 @@ internal object McpInputSchemaProjection {
         return defNode
       }
     }
-    throw InvalidTelemetryEventSchemaError(
+    throw invalidTelemetryEventSchemaError(
       fieldPath = LifecycleTelemetryPayloadKeys.EVENT_NAME,
       eventName = toolName,
       reason = "No \$defs branch pins event_name.const to '$toolName'.",

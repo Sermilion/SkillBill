@@ -2,7 +2,7 @@ package skillbill.workflow.taskruntime.model.core
 
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 
 data class FeatureTaskRuntimeResolvedBranch(
@@ -68,7 +68,7 @@ data class FeatureTaskRuntimeResolvedBranch(
           boundaryHistoryRoots = reader.optionalStringList("boundary_history_roots"),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime resolved-branch artifact is invalid.",
           error,
         )

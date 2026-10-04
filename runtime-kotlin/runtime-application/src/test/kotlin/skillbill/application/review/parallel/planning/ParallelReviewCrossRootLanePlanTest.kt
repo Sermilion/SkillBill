@@ -8,7 +8,8 @@ import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.application.review.snapshot.reviewed
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
@@ -92,11 +93,13 @@ class ParallelReviewCrossRootLanePlanTest {
       )
 
     val error =
-      assertFailsWith<AmbiguousLaneOwnershipError> {
+      assertFailsWith<SkillBillRuntimeException> {
         reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, swift), diff = diff), recorder)
           .reviewed(
             harnessRequest(reviewRunId = "cross-root-ambiguous", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
           )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
       }
 
     assertTrue(

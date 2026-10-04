@@ -4,8 +4,10 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_RUN_INVARIANTS_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -46,7 +48,7 @@ internal fun featureTaskRuntimeRunInvariantsFromArtifactMap(raw: Map<String, Any
       agentAddonSelection = agentAddonSelection,
     )
   } catch (error: IllegalArgumentException) {
-    throw InvalidWorkflowStateSchemaError("Feature-task-runtime run invariants are invalid: ${error.message}", error)
+    throw invalidWorkflowStateSchemaError("Feature-task-runtime run invariants are invalid: ${error.message}", error)
   }
 }
 
@@ -91,7 +93,7 @@ private fun Map<String, Any?>.optionalAgentAddonSelection(): AgentAddonSelection
       },
     )
   } catch (error: IllegalArgumentException) {
-    throw InvalidWorkflowStateSchemaError("Agent add-on selection is invalid: ${error.message}", error)
+    throw invalidWorkflowStateSchemaError("Agent add-on selection is invalid: ${error.message}", error)
   }
 }
 
@@ -134,7 +136,8 @@ private fun Map<String, Any?>.requireFeatureSizeField(key: String): FeatureTaskR
   val rawValue = requireInvariantStringField(key)
   return try {
     FeatureTaskRuntimeFeatureSize.fromWire(rawValue)
-  } catch (_: InvalidFeatureTaskRuntimePhaseHandoffSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_PHASE_HANDOFF_SCHEMA)
     runInvariantSchemaError("Feature-task-runtime artifact field '$key' must be one of SMALL, MEDIUM, LARGE.")
   }
 }
@@ -146,4 +149,4 @@ private fun Map<String, Any?>.requireCodeReviewModeField(key: String): CodeRevie
     runInvariantSchemaError("Feature-task-runtime artifact field '$key' must be one of auto, inline, delegated.")
   }
 
-private fun runInvariantSchemaError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+private fun runInvariantSchemaError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)

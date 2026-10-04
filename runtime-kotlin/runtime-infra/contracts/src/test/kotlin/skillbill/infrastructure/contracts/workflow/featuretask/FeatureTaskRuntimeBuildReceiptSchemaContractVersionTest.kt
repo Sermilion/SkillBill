@@ -3,7 +3,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeBuildReceiptSchemaPaths
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
@@ -75,7 +75,7 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
   @Test
   fun `a missing gate_run_count fails validation`() {
     val payload = representativeReceipt().toMutableMap().apply { remove("gate_run_count") }
-    assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, sourceLabel = "build#missing-count")
     }
   }
@@ -83,7 +83,7 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
   @Test
   fun `a wrong contract_version fails validation`() {
     val payload = representativeReceipt().toMutableMap().apply { put("contract_version", "9.9") }
-    assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, sourceLabel = "build#bad-version")
     }
   }
@@ -111,7 +111,7 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
             ),
         )
     invalid.forEach { payload ->
-      assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, "coherence")
       }
     }

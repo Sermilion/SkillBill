@@ -1,7 +1,8 @@
 package skillbill.application.decomposition
 
 import skillbill.application.decomposition.model.DecompositionManifestFileCandidate
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -58,20 +59,20 @@ fun findMatchingDecompositionManifests(
         try {
           loadDecompositionManifest(path, fileStore, validator, recoverPending)
         } catch (error: NoSuchFileException) {
-          throw InvalidDecompositionManifestSchemaError(
+          throw invalidDecompositionManifestSchema(
             sourceLabel = path.toString(),
             reason = "manifest disappeared during read; the decomposition bundle is incomplete.",
-            failureCode = "incomplete_bundle",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_INCOMPLETE_BUNDLE,
             cause = error,
           )
         }
       if (manifest.issueKey != normalizedIssueKey) {
-        throw InvalidDecompositionManifestSchemaError(
+        throw invalidDecompositionManifestSchema(
           sourceLabel = path.toString(),
           reason =
             "manifest issue_key '${manifest.issueKey}' does not match the requested issue key " +
               "'$normalizedIssueKey'.",
-          failureCode = "issue_key_mismatch",
+          code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_ISSUE_KEY_MISMATCH,
         )
       }
       DecompositionManifestFileCandidate(path, manifest)
@@ -89,12 +90,12 @@ fun resolveDecompositionManifest(
   val candidates = findMatchingDecompositionManifests(repoRoot, issueKey, fileStore, validator, recoverPending)
   val activeCandidates = candidates.filter { candidate -> candidate.manifest.isActiveGoalRuntime() }
   if (activeCandidates.size > 1) {
-    throw InvalidDecompositionManifestSchemaError(
+    throw invalidDecompositionManifestSchema(
       sourceLabel = issueKey,
       reason =
         "multiple active decomposition manifests match the requested issue key: " +
           activeCandidates.joinToString { candidate -> repoRoot.relativize(candidate.path).toString() } + ".",
-      failureCode = "duplicate_active",
+      code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_DUPLICATE_ACTIVE,
     )
   }
   return activeCandidates.firstOrNull()?.manifest ?: candidates.firstOrNull()?.manifest

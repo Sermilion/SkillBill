@@ -1,7 +1,7 @@
 package skillbill.goalrunner.model
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
@@ -26,7 +26,7 @@ enum class GoalAttemptLedgerAction(val wireValue: String) {
   companion object {
     fun fromWire(value: String): GoalAttemptLedgerAction =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError("Unknown goal attempt ledger action '$value'.")
+        ?: throw invalidWorkflowStateSchemaError("Unknown goal attempt ledger action '$value'.")
   }
 }
 

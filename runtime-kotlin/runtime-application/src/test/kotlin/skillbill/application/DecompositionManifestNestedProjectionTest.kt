@@ -7,7 +7,7 @@ import skillbill.application.decomposition.model.DecompositionManifestWriteReque
 import skillbill.application.decomposition.model.DecompositionPlanningSubtaskOptions
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.decomposition.DecompositionPlanningResult
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import java.nio.file.Files
 import java.nio.file.Path
@@ -23,7 +23,7 @@ class DecompositionManifestNestedProjectionTest {
     writeTopLevelDecomposition(fixture.repoRoot, fixture.topLevelParentSpecPath)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeFromWorkflowUpdate(
           repoRoot = fixture.repoRoot,
           existingArtifactsJson = "{}",
@@ -36,9 +36,9 @@ class DecompositionManifestNestedProjectionTest {
         )
       }
 
-    assertContains(error.reason, "already a decomposed subtask")
+    assertContains(error.message.orEmpty(), "already a decomposed subtask")
     assertContains(
-      error.reason,
+      error.message.orEmpty(),
       ".feature-specs/SKILL-52.1-hexagonal-runtime-hardening/spec_subtask_1_install-policy.md",
     )
   }
@@ -49,7 +49,7 @@ class DecompositionManifestNestedProjectionTest {
     writeTopLevelDecomposition(fixture.repoRoot, fixture.topLevelParentSpecPath)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeIfDecomposed(
           DecompositionManifestWriteRequest(
             repoRoot = fixture.repoRoot,
@@ -61,7 +61,7 @@ class DecompositionManifestNestedProjectionTest {
         )
       }
 
-    assertContains(error.reason, "nested decomposition of subtask specs is not supported")
+    assertContains(error.message.orEmpty(), "nested decomposition of subtask specs is not supported")
   }
 
   @Test
@@ -78,7 +78,7 @@ class DecompositionManifestNestedProjectionTest {
     )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeFromWorkflowUpdate(
           repoRoot = fixture.repoRoot,
           existingArtifactsJson = "{}",
@@ -91,8 +91,8 @@ class DecompositionManifestNestedProjectionTest {
         )
       }
 
-    assertContains(error.reason, "failed to load decomposition manifest")
-    assertContains(error.reason, malformedManifest.toString())
+    assertContains(error.message.orEmpty(), "failed to load decomposition manifest")
+    assertContains(error.message.orEmpty(), malformedManifest.toString())
   }
 }
 

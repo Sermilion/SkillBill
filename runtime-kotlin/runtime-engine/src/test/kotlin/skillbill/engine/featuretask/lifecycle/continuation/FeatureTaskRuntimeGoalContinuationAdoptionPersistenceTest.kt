@@ -16,7 +16,8 @@ import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -78,7 +79,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         },
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       persistence.persistArtifactsPatch(
         harness.repository,
         before.toSnapshot(),
@@ -87,7 +88,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             preContractContinuationMap().plus("subtask_id" to 2.7),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertEquals(before, harness.repository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
   }

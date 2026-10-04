@@ -13,8 +13,7 @@ import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.error.core.rejectedOutputDiagnosticInvalidRequestMessage
-import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
-import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
@@ -202,12 +201,14 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       } else {
         FeatureTaskRuntimeProducerOutputRead.Found(evidence)
       }
-    } catch (_: InvalidProducerOutputEvidenceSchemaError) {
-      unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
-    } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
-      unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (error: SkillBillRuntimeException) {
-      unreadable(error.degradableFailureClass() ?: throw error)
+      when (error.code) {
+        WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA,
+        ->
+          unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+        else -> unreadable(error.degradableFailureClass() ?: throw error)
+      }
     }
   }
 
@@ -232,12 +233,14 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     }
     return try {
       DiagnosticWriteOutcome.Written(block())
-    } catch (_: InvalidProducerOutputEvidenceSchemaError) {
-      degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
-    } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
-      degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (error: SkillBillRuntimeException) {
-      degrade(error.degradableFailureClass() ?: throw error)
+      when (error.code) {
+        WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA,
+        WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA,
+        ->
+          degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+        else -> degrade(error.degradableFailureClass() ?: throw error)
+      }
     }
   }
 

@@ -29,7 +29,7 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.toStatusWireMap
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -521,7 +521,7 @@ internal class OrphanedIdentityWorkflowStates(
   internal val message: String,
 ) : WorkflowStateRepository by IdeStatusWorkflowStates() {
   override fun getFeatureTaskExecutionIdentity(workflowId: String): FeatureTaskExecutionIdentity? =
-    throw InvalidWorkflowStateSchemaError(message)
+    throw invalidWorkflowStateSchemaError(message)
 }
 
 internal class IdeStatusWorkflowStates : WorkflowStateRepositoryDefaults() {

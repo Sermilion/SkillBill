@@ -16,7 +16,7 @@ import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.model.toPath
@@ -97,7 +97,7 @@ class GoalPreflightGateBlockBuilder(
         )
       }
     if (mismatch != null) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError("goal preflight", mismatch)
+      throw invalidFeatureTaskExecutionIdentitySchema("goal preflight", mismatch)
     }
     val effectiveReviewPolicy =
       effectiveGoalRunnerReviewPolicy(

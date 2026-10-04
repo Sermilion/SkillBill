@@ -9,8 +9,9 @@ import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
-import skillbill.error.shellcontent.InvalidWorkListRowError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.IdeStatusValidator
@@ -75,22 +76,26 @@ class IdeStatusService(
           )
         emit(snapshot)
       }
-    } catch (error: InvalidWorkListRowError) {
-      emit(
-        IdeStatusProblemSnapshots.incompatibleRecord(
-          repositoryIdentity = repositoryIdentity,
-          observedAt = observedAt,
-          message = error.message ?: "Incompatible work-list record.",
-        ),
-      )
-    } catch (error: InvalidWorkflowStateSchemaError) {
-      emit(
-        IdeStatusProblemSnapshots.incompatibleRecord(
-          repositoryIdentity = repositoryIdentity,
-          observedAt = observedAt,
-          message = error.message ?: "Incompatible workflow record.",
-        ),
-      )
+    } catch (error: SkillBillRuntimeException) {
+      when {
+        error.code == WorkflowFailureCode.INVALID_WORK_LIST_ROW ->
+          emit(
+            IdeStatusProblemSnapshots.incompatibleRecord(
+              repositoryIdentity = repositoryIdentity,
+              observedAt = observedAt,
+              message = error.message ?: "Incompatible work-list record.",
+            ),
+          )
+        error.isInvalidWorkflowStateFailure() ->
+          emit(
+            IdeStatusProblemSnapshots.incompatibleRecord(
+              repositoryIdentity = repositoryIdentity,
+              observedAt = observedAt,
+              message = error.message ?: "Incompatible workflow record.",
+            ),
+          )
+        else -> throw error
+      }
     }
   }
 

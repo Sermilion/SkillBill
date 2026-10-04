@@ -4,11 +4,12 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -234,10 +235,10 @@ private fun invalidDecompositionManifest(
   sourceLabel: String,
   reason: String,
 ): Nothing =
-  throw InvalidDecompositionManifestSchemaError(
+  throw invalidDecompositionManifestSchema(
     sourceLabel = sourceLabel,
     reason = reason,
-    failureCode = "invalid_shape",
+    code = DecompositionManifestValidationFailureCode.INVALID_SHAPE,
   )
 
 fun decodeDecompositionManifestWireMap(

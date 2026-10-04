@@ -2,7 +2,8 @@
 package skillbill.infrastructure.workflow.review.specialists
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
+import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256HexOfFile
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
@@ -28,12 +29,14 @@ class FileSystemReviewNativeAgentPreflight(
       val agentId = assignment.agentId
       val logicalName = assignment.logicalName
       val provider =
-        provider(agentId) ?: throw MissingInstalledNativeAgentError(
-          logicalName,
-          agentId,
-          environment.userHome.toString(),
-          "provider does not support native-agent selection",
-          REPAIR_COMMAND,
+        provider(agentId) ?: throw missingInstalledNativeAgent(
+          MissingInstalledNativeAgentContext(
+            logicalName,
+            agentId,
+            environment.userHome.toString(),
+            "provider does not support native-agent selection",
+            REPAIR_COMMAND,
+          ),
         )
       val entries = inventory.filter { it.provider == provider.name.lowercase() && it.logicalName == logicalName }
       if (entries.isEmpty()) {
@@ -121,12 +124,14 @@ class FileSystemReviewNativeAgentPreflight(
     reason: String,
     cause: Throwable? = null,
   ): Nothing =
-    throw MissingInstalledNativeAgentError(
-      logicalName,
-      provider.name.lowercase(),
-      path.toString(),
-      reason,
-      REPAIR_COMMAND,
+    throw missingInstalledNativeAgent(
+      MissingInstalledNativeAgentContext(
+        logicalName,
+        provider.name.lowercase(),
+        path.toString(),
+        reason,
+        REPAIR_COMMAND,
+      ),
       cause,
     )
 

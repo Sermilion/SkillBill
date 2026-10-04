@@ -13,7 +13,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.planning.PlanBundleAuthorization
 import skillbill.engine.goalrunner.manifest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
@@ -25,6 +26,7 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairEvidence
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairOperation
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFormat
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationSourceLocation
@@ -241,13 +243,21 @@ class FeatureSpecPreparationWriterTest {
           manifest: DecompositionManifestWireMap,
           sourceLabel: String,
         ): Unit =
-          throw InvalidDecompositionManifestSchemaError(sourceLabel, "typed manifest rejection", "schema_invalid")
+          throw invalidDecompositionManifestSchema(
+            sourceLabel,
+            "typed manifest rejection",
+            DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+          )
 
         override fun validateYamlText(
           yamlText: String,
           sourceLabel: String,
         ): DecompositionManifest =
-          throw InvalidDecompositionManifestSchemaError(sourceLabel, "typed YAML rejection", "schema_invalid")
+          throw invalidDecompositionManifestSchema(
+            sourceLabel,
+            "typed YAML rejection",
+            DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+          )
 
         override fun validateYamlTextResult(
           yamlText: String,
@@ -256,7 +266,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(rejectingValidator, store, testDecompositionManifestWriter).write(
         repoRoot,
         FeatureSpecWriteRequest(
@@ -290,7 +300,11 @@ class FeatureSpecPreparationWriterTest {
         ): DecompositionManifest {
           yamlValidationCount += 1
           if (yamlValidationCount == 2) {
-            throw InvalidDecompositionManifestSchemaError(sourceLabel, "read-back rejection", "schema_invalid")
+            throw invalidDecompositionManifestSchema(
+              sourceLabel,
+              "read-back rejection",
+              DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+            )
           }
           return decodeManifest(
             DecompositionManifestWireMap.from(
@@ -307,7 +321,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
         TestDecompositionManifestStore,
@@ -358,7 +372,11 @@ class FeatureSpecPreparationWriterTest {
         ): DecompositionManifest {
           yamlValidationCount += 1
           if (yamlValidationCount == 4) {
-            throw InvalidDecompositionManifestSchemaError(sourceLabel, "read-back rejection", "schema_invalid")
+            throw invalidDecompositionManifestSchema(
+              sourceLabel,
+              "read-back rejection",
+              DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+            )
           }
           return decodeManifest(
             DecompositionManifestWireMap.from(
@@ -375,7 +393,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
         TestDecompositionManifestStore,

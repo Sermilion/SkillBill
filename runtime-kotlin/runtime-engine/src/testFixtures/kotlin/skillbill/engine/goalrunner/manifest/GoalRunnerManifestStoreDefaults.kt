@@ -162,7 +162,8 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   override fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
-  ): GoalRunnerManifestState = error("Goal runner manifest store must atomically persist new child workflow state.")
+  ): GoalRunnerChildWorkflowSaveResult =
+    error("Goal runner manifest store must atomically persist new child workflow state.")
 
   override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> = emptyList()
 

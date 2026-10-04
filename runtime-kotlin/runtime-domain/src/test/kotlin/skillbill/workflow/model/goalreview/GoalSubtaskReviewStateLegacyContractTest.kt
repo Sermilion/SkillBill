@@ -1,7 +1,8 @@
 package skillbill.workflow.model.goalreview
 
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,9 +23,9 @@ class GoalSubtaskReviewStateLegacyContractTest {
       val legacy = currentRecord().toMutableMap().apply { put("contract_version", legacyVersion) }
 
       val error =
-        assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           GoalSubtaskReviewState.fromArtifactMap(legacy)
-        }
+        }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
       assertTrue(
         error.message.orEmpty().contains(legacyVersion),
         "The rejection must name the quarantined legacy contract version '$legacyVersion'.",
@@ -40,9 +41,9 @@ class GoalSubtaskReviewStateLegacyContractTest {
         put("code_review_mode", "inline")
       }
 
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewState.fromArtifactMap(legacy)
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test

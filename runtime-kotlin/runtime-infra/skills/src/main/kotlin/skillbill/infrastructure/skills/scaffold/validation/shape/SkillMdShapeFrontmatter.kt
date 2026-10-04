@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.validation.shape
 
-import skillbill.error.shellcontent.InvalidSkillMdShapeError
+import skillbill.error.shellcontent.invalidSkillMdShape
 import java.nio.file.Path
 
 internal val SKILL_MD_FRONTMATTER_PATTERN = Regex("""(?s)\A---\n(.*?)\n---\n""")
@@ -44,7 +44,7 @@ internal fun validateSkillMdBodyLine(
   }
 }
 
-internal fun skillShapeFailure(message: String): Nothing = throw InvalidSkillMdShapeError(message)
+internal fun skillShapeFailure(message: String): Nothing = throw invalidSkillMdShape(message)
 
 private val TABLE_PATTERN = Regex("""^\s*\|.*\|\s*$""")
 private val STEP_HEADING_PATTERN = Regex("""^##\s+Step\s+\d+[a-z]?\b""", RegexOption.IGNORE_CASE)

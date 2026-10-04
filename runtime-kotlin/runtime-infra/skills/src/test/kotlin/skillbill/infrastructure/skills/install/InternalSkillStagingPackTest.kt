@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
 import skillbill.infrastructure.skills.install.plan.uninstallTargets
@@ -30,12 +31,14 @@ class InternalSkillStagingPackTest : InternalSkillStagingTestSupport() {
     Files.createDirectories(agentRoot)
 
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installSkill(
           skillPath = fixture.childDir,
           agentTargets = listOf(AgentTarget("test-agent", agentRoot.toFileLocation())),
           context = InstallContext(repoRoot = fixture.repoRoot, home = fixture.home),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("internal-for: ${fixture.parentName}"))
     assertFalse(

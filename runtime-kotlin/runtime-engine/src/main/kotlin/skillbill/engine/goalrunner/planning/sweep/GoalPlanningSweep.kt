@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
@@ -21,14 +22,17 @@ import skillbill.engine.goalrunner.planning.outcome.preSweepStopped
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
 import skillbill.engine.goalrunner.planning.outcome.sharedContextReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningMissingSharedContextPacketStopReason
+import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
 import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunFacts
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
@@ -65,27 +69,38 @@ class DefaultGoalPlanningSweep(
         FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
         repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
       )
-    val existingShared =
-      runCatching {
+    val sharedRead =
+      try {
         sharedPreplanProduction.findAdmittedSharedPreplan(identity)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfCooperativeCancellationOrInterruption()
+        return preSweepStopped(request, goalPlanningPreparationStateReadStopReason(error, request.issueKey, 0))
       }
-        .getOrElse { error ->
-          return preSweepStopped(request, preparationStateReadReason(error, request.issueKey, 0))
-        }
+    val existingShared =
+      when (val result = sharedRead) {
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+        is SharedGoalPreplanLookupResult.Conflicted ->
+          return preSweepStopped(
+            request,
+            preparationStateReadReason(result.conflict, request.issueKey, result.conflict.subtaskId),
+            result.conflict.subtaskId,
+          )
+      }
     val recoveredPacket = existingShared?.let(sharedPreplanProduction::planningPacketFrom)
-    if (existingShared != null && recoveredPacket == null) {
-      return preSweepStopped(
+    return if (existingShared != null && recoveredPacket == null) {
+      preSweepStopped(
         request,
         goalPlanningMissingSharedContextPacketStopReason(
           request.issueKey,
           goalPlanningRemedySubtaskId(state.manifest.subtasks),
         ),
       )
+    } else {
+      val gathered =
+        runCatching { sharedPreplanProduction.gatherSharedContext(state, request, recoveredPacket) }
+          .getOrElse { error -> return preSweepStopped(request, sharedContextReason(error)) }
+      continueAfterSharedContext(state, request, identity, existingShared, gathered)
     }
-    val gathered =
-      runCatching { sharedPreplanProduction.gatherSharedContext(state, request, recoveredPacket) }
-        .getOrElse { error -> return preSweepStopped(request, sharedContextReason(error)) }
-    return continueAfterSharedContext(state, request, identity, existingShared, gathered)
   }
 
   private fun continueAfterSharedContext(

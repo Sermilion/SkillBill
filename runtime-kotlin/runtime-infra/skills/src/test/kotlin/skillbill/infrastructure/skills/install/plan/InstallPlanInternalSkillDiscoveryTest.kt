@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install.plan
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
 import skillbill.ports.repository.toFileLocation
@@ -62,8 +63,10 @@ class InstallPlanInternalSkillDiscoveryTest {
   fun `validateInstallPlanInternalSkills fails for an unknown parent`() {
     val skills = listOf(planSkill("bill-feature-helper", internalFor = "bill-featur"))
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("not a discovered skill"))
     assertTrue(error.message.orEmpty().contains("bill-feature-helper"))
@@ -73,8 +76,10 @@ class InstallPlanInternalSkillDiscoveryTest {
   fun `validateInstallPlanInternalSkills fails for a self parent`() {
     val skills = listOf(planSkill("bill-feature-helper", internalFor = "bill-feature-helper"))
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("skill itself"))
   }
@@ -83,8 +88,10 @@ class InstallPlanInternalSkillDiscoveryTest {
   fun `validateInstallPlanInternalSkills fails for an empty internal-for value`() {
     val skills = listOf(planSkill("bill-feature-helper", internalFor = "  "))
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("empty value"))
   }
@@ -98,8 +105,10 @@ class InstallPlanInternalSkillDiscoveryTest {
         planSkill("bill-feature-helper", internalFor = "bill-feature"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("chained internal-for"))
     assertTrue(error.message.orEmpty().contains("bill-feature-helper"))
@@ -135,8 +144,10 @@ class InstallPlanInternalSkillDiscoveryTest {
         ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("listed base skill"))
     assertTrue(error.message.orEmpty().contains("bill-kotlin-code-review-security"))
@@ -150,8 +161,10 @@ class InstallPlanInternalSkillDiscoveryTest {
         planSkill("bill-feature-helper", internalFor = "bill-kotlin-code-review"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("listed base skill"))
   }
@@ -178,8 +191,10 @@ class InstallPlanInternalSkillDiscoveryTest {
     assertEquals("", skills.single().internalFor, "blank value must be preserved, not treated as listed")
 
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInstallPlanInternalSkills(skills)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("empty value"))
   }

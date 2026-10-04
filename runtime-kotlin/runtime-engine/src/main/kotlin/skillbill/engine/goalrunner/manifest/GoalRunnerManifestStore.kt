@@ -177,7 +177,7 @@ interface GoalRunnerManifestStateWrites {
   fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
-  ): GoalRunnerManifestState
+  ): GoalRunnerChildWorkflowSaveResult
 }
 
 interface GoalRunnerManifestPurgeCommands {

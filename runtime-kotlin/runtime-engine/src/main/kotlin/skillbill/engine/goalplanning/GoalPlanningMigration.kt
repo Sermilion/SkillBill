@@ -11,14 +11,16 @@ import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPac
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.GoalPlanningPreparationSourceValidator
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
@@ -88,7 +90,7 @@ class GoalPlanningMigration(
     val targetShared = migrateShared(shared)
     val targetPlans = plans.map(::migratePlan)
     val replacements = imports.prepare(session, parent, shared, plans.zip(targetPlans), targetShared)
-    if (repository.findSharedPreplan(identity) != shared ||
+    if (repository.findSharedPreplan(identity) != SharedGoalPreplanLookupResult.Found(shared) ||
       repository.listSubtaskPlansForMigration(identity) != plans
     ) {
       migrationFailure(FeatureTaskRuntimeMigrationFailureCode.STALE_SOURCE)
@@ -99,7 +101,7 @@ class GoalPlanningMigration(
     }
     imports.publish(session, replacements)
     val gate = GoalPlanningPreparationProjectionGate(envelopeValidator)
-    gate.validateSharedPreplan(requireNotNull(repository.findSharedPreplan(identity)))
+    gate.validateSharedPreplan(requireNotNull(findAdmittedShared(session, identity, true)))
     repository.listSubtaskPlansForMigration(identity).forEach(gate::validateSubtaskPlan)
     return RuntimeMigrationReceipt(
       sourceVersion = shared.provenance.phaseOutputContractVersion,
@@ -150,7 +152,8 @@ class GoalPlanningMigration(
         manifest.parentSpecPath,
         manifest.subtasks,
       )
-    } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
         "Persisted shared planning context failed its source or target packet contract. Preserve the original record.",
@@ -201,7 +204,10 @@ class GoalPlanningMigration(
   ): SharedGoalPreplanCheckpoint? {
     val repository = session.goalPlanningPreparations
     val shared =
-      repository.findSharedPreplan(identity) ?: run {
+      when (val result = repository.findSharedPreplan(identity)) {
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+        is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
+      } ?: run {
         if (repository.listSubtaskPlansForMigration(identity).isEmpty() && !requirePreparation) {
           return null
         }
@@ -317,7 +323,8 @@ class GoalPlanningMigration(
     if (path != null) {
       try {
         sourceValidator.validateHistoricalPhaseOutput06(envelope, "migration")
-      } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
         throw SkillBillRuntimeException(
           FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
           "Persisted planning preparation failed its declared source contract. Restore the original record and retry.",
@@ -327,7 +334,8 @@ class GoalPlanningMigration(
     }
     try {
       readStoredPlanningRecord(payload, phaseId, "migration")
-    } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
         "Persisted planning output lacks valid source evidence. Restore the original record and retry.",
@@ -339,7 +347,8 @@ class GoalPlanningMigration(
   private inline fun validateTarget(validate: () -> Unit) {
     try {
       validate()
-    } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.INVALID_TARGET,
         "Converted planning preparation failed the target contract. The transaction must preserve the source records.",
@@ -351,7 +360,8 @@ class GoalPlanningMigration(
   private inline fun validateCurrentSource(validate: () -> Unit) {
     try {
       validate()
-    } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
         "Persisted planning preparation failed its declared current contract. Preserve the original records.",
@@ -383,7 +393,8 @@ class GoalPlanningMigration(
       }
     try {
       readStoredPlanningRecord(converted, phaseId, "migration")
-    } catch (error: InvalidGoalPlanningPreparationSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA)
       throw SkillBillRuntimeException(
         FeatureTaskRuntimeMigrationFailureCode.INVALID_TARGET,
         "Converted phase output does not contain the required planning evidence. Preserve the source record.",

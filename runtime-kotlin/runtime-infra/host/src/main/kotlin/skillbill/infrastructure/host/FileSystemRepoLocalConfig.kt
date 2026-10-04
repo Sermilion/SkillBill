@@ -11,8 +11,8 @@ import skillbill.config.model.ValidationGateRepoConfigParse
 import skillbill.config.model.parseSpecType
 import skillbill.config.model.parseValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.MalformedRepoLocalConfigError
-import skillbill.error.shellcontent.UnreadableRepoLocalConfigError
+import skillbill.error.shellcontent.malformedRepoLocalConfigError
+import skillbill.error.shellcontent.unreadableRepoLocalConfigError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -69,7 +69,7 @@ class FileSystemRepoLocalConfig(
     if (!raw.containsKey(REMOVED_PARALLEL_AGENT_KEY)) return
     val normalized = raw[REMOVED_PARALLEL_AGENT_KEY]?.toString()?.trim()?.lowercase()
     if (normalized.isNullOrBlank() || normalized == "none") return
-    throw MalformedRepoLocalConfigError(
+    throw malformedRepoLocalConfigError(
       path = path.toString(),
       key = REMOVED_PARALLEL_AGENT_KEY,
       value = raw[REMOVED_PARALLEL_AGENT_KEY].toString(),
@@ -83,7 +83,7 @@ class FileSystemRepoLocalConfig(
   ): ValidationGateRepoConfig =
     when (val parsed = parseValidationGateRepoConfig(value)) {
       is ValidationGateRepoConfigParse.Valid -> parsed.config
-      is ValidationGateRepoConfigParse.Invalid -> throw MalformedRepoLocalConfigError(
+      is ValidationGateRepoConfigParse.Invalid -> throw malformedRepoLocalConfigError(
         path = path.toString(),
         key = parsed.keyPath,
         value = parsed.value,
@@ -108,7 +108,7 @@ class FileSystemRepoLocalConfig(
     return try {
       buildReviewContextBudget(path, active, defaults)
     } catch (error: IllegalArgumentException) {
-      throw MalformedRepoLocalConfigError(
+      throw malformedRepoLocalConfigError(
         path.toString(),
         "review_context_budget",
         value.toString(),
@@ -146,7 +146,7 @@ class FileSystemRepoLocalConfig(
     if (!raw.containsKey(configKey.key)) return null
     val rawValue = raw[configKey.key]
     val asString = rawValue?.toString()
-    return parser(asString) ?: throw MalformedRepoLocalConfigError(
+    return parser(asString) ?: throw malformedRepoLocalConfigError(
       path = path.toString(),
       key = configKey.key,
       value = rawValue?.toString() ?: "null",
@@ -162,7 +162,7 @@ class FileSystemRepoLocalConfig(
     return try {
       JsonCodec.anyToStringAnyMap(yamlMapper.readValue(payload, Any::class.java)) ?: emptyMap()
     } catch (error: JacksonException) {
-      throw MalformedRepoLocalConfigError(
+      throw malformedRepoLocalConfigError(
         path = path.toString(),
         key = "",
         value = "<document>",
@@ -176,9 +176,9 @@ class FileSystemRepoLocalConfig(
     try {
       Files.readString(path)
     } catch (error: IOException) {
-      throw UnreadableRepoLocalConfigError(path.toString(), error)
+      throw unreadableRepoLocalConfigError(path.toString(), error)
     } catch (error: SecurityException) {
-      throw UnreadableRepoLocalConfigError(path.toString(), error)
+      throw unreadableRepoLocalConfigError(path.toString(), error)
     }
 }
 
@@ -245,7 +245,7 @@ private fun malformedBudget(
   key: String,
   value: Any?,
   reason: String,
-): Nothing = throw MalformedRepoLocalConfigError(path.toString(), key, value?.toString() ?: "null", reason)
+): Nothing = throw malformedRepoLocalConfigError(path.toString(), key, value?.toString() ?: "null", reason)
 
 internal fun configPath(repoRoot: Path): Path =
   repoRoot

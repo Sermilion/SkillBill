@@ -3,11 +3,13 @@ package skillbill.di.goal
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
@@ -47,7 +49,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness()
     val malformedShared = validShared(payload = validShared().preplanPayload + "}")
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSharedPreplan(malformedShared)
     }
     assertNull(harness.readShared())
@@ -55,7 +57,7 @@ class GoalPlanningPreparationCheckpointTest {
     harness.checkpoint.checkpointSharedPreplan(validShared())
     val malformedPlan = validPlan(payload = validPlan().planPayload + "}")
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(malformedPlan)
     }
     assertNull(harness.readPlan())
@@ -66,7 +68,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness()
     val shared = validShared(payload = payloadJson(phaseId = "plan"))
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSharedPreplan(shared)
     }
     assertNull(harness.readShared())
@@ -77,7 +79,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val plan = validPlan(payload = payloadJson(phaseId = "plan", status = "queued"))
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(plan)
     }
     assertNull(harness.readPlan())
@@ -88,7 +90,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val plan = validPlan(payload = payloadJson(phaseId = "plan", status = "blocked"))
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(plan)
     }
     assertNull(harness.readPlan())
@@ -99,7 +101,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val plan = validPlan(payload = payloadJson(phaseId = "plan", producedOutputsJson = "{}"))
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(plan)
     }
     assertNull(harness.readPlan())
@@ -110,7 +112,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val plan = validPlan(subtaskId = 0)
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(plan)
     }
     assertNull(harness.readPlan(subtaskId = 0))
@@ -121,7 +123,7 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val plan = validPlan().copy(contractVersion = "0.1")
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.checkpointSubtaskPlan(plan)
     }
     assertNull(harness.readPlan())
@@ -132,12 +134,12 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness()
     val invalid = validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawShared(invalid)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.findSharedPreplan(identity())
-    }
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recheckpointSharedPreplan(validShared())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(invalid.preplanPayload, harness.readShared()?.preplanPayload)
   }
 
@@ -146,12 +148,12 @@ class GoalPlanningPreparationCheckpointTest {
     val harness = checkpointHarness().withShared()
     val invalid = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawPlan(invalid)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.findSubtaskPlan(identity(), 1, descriptor().governedSubSpecPath)
-    }
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recheckpointSubtaskPlan(validPlan())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(invalid.planPayload, harness.readPlan()?.planPayload)
   }
 
@@ -163,7 +165,7 @@ class GoalPlanningPreparationCheckpointTest {
       """{"value":"A different preplan prose payload for refresh testing."}"""
     val different = validShared(payload = payloadJson("preplan", producedOutputsJson = otherProjection))
 
-    assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recheckpointSharedPreplan(different)
     }
   }
@@ -192,9 +194,9 @@ class GoalPlanningPreparationCheckpointTest {
     val plan = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
     harness.storeRawShared(shared)
     harness.storeRawPlan(plan)
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       harness.checkpoint.recoveryProgress(identity(), listOf(descriptor()), provenance())
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(shared.preplanPayload, harness.readShared()?.preplanPayload)
     assertEquals(plan.planPayload, harness.readPlan()?.planPayload)
   }
@@ -217,11 +219,11 @@ class GoalPlanningPreparationCheckpointTest {
     val escape = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
 
     val error =
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         harness.checkpoint.checkpointSubtaskPlan(escape)
       }
 
-    assertContains(error.fieldPath, "plan_payload")
+    assertContains(error.message.orEmpty(), "plan_payload")
     assertNull(harness.readPlan(), "a projection-invalid plan must leave no durable row behind")
   }
 
@@ -261,11 +263,15 @@ class GoalPlanningPreparationCheckpointTest {
     }
 
     fun readShared(): SharedGoalPreplanCheckpoint? =
-      database.read { it.goalPlanningPreparations.findSharedPreplan(identity()) }
+      database.read { it.goalPlanningPreparations.findSharedPreplan(identity()).foundCheckpoint() }
 
     fun readPlan(subtaskId: Int = 1): GoalSubtaskPlanCheckpoint? =
       database.read {
-        it.goalPlanningPreparations.findSubtaskPlan(identity(), subtaskId, descriptor(subtaskId).governedSubSpecPath)
+        it.goalPlanningPreparations.findSubtaskPlan(
+          identity(),
+          subtaskId,
+          descriptor(subtaskId).governedSubSpecPath,
+        ).foundPlan()
       }
   }
 

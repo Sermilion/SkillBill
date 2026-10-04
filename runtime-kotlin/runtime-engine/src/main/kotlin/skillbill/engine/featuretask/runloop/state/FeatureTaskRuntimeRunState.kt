@@ -9,7 +9,9 @@ import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.validation.RuntimeGateRecordIntegrity
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
@@ -212,7 +214,8 @@ internal class FeatureTaskRuntimeRunState(
           NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(artifact, record.phaseId).also {
             RuntimeGateRecordIntegrity.requireIntact(it, record.phaseId)
           }
-        } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.code is FeatureTaskRuntimePhaseOutputFailureCode)
           if (record.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED) throw error
           return@let null
         }

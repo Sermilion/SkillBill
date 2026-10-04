@@ -34,6 +34,7 @@ import skillbill.engine.goalrunner.execution.support.progressProbe
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.TestNoopGoalRunnerSubtaskLauncher
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
@@ -70,7 +71,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -116,6 +117,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
@@ -419,6 +421,28 @@ class GoalRunnerTest {
     assertEquals(CurrentSubtaskIntent(subtaskId = 2, action = "blocked"), store.manifest.currentSubtaskIntent)
     assertEquals("blocked", store.manifest.subtasks.single { it.id == 2 }.status)
     assertEquals("pending", store.manifest.subtasks.single { it.id == 3 }.status)
+  }
+
+  @Test
+  fun `child preparation conflict blocks its selected subtask before launching an agent`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 2).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      ).apply {
+        conflictingChildSubtaskId = 2
+        childPreparationConflictReason = "stored plan conflicts with selected child"
+      }
+    val outcomes = RecordingOutcomeStore()
+    val launcher = RecordingSubtaskLauncher { launchFacts() }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))
+
+    val report = runner.run(runRequest())
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(report)
+    assertEquals(2, stopped.stop.subtaskId)
+    assertContains(stopped.stop.blockedReason, "stored plan conflicts with selected child")
+    assertFalse(stopped.stop.blockedReason.contains("cannot be recovered"))
+    assertTrue(launcher.requests.isEmpty())
   }
 
   @Test
@@ -3665,6 +3689,8 @@ internal class InMemoryGoalManifestStore(
   var boundaryTransitionCount: Int = 0
     private set
   var beforeLaunchAuthorization: ((Int) -> Unit)? = null
+  var conflictingChildSubtaskId: Int? = null
+  var childPreparationConflictReason: String = ""
   private var persistedReviewPolicy: GoalRunnerReviewPolicy? = null
   val newChildWorkflowSetups: MutableList<GoalRunnerChildWorkflowSetup> = mutableListOf()
   val acceptedParentWorkflowIds: MutableList<String> = mutableListOf()
@@ -3976,7 +4002,7 @@ internal class InMemoryGoalManifestStore(
         if (forceSharedDigestMismatchOnReplan ||
           options.expectedSharedPayloadSha256 != sharedPreplanPayloadSha256ForTest
         ) {
-          throw IncompatibleGoalPlanningPreparationRecoveryError(
+          throw incompatibleGoalPlanningPreparationRecoveryError(
             state.parentWorkflowId,
             0,
             "shared preplan changed after it was observed for discard",
@@ -4016,9 +4042,14 @@ internal class InMemoryGoalManifestStore(
   override fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
-  ): GoalRunnerManifestState {
+  ): GoalRunnerChildWorkflowSaveResult {
     newChildWorkflowSetups += setup
-    return save(state)
+    if (setup.subtaskId == conflictingChildSubtaskId) {
+      return GoalRunnerChildWorkflowSaveResult.Conflicted(
+        GoalPlanningPreparationConflict("wfl-parent", setup.subtaskId, childPreparationConflictReason, null),
+      )
+    }
+    return GoalRunnerChildWorkflowSaveResult.Saved(save(state))
   }
 
   override fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance> = acceptances

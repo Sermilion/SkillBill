@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -85,9 +85,9 @@ internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   when (val result = resolveFeatureTaskGovernedSpecPath(this, repoRoot, specPath)) {
     is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
     is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec escapes admitted repository")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec escapes admitted repository")
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec is not Markdown beneath .feature-specs/")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec is not Markdown beneath .feature-specs/")
   }
 
 internal fun RepositoryEnclosingRootPort.expectedFeatureTaskExecutionIdentity(

@@ -9,12 +9,13 @@ import skillbill.engine.goalrunner.planning.remedies.goalPlanningMissingSharedCo
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.remedies.statusRecoverabilityOrRefuse
 import skillbill.engine.goalrunner.planning.sweep.phasePayload
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusReasons
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.text.sha256HexUtf8
@@ -139,7 +140,7 @@ class GoalPlanningStatusReasonCoherenceTest {
   fun `classify failure maps to Invalid so status cannot keep a resume claim`() {
     val recoverability =
       statusRecoverabilityOrRefuse {
-        throw IncompatibleGoalPlanningPreparationRecoveryError(
+        throw incompatibleGoalPlanningPreparationRecoveryError(
           "wfl",
           0,
           "stored goal or repository identity differs from expected identity",
@@ -208,10 +209,11 @@ class GoalPlanningStatusReasonCoherenceTest {
   @Test
   fun `preparation state read stop uses recovery reason not cannot-be-recovered message`() {
     val error =
-      IncompatibleGoalPlanningPreparationRecoveryError(
+      GoalPlanningPreparationConflict(
         "wfl",
         0,
         "stored goal or repository identity differs from expected identity",
+        null,
       )
     val stopReason = goalPlanningPreparationStateReadStopReason(error, "SKILL-181", 1)
     assertTrue(stopReason.contains(goalPlanningIncludeSharedPreplanRemedy("SKILL-181", 1)), stopReason)

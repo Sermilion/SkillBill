@@ -5,7 +5,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.manifest.appendReadmeCatalogRow
 import java.nio.file.Path
 
@@ -90,9 +91,10 @@ class ReadmeCatalogAppendTest {
     readme.toFile().writeText("# Skill Bill\n\nNo table here.\n")
 
     val error =
-      assertThrows(InvalidScaffoldPayloadError::class.java) {
+      assertThrows(SkillBillRuntimeException::class.java) {
         appendReadmeCatalogRow(readme, "bill-foo", "desc")
       }
+    assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, error.code)
     assertTrue(error.message!!.contains("README.md does not contain a `/bill-*` catalog table"))
   }
 

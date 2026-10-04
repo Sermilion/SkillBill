@@ -15,7 +15,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -24,6 +25,7 @@ import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Files
 import java.time.Clock
@@ -81,7 +83,9 @@ class GoalRunnerSpecDriftRecoveryTest {
   fun `corrupt payload stays with contract recovery instead of spec drift reset`() {
     val fixture = SpecDriftFixture(corrupt = true)
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { fixture.refresh() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.refresh()
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     assertEquals(0, fixture.store.scopedReplanCount)
     assertEquals(setOf(1, 2), fixture.store.plannedSubtaskIds)
     assertTrue(fixture.messages.isEmpty())
@@ -146,22 +150,24 @@ private class SpecDriftFixture(
         expectedIdentity: GoalPlanningIdentity,
         subtaskId: Int,
         governedSubSpecPath: String,
-      ): GoalSubtaskPlanCheckpoint? {
-        if (subtaskId !in store.plannedSubtaskIds) return null
-        return GoalSubtaskPlanCheckpoint(
-          identity = expectedIdentity,
-          subtaskId = subtaskId,
-          manifestOrder = subtaskId - 1,
-          governedSubSpecPath = governedSubSpecPath,
-          subSpecHash = sha256HexUtf8(ORIGINAL_SPEC),
-          provenance =
-            GoalPlanningContractProvenance(
-              "a".repeat(64),
-              "b".repeat(64),
-              GOAL_PLANNING_PREPARATION_SCHEMA_ID,
-            ),
-          payloadSha256 = if (corrupt) "bad-digest" else sha256HexUtf8(PLAN_PAYLOAD),
-          planPayload = PLAN_PAYLOAD,
+      ): GoalSubtaskPlanLookupResult {
+        if (subtaskId !in store.plannedSubtaskIds) return GoalSubtaskPlanLookupResult.Found(null)
+        return GoalSubtaskPlanLookupResult.Found(
+          GoalSubtaskPlanCheckpoint(
+            identity = expectedIdentity,
+            subtaskId = subtaskId,
+            manifestOrder = subtaskId - 1,
+            governedSubSpecPath = governedSubSpecPath,
+            subSpecHash = sha256HexUtf8(ORIGINAL_SPEC),
+            provenance =
+              GoalPlanningContractProvenance(
+                "a".repeat(64),
+                "b".repeat(64),
+                GOAL_PLANNING_PREPARATION_SCHEMA_ID,
+              ),
+            payloadSha256 = if (corrupt) "bad-digest" else sha256HexUtf8(PLAN_PAYLOAD),
+            planPayload = PLAN_PAYLOAD,
+          ),
         )
       }
     }

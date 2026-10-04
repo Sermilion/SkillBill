@@ -6,7 +6,7 @@ import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
@@ -278,7 +278,7 @@ data class FeatureTaskRuntimePhaseRecord(
     }
 
     private fun incompatiblePhaseRecord(details: List<String> = emptyList()): Nothing =
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Private feature-task-runtime phase record is incompatible with persistence contract " +
           "$FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION" +
           details.takeIf { it.isNotEmpty() }?.joinToString(prefix = " (", postfix = ")").orEmpty() +

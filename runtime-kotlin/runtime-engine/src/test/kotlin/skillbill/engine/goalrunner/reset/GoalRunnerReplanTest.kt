@@ -9,7 +9,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
@@ -394,7 +394,7 @@ class GoalRunnerReplanTest {
         seedIdleLease()
       }
     val failure =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
+      assertFailsWith<SkillBillRuntimeException> {
         idleReplanService(store)
           .replan(GoalRunnerReplanRequest("SKILL-56", 3, includeSharedPreplan = true))
       }

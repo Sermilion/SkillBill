@@ -1,6 +1,7 @@
 package skillbill.mcp.telemetry
 
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -64,20 +65,19 @@ class TelemetryEventSchemaViolationsTest {
     envelope["event_name"] = "this_event_does_not_exist"
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(envelope)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("this_event_does_not_exist", error.eventName)
+    assertContains(error.message.orEmpty(), "this_event_does_not_exist")
 
-    val combined = (error.reason + " " + error.fieldPath).lowercase()
+    val combined = error.message.orEmpty().lowercase()
     val signals = listOf("oneof", "event_name", "anyof", "schema")
     val hits = signals.count { it in combined }
     assertEquals(
       hits > 0,
       true,
-      "Unknown event_name violation reason should mention oneOf/event_name signal — got reason='${error.reason}' " +
-        "fieldPath='${error.fieldPath}'.",
+      "Unknown event_name violation reason should mention oneOf/event_name signal — got '${error.message.orEmpty()}'.",
     )
   }
 
@@ -87,12 +87,12 @@ class TelemetryEventSchemaViolationsTest {
     envelope.remove("spec_summary")
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(envelope)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertContains(error.reason.lowercase() + " " + error.fieldPath.lowercase(), "spec_summary")
-    assertEquals("feature_verify_started", error.eventName)
+    assertContains(error.message.orEmpty().lowercase(), "spec_summary")
+    assertContains(error.message.orEmpty(), "feature_verify_started")
   }
 
   @Test
@@ -101,11 +101,11 @@ class TelemetryEventSchemaViolationsTest {
     envelope["contract_version"] = "9.99"
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(envelope)
-      }
-    assertContains(error.reason.lowercase() + " " + error.fieldPath.lowercase(), "contract_version")
-    assertEquals("feature_verify_started", error.eventName)
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty().lowercase(), "contract_version")
+    assertContains(error.message.orEmpty(), "feature_verify_started")
   }
 
   @Test
@@ -114,11 +114,11 @@ class TelemetryEventSchemaViolationsTest {
     envelope["bogus_extra"] = true
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(envelope)
-      }
-    assertContains(error.reason, "bogus_extra")
-    assertEquals("feature_verify_started", error.eventName)
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "bogus_extra")
+    assertContains(error.message.orEmpty(), "feature_verify_started")
   }
 
   @Test
@@ -128,11 +128,11 @@ class TelemetryEventSchemaViolationsTest {
     envelope["acceptance_criteria_count"] = "not-a-number"
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(envelope)
-      }
-    assertContains(error.reason.lowercase() + " " + error.fieldPath.lowercase(), "acceptance_criteria_count")
-    assertEquals("feature_verify_started", error.eventName)
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty().lowercase(), "acceptance_criteria_count")
+    assertContains(error.message.orEmpty(), "feature_verify_started")
   }
 
   @Test
@@ -141,11 +141,11 @@ class TelemetryEventSchemaViolationsTest {
     finishedShapedButStartedTagged["event_name"] = "feature_verify_started"
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(finishedShapedButStartedTagged)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("feature_verify_started", error.eventName)
+    assertContains(error.message.orEmpty(), "feature_verify_started")
   }
 
   @Test
@@ -154,11 +154,11 @@ class TelemetryEventSchemaViolationsTest {
     callerReported["final_failure_count"] = null
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.validate(callerReported)
-      }
-    assertEquals("final_failure_count", error.fieldPath)
-    assertEquals("quality_check_finished", error.eventName)
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "final_failure_count")
+    assertContains(error.message.orEmpty(), "quality_check_finished")
 
     val reconcilerClosed = validQualityCheckFinishedEnvelope()
     reconcilerClosed["final_failure_count"] = null
@@ -186,10 +186,10 @@ class TelemetryEventSchemaViolationsTest {
         )
 
       val error =
-        assertFailsWith<InvalidTelemetryEventSchemaError>(message = retired) {
+        assertFailsWith<SkillBillRuntimeException>(message = retired) {
           TelemetryEventSchemaValidator.validate(envelope)
-        }
-      assertEquals(retired, error.eventName)
+        }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+      assertContains(error.message.orEmpty(), retired)
     }
   }
 }

@@ -1,14 +1,13 @@
 package skillbill.workflow.taskruntime.validation
 
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -23,7 +22,7 @@ class UnboundedRemediationLoopRegressionTest {
     verdict: FeatureTaskRuntimeVerdict,
     iteration: Int,
     settled: Map<String, FeatureTaskRuntimeVerdict> = emptyMap(),
-  ) = FeatureTaskRuntimeTransitionFunction.nextTransition(
+  ) = resolvedTransition(
     declaration = transitions,
     currentPhaseId = phaseId,
     verdict = verdict,
@@ -34,14 +33,18 @@ class UnboundedRemediationLoopRegressionTest {
   @Test
   fun `gaps_found cannot advance to review or reenter implement at any iteration`() {
     listOf(0, 3, 11).forEach { consumed ->
-      assertFailsWith<FeatureTaskRuntimePhaseOrderViolationError> {
-        transition(
-          def.PHASE_AUDIT,
-          FeatureTaskRuntimeVerdict.GAPS_FOUND,
-          consumed,
-          mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND),
+      val violation =
+        FeatureTaskRuntimeTransitionFunction.nextTransition(
+          declaration = transitions,
+          currentPhaseId = def.PHASE_AUDIT,
+          verdict = FeatureTaskRuntimeVerdict.GAPS_FOUND,
+          edgeIterationCount = consumed,
+          context =
+            FeatureTaskRuntimeTransitionContext(
+              settledVerdictsByPhaseId = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND),
+            ),
         )
-      }
+      assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(violation)
     }
     assertTrue(transitions.backwardEdges.none { it.loopId == def.AUDIT_GAP_LOOP_ID })
   }

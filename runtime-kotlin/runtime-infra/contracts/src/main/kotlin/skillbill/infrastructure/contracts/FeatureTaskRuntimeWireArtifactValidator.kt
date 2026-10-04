@@ -1,6 +1,7 @@
 package skillbill.infrastructure.contracts
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeHandoffEnvelopeSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationAttemptSchemaValidator
@@ -18,6 +19,15 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 
 @Inject
 class FeatureTaskRuntimeWireArtifactValidator : FeatureTaskRuntimeWireArtifactValidator {
+  override fun handoffEnvelopeRejection(
+    payload: FeatureTaskRuntimeWorkflowArtifactMap,
+    sourceLabel: String,
+  ): InvalidFeatureTaskRuntimeHandoffProjectionContext? =
+    FeatureTaskRuntimeHandoffEnvelopeSchemaValidator.rejection(
+      requireFeatureTaskRuntimeArtifactMap(FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE, payload, sourceLabel),
+      sourceLabel,
+    )
+
   override fun validate(
     kind: FeatureTaskRuntimeWireArtifactKind,
     payload: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -49,4 +59,20 @@ class FeatureTaskRuntimeWireArtifactValidator : FeatureTaskRuntimeWireArtifactVa
         GoalPlanningPreparationSchemaValidator.validate(wireMap, sourceLabel)
     }
   }
+
+  override fun violation(
+    kind: FeatureTaskRuntimeWireArtifactKind,
+    payload: FeatureTaskRuntimeWorkflowArtifactMap,
+    sourceLabel: String,
+  ): String? =
+    if (kind == FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD) {
+      if (payload.isObject) {
+        FeatureTaskRuntimePersistenceSchemaValidator.violation(payload, sourceLabel)
+      } else {
+        "<root> must be an object."
+      }
+    } else {
+      validate(kind, payload, sourceLabel)
+      null
+    }
 }

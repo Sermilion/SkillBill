@@ -18,7 +18,9 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -435,6 +437,7 @@ class DecompositionWorkflowContinuation(
 private fun WorkflowStateSnapshot.decompositionRuntimeOrNull(): DecompositionManifest? =
   try {
     decompositionRuntime()
-  } catch (_: InvalidWorkflowStateSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isInvalidWorkflowStateFailure())
     null
   }

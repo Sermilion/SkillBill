@@ -1,6 +1,7 @@
 package skillbill.contracts.scaffold.wire
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -8,16 +9,16 @@ import kotlin.test.assertFailsWith
 class ScaffoldPayloadParsingTest {
   @Test
   fun `present wrong type description fails before defaulting to empty`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       requireStringOrDefault(mapOf("description" to 123), "description", "")
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
   fun `present wrong type optional string fails before treating as absent`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       optionalString(mapOf("content_body" to 123), "content_body")
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test

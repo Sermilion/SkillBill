@@ -2,7 +2,9 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.UnreadableBaselineManifestError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.unreadableBaselineManifestError
 import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
 import skillbill.install.model.BaselineManifest
 import java.nio.file.Path
@@ -94,15 +96,17 @@ private fun requireBaselineContractVersion(
   }
 }
 
-internal fun Throwable.toUnreadableBaseline(path: Path): UnreadableBaselineManifestError =
-  this as? UnreadableBaselineManifestError ?: unreadableBaseline(path, message.orEmpty(), this)
+internal fun Throwable.toUnreadableBaseline(path: Path): SkillBillRuntimeException =
+  (this as? SkillBillRuntimeException)
+    ?.takeIf { it.code == InstallFailureCode.UNREADABLE_BASELINE_MANIFEST }
+    ?: unreadableBaseline(path, message.orEmpty(), this)
 
 internal fun unreadableBaseline(
   path: Path,
   reason: String,
   cause: Throwable? = null,
-): UnreadableBaselineManifestError =
-  UnreadableBaselineManifestError(
+): SkillBillRuntimeException =
+  unreadableBaselineManifestError(
     path = path.toString(),
     reason = reason.ifBlank { "No reason provided" },
     cause = cause,

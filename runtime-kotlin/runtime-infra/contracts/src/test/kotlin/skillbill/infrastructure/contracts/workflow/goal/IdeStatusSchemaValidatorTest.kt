@@ -3,9 +3,11 @@ package skillbill.infrastructure.contracts.workflow.goal
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidIdeStatusSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.locator.IdeStatusSchemaPaths
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -42,9 +44,9 @@ class IdeStatusSchemaValidatorTest {
   fun `unknown lifecycle state fails loudly with typed error`() {
     val malformed = validIdleSnapshot().toMutableMap()
     malformed["lifecycle_state"] = "exploded"
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-bad-lifecycle")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
@@ -55,36 +57,36 @@ class IdeStatusSchemaValidatorTest {
         "code" to "not_a_code",
         "message" to "bad",
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-bad-problem")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `wrong contract version fails loudly with typed error`() {
     val malformed = validIdleSnapshot().toMutableMap()
     malformed["contract_version"] = "9.9"
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-bad-version")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `unknown additional property fails loudly with typed error`() {
     val malformed = validIdleSnapshot().toMutableMap()
     malformed["sqlite_row"] = "nope"
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-additional-property")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `malformed nested current_step fails loudly with typed error`() {
     val malformed = validIdleSnapshot().toMutableMap()
     malformed["current_step"] = linkedMapOf("id" to "idle")
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-malformed-step")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
@@ -173,7 +175,7 @@ class IdeStatusSchemaValidatorTest {
         "over-cap" to (1..GOAL_PLANNING_WAVE_CAP + 1).map(Int::toString),
       )
     rejected.forEach { (label, wave) ->
-      assertFailsWith<InvalidIdeStatusSchemaError>("planning_wave_subtask_ids accepted $label") {
+      assertFailsWith<SkillBillRuntimeException>("planning_wave_subtask_ids accepted $label") {
         IdeStatusSchemaValidator.validate(
           goalSnapshotWithPlanning(
             linkedMapOf(
@@ -186,7 +188,7 @@ class IdeStatusSchemaValidatorTest {
           ),
           "test-planning-wave-$label",
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     }
   }
 
@@ -207,7 +209,7 @@ class IdeStatusSchemaValidatorTest {
 
   @Test
   fun `unknown planning property fails loudly with typed error`() {
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(
         goalSnapshotWithPlanning(
           linkedMapOf(
@@ -220,12 +222,12 @@ class IdeStatusSchemaValidatorTest {
         ),
         "test-planning-unknown-property",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `negative planning counts fail loudly with typed error`() {
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(
         goalSnapshotWithPlanning(
           linkedMapOf(
@@ -237,8 +239,8 @@ class IdeStatusSchemaValidatorTest {
         ),
         "test-planning-negative-planned",
       )
-    }
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(
         goalSnapshotWithPlanning(
           linkedMapOf(
@@ -250,12 +252,12 @@ class IdeStatusSchemaValidatorTest {
         ),
         "test-planning-negative-total",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `invalid planning state fails loudly with typed error`() {
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(
         goalSnapshotWithPlanning(
           linkedMapOf(
@@ -267,12 +269,12 @@ class IdeStatusSchemaValidatorTest {
         ),
         "test-planning-bad-state",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
   fun `planning object missing a required property fails loudly with typed error`() {
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(
         goalSnapshotWithPlanning(
           linkedMapOf(
@@ -283,7 +285,7 @@ class IdeStatusSchemaValidatorTest {
         ),
         "test-planning-missing-required",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
@@ -303,9 +305,9 @@ class IdeStatusSchemaValidatorTest {
   fun `blank paused_at fails loudly with typed error`() {
     val malformed = validGoalSnapshot()
     malformed["paused_at"] = ""
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(malformed, "test-blank-paused-at")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test
@@ -337,9 +339,9 @@ class IdeStatusSchemaValidatorTest {
         "kind" to "loop",
         "count" to 1,
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(badKind, "test-current-phase-execution-bad-kind")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val zeroCount = validGoalSnapshot()
     zeroCount["current_phase_execution"] =
       linkedMapOf(
@@ -347,9 +349,9 @@ class IdeStatusSchemaValidatorTest {
         "kind" to "pass",
         "count" to 0,
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(zeroCount, "test-current-phase-execution-zero-count")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val unknownProperty = validGoalSnapshot()
     unknownProperty["current_phase_execution"] =
       linkedMapOf(
@@ -358,9 +360,9 @@ class IdeStatusSchemaValidatorTest {
         "count" to 1,
         "loop_id" to "audit_gap",
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(unknownProperty, "test-current-phase-execution-unknown-property")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val totalOnPass = validGoalSnapshot()
     totalOnPass["current_phase_execution"] =
       linkedMapOf(
@@ -369,9 +371,9 @@ class IdeStatusSchemaValidatorTest {
         "count" to 2,
         "total" to 3,
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(totalOnPass, "test-current-phase-execution-total-on-pass")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val totalOnSemanticLoop = validGoalSnapshot()
     totalOnSemanticLoop["current_phase_execution"] =
       linkedMapOf(
@@ -380,9 +382,9 @@ class IdeStatusSchemaValidatorTest {
         "count" to 1,
         "total" to 2,
       )
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(totalOnSemanticLoop, "test-current-phase-execution-total-on-loop")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val boundedWithTotal = validGoalSnapshot()
     boundedWithTotal["current_phase_execution"] =
       linkedMapOf(
@@ -462,17 +464,17 @@ class IdeStatusSchemaValidatorTest {
       validIdleSnapshot().apply {
         put("last_agent_activity_at", "2026-08-30T10:00:00Z")
       }
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(onlyAt, "test-agent-activity-partial-at")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
     val badLabel =
       validIdleSnapshot().apply {
         put("last_agent_activity_at", "2026-08-30T10:00:00Z")
         put("last_agent_activity_label", "grep")
       }
-    assertFailsWith<InvalidIdeStatusSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       IdeStatusSchemaValidator.validate(badLabel, "test-agent-activity-bad-label")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_IDE_STATUS_SCHEMA, it.code) }
   }
 
   @Test

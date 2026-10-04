@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 
@@ -35,7 +35,7 @@ class FeatureTaskRuntimeRunner(
       identity.normalizedIssueKey != FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey) ||
       (identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD) != (request.goalContinuation != null)
     ) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "admission does not match run request")
+      throw invalidFeatureTaskExecutionIdentitySchema(request.workflowId, "admission does not match run request")
     }
     if (request.transitionsOverride != null && request.transitionsOverride != admitted.plan.traversal) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()

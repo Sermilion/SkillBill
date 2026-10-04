@@ -1,8 +1,9 @@
 package skillbill.infrastructure.skills.scaffold.payload
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.ScaffoldPayloadVersionMismatchError
-import skillbill.error.shellcontent.UnknownPreShellFamilyError
-import skillbill.error.shellcontent.UnknownSkillKindError
+
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
+import skillbill.error.shellcontent.scaffoldPayloadVersionMismatchError
+import skillbill.error.shellcontent.unknownPreShellFamilyError
+import skillbill.error.shellcontent.unknownSkillKindError
 import skillbill.scaffold.model.SkillKind
 import skillbill.scaffold.policy.ACTIVE_CREATION_SKILL_KINDS
 import skillbill.scaffold.policy.RETIRED_CODE_REVIEW_AREA_KIND_ALIASES
@@ -13,11 +14,11 @@ import skillbill.scaffold.policy.rejectRetiredPartialScaffoldKind
 internal fun validatePayloadVersion(payload: Map<String, Any?>) {
   val version =
     payload["scaffold_payload_version"] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload is missing required field 'scaffold_payload_version'.",
       )
   if (version != SCAFFOLD_PAYLOAD_VERSION) {
-    throw ScaffoldPayloadVersionMismatchError(
+    throw scaffoldPayloadVersionMismatchError(
       "Scaffold payload declares 'scaffold_payload_version' '$version' " +
         "but the scaffolder expects '$SCAFFOLD_PAYLOAD_VERSION'.",
     )
@@ -27,7 +28,7 @@ internal fun validatePayloadVersion(payload: Map<String, Any?>) {
 internal fun detectKind(payload: Map<String, Any?>): String {
   val kind =
     payload["kind"] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'kind' must be a non-empty string.",
       )
   rejectRetiredFeatureImplementFamily(payload["family"])
@@ -39,7 +40,7 @@ internal fun detectKind(payload: Map<String, Any?>): String {
   }
   val skillKind = SkillKind.fromWire(kind)
   if (skillKind.wireValue !in ACTIVE_CREATION_SKILL_KINDS) {
-    throw UnknownSkillKindError(
+    throw unknownSkillKindError(
       "Scaffold payload declares unsupported kind '$kind'. " +
         "Supported kinds: $ACTIVE_CREATION_SKILL_KINDS.",
     )
@@ -50,7 +51,7 @@ internal fun detectKind(payload: Map<String, Any?>): String {
 private fun rejectRetiredFeatureImplementFamily(family: Any?) {
   val retiredFeatureImplement = "feature-" + "implement"
   if (family == retiredFeatureImplement) {
-    throw UnknownPreShellFamilyError(
+    throw unknownPreShellFamilyError(
       "Scaffold payload declares pre-shell family '$retiredFeatureImplement'. Use 'feature-task' instead.",
     )
   }
@@ -61,7 +62,7 @@ internal fun requireStringMap(
   key: String,
 ): String =
   (payload[key] as? String)?.takeIf { it.isNotBlank() }
-    ?: throw InvalidScaffoldPayloadError(
+    ?: throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a non-empty string.",
     )
 
@@ -76,7 +77,7 @@ internal fun rejectBaselineLayersForNonPlatformPack(
   kind: String,
 ) {
   if (payload.containsKey("baseline_layers")) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'baseline_layers' is only supported for kind 'platform-pack'; got '$kind'.",
     )
   }
@@ -87,7 +88,7 @@ internal fun requireStringListPayload(
   fieldName: String,
 ): List<String> {
   if (value !is List<*>) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldName' must be a list of strings.",
     )
   }
@@ -100,11 +101,11 @@ private fun liftNonBlankString(
 ): String {
   val string =
     value as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$fieldName' must contain only non-empty strings.",
       )
   if (string.isBlank()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldName' must contain only non-empty strings.",
     )
   }

@@ -4,7 +4,9 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
@@ -69,7 +71,8 @@ class SpecIntentProjectionExtractor(
         "spec_intent_projection",
       )
       SpecIntentSourceRead.Read(projection)
-    } catch (error: InvalidReviewContextSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA)
       unavailable(normalized, "unparseable", error)
     }
   }

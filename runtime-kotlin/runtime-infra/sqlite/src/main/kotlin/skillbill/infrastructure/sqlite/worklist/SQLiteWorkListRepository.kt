@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.worklist
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkListRowError
+import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkItem
@@ -161,5 +161,5 @@ private fun invalid(
   cause: Throwable? = null,
 ): Nothing {
   val label = if (workflowId.isBlank()) "<unknown>" else workflowId
-  throw InvalidWorkListRowError("Work-list row '$label' $detail.", cause)
+  throw invalidWorkListRowError("Work-list row '$label' $detail.", cause)
 }

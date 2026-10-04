@@ -10,7 +10,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.sqlite.SqliteTestDatabasePaths
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.install.model.InstallAgentSelection
@@ -432,15 +433,15 @@ class CliInstallPlanApplyRuntimeTest {
         .create(installPlanCliContext(fixture.home).toRuntimeContext())
         .installService
     val planError =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installPlanPayload(invalidPlan, installService)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(planError.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
 
     val applyError =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installApplyPayload(invalidPlan, minimalApplyResult(invalidPlan), installService)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(applyError.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 

@@ -21,9 +21,11 @@ import skillbill.engine.goalrunner.planning.recovery.preplanProsePromptHash
 import skillbill.engine.goalrunner.planning.recovery.preplanProseValueHash
 import skillbill.engine.goalrunner.planning.recovery.refuseRefreshReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -172,18 +174,27 @@ class GoalPlanningSharedPreplanSettlement(
     args: StaleSharedPreplanSettlementArgs,
     first: SharedPreplanRefresh.Refreshed,
   ): SharedPreplanAfterRefresh {
-    val afterRefresh =
-      runCatching {
-        checkpoint.findSharedPreplan(args.identity)
-      }.getOrElse { error ->
+    val read =
+      try {
+        checkpoint.findSharedPreplanResult(args.identity)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfCooperativeCancellationOrInterruption()
         return SharedPreplanAfterRefresh.Halt(
-          preSweepStopped(
-            args.request,
-            preparationStateReadReason(error, args.request.issueKey, 0),
-          ),
+          preSweepStopped(args.request, preparationStateReadReason(error)),
         )
       }
-    return SharedPreplanAfterRefresh.Ready(afterRefresh ?: first.checkpoint)
+    return when (read) {
+      is SharedGoalPreplanLookupResult.Found ->
+        SharedPreplanAfterRefresh.Ready(read.checkpoint ?: first.checkpoint)
+      is SharedGoalPreplanLookupResult.Conflicted ->
+        SharedPreplanAfterRefresh.Halt(
+          preSweepStopped(
+            args.request,
+            preparationStateReadReason(read.conflict, args.request.issueKey, read.conflict.subtaskId),
+            read.conflict.subtaskId,
+          ),
+        )
+    }
   }
 
   private data class StaleRefreshReclassifyArgs(

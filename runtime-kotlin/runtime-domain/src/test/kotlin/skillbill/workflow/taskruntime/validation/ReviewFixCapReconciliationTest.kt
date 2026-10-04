@@ -21,7 +21,7 @@ class ReviewFixCapReconciliationTest {
   private fun transitionAt(
     iteration: Int,
     verdict: FeatureTaskRuntimeVerdict,
-  ) = FeatureTaskRuntimeTransitionFunction.nextTransition(
+  ) = resolvedTransition(
     declaration = transitions,
     currentPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
     verdict = verdict,

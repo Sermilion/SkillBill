@@ -1,7 +1,7 @@
 package skillbill.application.scaffold
 
 import skillbill.contracts.scaffold.wire.optionalList
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
@@ -9,7 +9,7 @@ import skillbill.scaffold.model.CodeReviewCompositionScope
 internal fun parseBaselineLayers(payload: Map<String, Any?>): List<CodeReviewBaselineLayer> {
   val raw = optionalList(payload, "baseline_layers") ?: return emptyList()
   if (raw.isEmpty()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'baseline_layers' must contain at least one layer when provided.",
     )
   }
@@ -22,7 +22,7 @@ private fun parseBaselineLayer(
 ): CodeReviewBaselineLayer {
   val layer =
     entry as? Map<*, *>
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'baseline_layers[$index]' must be an object.",
       )
   val fieldPrefix = "baseline_layers[$index]"
@@ -42,7 +42,7 @@ private fun parseRequiredFlag(
   fieldPrefix: String,
 ): Boolean =
   layer["required"] as? Boolean
-    ?: throw InvalidScaffoldPayloadError(
+    ?: throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldPrefix.required' must be an explicit boolean.",
     )
 
@@ -51,7 +51,7 @@ private fun parseBaselineScope(
   fieldPrefix: String,
 ): CodeReviewCompositionScope =
   CodeReviewCompositionScope.fromWireValue(scopeValue)
-    ?: throw InvalidScaffoldPayloadError(
+    ?: throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldPrefix.scope' has unsupported value '$scopeValue'. " +
         "Supported values: ${CodeReviewCompositionScope.entries.map { it.wireValue }}.",
     )
@@ -61,7 +61,7 @@ private fun parseBaselineMode(
   fieldPrefix: String,
 ): CodeReviewCompositionMode =
   CodeReviewCompositionMode.fromWireValue(modeValue)
-    ?: throw InvalidScaffoldPayloadError(
+    ?: throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldPrefix.mode' has unsupported value '$modeValue'. " +
         "Supported values: ${CodeReviewCompositionMode.entries.map { it.wireValue }}.",
     )

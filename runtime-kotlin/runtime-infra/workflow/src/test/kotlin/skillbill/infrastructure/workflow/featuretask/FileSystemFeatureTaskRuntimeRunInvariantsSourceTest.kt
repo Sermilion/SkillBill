@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.featuretask
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import java.nio.file.Files
 import java.nio.file.Path
@@ -59,7 +59,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseHandoffSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
     }
   }

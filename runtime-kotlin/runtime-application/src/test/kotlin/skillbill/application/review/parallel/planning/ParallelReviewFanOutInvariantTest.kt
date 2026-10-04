@@ -7,7 +7,8 @@ import skillbill.application.review.preparation.model.ReviewLaneSelection
 import skillbill.application.review.preparation.model.ReviewPreparationFacts
 import skillbill.application.review.preparation.model.ReviewScopeFacts
 import skillbill.application.review.preparation.model.ReviewStackRoutingFacts
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.review.context.ReviewContextWireMap
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
@@ -161,12 +162,12 @@ class ParallelReviewFanOutInvariantTest {
           ),
       )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(scopeWithCommitCount(2), prepared.packet.laneDecisions).validateAgainstPacket(
           prepared.packet,
           prepared.assignments + extra,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue(
       "synthesized ${prepared.assignments.size + 1} assignment" in failure.message.orEmpty() ||
         "must cover exactly the packet's selected lanes" in failure.message.orEmpty(),

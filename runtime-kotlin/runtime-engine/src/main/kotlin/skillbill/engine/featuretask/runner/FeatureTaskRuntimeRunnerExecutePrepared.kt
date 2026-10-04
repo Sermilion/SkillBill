@@ -24,7 +24,7 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDur
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
+import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -103,7 +103,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     return runLoopEntry.run(context) { loop ->
       runRequest.operatorDecision?.let { decision ->
         loop.applyOperatorDecision()?.let { rejection ->
-          throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+          throw featureTaskRuntimeOperatorDecisionRejected(runRequest.workflowId, decision.wireValue, rejection)
         }
       }
     }

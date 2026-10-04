@@ -1,8 +1,8 @@
 package skillbill.workflow.model.goalobservability
 
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.goalObservabilityHistory
 import skillbill.goalrunner.goalObservabilityLatestEvent
@@ -40,22 +40,22 @@ class GoalObservabilityModelsTest {
 
   @Test
   fun `unknown goal progress event kind wire token fails typed workflow error`() {
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventKind.fromWire("not-an-event-kind")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
   fun `unknown goal observability and ledger tokens fail with typed workflow errors`() {
-    assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalObservabilityRecordKind.fromWire("not-a-record-kind")
-    }
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressOutcome.fromWire("not-an-outcome")
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       GoalAttemptLedgerAction.fromWire("not-an-action")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -66,17 +66,17 @@ class GoalObservabilityModelsTest {
         .toMutableMap()
         .apply { this["changed_files"] = listOf(7) }
 
-    assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       goalObservabilityEventFromArtifact(
         raw = malformed,
         sourceLabel = "goal_observability_latest_event",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
   }
 
   @Test
   fun `goal observability progress rejects fractional durable sequence numbers`() {
-    assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalObservabilityArtifacts.patchForProgressEvent(
         GoalObservabilityProgressInput(
           artifacts =
@@ -91,7 +91,7 @@ class GoalObservabilityModelsTest {
           currentStepId = "implement",
         ),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
   }
 
   @Test

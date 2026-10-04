@@ -1,7 +1,7 @@
 package skillbill.engine.goalplanning
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
@@ -32,7 +32,7 @@ fun Map<String, Any?>.toGoalPlanningPreparationRecord(): GoalPlanningPreparation
   val preparationStatusValue = stringValue("preparation_status")
   val preparationStatus =
     GoalPlanningPreparationState.fromWireValue(preparationStatusValue)
-      ?: throw InvalidGoalPlanningPreparationSchemaError(
+      ?: throw invalidGoalPlanningPreparationSchemaError(
         sourceLabel = stringValue("governed_sub_spec_path"),
         fieldPath = "preparation_status",
         reason = "unsupported preparation status '$preparationStatusValue'",

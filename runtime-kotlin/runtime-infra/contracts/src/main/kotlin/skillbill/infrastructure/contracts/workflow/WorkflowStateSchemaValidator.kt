@@ -5,7 +5,7 @@ import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.WorkflowStateSnapshotWireMapper
@@ -38,7 +38,7 @@ class WorkflowStateSchemaValidator : WorkflowSnapshotValidator {
     }
 
     log.log(Level.WARNING, buildWorkflowStateSchemaDriftLog(slug, errors, instance))
-    throw InvalidWorkflowStateSchemaError(formatWorkflowStateValidationMessage(slug, errors, instance))
+    throw invalidWorkflowStateSchemaError(formatWorkflowStateValidationMessage(slug, errors, instance))
   }
 }
 
@@ -96,13 +96,13 @@ private fun workflowStateSchema(): JsonSchema =
       classLoader = WorkflowStateSchemaValidator::class.java.classLoader,
       classpathResource = WORKFLOW_STATE_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidWorkflowStateSchemaError(
+        invalidWorkflowStateSchemaError(
           "Canonical workflow-state schema is missing. Expected to find it on the JVM classpath at " +
             "'$WORKFLOW_STATE_SCHEMA_CLASSPATH_RESOURCE'.",
         )
       },
       processingFailure = { cause ->
-        InvalidWorkflowStateSchemaError(cause.message ?: cause::class.simpleName.orEmpty(), cause)
+        invalidWorkflowStateSchemaError(cause.message ?: cause::class.simpleName.orEmpty(), cause)
       },
       loadFailureLogger = { error ->
         logSchemaLoadFailure(
@@ -115,6 +115,6 @@ private fun workflowStateSchema(): JsonSchema =
       },
       expectedSchemaId = WorkflowStateSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = WORKFLOW_STATE_CONTRACT_VERSION,
-      identityFailure = { reason -> InvalidWorkflowStateSchemaError(reason) },
+      identityFailure = { reason -> invalidWorkflowStateSchemaError(reason) },
     ),
   )

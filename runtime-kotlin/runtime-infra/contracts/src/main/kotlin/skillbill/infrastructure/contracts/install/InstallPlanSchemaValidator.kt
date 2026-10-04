@@ -5,7 +5,7 @@ import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.InstallPlanSchemaPaths
@@ -39,7 +39,7 @@ class InstallPlanSchemaValidator : InstallPlanWireValidator {
     val instanceLocation = firstError.instanceLocation?.toString().orEmpty()
     val fieldPath = installPlanSchemaDottedFieldPath(instanceLocation)
     val reason = formatValidationReason(sorted, instance)
-    throw InvalidInstallPlanSchemaError(fieldPath = fieldPath, reason = reason)
+    throw invalidInstallPlanSchemaError(fieldPath = fieldPath, reason = reason)
   }
 
   private fun buildSchemaDriftLog(
@@ -116,7 +116,7 @@ private fun installPlanSchema(): JsonSchema =
       classLoader = InstallPlanSchemaValidator::class.java.classLoader,
       classpathResource = INSTALL_PLAN_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidInstallPlanSchemaError(
+        invalidInstallPlanSchemaError(
           fieldPath = "",
           reason =
             "Canonical install-plan schema is missing. Expected to find it on the JVM classpath at " +
@@ -124,7 +124,7 @@ private fun installPlanSchema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidInstallPlanSchemaError(
+        invalidInstallPlanSchemaError(
           fieldPath = "",
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
           cause = cause,
@@ -142,7 +142,7 @@ private fun installPlanSchema(): JsonSchema =
       expectedSchemaId = InstallPlanSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = INSTALL_PLAN_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidInstallPlanSchemaError(
+        invalidInstallPlanSchemaError(
           fieldPath = "<schema>",
           reason = reason,
         )

@@ -16,38 +16,45 @@ internal object FeatureTaskRuntimeHandoffProjectionEnvelopeWire {
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
     fields: List<FeatureTaskRuntimeHandoffProjectionField>,
-  ): List<FeatureTaskRuntimeHandoffProjectionField> {
+  ): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>> {
     val carried = receiptCarriedCheckpointFingerprint(fields)
     checkpointPolicyViolation(inputs, declaration)?.let { violation ->
-      rejectFeatureTaskRuntimeHandoffProjection(
-        inputs,
-        declaration,
-        FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
-        violation,
+      return FeatureTaskRuntimeHandoffProjectionStep.Rejected(
+        rejectedFeatureTaskRuntimeHandoffProjectionContext(
+          inputs,
+          declaration,
+          FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
+          violation,
+        ),
       )
     }
     if (declaration.checkpointPolicy == FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED) {
-      return fields
+      return FeatureTaskRuntimeHandoffProjectionStep.Value(fields)
     }
-    val resolvedFingerprint = inputs.resolvedCheckpoint?.fingerprint ?: return fields
+    val resolvedFingerprint =
+      inputs.resolvedCheckpoint?.fingerprint
+        ?: return FeatureTaskRuntimeHandoffProjectionStep.Value(fields)
     val refreshed =
       fields.map { field ->
         resolvedCheckpointField(field, resolvedFingerprint, carried)
       }
-    if (
-      REPOSITORY_CHECKPOINT_FIELD in declaration.declaredFieldNames &&
-      refreshed.none { it.name == REPOSITORY_CHECKPOINT_FIELD }
-    ) {
-      return refreshed +
-        FeatureTaskRuntimeHandoffProjectionField(
-          REPOSITORY_CHECKPOINT_FIELD,
-          FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-            kind = FeatureTaskRuntimeCompactReferenceKind.REPOSITORY_CHECKPOINT,
-            value = resolvedFingerprint,
-          ),
-        )
-    }
-    return refreshed
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(
+      if (
+        REPOSITORY_CHECKPOINT_FIELD in declaration.declaredFieldNames &&
+        refreshed.none { it.name == REPOSITORY_CHECKPOINT_FIELD }
+      ) {
+        refreshed +
+          FeatureTaskRuntimeHandoffProjectionField(
+            REPOSITORY_CHECKPOINT_FIELD,
+            FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+              kind = FeatureTaskRuntimeCompactReferenceKind.REPOSITORY_CHECKPOINT,
+              value = resolvedFingerprint,
+            ),
+          )
+      } else {
+        refreshed
+      },
+    )
   }
 
   private fun checkpointPolicyViolation(

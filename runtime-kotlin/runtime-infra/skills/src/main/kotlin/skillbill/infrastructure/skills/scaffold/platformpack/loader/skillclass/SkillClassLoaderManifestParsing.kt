@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.scaffold.model.SkillClassSection
 
@@ -10,7 +11,7 @@ internal fun requireSkillClassManifestMap(
   classFile: String,
   raw: Any?,
 ): Map<*, *> =
-  raw as? Map<*, *> ?: throw InvalidManifestSchemaError(
+  raw as? Map<*, *> ?: throw invalidManifestSchema(
     "Skill class '$classId': manifest '$classFile' must be a YAML mapping at the top level.",
   )
 
@@ -19,7 +20,7 @@ internal fun validateDeclaredSkillClass(
   declaredClass: String,
 ) {
   if (declaredClass != classId) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Skill class '$classId': manifest 'class' field is '$declaredClass', expected '$classId' to match the filename.",
     )
   }
@@ -30,7 +31,8 @@ internal fun validateSkillClassContractVersion(
   contractVersion: String,
 ) {
   if (contractVersion != SHELL_CONTRACT_VERSION) {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Skill class '$classId': declares contract_version '$contractVersion' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )
@@ -40,7 +42,7 @@ internal fun validateSkillClassContractVersion(
 internal fun requireSkillClassMatcherList(
   classId: String,
   raw: Any?,
-): List<*> = raw as? List<*> ?: throw InvalidManifestSchemaError("Skill class '$classId': 'matchers' must be a list.")
+): List<*> = raw as? List<*> ?: throw invalidManifestSchema("Skill class '$classId': 'matchers' must be a list.")
 
 internal fun parseSkillClassSection(
   classId: String,
@@ -58,7 +60,7 @@ private fun requireSkillClassSectionMap(
   index: Int,
   entry: Any?,
 ): Map<*, *> =
-  entry as? Map<*, *> ?: throw InvalidManifestSchemaError(
+  entry as? Map<*, *> ?: throw invalidManifestSchema(
     "Skill class '$classId': sections[$index] must be a mapping with 'heading' and 'body'.",
   )
 
@@ -69,7 +71,7 @@ private fun requireSkillClassSectionHeading(
 ): String {
   val heading = (mapping["heading"] as? String)?.trim().orEmpty()
   if (heading.isEmpty()) {
-    throw InvalidManifestSchemaError("Skill class '$classId': sections[$index] is missing required 'heading'.")
+    throw invalidManifestSchema("Skill class '$classId': sections[$index] is missing required 'heading'.")
   }
   return heading
 }
@@ -80,7 +82,7 @@ private fun requireSkillClassSectionBody(
   mapping: Map<*, *>,
 ): String =
   mapping["body"] as? String
-    ?: throw InvalidManifestSchemaError("Skill class '$classId': sections[$index] is missing required 'body'.")
+    ?: throw invalidManifestSchema("Skill class '$classId': sections[$index] is missing required 'body'.")
 
 internal fun requireSkillClassStringEntry(
   classId: String,
@@ -89,4 +91,4 @@ internal fun requireSkillClassStringEntry(
   entry: Any?,
 ): String =
   entry as? String
-    ?: throw InvalidManifestSchemaError("Skill class '$classId': '$field'[$index] must be a string.")
+    ?: throw invalidManifestSchema("Skill class '$classId': '$field'[$index] must be a string.")

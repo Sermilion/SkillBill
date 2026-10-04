@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.manifest
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.infrastructure.skills.scaffold.runtime.service.areaFocus
 import java.nio.file.Path
 
@@ -102,7 +102,7 @@ internal fun renderReadmeCatalogRow(
 ): String {
   val rows = findReadmeCatalogRows(text)
   if (rows.isEmpty()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "README.md does not contain a `/bill-*` catalog table; refusing to append a row for $skillName.",
     )
   }

@@ -1,7 +1,9 @@
 package skillbill.workflow.taskruntime.model.persistence
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
@@ -57,7 +59,8 @@ object GoalSubtaskReviewArtifactDecoder {
             FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
           ),
         )
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         reviewStateError(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY, error.message.orEmpty(), error)
       }
     val state =
@@ -97,7 +100,8 @@ object GoalSubtaskReviewArtifactDecoder {
     }
     return try {
       decodeWire(artifacts)?.continuation
-    } catch (error: InvalidGoalSubtaskReviewStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
       if (GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY !in artifacts) decodeContinuationDirect(artifacts) else throw error
     }
   }
@@ -112,7 +116,8 @@ object GoalSubtaskReviewArtifactDecoder {
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY,
         ),
       )
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       reviewStateError(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY, error.message.orEmpty(), error)
     }
 

@@ -3,7 +3,7 @@ import com.networknt.schema.JsonSchema
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.output.PRODUCER_OUTPUT_EVIDENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
+import skillbill.error.shellcontent.invalidProducerOutputEvidenceSchemaError
 import skillbill.infrastructure.contracts.locator.ProducerOutputEvidenceSchemaPaths
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -28,7 +28,7 @@ class ProducerOutputEvidenceSchemaValidator : ProducerOutputEvidenceValidator {
       }
     val violations = ClasspathContractSchemaLoader.validate(producerOutputEvidenceSchema(), instance)
     if (violations.isNotEmpty()) {
-      throw InvalidProducerOutputEvidenceSchemaError(
+      throw invalidProducerOutputEvidenceSchemaError(
         "Producer output evidence '${evidence.workflowId}:${evidence.phaseId}:" +
           "${evidence.generation}:${evidence.attempt}:${evidence.repairTurn}' fails canonical contract " +
           "$PRODUCER_OUTPUT_EVIDENCE_CONTRACT_VERSION.",
@@ -50,16 +50,16 @@ private fun producerOutputEvidenceSchema(): JsonSchema =
       classLoader = ProducerOutputEvidenceSchemaValidator::class.java.classLoader,
       classpathResource = ProducerOutputEvidenceSchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidProducerOutputEvidenceSchemaError("Canonical producer output evidence schema resource is missing.")
+        invalidProducerOutputEvidenceSchemaError("Canonical producer output evidence schema resource is missing.")
       },
       processingFailure = { cause ->
-        InvalidProducerOutputEvidenceSchemaError(
+        invalidProducerOutputEvidenceSchemaError(
           cause.message ?: cause::class.simpleName.orEmpty(),
         )
       },
       loadFailureLogger = {},
       expectedSchemaId = ProducerOutputEvidenceSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = PRODUCER_OUTPUT_EVIDENCE_CONTRACT_VERSION,
-      identityFailure = { reason -> InvalidProducerOutputEvidenceSchemaError(reason) },
+      identityFailure = { reason -> invalidProducerOutputEvidenceSchemaError(reason) },
     ),
   )

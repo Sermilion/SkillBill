@@ -4,8 +4,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
@@ -24,15 +25,11 @@ internal object RuntimeGateRecordIntegrity {
         .takeIf { it[SharedPayloadKeys.STATUS] == WorkflowStepStatus.COMPLETED.wireValue }
         ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
         ?: return
-    try {
-      if (produced.containsKey(ValidationEvidencePayloadKeys.BUILD_RECEIPT)) {
-        requireBuildReceipt(receipt(produced, ValidationEvidencePayloadKeys.BUILD_RECEIPT, phaseId), phaseId)
-      }
-      if (produced.containsKey(ValidationEvidencePayloadKeys.VALIDATION_RESULT)) {
-        requireValidationResult(receipt(produced, ValidationEvidencePayloadKeys.VALIDATION_RESULT, phaseId), phaseId)
-      }
-    } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(phaseId, error.reason, error)
+    if (produced.containsKey(ValidationEvidencePayloadKeys.BUILD_RECEIPT)) {
+      requireBuildReceipt(receipt(produced, ValidationEvidencePayloadKeys.BUILD_RECEIPT, phaseId), phaseId)
+    }
+    if (produced.containsKey(ValidationEvidencePayloadKeys.VALIDATION_RESULT)) {
+      requireValidationResult(receipt(produced, ValidationEvidencePayloadKeys.VALIDATION_RESULT, phaseId), phaseId)
     }
   }
 
@@ -49,18 +46,31 @@ internal object RuntimeGateRecordIntegrity {
     if (receipt[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION) {
       invalid(phaseId, "Unsupported build receipt contract_version.")
     }
-    requirePassed(phaseId, decodeValidationGateExecutionEvidenceFromArtifact(receipt, phaseId))
+    requirePassed(
+      phaseId,
+      decodeValidationGateExecutionEvidenceFromArtifact(receipt, phaseId) { reason, failure ->
+        invalidFeatureTaskRuntimePhaseOutputSchema(phaseId, reason, cause = failure)
+      },
+    )
   }
 
   private fun requireValidationResult(
     result: Map<String, Any?>,
     phaseId: String,
   ) {
-    val runs = requirePassed(phaseId, decodeValidationGateExecutionEvidenceFromArtifact(result, phaseId))
+    val runs =
+      requirePassed(
+        phaseId,
+        decodeValidationGateExecutionEvidenceFromArtifact(result, phaseId) { reason, failure ->
+          invalidFeatureTaskRuntimePhaseOutputSchema(phaseId, reason, cause = failure)
+        },
+      )
     val commands =
-      decodeValidationEvidenceFromArtifact(result[ValidationEvidencePayloadKeys.VALIDATION_EVIDENCE], phaseId)
+      decodeValidationEvidenceFromArtifact(result[ValidationEvidencePayloadKeys.VALIDATION_EVIDENCE], phaseId) {
+        evidenceFailure(phaseId, it)
+      }
         ?: invalid(phaseId, "Command evidence is missing.")
-    commands.requireSuccessfulResult(phaseId)
+    commands.requireSuccessfulResult(phaseId) { evidenceFailure(phaseId, it) }
     if (commands.results.size != runs.gateRuns.size ||
       commands.results.zip(runs.gateRuns).any { (command, run) ->
         command.command != run.command || command.exitCode != run.exitCode
@@ -82,7 +92,17 @@ internal object RuntimeGateRecordIntegrity {
   private fun invalid(
     phaseId: String,
     reason: String,
-  ): Nothing = throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(phaseId, reason)
+  ): Nothing = throw evidenceFailure(phaseId, reason)
+
+  private fun evidenceFailure(
+    phaseId: String,
+    reason: String,
+  ): SkillBillRuntimeException =
+    invalidFeatureTaskRuntimePhaseOutputSchema(
+      phaseId,
+      reason,
+      cause = invalidFeatureTaskRuntimeValidationEvidenceSchema(phaseId, reason),
+    )
 
   private const val PASSED = "passed"
 }

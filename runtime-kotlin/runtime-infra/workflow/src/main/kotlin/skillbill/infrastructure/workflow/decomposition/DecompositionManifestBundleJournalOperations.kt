@@ -2,7 +2,8 @@ package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import java.nio.file.Files
@@ -43,10 +44,10 @@ internal object DecompositionManifestBundleJournalRecovery {
     Files.newDirectoryStream(parent, markerGlob)
       .use { markers ->
         if (markers.iterator().hasNext()) {
-          throw InvalidDecompositionManifestSchemaError(
+          throw invalidDecompositionManifestSchema(
             sourceLabel = parent.toString(),
             reason = "decomposition manifest bundle has an incomplete journal; launch recovery is required.",
-            failureCode = "incomplete_bundle",
+            code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_INCOMPLETE_BUNDLE,
           )
         }
       }

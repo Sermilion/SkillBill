@@ -6,11 +6,13 @@ import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERS
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import java.sql.Connection
 import java.sql.SQLException
@@ -25,7 +27,7 @@ internal inline fun <T> translateSqlFailure(
   try {
     block()
   } catch (failure: SQLException) {
-    throw IncompatibleGoalPlanningPreparationRecoveryError(
+    throw incompatibleGoalPlanningPreparationRecoveryError(
       workflowId,
       subtaskId,
       "SQLite rejected the immutable planning checkpoint: ${failure.message.orEmpty()}",
@@ -33,7 +35,26 @@ internal inline fun <T> translateSqlFailure(
     )
   }
 
-internal fun Connection.rejectLegacy(workflowId: String) {
+internal inline fun <T> translateSqlFailureResult(
+  workflowId: String,
+  subtaskId: Int,
+  conflicted: (GoalPlanningPreparationConflict) -> T,
+  block: () -> T,
+): T =
+  try {
+    block()
+  } catch (failure: SQLException) {
+    conflicted(
+      GoalPlanningPreparationConflict(
+        workflowId,
+        subtaskId,
+        "SQLite rejected the immutable planning checkpoint: ${failure.message.orEmpty()}",
+        failure,
+      ),
+    )
+  }
+
+internal fun Connection.rejectLegacy(workflowId: String): GoalPlanningPreparationConflict? {
   prepareStatement(
     "SELECT 1 FROM goal_planning_preparations WHERE parent_goal_workflow_id = ? LIMIT 1",
   ).use { s ->
@@ -48,11 +69,12 @@ internal fun Connection.rejectLegacy(workflowId: String) {
       }
     }
   }
+  return null
 }
 
 internal fun requireParentGoalWorkflowId(parentGoalWorkflowId: String) {
   if (parentGoalWorkflowId.isBlank()) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       parentGoalWorkflowId,
       "parent_goal_workflow_id",
       "parent_goal_workflow_id is required",
@@ -65,13 +87,42 @@ internal fun requirePositiveSubtaskId(
   subtaskId: Int,
 ) {
   if (subtaskId < 1) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       "$parentGoalWorkflowId#$subtaskId",
       "subtask_id",
       "subtask_id must be a positive integer",
     )
   }
 }
+
+internal fun throwNormalizedIdentityFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing = throw invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+
+internal fun throwNormalizedProvenanceFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing =
+  throw when (failure.first) {
+    "provenance.planning_contract_id",
+    "provenance.planning_contract_version",
+    "provenance.phase_output_contract_id",
+    "provenance.phase_output_contract_version",
+    ->
+      incompatibleGoalPlanningPreparationContractError(sourceLabel, failure.first, failure.second)
+    else -> invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+  }
+
+internal fun throwNormalizedEnvelopeFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing =
+  throw if (failure.first == "contract_version") {
+    incompatibleGoalPlanningPreparationContractError(sourceLabel, failure.first, failure.second)
+  } else {
+    invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+  }
 
 internal fun normalizedIdentityFailure(identity: GoalPlanningIdentity): Pair<String, String>? =
   when {

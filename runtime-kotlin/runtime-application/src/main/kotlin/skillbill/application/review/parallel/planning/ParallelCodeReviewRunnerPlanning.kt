@@ -20,7 +20,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.SharedReviewEvidenceResolution
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -196,7 +196,7 @@ class ParallelCodeReviewRunnerPlanning(
       sharedEvidenceLocatorReader != null &&
       args.evidenceStorePath.isNullOrBlank()
     ) {
-      throw ReviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
+      throw reviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
     }
     val plannedRubrics =
       rubricPlanning.resolvePlannedRubrics(

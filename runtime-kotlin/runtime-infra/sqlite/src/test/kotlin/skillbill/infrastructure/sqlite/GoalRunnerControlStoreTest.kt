@@ -1,7 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -160,7 +161,11 @@ class GoalRunnerControlStoreTest {
         statement.setString(2, "parent-1")
         statement.executeUpdate()
       }
-      assertFailsWith<InvalidWorkflowStateSchemaError> { store.controlState("parent-1") }
+      assertFailsWith<SkillBillRuntimeException> {
+        store.controlState("parent-1")
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
   }
 
@@ -173,7 +178,11 @@ class GoalRunnerControlStoreTest {
       store.persistControlState("parent-malformed", GoalRunnerControlState())
       writeRawControlState(connection, "parent-malformed", "{not valid json")
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> { store.controlState("parent-malformed") }
+      assertFailsWith<SkillBillRuntimeException> {
+        store.controlState("parent-malformed")
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
   }
 
@@ -267,13 +276,17 @@ class GoalRunnerControlStoreTest {
         val parent = "parent-malformed-$index"
         store.persistControlState(parent, GoalRunnerControlState())
         writeRawAcceptances(connection, parent, rawAcceptanceList(identity))
-        assertFailsWith<InvalidWorkflowStateSchemaError>("subtask_id $identity must be rejected.") {
+        assertFailsWith<SkillBillRuntimeException>("subtask_id $identity must be rejected.") {
           store.outOfBandAcceptances(parent)
-        }
+        }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       }
       store.persistControlState("parent-blank-commit", GoalRunnerControlState())
       writeRawAcceptances(connection, "parent-blank-commit", rawAcceptanceList("2", " "))
-      assertFailsWith<InvalidWorkflowStateSchemaError> { store.outOfBandAcceptances("parent-blank-commit") }
+      assertFailsWith<SkillBillRuntimeException> {
+        store.outOfBandAcceptances("parent-blank-commit")
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
 
       store.persistControlState("parent-unknown-mode", GoalRunnerControlState())
       connection.prepareStatement(
@@ -283,7 +296,11 @@ class GoalRunnerControlStoreTest {
         statement.setString(2, "parent-unknown-mode")
         statement.executeUpdate()
       }
-      assertFailsWith<InvalidWorkflowStateSchemaError> { store.reviewPolicy("parent-unknown-mode") }
+      assertFailsWith<SkillBillRuntimeException> {
+        store.reviewPolicy("parent-unknown-mode")
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
   }
 

@@ -75,7 +75,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -355,7 +355,7 @@ object PhaseOutputGate {
     recorder: PhaseRunRecords,
     phaseSettlementService: PhaseRunSettlements,
     args: GateOutput,
-    error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError,
+    error: SkillBillRuntimeException,
   ) {
     val run = args.run
     phaseSettlementService.clear(

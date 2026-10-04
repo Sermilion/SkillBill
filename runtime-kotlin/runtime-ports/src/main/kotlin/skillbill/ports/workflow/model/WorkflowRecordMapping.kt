@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.error.core.MalformedJsonTextError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
@@ -65,7 +65,7 @@ fun WorkflowStateSnapshot.mapToRecord(source: WorkflowStateRecord? = null): Work
 private fun decodeSteps(raw: String): List<WorkflowStepState> {
   val root =
     parseJson(raw, "steps") as? List<*>
-      ?: throw InvalidWorkflowStateSchemaError("Workflow state steps must decode to a JSON array.")
+      ?: throw invalidWorkflowStateSchemaError("Workflow state steps must decode to a JSON array.")
   return root.mapIndexed(::decodeStep)
 }
 
@@ -101,11 +101,11 @@ private fun decodeStep(
 private fun invalidStep(
   index: Int,
   reason: String,
-): Nothing = throw InvalidWorkflowStateSchemaError("Workflow state steps[$index] $reason")
+): Nothing = throw invalidWorkflowStateSchemaError("Workflow state steps[$index] $reason")
 
 private fun decodeObject(raw: String): Map<String, Any?> =
   JsonCodec.anyToStringAnyMap(parseJson(raw, "artifacts"))
-    ?: throw InvalidWorkflowStateSchemaError("Workflow state artifacts must decode to a JSON object.")
+    ?: throw invalidWorkflowStateSchemaError("Workflow state artifacts must decode to a JSON object.")
 
 private fun parseJson(
   raw: String,
@@ -114,7 +114,7 @@ private fun parseJson(
   try {
     JsonCodec.parseValue(raw)
   } catch (error: MalformedJsonTextError) {
-    throw InvalidWorkflowStateSchemaError("Workflow state $field contains malformed JSON.", error)
+    throw invalidWorkflowStateSchemaError("Workflow state $field contains malformed JSON.", error)
   }
 
 private fun encodeSteps(steps: List<WorkflowStepState>): String =
@@ -142,7 +142,7 @@ private fun decodeInstant(
         try {
           LocalDateTime.parse(it, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")).toInstant(ZoneOffset.UTC)
         } catch (error: DateTimeParseException) {
-          throw InvalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.", error)
+          throw invalidWorkflowStateSchemaError("Workflow state $field contains an invalid timestamp.", error)
         }
       }
     }

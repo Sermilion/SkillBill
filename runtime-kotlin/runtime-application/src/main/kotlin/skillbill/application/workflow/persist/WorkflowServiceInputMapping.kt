@@ -18,7 +18,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityWorktreeActivity
@@ -151,7 +151,7 @@ internal fun WorkflowUpdateRequest.toWorkflowUpdateInput(): WorkflowUpdateInput 
   WorkflowUpdateInput(
     workflowStatus =
       WorkflowStatus.fromWire(workflowStatus)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Invalid workflow_status '$workflowStatus'.",
         ),
     currentStepId = currentStepId,

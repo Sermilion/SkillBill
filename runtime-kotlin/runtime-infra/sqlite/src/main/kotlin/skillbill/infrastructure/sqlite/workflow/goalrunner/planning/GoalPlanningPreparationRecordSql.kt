@@ -1,29 +1,26 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationStatus
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import java.sql.Connection
 
 internal class GoalPlanningPreparationRecordSql(
   private val connection: Connection,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun markPrepared(record: GoalPlanningPreparationRecord) {
+  fun markPrepared(record: GoalPlanningPreparationRecord): GoalPlanningPreparationWriteResult {
     requirePreparedEnvelope(record)
-    connection.inNestedWriteTransaction(diagnostics) {
-      if (connection.upsertPreparedRow(record)) return@inNestedWriteTransaction
-      val stored =
-        connection.selectStoredRecoveryIdentity(record.parentGoalWorkflowId, record.subtaskId)
-          ?: return@inNestedWriteTransaction
-      val reason = recoveryIdentityFailure(stored, record) ?: return@inNestedWriteTransaction
-      throw IncompatibleGoalPlanningPreparationRecoveryError(
-        workflowId = record.parentGoalWorkflowId,
-        subtaskId = record.subtaskId,
-        reason = reason,
-      )
+    return connection.inNestedWriteTransaction(diagnostics) {
+      if (connection.upsertPreparedRow(record)) {
+        GoalPlanningPreparationWriteResult.Applied
+      } else {
+        preparedRowConflict(record)
+      }
     }
   }
 
@@ -52,4 +49,19 @@ internal class GoalPlanningPreparationRecordSql(
   ): GoalPlanningPreparationStatus? = connection.selectStatus(parentGoalWorkflowId, subtaskId)
 
   fun deletePreparedByGoal(parentGoalWorkflowId: String): Int = connection.deletePreparedByGoal(parentGoalWorkflowId)
+
+  private fun preparedRowConflict(record: GoalPlanningPreparationRecord): GoalPlanningPreparationWriteResult {
+    val stored =
+      connection.selectStoredRecoveryIdentity(record.parentGoalWorkflowId, record.subtaskId)
+        ?: return GoalPlanningPreparationWriteResult.Applied
+    val reason = recoveryIdentityFailure(stored, record) ?: return GoalPlanningPreparationWriteResult.Applied
+    return GoalPlanningPreparationWriteResult.Conflicted(
+      GoalPlanningPreparationConflict(
+        workflowId = record.parentGoalWorkflowId,
+        subtaskId = record.subtaskId,
+        reason = reason,
+        cause = null,
+      ),
+    )
+  }
 }

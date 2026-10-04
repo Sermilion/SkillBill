@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.ReviewHunkEvidenceIntegrityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBrokerBinding
@@ -52,12 +53,14 @@ class FileSystemReviewEvidenceBrokerBudgetTest {
     payloads[storePath] = overwritten
 
     val failure =
-      assertFailsWith<ReviewHunkEvidenceIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         broker.readBatch(batch("A.kt"))
-      }
-    assertEquals(storePath, failure.storePath)
-    assertEquals(ReviewChangedHunk.digestOfBody(original), failure.expectedDigest)
-    assertEquals(ReviewChangedHunk.digestOfBody(overwritten), failure.observedDigest)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_INTEGRITY, it.code) }
+    val expectedDigest = ReviewChangedHunk.digestOfBody(original)
+    val observedDigest = ReviewChangedHunk.digestOfBody(overwritten)
+    assertTrue("store_path '$storePath'" in failure.message.orEmpty())
+    assertTrue("locator digest '$expectedDigest'" in failure.message.orEmpty())
+    assertTrue("body digest '$observedDigest'" in failure.message.orEmpty())
     assertEquals(0, broker.accounting().evidenceBytes)
   }
 

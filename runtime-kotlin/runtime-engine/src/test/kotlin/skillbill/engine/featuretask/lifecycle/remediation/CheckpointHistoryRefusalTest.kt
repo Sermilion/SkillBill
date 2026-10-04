@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -59,7 +59,7 @@ class CheckpointHistoryRefusalTest {
           seedUnsupportedCheckpointHistory(database, workflowId, status)
           val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
 
-          assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentityVersionError> {
+          assertFailsWith<SkillBillRuntimeException> {
             recorder.appendCheckpointIdentity(
               AppendCheckpointIdentityArgs(
                 workflowId = workflowId,

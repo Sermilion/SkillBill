@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.PreparedLaunch
 import skillbill.engine.goalrunner.execution.support.RUNTIME_WORKFLOW_ID_PREFIX
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -24,10 +25,10 @@ import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -134,23 +135,13 @@ class GoalRunnerSubtaskLaunchPrepare(
     )
   }
 
-  internal fun blockedOnRecoveryError(
+  internal fun blockedOnPreparationConflict(
     state: GoalRunnerManifestState,
-    subtaskId: Int,
-    error: Throwable,
+    conflict: GoalPlanningPreparationConflict,
     request: GoalRunnerRunRequest,
   ): GoalRunnerIterationResult {
-    val (targetSubtaskId, reason) =
-      when (error) {
-        is IncompatibleGoalPlanningPreparationRecoveryError ->
-          error.subtaskId to
-            goalPlanningChildImportConflictBlockedReason(
-              state.manifest.issueKey,
-              error.subtaskId,
-              error,
-            )
-        else -> throw error
-      }
+    val targetSubtaskId = conflict.subtaskId
+    val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
     state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
       runCatching {
         outcomeStore.markBlocked(
@@ -194,7 +185,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     request: GoalRunnerRunRequest,
     reviewBaseline: GoalSubtaskReviewBaseline,
     planning: GoalPlanningSweepOutcome.PreparedAll,
-  ): PreparedLaunch {
+  ): GoalSubtaskLaunchPrepareResult {
     val priorWorkflowId = state.manifest.workflowIdFor(subtaskId)
     val subtask =
       requireNotNull(state.manifest.subtasks.firstOrNull { it.id == subtaskId }) {
@@ -220,7 +211,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     val attemptedManifest =
       state.manifest.withAttemptedSubtask(subtaskId)
         .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
-    val attemptedState =
+    val saved =
       run {
         val branch =
           attemptedManifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
@@ -255,7 +246,13 @@ class GoalRunnerSubtaskLaunchPrepare(
           ),
         )
       }
-    return PreparedLaunch(attemptedState, assignedWorkflowId.takeIf { firstRun })
+    return when (saved) {
+      is GoalRunnerChildWorkflowSaveResult.Conflicted -> GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
+      is GoalRunnerChildWorkflowSaveResult.Saved ->
+        GoalSubtaskLaunchPrepareResult.Prepared(
+          PreparedLaunch(saved.state, assignedWorkflowId.takeIf { firstRun }),
+        )
+    }
   }
 
   private fun governedChildSpecPath(

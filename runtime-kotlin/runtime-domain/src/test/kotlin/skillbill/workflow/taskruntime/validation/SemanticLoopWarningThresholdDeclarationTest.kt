@@ -55,7 +55,7 @@ class SemanticLoopWarningThresholdDeclarationTest {
     phaseId: String,
     verdict: FeatureTaskRuntimeVerdict,
     iteration: Int,
-  ) = FeatureTaskRuntimeTransitionFunction.nextTransition(
+  ) = resolvedTransition(
     declaration = declaration,
     currentPhaseId = phaseId,
     verdict = verdict,

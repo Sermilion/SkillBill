@@ -1,12 +1,13 @@
 package skillbill.workflow.taskruntime.validation
 
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
+import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 
 object FeatureTaskRuntimeTransitionFunction {
   fun nextTransition(
@@ -15,24 +16,30 @@ object FeatureTaskRuntimeTransitionFunction {
     verdict: FeatureTaskRuntimeVerdict,
     edgeIterationCount: Int,
     context: FeatureTaskRuntimeTransitionContext = FeatureTaskRuntimeTransitionContext(),
-  ): FeatureTaskRuntimeNextPhase =
-    computeTransition(declaration, currentPhaseId, verdict, edgeIterationCount)
-      .also { transition -> guardEntryGate(declaration, transition, context.settledVerdictsByPhaseId) }
+  ): FeatureTaskRuntimeTransitionResult {
+    val transition = computeTransition(declaration, currentPhaseId, verdict, edgeIterationCount)
+    return guardEntryGate(declaration, transition, context.settledVerdictsByPhaseId)
+      ?: FeatureTaskRuntimeTransitionResult.Resolved(transition)
+  }
 
   private fun guardEntryGate(
     declaration: FeatureTaskRuntimeTransitionDeclaration,
     transition: FeatureTaskRuntimeNextPhase,
     settledVerdictsByPhaseId: Map<String, FeatureTaskRuntimeVerdict>,
-  ) {
-    val targetPhaseId = (transition as? FeatureTaskRuntimeNextPhase.Next)?.phaseId ?: return
-    declaration.entryGateViolation(targetPhaseId, settledVerdictsByPhaseId)?.let { gate ->
-      throw FeatureTaskRuntimePhaseOrderViolationError(
-        phaseId = gate.phaseId,
-        requiredPhaseId = gate.requiredPhaseId,
-        requiredVerdict = gate.requiredVerdict.wireValue,
-        observedVerdict = settledVerdictsByPhaseId[gate.requiredPhaseId]?.wireValue,
-      )
-    }
+  ): FeatureTaskRuntimeTransitionResult.PhaseOrderViolation? {
+    val targetPhaseId = (transition as? FeatureTaskRuntimeNextPhase.Next)?.phaseId ?: return null
+    val gate = declaration.entryGateViolation(targetPhaseId, settledVerdictsByPhaseId) ?: return null
+    val observedVerdict = settledVerdictsByPhaseId[gate.requiredPhaseId]?.wireValue
+    return FeatureTaskRuntimeTransitionResult.PhaseOrderViolation(
+      phaseId = gate.phaseId,
+      message =
+        featureTaskRuntimePhaseOrderViolationMessage(
+          gate.phaseId,
+          gate.requiredPhaseId,
+          gate.requiredVerdict.wireValue,
+          observedVerdict,
+        ),
+    )
   }
 
   private fun computeTransition(

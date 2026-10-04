@@ -1,6 +1,7 @@
 package skillbill.install.policy
 
-import skillbill.error.shellcontent.MissingBaselinePlatformSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.install.model.InstallAgentDefaultTarget
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode
@@ -341,10 +342,15 @@ class InstallPlanPolicyTest {
         platformPacks = listOf(kmpPack, kotlinPack),
       )
 
-    val error = assertFailsWith<MissingBaselinePlatformSelectionError> { InstallPlanPolicy.buildPlanDraft(input) }
-    assertEquals("kmp", error.selectingSlug)
-    assertEquals("kotlin", error.requiredBaselineSlug)
-    assertContains(error.declaringManifestPath, "platform-packs/kmp/platform.yaml")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        InstallPlanPolicy.buildPlanDraft(input)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_BASELINE_PLATFORM_SELECTION, failure.code)
+      }
+    assertContains(error.message.orEmpty(), "Platform pack 'kmp'")
+    assertContains(error.message.orEmpty(), "required baseline layer on 'kotlin'")
+    assertContains(error.message.orEmpty(), "platform-packs/kmp/platform.yaml")
     assertContains(error.message.orEmpty(), "'kotlin' is not in the selection")
   }
 

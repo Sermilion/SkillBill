@@ -1,5 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.requireUnchangedExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -183,7 +183,7 @@ internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: Workfl
     parameters.bind()
     val updated = statement.executeUpdate()
     if (updated != 1) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Legacy prose feature-task workflow '${row.workflowId}' was not terminalized " +
           "(missing row or mode is not prose).",
       )

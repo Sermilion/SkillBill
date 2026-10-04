@@ -2,11 +2,13 @@ package skillbill.engine.goalrunner.planning.context
 
 import skillbill.engine.goalplanning.toEnvelopeMap
 import skillbill.engine.goalplanning.toGoalPlanningPreparationRecord
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -63,9 +65,10 @@ class GoalPlanningPreparationRecordMappingTest {
       )
 
     val error =
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { envelope.toGoalPlanningPreparationRecord() }
+      assertFailsWith<SkillBillRuntimeException> { envelope.toGoalPlanningPreparationRecord() }
 
-    assertEquals("preparation_status", error.fieldPath)
-    assertEquals(".feature-specs/SKILL-128/spec_subtask_2.md", error.sourceLabel)
+    assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, error.code)
+    assertContains(error.message.orEmpty(), "'preparation_status'")
+    assertContains(error.message.orEmpty(), "'.feature-specs/SKILL-128/spec_subtask_2.md'")
   }
 }

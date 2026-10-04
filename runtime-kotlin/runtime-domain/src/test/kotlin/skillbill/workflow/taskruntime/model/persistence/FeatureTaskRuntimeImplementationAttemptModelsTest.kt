@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.model.persistence
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,30 +74,30 @@ class FeatureTaskRuntimeImplementationAttemptModelsTest {
 
   @Test
   fun `decode rejects an unsupported contract version`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeImplementationAttemptsFromWire(
         mapOf("contract_version" to "0.9", "attempts" to emptyList<Any?>()),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `decode rejects a record that is not an object`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeImplementationAttemptsFromWire(listOf<Any?>())
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `decode rejects an unknown attempt field rather than silently dropping it`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeImplementationAttemptsFromWire(
         mapOf(
           "contract_version" to FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION,
           "attempts" to listOf(attempt().toArtifactMap() + mapOf("completed" to true)),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

@@ -6,8 +6,9 @@ import skillbill.engine.goalrunner.model.GoalPreflightLookupInput
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightResult
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
@@ -36,7 +37,7 @@ class GoalPreflightLookupResolver(
           input.root,
         )
       is FeatureTaskContinuationLookupResult.NeedsIdentityRepair ->
-        throw InvalidFeatureTaskExecutionIdentitySchemaError(input.lookup.workflowId, input.lookup.summary)
+        throw invalidFeatureTaskExecutionIdentitySchema(input.lookup.workflowId, input.lookup.summary)
     }
 
   private fun noMatchResult(
@@ -118,10 +119,10 @@ class GoalPreflightLookupResolver(
     root: Path,
   ): GoalPreflightResult {
     val manifest =
-      manifestState?.manifest ?: throw InvalidDecompositionManifestSchemaError(
+      manifestState?.manifest ?: throw invalidDecompositionManifestSchema(
         sourceLabel = issueKey,
         reason = "goal continuation has no readable decomposition manifest",
-        failureCode = "missing_manifest",
+        code = WorkflowFailureCode.DECOMPOSITION_MANIFEST_MISSING_MANIFEST,
       )
     return GoalPreflightResult(
       verdict = "goal_continuation",

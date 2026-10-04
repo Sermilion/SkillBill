@@ -3,7 +3,9 @@ package skillbill.infrastructure.contracts.workflow.decomposition
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -165,11 +167,11 @@ internal object DecompositionManifestCoherenceValidator {
     sourceLabel: String,
     fieldPath: String,
     reason: String,
-  ): InvalidDecompositionManifestSchemaError =
-    InvalidDecompositionManifestSchemaError(
+  ): SkillBillRuntimeException =
+    invalidDecompositionManifestSchema(
       sourceLabel = sourceLabel,
       reason = "$fieldPath: $reason",
-      failureCode = "coherence_invalid",
+      code = DecompositionManifestValidationFailureCode.COHERENCE_INVALID,
     )
 
   private fun coherenceFailure(

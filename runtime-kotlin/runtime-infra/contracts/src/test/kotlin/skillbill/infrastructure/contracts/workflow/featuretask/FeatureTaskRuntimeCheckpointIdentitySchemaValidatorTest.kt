@@ -1,6 +1,6 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
@@ -39,7 +39,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
   @Test
   fun `rejects an unknown field rather than reinterpreting the record`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
           mapOf(
             "contract_version" to "0.2",
@@ -54,7 +54,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
 
   @Test
   fun `rejects a wrong contract version`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
         mapOf("contract_version" to "0.1", "checkpoints" to listOf(entry())),
         SOURCE,
@@ -82,7 +82,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
   @Test
   fun `rejects a checkpoint missing its ref or owning subtask`() {
     listOf("checkpoint_ref", "subtask_id").forEach { field ->
-      assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
           mapOf("contract_version" to "0.2", "checkpoints" to listOf(entry() - field)),
           SOURCE,
@@ -93,7 +93,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
 
   @Test
   fun `rejects a missing required identity field`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
         mapOf(
           "contract_version" to "0.2",
@@ -106,7 +106,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
 
   @Test
   fun `rejects a control-bearing issue key so an unbounded authority boundary cannot be recorded`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
         mapOf(
           "contract_version" to "0.2",
@@ -135,7 +135,7 @@ class FeatureTaskRuntimeCheckpointIdentitySchemaValidatorTest {
 
   @Test
   fun `rejects a commit sha that is not a commit sha`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeCheckpointIdentitySchemaValidator.validate(
         mapOf(
           "contract_version" to "0.2",

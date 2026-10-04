@@ -1,12 +1,14 @@
 package skillbill.mcp.telemetry
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
@@ -24,10 +26,10 @@ class TelemetryEventSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.assertIdentity(YAMLMapper().readTree(mismatchedIdYaml))
-      }
-    val reason = error.reason
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "https://malicious.example/shadow-telemetry-event.yaml")
     assertContains(reason, TelemetryEventSchemaPaths.EXPECTED_SCHEMA_ID)
   }
@@ -45,10 +47,10 @@ class TelemetryEventSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidTelemetryEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         TelemetryEventSchemaValidator.assertIdentity(YAMLMapper().readTree(mismatchedConstYaml))
-      }
-    val reason = error.reason
+      }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "9.99")
     assertContains(reason, TELEMETRY_EVENT_CONTRACT_VERSION)
   }

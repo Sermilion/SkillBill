@@ -2,7 +2,7 @@ package skillbill.workflow.engine
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.engine.model.WorkflowInputProjection
@@ -220,5 +220,5 @@ internal object WorkflowInputProjectionSelector {
   private fun reject(
     definition: WorkflowDefinition,
     detail: String,
-  ): Nothing = throw InvalidWorkflowStateSchemaError("${definition.workflowName}: $detail")
+  ): Nothing = throw invalidWorkflowStateSchemaError("${definition.workflowName}: $detail")
 }

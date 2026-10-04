@@ -1,6 +1,7 @@
 package skillbill.review.model
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.context.model.packet.ReviewLaneSegmentAccounting
 import skillbill.review.context.model.packet.ReviewRunLaneSegmentAccountingJson
 import kotlin.test.Test
@@ -47,8 +48,8 @@ class ReviewRunLaneSegmentAccountingJsonTest {
 
   @Test
   fun `malformed segment accounting json raises typed review context schema error`() {
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewRunLaneSegmentAccountingJson.decode("""{"segment_id":"x"}""")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 }

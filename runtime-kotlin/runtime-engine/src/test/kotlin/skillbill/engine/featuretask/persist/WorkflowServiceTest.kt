@@ -38,6 +38,7 @@ import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
@@ -52,12 +53,15 @@ import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
+import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -70,12 +74,17 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -99,6 +108,7 @@ import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
@@ -611,7 +621,7 @@ class WorkflowServiceTest {
           snapshot: WorkflowStateSnapshot,
           slug: String,
         ): Unit =
-          throw InvalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
+          throw invalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
       }
     val service =
       WorkflowService(
@@ -626,12 +636,12 @@ class WorkflowServiceTest {
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
       )
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.get(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
-    }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, "wftr-loud")
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -651,7 +661,7 @@ class WorkflowServiceTest {
           snapshot: WorkflowStateSnapshot,
           slug: String,
         ): Unit =
-          throw InvalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
+          throw invalidWorkflowStateSchemaError("Workflow '$slug': snapshot fails schema validation at '<root>'.")
       }
     val service =
       WorkflowService(
@@ -780,12 +790,24 @@ class WorkflowServiceTest {
     val service = newService(workflows)
     val progress = testWorkflowGoalRunnerOutcomeStore(database, testWorkflowSnapshotValidator)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> { service.resume(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId) }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { service.get(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId) }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
-      service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    assertFailsWith<SkillBillRuntimeException> {
+      service.resume(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> { progress.progress(row.workflowId) }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.get(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      service.continueWorkflow(WorkflowFamilyKind.TASK_RUNTIME, row.workflowId)
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
+      progress.progress(row.workflowId)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
     assertEquals(row, workflows.getFeatureTaskWorkflowAsMode(row.workflowId, RUNTIME))
   }
 
@@ -1224,7 +1246,7 @@ class WorkflowServiceGoalManifestStoreTest {
     Files.writeString(brokenPath, LEGACY_CONTRACT_MANIFEST_YAML.replace("SKILL-80", "SKILL-8"))
     val store = manifestStore(rejecting = setOf(brokenPath.toString()))
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.loadByIssueKey("SKILL-8", repoRoot = repoRoot)
     }
   }
@@ -1555,7 +1577,7 @@ class WorkflowServiceGoalManifestStoreTest {
       )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.loadByIssueKey("SKILL-52.1", repoRoot = repoRoot)
       }
 
@@ -2917,13 +2939,24 @@ class WorkflowGoalRunnerProgressStoreTest {
           OutcomeStoreTestArtifactPorts(
             goalObservabilityEventValidator =
               object : FeatureTaskRuntimeWireArtifactValidator {
+                override fun handoffEnvelopeRejection(
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
                 override fun validate(
                   kind: FeatureTaskRuntimeWireArtifactKind,
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
                   sourceLabel: String,
                 ) {
-                  throw InvalidGoalObservabilityEventSchemaError(sourceLabel, "subtask_id", "subtask_id is required.")
+                  throw invalidGoalObservabilityEventSchemaError(sourceLabel, "subtask_id", "subtask_id is required.")
                 }
+
+                override fun violation(
+                  kind: FeatureTaskRuntimeWireArtifactKind,
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): String? = null
               },
           ),
       )
@@ -3115,24 +3148,35 @@ class WorkflowGoalRunnerProgressStoreTest {
           OutcomeStoreTestArtifactPorts(
             goalProgressEventValidator =
               object : FeatureTaskRuntimeWireArtifactValidator {
+                override fun handoffEnvelopeRejection(
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
                 override fun validate(
                   kind: FeatureTaskRuntimeWireArtifactKind,
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
                   sourceLabel: String,
                 ) {
-                  throw InvalidGoalProgressEventSchemaError(
+                  throw invalidGoalProgressEventSchemaError(
                     sourceLabel,
                     "operation_name",
                     "operation_name is required.",
                   )
                 }
+
+                override fun violation(
+                  kind: FeatureTaskRuntimeWireArtifactKind,
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): String? = null
               },
           ),
       )
 
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.recordProgressEvent(progressEventRequest("wfl-child", tick = 0))
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
     val artifacts = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-child")).toSnapshot().artifacts
     assertFalse(artifacts.containsKey("goal_progress_run_history"))
     assertFalse(artifacts.containsKey("goal_progress_latest_event"))
@@ -3360,7 +3404,7 @@ class WorkflowGoalRunnerProgressStoreTest {
           )
         }
 
-      assertFailsWith<InvalidWorkflowStateSchemaError>("subtask_id $identity must be rejected.") {
+      assertFailsWith<SkillBillRuntimeException>("subtask_id $identity must be rejected.") {
         FakeDatabaseSessionFactory(workflows, goalRunnerControls = controls).transaction { unitOfWork ->
           testWorkflowEngine.persistParentDecompositionRuntime(
             malformed,
@@ -3369,7 +3413,7 @@ class WorkflowGoalRunnerProgressStoreTest {
             testDecompositionManifestValidator,
           )
         }
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
       assertNull(controls.reviewPolicy("wfl-malformed-parent"))
       assertEquals(emptyMap(), controls.outOfBandAcceptances("wfl-malformed-parent"))
@@ -3466,11 +3510,22 @@ private val testWorkflowEngine: WorkflowEngine = WorkflowEngine()
 
 private val testFeatureTaskRuntimeWireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator =
   object : FeatureTaskRuntimeWireArtifactValidator {
+    override fun handoffEnvelopeRejection(
+      payload: FeatureTaskRuntimeWorkflowArtifactMap,
+      sourceLabel: String,
+    ): InvalidFeatureTaskRuntimeHandoffProjectionContext? = null
+
     override fun validate(
       kind: FeatureTaskRuntimeWireArtifactKind,
       payload: FeatureTaskRuntimeWorkflowArtifactMap,
       sourceLabel: String,
     ) = Unit
+
+    override fun violation(
+      kind: FeatureTaskRuntimeWireArtifactKind,
+      payload: FeatureTaskRuntimeWorkflowArtifactMap,
+      sourceLabel: String,
+    ): String? = null
   }
 
 private fun workflowRecord(
@@ -3541,7 +3596,11 @@ private fun rejectingDecompositionManifestValidator(rejectedSources: Set<String>
       sourceLabel: String,
     ): DecompositionManifest {
       if (sourceLabel in rejectedSources) {
-        throw InvalidDecompositionManifestSchemaError(sourceLabel, "contract_version: must be '0.5'")
+        throw invalidDecompositionManifestSchema(
+          sourceLabel,
+          "contract_version: must be '0.5'",
+          DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+        )
       }
       return testDecompositionManifestValidator.validateYamlText(yamlText, sourceLabel)
     }
@@ -3691,8 +3750,15 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
   fun `missing corrupt and conflicting preparation fail before a child is durable`() {
     listOf("missing", "corrupt", "conflict").forEach { variant ->
       val harness = hydrationHarness(variant = variant)
-      assertFailsWith<RuntimeException>(variant) {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+      if (variant == "conflict") {
+        assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+          variant,
+        )
+      } else {
+        assertFailsWith<RuntimeException>(variant) {
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+        }
       }
       assertNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME), variant)
       assertNull(harness.workflows.executionIdentity(CHILD_ID), variant)
@@ -3704,11 +3770,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val harness = hydrationHarness(variant = "projection_invalid")
 
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         harness.store.saveNewChildWorkflow(harness.state, harness.setup)
       }
 
-    assertContains(error.reason, "value")
+    assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
+    assertContains(error.message.orEmpty(), "value")
     assertNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
     assertNull(harness.workflows.executionIdentity(CHILD_ID))
   }
@@ -3797,12 +3864,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "stored import provenance differs from the hydration request")
+    assertContains(conflict.reason, "stored import provenance differs from the hydration request")
   }
 
   @Test
@@ -3817,12 +3884,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "child carries no goal planning import artifact")
+    assertContains(conflict.reason, "child carries no goal planning import artifact")
   }
 
   @Test
@@ -3832,13 +3899,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
 
     harness.preparations.shared = null
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
     assertContains(
-      error.message.orEmpty(),
+      conflict.reason,
       "parent planning checkpoints are missing or have incompatible provenance",
     )
   }
@@ -3859,12 +3926,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "phase ledger no longer opens with the goal planning import prefix")
+    assertContains(conflict.reason, "phase ledger no longer opens with the goal planning import prefix")
   }
 
   @Test
@@ -3878,12 +3945,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "child planning phases are not settled as completed")
+    assertContains(conflict.reason, "child planning phases are not settled as completed")
   }
 
   @Test
@@ -4296,32 +4363,42 @@ private class RecordingPlanningPreparations(
   val plans = mutableMapOf<Int, GoalSubtaskPlanCheckpoint>()
   var readCount = 0
 
-  override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
+  override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult {
     shared = checkpoint
+    return GoalPlanningPreparationWriteResult.Applied
   }
 
-  override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? {
+  override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanLookupResult {
     readCount++
     check(!errorOnRead) { "standalone path read goal preparation" }
-    return shared?.takeIf { it.identity == expectedIdentity }
+    return SharedGoalPreplanLookupResult.Found(shared?.takeIf { it.identity == expectedIdentity })
   }
 
-  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
+  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     plans[checkpoint.subtaskId] = checkpoint
+    return GoalPlanningPreparationWriteResult.Applied
   }
 
   override fun findSubtaskPlan(
     expectedIdentity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
-  ) = plans[subtaskId]?.takeIf { it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath }
+  ): GoalSubtaskPlanLookupResult =
+    GoalSubtaskPlanLookupResult.Found(
+      plans[subtaskId]?.takeIf { it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath },
+    )
 
   override fun listSubtaskPlansOrdered(
     expectedIdentity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
-  ) = orderedDescriptors.mapNotNull { findSubtaskPlan(expectedIdentity, it.subtaskId, it.governedSubSpecPath) }
+  ): GoalSubtaskPlanListResult =
+    GoalSubtaskPlanListResult.Found(
+      orderedDescriptors.mapNotNull {
+        findSubtaskPlan(expectedIdentity, it.subtaskId, it.governedSubSpecPath).foundPlan()
+      },
+    )
 
-  override fun markPrepared(record: GoalPlanningPreparationRecord) = Unit
+  override fun markPrepared(record: GoalPlanningPreparationRecord) = GoalPlanningPreparationWriteResult.Applied
 
   override fun deleteByGoal(parentGoalWorkflowId: String) = 0
 

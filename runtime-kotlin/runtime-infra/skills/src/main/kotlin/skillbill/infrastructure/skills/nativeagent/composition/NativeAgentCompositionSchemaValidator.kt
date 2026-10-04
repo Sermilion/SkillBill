@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
-import skillbill.error.shellcontent.InvalidNativeAgentCompositionSchemaError
+import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
@@ -25,7 +25,7 @@ object NativeAgentCompositionSchemaValidator {
       try {
         yamlMapper.readTree(yamlText)
       } catch (error: JsonProcessingException) {
-        throw InvalidNativeAgentCompositionSchemaError(
+        throw invalidNativeAgentCompositionSchemaError(
           sourceLabel = sourceLabel,
           reason = "could not parse YAML for schema validation: ${error.message.orEmpty()}",
           cause = error,
@@ -53,7 +53,7 @@ object NativeAgentCompositionSchemaValidator {
     log.log(Level.WARNING, buildSchemaDriftLog(errors, sourceLabel))
     val sorted = errors.sortedWith(violationOrdering)
     val reason = formatValidationReason(sorted)
-    throw InvalidNativeAgentCompositionSchemaError(sourceLabel = sourceLabel, reason = reason)
+    throw invalidNativeAgentCompositionSchemaError(sourceLabel = sourceLabel, reason = reason)
   }
 
   private fun buildSchemaDriftLog(
@@ -96,7 +96,7 @@ object NativeAgentCompositionSchemaValidator {
         classLoader = NativeAgentCompositionSchemaValidator::class.java.classLoader,
         classpathResource = NativeAgentCompositionSchemaPaths.CLASSPATH_RESOURCE,
         missingResource = {
-          InvalidNativeAgentCompositionSchemaError(
+          invalidNativeAgentCompositionSchemaError(
             sourceLabel = "<schema-load>",
             reason =
               "Canonical native-agent composition schema is missing. Expected classpath resource " +
@@ -104,7 +104,7 @@ object NativeAgentCompositionSchemaValidator {
           )
         },
         processingFailure = { cause ->
-          InvalidNativeAgentCompositionSchemaError(
+          invalidNativeAgentCompositionSchemaError(
             sourceLabel = "<schema-load>",
             reason = cause.message ?: cause::class.simpleName.orEmpty(),
             cause = cause,
@@ -123,7 +123,7 @@ object NativeAgentCompositionSchemaValidator {
         expectedContractVersion = NATIVE_AGENT_COMPOSITION_CONTRACT_VERSION,
         contractVersionPath = listOf("\$defs", "contractVersion", "const"),
         identityFailure = { reason ->
-          InvalidNativeAgentCompositionSchemaError(
+          invalidNativeAgentCompositionSchemaError(
             sourceLabel = "<schema-load>",
             reason = reason,
           )

@@ -11,7 +11,8 @@ import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.status.liveLease
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
@@ -150,12 +151,12 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
       )
 
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.unemittedGoalReviewPasses("wftr-goal-review")
-    }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       store.acknowledgeGoalReviewPass("wftr-goal-review", 1)
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test

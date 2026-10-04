@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -172,10 +172,10 @@ internal fun decodeWorkflowStringList(rawValue: String?): List<String> {
       JsonCodec.parseJsonArrayStrict(rawValue.trim())
     } catch (error: SkillBillRuntimeException) {
       error.rethrowUnless(error.isShellContentContractFailure())
-      throw InvalidWorkflowStateSchemaError("spec_input_types must be a JSON array")
+      throw invalidWorkflowStateSchemaError("spec_input_types must be a JSON array")
     }
   return parsed.map { element ->
-    element as? String ?: throw InvalidWorkflowStateSchemaError("spec_input_types entries must be strings")
+    element as? String ?: throw invalidWorkflowStateSchemaError("spec_input_types entries must be strings")
   }
 }
 
@@ -225,7 +225,7 @@ internal fun Connection.getFeatureTaskWorkflowRowAsMode(
 ): WorkflowStateRecord? {
   val row = getFeatureTaskWorkflowRow(workflowId) ?: return null
   if (row.mode != mode) {
-    throw InvalidWorkflowStateSchemaError(
+    throw invalidWorkflowStateSchemaError(
       "Feature-task workflow '$workflowId' is mode='${row.mode?.wireValue.orEmpty()}', not '${mode.wireValue}'.",
     )
   }
@@ -295,14 +295,14 @@ internal fun ResultSet.toFeatureTaskWorkflowStateRecord(): WorkflowStateRecord {
   val workflowId = getString(SharedPayloadKeys.WORKFLOW_ID)
   val workflowName = getString("workflow_name")
   if (workflowName != "bill-feature-task") {
-    throw InvalidWorkflowStateSchemaError(
+    throw invalidWorkflowStateSchemaError(
       "Feature-task workflow '$workflowId' must persist workflow_name='bill-feature-task'; found '$workflowName'.",
     )
   }
   val rawMode = getString("mode")
   val mode =
     FeatureTaskWorkflowMode.fromWireValue(rawMode)
-      ?: throw InvalidWorkflowStateSchemaError(
+      ?: throw invalidWorkflowStateSchemaError(
         "Feature-task workflow '$workflowId' has unknown mode '$rawMode'.",
       )
   return WorkflowStateRecord(

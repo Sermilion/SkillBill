@@ -7,8 +7,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.WorkflowIssueKeyConflictError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.workflowIssueKeyConflictError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -94,7 +94,7 @@ class FeatureTaskRuntimeWorkflowPersistence
             normalizedIssueKey != null &&
             persistedIssueKey != normalizedIssueKey
           ) {
-            throw WorkflowIssueKeyConflictError(workflowId, persistedIssueKey, normalizedIssueKey)
+            throw workflowIssueKeyConflictError(workflowId, persistedIssueKey, normalizedIssueKey)
           }
           if (persistedIssueKey == null && normalizedIssueKey != null) {
             unitOfWork.workflowStates.saveFeatureTaskWorkflow(
@@ -154,7 +154,7 @@ class FeatureTaskRuntimeWorkflowPersistence
             terminalInstant = advance.terminalInstant,
             workflowStatus =
               WorkflowStatus.fromWire(advance.workflowStatus)
-                ?: throw InvalidWorkflowStateSchemaError(
+                ?: throw invalidWorkflowStateSchemaError(
                   "Workflow update workflow_status has unsupported value '${advance.workflowStatus}'.",
                 ),
             currentStepId = advance.currentStepId,
@@ -215,7 +215,7 @@ internal fun stepUpdatesFrom(
       record.finishedAt != null -> "completed"
       record.status.workflowStepStatus() in setOf(WorkflowStepStatus.RUNNING, WorkflowStepStatus.COMPLETED) ->
         record.status.wireValue
-      else -> throw InvalidWorkflowStateSchemaError(
+      else -> throw invalidWorkflowStateSchemaError(
         "Feature-task-runtime phase '${record.phaseId}' has unmappable status '${record.status}' for steps[].",
       )
     }

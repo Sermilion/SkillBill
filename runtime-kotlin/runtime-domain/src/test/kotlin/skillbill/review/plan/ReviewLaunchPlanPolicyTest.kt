@@ -1,10 +1,8 @@
 package skillbill.review.plan
 
 import org.junit.jupiter.api.Test
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
-import skillbill.error.shellcontent.IncompatibleCompositionContractError
-import skillbill.error.shellcontent.MissingCompositionLayerError
-import skillbill.error.shellcontent.ReviewCompositionCycleError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.model.FileLocation
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewComposition
@@ -126,14 +124,20 @@ class ReviewLaunchPlanPolicyTest {
   fun `cycle missing layer and contract drift fail loudly`() {
     val a = pack("a", listOf("security"), layers = listOf(layer("b")))
     val b = pack("b", listOf("testing"), layers = listOf(layer("a")))
-    assertFailsWith<ReviewCompositionCycleError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewLaunchPlanPolicy.flatten("a", listOf(a, b), setOf("security", "testing"))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.REVIEW_COMPOSITION_CYCLE, failure.code)
     }
-    assertFailsWith<MissingCompositionLayerError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewLaunchPlanPolicy.flatten("a", listOf(a), setOf("security"))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.MISSING_COMPOSITION_LAYER, failure.code)
     }
-    assertFailsWith<IncompatibleCompositionContractError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewLaunchPlanPolicy.flatten("a", listOf(a, b.copy(contractVersion = "2.0")), setOf("security"))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INCOMPATIBLE_COMPOSITION_CONTRACT, failure.code)
     }
   }
 
@@ -142,8 +146,10 @@ class ReviewLaunchPlanPolicyTest {
     val left = pack("left", listOf("security"))
     val right = pack("right", listOf("security"))
     val root = pack("root", listOf("ui"), layers = listOf(layer("left"), layer("right")))
-    assertFailsWith<AmbiguousLaneOwnershipError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewLaunchPlanPolicy.flatten("root", listOf(root, left, right), setOf("security"))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
     }
   }
 

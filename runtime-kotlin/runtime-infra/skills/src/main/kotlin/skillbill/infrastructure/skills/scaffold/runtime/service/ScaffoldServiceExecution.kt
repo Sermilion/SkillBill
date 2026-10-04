@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
-import skillbill.error.shellcontent.SkillAlreadyExistsError
+import skillbill.error.shellcontent.skillAlreadyExistsError
 import skillbill.infrastructure.skills.scaffold.rendering.renderAddonBody
 import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
@@ -101,7 +101,7 @@ internal fun stageFile(
   content: String,
 ) {
   if (Files.exists(path)) {
-    throw SkillAlreadyExistsError(
+    throw skillAlreadyExistsError(
       "Skill target '$path' already exists. Remove it or pick a new name before retrying.",
     )
   }

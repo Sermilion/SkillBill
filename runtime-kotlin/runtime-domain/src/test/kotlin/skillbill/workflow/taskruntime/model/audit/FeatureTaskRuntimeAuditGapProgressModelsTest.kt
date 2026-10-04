@@ -2,7 +2,8 @@ package skillbill.workflow.taskruntime.model.audit
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,18 +36,18 @@ class FeatureTaskRuntimeAuditGapProgressModelsTest {
   fun `audit-gap progress decode loud-fails on a malformed key set`() {
     val map = legacyAuditGapProgressArtifact(criterionRefs = listOf("AC-002")).toMutableMap()
     map["previous_criterion_refs"] = listOf(42)
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeAuditGapProgress.fromArtifactMap(map)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `audit-gap progress decode loud-fails on an unknown key`() {
     val map = legacyAuditGapProgressArtifact(criterionRefs = listOf("AC-002")).toMutableMap()
     map["unexpected"] = "x"
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeAuditGapProgress.fromArtifactMap(map)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

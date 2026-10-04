@@ -3,7 +3,8 @@ package skillbill.mcp.workflow
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowUpdateResult
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStepState
@@ -12,6 +13,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -89,7 +91,7 @@ class WorkflowMcpResultMappersTest {
   @Test
   fun `workflow mapper loud-fails malformed goal observability latest event`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -108,29 +110,29 @@ class WorkflowMcpResultMappersTest {
                 ),
             ),
         ).withDecodedGoalObservability().toMcpMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("contract_version", error.fieldPath)
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-invalid extra goal observability field`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("unknown" to true)),
         ).withDecodedGoalObservability().toMcpMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("", error.fieldPath)
+    assertContains(error.message.orEmpty(), "at '<root>'")
   }
 
   @Test
   fun `workflow mapper loud-fails malformed optional goal observability summary`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -139,15 +141,15 @@ class WorkflowMcpResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_file_summary" to "not-an-object"),
             ),
         ).withDecodedGoalObservability().toMcpMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("changed_file_summary", error.fieldPath)
+    assertContains(error.message.orEmpty(), "changed_file_summary")
   }
 
   @Test
   fun `workflow mapper loud-fails malformed optional goal observability arrays`() {
     val changedFilesError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -156,11 +158,11 @@ class WorkflowMcpResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_files" to listOf(123)),
             ),
         ).withDecodedGoalObservability().toMcpMap()
-      }
-    assertEquals("changed_files[0]", changedFilesError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(changedFilesError.message.orEmpty(), "changed_files[0]")
 
     val samplePathsError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -181,47 +183,47 @@ class WorkflowMcpResultMappersTest {
                 ),
             ),
         ).withDecodedGoalObservability().toMcpMap()
-      }
-    assertEquals("changed_file_summary.sample_paths", samplePathsError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(samplePathsError.message.orEmpty(), "changed_file_summary.sample_paths")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-invalid scalar coercion`() {
     val issueKeyError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("issue_key" to 61)),
         ).withDecodedGoalObservability().toMcpMap()
-      }
-    assertEquals("issue_key", issueKeyError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(issueKeyError.message.orEmpty(), "issue_key")
 
     val subtaskIdError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("subtask_id" to "1")),
         ).withDecodedGoalObservability().toMcpMap()
-      }
-    assertEquals("subtask_id", subtaskIdError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(subtaskIdError.message.orEmpty(), "subtask_id")
 
     val timestampError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("timestamp" to 20260601)),
         ).withDecodedGoalObservability().toMcpMap()
-      }
-    assertEquals("timestamp", timestampError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(timestampError.message.orEmpty(), "timestamp")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-only invalid heavy goal observability fields`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -230,9 +232,9 @@ class WorkflowMcpResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_files" to List(501) { "file-$it.kt" }),
             ),
         ).withDecodedGoalObservability().toMcpMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("changed_files", error.fieldPath)
+    assertContains(error.message.orEmpty(), "changed_files")
   }
 
   @Test

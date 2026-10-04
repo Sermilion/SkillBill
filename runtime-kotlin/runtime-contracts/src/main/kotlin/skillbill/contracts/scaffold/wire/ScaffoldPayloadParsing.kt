@@ -1,6 +1,6 @@
 package skillbill.contracts.scaffold.wire
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 
 fun requireString(
   map: Map<String, Any?>,
@@ -8,11 +8,11 @@ fun requireString(
 ): String {
   val value =
     map[key] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$key' must be a non-empty string.",
       )
   if (value.isBlank()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a non-empty string.",
     )
   }
@@ -30,7 +30,7 @@ fun requireStringOrDefault(
   return when (val value = map[key]) {
     null -> default
     is String -> value.takeIf { it.isNotBlank() } ?: default
-    else -> throw InvalidScaffoldPayloadError(
+    else -> throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' has wrong type " +
         "(expected String, got ${value::class.simpleName}).",
     )
@@ -47,7 +47,7 @@ fun optionalString(
   return when (val value = map[key]) {
     null -> null
     is String -> value.takeIf { it.isNotBlank() }
-    else -> throw InvalidScaffoldPayloadError(
+    else -> throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' has wrong type " +
         "(expected String, got ${value::class.simpleName}).",
     )
@@ -60,7 +60,7 @@ fun optionalList(
 ): List<*>? {
   val raw = map[key] ?: return null
   if (raw !is List<*>) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a list when provided " +
         "(got ${raw::class.simpleName}).",
     )

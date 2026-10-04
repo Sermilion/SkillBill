@@ -7,11 +7,11 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
 @Inject
 class GoalPlanningMigrationAdmission(
@@ -24,20 +24,27 @@ class GoalPlanningMigrationAdmission(
     val receipt =
       runCatching {
         database.transaction {
-          sourceVersion = it.goalPlanningPreparations.findSharedPreplan(identity)
-            ?.provenance?.phaseOutputContractVersion?.takeIf {
-                version ->
-              version.matches(Regex("[0-9]{1,3}\\.[0-9]{1,3}"))
+          val shared =
+            when (val result = it.goalPlanningPreparations.findSharedPreplan(identity)) {
+              is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+              is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
             }
+          sourceVersion = shared?.provenance?.phaseOutputContractVersion?.takeIf {
+              version ->
+            version.matches(Regex("[0-9]{1,3}\\.[0-9]{1,3}"))
+          }
             ?: "unknown"
           migration.migrate(it, identity.parentGoalWorkflowId, identity.repositoryIdentity, identity.normalizedIssueKey)
         }
       }.getOrElse { error ->
         error.rethrowIfCooperativeCancellationOrInterruption()
         val reported =
-          when (error) {
-            is InvalidGoalPlanningPreparationSchemaError,
-            is IncompatibleGoalPlanningPreparationRecoveryError,
+          when {
+            (error as? SkillBillRuntimeException)?.code in
+              setOf(
+                InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+                InstallFailureCode.GOAL_PLANNING_PREPARATION_CONFLICT,
+              )
             ->
               SkillBillRuntimeException(
                 FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
@@ -45,7 +52,7 @@ class GoalPlanningMigrationAdmission(
                   "and restore or repair the identified record before retrying.",
                 error,
               )
-            is SkillBillRuntimeException -> error
+            error is SkillBillRuntimeException -> error
             else ->
               SkillBillRuntimeException(
                 FeatureTaskRuntimeMigrationFailureCode.WRITE_FAILURE,

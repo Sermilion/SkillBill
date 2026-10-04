@@ -7,9 +7,9 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -241,7 +241,7 @@ class WorkerTakeoverFencingTest {
         identity.copy(normalizedIssueKey = "SKILL-999"),
         identity.copy(governedSpecPath = ".feature-specs/SKILL-384/other.md"),
       ).forEach { expected ->
-        assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           coordinator.runOwned(original.workflowId, execution.inputs, expected) { launches++ }
         }
       }

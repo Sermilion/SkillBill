@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
+
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.workflow.featuretask.encodeWorkflowArtifact
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
@@ -29,7 +30,7 @@ internal fun requireColumn(
   label: String,
   column: String,
 ): String =
-  rows.getString(column) ?: throw InvalidGoalPlanningPreparationSchemaError(
+  rows.getString(column) ?: throw invalidGoalPlanningPreparationSchemaError(
     sourceLabel = label,
     fieldPath = column,
     reason = "$column is required but was null on hydrate.",
@@ -49,7 +50,7 @@ internal fun optionalRepairEvidence(
         ?: throw IllegalArgumentException("repair evidence must be a JSON object")
     decodePhaseOutputRepairEvidenceFromArtifact(decoded)
   } catch (_: Exception) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       sourceLabel = label,
       fieldPath = column,
       reason = "repair evidence is malformed",
@@ -62,7 +63,7 @@ internal fun decodeState(
   value: String?,
 ): GoalPlanningPreparationState =
   GoalPlanningPreparationState.entries.singleOrNull { it.wireValue == value }
-    ?: throw InvalidGoalPlanningPreparationSchemaError(
+    ?: throw invalidGoalPlanningPreparationSchemaError(
       sourceLabel = label,
       fieldPath = "preparation_status",
       reason = "preparation_status '${value.orEmpty()}' is not supported.",
@@ -75,7 +76,7 @@ internal fun requirePositiveInt(
 ): Int =
   rows.getInt(column).also {
     if (rows.wasNull() || it < 1) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         label,
         column,
         "$column must be a positive integer on hydrate",
@@ -90,7 +91,7 @@ internal fun requireNonNegativeInt(
 ): Int =
   rows.getInt(column).also {
     if (rows.wasNull() || it < 0) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         label,
         column,
         "$column must be a non-negative integer on hydrate",

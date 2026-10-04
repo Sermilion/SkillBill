@@ -1,8 +1,7 @@
 package skillbill.scaffold.policy
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.RetiredScaffoldKindError
-import skillbill.error.shellcontent.UnknownSkillKindError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.scaffold.model.SkillKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,9 +13,9 @@ class ScaffoldPayloadPolicyTest {
     SkillKind.entries.forEach { kind ->
       assertEquals(kind, SkillKind.fromWire(kind.wireValue))
     }
-    assertFailsWith<UnknownSkillKindError> {
+    assertFailsWith<SkillBillRuntimeException> {
       SkillKind.fromWire("not-a-skill-kind")
-    }
+    }.also { assertEquals(ScaffoldFailureCode.UNKNOWN_SKILL_KIND, it.code) }
   }
 
   @Test
@@ -32,9 +31,9 @@ class ScaffoldPayloadPolicyTest {
   @Test
   fun `retired partial scaffold kind error recommends full pack or edit remove`() {
     val error =
-      assertFailsWith<RetiredScaffoldKindError> {
+      assertFailsWith<SkillBillRuntimeException> {
         rejectRetiredPartialScaffoldKind(SKILL_KIND_CODE_REVIEW_AREA)
-      }
+      }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
     val message = error.message.orEmpty()
     assertEquals(true, message.contains("platform-pack"))
     assertEquals(true, message.contains("edit/remove existing platform-pack content"))
@@ -62,9 +61,9 @@ class ScaffoldPayloadPolicyTest {
 
   @Test
   fun `parseBaselineLayerPayload throws when raw is not an object`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseBaselineLayerPayload(2, "not-an-object")
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
@@ -79,9 +78,9 @@ class ScaffoldPayloadPolicyTest {
       )
 
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseBaselineLayerPayload(0, raw)
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message
     requireNotNull(message)
     assertEquals(true, message.contains("bogus-scope"))
@@ -99,9 +98,9 @@ class ScaffoldPayloadPolicyTest {
       )
 
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseBaselineLayerPayload(1, raw)
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message
     requireNotNull(message)
     assertEquals(true, message.contains("baseline_layers[1].required"))
@@ -118,9 +117,9 @@ class ScaffoldPayloadPolicyTest {
         "mode" to "kmp-baseline",
       )
     val blankPlatformError =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseBaselineLayerPayload(0, blankPlatform)
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val blankPlatformMessage = blankPlatformError.message
     requireNotNull(blankPlatformMessage)
     assertEquals(true, blankPlatformMessage.contains("baseline_layers[0].platform"))
@@ -134,9 +133,9 @@ class ScaffoldPayloadPolicyTest {
         "mode" to "kmp-baseline",
       )
     val blankSkillError =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseBaselineLayerPayload(2, blankSkill)
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val blankSkillMessage = blankSkillError.message
     requireNotNull(blankSkillMessage)
     assertEquals(true, blankSkillMessage.contains("baseline_layers[2].skill"))

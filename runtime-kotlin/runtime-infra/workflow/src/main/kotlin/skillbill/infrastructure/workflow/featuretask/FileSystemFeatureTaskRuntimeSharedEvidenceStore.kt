@@ -3,8 +3,8 @@ package skillbill.infrastructure.workflow.featuretask
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorUnreadableError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorUnreadableError
 import skillbill.infrastructure.host.jvm.deleteRecursively
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.replaceDirectory
@@ -73,20 +73,20 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
     val artifactDir = repoRoot.resolve(request.storePath).normalize()
     val storeRoot = repoRoot.resolve(".skill-bill").resolve("run-evidence").normalize()
     if (!pathContainedIn(artifactDir, storeRoot) || !Files.isDirectory(artifactDir)) {
-      throw ReviewHunkEvidenceLocatorMissingError(request.storePath)
+      throw reviewHunkEvidenceLocatorMissingError(request.storePath)
     }
     val fingerprint = artifactDir.fileName.toString()
     val workflowId = artifactDir.parent.fileName.toString()
     val publishedPath = storePath(request.repoRoot, artifactDir)
     val stored =
       readStored(mapper, artifactDir, fingerprint, workflowId, publishedPath)
-        ?: throw ReviewHunkEvidenceLocatorUnreadableError(
+        ?: throw reviewHunkEvidenceLocatorUnreadableError(
           request.storePath,
           "stored artifact is missing, truncated, or unreadable",
         )
     val payloadPath = artifactDir.resolve(request.payloadFile)
     if (!Files.isRegularFile(payloadPath)) {
-      throw ReviewHunkEvidenceLocatorUnreadableError(request.storePath, "payload file is not a regular file")
+      throw reviewHunkEvidenceLocatorUnreadableError(request.storePath, "payload file is not a regular file")
     }
     return stored.diffPayload
   }

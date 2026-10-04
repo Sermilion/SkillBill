@@ -11,10 +11,11 @@ import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -27,6 +28,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -206,16 +208,16 @@ class ApplicationPersistencePortWorkflowTest {
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
 
-    val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+    val rejection =
+      assertIs<RequiredPhaseWrite.Rejected>(
         recorder.recordPhaseBriefing(
           workflowId,
           handoffBriefing(envelope = handoffEnvelope().copy(contractVersion = "9.9")),
-        )
-      }
+        ),
+      ).handoffRejection
 
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.failureKind)
-    assertEquals("implement", error.consumerPhaseId)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, rejection?.failureKind)
+    assertEquals("implement", rejection?.consumerPhaseId)
   }
 
   @Test
@@ -226,19 +228,17 @@ class ApplicationPersistencePortWorkflowTest {
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
     val rejection =
-      InvalidFeatureTaskRuntimeHandoffProjectionError(
-        InvalidFeatureTaskRuntimeHandoffProjectionContext(
-          workflowId = workflowId,
-          consumerPhaseId = "implement",
-          projectionName = "plan_receipt",
-          projectionContractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE,
-          projectionContractVersion = "0.2",
-          failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
-          reason = "repository checkpoint differs",
-        ),
+      InvalidFeatureTaskRuntimeHandoffProjectionContext(
+        workflowId = workflowId,
+        consumerPhaseId = "implement",
+        projectionName = "plan_receipt",
+        projectionContractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE,
+        projectionContractVersion = "0.2",
+        failureKind = FeatureTaskRuntimeHandoffProjectionFailureKind.CHECKPOINT_POLICY_VIOLATION,
+        reason = "repository checkpoint differs",
       )
 
-    assertTrue(recorder.recordProjectionRejection(workflowId, "implement", rejection, "checkpoint-2"))
+    assertTrue(recorder.recordProjectionRejection(rejection, "checkpoint-2"))
 
     val measurement = telemetry.projectionMeasurements.single()
     assertEquals(FeatureTaskRuntimeProjectionFailureClassification.STALE_CHECKPOINT, measurement.failureClassification)
@@ -259,10 +259,12 @@ class ApplicationPersistencePortWorkflowTest {
     }
 
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.loadPhaseBriefings(workflowId)
+      }.also {
+        assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, it.code)
       }
-    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.failureKind)
+    assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, error.code)
   }
 
   @Test
@@ -275,7 +277,8 @@ class ApplicationPersistencePortWorkflowTest {
 
     corruptDurableEnvelope(workflowRepository, workflowId) { it + ("contract_version" to "9.9") }
 
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> { recorder.loadPhaseBriefings(workflowId) }
+    assertFailsWith<SkillBillRuntimeException> { recorder.loadPhaseBriefings(workflowId) }
+      .also { assertEquals(FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID, it.code) }
   }
 
   @Test
@@ -528,7 +531,7 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.recordPhaseState(
         FeatureTaskRuntimePhaseStateRequest(
           workflowId = workflowId,
@@ -539,7 +542,7 @@ class ApplicationPersistencePortWorkflowTest {
           finished = false,
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -570,9 +573,9 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.appendPlanLedger(workflowId, FeatureTaskRuntimePhaseLedgerAction.RESUME)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -596,9 +599,9 @@ class ApplicationPersistencePortWorkflowTest {
     val record = requireNotNull(workflowRepository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
     workflowRepository.saveFeatureTaskWorkflow(record.copy(artifactsJson = malformedArtifactsJson), RUNTIME)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       recorder.appendPlanLedger(workflowId, FeatureTaskRuntimePhaseLedgerAction.RESUME)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

@@ -8,7 +8,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
@@ -16,6 +17,7 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -96,10 +98,11 @@ class FeatureTaskRuntimeGateRecoveryTest {
       assertTrue(result.blockedReason.contains("Terminal workflows"))
     } else {
       val error =
-        assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           harness.runner.run(harness.request)
         }
-      assertEquals(phase, error.sourceLabel)
+      assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
+      assertContains(error.message.orEmpty(), phase)
     }
   }
 

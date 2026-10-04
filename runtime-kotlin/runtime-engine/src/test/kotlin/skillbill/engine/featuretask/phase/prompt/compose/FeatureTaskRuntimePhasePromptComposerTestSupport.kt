@@ -4,8 +4,8 @@ package skillbill.engine.featuretask.phase.prompt.compose
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
-import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
+import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.engine.featuretask.runner.IMPLEMENT_OUTPUT
 import skillbill.engine.featuretask.runner.SIMPLIFY_OUTPUT
 import skillbill.engine.featuretask.runner.phaseDeclaration
@@ -80,7 +80,7 @@ internal fun promptComposerBriefingFor(
   val checkpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "fixture-checkpoint-1")
   val declaration =
     phaseDeclaration(phaseId, options.featureSize, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD))
-  return FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+  return assembleFeatureTaskRuntimeBriefing(
     FeatureTaskRuntimeHandoffContract.assembleHandoff(
       FeatureTaskRuntimeHandoffAssemblyRequest(
         declaration = declaration,

@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLa
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -48,7 +48,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
     private fun invalidValidationEvidence(
       phaseId: String,
       reason: String,
-    ): Nothing = throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(phaseId, reason)
+    ): Nothing = throw invalidFeatureTaskRuntimeValidationEvidenceSchema(phaseId, reason)
 
     fun runtimeOwnedValidationOutput(
       phaseId: String,

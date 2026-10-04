@@ -1,7 +1,7 @@
 
 package skillbill.engine.featuretask.phase.prompt.compose
 
-import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.briefing.assembleFeatureTaskRuntimeBriefing
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsPhaseOutput
@@ -163,7 +163,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
+      assembleFeatureTaskRuntimeBriefing(handoff)
     val prompt =
       composePhasePrompt(
         issueKey = "SKILL-142",
@@ -220,7 +220,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
+      assembleFeatureTaskRuntimeBriefing(handoff)
     val prompt =
       composePhasePrompt(
         issueKey = "SKILL-178",
@@ -278,7 +278,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
+      assembleFeatureTaskRuntimeBriefing(handoff)
     return composePhasePrompt(
       issueKey = "SKILL-142",
       briefing = briefing,
@@ -315,7 +315,7 @@ private val REVIEW_INPUT =
   )
 
 private fun reviewBriefing() =
-  FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+  assembleFeatureTaskRuntimeBriefing(
     FeatureTaskRuntimeHandoffContract.assembleHandoff(
       FeatureTaskRuntimeHandoffAssemblyRequest(
         declaration =

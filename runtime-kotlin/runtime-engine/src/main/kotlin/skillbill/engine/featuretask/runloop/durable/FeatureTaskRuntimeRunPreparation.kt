@@ -14,7 +14,9 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
@@ -36,7 +38,8 @@ class FeatureTaskRuntimeRunPreparation(
     val persistedInvariants =
       try {
         runInvariantsStore.resolve(request.workflowId)
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         val completedPhases =
           recorder.loadPhaseRecords(request.workflowId).orEmpty().values
             .filter { it.status == WorkflowStepStatus.COMPLETED }

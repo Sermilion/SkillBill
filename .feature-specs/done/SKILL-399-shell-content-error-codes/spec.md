@@ -1,11 +1,11 @@
 # SKILL-399 - shell-content-error-codes
 
 Issue key: SKILL-399
-Origin: split out of SKILL-398 subtask 4 (`../done/SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
+Origin: split out of SKILL-398 subtask 4 (`../SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
 
 ## Outcome
 
-Every class declared in `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/` becomes a `SkillBillRuntimeException` with an owner failure code. SKILL-398 subtask 4 converts the AgentAddon and GovernedReview files and lays the shared transition pieces. This bundle converts the other seven files: FeatureTaskRuntime, Install, Manifest, ReviewContext, Scaffold, SkillStaging and Workflow.
+Every class declared in `../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent` becomes a `SkillBillRuntimeException` with an owner failure code. SKILL-398 subtask 4 converts the AgentAddon and GovernedReview files and lays the shared transition pieces. This bundle converts the other seven files: FeatureTaskRuntime, Install, Manifest, ReviewContext, Scaffold, SkillStaging and Workflow.
 
 Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
 
@@ -21,7 +21,7 @@ Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
 
 ## Target failure model
 
-The model is SKILL-398's (`../done/SKILL-398-runtime-exception-reduction`, "Target failure model"):
+The model is SKILL-398's (`../SKILL-398-runtime-exception-reduction`, "Target failure model"):
 
 ```kotlin
 package skillbill.error.core
@@ -40,7 +40,7 @@ Transition: while any class in main still extends `SkillBillRuntimeException` or
 
 - it deletes `ShellContentContractException`, `LegacyFailureCode` and the secondary constructor;
 - it makes `SkillBillRuntimeException` final;
-- it removes the `is ShellContentContractException` term from `isShellContentContractFailure()` and keeps every guarded edge site with its rethrow, retargeting any `ShellContentContractException` catch, function type or `is` check left in main or tests to `SkillBillRuntimeException` under the same guard. Widening a guarded catch to every `SkillBillRuntimeException` is not allowed: it would absorb database, runtime-owned fact, gate-JVM and validation-gate failures that propagate today. The full rule is `.feature-specs/SKILL-400-runtime-error-codes/spec.md` "Transition finish"; the condition also requires that no source calls the codeless constructor.
+- it removes the `is ShellContentContractException` term from `isShellContentContractFailure()` and keeps every guarded edge site with its rethrow, retargeting any `ShellContentContractException` catch, function type or `is` check left in main or tests to `SkillBillRuntimeException` under the same guard. Widening a guarded catch to every `SkillBillRuntimeException` is not allowed: it would absorb database, runtime-owned fact, gate-JVM and validation-gate failures that propagate today. The full rule is `../../SKILL-400-runtime-error-codes/spec.md` "Transition finish"; the condition also requires that no source calls the codeless constructor.
 
 Every subtask in this bundle checks that condition after its own edits.
 
@@ -63,7 +63,7 @@ These come from SKILL-398 subtask 4. A subtask that finds one missing adds it ex
 - **Throw sites.** Every `throw`, and every returned or constructed former class, uses the message function or the coded constructor. Lambdas typed as returning a former class become `SkillBillRuntimeException`.
 - **Catch sites.** `catch (e: FormerClass)` becomes `catch (e: SkillBillRuntimeException) { e.rethrowUnless(e.code == X) … }`, or `code is <Enum>` for a `FailureWireCode` family. Two catches on one `try` merge into one catch with a `when (e.code)`. `is FormerClass` and `as? FormerClass` become code checks on `(error as? SkillBillRuntimeException)?.code`. A catch that precedes a generic `SkillBillRuntimeException` catch keeps its order. A code-checked catch-to-null is acceptable; do not widen into decoder refactors. No touched catch becomes a new `runCatching`, and cancellation and interruption keep propagating.
 - **Tests.** `assertFailsWith<FormerClass>` becomes `assertFailsWith<SkillBillRuntimeException>` plus `assertEquals(<Code>.<ENTRY>, error.code)`. Message, `contains`, payload and exit-code assertions stay byte-for-byte. Property assertions change only from `error.<property> == x` to `error.code == <entry>`. Tests that construct former classes switch to the message function or the new value. Do not use `relaxed = true` mocks, `environment = emptyMap()` or a new test-helper module.
-- **Baseline.** Remove each deleted class's row from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand (row format `module:Class`, whole-row compare). Edit no other row.
+- **Baseline.** Remove each deleted class's row from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand (row format `module:Class`, whole-row compare). Edit no other row.
 
 ## Execution Rule
 

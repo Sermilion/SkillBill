@@ -1,3 +1,9 @@
+## [2026-10-04] Carry the original manifest failure through validation rejection
+Context: SKILL-399 subtask 8 removes caught-exception reason and failureCode reads from schema validation while preserving the messages emitted by requireAccepted.
+Decision: Rejected carries an optional SkillBillRuntimeException. Schema validation stores the original failure and its full message; requireAccepted rethrows it when present and constructs a coded failure otherwise.
+Reason: Rebuilding from the full message would wrap the schema-validation prefix again and lose the original cause. The settled plan confirms that discovery, both file-write paths and purge use the same validation and acceptance label, so rethrowing preserves their message text.
+Alternatives considered: Recover the raw reason from exception properties or parse the message. The plan removes those property reads and preserves the original failure instead.
+
 ## [2026-09-24] Validator contracts stay outside domain while artifact families stay typed (SKILL-372)
 Context: Domain decoders need to reject malformed durable artifacts without depending on schema-validator ports.
 Decision: Validator interfaces and wire carriers live in `runtime-ports`; runtime-domain owns pure artifact decoding and typed accessors, and adapters validate encoded payloads at every durable read and write seam.

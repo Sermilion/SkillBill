@@ -23,7 +23,9 @@ import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.pullRequestNotFound
 import skillbill.engine.operation.core.unknownVerifyWorkflow
 import skillbill.engine.operation.core.unresolvableVerifyTarget
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -343,7 +345,8 @@ class VerifyOperation(
   ): T? =
     try {
       read()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "seam=verify_supersede value_expected=readable_verify_rows value_used=skipped workflow_id=$workflowId " +

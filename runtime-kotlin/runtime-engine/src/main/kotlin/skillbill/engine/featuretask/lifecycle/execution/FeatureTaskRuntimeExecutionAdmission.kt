@@ -15,11 +15,13 @@ import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
@@ -88,12 +90,12 @@ class FeatureTaskRuntimeExecutionAdmission(
       val requestedReviewSelection = request.requestedReviewSelection
       val identity =
         states.getFeatureTaskExecutionIdentity(workflowId)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "missing immutable execution identity")
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing immutable execution identity")
       FeatureTaskExecutionIdentityPolicy.validate(identity)
       val goalMigration = migrateGoalImport(states, session, identity)
       val row =
         states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "missing workflow")
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing workflow")
       requireMatchingIdentity(identity, row, workflowId, expectedIdentity)
       val checkedInputs = inputs.frozen()
       val initialSnapshot = row.toSnapshot()
@@ -129,25 +131,33 @@ class FeatureTaskRuntimeExecutionAdmission(
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
       throw error
-    } catch (error: InvalidFeatureTaskExecutionIdentitySchemaError) {
-      warn(request.workflowId, "invalid_route_identity")
-      throw error
     } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
       warn(request.workflowId, error.refusal.wireValue)
       throw error
-    } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
-      val refusal =
+    } catch (error: SkillBillRuntimeException) {
+      reportAdmissionFailure(error, request)
+    }
+
+  private fun reportAdmissionFailure(
+    error: SkillBillRuntimeException,
+    request: AdmissionRequest,
+  ): Nothing {
+    if (error.code == FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA) {
+      warn(request.workflowId, "invalid_route_identity")
+    }
+    val reported =
+      if (error.code is FeatureTaskRuntimePhaseOutputFailureCode) {
         SkillBillRuntimeException(
           FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
           "Persisted phase output failed its declared contract. Restore or repair the identified record and retry.",
           error,
         )
-      recordMigrationFailure(refusal, null)
-      throw refusal
-    } catch (error: SkillBillRuntimeException) {
-      recordMigrationFailure(error, request.failureFacts)
-      throw error
-    }
+      } else {
+        error
+      }
+    recordMigrationFailure(reported, request.failureFacts)
+    throw reported
+  }
 
   private fun requireStoppedMigrationOwner(
     states: WorkflowStateRepository,
@@ -260,14 +270,14 @@ class FeatureTaskRuntimeExecutionAdmission(
     expected: FeatureTaskExecutionIdentity?,
   ) {
     if (WorkflowStatus.fromWire(row.workflowStatus)?.let { it in WorkflowStatus.terminalStatuses } == true) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "terminal workflow cannot be admitted")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "terminal workflow cannot be admitted")
     }
     val matchingRow =
       identity.workflowId == workflowId && identity.mode == FeatureTaskWorkflowMode.RUNTIME &&
         identity.normalizedIssueKey == row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
     val matchingExpected = expected == null || identity == expected
     if (!matchingRow || !matchingExpected) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "execution identity changed")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "execution identity changed")
     }
   }
 
@@ -285,7 +295,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         ?: if (!DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.contains(snapshot.artifacts)) {
           return MigratedPhaseOutputs(emptyMap(), emptySet(), null)
         } else {
-          throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+          throw invalidFeatureTaskRuntimePhaseOutputSchema(
             workflowId,
             "phase records do not have the persisted map shape",
           )
@@ -339,7 +349,7 @@ class FeatureTaskRuntimeExecutionAdmission(
     label: String,
   ): Map<String, Any?> {
     val record =
-      raw as? Map<*, *> ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+      raw as? Map<*, *> ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
         label,
         "outer phase record cannot be patched without changing its stored fields",
       )

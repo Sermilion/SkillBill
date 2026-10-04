@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -14,7 +14,7 @@ fun AdmittedFeatureTaskRuntimeExecution.requireCurrent(
   workflowId: String,
 ) {
   if (workflowId != identity.workflowId || states.getFeatureTaskExecutionIdentity(workflowId) != identity) {
-    throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "admitted route identity changed")
+    throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "admitted route identity changed")
   }
   val row =
     states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
@@ -26,4 +26,4 @@ fun AdmittedFeatureTaskRuntimeExecution.requireCurrent(
 }
 
 private fun missingAdmittedWorkflow(workflowId: String): Nothing =
-  throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "admitted workflow disappeared")
+  throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "admitted workflow disappeared")

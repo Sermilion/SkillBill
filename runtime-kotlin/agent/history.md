@@ -8,6 +8,16 @@ Areas: runtime-kotlin/runtime-{engine,contracts,domain,ports,core,cli,mcp}, runt
 - Limits: legacy preparation 0.1 and undeclared transitions remain unsupported. Corrupt, stale, mismatched, or non-convertible records block with typed diagnostics that omit payload content; this transition reuses planning without refresh.
 Feature flag: N/A
 Acceptance criteria: 1/1 implemented
+## [2026-10-04] SKILL-399 subtask 5: feature-task-runtime phase-output failures
+Areas: runtime-contracts error/shellcontent and error/featuretask; runtime-domain workflow/taskruntime; runtime-engine featuretask and goal planning; runtime-ports taskruntime; runtime-infra/contracts; runtime-core architecture baseline and workflow tests; runtime-application test fixtures; runtime-kotlin/ARCHITECTURE.md
+- Removed three legacy throwable classes and two unused structural-repair data types. Phase-output and projection message helpers create coded SkillBillRuntimeException values with the existing messages.
+- nextTransition returns Resolved or PhaseOrderViolation. The run loop blocks at the violation's phaseId with its message instead of recovering fields from an exception.
+- Projection validation, briefing assembly and recording pass rejection contexts as values. RequiredPhaseWrite.Rejected carries optional handoff details so launch rejection measurements retain their projection identity and classification.
+- reusable: accepted/rejected projection results and handoffEnvelopeRejection on the validator port let callers handle expected rejection without exception properties; throwing validation remains available.
+- Catch sites discriminate owned failure codes; converted tests retain message and measurement assertions, and the throwable baseline loses exactly the three deleted classes.
+- Limits: Kotlin callers must adopt the changed transition and recording signatures. Other shell-content failure conversions and retirement of the legacy bases remain outside this subtask; no feature flag or new wire format.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
 
 ## [2026-10-02] SKILL-398 subtask 6 — defect exceptions stop driving control flow at parse edges
 Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra/skills

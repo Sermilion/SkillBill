@@ -67,7 +67,7 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
 
     assertEquals(InstallApplyStatus.FAILURE, second.status)
     assertEquals(
-      "skillbill.error.shellcontent.InternalSkillSidecarCollisionError",
+      "SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION",
       second.failures.single { issue -> issue.skillName == PACK_SIDECAR_PARENT_SKILL }.causeClass,
     )
   }

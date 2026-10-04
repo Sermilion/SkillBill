@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
 import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
@@ -235,9 +236,9 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     seedPlatformPack(local, "generic")
     stalePackContractVersion(upstream)
 
-    assertFailsWith<ContractVersionMismatchError> {
+    assertFailsWith<SkillBillRuntimeException> {
       planWith(upstream, local, home, BaselineManifest.empty())
-    }
+    }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
   }
 
   @Test

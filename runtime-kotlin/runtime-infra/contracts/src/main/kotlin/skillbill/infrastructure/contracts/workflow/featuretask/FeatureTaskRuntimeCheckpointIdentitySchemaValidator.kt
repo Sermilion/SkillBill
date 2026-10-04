@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeCheckpointIdentitySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeCheckpointIdentitySchemaPaths
@@ -19,7 +19,7 @@ object FeatureTaskRuntimeCheckpointIdentitySchemaValidator {
     val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(payload)
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema(), instance)
     if (errors.isNotEmpty()) {
-      throw InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError(
+      throw invalidFeatureTaskRuntimeCheckpointIdentitySchema(
         sourceLabel = sourceLabel,
         reason = formatReason(errors),
       )
@@ -43,7 +43,7 @@ private fun schema(): JsonSchema =
       classLoader = FeatureTaskRuntimeCheckpointIdentitySchemaValidator::class.java.classLoader,
       classpathResource = FeatureTaskRuntimeCheckpointIdentitySchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError(
+        invalidFeatureTaskRuntimeCheckpointIdentitySchema(
           sourceLabel = FeatureTaskRuntimeCheckpointIdentitySchemaPaths.CLASSPATH_RESOURCE,
           reason =
             "Canonical feature-task-runtime checkpoint-identity schema is missing. Expected classpath " +
@@ -51,7 +51,7 @@ private fun schema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError(
+        invalidFeatureTaskRuntimeCheckpointIdentitySchema(
           sourceLabel = FeatureTaskRuntimeCheckpointIdentitySchemaPaths.CLASSPATH_RESOURCE,
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
           cause = cause,
@@ -61,7 +61,7 @@ private fun schema(): JsonSchema =
       expectedSchemaId = FeatureTaskRuntimeCheckpointIdentitySchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidFeatureTaskRuntimeCheckpointIdentitySchemaError(
+        invalidFeatureTaskRuntimeCheckpointIdentitySchema(
           sourceLabel = FeatureTaskRuntimeCheckpointIdentitySchemaPaths.CLASSPATH_RESOURCE,
           reason = reason,
         )

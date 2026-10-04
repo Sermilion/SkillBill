@@ -37,7 +37,9 @@ import skillbill.application.workflow.persist.resolveEffectiveSessionId
 import skillbill.application.workflow.persist.toWorkflowUpdateInput
 import skillbill.application.workflow.persist.withGoalObservabilityArtifacts
 import skillbill.contracts.issuekey.normalizeIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -140,7 +142,8 @@ class WorkflowService(
           database = database,
         ),
       ).withGoalObservability()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       WorkflowOpenResult.Error(workflowId, error.message.orEmpty())
     }
   }
@@ -162,7 +165,8 @@ class WorkflowService(
     val input =
       try {
         request.toWorkflowUpdateInput().copy(terminalInstant = clock.instant())
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         return WorkflowUpdateResult.Error(request.workflowId, error.message.orEmpty())
       }
     val persisted =
@@ -170,7 +174,8 @@ class WorkflowService(
         database.transaction { unitOfWork ->
           persistUpdate(family, request, input, unitOfWork)
         }
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         return WorkflowUpdateResult.Error(request.workflowId, error.message.orEmpty())
       }
     persisted.pendingProjection?.let { pending ->

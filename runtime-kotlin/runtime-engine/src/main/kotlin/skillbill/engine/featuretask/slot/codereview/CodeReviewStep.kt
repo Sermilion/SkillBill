@@ -20,8 +20,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -406,9 +405,9 @@ private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when {
     error is CancellationException -> null
-    error is UnreadableSpecIntentProjectionError ->
+    error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.UNREADABLE_SPEC_INTENT ->
       ReviewPassLaunch.Failed("Runtime-owned review could not read the spec intent projection: $message")
-    error is InvalidReviewContextSchemaError ->
+    error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA ->
       ReviewPassLaunch.Failed("Runtime-owned review produced an invalid review-context envelope: $message")
     error is SkillBillRuntimeException && error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE ->
       ReviewPassLaunch.Failed(

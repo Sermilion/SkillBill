@@ -9,11 +9,12 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
+import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
 
 object FeatureTaskRuntimeRunLoopDrive {
@@ -100,12 +101,12 @@ object FeatureTaskRuntimeRunLoopDrive {
   ): String? {
     val settledVerdicts = state.settledVerdictsByPhaseId
     return transitions.entryGateViolation(phaseId, settledVerdicts)?.let { gate ->
-      FeatureTaskRuntimePhaseOrderViolationError(
+      featureTaskRuntimePhaseOrderViolationMessage(
         phaseId = gate.phaseId,
         requiredPhaseId = gate.requiredPhaseId,
         requiredVerdict = gate.requiredVerdict.wireValue,
         observedVerdict = settledVerdicts[gate.requiredPhaseId]?.wireValue,
-      ).message
+      )
     }
   }
 
@@ -148,27 +149,30 @@ object FeatureTaskRuntimeRunLoopDrive {
     verdict: FeatureTaskRuntimeVerdict,
     edgeIterationCount: Int,
   ): FeatureTaskRuntimeNextPhase? =
-    runCatching {
-      FeatureTaskRuntimeTransitionFunction.nextTransition(
-        declaration = traversal(context),
-        currentPhaseId = phaseId,
-        verdict = verdict,
-        edgeIterationCount = edgeIterationCount,
-        context =
-          FeatureTaskRuntimeTransitionContext(
-            settledVerdictsByPhaseId = context.state.settledVerdictsByPhaseId,
-          ),
-      )
-    }.getOrElse { error ->
-      if (error !is FeatureTaskRuntimePhaseOrderViolationError) throw error
-      FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
-        context.request,
-        context.state,
-        context.runState.coupledSession(),
-        error.phaseId,
-        error.message.orEmpty(),
-      )
-      null
+    when (
+      val result =
+        FeatureTaskRuntimeTransitionFunction.nextTransition(
+          declaration = traversal(context),
+          currentPhaseId = phaseId,
+          verdict = verdict,
+          edgeIterationCount = edgeIterationCount,
+          context =
+            FeatureTaskRuntimeTransitionContext(
+              settledVerdictsByPhaseId = context.state.settledVerdictsByPhaseId,
+            ),
+        )
+    ) {
+      is FeatureTaskRuntimeTransitionResult.Resolved -> result.next
+      is FeatureTaskRuntimeTransitionResult.PhaseOrderViolation -> {
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+          context.request,
+          context.state,
+          context.runState.coupledSession(),
+          result.phaseId,
+          result.message,
+        )
+        null
+      }
     }
 
   internal fun FeatureTaskRuntimeRunLoopContext.runPhaseDriveLoop(advance: (String) -> PhaseSettlement) {

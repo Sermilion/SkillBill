@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.shellcontent.InvalidWorkListRowError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -121,9 +122,9 @@ class SQLiteWorkListRepositoryTest {
       connection.createStatement().use { it.executeUpdate(insert) }
 
       val error =
-        assertFailsWith<InvalidWorkListRowError> {
+        assertFailsWith<SkillBillRuntimeException> {
           SQLiteWorkListRepository(connection).list()
-        }
+        }.also { assertEquals(WorkflowFailureCode.INVALID_WORK_LIST_ROW, it.code) }
 
       assertContains(error.message.orEmpty(), expectedDetail)
     }

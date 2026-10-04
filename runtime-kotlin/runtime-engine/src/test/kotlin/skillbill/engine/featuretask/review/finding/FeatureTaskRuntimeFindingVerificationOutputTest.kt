@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.review.finding
 
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.runner.disposition
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeFindingVerificationDispositionFromArtifact
@@ -175,20 +175,20 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   @Test
   fun `malformed finding verification checkpoint loud-fails when raw is not an array`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeFindingVerificationDisposition.parseList(
           mapOf("finding_id" to "F-001"),
           "finding_verification_checkpoint",
         )
       }
-    assertTrue(error.reason.contains("finding_verification_checkpoint"))
-    assertTrue(error.reason.contains("array"))
+    assertTrue(error.message.orEmpty().contains("finding_verification_checkpoint"))
+    assertTrue(error.message.orEmpty().contains("array"))
   }
 
   @Test
   fun `retired disposition field loud-fails with named verification record error`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         decodeFindingVerificationDispositionFromArtifact(
           mapOf(
             "finding_id" to "F-001",
@@ -197,6 +197,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
           "finding_verification_checkpoint[0]",
         )
       }
-    assertTrue(error.reason.contains("disposition"))
+    assertTrue(error.message.orEmpty().contains("disposition"))
   }
 }

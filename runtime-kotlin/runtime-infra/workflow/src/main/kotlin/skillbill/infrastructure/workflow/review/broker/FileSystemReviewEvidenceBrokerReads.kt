@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.ReviewHunkEvidenceIntegrityError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.infrastructure.workflow.featuretask.storePath
 import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.review.model.ReviewEvidenceRequest
@@ -210,13 +210,13 @@ private fun materializeAssignedHunk(
       state.bodyExtractor.extract(payload, hunk)
     } else {
       val fallback = hunk.content.replace("\r\n", "\n")
-      if (fallback.isEmpty()) throw ReviewHunkEvidenceLocatorMissingError(locator.storePath)
+      if (fallback.isEmpty()) throw reviewHunkEvidenceLocatorMissingError(locator.storePath)
       fallback
     }
   val normalized = body.replace("\r\n", "\n")
   val observed = ReviewChangedHunk.digestOfBody(normalized)
   if (observed != hunk.contentDigest) {
-    throw ReviewHunkEvidenceIntegrityError(locator.storePath, hunk.contentDigest, observed)
+    throw reviewHunkEvidenceIntegrityError(locator.storePath, hunk.contentDigest, observed)
   }
   return normalized
 }

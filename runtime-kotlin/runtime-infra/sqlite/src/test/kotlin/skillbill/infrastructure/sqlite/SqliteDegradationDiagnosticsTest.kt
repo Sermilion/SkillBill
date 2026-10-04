@@ -4,7 +4,6 @@ import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.UnresolvedEnvironmentContextFieldError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
 import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
@@ -35,7 +34,7 @@ class SqliteDegradationDiagnosticsTest {
   @Test
   fun `unparsable worker lease expiry records one degradation before failing loud`() {
     val diagnostics = recordingDiagnostics()
-    assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseWorkerLeaseInstant("wf-lease", "expires_at", "not-an-instant", diagnostics)
     }
     assertTrue(

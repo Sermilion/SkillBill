@@ -1,11 +1,12 @@
 package skillbill.engine.goalrunner.planning.recovery
 
+import skillbill.engine.goalplanning.toFailure
 import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 
 internal enum class GoalPlanningRecoveryKind {
   HARD_RESET,
@@ -21,8 +22,12 @@ internal fun classifyGoalPlanningRecovery(cause: Throwable?): GoalPlanningRecove
     if ((current as? SkillBillRuntimeException)?.code is FeatureTaskRuntimeMigrationFailureCode) {
       return GoalPlanningRecoveryKind.BLOCKED
     }
-    if (current is InvalidGoalPlanningPreparationSchemaError ||
-      current is InvalidFeatureTaskRuntimePhaseOutputSchemaError
+    if ((current as? SkillBillRuntimeException)?.code in
+      setOf(
+        InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+        InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+      ) ||
+      (current as? SkillBillRuntimeException)?.code is FeatureTaskRuntimePhaseOutputFailureCode
     ) {
       return GoalPlanningRecoveryKind.BLOCKED
     }
@@ -31,17 +36,16 @@ internal fun classifyGoalPlanningRecovery(cause: Throwable?): GoalPlanningRecove
   return GoalPlanningRecoveryKind.SCOPED_REPLAN
 }
 
-internal fun classifyGoalPlanningRecovery(
-  error: IncompatibleGoalPlanningPreparationRecoveryError,
-): GoalPlanningRecoveryKind = classifyGoalPlanningRecovery(error.cause)
+internal fun classifyGoalPlanningRecovery(conflict: GoalPlanningPreparationConflict): GoalPlanningRecoveryKind =
+  classifyGoalPlanningRecovery(conflict.cause)
 
 fun goalPlanningChildImportConflictBlockedReason(
   issueKey: String,
   subtaskId: Int,
-  error: IncompatibleGoalPlanningPreparationRecoveryError,
+  conflict: GoalPlanningPreparationConflict,
 ): String {
-  val kind = classifyGoalPlanningRecovery(error)
-  val detail = error.reason.ifBlank { error.message.orEmpty() }
+  val kind = classifyGoalPlanningRecovery(conflict)
+  val detail = conflict.reason.ifBlank { conflict.toFailure().message.orEmpty() }
   return when (kind) {
     GoalPlanningRecoveryKind.HARD_RESET ->
       "Goal-subtask planning is incompatible with the current runtime. Keep the workflow and checkpoints " +

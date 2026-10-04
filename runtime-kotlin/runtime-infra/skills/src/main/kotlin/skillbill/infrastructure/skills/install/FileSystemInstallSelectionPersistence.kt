@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.install
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.MissingInstallSelectionRecordError
-import skillbill.error.shellcontent.UnreadableInstallSelectionRecordError
+import skillbill.error.shellcontent.missingInstallSelectionRecordError
+import skillbill.error.shellcontent.unreadableInstallSelectionRecordError
 import skillbill.infrastructure.host.jvm.atomicWriteString
 import skillbill.install.model.SharedInstallSelection
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
@@ -30,7 +30,7 @@ class FileSystemInstallSelectionPersistence : InstallSelectionPersistencePort {
     val payload = request.selection.toInstallSelectionJson()
     val durablePayload = payload + "\n"
     if (durablePayload.toByteArray(StandardCharsets.UTF_8).size > MAX_INSTALL_SELECTION_RECORD_BYTES) {
-      throw UnreadableInstallSelectionRecordError(selectionPath.toString())
+      throw unreadableInstallSelectionRecordError(selectionPath.toString())
     }
     parseInstallSelectionPayload(selectionPath, payload)
     writeInstallSelectionRecord(selectionPath, durablePayload)
@@ -40,11 +40,11 @@ class FileSystemInstallSelectionPersistence : InstallSelectionPersistencePort {
 
 internal fun readInstallSelectionRecord(path: Path): SharedInstallSelection {
   if (!Files.exists(path)) {
-    throw MissingInstallSelectionRecordError(path.toString())
+    throw missingInstallSelectionRecordError(path.toString())
   }
   val size = installSelectionRecordSize(path)
   if (size > MAX_INSTALL_SELECTION_RECORD_BYTES) {
-    throw UnreadableInstallSelectionRecordError(path.toString())
+    throw unreadableInstallSelectionRecordError(path.toString())
   }
   return parseInstallSelectionPayload(path, readInstallSelectionPayload(path))
 }
@@ -60,18 +60,18 @@ private fun installSelectionRecordSize(path: Path): Long =
   try {
     Files.size(path)
   } catch (error: IOException) {
-    throw UnreadableInstallSelectionRecordError(path.toString(), error)
+    throw unreadableInstallSelectionRecordError(path.toString(), error)
   } catch (error: SecurityException) {
-    throw UnreadableInstallSelectionRecordError(path.toString(), error)
+    throw unreadableInstallSelectionRecordError(path.toString(), error)
   }
 
 private fun readInstallSelectionPayload(path: Path): String =
   try {
     Files.readString(path)
   } catch (error: IOException) {
-    throw UnreadableInstallSelectionRecordError(path.toString(), error)
+    throw unreadableInstallSelectionRecordError(path.toString(), error)
   } catch (error: SecurityException) {
-    throw UnreadableInstallSelectionRecordError(path.toString(), error)
+    throw unreadableInstallSelectionRecordError(path.toString(), error)
   }
 
 private fun selectionPath(installHome: Path): Path =

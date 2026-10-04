@@ -2,8 +2,10 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedgerEntry
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptDecodeObservations
@@ -45,7 +47,7 @@ private fun artifactsMap(artifacts: Any?): Map<String, Any?> =
     artifacts == null -> emptyMap()
     else ->
       JsonCodec.anyToStringAnyMap(artifacts)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime workflow artifacts must decode to an object.",
         )
   }
@@ -115,9 +117,10 @@ fun FeatureTaskRuntimeValidationGateExecutionEvidence.asWorkflowArtifactEntry(
 fun decodeValidationGateExecutionEvidenceFromArtifact(
   raw: Any?,
   sourceLabel: String,
+  onInvalid: (String, SkillBillRuntimeException) -> SkillBillRuntimeException = { _, failure -> failure },
 ): FeatureTaskRuntimeValidationGateExecutionEvidence? =
   JsonCodec.anyToStringAnyMap(raw)?.let {
-    FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(it, sourceLabel)
+    FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(it, sourceLabel, onInvalid)
   }
 
 internal fun decodeValidationGateExecutionEvidenceFromArtifact(
@@ -146,8 +149,13 @@ internal fun decodeReadinessEvidenceFromArtifact(
 fun decodeValidationEvidenceFromArtifact(
   raw: Any?,
   sourceLabel: String,
+  onInvalid: (String) -> SkillBillRuntimeException = {
+    invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, it)
+  },
 ): FeatureTaskRuntimeValidationEvidence? =
-  JsonCodec.anyToStringAnyMap(raw)?.let { FeatureTaskRuntimeValidationEvidence.fromArtifactMap(it, sourceLabel) }
+  JsonCodec.anyToStringAnyMap(raw)?.let {
+    FeatureTaskRuntimeValidationEvidence.fromArtifactMap(it, sourceLabel, onInvalid)
+  }
 
 internal fun decodeValidationEvidenceFromArtifact(
   raw: Map<String, Any?>,
@@ -195,10 +203,9 @@ fun validateRepairReceiptWireEntries(
 ) {
   FeatureTaskRuntimeRepairReceipt.validateEntries(
     JsonCodec.anyToStringAnyMap(raw)
-      ?: throw InvalidFeatureTaskRuntimeRepairReceiptError(
+      ?: throw invalidFeatureTaskRuntimeRepairReceipt(
         fieldPath = path,
         reason = "must be an object.",
-        payloadFreeReason = "$path must be an object.",
       ),
     path,
   )

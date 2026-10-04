@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.ReconciliationConflictError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
 import skillbill.infrastructure.skills.install.reconcile.applyReconciliation
 import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
@@ -97,9 +98,9 @@ class InstallReconcileApplyTest : InstallApplyTestSupport() {
     val home = home()
     val liveBytes = Files.readString(reviewContent(local))
 
-    assertFailsWith<ReconciliationConflictError> {
+    assertFailsWith<SkillBillRuntimeException> {
       applyReconciliation(roots(upstream), roots(local), home, BaselineManifest.empty())
-    }
+    }.also { assertEquals(InstallFailureCode.RECONCILIATION_CONFLICT, it.code) }
     assertEquals(liveBytes, Files.readString(reviewContent(local)), "a refused prune must change nothing")
   }
 

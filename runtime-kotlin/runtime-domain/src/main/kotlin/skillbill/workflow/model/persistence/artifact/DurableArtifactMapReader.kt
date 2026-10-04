@@ -2,7 +2,7 @@ package skillbill.workflow.model.persistence.artifact
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -145,7 +145,7 @@ internal class DurableArtifactMapReader(
 }
 
 internal fun durableArtifactMapReader(map: Map<String, Any?>): DurableArtifactMapReader =
-  DurableArtifactMapReader(map) { message -> throw InvalidWorkflowStateSchemaError(message) }
+  DurableArtifactMapReader(map) { message -> throw invalidWorkflowStateSchemaError(message) }
 
 internal fun Any?.toStringKeyedArtifactMap(fail: (String) -> Nothing): Map<String, Any?> =
   (this as? Map<*, *>)?.entries?.associate { (key, value) ->

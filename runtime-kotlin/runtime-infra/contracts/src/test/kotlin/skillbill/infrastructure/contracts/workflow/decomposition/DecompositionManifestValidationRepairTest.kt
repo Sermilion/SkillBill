@@ -1,6 +1,6 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
@@ -58,11 +58,11 @@ class DecompositionManifestValidationRepairTest {
   @Test
   fun `malformed YAML whose snippet contains the word duplicate is classified malformed not duplicate`() {
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validateYamlTextMap("issue_key: [duplicate\nfeature_name: x\n", "manifest.yaml")
       }
 
-    assertEquals(DecompositionManifestValidationFailureCode.MALFORMED.wireValue, error.failureCode)
+    assertEquals(DecompositionManifestValidationFailureCode.MALFORMED, error.code)
   }
 
   @Test

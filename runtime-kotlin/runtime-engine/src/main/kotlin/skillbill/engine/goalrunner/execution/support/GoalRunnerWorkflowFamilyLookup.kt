@@ -6,7 +6,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
-import skillbill.error.shellcontent.LegacyProseWorkflowError
+import skillbill.error.shellcontent.legacyProseWorkflowError
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -19,7 +19,7 @@ fun workflowFamilyFor(
   if (featureTaskRow != null) {
     return when (featureTaskRow.mode) {
       FeatureTaskWorkflowMode.RUNTIME -> WorkflowFamily.TASK_RUNTIME
-      FeatureTaskWorkflowMode.PROSE, null -> throw LegacyProseWorkflowError(workflowId, featureTaskRow.issueKey)
+      FeatureTaskWorkflowMode.PROSE, null -> throw legacyProseWorkflowError(workflowId, featureTaskRow.issueKey)
     }
   }
   return if (workflowStates.get(WorkflowFamily.VERIFY, workflowId) != null) {

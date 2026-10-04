@@ -3,7 +3,6 @@ package skillbill.engine.goalrunner.planning.outcome
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningEmptyTurnEvidence
 import skillbill.error.core.failureCodeLabel
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -41,6 +40,3 @@ fun emptyTurnReason(
   phaseId: String,
   evidence: GoalPlanningEmptyTurnEvidence,
 ): String = "Goal planning '$phaseId' agent turn exited cleanly and returned no output. ${evidence.summary()}"
-
-fun recoverySubtaskId(error: Throwable): Int =
-  (error as? IncompatibleGoalPlanningPreparationRecoveryError)?.subtaskId ?: 0

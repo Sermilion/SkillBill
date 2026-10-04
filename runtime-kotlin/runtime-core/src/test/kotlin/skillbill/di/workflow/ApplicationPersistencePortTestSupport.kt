@@ -28,8 +28,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.testExecutionPlan
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.MissingCompositionLayerError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
@@ -600,7 +600,7 @@ internal object ThrowingPlanReviewAttributionPort : ReviewAttributionPort {
   override fun routedSkillPlatformSlugs(): Map<String, String> = emptyMap()
 
   override fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan =
-    throw MissingCompositionLayerError("Baseline layer 'kotlin' is not installed.")
+    throw missingCompositionLayer("Baseline layer 'kotlin' is not installed.")
 }
 
 internal object NoopTelemetryOutboxRepository : TelemetryOutboxRepository {
@@ -1226,7 +1226,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
     getFeatureTaskWorkflow(workflowId)?.also { row ->
       val actualMode = row.mode ?: PROSE
       if (actualMode != mode) {
-        throw InvalidWorkflowStateSchemaError("Unexpected feature-task workflow mode.")
+        throw invalidWorkflowStateSchemaError("Unexpected feature-task workflow mode.")
       }
     }
 

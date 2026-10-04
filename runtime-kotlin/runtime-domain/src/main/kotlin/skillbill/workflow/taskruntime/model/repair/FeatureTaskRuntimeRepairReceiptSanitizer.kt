@@ -1,6 +1,6 @@
 package skillbill.workflow.taskruntime.model.repair
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
 
 internal const val REPAIR_RECEIPT_MAX_CONSTRUCT_SYMBOL_UTF8_BYTES: Int = 256
 internal const val REPAIR_RECEIPT_MAX_CONSTRUCT_FILE_UTF8_BYTES: Int = 128
@@ -29,10 +29,11 @@ private const val CODE_FENCE: String = "```"
 internal fun requireReceiptSymbol(
   value: String,
   field: String,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ) {
-  requireReceiptSanitizedText(value, field, REPAIR_RECEIPT_MAX_CONSTRUCT_SYMBOL_UTF8_BYTES)
+  requireReceiptSanitizedText(value, field, REPAIR_RECEIPT_MAX_CONSTRUCT_SYMBOL_UTF8_BYTES, onInvalid)
   if (value.contains('/') || value.contains('\\') || !COMPACT_SYMBOL.matches(value)) {
-    receiptError(field, "must be a compact symbol (Type or Type.member), never a repository path.")
+    onInvalid(field, "must be a compact symbol (Type or Type.member), never a repository path.")
   }
 }
 
@@ -63,10 +64,11 @@ fun salvageCompactReceiptSymbol(raw: String): String? {
 internal fun requireReceiptFileBasename(
   value: String,
   field: String,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ) {
-  requireUtf8Budget(value, field, REPAIR_RECEIPT_MAX_CONSTRUCT_FILE_UTF8_BYTES)
+  requireUtf8Budget(value, field, REPAIR_RECEIPT_MAX_CONSTRUCT_FILE_UTF8_BYTES, onInvalid)
   if (value.contains('/') || value.contains('\\') || !FILE_BASENAME.matches(value)) {
-    receiptError(field, "must be a file basename, never a repository path.")
+    onInvalid(field, "must be a file basename, never a repository path.")
   }
 }
 
@@ -74,16 +76,18 @@ internal fun requireReceiptIdentityText(
   value: String,
   field: String,
   maxUtf8Bytes: Int,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ) {
-  utf8BudgetViolation(value, maxUtf8Bytes)?.let { reason -> receiptError(field, reason) }
+  utf8BudgetViolation(value, maxUtf8Bytes)?.let { reason -> onInvalid(field, reason) }
 }
 
 internal fun requireReceiptSanitizedText(
   value: String,
   field: String,
   maxUtf8Bytes: Int,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ) {
-  sanitizedTextViolation(value, maxUtf8Bytes)?.let { reason -> receiptError(field, reason) }
+  sanitizedTextViolation(value, maxUtf8Bytes)?.let { reason -> onInvalid(field, reason) }
 }
 
 internal fun sanitizedTextViolation(
@@ -117,10 +121,11 @@ private fun requireUtf8Budget(
   value: String,
   field: String,
   maxUtf8Bytes: Int,
+  onInvalid: (String, String) -> Nothing = ::receiptError,
 ) {
   val bytes = value.toByteArray(Charsets.UTF_8).size
   if (bytes > maxUtf8Bytes) {
-    receiptError(field, "allows at most $maxUtf8Bytes UTF-8 bytes.")
+    onInvalid(field, "allows at most $maxUtf8Bytes UTF-8 bytes.")
   }
 }
 
@@ -128,8 +133,7 @@ internal fun receiptError(
   fieldPath: String,
   payloadFreeReason: String,
 ): Nothing =
-  throw InvalidFeatureTaskRuntimeRepairReceiptError(
+  throw invalidFeatureTaskRuntimeRepairReceipt(
     fieldPath = fieldPath,
     reason = payloadFreeReason,
-    payloadFreeReason = payloadFreeReason,
   )

@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.model.persistence
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -54,26 +55,27 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
   @Test
   fun `an unsupported contract version loud-fails with both versions so quarantine can be distinguished`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentityVersionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeCheckpointIdentitiesFromArtifact(
           mapOf("contract_version" to "0.1", "checkpoints" to emptyList<Any?>()),
         )
       }
 
-    assertEquals("0.2", error.expectedContractVersion)
-    assertEquals("0.1", error.actualContractVersion)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION, error.code)
+    assertContains(error.message.orEmpty(), "unsupported contract version '0.1'")
+    assertContains(error.message.orEmpty(), "this runtime reads '0.2'")
   }
 
   @Test
   fun `an unsupported field loud-fails rather than being reinterpreted`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeCheckpointIdentitiesFromArtifact(
         mapOf(
           "contract_version" to "0.2",
           "checkpoints" to listOf(identity().toArtifactMap() + ("raw_prompt" to "…")),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -94,11 +96,11 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
         identity(sequenceNumber = 0, commitSuffix = 2).toArtifactMap(),
       )
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeCheckpointIdentitiesFromArtifact(
           mapOf("contract_version" to "0.2", "checkpoints" to duplicatedRef),
         )
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "more than once")
   }
@@ -110,14 +112,14 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
         ("checkpoint_ref" to featureTaskRuntimeCheckpointRefName("SKILL-150", "9", 0))
 
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeCheckpointIdentitiesFromArtifact(
           mapOf(
             "contract_version" to "0.2",
             "checkpoints" to listOf(identity(sequenceNumber = 1).toArtifactMap(), drifted),
           ),
         )
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "does not derive from")
   }
@@ -126,14 +128,14 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
   fun `a ledger mixing current records with one legacy-shaped record fails whole`() {
     val legacy = identity(sequenceNumber = 1).toArtifactMap() - "checkpoint_ref"
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeCheckpointIdentitiesFromArtifact(
         mapOf(
           "contract_version" to "0.2",
           "checkpoints" to listOf(identity(sequenceNumber = 0).toArtifactMap(), legacy),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

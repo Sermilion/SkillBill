@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
+import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
@@ -129,12 +130,14 @@ internal fun verifyInstalledNativeAgent(entry: NativeAgentLinkInventoryEntry) {
     reason: String,
     cause: Throwable? = null,
   ): Nothing =
-    throw MissingInstalledNativeAgentError(
-      logicalName = entry.logicalName,
-      provider = entry.provider,
-      expectedPath = installed.toString(),
-      reason = reason,
-      repairCommand = repair,
+    throw missingInstalledNativeAgent(
+      MissingInstalledNativeAgentContext(
+        logicalName = entry.logicalName,
+        provider = entry.provider,
+        expectedPath = installed.toString(),
+        reason = reason,
+        repairCommand = repair,
+      ),
       cause = cause,
     )
   if (!Files.isSymbolicLink(installed)) fail("managed link is missing")

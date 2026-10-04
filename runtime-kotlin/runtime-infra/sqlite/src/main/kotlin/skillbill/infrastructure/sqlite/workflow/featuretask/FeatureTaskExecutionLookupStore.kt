@@ -1,8 +1,8 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRow
 import skillbill.ports.workflow.FeatureTaskExecutionLookupRepository
@@ -53,9 +53,9 @@ internal class FeatureTaskExecutionLookupStore(
     }
     val persisted =
       connection.featureTaskIdentity(identity.workflowId)
-        ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(identity.workflowId, "identity was not persisted")
+        ?: throw invalidFeatureTaskExecutionIdentitySchema(identity.workflowId, "identity was not persisted")
     if (persisted != identity) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(
+      throw invalidFeatureTaskExecutionIdentitySchema(
         identity.workflowId,
         "immutable identity conflicts with the persisted record",
       )
@@ -127,7 +127,7 @@ internal class FeatureTaskExecutionLookupStore(
             val workflowId = rows.getString(SharedPayloadKeys.WORKFLOW_ID)
             val workflow =
               connection.getFeatureTaskWorkflowRow(workflowId)
-                ?: throw InvalidWorkflowStateSchemaError(
+                ?: throw invalidWorkflowStateSchemaError(
                   "Feature-task identity '$workflowId' has no workflow row.",
                 )
             add(FeatureTaskWorkflowCandidate(connection.featureTaskIdentity(workflowId), workflow))

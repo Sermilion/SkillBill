@@ -12,7 +12,8 @@ import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
 import skillbill.engine.goalrunner.status.completed
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -150,9 +151,11 @@ class AmbientInputsAndLoudFailSeamsTest {
         payload = "not a json object",
       )
 
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
-      state.parsedOutput(output)
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        state.parsedOutput(output)
+      }
+    assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
   }
 
   @Test

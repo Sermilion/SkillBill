@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.requirePathContainedIn
@@ -99,7 +99,7 @@ internal fun rejectCheckpointDrift(
   state: FileSystemReviewEvidenceBrokerReadState,
   path: String,
 ): Nothing =
-  throw InvalidReviewContextSchemaError(
+  throw invalidReviewContextSchemaError(
     sourceLabel = "review-evidence:${state.assignment.reviewId}:${state.assignment.lane}",
     reason = "Complete-file evidence '$path' changed after the immutable launch checkpoint was bound.",
   )

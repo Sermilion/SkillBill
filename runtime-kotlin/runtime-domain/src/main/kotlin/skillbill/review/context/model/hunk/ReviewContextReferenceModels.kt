@@ -1,7 +1,7 @@
 package skillbill.review.context.model.hunk
 
-import skillbill.error.shellcontent.ReviewLearningRuleTextTooLongError
-import skillbill.error.shellcontent.ReviewLearningTitleTooLongError
+import skillbill.error.shellcontent.reviewLearningRuleTextTooLongError
+import skillbill.error.shellcontent.reviewLearningTitleTooLongError
 import skillbill.review.model.requireRepositoryRelativePath
 import skillbill.text.sha256HexUtf8
 
@@ -60,11 +60,11 @@ data class ReviewLearningsReference(
     require(scope.isNotBlank()) { "Learnings reference scope must not be blank." }
     require(title.isNotBlank()) { "Learnings reference title must not be blank." }
     if (title.length > REVIEW_LEARNING_TITLE_MAX_CHARS) {
-      throw ReviewLearningTitleTooLongError(learningId, title.length, REVIEW_LEARNING_TITLE_MAX_CHARS)
+      throw reviewLearningTitleTooLongError(learningId, title.length, REVIEW_LEARNING_TITLE_MAX_CHARS)
     }
     require(ruleText.isNotBlank()) { "Learnings reference rule text must not be blank." }
     if (ruleText.length > REVIEW_RULE_EXCERPT_MAX_CHARS) {
-      throw ReviewLearningRuleTextTooLongError(learningId, ruleText.length, REVIEW_RULE_EXCERPT_MAX_CHARS)
+      throw reviewLearningRuleTextTooLongError(learningId, ruleText.length, REVIEW_RULE_EXCERPT_MAX_CHARS)
     }
     require(digest.matches(SHA256_HEX)) { "Learnings reference digest must be lowercase SHA-256." }
     require(digest == digestOf(ruleText)) {

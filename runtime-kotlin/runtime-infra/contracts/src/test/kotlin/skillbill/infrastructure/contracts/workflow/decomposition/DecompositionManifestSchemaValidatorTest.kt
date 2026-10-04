@@ -1,6 +1,6 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
@@ -9,21 +9,21 @@ class DecompositionManifestSchemaValidatorTest {
   @Test
   fun `malformed decomposition manifest YAML fails with typed schema error`() {
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestSchemaValidator.validateYamlText("contract_version: [", "malformed.yaml")
       }
 
-    assertContains(error.reason, "YAML is malformed")
+    assertContains(error.message.orEmpty(), "YAML is malformed")
   }
 
   @Test
   fun `non object decomposition manifest YAML fails with typed schema error`() {
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestSchemaValidator.validateYamlText("- contract_version: 0.1", "array.yaml")
       }
 
-    assertContains(error.reason, "<root> must be an object")
+    assertContains(error.message.orEmpty(), "<root> must be an object")
   }
 
   @Test
@@ -55,11 +55,11 @@ class DecompositionManifestSchemaValidatorTest {
     val yaml = validManifestYaml(specSourceValue = "github")
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionManifestSchemaValidator.validateYamlText(yaml, "bad-spec-source.yaml")
       }
 
-    assertContains(error.reason, "spec_source")
+    assertContains(error.message.orEmpty(), "spec_source")
   }
 
   private fun validManifestYaml(

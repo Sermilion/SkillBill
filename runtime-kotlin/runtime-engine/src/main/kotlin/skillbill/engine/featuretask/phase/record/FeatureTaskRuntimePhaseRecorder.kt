@@ -19,7 +19,7 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefi
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCheckpointRecorder
 import skillbill.engine.featuretask.review.goal.FeatureTaskRuntimeGoalReviewCompletionRecorder
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
@@ -234,15 +234,11 @@ class FeatureTaskRuntimePhaseRecorder
       )
 
     fun recordProjectionRejection(
-      workflowId: String,
-      consumerPhaseId: String,
-      error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+      context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
       repositoryCheckpointFingerprint: String?,
     ): Boolean =
       briefingRecorder.recordProjectionRejection(
-        workflowId,
-        consumerPhaseId,
-        error,
+        context,
         repositoryCheckpointFingerprint,
       )
 

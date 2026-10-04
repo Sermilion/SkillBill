@@ -2,7 +2,7 @@ package skillbill.workflow.engine
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -70,4 +70,4 @@ internal fun mergeStepUpdates(
   return definition.stepIds.mapNotNull(byStepId::get)
 }
 
-private fun invalidWorkflowStep(reason: String): Nothing = throw InvalidWorkflowStateSchemaError(reason)
+private fun invalidWorkflowStep(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)

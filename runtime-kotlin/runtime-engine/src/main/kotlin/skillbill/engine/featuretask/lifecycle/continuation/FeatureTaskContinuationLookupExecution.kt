@@ -4,7 +4,7 @@ import skillbill.application.workflow.decomposition.goalContinuationFor
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupQuery
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
@@ -44,7 +44,7 @@ fun executeFeatureTaskContinuationLookup(
     query.workflowId?.let { selector ->
       listOf(
         candidates.singleOrNull { it.workflow.workflowId == selector }
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(
             "lookup request",
             "workflow selector '$selector' does not match this issue and repository",
           ),

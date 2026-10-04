@@ -4,7 +4,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
@@ -85,7 +87,8 @@ internal fun invalidateUnsettledResumedCompletions(
     val output = {
       try {
         if (stepId in gateOutputs) gateOutputs[stepId] else validation.validatedRecordToOutput(record)
-      } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code is FeatureTaskRuntimePhaseOutputFailureCode)
         if (validation.resumeRules(stepId).requiresValidCompletedOutput
         ) {
           throw error

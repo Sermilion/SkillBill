@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.validation.review
 
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.InvalidReviewSkillStructureError
+import skillbill.error.shellcontent.invalidManifestSchema
+import skillbill.error.shellcontent.invalidReviewSkillStructure
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_BUNDLE_FILE
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentBundle
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
@@ -18,7 +18,7 @@ internal object ReviewSkillStructureValidator {
   ) {
     val violations = violations(pack, packRootsBySlug)
     if (violations.isNotEmpty()) {
-      throw InvalidReviewSkillStructureError(
+      throw invalidReviewSkillStructure(
         "Platform pack '${pack.fileName}' violates the governed review-skill structure: " +
           violations.joinToString("; ") { violation ->
             val display = displayPath(pack, violation.path)
@@ -87,7 +87,7 @@ internal fun validateReviewSkillStructure(pack: PlatformManifest) {
   val governedNameSet = actualAgents.filter { it.composition != null }.map { it.name }.toSet()
   val unknown = governedNameSet - expectedNames
   if (actualNames.size != actualNameSet.size || unknown.isNotEmpty()) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Platform pack '${pack.slug}': native-agent bundle may not declare duplicate agents or unknown " +
         "governed-content agents; unknown=${unknown.sorted()}.",
     )

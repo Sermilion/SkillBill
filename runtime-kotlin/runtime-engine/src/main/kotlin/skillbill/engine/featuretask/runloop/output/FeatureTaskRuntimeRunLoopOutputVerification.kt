@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
@@ -40,7 +41,7 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -99,10 +100,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   ): String? {
     with(context) {
       val run = args.run
-      val iteration = args.iteration
-      val normalizedOutput = args.normalizedOutput
-      val repairEvidence = args.repairEvidence
-      val repositoryFingerprint = args.repositoryFingerprint
       if (!args.checksImmediateConsumerProjection) return null
       if (run.validationGateFindings != null) return null
       val producerIndex = transitionDeclaration.forwardPhaseIds.indexOf(run.phaseId)
@@ -117,15 +114,15 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val currentOutput =
         FeatureTaskRuntimePhaseOutput(
           phaseId = run.phaseId,
-          iteration = iteration,
-          payload = normalizedOutput.canonicalJson,
-          normalizedOutput = normalizedOutput,
-          repairEvidence = repairEvidence,
+          iteration = args.iteration,
+          payload = args.normalizedOutput.canonicalJson,
+          normalizedOutput = args.normalizedOutput,
+          repairEvidence = args.repairEvidence,
         )
       val outputs = progress.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
       val sessionObservations = settlementCoupling().sessionObservations
       val resolvedFingerprint =
-        repositoryFingerprint?.takeIf(String::isNotBlank)
+        args.repositoryFingerprint?.takeIf(String::isNotBlank)
           ?: gitOperations
             .repositoryFingerprint(run.request.repoRoot)
             .value
@@ -149,16 +146,20 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
                 ?: "main",
           ),
         )
-      return try {
-        FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-          handoff,
-          run.request.workflowId,
-          run.request.agentAddonSelection,
-        )
-        null
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
-          "'$consumerPhaseId': ${boundedSchemaGateDetail(error.message.orEmpty())}"
+      return when (
+        val assembly =
+          FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+            handoff,
+            run.request.workflowId,
+            run.request.agentAddonSelection,
+          )
+      ) {
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> null
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+          "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
+            "'$consumerPhaseId': ${boundedSchemaGateDetail(
+              invalidFeatureTaskRuntimeHandoffProjection(assembly.context).message.orEmpty(),
+            )}"
       }
     }
   }

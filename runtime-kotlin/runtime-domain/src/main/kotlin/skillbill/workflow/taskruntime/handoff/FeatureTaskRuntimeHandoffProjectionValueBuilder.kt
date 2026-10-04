@@ -41,34 +41,52 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
     output: FeatureTaskRuntimePhaseOutput,
-  ): List<FeatureTaskRuntimeHandoffProjectionField>? {
-    if (declaration.projectionContractId !in phaseProjectionContractIds) return null
-    val values = proseValues(inputs, declaration, output.output) + runtimeOwnedValues(inputs, declaration, output)
-    return declaration.declaredFieldNames.mapNotNull { name ->
-      values[name]?.let {
-        FeatureTaskRuntimeHandoffProjectionField(name, projectionValue(name, it, inputs, declaration))
+  ): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> {
+    if (declaration.projectionContractId !in phaseProjectionContractIds) {
+      return FeatureTaskRuntimeHandoffProjectionStep.Value(null)
+    }
+    val prose =
+      when (val result = proseValues(inputs, declaration, output.output)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> return result
+        is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value
+      }
+    val values =
+      prose +
+        runtimeOwnedValues(inputs, declaration, output)
+    val fields = mutableListOf<FeatureTaskRuntimeHandoffProjectionField>()
+    for (name in declaration.declaredFieldNames) {
+      val value = values[name] ?: continue
+      when (val projected = projectionValue(name, value, inputs, declaration)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> return projected
+        is FeatureTaskRuntimeHandoffProjectionStep.Value ->
+          fields += FeatureTaskRuntimeHandoffProjectionField(name, projected.value)
       }
     }
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(fields)
   }
 
   private fun proseValues(
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
     output: PhaseOutput,
-  ): Map<String, Any?> {
+  ): FeatureTaskRuntimeHandoffProjectionStep<Map<String, Any?>> {
     val isProse =
       declaration.projectionContractId == FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE
     if (isProse && output.value.isBlank()) {
-      rejectFeatureTaskRuntimeHandoffProjection(
-        inputs,
-        declaration,
-        FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-        "upstream phase output must contain non-blank prose for phase handoff.",
+      return FeatureTaskRuntimeHandoffProjectionStep.Rejected(
+        rejectedFeatureTaskRuntimeHandoffProjectionContext(
+          inputs,
+          declaration,
+          FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
+          "upstream phase output must contain non-blank prose for phase handoff.",
+        ),
       )
     }
-    return mapOf(
-      SharedPayloadKeys.VALUE to output.value.takeIf(String::isNotBlank),
-      DIRECTIVE_FIELD to output.prompt?.takeIf(String::isNotBlank),
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(
+      mapOf(
+        SharedPayloadKeys.VALUE to output.value.takeIf(String::isNotBlank),
+        DIRECTIVE_FIELD to output.prompt?.takeIf(String::isNotBlank),
+      ),
     )
   }
 
@@ -114,42 +132,48 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
     value: Any,
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
-  ): FeatureTaskRuntimeHandoffProjectionValue {
+  ): FeatureTaskRuntimeHandoffProjectionStep<FeatureTaskRuntimeHandoffProjectionValue> {
     if (name == FeatureTaskRuntimeHandoffProjectionEnvelopeWire.REPOSITORY_CHECKPOINT_FIELD) {
       val checkpoint = JsonCodec.anyToStringAnyMap(value)
       val fingerprint =
         (checkpoint?.get(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT) as? String)
           ?.takeIf(String::isNotBlank)
-          ?: rejectFeatureTaskRuntimeHandoffProjection(
-            inputs,
-            declaration,
-            FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-            "repository_checkpoint must contain a non-blank fingerprint.",
+          ?: return FeatureTaskRuntimeHandoffProjectionStep.Rejected(
+            rejectedFeatureTaskRuntimeHandoffProjectionContext(
+              inputs,
+              declaration,
+              FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
+              "repository_checkpoint must contain a non-blank fingerprint.",
+            ),
           )
-      return FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-        FeatureTaskRuntimeCompactReferenceKind.REPOSITORY_CHECKPOINT,
-        fingerprint,
+      return FeatureTaskRuntimeHandoffProjectionStep.Value(
+        FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+          FeatureTaskRuntimeCompactReferenceKind.REPOSITORY_CHECKPOINT,
+          fingerprint,
+        ),
       )
     }
-    return when (value) {
-      is Iterable<*> ->
-        FeatureTaskRuntimeHandoffProjectionValue.TextList(
-          value.map { item ->
-            when (item) {
-              is String -> item
-              is Map<*, *> ->
-                JsonCodec.mapToJsonString(
-                  item.entries.associate { (key, entryValue) -> key.toString() to entryValue },
-                )
-              else -> item.toString()
-            }
-          },
-        )
-      is Map<*, *> ->
-        FeatureTaskRuntimeHandoffProjectionValue.Text(
-          JsonCodec.mapToJsonString(value.entries.associate { (key, entryValue) -> key.toString() to entryValue }),
-        )
-      else -> FeatureTaskRuntimeHandoffProjectionValue.Text(value.toString())
-    }
+    val projected =
+      when (value) {
+        is Iterable<*> ->
+          FeatureTaskRuntimeHandoffProjectionValue.TextList(
+            value.map { item ->
+              when (item) {
+                is String -> item
+                is Map<*, *> ->
+                  JsonCodec.mapToJsonString(
+                    item.entries.associate { (key, entryValue) -> key.toString() to entryValue },
+                  )
+                else -> item.toString()
+              }
+            },
+          )
+        is Map<*, *> ->
+          FeatureTaskRuntimeHandoffProjectionValue.Text(
+            JsonCodec.mapToJsonString(value.entries.associate { (key, entryValue) -> key.toString() to entryValue }),
+          )
+        else -> FeatureTaskRuntimeHandoffProjectionValue.Text(value.toString())
+      }
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(projected)
   }
 }

@@ -1,7 +1,7 @@
 package skillbill.goalrunner
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -14,7 +14,7 @@ internal fun DurableWorkflowArtifacts.goalProgressHistory(): List<GoalProgressEv
   if (!containsKey(GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY)) return emptyList()
   val raw =
     JsonCodec.anyToStringAnyMapList(this[GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY])
-      ?: throw InvalidGoalProgressEventSchemaError(
+      ?: throw invalidGoalProgressEventSchemaError(
         GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY,
         "<root>",
         "must be an array.",

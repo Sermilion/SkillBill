@@ -12,6 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
+import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
@@ -354,13 +355,19 @@ class WorkflowGoalRunnerManifestStore
     override fun saveNewChildWorkflow(
       state: GoalRunnerManifestState,
       setup: GoalRunnerChildWorkflowSetup,
-    ): GoalRunnerManifestState {
-      val saved =
-        database.transaction { unitOfWork ->
-          childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
+    ): GoalRunnerChildWorkflowSaveResult {
+      return when (
+        val saved =
+          database.transaction { unitOfWork ->
+            childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
+          }
+      ) {
+        is GoalChildWorkflowSaveResult.Conflicted -> GoalRunnerChildWorkflowSaveResult.Conflicted(saved.conflict)
+        is GoalChildWorkflowSaveResult.Saved -> {
+          projectionPersistence.writeProjectionFile(state, saved.saved.projectionArtifacts)
+          GoalRunnerChildWorkflowSaveResult.Saved(saved.saved.state)
         }
-      projectionPersistence.writeProjectionFile(state, saved.projectionArtifacts)
-      return saved.state
+      }
     }
 
     override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> =

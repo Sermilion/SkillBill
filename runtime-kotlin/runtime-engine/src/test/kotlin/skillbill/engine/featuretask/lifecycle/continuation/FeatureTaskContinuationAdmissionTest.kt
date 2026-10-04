@@ -13,12 +13,12 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -155,7 +155,7 @@ class FeatureTaskContinuationAdmissionTest {
       assertEquals(candidate.updatedAt, before.updatedAt)
       val identity = fixture.database.read { it.workflowStates.getFeatureTaskExecutionIdentity(WORKFLOW_ID) }
 
-      assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.lookup.claim(candidate, fixture.execution.inputs)
       }
 

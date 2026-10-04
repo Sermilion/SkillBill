@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -82,7 +82,7 @@ fun rawReviewResultError(
   fieldPath: String,
   reason: String,
 ): Nothing =
-  throw InvalidGoalSubtaskReviewStateSchemaError(
+  throw invalidGoalSubtaskReviewStateSchemaError(
     sourceLabel = DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label(),
     fieldPath = fieldPath,
     reason = reason,

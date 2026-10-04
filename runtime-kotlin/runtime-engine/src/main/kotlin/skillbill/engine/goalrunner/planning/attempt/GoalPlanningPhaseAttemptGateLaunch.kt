@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.attempt
 
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.runner.phaseDeclaration
@@ -14,6 +15,7 @@ import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFor
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.outcome.planningProgressMessage
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -74,14 +76,24 @@ internal inline fun composePlanningPrompt(
         recordedOutputs = args.recordedOutputs,
       ),
     )
-  val briefing =
+  val assembly =
     FeatureTaskRuntimePhaseBriefingAssembler.assemble(
       handoff,
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
+  val briefing =
+    when (assembly) {
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> assembly.briefing
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+        throw invalidFeatureTaskRuntimeHandoffProjection(assembly.context)
+    }
   val write = (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
-  if (write is RequiredPhaseWrite.Rejected) onRejected(write)
+  if (write is RequiredPhaseWrite.Rejected) {
+    val handoffRejection = write.handoffRejection
+    if (handoffRejection != null) throw invalidFeatureTaskRuntimeHandoffProjection(handoffRejection)
+    onRejected(write)
+  }
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(
       FeatureTaskRuntimePhasePromptComposeInputs(

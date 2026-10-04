@@ -4,11 +4,13 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeBriefingProjectionInputs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffProjectionValidator
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
@@ -42,7 +44,7 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
     workflowId: String? = null,
     agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
     scope: FeatureTaskRuntimeBriefingScope = FeatureTaskRuntimeBriefingScope(),
-  ): FeatureTaskRuntimePhaseLaunchBriefing {
+  ): FeatureTaskRuntimePhaseBriefingAssemblyResult {
     val invariantFields = scope.invariantFields
     val boundedAddonSelection =
       FeatureTaskRuntimePhasePromptComposer.budgetedAddonsFor(
@@ -67,8 +69,8 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
               ),
           )
         }
-    val envelope =
-      FeatureTaskRuntimeHandoffProjectionValidator.validate(
+    val envelopeResult =
+      FeatureTaskRuntimeHandoffProjectionValidator.validateToResult(
         briefingProjectionInputs(
           FeatureTaskRuntimeBriefingProjectionInputs(
             handoff = handoff,
@@ -79,18 +81,26 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
           ),
         ),
       )
+    val envelope =
+      when (envelopeResult) {
+        is FeatureTaskRuntimeHandoffProjectionResult.Rejected ->
+          return FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected(envelopeResult.context)
+        is FeatureTaskRuntimeHandoffProjectionResult.Accepted -> envelopeResult.envelope
+      }
     val projectedHandoff = handoff.copy(projectionDeclarations = promptDeclarations)
     val briefingText = renderFeatureTaskRuntimePhaseBriefing(projectedHandoff, envelope, invariantFields)
-    return FeatureTaskRuntimePhaseLaunchBriefing(
-      phaseId = handoff.phaseId,
-      specReference = handoff.runInvariants.specReference,
-      featureSize = handoff.runInvariants.featureSize.name,
-      acceptanceCriteria = handoff.runInvariants.acceptanceCriteria,
-      mandatesAndOverrides = handoff.runInvariants.mandatesAndOverrides,
-      handoffEnvelope = envelope,
-      derivedContextKeys = handoff.derivedContextKeys,
-      briefingText = briefingText,
-      drivingVerdict = handoff.drivingVerdict?.wireValue,
+    return FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted(
+      FeatureTaskRuntimePhaseLaunchBriefing(
+        phaseId = handoff.phaseId,
+        specReference = handoff.runInvariants.specReference,
+        featureSize = handoff.runInvariants.featureSize.name,
+        acceptanceCriteria = handoff.runInvariants.acceptanceCriteria,
+        mandatesAndOverrides = handoff.runInvariants.mandatesAndOverrides,
+        handoffEnvelope = envelope,
+        derivedContextKeys = handoff.derivedContextKeys,
+        briefingText = briefingText,
+        drivingVerdict = handoff.drivingVerdict?.wireValue,
+      ),
     )
   }
 
@@ -125,4 +135,14 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
           ),
       )
     }
+}
+
+sealed interface FeatureTaskRuntimePhaseBriefingAssemblyResult {
+  data class Accepted(
+    val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+  ) : FeatureTaskRuntimePhaseBriefingAssemblyResult
+
+  data class Rejected(
+    val context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
+  ) : FeatureTaskRuntimePhaseBriefingAssemblyResult
 }

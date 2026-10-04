@@ -2,7 +2,7 @@ package skillbill.workflow.taskruntime.model.audit
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDiagnosticFailureClass
 
@@ -68,11 +68,11 @@ internal fun featureTaskRuntimeDiagnosticSignalsFromWire(raw: Any?): List<Featur
   if (raw == null) return emptyList()
   val entries =
     raw as? List<*>
-      ?: throw InvalidWorkflowStateSchemaError("Feature-task-runtime diagnostic signals must be an array.")
+      ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime diagnostic signals must be an array.")
   return entries.map { entry ->
     FeatureTaskRuntimeDiagnosticSignal.fromArtifactMap(
       JsonCodec.anyToStringAnyMap(entry)
-        ?: throw InvalidWorkflowStateSchemaError("Feature-task-runtime diagnostic signal must be an object."),
+        ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime diagnostic signal must be an object."),
     )
   }
 }

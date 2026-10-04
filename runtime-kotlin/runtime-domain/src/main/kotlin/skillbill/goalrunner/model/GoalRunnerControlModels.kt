@@ -1,6 +1,6 @@
 package skillbill.goalrunner.model
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -61,7 +61,7 @@ fun parseExecutionLeaseInstant(
     try {
       OffsetDateTime.parse(value).toInstant()
     } catch (error: DateTimeParseException) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Goal runner execution lease field '$field' must be an RFC 3339 instant.",
         error,
       )

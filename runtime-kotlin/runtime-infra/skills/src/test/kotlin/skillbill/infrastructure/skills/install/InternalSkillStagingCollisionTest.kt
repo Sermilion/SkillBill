@@ -1,8 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.InternalSkillSidecarCollisionError
-import skillbill.error.shellcontent.InvalidAuthoredSkillSidecarError
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.apply.NativeAgentSourceRootsRequest
 import skillbill.infrastructure.skills.install.apply.nativeAgentSourceRoots
 import skillbill.infrastructure.skills.install.apply.standaloneInstallableSkills
@@ -23,6 +22,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -126,7 +126,7 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
     )
     Files.writeString(fixture.packChildDir.resolve("${fixture.packChildName}.md"), "collision\n")
     val error =
-      assertFailsWith<InternalSkillSidecarCollisionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         stageInstalledSkill(
           StageInstalledSkillInput(
             repoRoot = fixture.repoRoot,
@@ -135,8 +135,10 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
             selectedPackSkills = listOf(fixture.packChildPlanSkill),
           ),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION, failure.code)
       }
-    assertEquals("${fixture.packChildName}.md", error.sidecarRelativePath)
+    assertContains(error.message.orEmpty(), "sidecar '${fixture.packChildName}.md'")
   }
 
   @Test
@@ -144,7 +146,7 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
     val fixture = setupParentWithInternalPackChild()
     Files.writeString(fixture.packChildDir.resolve("patterns.md"), "organization notes\n")
 
-    assertFailsWith<InvalidAuthoredSkillSidecarError> {
+    assertFailsWith<SkillBillRuntimeException> {
       stageInstalledSkill(
         StageInstalledSkillInput(
           repoRoot = fixture.repoRoot,
@@ -153,6 +155,8 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
           selectedPackSkills = listOf(fixture.packChildPlanSkill),
         ),
       )
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_AUTHORED_SKILL_SIDECAR, failure.code)
     }
 
     Files.delete(fixture.packChildDir.resolve("patterns.md"))
@@ -162,7 +166,7 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
         "\nRead [Review-Orchestrator.md](Review-Orchestrator.md) for the governed rubric.\n",
     )
     Files.writeString(fixture.packChildDir.resolve("Review-Orchestrator.md"), "override\n")
-    assertFailsWith<InvalidAuthoredSkillSidecarError> {
+    assertFailsWith<SkillBillRuntimeException> {
       stageInstalledSkill(
         StageInstalledSkillInput(
           repoRoot = fixture.repoRoot,
@@ -171,6 +175,8 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
           selectedPackSkills = listOf(fixture.packChildPlanSkill),
         ),
       )
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_AUTHORED_SKILL_SIDECAR, failure.code)
     }
   }
 
@@ -193,11 +199,13 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
       )
 
     val error =
-      assertFailsWith<InternalSkillSidecarCollisionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSidecarFileNames(parent, listOf(first, second))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION, failure.code)
       }
 
-    assertEquals("rubric.md", error.sidecarRelativePath)
+    assertContains(error.message.orEmpty(), "sidecar 'rubric.md'")
   }
 
   @Test
@@ -274,12 +282,14 @@ class InternalSkillStagingCollisionTest : InternalSkillStagingTestSupport() {
     Files.createDirectories(agentRoot)
 
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installSkill(
           skillPath = fixture.packChildDir,
           agentTargets = listOf(AgentTarget("test-agent", agentRoot.toFileLocation())),
           context = InstallContext(repoRoot = fixture.repoRoot, home = fixture.home),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("internal-for: ${fixture.parentName}"))
     assertFalse(

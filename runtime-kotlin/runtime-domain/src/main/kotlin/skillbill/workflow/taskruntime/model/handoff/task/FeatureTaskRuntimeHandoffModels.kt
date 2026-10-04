@@ -5,8 +5,8 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -50,7 +50,7 @@ enum class FeatureTaskRuntimeFeatureSize {
 
     fun fromWire(value: String): FeatureTaskRuntimeFeatureSize =
       entries.firstOrNull { it.name == value.trim().uppercase() }
-        ?: throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+        ?: throw invalidFeatureTaskRuntimePhaseHandoffSchema(
           sourceLabel = "<wire>",
           reason = "Unknown feature-task-runtime feature size '$value'.",
         )
@@ -148,12 +148,12 @@ data class NormalizedFeatureTaskRuntimePhaseOutput(
           .parseObjectOrNull(text)
           ?.let(JsonCodec::jsonElementToValue)
           ?.let(JsonCodec::anyToStringAnyMap)
-          ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+          ?: throw invalidFeatureTaskRuntimePhaseOutputSchema(
             sourceLabel = sourceLabel,
             reason = "must be a JSON object.",
           )
       unsupportedHistoricalShape(record)?.let { reason ->
-        throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel = sourceLabel, reason = reason)
+        throw invalidFeatureTaskRuntimePhaseOutputSchema(sourceLabel = sourceLabel, reason = reason)
       }
       return fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(record))
     }

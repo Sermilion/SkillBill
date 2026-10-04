@@ -16,26 +16,35 @@ internal fun upstreamPhaseOutputFields(
   inputs: FeatureTaskRuntimeHandoffProjectionInputs,
   declaration: PhaseHandoffProjectionDeclaration,
   sourceRef: FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput,
-): List<FeatureTaskRuntimeHandoffProjectionField>? =
-  inputs.resolvedUpstream.outputsByPhaseId[sourceRef.producingPhaseId]?.let { output ->
-    FeatureTaskRuntimeHandoffProjectionValueBuilder.phaseProjectionFields(inputs, declaration, output)
-      ?: listOf(
-        FeatureTaskRuntimeHandoffProjectionField(
-          name = FeatureTaskRuntimeHandoffProjectionValidator.PHASE_OUTPUT_RECEIPT_FIELD,
-          value =
-            declaration.inlineAlternative?.let { kind ->
-              FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-                kind = kind,
-                value =
-                  FeatureTaskRuntimeHandoffProjectionValidator.privateEvidenceReference(
-                    sourceRef.producingPhaseId,
-                    output.iteration,
-                  ),
-              )
-            } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.output.value),
+): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> {
+  val output =
+    inputs.resolvedUpstream.outputsByPhaseId[sourceRef.producingPhaseId]
+      ?: return FeatureTaskRuntimeHandoffProjectionStep.Value(null)
+  return when (
+    val fields = FeatureTaskRuntimeHandoffProjectionValueBuilder.phaseProjectionFields(inputs, declaration, output)
+  ) {
+    is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> fields
+    is FeatureTaskRuntimeHandoffProjectionStep.Value ->
+      FeatureTaskRuntimeHandoffProjectionStep.Value(
+        fields.value ?: listOf(
+          FeatureTaskRuntimeHandoffProjectionField(
+            name = FeatureTaskRuntimeHandoffProjectionValidator.PHASE_OUTPUT_RECEIPT_FIELD,
+            value =
+              declaration.inlineAlternative?.let { kind ->
+                FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+                  kind = kind,
+                  value =
+                    FeatureTaskRuntimeHandoffProjectionValidator.privateEvidenceReference(
+                      sourceRef.producingPhaseId,
+                      output.iteration,
+                    ),
+                )
+              } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.output.value),
+          ),
         ),
       )
   }
+}
 
 internal fun derivedCeremonyScalingFields(
   inputs: FeatureTaskRuntimeHandoffProjectionInputs,

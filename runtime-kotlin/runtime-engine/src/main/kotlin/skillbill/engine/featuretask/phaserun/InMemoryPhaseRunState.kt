@@ -31,7 +31,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.error.shellcontent.missingValidationGate
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
@@ -161,7 +161,7 @@ internal class InMemoryPhaseRunState(
     reviewTarget ?: resolve().also { reviewTarget = it }
 
   override fun qualityGateAbsent(stepName: String): Unit =
-    throw MissingValidationGateError(
+    throw missingValidationGate(
       "The dominant platform pack has no validation_gate declaration; quality gate '$stepName' cannot run.",
     )
 

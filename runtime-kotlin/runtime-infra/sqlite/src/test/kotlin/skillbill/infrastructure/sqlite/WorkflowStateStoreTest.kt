@@ -1,9 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.ProseFeatureTaskWorkflowWriteRefusedError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION
@@ -64,9 +63,9 @@ class WorkflowStateStoreTest {
               """"goal_branch":"feat/SKILL-372","code_review_mode":"inline"}}""",
         )
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(row, RUNTIME)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(null, store.getFeatureTaskWorkflowAsMode(row.workflowId, RUNTIME))
     }
   }
@@ -437,7 +436,7 @@ class WorkflowStateStoreTest {
         it.setString(2, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
 
@@ -449,7 +448,7 @@ class WorkflowStateStoreTest {
         it.setString(3, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
     }
@@ -782,9 +781,9 @@ class WorkflowStateStoreLifecycleTest {
       assertEquals("plan", saved.currentStepId)
       assertEquals(artifactsJson, saved.artifactsJson)
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskWorkflowAsMode("wftr-001", PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(null, store.get(WorkflowFamily.VERIFY, "wftr-001"))
       assertEquals(RUNTIME, store.getFeatureTaskWorkflow("wftr-001")?.mode)
     }
@@ -923,13 +922,13 @@ class WorkflowStateStoreLifecycleTest {
 
       val generic = assertNotNull(store.getFeatureTaskWorkflow("wfl-legacy-prose-001"))
       assertEquals(PROSE, generic.mode)
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskWorkflowAsMode("wfl-legacy-prose-001", RUNTIME)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
-      assertFailsWith<ProseFeatureTaskWorkflowWriteRefusedError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(prose, PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED, it.code) }
     }
   }
 
@@ -971,9 +970,9 @@ class WorkflowStateStoreLifecycleTest {
       assertEquals("abandoned", saved.workflowStatus)
       assertContains(saved.artifactsJson, "retain-me")
       assertContains(saved.artifactsJson, "operator_abandonment")
-      assertFailsWith<ProseFeatureTaskWorkflowWriteRefusedError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(saved, PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED, it.code) }
     }
   }
 }

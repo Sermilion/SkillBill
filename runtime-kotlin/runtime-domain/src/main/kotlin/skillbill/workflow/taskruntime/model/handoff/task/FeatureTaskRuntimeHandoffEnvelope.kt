@@ -5,7 +5,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -60,7 +60,7 @@ data class FeatureTaskRuntimeHandoffEnvelope(
           contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+        throw invalidFeatureTaskRuntimePhaseHandoffSchema(
           sourceLabel = "<wire>",
           reason = error.message ?: "handoff envelope is invalid.",
           cause = error,
@@ -113,7 +113,7 @@ data class FeatureTaskRuntimeHandoffEnvelope(
     }
 
     private fun decodeError(detail: String): Nothing =
-      throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(sourceLabel = "<wire>", reason = detail)
+      throw invalidFeatureTaskRuntimePhaseHandoffSchema(sourceLabel = "<wire>", reason = detail)
 
     private fun handoffReader(map: Map<String, Any?>): DurableArtifactMapReader =
       DurableArtifactMapReader(map) { message -> decodeError(message) }

@@ -13,8 +13,9 @@ import skillbill.engine.featuretask.model.subtask.RemediationReconciliationApply
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationCoherent
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationHeal
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -75,13 +76,16 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
           )
         RemediationSnapshotRead.Available(RemediationReconcileSnapshot(state, continuation, checkpoints))
-      } catch (_: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
-        RemediationSnapshotRead.Refused(
-          "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
-            "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
-        )
-      } catch (_: InvalidGoalSubtaskReviewStateSchemaError) {
-        RemediationSnapshotRead.Absent
+      } catch (error: SkillBillRuntimeException) {
+        when (error.code) {
+          FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION ->
+            RemediationSnapshotRead.Refused(
+              "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
+                "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
+            )
+          InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA -> RemediationSnapshotRead.Absent
+          else -> throw error
+        }
       }
     }
 

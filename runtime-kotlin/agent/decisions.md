@@ -18,6 +18,17 @@ Decision: Support preparation 0.2 with planning provenance 0.2 and phase-output 
 Reason: Explicit support lets operators resume without discarding completed subtasks or commits. Missing target prose or failure evidence cannot be inferred from summaries or decoder defaults. This transition reuses planning without refresh and replaces blanket historical-version hard-reset guidance.
 Alternatives considered: Version-token-only acceptance, automatic hard reset, speculative planning refresh, and a framework for unrelated schema families were excluded by the spec. Fresh agent prose retains its existing settlement behavior.
 Revisit when: Another concrete transition has an evidenced conversion or requires scoped refresh of unfinished planning.
+## [2026-10-04] SKILL-399: return phase-order violations with their target phase
+Context: An entry-gate violation can target a phase other than the current phase. The run loop previously recovered that phaseId from a caught exception.
+Decision: nextTransition returns Resolved or PhaseOrderViolation carrying phaseId and the unchanged message. The run loop branches on the result and blocks at that phaseId.
+Reason: Phase-order refusal is an expected outcome. Wrapping FeatureTaskRuntimeNextPhase preserves its existing variants and consumers while keeping the violation's target explicit.
+Alternatives considered: Retaining exception-based control flow would keep readers dependent on properties of the deleted throwable.
+
+## [2026-10-04] SKILL-399: return handoff rejection context through validation and recording
+Context: Launch rejection measurements need projection identity and failure classification, including when envelope schema validation rejects a briefing during recording.
+Decision: Add handoffEnvelopeRejection to the validator port and carry rejection contexts through assembly and RequiredPhaseWrite.Rejected. Keep the existing throwing validation entry point for its other callers.
+Reason: A context-returning port preserves the measurement's projection name without reading properties from a caught exception. Carrying that context in the existing write result preserves the recorder's sealed outcome shape.
+Alternatives considered: The digest's recommendation against a result-returning port left no value path for schema rejection details needed by launch measurements.
 
 ## [2026-10-02] Refuse incomplete build gates at admission and retire the active blocker on resume
 
@@ -2601,3 +2612,12 @@ ordinary phase output and deliver it to repair. Bump acceptance-audit to revisio
 3 and extend the checked mapping to the exact revision 1 and 2 compositions. Keep
 the original descriptors and evidence. This removes the restrictive parser rather
 than moving it, as required by A5. No architecture guard changes.
+## [2026-10-03] One-shot process success does not wait on leftover descendants
+
+Context: SKILL-399 build-gate `compileKotlin` printed `BUILD SUCCESSFUL` and every compile task came from cache. `BoundedExternalProcessRunner.settleOwnedDescendants` then remapped exit 0 to 1 because the Gradle client had started a daemon that was still alive. Parsers found no `e:` lines and minted `unparseable_gate_failure`. Cleanup already destroys the captured tree after the wait.
+
+Decision: After a client exits, publish that exit code. A still-running owned descendant is not a `readFailure`. Cleanup still destroys the captured tree. Gradle and Kotlin daemons are leftover children, and failing the command after a five-second wait turned a successful compile into a synthetic gate failure. `runtime-kotlin/gradle.properties` keeps the previous daemon and compiler settings. A one-second `org.gradle.daemon.idletimeout` and `kotlin.compiler.execution.strategy=in-process` would change every Gradle run in this tree, while this runner no longer waits on those children. `org.gradle.daemon=false` did not stop Gradle 9.3 from starting a daemon here. An installed runner that still contains the wait can still false-fail until it picks up this change.
+
+Reason: The one-shot runner's contract is complete-or-killed. Killing leftover children is teardown. Publishing the client's exit code is the result. Repo-wide daemon settings were rejected because they apply to direct Gradle invocations as well as the gate runner.
+
+Revisit when: A caller needs to distinguish a leaked child from an intentional daemon without adding process-identity branches to the shared runner.
