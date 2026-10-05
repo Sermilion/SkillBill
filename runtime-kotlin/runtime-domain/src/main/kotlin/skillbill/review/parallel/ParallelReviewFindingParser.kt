@@ -6,7 +6,7 @@ import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
-import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.review.model.repositoryRelativePathViolation
 
 object ParallelReviewFindingParser {
   const val PARALLEL_REVIEW_FINDING_ID_MIN: Int = 0
@@ -198,14 +198,7 @@ object ParallelReviewFindingParser {
     val decoded =
       when {
         quoted != null ->
-          try {
-            decodeParallelReviewStructuredString(quoted)
-          } catch (_: IllegalArgumentException) {
-            return ResolvedPath(
-              UNASSIGNED_REPOSITORY_PATH,
-              ParallelReviewFindingRejectionReason.UNPARSEABLE_STRUCTURED_PATH,
-            )
-          } catch (_: IllegalStateException) {
+          decodeParallelReviewStructuredStringOrNull(quoted) ?: run {
             return ResolvedPath(
               UNASSIGNED_REPOSITORY_PATH,
               ParallelReviewFindingRejectionReason.UNPARSEABLE_STRUCTURED_PATH,
@@ -214,13 +207,7 @@ object ParallelReviewFindingParser {
         bare != null -> bare
         else -> match.groups["legacyPath"]?.value?.trim().orEmpty()
       }
-    if (decoded.isNotEmpty()) {
-      try {
-        requireRepositoryRelativePath(decoded)
-        return ResolvedPath(decoded)
-      } catch (_: IllegalArgumentException) {
-      }
-    }
+    if (decoded.isNotEmpty() && repositoryRelativePathViolation(decoded) == null) return ResolvedPath(decoded)
     return ResolvedPath(UNASSIGNED_REPOSITORY_PATH, ParallelReviewFindingRejectionReason.NO_ADMISSIBLE_LOCATION)
   }
 

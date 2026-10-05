@@ -101,14 +101,8 @@ data class GoalProgressEvent(
   )
 
   init {
-    require(workflowId.isNotBlank()) { "GoalProgressEvent.workflowId is required." }
-    require(workflowPhase.isNotBlank()) { "GoalProgressEvent.workflowPhase is required." }
-    require(sequenceNumber >= 0) { "GoalProgressEvent.sequenceNumber must be non-negative." }
-    if (eventKind.isOperationEvent) {
-      require(!operationName.isNullOrBlank()) {
-        "GoalProgressEvent.operationName is required for operation_* events."
-      }
-    }
+    val reason = violation(eventKind, workflowId, workflowPhase, sequenceNumber, operationName)
+    require(reason == null) { reason.orEmpty() }
   }
 
   fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
@@ -134,6 +128,24 @@ data class GoalProgressEvent(
         put("outcome", outcome.wireValue)
       }
     }
+
+  companion object {
+    internal fun violation(
+      eventKind: GoalProgressEventKind,
+      workflowId: String,
+      workflowPhase: String,
+      sequenceNumber: Int,
+      operationName: String?,
+    ): String? =
+      when {
+        workflowId.isBlank() -> "GoalProgressEvent.workflowId is required."
+        workflowPhase.isBlank() -> "GoalProgressEvent.workflowPhase is required."
+        sequenceNumber < 0 -> "GoalProgressEvent.sequenceNumber must be non-negative."
+        eventKind.isOperationEvent && operationName.isNullOrBlank() ->
+          "GoalProgressEvent.operationName is required for operation_* events."
+        else -> null
+      }
+  }
 }
 
 private data class GoalProgressHistory(

@@ -3,22 +3,22 @@ contract_version: "0.5"
 issue_key: "SKILL-401"
 feature_name: "defect-exception-control-flow"
 parent_spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-401-defect-exception-control-flow"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "domain-goalrunner-review-decoders"
   spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec_subtask_1_domain-goalrunner-review-decoders.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261005-054739-nbcz"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

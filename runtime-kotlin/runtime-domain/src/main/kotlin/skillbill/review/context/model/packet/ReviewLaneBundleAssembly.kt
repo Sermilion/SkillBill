@@ -150,9 +150,18 @@ data class ReviewLaneSegmentAccounting(
   val compositionDigest: String,
 ) {
   init {
-    require(segmentId.isNotBlank())
-    require(measuredBytes >= REVIEW_MIN_ORDER_INDEX && entryCount >= REVIEW_MIN_ORDER_INDEX)
-    require(compositionDigest.matches(SHA256_HEX))
+    val reason = violation(segmentId, measuredBytes, entryCount, compositionDigest)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(segmentId: String, measuredBytes: Long, entryCount: Int, compositionDigest: String): String? =
+      when {
+        segmentId.isBlank() -> "Failed requirement."
+        measuredBytes < REVIEW_MIN_ORDER_INDEX || entryCount < REVIEW_MIN_ORDER_INDEX -> "Failed requirement."
+        !compositionDigest.matches(SHA256_HEX) -> "Failed requirement."
+        else -> null
+      }
   }
 }
 

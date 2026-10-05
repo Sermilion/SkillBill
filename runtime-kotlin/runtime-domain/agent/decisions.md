@@ -1,3 +1,14 @@
+## [2026-10-05] Share ordered validation between decoders and model invariants
+Context: SKILL-401 subtask 1 removes argument and state exception handling from goalrunner, review and workflow/model input decoding while preserving schema failures and their exact messages.
+Decision: Pure model-owned violation helpers supply ordered reasons to both explicit decoder checks and constructor require assertions. Nullable timestamp and execution-mode parsers report invalid input before construction.
+Reason: A single reason source prevents decoder messages and model constraints from drifting. Preserving check order keeps the first reported failure unchanged, while constructor assertions continue to identify defects rather than drive input rejection.
+Alternatives considered: Separate decoder constraints would duplicate model rules; retaining argument or state exception catches would continue classifying defects as input failures.
+
+## [2026-10-05] Keep structured decoding separate from path admissibility
+Context: Parallel-review findings distinguish malformed structured strings from decoded paths that cannot name repository locations.
+Decision: Nullable structured-string decoding maps failure to UNPARSEABLE_STRUCTURED_PATH. The subsequent repository-relative-path check maps rejection to NO_ADMISSIBLE_LOCATION; citation validation retains invalid_path.
+Reason: The spec requires both existing rejection categories and the citation diagnostic to remain unchanged. Separate value checks preserve those distinctions without relying on constructor or string-decoder exceptions.
+
 ## [2026-10-04] Carry the original manifest failure through validation rejection
 Context: SKILL-399 subtask 8 removes caught-exception reason and failureCode reads from schema validation while preserving the messages emitted by requireAccepted.
 Decision: Rejected carries an optional SkillBillRuntimeException. Schema validation stores the original failure and its full message; requireAccepted rethrows it when present and constructs a coded failure otherwise.

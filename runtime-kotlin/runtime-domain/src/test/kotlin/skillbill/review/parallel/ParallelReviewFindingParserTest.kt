@@ -178,6 +178,23 @@ class ParallelReviewFindingParserTest {
   }
 
   @Test
+  fun `traversing structured path is rejected and later findings still parse`() {
+    val result =
+      ParallelReviewFindingParser.parse(
+        """
+        - [F-001] Major | High | path="../outside.kt" | line=3 | outside the repository
+        - [F-002] Minor | Low | path="src/Ok.kt" | line=4 | inside the repository
+        """.trimIndent(),
+      )
+
+    assertEquals(listOf("src/Ok.kt"), result.findings.map { it.repositoryPath })
+    assertEquals(
+      listOf(ParallelReviewFindingRejectionReason.NO_ADMISSIBLE_LOCATION),
+      result.rejections.map { it.reason },
+    )
+  }
+
+  @Test
   fun `one garbled register line is reported as a rejection without discarding its siblings`() {
     val result =
       ParallelReviewFindingParser.parse(

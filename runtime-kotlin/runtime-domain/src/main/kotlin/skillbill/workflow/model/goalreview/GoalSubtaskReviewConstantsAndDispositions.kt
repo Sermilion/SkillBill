@@ -45,13 +45,8 @@ data class GoalSubtaskBlockerDisposition(
   val evidence: List<String>,
 ) {
   init {
-    require(findingId.isNotBlank()) { "GoalSubtaskBlockerDisposition.findingId must be non-blank." }
-    require(evidence.isNotEmpty()) {
-      "GoalSubtaskBlockerDisposition.evidence must contain at least one evidence entry."
-    }
-    require(evidence.all(String::isNotBlank)) {
-      "GoalSubtaskBlockerDisposition.evidence must contain only non-blank strings."
-    }
+    val reason = violation(findingId, evidence)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -62,9 +57,18 @@ data class GoalSubtaskBlockerDisposition(
     )
 
   companion object {
+    private fun violation(findingId: String, evidence: List<String>): String? =
+      when {
+        findingId.isBlank() -> "GoalSubtaskBlockerDisposition.findingId must be non-blank."
+        evidence.isEmpty() -> "GoalSubtaskBlockerDisposition.evidence must contain at least one evidence entry."
+        evidence.any(String::isBlank) -> "GoalSubtaskBlockerDisposition.evidence must contain only non-blank strings."
+        else -> null
+      }
+
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       path: String,
+      onInvalid: (String) -> Nothing = { reason -> reviewStateError(path, reason) },
     ): GoalSubtaskBlockerDisposition {
       raw.requireOnlyReviewStateKeys(setOf("finding_id", "verdict", "evidence"), path)
       val reader = reviewStateReader(raw, path)
@@ -75,9 +79,12 @@ data class GoalSubtaskBlockerDisposition(
             "must be a non-blank string.",
           )
         }
+      val findingId = reader.requiredString("finding_id")
+      val verdict = GoalSubtaskBlockerDispositionVerdict.fromWire(reader.requiredString("verdict"))
+      violation(findingId, evidence)?.let(onInvalid)
       return GoalSubtaskBlockerDisposition(
-        findingId = reader.requiredString("finding_id"),
-        verdict = GoalSubtaskBlockerDispositionVerdict.fromWire(reader.requiredString("verdict")),
+        findingId = findingId,
+        verdict = verdict,
         evidence = evidence,
       )
     }

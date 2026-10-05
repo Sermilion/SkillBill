@@ -1,6 +1,7 @@
 package skillbill.goalrunner.model
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
@@ -43,12 +44,8 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
   )
 
   init {
-    require(issueKey.isNotBlank()) { "FeatureTaskRuntimeGoalContinuationOutcome.issueKey must be non-blank." }
-    require(subtaskId > 0) { "FeatureTaskRuntimeGoalContinuationOutcome.subtaskId must be positive." }
-    require(workflowId.isNotBlank()) { "FeatureTaskRuntimeGoalContinuationOutcome.workflowId must be non-blank." }
-    require(lastResumableStep.isNotBlank()) {
-      "FeatureTaskRuntimeGoalContinuationOutcome.lastResumableStep must be non-blank."
-    }
+    val reason = violation(issueKey, subtaskId, workflowId, lastResumableStep)
+    require(reason == null) { reason.orEmpty() }
   }
 
   fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
@@ -69,29 +66,42 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
     }
 
   companion object {
+    private fun violation(issueKey: String, subtaskId: Int, workflowId: String, step: String): String? =
+      when {
+        issueKey.isBlank() -> "FeatureTaskRuntimeGoalContinuationOutcome.issueKey must be non-blank."
+        subtaskId <= 0 -> "FeatureTaskRuntimeGoalContinuationOutcome.subtaskId must be positive."
+        workflowId.isBlank() -> "FeatureTaskRuntimeGoalContinuationOutcome.workflowId must be non-blank."
+        step.isBlank() -> "FeatureTaskRuntimeGoalContinuationOutcome.lastResumableStep must be non-blank."
+        else -> null
+      }
+
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeGoalContinuationOutcome {
       val reader = durableArtifactMapReader(raw)
-      return try {
-        FeatureTaskRuntimeGoalContinuationOutcome(
-          issueKey = reader.requiredString("issue_key"),
-          subtaskId = reader.requiredInt("subtask_id"),
-          status =
-            requireNotNull(GoalRunnerTerminalStatus.fromWire(reader.requiredString("status"))) {
-              "Unknown goal-continuation outcome status '${raw[SharedPayloadKeys.STATUS]}'."
-            },
-          workflowId = reader.requiredString("workflow_id"),
-          commitSha = reader.optionalString("commit_sha"),
-          blockedReason = reader.optionalString("blocked_reason"),
-          lastResumableStep = reader.requiredString("last_resumable_step"),
-          finalizingAgentId = reader.optionalString("finalizing_agent_id"),
-          participatingAgentIds = reader.optionalStringList("participating_agent_ids"),
-        )
-      } catch (error: IllegalArgumentException) {
-        throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime goal-continuation outcome is invalid.",
-          error,
-        )
+      val issueKey = reader.requiredString("issue_key")
+      val subtaskId = reader.requiredInt("subtask_id")
+      val statusWire = reader.requiredString("status")
+      val status = GoalRunnerTerminalStatus.fromWire(statusWire)
+        ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
+      val workflowId = reader.requiredString(SharedPayloadKeys.WORKFLOW_ID)
+      val commitSha = reader.optionalString(DecompositionManifestPayloadKeys.COMMIT_SHA)
+      val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
+      val step = reader.requiredString(DecompositionManifestPayloadKeys.LAST_RESUMABLE_STEP)
+      val finalizingAgentId = reader.optionalString(DecompositionManifestPayloadKeys.FINALIZING_AGENT_ID)
+      val participatingAgentIds = reader.optionalStringList(DecompositionManifestPayloadKeys.PARTICIPATING_AGENT_IDS)
+      if (violation(issueKey, subtaskId, workflowId, step) != null) {
+        throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
       }
+      return FeatureTaskRuntimeGoalContinuationOutcome(
+        issueKey = issueKey,
+        subtaskId = subtaskId,
+        status = status,
+        workflowId = workflowId,
+        commitSha = commitSha,
+        blockedReason = blockedReason,
+        lastResumableStep = step,
+        finalizingAgentId = finalizingAgentId,
+        participatingAgentIds = participatingAgentIds,
+      )
     }
   }
 }
