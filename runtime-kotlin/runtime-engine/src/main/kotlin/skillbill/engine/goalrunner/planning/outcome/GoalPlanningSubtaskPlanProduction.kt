@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.outcome
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
@@ -18,6 +19,7 @@ import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.planning.model.GoalPlanningResolvedBoundaryBodies
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -50,10 +52,23 @@ class GoalPlanningSubtaskPlanProduction(
         )
     val (runInvariants, snapshot) =
       runCatching {
-        invariantsSource.read(
-          resolvedSpecPath,
-        ) to snapshotSubSpecs(shared, subtask, resolvedSpecPath, manifestFileStore, repositoryEnclosingRootPort)
+        val read = invariantsSource.read(resolvedSpecPath)
+        when (read) {
+          is FeatureTaskRuntimeRunInvariantsRead.Read ->
+            read.invariants to
+              snapshotSubSpecs(shared, subtask, resolvedSpecPath, manifestFileStore, repositoryEnclosingRootPort)
+          is FeatureTaskRuntimeRunInvariantsRead.Rejected ->
+            return SubtaskPlanProduction.Stopped(
+              stopped(
+                shared,
+                subtask.id,
+                invariantReadReason(subtask, read.reason),
+                GoalPlanningSweepConstants.PHASE_PLAN,
+              ),
+            )
+        }
       }.getOrElse { error ->
+        error.rethrowIfCooperativeCancellationOrInterruption()
         return SubtaskPlanProduction.Stopped(
           stopped(shared, subtask.id, invariantReadReason(subtask, error), GoalPlanningSweepConstants.PHASE_PLAN),
         )

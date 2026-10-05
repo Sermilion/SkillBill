@@ -3,6 +3,7 @@ package skillbill.infrastructure.host
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.model.EnvironmentContext
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
 import skillbill.telemetry.STATE_DIR_ENVIRONMENT_KEY
@@ -10,10 +11,41 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class FileTelemetryConfigStoreTest {
+  @Test
+  fun `config reads distinguish absence malformed text and non-object roots while edge reads keep throwing`(
+    @TempDir tempDir: Path,
+  ) {
+    val path = tempDir.resolve("config.json")
+
+    assertEquals(TelemetryConfigRead.Absent, readTelemetryConfigFileRead(path))
+
+    Files.writeString(path, "{not json")
+    val malformedText = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
+    assertEquals("Telemetry config at '$path' is not valid JSON.", malformedText.reason)
+    assertEquals(
+      malformedText.reason,
+      assertFailsWith<IllegalArgumentException> { readTelemetryConfigFile(path) }.message,
+    )
+    assertEquals(
+      malformedText.reason,
+      assertFailsWith<IllegalArgumentException> { ensureTelemetryConfigFile(path) }.message,
+    )
+
+    Files.writeString(path, "[]")
+    val nonObject = assertIs<TelemetryConfigRead.Malformed>(readTelemetryConfigFileRead(path))
+    assertEquals("Telemetry config at '$path' is not valid JSON.", nonObject.reason)
+
+    Files.writeString(path, "{}")
+    val present = assertIs<TelemetryConfigRead.Present>(readTelemetryConfigFileRead(path))
+    assertEquals(emptyMap(), present.document.payload)
+  }
+
   @Test
   fun `telemetry state dir expands user home at filesystem adapter seam`() {
     val home = Path.of("build/tmp/skill-bill-home").toAbsolutePath().normalize()

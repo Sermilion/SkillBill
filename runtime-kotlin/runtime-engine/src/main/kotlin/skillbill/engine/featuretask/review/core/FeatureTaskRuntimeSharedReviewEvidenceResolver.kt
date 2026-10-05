@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.review.core
 
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.model.ReviewDiffQuery
@@ -71,11 +72,12 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
       diffResolver.diff(repoRoot, query)
         ?: return recordUnreadableDiff(workflowId, consumerPhaseId, query)
     val evidence =
-      try {
-        ReviewDiffEvidence.parse(diff)
-      } catch (error: IllegalArgumentException) {
-        recordParseDegradation(error)
-        null
+      when (val result = ReviewDiffEvidence.parseOrRejection(diff)) {
+        is ReviewDiffEvidenceParseResult.Parsed -> result.evidence
+        is ReviewDiffEvidenceParseResult.Rejected -> {
+          recordParseDegradation(result.reason)
+          null
+        }
       }
     return FeatureTaskRuntimeSharedEvidenceDerivation(
       baseRef = base,
@@ -106,12 +108,11 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
     return null
   }
 
-  private fun recordParseDegradation(error: IllegalArgumentException) {
+  private fun recordParseDegradation(reason: String) {
     log.log(
       Level.WARNING,
       "seam=shared_review_evidence_parse value_used=empty_file_and_hunk_index " +
-        "value_expected=parsed_diff_evidence cause=${error.message ?: error.javaClass.simpleName}",
-      error,
+        "value_expected=parsed_diff_evidence cause=$reason",
     )
   }
 

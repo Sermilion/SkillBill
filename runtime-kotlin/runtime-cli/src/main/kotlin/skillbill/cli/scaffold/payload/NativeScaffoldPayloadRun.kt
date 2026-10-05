@@ -17,6 +17,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.scaffold.ScaffoldGateway
 import skillbill.ports.scaffold.model.ScaffoldRenderResult
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.time.Clock
 
@@ -38,7 +39,7 @@ class NativeScaffoldPayloadRun(
         transform(readScaffoldPayload(payloadPath, state))
       } catch (error: SkillBillRuntimeException) {
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
-      } catch (error: IllegalArgumentException) {
+      } catch (error: InvalidPathException) {
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
     runPayload(payload, options)
@@ -158,7 +159,7 @@ internal fun CliRunState.completeAuthoring(
   } catch (error: SkillBillRuntimeException) {
     error.rethrowIfDatabaseFailure()
     completeScaffoldError(error.message.orEmpty(), format)
-  } catch (error: IllegalArgumentException) {
+  } catch (error: InvalidPathException) {
     completeScaffoldError(error.message.orEmpty(), format)
   }
 }
@@ -173,8 +174,6 @@ internal fun completeRenderText(
   val rendered = scaffoldGateway.render(repoRoot, skillName)
   state.completeText(rendered.stdout, rendered.toCliPayload(dryRun))
 } catch (error: SkillBillRuntimeException) {
-  state.completeScaffoldError(error.message.orEmpty(), CliFormat.TEXT)
-} catch (error: IllegalArgumentException) {
   state.completeScaffoldError(error.message.orEmpty(), CliFormat.TEXT)
 }
 

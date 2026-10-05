@@ -3,10 +3,10 @@ package skillbill.application.telemetry.settings
 import skillbill.application.telemetry.model.TelemetryMutationResult
 import skillbill.application.telemetry.sync.telemetrySyncTarget
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.review.model.FeedbackTelemetryOptions
 import skillbill.telemetry.model.TelemetrySettings
-import kotlin.coroutines.cancellation.CancellationException
 
 internal const val TELEMETRY_SETTINGS_LOAD_FAILURE_MESSAGE =
   "Telemetry settings could not be loaded; treating telemetry as disabled."
@@ -18,23 +18,16 @@ internal fun telemetrySettingsOrNull(
   settingsProvider: TelemetrySettingsProvider,
   diagnostics: RuntimeDiagnostics,
 ): TelemetrySettings? =
-  try {
-    settingsProvider.load()
-  } catch (error: CancellationException) {
-    throw error
-  } catch (error: InterruptedException) {
-    throw error
-  } catch (error: IllegalStateException) {
-    telemetrySettingsLoadFailure(diagnostics, error)
-  } catch (error: IllegalArgumentException) {
-    telemetrySettingsLoadFailure(diagnostics, error)
+  when (val result = settingsProvider.loadOrUnavailable()) {
+    is TelemetrySettingsLoad.Loaded -> result.settings
+    is TelemetrySettingsLoad.Unavailable -> telemetrySettingsLoadFailure(diagnostics, result.reason)
   }
 
 private fun telemetrySettingsLoadFailure(
   diagnostics: RuntimeDiagnostics,
-  error: RuntimeException,
+  reason: String,
 ): Nothing? {
-  diagnostics.error(TELEMETRY_SETTINGS_LOAD_FAILURE_MESSAGE, error)
+  diagnostics.error(TELEMETRY_SETTINGS_LOAD_FAILURE_MESSAGE, IllegalArgumentException(reason))
   return null
 }
 

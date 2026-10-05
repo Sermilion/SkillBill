@@ -12,6 +12,7 @@ import skillbill.infrastructure.skills.install.nativeagent.parseEmbeddedLogicalN
 import skillbill.install.model.SupportedAgent
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -34,8 +35,6 @@ internal object NativeAgentLinkInventoryDecode {
       error.rethrowUnless(error.isShellContentContractFailure())
       rethrow(error)
     } catch (error: IOException) {
-      throwDecodeError(path, error)
-    } catch (error: IllegalArgumentException) {
       throwDecodeError(path, error)
     }
 
@@ -92,10 +91,10 @@ internal object NativeAgentLinkInventoryDecode {
       NativeAgentLinkInventoryEntry(
         logicalName = node.requiredText("logical_name", path),
         provider = node.requiredText("provider", path),
-        installedPath = Path.of(node.requiredText("installed_path", path)),
-        cacheTargetPath = Path.of(node.requiredText("cache_target_path", path)),
+        installedPath = decodePath(node.requiredText("installed_path", path), path),
+        cacheTargetPath = decodePath(node.requiredText("cache_target_path", path), path),
         contentDigest = node.requiredText("content_digest", path),
-        sourceRoot = Path.of(node.requiredText("source_root", path)),
+        sourceRoot = decodePath(node.requiredText("source_root", path), path),
       )
     }?.toList() ?: invalid(path, "entries is required")
 
@@ -108,6 +107,16 @@ internal object NativeAgentLinkInventoryDecode {
     validateUniqueEntries(entries, path)
     entries.forEach { entry -> validateDecodedEntry(entry, home, managedRoots, path) }
   }
+
+  private fun decodePath(
+    value: String,
+    source: Path,
+  ): Path =
+    try {
+      Path.of(value)
+    } catch (error: InvalidPathException) {
+      throwDecodeError(source, error)
+    }
 
   private fun validateUniqueEntries(
     entries: List<NativeAgentLinkInventoryEntry>,

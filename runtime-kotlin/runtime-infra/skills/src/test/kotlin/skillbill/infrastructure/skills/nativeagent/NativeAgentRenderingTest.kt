@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.nativeagent
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
@@ -38,7 +40,7 @@ class NativeAgentRenderingTest {
   @Test
   fun `source parser rejects provider-specific mode frontmatter`() {
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(
           """
           ---
@@ -52,6 +54,7 @@ class NativeAgentRenderingTest {
         )
       }
 
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "unsupported native agent frontmatter key 'mode'")
   }
 
@@ -166,10 +169,11 @@ class NativeAgentRenderingTest {
     )
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSource(sourcePath)
       }
 
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "filename must match frontmatter name")
   }
 

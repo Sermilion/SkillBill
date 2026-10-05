@@ -4,6 +4,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceCodec
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
 import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorUnreadableError
@@ -78,11 +79,12 @@ internal object ReviewHunkStoreIndexing {
     payload: String,
     storePath: String,
   ): SharedReviewEvidenceRecord {
-    runCatching { ReviewDiffEvidence.parse(payload) }.getOrNull()
-      ?: throw reviewHunkEvidenceLocatorUnreadableError(
+    if (ReviewDiffEvidence.parseOrRejection(payload) !is ReviewDiffEvidenceParseResult.Parsed) {
+      throw reviewHunkEvidenceLocatorUnreadableError(
         storePath,
         "payload is not a shared-evidence or git-diff body",
       )
+    }
     return SharedReviewEvidenceRecord(
       aggregateDiff = payload,
       sequence =
@@ -162,8 +164,7 @@ internal object ReviewHunkStoreIndexing {
     hunk: ReviewChangedHunk,
   ): String? =
     diff?.let { payload ->
-      runCatching { ReviewDiffEvidence.parse(payload) }.getOrNull()
-        ?.hunks
+      (ReviewDiffEvidence.parseOrRejection(payload) as? ReviewDiffEvidenceParseResult.Parsed)?.evidence?.hunks
         ?.find { sameSpan(it, hunk) }
         ?.content
     }

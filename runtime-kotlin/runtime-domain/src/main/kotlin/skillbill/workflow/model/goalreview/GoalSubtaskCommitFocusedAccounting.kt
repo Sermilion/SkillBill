@@ -2,6 +2,8 @@ package skillbill.workflow.model.goalreview
 
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.hunk.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
@@ -27,20 +29,21 @@ data class GoalSubtaskCommitFocusedAccounting(
   val integrationFindingCount: Int? = null,
 ) {
   init {
-    require(commitSequenceDigest.matches(SHA256_HEX)) {
-      "Commit-focused accounting requires a SHA-256 commit sequence identity."
-    }
-    require(listOf(commitCount, laneCount, focusedCommitCount, skippedCommitCount).all { it >= 0 })
-    require(focusedCommitCount + skippedCommitCount == commitCount) {
-      "Every commit is either focused by some lane or skipped by all of them."
-    }
-    require(incompleteLanes.distinct().size == incompleteLanes.size)
-    if (integrationTerminalOutcome == ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE) {
-      require(!integrationSkipReason.isNullOrBlank()) {
-        "A skipped integration pass must record why it was not applicable."
-      }
-    }
+    val reason = validation().violation()
+    require(reason == null) { reason.orEmpty() }
   }
+
+  private fun validation() =
+    GoalSubtaskCommitFocusedAccountingValidation(
+      commitSequenceDigest,
+      commitCount,
+      laneCount,
+      focusedCommitCount,
+      skippedCommitCount,
+      incompleteLanes,
+      integrationTerminalOutcome,
+      integrationSkipReason,
+    )
 
   val isCleanCoverage: Boolean get() = incompleteLanes.isEmpty()
 
@@ -74,49 +77,71 @@ data class GoalSubtaskCommitFocusedAccounting(
       ReviewIntegrationTerminalOutcome.entries
         .mapTo(linkedSetOf(), ReviewIntegrationTerminalOutcome::wireValue)
 
-    private val SHA256_HEX = Regex("[0-9a-f]{64}")
-
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       path: String,
+      onInvalid: (String) -> Nothing = { reason ->
+        throw SkillBillRuntimeException(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, reason)
+      },
     ): GoalSubtaskCommitFocusedAccounting {
       raw.requireOnlyReviewStateKeys(ARTIFACT_KEYS, path)
       val reader = reviewStateReader(raw, path)
+      val digest = reader.requiredString("commit_sequence_digest")
+      val commitCount = reader.requiredInt("commit_count")
+      val laneCount = reader.requiredInt("lane_count")
+      val focusedCommitCount = reader.requiredInt("focused_commit_count")
+      val skippedCommitCount = reader.requiredInt("skipped_commit_count")
+      val outcomeWire = reader.requiredString("integration_terminal_outcome")
+      val outcome =
+        ReviewIntegrationTerminalOutcome.fromWire(outcomeWire)
+          ?: onInvalid("Unknown integration terminal outcome at '$path.integration_terminal_outcome'.")
+      val routingDigest = reader.optionalString("routing_digest")
+      val focusedPairCount = reader.optionalInt("focused_pair_count")
+      val skippedPairCount = reader.optionalInt("skipped_pair_count")
+      val laneBundleSizes = raw.longCountMap("lane_bundle_sizes", path)
+      val laneSegmentCounts =
+        raw.longCountMap("lane_segment_counts", path)
+          .mapValues { (entryKey, value) ->
+            value.asExactIntOrNull() ?: reviewStateError("$path.lane_segment_counts.$entryKey", "must be an integer.")
+          }
+      val incompleteLanes =
+        reader.optionalList("incomplete_lanes")
+          .orEmpty()
+          .mapIndexed { index, value ->
+            (value as? String)?.takeIf(String::isNotBlank)
+              ?: reviewStateError("$path.incomplete_lanes[$index]", "must be a non-blank string.")
+          }
+      val parentAnalysisPairs = reader.optionalInt("parent_analysis_pairs")
+      val parentAnalysisBytes = reader.optionalInt("parent_analysis_bytes")?.toLong()
+      val integrationSkipReason = reader.optionalString("integration_skip_reason")
+      val integrationFindingCount = reader.optionalInt("integration_finding_count")
+      GoalSubtaskCommitFocusedAccountingValidation(
+        digest,
+        commitCount,
+        laneCount,
+        focusedCommitCount,
+        skippedCommitCount,
+        incompleteLanes,
+        outcome,
+        integrationSkipReason,
+      ).violation()?.let(onInvalid)
       return GoalSubtaskCommitFocusedAccounting(
-        commitSequenceDigest = reader.requiredString("commit_sequence_digest"),
-        commitCount = reader.requiredInt("commit_count"),
-        laneCount = reader.requiredInt("lane_count"),
-        focusedCommitCount = reader.requiredInt("focused_commit_count"),
-        skippedCommitCount = reader.requiredInt("skipped_commit_count"),
-        integrationTerminalOutcome =
-          requireNotNull(
-            ReviewIntegrationTerminalOutcome.fromWire(
-              reader.requiredString("integration_terminal_outcome"),
-            ),
-          ) {
-            "Unknown integration terminal outcome at '$path.integration_terminal_outcome'."
-          },
-        routingDigest = reader.optionalString("routing_digest"),
-        focusedPairCount = reader.optionalInt("focused_pair_count"),
-        skippedPairCount = reader.optionalInt("skipped_pair_count"),
-        laneBundleSizes = raw.longCountMap("lane_bundle_sizes", path),
-        laneSegmentCounts =
-          raw.longCountMap("lane_segment_counts", path)
-            .mapValues { (entryKey, value) ->
-              value.asExactIntOrNull()
-                ?: reviewStateError("$path.lane_segment_counts.$entryKey", "must be an integer.")
-            },
-        incompleteLanes =
-          reader.optionalList("incomplete_lanes")
-            .orEmpty()
-            .mapIndexed { index, value ->
-              (value as? String)?.takeIf(String::isNotBlank)
-                ?: reviewStateError("$path.incomplete_lanes[$index]", "must be a non-blank string.")
-            },
-        parentAnalysisPairs = reader.optionalInt("parent_analysis_pairs"),
-        parentAnalysisBytes = reader.optionalInt("parent_analysis_bytes")?.toLong(),
-        integrationSkipReason = reader.optionalString("integration_skip_reason"),
-        integrationFindingCount = reader.optionalInt("integration_finding_count"),
+        commitSequenceDigest = digest,
+        commitCount = commitCount,
+        laneCount = laneCount,
+        focusedCommitCount = focusedCommitCount,
+        skippedCommitCount = skippedCommitCount,
+        integrationTerminalOutcome = outcome,
+        routingDigest = routingDigest,
+        focusedPairCount = focusedPairCount,
+        skippedPairCount = skippedPairCount,
+        laneBundleSizes = laneBundleSizes,
+        laneSegmentCounts = laneSegmentCounts,
+        incompleteLanes = incompleteLanes,
+        parentAnalysisPairs = parentAnalysisPairs,
+        parentAnalysisBytes = parentAnalysisBytes,
+        integrationSkipReason = integrationSkipReason,
+        integrationFindingCount = integrationFindingCount,
       )
     }
 
@@ -151,4 +176,27 @@ data class GoalSubtaskCommitFocusedAccounting(
       }
     }
   }
+}
+
+private data class GoalSubtaskCommitFocusedAccountingValidation(
+  val digest: String,
+  val commitCount: Int,
+  val laneCount: Int,
+  val focusedCommitCount: Int,
+  val skippedCommitCount: Int,
+  val incompleteLanes: List<String>,
+  val integrationTerminalOutcome: ReviewIntegrationTerminalOutcome,
+  val integrationSkipReason: String?,
+) {
+  fun violation(): String? =
+    when {
+      !digest.matches(SHA256_HEX) -> "Commit-focused accounting requires a SHA-256 commit sequence identity."
+      listOf(commitCount, laneCount, focusedCommitCount, skippedCommitCount).any { it < 0 } -> "Failed requirement."
+      focusedCommitCount + skippedCommitCount != commitCount ->
+        "Every commit is either focused by some lane or skipped by all of them."
+      incompleteLanes.distinct().size != incompleteLanes.size -> "Failed requirement."
+      integrationTerminalOutcome == ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE &&
+        integrationSkipReason.isNullOrBlank() -> "A skipped integration pass must record why it was not applicable."
+      else -> null
+    }
 }

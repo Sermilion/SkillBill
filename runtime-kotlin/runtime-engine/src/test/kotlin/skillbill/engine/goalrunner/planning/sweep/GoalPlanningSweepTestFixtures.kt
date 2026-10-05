@@ -9,6 +9,7 @@ import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.goalrunner.verification.model.GoalVerificationBoundaryDiscovery
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
@@ -121,12 +122,14 @@ private fun defaultSpec(fileName: String): String =
   if (fileName.startsWith("spec_subtask_")) readySubSpec(fileName) else "content-$fileName"
 
 internal class FakeInvariantsSource : FeatureTaskRuntimeRunInvariantsSource {
-  override fun read(specPath: Path): FeatureTaskRuntimeRunInvariants =
-    FeatureTaskRuntimeRunInvariants(
-      specReference = specPath.toString(),
-      featureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
-      acceptanceCriteria = listOf("The sweep produces a schema-valid plan for this sub-spec."),
-      mandatesAndOverrides = emptyList(),
+  override fun read(specPath: Path): FeatureTaskRuntimeRunInvariantsRead =
+    FeatureTaskRuntimeRunInvariantsRead.Read(
+      FeatureTaskRuntimeRunInvariants(
+        specReference = specPath.toString(),
+        featureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
+        acceptanceCriteria = listOf("The sweep produces a schema-valid plan for this sub-spec."),
+        mandatesAndOverrides = emptyList(),
+      ),
     )
 }
 

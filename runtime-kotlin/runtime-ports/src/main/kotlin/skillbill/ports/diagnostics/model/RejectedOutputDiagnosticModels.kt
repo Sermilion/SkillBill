@@ -21,7 +21,13 @@ data class RejectedOutputDiagnostic(
   val repairTurn: Int = 0,
 ) {
   init {
-    require(repairTurn >= 0) { "Rejected output diagnostic repair turn must not be negative." }
+    val reason = violation(repairTurn)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(repairTurn: Int): String? =
+      if (repairTurn >= 0) null else "Rejected output diagnostic repair turn must not be negative."
   }
 }
 

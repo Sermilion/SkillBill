@@ -75,14 +75,23 @@ data class ReviewFindingCitation(
   val line: Int,
 ) {
   init {
-    require(path.isNotBlank()) { "Finding citation path must not be blank." }
-    require(line >= 1) { "Finding citation line must be a positive integer." }
-    requireRepositoryRelativePath(path)
+    val reason = violation(path, line)
+    require(reason == null) { reason.orEmpty() }
   }
 
   fun encoded(): String = "$path\t$line"
 
   companion object {
+    internal fun violation(
+      path: String,
+      line: Int,
+    ): String? =
+      when {
+        path.isBlank() -> "Finding citation path must not be blank."
+        line < 1 -> "Finding citation line must be a positive integer."
+        else -> repositoryRelativePathViolation(path)
+      }
+
     fun decodeList(raw: String?): List<ReviewFindingCitation> =
       raw.orEmpty().lineSequence().filter { it.isNotBlank() }.map { line ->
         val path = line.substringBefore('\t')

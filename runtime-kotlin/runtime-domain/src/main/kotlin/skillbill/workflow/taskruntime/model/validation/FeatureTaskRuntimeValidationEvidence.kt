@@ -27,10 +27,8 @@ data class FeatureTaskRuntimeValidationEvidence(
   val results: List<FeatureTaskRuntimeValidationCommandResult>,
 ) {
   init {
-    require(results.isNotEmpty()) { "Validation evidence must contain at least one result." }
-    require(results.size <= MAX_VALIDATION_RESULTS) {
-      "Validation evidence cannot contain more than $MAX_VALIDATION_RESULTS results."
-    }
+    val reason = violation(results)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -78,6 +76,14 @@ data class FeatureTaskRuntimeValidationEvidence(
   }
 
   companion object {
+    internal fun violation(results: List<FeatureTaskRuntimeValidationCommandResult>): String? =
+      when {
+        results.isEmpty() -> "Validation evidence must contain at least one result."
+        results.size > MAX_VALIDATION_RESULTS ->
+          "Validation evidence cannot contain more than $MAX_VALIDATION_RESULTS results."
+        else -> null
+      }
+
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       sourceLabel: String,
@@ -119,11 +125,8 @@ data class FeatureTaskRuntimeValidationEvidence(
           if (command.isBlank()) invalid(onInvalid, "results[$index].command must be non-blank.")
           FeatureTaskRuntimeValidationCommandResult(command, exitCode)
         }
-      return try {
-        FeatureTaskRuntimeValidationEvidence(results)
-      } catch (error: IllegalArgumentException) {
-        invalid(onInvalid, error.message.orEmpty())
-      }
+      violation(results)?.let { reason -> invalid(onInvalid, reason) }
+      return FeatureTaskRuntimeValidationEvidence(results)
     }
 
     private fun invalid(

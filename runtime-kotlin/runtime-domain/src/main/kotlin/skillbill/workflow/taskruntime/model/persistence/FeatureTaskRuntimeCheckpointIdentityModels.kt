@@ -44,43 +44,11 @@ data class FeatureTaskRuntimeCheckpointIdentity(
   val parentSha: String? = null,
 ) {
   init {
-    require(sequenceNumber >= 0) {
-      "FeatureTaskRuntimeCheckpointIdentity.sequenceNumber must be non-negative, was $sequenceNumber."
-    }
-    require(issueKey.isNotBlank()) { "FeatureTaskRuntimeCheckpointIdentity.issueKey must be non-blank." }
-    require(subtaskId.matches(SUBTASK_ID_PATTERN)) {
-      "FeatureTaskRuntimeCheckpointIdentity.subtaskId must be a positive integer or " +
-        "'$FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID', was '$subtaskId'."
-    }
-    require(checkpointRef.matches(CHECKPOINT_REF_PATTERN) && checkpointRef.length <= CHECKPOINT_REF_MAX_LENGTH) {
-      "FeatureTaskRuntimeCheckpointIdentity.checkpointRef must be a bounded skill-bill checkpoint ref."
-    }
-    require(checkpointRef == featureTaskRuntimeCheckpointRefName(issueKey, subtaskId, sequenceNumber)) {
-      "FeatureTaskRuntimeCheckpointIdentity.checkpointRef '$checkpointRef' does not derive from issueKey " +
-        "'$issueKey', subtaskId '$subtaskId' and sequenceNumber $sequenceNumber; the ref is the identity, so a " +
-        "ref naming a different authority boundary than its own record is rejected."
-    }
-    require(branch.isNotBlank()) { "FeatureTaskRuntimeCheckpointIdentity.branch must be non-blank." }
-    require(phaseId.isNotBlank()) { "FeatureTaskRuntimeCheckpointIdentity.phaseId must be non-blank." }
-    require(generation >= 0) {
-      "FeatureTaskRuntimeCheckpointIdentity.generation must be non-negative, was $generation."
-    }
-    require(ownedPathCount >= 0) {
-      "FeatureTaskRuntimeCheckpointIdentity.ownedPathCount must be non-negative, was $ownedPathCount."
-    }
-    require(ownedPathDigest.matches(DIGEST_PATTERN)) {
-      "FeatureTaskRuntimeCheckpointIdentity.ownedPathDigest must be a lowercase SHA-256 hex digest."
-    }
-    require(commitSha.matches(SHA_PATTERN)) {
-      "FeatureTaskRuntimeCheckpointIdentity.commitSha must be a lowercase commit sha."
-    }
-    require(recordedAt.isNotBlank()) { "FeatureTaskRuntimeCheckpointIdentity.recordedAt must be non-blank." }
-    parentSha?.let { sha ->
-      require(sha.matches(SHA_PATTERN)) {
-        "FeatureTaskRuntimeCheckpointIdentity.parentSha must be a lowercase commit sha when present."
-      }
-    }
-    loopId?.let { id -> require(id.isNotBlank()) { "FeatureTaskRuntimeCheckpointIdentity.loopId must be non-blank." } }
+    val reason =
+      identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
+        ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
+        ?: continuationViolation(recordedAt, parentSha, loopId)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -109,6 +77,63 @@ data class FeatureTaskRuntimeCheckpointIdentity(
       Regex("^$CHECKPOINT_REF_PREFIX/.+/($FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID|[0-9]+)/[0-9]+$")
     private const val CHECKPOINT_REF_MAX_LENGTH: Int = 255
 
+    private fun identityViolation(
+      sequenceNumber: Int,
+      issueKey: String,
+      subtaskId: String,
+      checkpointRef: String,
+      branch: String,
+    ): String? =
+      when {
+        sequenceNumber < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.sequenceNumber must be non-negative, was $sequenceNumber."
+        issueKey.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.issueKey must be non-blank."
+        !subtaskId.matches(SUBTASK_ID_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.subtaskId must be a positive integer or " +
+            "'$FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID', was '$subtaskId'."
+        !checkpointRef.matches(CHECKPOINT_REF_PATTERN) || checkpointRef.length > CHECKPOINT_REF_MAX_LENGTH ->
+          "FeatureTaskRuntimeCheckpointIdentity.checkpointRef must be a bounded skill-bill checkpoint ref."
+        checkpointRef != featureTaskRuntimeCheckpointRefName(issueKey, subtaskId, sequenceNumber) ->
+          "FeatureTaskRuntimeCheckpointIdentity.checkpointRef '$checkpointRef' does not derive from issueKey " +
+            "'$issueKey', subtaskId '$subtaskId' and sequenceNumber $sequenceNumber; the ref is the identity, so a " +
+            "ref naming a different authority boundary than its own record is rejected."
+        branch.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.branch must be non-blank."
+        else -> null
+      }
+
+    private fun evidenceViolation(
+      phaseId: String,
+      generation: Int,
+      ownedPathDigest: String,
+      ownedPathCount: Int,
+      commitSha: String,
+    ): String? =
+      when {
+        phaseId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.phaseId must be non-blank."
+        generation < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.generation must be non-negative, was $generation."
+        ownedPathCount < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.ownedPathCount must be non-negative, was $ownedPathCount."
+        !ownedPathDigest.matches(DIGEST_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.ownedPathDigest must be a lowercase SHA-256 hex digest."
+        !commitSha.matches(SHA_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.commitSha must be a lowercase commit sha."
+        else -> null
+      }
+
+    private fun continuationViolation(
+      recordedAt: String,
+      parentSha: String?,
+      loopId: String?,
+    ): String? =
+      when {
+        recordedAt.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.recordedAt must be non-blank."
+        parentSha != null && !parentSha.matches(SHA_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.parentSha must be a lowercase commit sha when present."
+        loopId != null && loopId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.loopId must be non-blank."
+        else -> null
+      }
+
     private val ALLOWED_FIELDS =
       setOf(
         "sequence_number",
@@ -134,28 +159,31 @@ data class FeatureTaskRuntimeCheckpointIdentity(
             "${unexpected.sorted()}; the store is quarantined and regenerated rather than reinterpreted.",
         )
       }
-      return try {
-        val reader = durableArtifactMapReader(raw)
-        FeatureTaskRuntimeCheckpointIdentity(
-          sequenceNumber = reader.requiredInt("sequence_number"),
-          issueKey = reader.requiredString(SharedPayloadKeys.ISSUE_KEY),
-          subtaskId = reader.requiredString(SharedPayloadKeys.SUBTASK_ID),
-          checkpointRef = reader.requiredString("checkpoint_ref"),
-          branch = reader.requiredString(DecompositionPlanningPayloadKeys.BRANCH),
-          phaseId = reader.requiredString(SharedPayloadKeys.PHASE_ID),
-          generation = reader.requiredInt("generation"),
-          ownedPathDigest = reader.requiredString("owned_path_digest"),
-          ownedPathCount = reader.requiredInt("owned_path_count"),
-          commitSha = reader.requiredString(DecompositionManifestPayloadKeys.COMMIT_SHA),
-          recordedAt = reader.requiredString("recorded_at"),
-          loopId = reader.optionalString("loop_id"),
-          parentSha = reader.optionalString("parent_sha"),
-        )
-      } catch (error: IllegalArgumentException) {
-        checkpointIdentityError(
-          "Feature-task-runtime checkpoint-identity entry is malformed: ${error.message}",
-        )
+      val reader = durableArtifactMapReader(raw)
+      val sequenceNumber = reader.requiredInt("sequence_number")
+      val issueKey = reader.requiredString(SharedPayloadKeys.ISSUE_KEY)
+      val subtaskId = reader.requiredString(SharedPayloadKeys.SUBTASK_ID)
+      val checkpointRef = reader.requiredString("checkpoint_ref")
+      val branch = reader.requiredString(DecompositionPlanningPayloadKeys.BRANCH)
+      val phaseId = reader.requiredString(SharedPayloadKeys.PHASE_ID)
+      val generation = reader.requiredInt("generation")
+      val ownedPathDigest = reader.requiredString("owned_path_digest")
+      val ownedPathCount = reader.requiredInt("owned_path_count")
+      val commitSha = reader.requiredString(DecompositionManifestPayloadKeys.COMMIT_SHA)
+      val recordedAt = reader.requiredString("recorded_at")
+      val loopId = reader.optionalString("loop_id")
+      val parentSha = reader.optionalString("parent_sha")
+      val reason =
+        identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
+          ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
+          ?: continuationViolation(recordedAt, parentSha, loopId)
+      if (reason != null) {
+        checkpointIdentityError("Feature-task-runtime checkpoint-identity entry is malformed: $reason")
       }
+      return FeatureTaskRuntimeCheckpointIdentity(
+        sequenceNumber, issueKey, subtaskId, checkpointRef, branch, phaseId, generation,
+        ownedPathDigest, ownedPathCount, commitSha, recordedAt, loopId, parentSha,
+      )
     }
   }
 }

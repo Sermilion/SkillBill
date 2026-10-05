@@ -1,0 +1,11 @@
+# Boundary decisions
+
+## [2026-10-05] SKILL-401: retry only expected heartbeat renewal failures
+Context: Feature-task and goal heartbeat callbacks renew leases through database transactions. Broad IAE/ISE recovery also intercepted defects.
+Decision: Report and reschedule IOException and SkillBillRuntimeException with DatabaseFailureCode.ACCESS or BUSY. Rethrow unrelated codes and defects; retain fencing-loss outcomes and existing expiry escalation.
+Reason: Expected persistence failures must not stop lease renewal. Recovering defects as transient failures would hide broken invariants. Existing coded database failures already identify the recoverable boundary without a new renewal outcome or transaction owner.
+
+## [2026-10-05] SKILL-401: retain the shared-evidence diagnostic cause prefix
+Context: Stored shared-evidence index rejection emitted a degraded cause beginning with "IllegalArgumentException: ". SKILL-401 removes the constructor-defect catch.
+Decision: Validate stored model fields before construction and emit the same ordered reason with the literal prefix. Keep the existing seam, re-derive action and expected-value text.
+Reason: The prefix is part of emitted diagnostic bytes. Replacing exception-based control flow must preserve that output even though rejection now arrives as a value.

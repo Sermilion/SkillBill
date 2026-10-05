@@ -2,6 +2,7 @@ package skillbill.cli.scaffold.wizard
 
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliRunInputs
+import skillbill.error.shellcontent.invalidScaffoldInputError
 
 internal fun promptRequired(
   state: CliRunState,
@@ -9,7 +10,7 @@ internal fun promptRequired(
   label: String,
 ): String {
   val value = promptOptional(state, inputs, label)
-  require(value.isNotBlank()) { "Missing required scaffold wizard value: $label." }
+  if (value.isBlank()) throw invalidScaffoldInputError("Missing required scaffold wizard value: $label.")
   return value
 }
 
@@ -52,8 +53,8 @@ internal fun promptRoutingSignals(
       "dependency coordinates, or language markers.\n",
   )
   val signals = parseCommaSeparated(promptRequired(state, inputs, "Strong routing signals (comma-separated)"))
-  require(signals.isNotEmpty()) {
-    "Missing required scaffold wizard value: Strong routing signals (comma-separated)."
+  if (signals.isEmpty()) {
+    throw invalidScaffoldInputError("Missing required scaffold wizard value: Strong routing signals (comma-separated).")
   }
   return signals
 }
@@ -76,7 +77,7 @@ internal fun promptAssistedAgent(
   val selected = promptDefault(state, inputs, "Agent [1]", "1")
   val byNumber = selected.toIntOrNull()?.let { number -> agents.getOrNull(number - 1) }
   val byName = agents.firstOrNull { agent -> agent.equals(selected, ignoreCase = true) }
-  return byNumber ?: byName ?: throw IllegalArgumentException(
+  return byNumber ?: byName ?: throw invalidScaffoldInputError(
     "Unknown assisted agent '$selected'. Choose one of: ${agents.joinToString(", ")}.",
   )
 }
@@ -87,7 +88,7 @@ internal fun requiredCommaSeparated(
   label: String,
 ): List<String> =
   parseCommaSeparated(promptRequired(state, inputs, label)).also { values ->
-    require(values.isNotEmpty()) { "Missing required scaffold wizard value: $label." }
+    if (values.isEmpty()) throw invalidScaffoldInputError("Missing required scaffold wizard value: $label.")
   }
 
 internal fun parseCommaSeparated(value: String): List<String> =

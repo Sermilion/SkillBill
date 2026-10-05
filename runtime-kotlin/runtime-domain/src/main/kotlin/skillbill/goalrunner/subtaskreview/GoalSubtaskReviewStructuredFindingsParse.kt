@@ -10,7 +10,7 @@ import skillbill.review.model.RecordedVerdictFields
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewFindingVerdict
-import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.review.model.repositoryRelativePathViolation
 import skillbill.review.parsing.ReviewFindingActionability
 import skillbill.review.parsing.ReviewFindingFieldCodec
 
@@ -120,12 +120,7 @@ object GoalSubtaskReviewStructuredFindingsParse {
 
   private fun admissibleRepositoryPath(raw: String?): String? {
     val trimmed = raw?.trim()?.takeIf(String::isNotBlank) ?: return null
-    return try {
-      requireRepositoryRelativePath(trimmed)
-      trimmed
-    } catch (_: IllegalArgumentException) {
-      null
-    }
+    return trimmed.takeIf { repositoryRelativePathViolation(it) == null }
   }
 
   private fun pathFromLocationLine(location: String): String? {

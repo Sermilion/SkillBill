@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.plan
 
+import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.install.identity.suppliedSkillContentIdentity
 import skillbill.infrastructure.skills.scaffold.authoring.InternalSkillDeclaration
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
@@ -61,10 +62,16 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
   val missingContent =
     candidateSkillDirs
       .filterNot { skillDir -> Files.isRegularFile(skillDir.resolve("content.md"), LinkOption.NOFOLLOW_LINKS) }
-  require(missingContent.isEmpty()) {
-    "Base skills root '$skillsRoot' contains listed skill directories without content.md: " +
-      missingContent.joinToString(", ") { skillDir -> skillDir.fileName.toString() }
-  }
+  val contentViolation =
+    when {
+      missingContent.isNotEmpty() ->
+        "Base skills root '$skillsRoot' contains listed skill directories without content.md: " +
+          missingContent.joinToString(", ") { skillDir -> skillDir.fileName.toString() }
+      candidateSkillDirs.isEmpty() ->
+        "Base skills root '$skillsRoot' does not contain any bill-* skills with content.md."
+      else -> null
+    }
+  if (contentViolation != null) throw missingContentFile(contentViolation)
   val baseSkills =
     candidateSkillDirs
       .map { skillDir ->
@@ -77,9 +84,6 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
           internalFor = parseInternalForFrontmatter(skillDir.resolve("content.md")),
         )
       }
-  require(baseSkills.isNotEmpty()) {
-    "Base skills root '$skillsRoot' does not contain any bill-* skills with content.md."
-  }
   return baseSkills
 }
 

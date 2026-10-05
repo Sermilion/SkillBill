@@ -65,6 +65,7 @@ internal fun prepareInternalStaging(request: InternalStagingPreparation): Prepar
       selectedPackSkills = request.selectedPackSkills,
       packDiscovery =
         InternalSidecarPackDiscovery(
+          failureSourceLabel = request.parentSourceDir.toString(),
           enforceContractVersion = request.enforceContractVersion,
           userHome = request.userHome,
           environment = request.environment,
@@ -124,6 +125,7 @@ private fun mergeInternalSupportPointers(
 }
 
 internal data class InternalSidecarPackDiscovery(
+  val failureSourceLabel: String? = null,
   val enforceContractVersion: Boolean = true,
   val userHome: Path? = null,
   val environment: Map<String, String> = emptyMap(),
@@ -137,6 +139,7 @@ internal fun discoverInternalSidecarTargets(
   selectedPackSkills: List<InstallPlanSkill> = emptyList(),
   packDiscovery: InternalSidecarPackDiscovery = InternalSidecarPackDiscovery(),
 ): List<InternalSidecarTarget> {
+  val failureSourceLabel = packDiscovery.failureSourceLabel ?: parentSkillName
   val baseChildren = discoverBaseSkillSidecarTargets(parentSkillName, skillsRoot)
   val packChildren =
     selectedPackSkills
@@ -163,27 +166,33 @@ internal fun discoverInternalSidecarTargets(
         skillName = skillName,
         sourceDir = sourceDir,
         renderedWrapper = renderWrapper(discovered.getValue(skillName)),
-        authoredCompanions = discoverAuthoredCompanions(sourceDir),
+        authoredCompanions = discoverAuthoredCompanions(sourceDir, failureSourceLabel),
       )
   }
   packChildren.forEach { skill ->
 
-    require(skill.name !in byName) {
-      "Internal pack skill '${skill.name}' duplicates a base-skill sidecar name for parent " +
-        "'$parentSkillName'."
+    if (skill.name in byName) {
+      invalidInstallStaging(
+        failureSourceLabel,
+        "Internal pack skill '${skill.name}' duplicates a base-skill sidecar name for parent " +
+          "'$parentSkillName'.",
+      )
     }
     byName[skill.name] =
       InternalSidecarTarget(
         skillName = skill.name,
         sourceDir = skill.sourceDir.toPath(),
         renderedWrapper = renderWrapper(discovered.getValue(skill.name)),
-        authoredCompanions = discoverAuthoredCompanions(skill.sourceDir.toPath()),
+        authoredCompanions = discoverAuthoredCompanions(skill.sourceDir.toPath(), failureSourceLabel),
       )
   }
   return byName.values.toList()
 }
 
-private fun discoverAuthoredCompanions(sourceDir: Path): List<InternalSidecarCompanion> {
+private fun discoverAuthoredCompanions(
+  sourceDir: Path,
+  failureSourceLabel: String,
+): List<InternalSidecarCompanion> {
   val normalizedSource = sourceDir.toAbsolutePath().normalize()
   val realSource = normalizedSource.toRealPath()
   val companions =
@@ -195,8 +204,11 @@ private fun discoverAuthoredCompanions(sourceDir: Path): List<InternalSidecarCom
         .sorted(Comparator.comparing { path -> path.fileName.toString() })
         .map { path ->
           val normalized = path.toAbsolutePath().normalize()
-          require(normalized.parent == normalizedSource && normalized.toRealPath().startsWith(realSource)) {
-            "Authored companion '$path' escapes internal child source directory '$normalizedSource'."
+          if (normalized.parent != normalizedSource || !normalized.toRealPath().startsWith(realSource)) {
+            invalidInstallStaging(
+              failureSourceLabel,
+              "Authored companion '$path' escapes internal child source directory '$normalizedSource'.",
+            )
           }
           InternalSidecarCompanion(path.fileName.toString(), Files.readAllBytes(path))
         }

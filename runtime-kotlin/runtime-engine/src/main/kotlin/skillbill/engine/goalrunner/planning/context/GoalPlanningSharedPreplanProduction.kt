@@ -22,6 +22,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
+import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
@@ -30,6 +31,7 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
@@ -70,7 +72,19 @@ class GoalPlanningSharedPreplanProduction(
     launch: GoalPlanningLaunch,
   ): Result<SharedPreplanProduction> =
     runCatching {
-      val runInvariants = invariantsSource.read(shared.parentSpecPath)
+      val runInvariants =
+        when (val read = invariantsSource.read(shared.parentSpecPath)) {
+          is FeatureTaskRuntimeRunInvariantsRead.Read -> read.invariants
+          is FeatureTaskRuntimeRunInvariantsRead.Rejected ->
+            return@runCatching SharedPreplanProduction.Stopped(
+              stopped(
+                shared,
+                0,
+                read.reason,
+                GoalPlanningSweepConstants.PHASE_PREPLAN,
+              ),
+            )
+        }
       val preplanProduction =
         attemptGate.producePhase(
           GoalPlanningProduceAttemptArgs(
@@ -93,7 +107,7 @@ class GoalPlanningSharedPreplanProduction(
         else ->
           producedSharedPreplan(shared, provenance, preplanProduction as GoalPlanningPhaseProduction.Captured)
       }
-    }
+    }.onFailure { error -> error.rethrowIfCooperativeCancellationOrInterruption() }
 
   private fun producedSharedPreplan(
     shared: GoalPlanningSharedContext,

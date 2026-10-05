@@ -23,6 +23,7 @@ import skillbill.ports.operation.UnavailableOperationProposalRepository
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogEntry
 import skillbill.ports.process.model.ReleaseCatalogResult
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.telemetry.model.TelemetrySettings
@@ -153,6 +154,9 @@ class UpdateCheckOperationTest {
 
   private object UnusedTelemetrySettings : TelemetrySettingsProvider {
     override fun load(materialize: Boolean): TelemetrySettings = error("update-check reads no telemetry settings")
+
+    override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+      TelemetrySettingsLoad.Loaded(load(materialize))
   }
 
   private object UnlaunchablePhaseRunner : PhaseRunner {

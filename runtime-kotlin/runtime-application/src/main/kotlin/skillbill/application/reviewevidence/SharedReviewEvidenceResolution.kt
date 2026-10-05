@@ -3,6 +3,7 @@ package skillbill.application.reviewevidence
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceDerivation
@@ -121,7 +122,8 @@ internal class SharedReviewEvidenceResolution(
   }
 
   private fun derivationOf(record: SharedReviewEvidenceRecord): FeatureTaskRuntimeSharedEvidenceDerivation {
-    val evidence = runCatching { ReviewDiffEvidence.parse(record.aggregateDiff) }.getOrNull()
+    val evidence =
+      (ReviewDiffEvidence.parseOrRejection(record.aggregateDiff) as? ReviewDiffEvidenceParseResult.Parsed)?.evidence
     return FeatureTaskRuntimeSharedEvidenceDerivation(
       baseRef = record.sequence.baseRevision,
       headRef = record.sequence.headRevision,

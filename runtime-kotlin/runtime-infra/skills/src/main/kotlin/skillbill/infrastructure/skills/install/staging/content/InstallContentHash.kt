@@ -1,11 +1,12 @@
 package skillbill.infrastructure.skills.install.staging.content
 
 import skillbill.infrastructure.contracts.newSha256Digest
-import skillbill.infrastructure.host.jvm.requirePathContainedIn
+import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
 import skillbill.infrastructure.skills.install.staging.GeneratedSupportPointer
 import skillbill.infrastructure.skills.install.staging.InternalSidecarTarget
 import skillbill.infrastructure.skills.install.staging.applicablePointers
+import skillbill.infrastructure.skills.install.staging.invalidInstallStaging
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec
@@ -95,12 +96,19 @@ private fun updatePointerHash(
           ?: manifest.packRoot.toPath().toAbsolutePath().normalize().parent?.parent
           ?: error("Platform pack '${manifest.slug}' root '${manifest.packRoot}' has no repo root parent.")
       val targetFile = repoRoot.resolve(spec.target).normalize()
-      requirePathContainedIn(targetFile, repoRoot) {
-        "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' outside repoRoot '$repoRoot'."
+      if (!pathContainedIn(targetFile, repoRoot)) {
+        invalidInstallStaging(
+          inputs.sourceSkillDir.toString(),
+          "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' " +
+            "outside repoRoot '$repoRoot'.",
+        )
       }
-      require(Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS)) {
-        "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' " +
-          "which does not exist at '$targetFile'."
+      if (!Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS)) {
+        invalidInstallStaging(
+          inputs.sourceSkillDir.toString(),
+          "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' " +
+            "which does not exist at '$targetFile'.",
+        )
       }
       digest.update(Files.readAllBytes(targetFile))
       digest.update(newline)

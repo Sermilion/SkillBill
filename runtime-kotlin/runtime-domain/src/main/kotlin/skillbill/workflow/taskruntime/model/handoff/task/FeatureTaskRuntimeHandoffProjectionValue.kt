@@ -67,11 +67,18 @@ data class FeatureTaskRuntimeHandoffProjectionField(
   val value: FeatureTaskRuntimeHandoffProjectionValue,
 ) {
   init {
-    require(PROJECTION_NAME_PATTERN.matches(name)) {
-      "FeatureTaskRuntimeHandoffProjectionField.name must match ${PROJECTION_NAME_PATTERN.pattern}, was '$name'."
-    }
-    require(name !in FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES) {
-      "FeatureTaskRuntimeHandoffProjectionField.name '$name' is a forbidden raw-context field."
-    }
+    val reason = violation(name)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(name: String): String? =
+      when {
+        !PROJECTION_NAME_PATTERN.matches(name) ->
+          "FeatureTaskRuntimeHandoffProjectionField.name must match ${PROJECTION_NAME_PATTERN.pattern}, was '$name'."
+        name in FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES ->
+          "FeatureTaskRuntimeHandoffProjectionField.name '$name' is a forbidden raw-context field."
+        else -> null
+      }
   }
 }

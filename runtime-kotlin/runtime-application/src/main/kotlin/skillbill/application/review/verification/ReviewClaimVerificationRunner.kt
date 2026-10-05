@@ -33,7 +33,7 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewStage
 import skillbill.review.model.ReviewStageDegradationReason
 import skillbill.review.model.ReviewVerificationNonSuccess
-import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.review.model.repositoryRelativePathViolation
 import skillbill.review.parsing.ReviewFindingFieldCodec
 import skillbill.review.stage.ReviewStageDegradationSelection
 import java.time.Clock
@@ -352,11 +352,7 @@ internal fun citedRegionOf(finding: ParallelReviewMergedFinding): ReviewCitedReg
     finding.repositoryPath ?: finding.location.substringBefore(
       ':',
     ).takeIf { it.isNotBlank() } ?: return null
-  val path =
-    runCatching {
-      requireRepositoryRelativePath(rawPath.trim())
-      rawPath.trim()
-    }.getOrNull() ?: return null
+  val path = rawPath.trim().takeIf { repositoryRelativePathViolation(it) == null } ?: return null
   val line = finding.line ?: finding.location.substringAfter(':', "").toIntOrNull()?.takeIf { it >= 1 } ?: return null
   return runCatching { ReviewCitedRegion(path, line, line) }.getOrNull()
 }

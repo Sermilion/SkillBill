@@ -8,7 +8,7 @@ import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
-import skillbill.workflow.time.parsePersistedInstant
+import skillbill.workflow.time.parsePersistedInstantOrNull
 
 fun goalObservabilityLatestEventFromArtifacts(artifacts: Any): GoalObservabilityEvent? {
   val artifactMap = artifacts.asGoalWorkflowArtifactMap("goal observability artifacts")
@@ -95,11 +95,8 @@ private fun Int.requireNonNegativeObservationInt(sourceLabel: String): Int =
 private fun parseObservationTimestamp(
   value: String,
   sourceLabel: String,
-) = try {
-  parsePersistedInstant(value)
-} catch (error: IllegalArgumentException) {
-  throw invalidGoalObservabilityEvent(sourceLabel, "timestamp", "field must be a persisted instant.", error)
-}
+) = parsePersistedInstantOrNull(value)
+  ?: throw invalidGoalObservabilityEvent(sourceLabel, "timestamp", "field must be a persisted instant.")
 
 private fun Any?.toGoalObservabilityEventMap(sourceLabel: String): Map<String, Any?> =
   JsonCodec.anyToStringAnyMap(this)

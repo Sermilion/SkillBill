@@ -8,7 +8,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.support
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
-import java.io.IOException
+import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -49,25 +49,13 @@ private fun <T> runWithContentRollback(
   target: AuthoringTarget,
   contentBefore: ByteArray,
   block: () -> T,
-): T =
-  try {
-    block()
-  } catch (error: SkillBillRuntimeException) {
-    restoreContentFiles(target, contentBefore)
-    throw error
-  } catch (error: IOException) {
-    restoreContentFiles(target, contentBefore)
-    throw error
-  } catch (error: IllegalArgumentException) {
-    restoreContentFiles(target, contentBefore)
-    throw error
+): T {
+  var committed = false
+  return Closeable {
+    if (!committed) rollbackRestoreBytes(target.contentFile, contentBefore)
+  }.use {
+    block().also { committed = true }
   }
-
-private fun restoreContentFiles(
-  target: AuthoringTarget,
-  contentBefore: ByteArray,
-) {
-  rollbackRestoreBytes(target.contentFile, contentBefore)
 }
 
 private fun collectTargetIssues(

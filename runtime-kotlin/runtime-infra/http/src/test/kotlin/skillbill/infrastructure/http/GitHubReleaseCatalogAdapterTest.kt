@@ -102,10 +102,9 @@ class GitHubReleaseCatalogAdapterTest {
       ReleaseCatalogResult.Failure("network failure: connection reset"),
       GitHubReleaseCatalogAdapter { _, _, _, _ -> throw IOException("connection reset") }.listReleases(),
     )
-    assertEquals(
-      ReleaseCatalogResult.Failure("network failure: IllegalArgumentException"),
-      GitHubReleaseCatalogAdapter { _, _, _, _ -> throw IllegalArgumentException() }.listReleases(),
-    )
+    assertFailsWith<IllegalArgumentException> {
+      GitHubReleaseCatalogAdapter { _, _, _, _ -> throw IllegalArgumentException() }.listReleases()
+    }
   }
 
   @Test

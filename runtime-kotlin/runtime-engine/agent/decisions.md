@@ -1,3 +1,13 @@
+## [2026-10-05] Return run-invariants rejection across the port
+Context: SKILL-401 subtask 3 removes defect-exception handling from phase intake and goal planning, which need different responses to an unreadable or unauthorized spec.
+Decision: The run-invariants port returns Read or Rejected with the existing reason. The filesystem adapter owns refusal; intake keeps its fallback and goal planning retains its stop policy.
+Reason: Refused input is an expected outcome. Returning the reason lets consumers preserve their behavior without treating unrelated defects as unreadable specs. Port-owned declarations keep filesystem behavior in the adapter.
+
+## [2026-10-05] Share rejection validation with edge-only throwing APIs
+Context: SKILL-401 requires unchanged user messages, persisted bytes and CLI/MCP exception classification while removing internal IllegalArgumentException and IllegalStateException handling.
+Decision: Decode expected invalid input through nullable lookups, model violation helpers and reason-carrying parse results. Retain throwing APIs for edge-only callers over the same validation and keep traversal derivation generic.
+Reason: Catching defect exceptions inside the run loop can conceal code bugs. Moving the catch into a parser wrapper preserves that problem; direct rejection also supplies the existing degradation text without manufacturing an exception. Changing edge classification can add MCP telemetry rows and change persisted bytes.
+
 ## [2026-10-04] Default to the next local issue key for new requirements
 
 Context: The dispatcher required a connected tracker even when the operator

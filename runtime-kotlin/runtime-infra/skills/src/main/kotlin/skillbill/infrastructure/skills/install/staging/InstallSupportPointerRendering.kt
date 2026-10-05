@@ -17,17 +17,29 @@ internal fun writeRenderedSupportPointerFiles(
     val resolvedSource = sourceSkillDir.toAbsolutePath().normalize()
     val targetFile = pointer.target.toAbsolutePath().normalize()
     val pointerFile = tempDir.resolve(pointer.name).normalize()
-    require(pointerFile.startsWith(tempDir)) {
-      "Supporting pointer '${pointer.name}' staging path '$pointerFile' escapes staging dir '$tempDir'."
+    if (!pointerFile.startsWith(tempDir)) {
+      invalidInstallStaging(
+        resolvedSource.toString(),
+        "Supporting pointer '${pointer.name}' staging path '$pointerFile' escapes staging dir '$tempDir'.",
+      )
     }
-    require(targetFile.startsWith(resolvedRepoRoot)) {
-      "Supporting pointer '${pointer.name}' target '$targetFile' escapes repoRoot '$resolvedRepoRoot'."
+    if (!targetFile.startsWith(resolvedRepoRoot)) {
+      invalidInstallStaging(
+        resolvedSource.toString(),
+        "Supporting pointer '${pointer.name}' target '$targetFile' escapes repoRoot '$resolvedRepoRoot'.",
+      )
     }
-    require(Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS)) {
-      "Supporting pointer '${pointer.name}' targets '$targetFile' which does not exist."
+    if (!Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS)) {
+      invalidInstallStaging(
+        resolvedSource.toString(),
+        "Supporting pointer '${pointer.name}' targets '$targetFile' which does not exist.",
+      )
     }
-    require(resolvedSource.resolve(pointer.name).normalize() != targetFile) {
-      "Supporting pointer '${pointer.name}' resolves to itself at '$targetFile'."
+    if (resolvedSource.resolve(pointer.name).normalize() == targetFile) {
+      invalidInstallStaging(
+        resolvedSource.toString(),
+        "Supporting pointer '${pointer.name}' resolves to itself at '$targetFile'.",
+      )
     }
 
     val rendered = normalizeMarkdownLineEndings(Files.readString(targetFile)).trimEnd() + "\n"

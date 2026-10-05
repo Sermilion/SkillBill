@@ -18,6 +18,7 @@ import skillbill.model.toPath
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.telemetry.transport.writeTelemetryLevel
@@ -102,9 +103,7 @@ private fun applyInstallTelemetryLevel(
 }
 
 private fun validateInstallTelemetryConfig(configStore: TelemetryConfigStore) {
-  val payload =
-    configStore.read()?.payload
-      ?: throw IllegalArgumentException("Telemetry config at '${configStore.configPath()}' is missing.")
+  val payload = readInstallTelemetryPayload(configStore)
   val telemetry =
     (payload["telemetry"] as? Map<*, *>)
       ?.entries
@@ -275,4 +274,15 @@ private fun failedMcpRegistrationOutcome(
     issue = issue,
     profiles = profiles,
   )
+}
+
+private fun readInstallTelemetryPayload(configStore: TelemetryConfigStore): Map<String, Any?> {
+  val payload =
+    when (val read = configStore.read()) {
+      TelemetryConfigRead.Absent ->
+        throw IllegalArgumentException("Telemetry config at '${configStore.configPath()}' is missing.")
+      is TelemetryConfigRead.Malformed -> throw IllegalArgumentException(read.reason)
+      is TelemetryConfigRead.Present -> read.document.payload
+    }
+  return payload
 }

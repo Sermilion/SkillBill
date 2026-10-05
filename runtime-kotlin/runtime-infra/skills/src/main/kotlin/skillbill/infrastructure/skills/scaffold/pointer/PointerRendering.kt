@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.scaffold.model.PointerSpec
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -15,25 +16,23 @@ fun renderPointer(
   val pointerDir = resolvedPackRoot.resolve(spec.skillRelativeDir).normalize()
   val pointerFile = pointerDir.resolve(spec.name).normalize()
   val targetFile = resolvedRepoRoot.resolve(spec.target).normalize()
-  require(targetFile.startsWith(resolvedRepoRoot)) {
-    "Pointer '${spec.name}' target '${spec.target}' escapes repoRoot '$resolvedRepoRoot'."
-  }
-  require(pointerFile.startsWith(resolvedPackRoot)) {
-    "Pointer '${spec.name}' under '${spec.skillRelativeDir}' escapes pack root '$resolvedPackRoot'."
-  }
-  require(Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS)) {
-    "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' " +
-      "which does not exist at '$targetFile'."
-  }
-  if (Files.isSymbolicLink(targetFile)) {
-    val real = targetFile.toRealPath()
-    require(real.startsWith(resolvedRepoRoot)) {
-      "Pointer '${spec.name}' target '${spec.target}' is a symlink pointing outside repoRoot at '$real'."
+  val violation =
+    when {
+      !targetFile.startsWith(resolvedRepoRoot) ->
+        "Pointer '${spec.name}' target '${spec.target}' escapes repoRoot '$resolvedRepoRoot'."
+
+      !pointerFile.startsWith(resolvedPackRoot) ->
+        "Pointer '${spec.name}' under '${spec.skillRelativeDir}' escapes pack root '$resolvedPackRoot'."
+
+      !Files.isRegularFile(targetFile, LinkOption.NOFOLLOW_LINKS) ->
+        "Pointer '${spec.name}' under '${spec.skillRelativeDir}' targets '${spec.target}' " +
+          "which does not exist at '$targetFile'."
+
+      pointerFile == targetFile ->
+        "Pointer '${spec.name}' under '${spec.skillRelativeDir}' resolves to itself at '$pointerFile'."
+      else -> null
     }
-  }
-  require(pointerFile != targetFile) {
-    "Pointer '${spec.name}' under '${spec.skillRelativeDir}' resolves to itself at '$pointerFile'."
-  }
+  if (violation != null) throw invalidScaffoldInputError(violation)
   val relative = pointerDir.relativize(targetFile).toString()
   return normalizePointerPath(relative)
 }

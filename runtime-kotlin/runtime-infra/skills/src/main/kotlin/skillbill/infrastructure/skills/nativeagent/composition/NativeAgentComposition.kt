@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.nativeagent.composition
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPackLoader
 import skillbill.infrastructure.skills.nativeagent.rendering.composeGovernedAgentBody
@@ -23,16 +25,17 @@ internal fun parseCompositionDirective(
   label: String,
 ): NativeAgentCompositionDirective? =
   rawValue?.let { value ->
-    require(value.isNotBlank()) {
-      "$label: native agent compose directive is required when the compose key is present"
+    if (value.isBlank()) {
+      invalidCompositionInput("$label: native agent compose directive is required when the compose key is present")
     }
     val kind =
       NativeAgentCompositionKind.entries.firstOrNull { it.wireValue == value }
-        ?: throw IllegalArgumentException(
-          "$label: unsupported native agent compose directive '$value'",
-        )
+        ?: invalidCompositionInput("$label: unsupported native agent compose directive '$value'")
     NativeAgentCompositionDirective(kind)
   }
+
+internal fun invalidCompositionInput(message: String): Nothing =
+  throw SkillBillRuntimeException(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, message)
 
 internal fun resolveNativeAgentCompositionTarget(
   repoRoot: Path,
@@ -62,7 +65,7 @@ internal fun resolveNativeAgentCompositionTarget(
     )
   } else {
     resolveSiblingContentTarget(sourcePath, source)
-  } ?: throw IllegalArgumentException(
+  } ?: invalidCompositionInput(
     "${displayPath(root, sourcePath)}: native agent compose directive 'governed-content' " +
       "could not resolve a corresponding content.md for '${source.name}'",
   )

@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.phaserun
 import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
+import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -50,6 +52,28 @@ class PhaseRunIntakeResolverTest {
   @Test
   fun `the URL host is never read as an issue key`() {
     assertFailsWith<PhaseIntakeRequiredError> { resolvePlan("https://abc-123/some/path") }
+  }
+
+  @Test
+  fun `rejected spec invariants leave intake on its current fallback`() {
+    val source =
+      object : FeatureTaskRuntimeRunInvariantsSource {
+        override fun read(specPath: Path) = FeatureTaskRuntimeRunInvariantsRead.Rejected("spec token is unreadable")
+      }
+    val intake =
+      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), source).resolve(
+        SkeletonDefinition.PLAN,
+        PhaseRunRequest(
+          definitionId = SkeletonDefinition.PLAN.id,
+          repoRoot = repoRoot,
+          invokedAgentId = "claude",
+          intake = ".feature-specs/SKILL-42-example/spec.md",
+        ),
+        currentBranch = null,
+      )
+
+    assertEquals("SKILL-42", intake.issueKey)
+    assertEquals(listOf(".feature-specs/SKILL-42-example/spec.md"), intake.runInvariants.acceptanceCriteria)
   }
 
   private fun resolvePlan(intake: String): PhaseRunIntake =

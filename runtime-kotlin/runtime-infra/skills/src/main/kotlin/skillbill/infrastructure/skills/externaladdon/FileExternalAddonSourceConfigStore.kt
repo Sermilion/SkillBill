@@ -2,7 +2,7 @@ package skillbill.infrastructure.skills.externaladdon
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.ExternalAddonConfigError
-import skillbill.infrastructure.host.readTelemetryConfigFile
+import skillbill.infrastructure.host.readTelemetryConfigFileRead
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
 import skillbill.infrastructure.host.writeTelemetryConfigFile
 import skillbill.install.model.ExternalAddonSource
@@ -12,6 +12,7 @@ import skillbill.ports.install.addon.model.ExternalAddonSourceConfigRequest
 import skillbill.ports.install.addon.model.ExternalAddonSourceConfigResult
 import skillbill.ports.install.addon.model.ExternalAddonSourceRegistrationRequest
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.scaffold.model.SkillKind
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
@@ -32,10 +33,10 @@ class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
   ): ExternalAddonSourceConfigResult {
     val configPath = resolveTelemetryConfigPath(request.environment, request.userHome)
     val existing =
-      try {
-        readTelemetryConfigFile(configPath)
-      } catch (error: IllegalArgumentException) {
-        throw ExternalAddonConfigError(error.message.orEmpty(), error)
+      when (val read = readTelemetryConfigFileRead(configPath)) {
+        TelemetryConfigRead.Absent -> null
+        is TelemetryConfigRead.Malformed -> throw ExternalAddonConfigError(read.reason)
+        is TelemetryConfigRead.Present -> read.document
       }
     val payload = LinkedHashMap<String, Any?>(existing?.payload.orEmpty())
     val rawSources = rawExternalAddonSources(configPath, payload)

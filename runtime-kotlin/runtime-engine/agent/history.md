@@ -1,3 +1,15 @@
+## [2026-10-05] SKILL-401 subtask 3: engine, ports and contracts rejection results
+Areas: runtime-engine featuretask execution, intake, strategy lookup and review evidence; goalrunner planning; runtime-ports taskruntime and workflow timestamps; runtime-contracts JSON; runtime-domain taskruntime models and traversal; runtime-application review evidence and packet indexing; runtime-infra/workflow spec reads
+- Run-invariants reads return Read or Rejected with a reason. Intake and goal planning branch on the result; filesystem authorization and acceptance-list rejection keep their existing reasons.
+- Execution settings, strategy identities and policies use domain violation helpers. Compatibility and strategy lookup consume a non-throwing traversal result through the shared skeleton derivation.
+- Review-diff parsing returns evidence or rejection through direct path, UTF-8 and hunk parsing. Engine degradation records consume the reason; dependent application callers use the same result.
+- Timestamp mapping uses nullable parsing and retains the source spelling for equal instants. JSON parsing catches SerializationException without the redundant IllegalArgumentException arm.
+- reusable: FeatureTaskRuntimeRunInvariantsRead and ReviewDiffEvidenceParseResult carry rejection reasons across their owning boundaries; domain violation helpers also serve constructor invariants.
+- Breaking source contract: run-invariants port implementations and fakes must return the sealed result. Existing throwing APIs remain for callers handled only at the CLI or MCP edge; no wire-format migration is intended.
+- Known limit: complete ordered execution-plan and traversal model validation is still missing, so malformed fields can escape constructor checks or change rejection framing.
+Feature flag: N/A
+Acceptance criteria: 2/3 implemented in current source; AC-003 message compatibility remains incomplete.
+
 ## [2026-10-03] SKILL-390 subtask 3: engine test packages mirror main
 Areas: runtime-engine featuretask lifecycle, phaserun, prepare, review, runloop, runner, slot and persistence; goalrunner execution, planning, status, repair and persistence; operation tests and engine testFixtures; runtime-core architecture inventory, test composition and build configuration; runtime-cli test inputs
 - Moved 91 engine test files into their production owners' packages. The tree retains 252 Kotlin files across 58 packages, with no forbidden declarations or path/package mismatches.

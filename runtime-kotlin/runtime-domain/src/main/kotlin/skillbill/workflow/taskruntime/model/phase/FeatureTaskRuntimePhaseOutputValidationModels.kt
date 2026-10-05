@@ -49,10 +49,24 @@ data class FeatureTaskRuntimePhaseOutputSourceLocation(
   val column: Int,
 ) {
   init {
-    require(sourceLabel.isNotBlank()) { "Phase-output sourceLabel must be non-blank." }
-    require(offset >= 0) { "Phase-output source offset must be non-negative." }
-    require(line >= 1) { "Phase-output source line must be >= 1." }
-    require(column >= 1) { "Phase-output source column must be >= 1." }
+    val reason = violation(sourceLabel, offset, line, column)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(
+      sourceLabel: String,
+      offset: Int,
+      line: Int,
+      column: Int,
+    ): String? =
+      when {
+        sourceLabel.isBlank() -> "Phase-output sourceLabel must be non-blank."
+        offset < 0 -> "Phase-output source offset must be non-negative."
+        line < 1 -> "Phase-output source line must be >= 1."
+        column < 1 -> "Phase-output source column must be >= 1."
+        else -> null
+      }
   }
 }
 
@@ -66,47 +80,73 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
   val sourceLocation: FeatureTaskRuntimePhaseOutputSourceLocation,
 ) {
   init {
-    require(contractVersion == FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION) {
-      "Phase-output repair evidence has unsupported contract version '$contractVersion'."
-    }
-    require(validatorVersion == FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION) {
-      "Phase-output repair evidence has unsupported validator version '$validatorVersion'."
-    }
-    require(originalDigest.matches(SHA256_HEX)) {
-      "Phase-output repair evidence originalDigest must be lowercase SHA-256."
-    }
-    require(repairedDigest.matches(SHA256_HEX)) {
-      "Phase-output repair evidence repairedDigest must be lowercase SHA-256."
-    }
-    require(originalDigest != repairedDigest) {
-      "Phase-output repair evidence must describe a changed payload."
-    }
+    val reason = violation(contractVersion, validatorVersion, originalDigest, repairedDigest)
+    require(reason == null) { reason.orEmpty() }
   }
 
   companion object {
     private val SHA256_HEX = Regex("[0-9a-f]{64}")
 
-    internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePhaseOutputRepairEvidence {
+    internal fun violation(
+      contractVersion: String,
+      validatorVersion: String,
+      originalDigest: String,
+      repairedDigest: String,
+    ): String? =
+      when {
+        contractVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
+          "Phase-output repair evidence has unsupported contract version '$contractVersion'."
+        validatorVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
+          "Phase-output repair evidence has unsupported validator version '$validatorVersion'."
+        !originalDigest.matches(SHA256_HEX) ->
+          "Phase-output repair evidence originalDigest must be lowercase SHA-256."
+        !repairedDigest.matches(SHA256_HEX) ->
+          "Phase-output repair evidence repairedDigest must be lowercase SHA-256."
+        originalDigest == repairedDigest -> "Phase-output repair evidence must describe a changed payload."
+        else -> null
+      }
+
+    internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePhaseOutputRepairEvidence =
+      decode(raw, null)
+
+    internal fun fromArtifactMap(
+      raw: Map<String, Any?>,
+      onInvariantViolation: () -> Nothing,
+    ): FeatureTaskRuntimePhaseOutputRepairEvidence = decode(raw, onInvariantViolation)
+
+    private fun decode(
+      raw: Map<String, Any?>,
+      onInvariantViolation: (() -> Nothing)?,
+    ): FeatureTaskRuntimePhaseOutputRepairEvidence {
       requireRepairEvidenceExactFields(raw)
       val location = requireRepairEvidenceLocation(raw)
       val reader = DurableArtifactMapReader(raw) { message -> phaseOutputRepairEvidenceSchemaError(message) }
       val locationReader =
         DurableArtifactMapReader(location) { message -> phaseOutputRepairEvidenceSchemaError(message) }
+      val contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION)
+      val validatorVersion =
+        reader.requiredString(FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION)
+      val format = FeatureTaskRuntimePhaseOutputFormat.fromWire(reader.requiredString("format"))
+      val originalDigest = reader.requiredString("original_digest")
+      val repairedDigest = reader.requiredString("repaired_digest")
+      val operation = FeatureTaskRuntimePhaseOutputRepairOperation.fromWire(reader.requiredString("operation"))
+      val sourceLabel = locationReader.requiredString("source_label")
+      val offset = locationReader.requiredInt("offset")
+      val line = locationReader.requiredInt("line")
+      val column = locationReader.requiredInt("column")
+      val locationReason = FeatureTaskRuntimePhaseOutputSourceLocation.violation(sourceLabel, offset, line, column)
+      if (locationReason != null && onInvariantViolation != null) onInvariantViolation()
+      val sourceLocation = FeatureTaskRuntimePhaseOutputSourceLocation(sourceLabel, offset, line, column)
+      val evidenceReason = violation(contractVersion, validatorVersion, originalDigest, repairedDigest)
+      if (evidenceReason != null && onInvariantViolation != null) onInvariantViolation()
       return FeatureTaskRuntimePhaseOutputRepairEvidence(
-        contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION),
-        validatorVersion =
-          reader.requiredString(FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION),
-        format = FeatureTaskRuntimePhaseOutputFormat.fromWire(reader.requiredString("format")),
-        originalDigest = reader.requiredString("original_digest"),
-        repairedDigest = reader.requiredString("repaired_digest"),
-        operation = FeatureTaskRuntimePhaseOutputRepairOperation.fromWire(reader.requiredString("operation")),
-        sourceLocation =
-          FeatureTaskRuntimePhaseOutputSourceLocation(
-            sourceLabel = locationReader.requiredString("source_label"),
-            offset = locationReader.requiredInt("offset"),
-            line = locationReader.requiredInt("line"),
-            column = locationReader.requiredInt("column"),
-          ),
+        contractVersion,
+        validatorVersion,
+        format,
+        originalDigest,
+        repairedDigest,
+        operation,
+        sourceLocation,
       )
     }
   }

@@ -6,6 +6,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifestValidationRes
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
 import java.security.MessageDigest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -63,6 +64,17 @@ class DecompositionManifestValidationRepairTest {
       }
 
     assertEquals(DecompositionManifestValidationFailureCode.MALFORMED, error.code)
+  }
+
+  @Test
+  fun `trailing YAML documents keep the malformed failure code and reason`() {
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        validator.validateYamlTextMap(validManifestJson() + "\n---\n" + validManifestJson(), "manifest.yaml")
+      }
+
+    assertEquals(DecompositionManifestValidationFailureCode.MALFORMED, error.code)
+    assertContains(error.message.orEmpty(), "YAML is malformed: YAML contains trailing content or multiple documents.")
   }
 
   @Test

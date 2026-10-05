@@ -70,74 +70,106 @@ private data class StoredReadContext(
   val storePath: String,
 )
 
+private data class StoredEnvelopeIndex(
+  val files: List<FeatureTaskRuntimeSharedEvidenceFileEntry>,
+  val hunks: List<FeatureTaskRuntimeSharedEvidenceHunkEntry>,
+)
+
+private fun readStoredIndex(
+  envelope: ObjectNode,
+  envelopeLabel: String,
+): StoredEnvelopeIndex? {
+  val fileValues =
+    envelope.path("files").map { it.path("path").asText("") to it.path("change_kind").asText("") }
+  val hunkValues =
+    envelope.path("hunks").map { it.path("path").asText("") to it.path("header").asText("") }
+  val fileViolation =
+    fileValues.firstNotNullOfOrNull { (path, changeKind) ->
+      FeatureTaskRuntimeSharedEvidenceFileEntry.violation(path, changeKind)
+    }
+  val hunkViolation =
+    hunkValues.firstNotNullOfOrNull { (path, header) ->
+      FeatureTaskRuntimeSharedEvidenceHunkEntry.violation(path, header)
+    }
+  val indexViolation = fileViolation ?: hunkViolation
+  if (indexViolation != null) {
+    return degraded(
+      seam = "stored_envelope_index",
+      used = "re-derive",
+      expected = "non-blank file and hunk entries at $envelopeLabel",
+      cause = "IllegalArgumentException: $indexViolation",
+    )
+  }
+  return StoredEnvelopeIndex(
+    files = fileValues.map { (path, changeKind) -> FeatureTaskRuntimeSharedEvidenceFileEntry(path, changeKind) },
+    hunks = hunkValues.map { (path, header) -> FeatureTaskRuntimeSharedEvidenceHunkEntry(path, header) },
+  )
+}
+
 private fun resolutionOf(
   stored: StoredEnvelopePayload,
   context: StoredReadContext,
-): FeatureTaskRuntimeSharedEvidenceResolution? =
-  try {
-    val files =
-      stored.envelope.path("files").map {
-        FeatureTaskRuntimeSharedEvidenceFileEntry(it.path("path").asText(""), it.path("change_kind").asText(""))
-      }
-    val hunks =
-      stored.envelope.path("hunks").map {
-        FeatureTaskRuntimeSharedEvidenceHunkEntry(it.path("path").asText(""), it.path("header").asText(""))
-      }
-    val baseRef = stored.envelope.path("base_ref").takeIf { !it.isNull && !it.isMissingNode }?.asText()
-    val headRef = stored.envelope.path("head_ref").takeIf { !it.isNull && !it.isMissingNode }?.asText()
-    val contractVersion =
-      stored.envelope.path("contract_version").asText("").ifBlank {
-        FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
-      }
-    val indexedArtifact =
-      FeatureTaskRuntimeSharedEvidenceArtifact(
-        fingerprint = stored.recorded,
-        baseRef = baseRef,
-        headRef = headRef,
-        files = files,
-        hunks = hunks,
-        diffPayload = stored.payloadRef,
-      )
-    val projection =
-      linkedMapOf<String, Any?>(
-        SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-        SharedPayloadKeys.WORKFLOW_ID to context.workflowId,
-        "repository_checkpoint_fingerprint" to stored.recorded,
-        "store_path" to context.storePath,
-        "changed_file_count" to files.size,
-        "changed_hunk_count" to hunks.size,
-        "file_hunk_index_digest" to
-          FeatureTaskRuntimeSharedReviewEvidenceReference.fileHunkIndexDigest(indexedArtifact),
-      ).apply {
-        baseRef?.takeIf { it.isNotBlank() }?.let { put("base_ref", it) }
-        headRef?.takeIf { it.isNotBlank() }?.let { put("head_ref", it) }
-
-        if (stored.envelope.has("diff_content") || stored.envelope.has("diff_bytes")) {
-          put("diff_content", stored.envelope.path("diff_content").asText("present"))
-        }
-      }
-    FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
-      .violation(projection, context.envelopeLabel)
-      ?.let { reason ->
-        return degraded(
-          seam = "stored_projection_schema",
-          used = "re-derive",
-          expected = "schema-valid shared evidence projection at ${context.envelopeLabel}",
-          cause = reason,
-        )
-      }
-    FeatureTaskRuntimeSharedEvidenceResolution(
-      artifact = indexedArtifact,
-      diffPayload = stored.payloadText,
-    )
-  } catch (error: IllegalArgumentException) {
-    degraded(
+): FeatureTaskRuntimeSharedEvidenceResolution? {
+  val index = readStoredIndex(stored.envelope, context.envelopeLabel) ?: return null
+  val files = index.files
+  val hunks = index.hunks
+  val baseRef = stored.envelope.path("base_ref").takeIf { !it.isNull && !it.isMissingNode }?.asText()
+  val headRef = stored.envelope.path("head_ref").takeIf { !it.isNull && !it.isMissingNode }?.asText()
+  val contractVersion =
+    stored.envelope.path("contract_version").asText("").ifBlank {
+      FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
+    }
+  val fingerprintViolation = FeatureTaskRuntimeSharedEvidenceArtifact.violation(stored.recorded)
+  if (fingerprintViolation != null) {
+    return degraded(
       seam = "stored_envelope_index",
       used = "re-derive",
       expected = "non-blank file and hunk entries at ${context.envelopeLabel}",
-      cause = "IllegalArgumentException: ${error.message.orEmpty()}",
+      cause = "IllegalArgumentException: $fingerprintViolation",
     )
   }
+  val indexedArtifact =
+    FeatureTaskRuntimeSharedEvidenceArtifact(
+      fingerprint = stored.recorded,
+      baseRef = baseRef,
+      headRef = headRef,
+      files = files,
+      hunks = hunks,
+      diffPayload = stored.payloadRef,
+    )
+  val projection =
+    linkedMapOf<String, Any?>(
+      SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
+      SharedPayloadKeys.WORKFLOW_ID to context.workflowId,
+      "repository_checkpoint_fingerprint" to stored.recorded,
+      "store_path" to context.storePath,
+      "changed_file_count" to files.size,
+      "changed_hunk_count" to hunks.size,
+      "file_hunk_index_digest" to
+        FeatureTaskRuntimeSharedReviewEvidenceReference.fileHunkIndexDigest(indexedArtifact),
+    ).apply {
+      baseRef?.takeIf { it.isNotBlank() }?.let { put("base_ref", it) }
+      headRef?.takeIf { it.isNotBlank() }?.let { put("head_ref", it) }
+
+      if (stored.envelope.has("diff_content") || stored.envelope.has("diff_bytes")) {
+        put("diff_content", stored.envelope.path("diff_content").asText("present"))
+      }
+    }
+  FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
+    .violation(projection, context.envelopeLabel)
+    ?.let { reason ->
+      return degraded(
+        seam = "stored_projection_schema",
+        used = "re-derive",
+        expected = "schema-valid shared evidence projection at ${context.envelopeLabel}",
+        cause = reason,
+      )
+    }
+  return FeatureTaskRuntimeSharedEvidenceResolution(
+    artifact = indexedArtifact,
+    diffPayload = stored.payloadText,
+  )
+}
 
 private fun intactPayloadRef(
   artifactDir: Path,
@@ -158,6 +190,21 @@ private fun intactPayloadRef(
   val actualSize = readableSize(payload) ?: return null
   if (expectedSize != actualSize) {
     return degraded("stored_payload_size", "re-derive", "$expectedSize bytes", "truncated to $actualSize bytes")
+  }
+  return validatedPayloadRef(relativePath, actualSize)
+}
+
+private fun validatedPayloadRef(
+  relativePath: String,
+  actualSize: Long,
+): FeatureTaskRuntimeSharedEvidenceDiffPayloadRef? {
+  FeatureTaskRuntimeSharedEvidenceDiffPayloadRef.violation(relativePath, actualSize)?.let { reason ->
+    return degraded(
+      seam = "stored_payload_relative_path",
+      used = "re-derive",
+      expected = SHARED_EVIDENCE_PAYLOAD_FILE,
+      cause = "IllegalArgumentException: $reason",
+    )
   }
   return FeatureTaskRuntimeSharedEvidenceDiffPayloadRef(relativePath, actualSize)
 }

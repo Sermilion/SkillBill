@@ -51,19 +51,12 @@ object ReviewRunLaneSegmentAccountingJson {
     val measuredBytes = map.requiredSegmentLong("measured_bytes", index)
     val entryCount = map.requiredSegmentInt("entry_count", index)
     val compositionDigest = map.requiredSegmentString("composition_digest", index, "is missing")
-    return try {
-      ReviewLaneSegmentAccounting(
-        segmentId = segmentId,
-        measuredBytes = measuredBytes,
-        entryCount = entryCount,
-        compositionDigest = compositionDigest,
-      )
-    } catch (error: IllegalArgumentException) {
+    if (ReviewLaneSegmentAccounting.violation(segmentId, measuredBytes, entryCount, compositionDigest) != null) {
       throw segmentAccountingSchemaError(
         "Segment accounting entry [$index] violates its value constraints.",
-        error,
       )
     }
+    return ReviewLaneSegmentAccounting(segmentId, measuredBytes, entryCount, compositionDigest)
   }
 
   private fun Map<*, *>.requiredSegmentString(

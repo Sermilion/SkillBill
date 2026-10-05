@@ -40,6 +40,7 @@ import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 @Inject
@@ -206,15 +207,19 @@ class InstallReplayLastSelectionCommand(
           .selection
       val availablePlatformSlugs = installService.discoverPlatformPackSlugs(replayDiscoveryRequest())
       val staleSlugs = selection.platformPackSelection.selectedSlugs - availablePlatformSlugs
-      require(staleSlugs.isEmpty()) {
-        "Saved install selection references unavailable platform pack slug(s): " +
-          "${staleSlugs.sorted().joinToString(", ")}."
+      if (staleSlugs.isNotEmpty()) {
+        return state.completeText(
+          "Saved install selection references unavailable platform pack slug(s): " +
+            "${staleSlugs.sorted().joinToString(", ")}.\n",
+          emptyMap(),
+          exitCode = 1,
+        )
       }
       state.completeText(selection.toReplayText(), emptyMap())
     } catch (error: SkillBillRuntimeException) {
       error.rethrowIfDatabaseFailure()
       state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)
-    } catch (error: IllegalArgumentException) {
+    } catch (error: InvalidPathException) {
       state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)
     }
   }

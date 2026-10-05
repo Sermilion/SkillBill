@@ -4,9 +4,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
@@ -42,79 +39,29 @@ data class GoalSubtaskReviewState(
   val contractVersion: String = GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION,
 ) {
   init {
-    require(contractVersion == GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION) {
-      "Unsupported goal review state contract '$contractVersion'. " +
-        "Records written before $GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION pin a worktree review " +
-        "baseline and carry no reviewed commit identity, are rejected, and must be regenerated."
-    }
-    resolvedTier?.let { tier ->
-      require(tier != CodeReviewExecutionMode.AUTO) {
-        "Goal review resolved tier must be a concrete mode, never 'auto'."
-      }
-    }
-    require(GIT_COMMIT_SHA.matches(reviewBaseSha)) {
-      "Goal review base SHA must be a 40- or 64-character lowercase commit SHA."
-    }
-    remediationBaseSha?.let { sha ->
-      require(GIT_COMMIT_SHA.matches(sha)) {
-        "Goal remediation base SHA must be a 40- or 64-character lowercase commit SHA."
-      }
-    }
-    listOf("reviewed target" to reviewedTargetSha, "reviewed tree" to reviewedTreeSha).forEach { (label, sha) ->
-      sha?.let {
-        require(GIT_COMMIT_SHA.matches(it)) {
-          "Goal $label SHA must be a 40- or 64-character lowercase object SHA."
-        }
-      }
-    }
-    require(baselineUntrackedPaths.all(String::isNotBlank)) { "Baseline untracked paths must be non-blank." }
-    require(baselineUntrackedPaths == baselineUntrackedPaths.distinct().sorted()) {
-      "Baseline untracked paths must be sorted and unique."
-    }
-    require(completedPassCount >= 0) { "Completed review passes must be non-negative." }
-    require(passResults.size == completedPassCount) { "Pass result count must equal completed pass count." }
-    require(passResults.map(GoalSubtaskReviewPassResult::passNumber) == (1..completedPassCount).toList()) {
-      "Pass results must be ordered and contiguous."
-    }
-    passResults.forEach { result ->
-      result.executedMode?.let { executedMode ->
-        require(executedMode == FeatureTaskRuntimeReviewPassSequence.modeForPass(codeReviewMode, result.passNumber)) {
-          "Pass ${result.passNumber} executed mode must match the immutable review pass sequence."
-        }
-      }
-    }
-    reservedPassNumber?.let { reserved ->
-      require(reserved == completedPassCount + 1) {
-        "Reserved pass must be the next permitted review pass."
-      }
-    }
-    require(emittedPassCount in 0..completedPassCount) { "Emitted pass count cannot exceed completed pass count." }
-    require(
-      disposition != GoalSubtaskReviewDisposition.REVIEW_CAP_REACHED ||
-        (
-          completedPassCount >= 1 &&
-            passResults.lastOrNull()?.blocksAdvance == true
-        ),
-    ) { "review_cap_reached requires unresolved Blocker or Major findings on a completed pass." }
-    require(
-      blockerDispositions.map(GoalSubtaskBlockerDisposition::findingId).distinct().size == blockerDispositions.size,
-    ) {
-      "Each prior Blocker may carry exactly one disposition."
-    }
-    require(
-      disposition != GoalSubtaskReviewDisposition.PAUSED ||
-        blockerDispositions.any { it.verdict == GoalSubtaskBlockerDispositionVerdict.UNRESOLVED } ||
-        passResults.lastOrNull()?.blocksAdvance == true,
-    ) {
-      "paused requires an unresolved Blocker disposition or a Blocker or Major the remediation pass itself introduced."
-    }
-    require(operatorDecision == null || disposition == GoalSubtaskReviewDisposition.PAUSED) {
-      "An operator decision is only recorded against a paused subtask."
-    }
-    require(repairReceipts.map(FeatureTaskRuntimeRepairReceipt::roundNumber).distinct().size == repairReceipts.size) {
-      "Each remediation round may carry exactly one repair receipt."
-    }
+    val reason = validation().violation()
+    require(reason == null) { reason.orEmpty() }
   }
+
+  private fun validation() =
+    GoalSubtaskReviewStateValidation(
+      contractVersion,
+      reviewBaseSha,
+      baselineUntrackedPaths,
+      codeReviewMode,
+      reservedPassNumber,
+      completedPassCount,
+      disposition,
+      reviewedTargetSha,
+      reviewedTreeSha,
+      passResults,
+      emittedPassCount,
+      blockerDispositions,
+      operatorDecision,
+      resolvedTier,
+      remediationBaseSha,
+      repairReceipts,
+    )
 
   val repairLedger: FeatureTaskRuntimeRepairLedger
     get() = featureTaskRuntimeFoldRepairLedger(repairReceipts, passResults)
@@ -245,6 +192,30 @@ data class GoalSubtaskReviewState(
     }
 
   companion object {
+    private val ARTIFACT_KEYS =
+      setOf(
+        "contract_version",
+        "review_base_sha",
+        "baseline_untracked_paths",
+        "code_review_mode",
+        "reserved_pass_number",
+        "completed_pass_count",
+        "disposition",
+        "review_input_artifact",
+        "reviewed_delta_digest",
+        "reviewed_target_sha",
+        "reviewed_tree_sha",
+        "pass_results",
+        "emitted_pass_count",
+        "blocker_dispositions",
+        "operator_decision",
+        "operator_retry_rounds",
+        "resolved_tier",
+        "deciding_rule",
+        "remediation_base_sha",
+        "repair_receipts",
+      )
+
     fun initial(
       reviewBaseSha: String,
       baselineUntrackedPaths: Collection<String> = emptyList(),
@@ -263,62 +234,93 @@ data class GoalSubtaskReviewState(
       raw: Map<String, Any?>,
       sourceLabel: String = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
     ): GoalSubtaskReviewState {
-      raw.requireOnlyReviewStateKeys(
-        setOf(
-          "contract_version", "review_base_sha", "baseline_untracked_paths", "code_review_mode", "reserved_pass_number",
-          "completed_pass_count", "disposition", "review_input_artifact", "reviewed_delta_digest",
-          "reviewed_target_sha", "reviewed_tree_sha", "pass_results",
-          "emitted_pass_count", "blocker_dispositions", "operator_decision", "operator_retry_rounds",
-          "resolved_tier", "deciding_rule",
-          "remediation_base_sha",
-          "repair_receipts",
-        ),
-        sourceLabel,
+      raw.requireOnlyReviewStateKeys(ARTIFACT_KEYS, sourceLabel)
+      val reader = reviewStateReader(raw, sourceLabel)
+      val contractVersion = reader.requiredString("contract_version")
+      val reviewBaseSha = reader.requiredString("review_base_sha")
+      val baselineUntrackedPaths = decodeBaselineUntrackedPaths(raw, sourceLabel)
+      val codeReviewModeWire = reader.requiredString("code_review_mode")
+      val codeReviewMode =
+        CodeReviewExecutionMode.fromWireOrNull(codeReviewModeWire)
+          ?: reviewStateError(sourceLabel, CodeReviewExecutionMode.unknownWireValueMessage(codeReviewModeWire))
+      val reservedPassNumber = reader.optionalInt("reserved_pass_number")
+      val completedPassCount = reader.requiredInt("completed_pass_count")
+      val disposition = GoalSubtaskReviewDisposition.fromWire(reader.requiredString("disposition"))
+      val reviewInputArtifact = reader.optionalString("review_input_artifact")
+      val reviewedDeltaDigest = reader.optionalString("reviewed_delta_digest")
+      val reviewedTargetSha = reader.optionalString("reviewed_target_sha")
+      val reviewedTreeSha = reader.optionalString("reviewed_tree_sha")
+      val passResults = decodePassResults(raw, sourceLabel)
+      val emittedPassCount = reader.requiredInt("emitted_pass_count")
+      val blockerDispositions = decodeBlockerDispositions(raw, sourceLabel)
+      val operatorDecision = reader.optionalString("operator_decision")?.let(GoalSubtaskOperatorDecision::fromWire)
+      val operatorRetryRounds = reader.optionalInt("operator_retry_rounds") ?: 0
+      val resolvedTier = decodeResolvedTier(raw, sourceLabel)
+      val decidingRule = reader.optionalString("deciding_rule")
+      val remediationBaseSha = reader.optionalString("remediation_base_sha")
+      val repairReceipts = decodeRepairReceipts(raw, sourceLabel)
+      val violation =
+        GoalSubtaskReviewStateValidation(
+          contractVersion,
+          reviewBaseSha,
+          baselineUntrackedPaths,
+          codeReviewMode,
+          reservedPassNumber,
+          completedPassCount,
+          disposition,
+          reviewedTargetSha,
+          reviewedTreeSha,
+          passResults,
+          emittedPassCount,
+          blockerDispositions,
+          operatorDecision,
+          resolvedTier,
+          remediationBaseSha,
+          repairReceipts,
+        ).violation()
+      if (violation != null) reviewStateError(sourceLabel, violation)
+      return GoalSubtaskReviewState(
+        contractVersion = contractVersion,
+        reviewBaseSha = reviewBaseSha,
+        baselineUntrackedPaths = baselineUntrackedPaths,
+        codeReviewMode = codeReviewMode,
+        reservedPassNumber = reservedPassNumber,
+        completedPassCount = completedPassCount,
+        disposition = disposition,
+        reviewInputArtifact = reviewInputArtifact,
+        reviewedDeltaDigest = reviewedDeltaDigest,
+        reviewedTargetSha = reviewedTargetSha,
+        reviewedTreeSha = reviewedTreeSha,
+        passResults = passResults,
+        emittedPassCount = emittedPassCount,
+        blockerDispositions = blockerDispositions,
+        operatorDecision = operatorDecision,
+        operatorRetryRounds = operatorRetryRounds,
+        resolvedTier = resolvedTier,
+        decidingRule = decidingRule,
+        remediationBaseSha = remediationBaseSha,
+        repairReceipts = repairReceipts,
       )
-      return try {
-        val reader = reviewStateReader(raw, sourceLabel)
-        GoalSubtaskReviewState(
-          contractVersion = reader.requiredString("contract_version"),
-          reviewBaseSha = reader.requiredString("review_base_sha"),
-          baselineUntrackedPaths =
-            reader.optionalList("baseline_untracked_paths")
-              ?.mapIndexed { index, value ->
-                (value as? String)?.takeIf(String::isNotBlank)
-                  ?: reviewStateError("$sourceLabel.baseline_untracked_paths[$index]", "must be a non-blank string.")
-              }
-              .orEmpty(),
-          codeReviewMode =
-            CodeReviewExecutionMode.fromWire(
-              reader.requiredString("code_review_mode"),
-            ),
-          reservedPassNumber = reader.optionalInt("reserved_pass_number"),
-          completedPassCount = reader.requiredInt("completed_pass_count"),
-          disposition = GoalSubtaskReviewDisposition.fromWire(reader.requiredString("disposition")),
-          reviewInputArtifact = reader.optionalString("review_input_artifact"),
-          reviewedDeltaDigest = reader.optionalString("reviewed_delta_digest"),
-          reviewedTargetSha = reader.optionalString("reviewed_target_sha"),
-          reviewedTreeSha = reader.optionalString("reviewed_tree_sha"),
-          passResults = decodePassResults(raw, sourceLabel),
-          emittedPassCount = reader.requiredInt("emitted_pass_count"),
-          blockerDispositions = decodeBlockerDispositions(raw, sourceLabel),
-          operatorDecision =
-            reader.optionalString("operator_decision")
-              ?.let(GoalSubtaskOperatorDecision::fromWire),
-          operatorRetryRounds = reader.optionalInt("operator_retry_rounds") ?: 0,
-          resolvedTier =
-            reader.optionalString("resolved_tier")
-              ?.let(CodeReviewExecutionMode::fromWire),
-          decidingRule = reader.optionalString("deciding_rule"),
-          remediationBaseSha = reader.optionalString("remediation_base_sha"),
-          repairReceipts = decodeRepairReceipts(raw, sourceLabel),
-        )
-      } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
-        throw error
-      } catch (error: IllegalArgumentException) {
-        reviewStateError(sourceLabel, error.message.orEmpty(), error)
-      }
     }
+
+    private fun decodeBaselineUntrackedPaths(
+      raw: Map<String, Any?>,
+      sourceLabel: String,
+    ): List<String> =
+      reviewStateReader(raw, sourceLabel).optionalList("baseline_untracked_paths")
+        ?.mapIndexed { index, value ->
+          (value as? String)?.takeIf(String::isNotBlank)
+            ?: reviewStateError("$sourceLabel.baseline_untracked_paths[$index]", "must be a non-blank string.")
+        }.orEmpty()
+
+    private fun decodeResolvedTier(
+      raw: Map<String, Any?>,
+      sourceLabel: String,
+    ): CodeReviewExecutionMode? =
+      reviewStateReader(raw, sourceLabel).optionalString("resolved_tier")?.let { wire ->
+        CodeReviewExecutionMode.fromWireOrNull(wire)
+          ?: reviewStateError(sourceLabel, CodeReviewExecutionMode.unknownWireValueMessage(wire))
+      }
 
     private fun decodePassResults(
       raw: Map<String, Any?>,
@@ -328,6 +330,7 @@ data class GoalSubtaskReviewState(
         GoalSubtaskReviewPassResult.fromArtifactMap(
           value.toReviewStateMap("$sourceLabel.pass_results[$index]"),
           "$sourceLabel.pass_results[$index]",
+          onInvalid = { reason -> reviewStateError(sourceLabel, reason) },
         )
       }
 
@@ -340,6 +343,7 @@ data class GoalSubtaskReviewState(
           GoalSubtaskBlockerDisposition.fromArtifactMap(
             value.toReviewStateMap("$sourceLabel.blocker_dispositions[$index]"),
             "$sourceLabel.blocker_dispositions[$index]",
+            onInvalid = { reason -> reviewStateError(sourceLabel, reason) },
           )
         }.orEmpty()
 
@@ -357,6 +361,109 @@ data class GoalSubtaskReviewState(
           )
         }.orEmpty()
   }
+}
+
+private data class GoalSubtaskReviewStateValidation(
+  val contractVersion: String,
+  val reviewBaseSha: String,
+  val baselineUntrackedPaths: List<String>,
+  val codeReviewMode: CodeReviewExecutionMode,
+  val reservedPassNumber: Int?,
+  val completedPassCount: Int,
+  val disposition: GoalSubtaskReviewDisposition,
+  val reviewedTargetSha: String?,
+  val reviewedTreeSha: String?,
+  val passResults: List<GoalSubtaskReviewPassResult>,
+  val emittedPassCount: Int,
+  val blockerDispositions: List<GoalSubtaskBlockerDisposition>,
+  val operatorDecision: GoalSubtaskOperatorDecision?,
+  val resolvedTier: CodeReviewExecutionMode?,
+  val remediationBaseSha: String?,
+  val repairReceipts: List<FeatureTaskRuntimeRepairReceipt>,
+) {
+  fun violation(): String? = identityViolation() ?: baselineViolation() ?: passViolation() ?: dispositionViolation()
+
+  private fun identityViolation(): String? =
+    when {
+      contractVersion != GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION ->
+        "Unsupported goal review state contract '$contractVersion'. " +
+          "Records written before $GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION pin a worktree review " +
+          "baseline and carry no reviewed commit identity, are rejected, and must be regenerated."
+      resolvedTier == CodeReviewExecutionMode.AUTO ->
+        "Goal review resolved tier must be a concrete mode, never 'auto'."
+      !GIT_COMMIT_SHA.matches(reviewBaseSha) ->
+        "Goal review base SHA must be a 40- or 64-character lowercase commit SHA."
+      remediationBaseSha != null && !GIT_COMMIT_SHA.matches(remediationBaseSha) ->
+        "Goal remediation base SHA must be a 40- or 64-character lowercase commit SHA."
+      else -> reviewedIdentityViolation()
+    }
+
+  private fun reviewedIdentityViolation(): String? =
+    listOf("reviewed target" to reviewedTargetSha, "reviewed tree" to reviewedTreeSha)
+      .firstNotNullOfOrNull { (label, sha) ->
+        if (sha != null && !GIT_COMMIT_SHA.matches(sha)) {
+          "Goal $label SHA must be a 40- or 64-character lowercase object SHA."
+        } else {
+          null
+        }
+      }
+
+  private fun baselineViolation(): String? {
+    if (baselineUntrackedPaths.any(String::isBlank)) return "Baseline untracked paths must be non-blank."
+    if (baselineUntrackedPaths != baselineUntrackedPaths.distinct().sorted()) {
+      return "Baseline untracked paths must be sorted and unique."
+    }
+    return null
+  }
+
+  private fun passViolation(): String? =
+    when {
+      completedPassCount < 0 -> "Completed review passes must be non-negative."
+      passResults.size != completedPassCount -> "Pass result count must equal completed pass count."
+      passResults.map(GoalSubtaskReviewPassResult::passNumber) != (1..completedPassCount).toList() ->
+        "Pass results must be ordered and contiguous."
+      else -> executedModeViolation()
+    } ?: reservationViolation()
+
+  private fun reservationViolation(): String? =
+    when {
+      reservedPassNumber != null && reservedPassNumber != completedPassCount + 1 ->
+        "Reserved pass must be the next permitted review pass."
+      emittedPassCount !in 0..completedPassCount -> "Emitted pass count cannot exceed completed pass count."
+      else -> null
+    }
+
+  private fun executedModeViolation(): String? =
+    passResults.firstNotNullOfOrNull { result ->
+      val executedMode = result.executedMode
+      if (
+        executedMode != null &&
+        executedMode != FeatureTaskRuntimeReviewPassSequence.modeForPass(codeReviewMode, result.passNumber)
+      ) {
+        "Pass ${result.passNumber} executed mode must match the immutable review pass sequence."
+      } else {
+        null
+      }
+    }
+
+  private fun dispositionViolation(): String? =
+    when {
+      disposition == GoalSubtaskReviewDisposition.REVIEW_CAP_REACHED &&
+        (completedPassCount < 1 || passResults.lastOrNull()?.blocksAdvance != true) ->
+        "review_cap_reached requires unresolved Blocker or Major findings on a completed pass."
+      blockerDispositions.map(GoalSubtaskBlockerDisposition::findingId).distinct().size != blockerDispositions.size ->
+        "Each prior Blocker may carry exactly one disposition."
+      disposition == GoalSubtaskReviewDisposition.PAUSED &&
+        blockerDispositions.none { it.verdict == GoalSubtaskBlockerDispositionVerdict.UNRESOLVED } &&
+        passResults.lastOrNull()?.blocksAdvance != true ->
+        "paused requires an unresolved Blocker disposition or a Blocker or Major " +
+          "the remediation pass itself introduced."
+      operatorDecision != null && disposition != GoalSubtaskReviewDisposition.PAUSED ->
+        "An operator decision is only recorded against a paused subtask."
+      repairReceipts.map(FeatureTaskRuntimeRepairReceipt::roundNumber).distinct().size != repairReceipts.size ->
+        "Each remediation round may carry exactly one repair receipt."
+      else -> null
+    }
 }
 
 internal fun blocksAdvance(

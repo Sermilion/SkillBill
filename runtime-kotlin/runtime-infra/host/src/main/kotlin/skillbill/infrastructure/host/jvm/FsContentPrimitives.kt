@@ -1,5 +1,6 @@
 package skillbill.infrastructure.host.jvm
 
+import java.io.Closeable
 import java.nio.channels.FileChannel
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.FileAlreadyExistsException
@@ -21,12 +22,10 @@ fun atomicWriteBytes(
   }
   val tempDir = parent ?: Path.of(".")
   val temp = Files.createTempFile(tempDir, "${path.fileName}.", ".tmp")
-  try {
+  Closeable { Files.deleteIfExists(temp) }.use {
     Files.write(temp, bytes)
     FileChannel.open(temp, StandardOpenOption.WRITE).use { channel -> channel.force(true) }
     atomicMoveReplacing(temp, path)
-  } finally {
-    Files.deleteIfExists(temp)
   }
 }
 

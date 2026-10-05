@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.goalplanning
 
 import skillbill.goalrunner.planning.GoalPlanningExcludedPaths
-import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.review.model.repositoryRelativePathViolation
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -101,10 +101,7 @@ internal fun goalPlanningOwningAgentDirectories(
 internal fun goalPlanningNormalizeFindingPath(findingPath: String): String? {
   val trimmed = findingPath.trim()
   if (trimmed.isBlank()) return null
-  return runCatching {
-    requireRepositoryRelativePath(trimmed)
-    trimmed
-  }.getOrNull()
+  return trimmed.takeIf { repositoryRelativePathViolation(it) == null }
 }
 
 private fun goalPlanningSortedChildDirectories(directory: Path): List<Path>? =

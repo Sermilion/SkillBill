@@ -32,8 +32,8 @@ internal fun peelTrailingStructuredFields(rawDescription: String): ParallelRevie
   return peeled.copy(description = parts.joinToString(" | ").trim())
 }
 
-internal fun decodeParallelReviewStructuredString(encoded: String): String {
-  require(encoded.length >= 2 && encoded.first() == '"' && encoded.last() == '"')
+internal fun decodeParallelReviewStructuredStringOrNull(encoded: String): String? {
+  if (encoded.length < 2 || encoded.first() != '"' || encoded.last() != '"') return null
   val body = encoded.substring(1, encoded.length - 1)
   val result = StringBuilder()
   var index = 0
@@ -42,30 +42,37 @@ internal fun decodeParallelReviewStructuredString(encoded: String): String {
       result.append(body[index++])
       continue
     }
-    require(++index < body.length) { "Malformed structured finding path escape." }
-    when (val escaped = body[index++]) {
-      '"', '\\', '/' -> result.append(escaped)
-      'b' -> result.append('\b')
-      'f' -> result.append('\u000c')
-      'n' -> result.append('\n')
-      'r' -> result.append('\r')
-      't' -> result.append('\t')
-      'u' -> {
-        require(index + JSON_UNICODE_ESCAPE_HEX_LENGTH <= body.length) {
-          "Malformed Unicode escape in finding path."
-        }
-        result.append(
-          body.substring(index, index + JSON_UNICODE_ESCAPE_HEX_LENGTH)
-            .toInt(JSON_UNICODE_ESCAPE_RADIX)
-            .toChar(),
-        )
-        index += JSON_UNICODE_ESCAPE_HEX_LENGTH
-      }
-      else -> error("Unsupported structured finding path escape '$escaped'.")
-    }
+    index++
+    if (index >= body.length) return null
+    val escaped = body[index++]
+    val decoded = decodeParallelReviewEscapedCharacterOrNull(escaped, body, index) ?: return null
+    result.append(decoded)
+    if (escaped == 'u') index += JSON_UNICODE_ESCAPE_HEX_LENGTH
   }
   return result.toString()
 }
+
+private fun decodeParallelReviewEscapedCharacterOrNull(
+  escaped: Char,
+  body: String,
+  index: Int,
+): Char? =
+  when (escaped) {
+    '"', '\\', '/' -> escaped
+    'b' -> '\b'
+    'f' -> '\u000c'
+    'n' -> '\n'
+    'r' -> '\r'
+    't' -> '\t'
+    'u' ->
+      if (index + JSON_UNICODE_ESCAPE_HEX_LENGTH <= body.length) {
+        body.substring(index, index + JSON_UNICODE_ESCAPE_HEX_LENGTH)
+          .toIntOrNull(JSON_UNICODE_ESCAPE_RADIX)?.toChar()
+      } else {
+        null
+      }
+    else -> null
+  }
 
 private fun applyTrailingStructuredToken(
   token: String,
@@ -121,12 +128,14 @@ private fun parseCitationToken(raw: String): ReviewFindingCitationsDecode {
         when {
           parsed == null -> diagnostics += ReviewFindingCitationDiagnostic(index, path, lineRaw, "non_numeric_line")
           parsed < 0 -> diagnostics += ReviewFindingCitationDiagnostic(index, path, lineRaw, "non_positive_line")
-          else ->
-            try {
-              citations += ReviewFindingCitation(path, if (parsed == 0) 1 else parsed)
-            } catch (_: IllegalArgumentException) {
+          else -> {
+            val line = if (parsed == 0) 1 else parsed
+            if (ReviewFindingCitation.violation(path, line) != null) {
               diagnostics += ReviewFindingCitationDiagnostic(index, path, lineRaw, "invalid_path")
+            } else {
+              citations += ReviewFindingCitation(path, line)
             }
+          }
         }
       }
     }

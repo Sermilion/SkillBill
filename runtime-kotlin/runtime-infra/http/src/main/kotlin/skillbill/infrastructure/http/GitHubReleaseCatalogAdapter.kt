@@ -31,10 +31,6 @@ class GitHubReleaseCatalogAdapter(
         )
       } catch (error: IOException) {
         return networkFailure(error)
-      } catch (error: InterruptedException) {
-        throw error
-      } catch (error: IllegalArgumentException) {
-        return networkFailure(error)
       }
     return parseResponse(response)
   }

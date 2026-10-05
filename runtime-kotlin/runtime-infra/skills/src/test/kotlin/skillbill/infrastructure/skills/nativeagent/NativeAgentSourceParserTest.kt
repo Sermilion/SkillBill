@@ -199,7 +199,7 @@ class NativeAgentSourceParserTest {
   @Test
   fun `blank body remains rejected without compose directive`() {
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(
           "---\n" +
             "name: bill-blank\n" +
@@ -210,13 +210,14 @@ class NativeAgentSourceParserTest {
       }
 
     assertContains(error.message.orEmpty(), "test source")
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "native agent body is required")
   }
 
   @Test
   fun `unsupported compose directive fails strictly`() {
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(
           "---\n" +
             "name: bill-composed\n" +
@@ -227,6 +228,7 @@ class NativeAgentSourceParserTest {
         )
       }
 
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "test source")
     assertContains(error.message.orEmpty(), "unsupported native agent compose directive 'local-file'")
   }
@@ -311,11 +313,12 @@ class NativeAgentSourceParserTest {
         "# Body\n"
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(text, label = "test source")
       }
 
     assertContains(error.message.orEmpty(), "test source")
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "unterminated double-quoted scalar")
   }
 
@@ -330,11 +333,12 @@ class NativeAgentSourceParserTest {
         "# Body\n"
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(text, label = "test source")
       }
 
     assertContains(error.message.orEmpty(), "test source")
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(
       error.message.orEmpty(),
       "unescaped double quote inside double-quoted scalar",
@@ -352,11 +356,12 @@ class NativeAgentSourceParserTest {
         "# Body\n"
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(text, label = "test source")
       }
 
     assertContains(error.message.orEmpty(), "test source")
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "unknown escape sequence \\q")
   }
 
@@ -371,11 +376,12 @@ class NativeAgentSourceParserTest {
         "# Body\n"
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(text, label = "test source")
       }
 
     assertContains(error.message.orEmpty(), "test source")
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "unterminated single-quoted scalar")
   }
 }

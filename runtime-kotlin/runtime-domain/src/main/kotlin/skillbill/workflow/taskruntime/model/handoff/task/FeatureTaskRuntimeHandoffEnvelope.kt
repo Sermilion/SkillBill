@@ -17,12 +17,8 @@ data class FeatureTaskRuntimeHandoffEnvelope(
   val contractVersion: String = FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION,
 ) {
   init {
-    require(consumerPhaseId.isNotBlank()) { "FeatureTaskRuntimeHandoffEnvelope.consumerPhaseId must be non-blank." }
-    require(contractVersion.isNotBlank()) { "FeatureTaskRuntimeHandoffEnvelope.contractVersion must be non-blank." }
-    val names = projections.map { it.projectionName }
-    require(names.distinct().size == names.size) {
-      "FeatureTaskRuntimeHandoffEnvelope for '$consumerPhaseId' contains duplicate projection names."
-    }
+    val reason = violation(consumerPhaseId, projections, contractVersion)
+    require(reason == null) { reason.orEmpty() }
   }
 
   val promptVisibleProjections: List<FeatureTaskRuntimeHandoffProjection>
@@ -38,78 +34,88 @@ data class FeatureTaskRuntimeHandoffEnvelope(
     }
 
   companion object {
+    internal fun violation(
+      consumerPhaseId: String,
+      projections: List<FeatureTaskRuntimeHandoffProjection>,
+      contractVersion: String,
+    ): String? =
+      when {
+        consumerPhaseId.isBlank() -> "FeatureTaskRuntimeHandoffEnvelope.consumerPhaseId must be non-blank."
+        contractVersion.isBlank() -> "FeatureTaskRuntimeHandoffEnvelope.contractVersion must be non-blank."
+        projections.map { it.projectionName }.distinct().size != projections.size ->
+          "FeatureTaskRuntimeHandoffEnvelope for '$consumerPhaseId' contains duplicate projection names."
+        else -> null
+      }
+
     internal fun fromEnvelopeMap(raw: Map<String, Any?>): FeatureTaskRuntimeHandoffEnvelope {
       val reader = handoffReader(raw)
-      return try {
-        FeatureTaskRuntimeHandoffEnvelope(
-          consumerPhaseId = reader.requiredString("consumer_phase_id"),
-          projections = reader.requiredList("projections").map(::projectionFromWire),
-          repositoryCheckpoint =
-            reader.optionalNestedObject(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)?.let {
-              val checkpointReader = handoffReader(it)
-              FeatureTaskRuntimeRepositoryCheckpoint(
-                fingerprint =
-                  checkpointReader.requiredString(
-                    ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT,
-                  ),
-                baseRef = checkpointReader.optionalString("base_ref"),
-                headRef = checkpointReader.optionalString("head_ref"),
-                workingTreeOwnedPaths = checkpointReader.optionalStringList("working_tree_owned_paths"),
-              )
-            },
-          contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION),
-        )
-      } catch (error: IllegalArgumentException) {
-        throw invalidFeatureTaskRuntimePhaseHandoffSchema(
-          sourceLabel = "<wire>",
-          reason = error.message ?: "handoff envelope is invalid.",
-          cause = error,
-        )
-      }
+      val consumerPhaseId = reader.requiredString("consumer_phase_id")
+      val projections = reader.requiredList("projections").map(::projectionFromWire)
+      val repositoryCheckpoint =
+        reader.optionalNestedObject(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)?.let {
+          val checkpointReader = handoffReader(it)
+          val fingerprint =
+            checkpointReader.requiredString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT)
+          val baseRef = checkpointReader.optionalString("base_ref")
+          val headRef = checkpointReader.optionalString("head_ref")
+          val workingTreeOwnedPaths = checkpointReader.optionalStringList("working_tree_owned_paths")
+          FeatureTaskRuntimeRepositoryCheckpoint.violation(fingerprint, workingTreeOwnedPaths)?.let(::decodeError)
+          FeatureTaskRuntimeRepositoryCheckpoint(fingerprint, baseRef, headRef, workingTreeOwnedPaths)
+        }
+      val contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION)
+      FeatureTaskRuntimeHandoffEnvelope.violation(consumerPhaseId, projections, contractVersion)?.let(::decodeError)
+      return FeatureTaskRuntimeHandoffEnvelope(consumerPhaseId, projections, repositoryCheckpoint, contractVersion)
     }
 
     private fun projectionFromWire(raw: Any?): FeatureTaskRuntimeHandoffProjection {
       val reader = handoffReader(raw.toStringKeyedArtifactMap(::decodeError))
+      val projectionName = reader.requiredString("projection_name")
+      val sourceRefWire = reader.requiredString("source_ref")
+      FeatureTaskRuntimeHandoffSourceRef.violation(sourceRefWire)?.let(::decodeError)
+      val sourceRef = FeatureTaskRuntimeHandoffSourceRef.fromWire(sourceRefWire)
+      val projectionContractId = reader.requiredString("projection_contract_id")
+      val projectionContractVersion = reader.requiredString("projection_contract_version")
+      val promptVisibility =
+        FeatureTaskRuntimeHandoffPromptVisibility.fromWire(reader.requiredString("prompt_visibility"))
+      val producerIteration =
+        reader.requiredNestedObject("producer_iteration").let {
+          val iterationReader = handoffReader(it)
+          val phaseId = iterationReader.requiredString(SharedPayloadKeys.PHASE_ID)
+          val iteration = iterationReader.requiredInt("iteration")
+          FeatureTaskRuntimeProducerIteration.violation(phaseId, iteration)?.let(::decodeError)
+          FeatureTaskRuntimeProducerIteration(phaseId, iteration)
+        }
+      val fields = reader.requiredList("fields").map(::fieldFromWire)
       return FeatureTaskRuntimeHandoffProjection(
-        projectionName = reader.requiredString("projection_name"),
-        sourceRef = FeatureTaskRuntimeHandoffSourceRef.fromWire(reader.requiredString("source_ref")),
-        projectionContractId = reader.requiredString("projection_contract_id"),
-        projectionContractVersion = reader.requiredString("projection_contract_version"),
-        promptVisibility =
-          FeatureTaskRuntimeHandoffPromptVisibility
-            .fromWire(reader.requiredString("prompt_visibility")),
-        producerIteration =
-          reader.requiredNestedObject("producer_iteration").let {
-            val iterationReader = handoffReader(it)
-            FeatureTaskRuntimeProducerIteration(
-              phaseId = iterationReader.requiredString(SharedPayloadKeys.PHASE_ID),
-              iteration = iterationReader.requiredInt("iteration"),
-            )
-          },
-        fields = reader.requiredList("fields").map(::fieldFromWire),
+        projectionName = projectionName,
+        sourceRef = sourceRef,
+        projectionContractId = projectionContractId,
+        projectionContractVersion = projectionContractVersion,
+        promptVisibility = promptVisibility,
+        fields = fields,
+        producerIteration = producerIteration,
       )
     }
 
     private fun fieldFromWire(raw: Any?): FeatureTaskRuntimeHandoffProjectionField {
       val reader = handoffReader(raw.toStringKeyedArtifactMap(::decodeError))
       val name = reader.requiredString(DecompositionPlanningPayloadKeys.NAME)
-      return FeatureTaskRuntimeHandoffProjectionField(
-        name = name,
-        value =
-          when (val kind = reader.requiredString("kind")) {
-            "text" -> FeatureTaskRuntimeHandoffProjectionValue.Text(reader.requiredString("text"))
-            "text_list" ->
-              FeatureTaskRuntimeHandoffProjectionValue.TextList(
-                reader.optionalStringList("items"),
-              )
-            "compact_reference" ->
-              FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-                kind = FeatureTaskRuntimeCompactReferenceKind.fromWire(reader.requiredString("reference_kind")),
-                value = reader.requiredString("reference_value"),
-              )
-            else -> decodeError("projection field '$name' has unknown value kind '$kind'.")
-          },
-      )
+      val value =
+        when (val kind = reader.requiredString("kind")) {
+          "text" -> FeatureTaskRuntimeHandoffProjectionValue.Text(reader.requiredString("text"))
+          "text_list" ->
+            FeatureTaskRuntimeHandoffProjectionValue.TextList(
+              reader.optionalStringList("items"),
+            )
+          "compact_reference" ->
+            FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+              kind = FeatureTaskRuntimeCompactReferenceKind.fromWire(reader.requiredString("reference_kind")),
+              value = reader.requiredString("reference_value"),
+            )
+          else -> decodeError("projection field '$name' has unknown value kind '$kind'.")
+        }
+      FeatureTaskRuntimeHandoffProjectionField.violation(name)?.let(::decodeError)
+      return FeatureTaskRuntimeHandoffProjectionField(name, value)
     }
 
     private fun decodeError(detail: String): Nothing =

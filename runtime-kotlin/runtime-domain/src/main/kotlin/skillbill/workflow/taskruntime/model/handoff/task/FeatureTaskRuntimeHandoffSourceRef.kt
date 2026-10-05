@@ -8,9 +8,17 @@ sealed interface FeatureTaskRuntimeHandoffSourceRef {
 
   data class UpstreamPhaseOutput(val producingPhaseId: String) : FeatureTaskRuntimeHandoffSourceRef {
     init {
-      require(producingPhaseId.isNotBlank()) {
-        "FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput.producingPhaseId must be non-blank."
-      }
+      val reason = violation(producingPhaseId)
+      require(reason == null) { reason.orEmpty() }
+    }
+
+    companion object {
+      internal fun violation(producingPhaseId: String): String? =
+        if (producingPhaseId.isNotBlank()) {
+          null
+        } else {
+          "FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput.producingPhaseId must be non-blank."
+        }
     }
 
     override val wireValue: String get() = "$UPSTREAM_PHASE_OUTPUT_PREFIX$producingPhaseId"
@@ -35,7 +43,13 @@ sealed interface FeatureTaskRuntimeHandoffSourceRef {
 
   data class AddonContentRef(val slug: String) : FeatureTaskRuntimeHandoffSourceRef {
     init {
-      require(slug.isNotBlank()) { "FeatureTaskRuntimeHandoffSourceRef.AddonContentRef.slug must be non-blank." }
+      val reason = violation(slug)
+      require(reason == null) { reason.orEmpty() }
+    }
+
+    companion object {
+      internal fun violation(slug: String): String? =
+        if (slug.isNotBlank()) null else "FeatureTaskRuntimeHandoffSourceRef.AddonContentRef.slug must be non-blank."
     }
 
     override val wireValue: String get() = "$ADDON_CONTENT_PREFIX$slug"
@@ -49,6 +63,15 @@ sealed interface FeatureTaskRuntimeHandoffSourceRef {
     const val SHARED_REVIEW_EVIDENCE_WIRE: String = "shared_review_evidence"
     const val REPAIR_LEDGER_WIRE: String = "repair_ledger"
     const val RETIRED_PRIOR_GAP_MEMORY_WIRE: String = "prior_gap_memory"
+
+    internal fun violation(value: String): String? =
+      when {
+        value.startsWith(UPSTREAM_PHASE_OUTPUT_PREFIX) ->
+          UpstreamPhaseOutput.violation(value.removePrefix(UPSTREAM_PHASE_OUTPUT_PREFIX))
+        value.startsWith(ADDON_CONTENT_PREFIX) ->
+          AddonContentRef.violation(value.removePrefix(ADDON_CONTENT_PREFIX))
+        else -> null
+      }
 
     fun fromWire(value: String): FeatureTaskRuntimeHandoffSourceRef =
       when {

@@ -12,11 +12,10 @@ import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentS
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntries
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntriesInRoots
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
-import java.io.IOException
+import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 
@@ -138,36 +137,20 @@ object NativeAgentOperations {
     Files.createDirectories(providerRoot)
     val orphanCandidates = listOrphanRenderCandidates(providerRoot, rendered)
     val staging = Files.createTempDirectory(providerRoot, ".skill-bill-native-agent-render-")
-    request.overrides.afterTemporaryCreation(staging)
-    var result: NativeAgentInstallRenderResult? = null
-    var initiatingFailure: Throwable? = null
-    try {
-      result =
-        stageAndPromoteNativeAgentRenders(
-          NativeAgentRenderPromotionRequest(
-            providerRoot = providerRoot,
-            staging = staging,
-            rendered = rendered,
-            orphanCandidates = orphanCandidates,
-            beforeMutation = request.overrides.beforeMutation,
-            provider = request.provider,
-            cacheRoot = cacheRoot,
-          ),
-        )
-    } catch (error: CancellationException) {
-      throw error
-    } catch (error: IOException) {
-      initiatingFailure = error
-    } catch (error: IllegalArgumentException) {
-      initiatingFailure = error
-    } catch (error: IllegalStateException) {
-      initiatingFailure = error
+    return Closeable { deleteNativeAgentRenderStaging(staging) }.use {
+      request.overrides.afterTemporaryCreation(staging)
+      stageAndPromoteNativeAgentRenders(
+        NativeAgentRenderPromotionRequest(
+          providerRoot = providerRoot,
+          staging = staging,
+          rendered = rendered,
+          orphanCandidates = orphanCandidates,
+          beforeMutation = request.overrides.beforeMutation,
+          provider = request.provider,
+          cacheRoot = cacheRoot,
+        ),
+      )
     }
-    val cleanupFailure = runCatching { deleteNativeAgentRenderStaging(staging) }.exceptionOrNull()
-    cleanupFailure?.let { initiatingFailure?.addSuppressed(it) }
-    val terminalFailure = initiatingFailure ?: cleanupFailure
-    terminalFailure?.let { throw it }
-    return requireNotNull(result)
   }
 
   private fun validateNativeAgentInstallSources(

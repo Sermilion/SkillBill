@@ -9,11 +9,13 @@ enum class AgentAddonConsumer(val id: String) {
   companion object {
     const val LEGACY_BILL_FEATURE_ID: String = "bill-feature"
 
+    fun fromIdOrNull(id: String): AgentAddonConsumer? = entries.firstOrNull { it.id == id }
+
+    fun unknownIdMessage(id: String): String =
+      "Unknown agent add-on consumer '$id'. Supported: ${entries.joinToString { it.id }}."
+
     fun fromId(id: String): AgentAddonConsumer =
-      entries.firstOrNull { it.id == id }
-        ?: throw IllegalArgumentException(
-          "Unknown agent add-on consumer '$id'. Supported: ${entries.joinToString { it.id }}.",
-        )
+      fromIdOrNull(id) ?: throw IllegalArgumentException(unknownIdMessage(id))
 
     fun decode(id: String): AgentAddonConsumerDecoding =
       if (id == LEGACY_BILL_FEATURE_ID) {
@@ -83,11 +85,23 @@ data class PersistedAgentAddonSelectionEntry(
   val contentSha256: String,
 ) {
   init {
-    require(slug.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*"))) { "Invalid agent add-on slug '$slug'." }
-    require(contentSha256.matches(Regex("[0-9a-f]{64}"))) {
-      "Agent add-on '$slug' content digest must be a lowercase SHA-256 value."
-    }
-    require(sourceIdentity.isNotBlank()) { "Agent add-on '$slug' source identity is required." }
+    val reason = violation(slug, sourceIdentity, contentSha256)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(
+      slug: String,
+      sourceIdentity: String,
+      contentSha256: String,
+    ): String? =
+      when {
+        !slug.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*")) -> "Invalid agent add-on slug '$slug'."
+        !contentSha256.matches(Regex("[0-9a-f]{64}")) ->
+          "Agent add-on '$slug' content digest must be a lowercase SHA-256 value."
+        sourceIdentity.isBlank() -> "Agent add-on '$slug' source identity is required."
+        else -> null
+      }
   }
 }
 
@@ -101,9 +115,17 @@ data class AgentAddonSelection(
   val entries: List<PersistedAgentAddonSelectionEntry> = emptyList(),
 ) {
   init {
-    require(entries.map { it.slug }.distinct().size == entries.size) {
-      "Agent add-on selection contains duplicate slugs."
-    }
+    val reason = violation(entries)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(entries: List<PersistedAgentAddonSelectionEntry>): String? =
+      if (entries.map { it.slug }.distinct().size == entries.size) {
+        null
+      } else {
+        "Agent add-on selection contains duplicate slugs."
+      }
   }
 }
 

@@ -124,6 +124,42 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   }
 
   @Test
+  fun `an invalid stored index emits the same literal degraded cause`() {
+    val records = mutableListOf<LogRecord>()
+    val handler =
+      object : Handler() {
+        override fun publish(record: LogRecord) {
+          records += record
+        }
+
+        override fun flush() = Unit
+
+        override fun close() = Unit
+      }
+    sharedEvidenceStoreLog.addHandler(handler)
+    try {
+      store.resolved(request("fp-index"), CountingDeriver())
+      val envelope =
+        artifactDir(request("fp-index"))
+          .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
+      Files.writeString(envelope, Files.readString(envelope).replace("\"path\":\"src/A.kt\"", "\"path\":\"\""))
+      records.clear()
+
+      store.resolved(request("fp-index"), CountingDeriver())
+
+      val degraded = records.single { it.message.contains("seam=stored_envelope_index") }
+      assertEquals(
+        "shared review evidence cache degraded: seam=stored_envelope_index used=re-derive " +
+          "expected=non-blank file and hunk entries at $envelope " +
+          "cause=IllegalArgumentException: FeatureTaskRuntimeSharedEvidenceFileEntry.path must be non-blank.",
+        degraded.message,
+      )
+    } finally {
+      sharedEvidenceStoreLog.removeHandler(handler)
+    }
+  }
+
+  @Test
   fun `a cold miss does not emit a cache degradation record`() {
     val records = mutableListOf<LogRecord>()
     val handler =

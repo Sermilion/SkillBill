@@ -1,5 +1,16 @@
 # Boundary History — runtime-domain
 
+## [2026-10-05] SKILL-401 subtask 1 domain goalrunner and review decoders
+Areas: runtime-domain/goalrunner, runtime-domain/review, runtime-domain/workflow/model/goalobservability, runtime-domain/workflow/model/goalreview, runtime-application/review/verification, runtime-infra/workflow/goalplanning
+- Goal-progress, continuation, lane-accounting and durable goal-review decoders now validate before construction and emit their existing schema failures with the same messages and precedence.
+- Parallel review uses nullable structured-string decoding and explicit path checks. Malformed escapes retain UNPARSEABLE_STRUCTURED_PATH; inadmissible paths retain NO_ADMISSIBLE_LOCATION; invalid citations retain invalid_path.
+- Claim verification and goal-planning path normalization use repositoryRelativePathViolation while retaining null for invalid paths.
+- Added a traversing-path regression that checks rejection and continued parsing of later findings; retained existing malformed-escape and durable-decoder coverage.
+- Shared ordered model violation helpers are reusable by decoder checks and constructor invariants. Nullable timestamp and execution-mode parsers follow the existing boundary pattern.
+- Breaking changes: none to wire bytes, schema versions or public commands. Scope is subtask 1; workflow/taskruntime decoders and the remaining exception conversions belong to other subtasks.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-01] SKILL-397 subtask 2 — Domain-owned aggregate transitions
 Areas: runtime-domain/workflow/decomposition, runtime-domain/workflow/model, runtime-domain/goalrunner, runtime-engine/goalrunner, runtime-application/decomposition
 - Decomposition manifest subtask transitions (attempt, complete, stop, resume, branch setup, branch selection, runtime-state preservation) now live in the domain as pure functions on the manifest aggregate.

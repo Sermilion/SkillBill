@@ -18,6 +18,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogResult
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
@@ -259,10 +260,14 @@ class ApplicationCooperativeFailureBoundaryTest {
     val cancelled =
       object : TelemetrySettingsProvider {
         override fun load(materialize: Boolean) = throw CancellationException("cancelled")
+
+        override fun loadOrUnavailable(materialize: Boolean) = throw CancellationException("cancelled")
       }
     val interrupted =
       object : TelemetrySettingsProvider {
         override fun load(materialize: Boolean) = throw InterruptedException("interrupted")
+
+        override fun loadOrUnavailable(materialize: Boolean) = throw InterruptedException("interrupted")
       }
 
     val diagnostics = NoopRuntimeDiagnostics
@@ -355,4 +360,7 @@ private class UpdateCheckTestDatabaseSessionFactory : DatabaseSessionFactory {
 
 private object UpdateCheckTestTelemetrySettingsProvider : TelemetrySettingsProvider {
   override fun load(materialize: Boolean): TelemetrySettings = error("unused")
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }

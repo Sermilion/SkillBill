@@ -1,7 +1,7 @@
 # SKILL-401 - defect-exception-control-flow
 
 Issue key: SKILL-401
-Origin: split out of SKILL-398 subtask 6 (`../done/SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-006.
+Origin: split out of SKILL-398 subtask 6 (`../SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-006.
 
 ## Outcome
 
@@ -61,7 +61,7 @@ These are the non-throwing forms the catch sites depend on. A subtask that needs
 
 ## Ground rules (every subtask)
 
-Paths are relative to `runtime-kotlin/`, and `.../` stands for `src/main/kotlin/skillbill/`.
+Paths are relative to `../../../runtime-kotlin`, and `.../` stands for `src/main/kotlin/skillbill/`.
 
 1. **Edge invariance (AC-003).** For a given input, the exception type that reaches `CliRuntime.run` or `McpToolDispatcher.dispatch` must not change.
    - `CliRuntime` prints `oneLine(message)` for both the `IllegalArgumentException` (IAE) arm and the `SkillBillRuntimeException` arm. The two differ only in the fallback used when the message is blank.

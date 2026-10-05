@@ -1,3 +1,9 @@
+## [2026-10-05] Preserve scaffold capture with an exact input code
+Context: SKILL-401 subtask 7 converts scaffold input assertions formerly handled as IllegalArgumentException to coded failures. Older scaffold codes already reached MCP as captured runtime failures.
+Decision: Add ScaffoldFailureCode.INVALID_INPUT and include only that entry in isShellContentContractFailure. Keep other scaffold codes excluded and retain ReviewContextFailureCode classification.
+Reason: MCP previously skipped capture for these input assertions. Reusing INVALID_PAYLOAD or classifying the whole scaffold family would change which failures produce telemetry rows. The existing shared predicate preserves capture without a dispatcher change.
+Alternatives considered: Reuse INVALID_PAYLOAD or classify all ScaffoldFailureCode entries. Both erase the distinction between newly converted input rejections and older coded failures.
+
 ## [2026-10-04] Keep decomposition failure codes with their vocabulary owners
 Context: SKILL-399 subtask 8 removes manifest and bundle-journal exception classes whose failureCode properties mixed domain wire codes with workflow-only conditions.
 Decision: Reuse DecompositionManifestValidationFailureCode entries for existing domain vocabulary. WorkflowFailureCode owns five other manifest conditions and one entry per distinct journal literal.
@@ -44,6 +50,7 @@ Alternatives considered: Replace failures with require, check or error. These in
 Context: SKILL-399 subtask 2 replaces Scaffold and ReviewContext throwable hierarchies with the same shared exception type.
 Decision: Include ReviewContextFailureCode in isShellContentContractFailure and exclude ScaffoldFailureCode. Converted review catches retain exact handled codes and rethrow other failures.
 Reason: ReviewContext failures previously extended ShellContentContractException. Scaffold failures extended SkillBillRuntimeException directly, so including them would widen shell-content handling and change propagation.
+Superseded by: Preserve scaffold capture with an exact input code (2026-10-05)
 
 ## [2026-10-03] Keep input-driven scaffold and review failures coded
 Context: SKILL-399 subtask 2 removes twenty exception classes while preserving scaffold output and review failure behavior.

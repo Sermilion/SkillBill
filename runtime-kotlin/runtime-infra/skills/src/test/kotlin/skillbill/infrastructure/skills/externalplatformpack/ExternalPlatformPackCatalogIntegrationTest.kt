@@ -6,6 +6,7 @@ import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
 import skillbill.error.core.AmbiguousExternalPlatformPackError
 import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.error.core.ExternalPlatformPackPublishError
+import skillbill.error.core.InvalidInstallStagingError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
@@ -706,7 +707,7 @@ class ExternalPlatformPackCatalogIntegrationTest {
     Files.writeString(playbook, "CHECKOUT_POINTER_MARKER_CHANGED\n")
     assertNotEquals(hashed, pointerHash(skill, manifest, pointer, checkout))
 
-    assertFailsWith<IllegalArgumentException> {
+    assertFailsWith<InvalidInstallStagingError> {
       pointerHash(
         skill,
         manifest,

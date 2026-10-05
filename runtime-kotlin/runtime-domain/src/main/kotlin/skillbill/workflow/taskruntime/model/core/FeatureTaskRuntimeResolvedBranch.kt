@@ -17,25 +17,15 @@ data class FeatureTaskRuntimeResolvedBranch(
   val boundaryHistoryRoots: List<String> = emptyList(),
 ) {
   init {
-    require(branch.isNotBlank()) { "FeatureTaskRuntimeResolvedBranch.branch must be non-blank." }
-    require(reviewBaseSha == null || REVIEW_BASE_SHA.matches(reviewBaseSha)) {
-      "FeatureTaskRuntimeResolvedBranch.reviewBaseSha must be a 40- or 64-character lowercase commit SHA."
-    }
-    require(baselineUntrackedPaths.all(String::isNotBlank)) {
-      "FeatureTaskRuntimeResolvedBranch.baselineUntrackedPaths must not contain blanks."
-    }
-    require(baselineOwnedPaths.all(String::isNotBlank)) {
-      "FeatureTaskRuntimeResolvedBranch.baselineOwnedPaths must not contain blanks."
-    }
-    require(workflowOwnedPaths.all(String::isNotBlank)) {
-      "FeatureTaskRuntimeResolvedBranch.workflowOwnedPaths must not contain blanks."
-    }
-    require(boundaryHistoryPaths.all(String::isNotBlank)) {
-      "FeatureTaskRuntimeResolvedBranch.boundaryHistoryPaths must not contain blanks."
-    }
-    require(boundaryHistoryRoots.all(String::isNotBlank)) {
-      "FeatureTaskRuntimeResolvedBranch.boundaryHistoryRoots must not contain blanks."
-    }
+    val reason =
+      branchViolation(branch, reviewBaseSha) ?: pathsViolation(
+        baselineUntrackedPaths,
+        baselineOwnedPaths,
+        workflowOwnedPaths,
+        boundaryHistoryPaths,
+        boundaryHistoryRoots,
+      )
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -53,26 +43,64 @@ data class FeatureTaskRuntimeResolvedBranch(
     }
 
   companion object {
+    private fun branchViolation(
+      branch: String,
+      reviewBaseSha: String?,
+    ): String? =
+      when {
+        branch.isBlank() -> "FeatureTaskRuntimeResolvedBranch.branch must be non-blank."
+        reviewBaseSha != null && !REVIEW_BASE_SHA.matches(reviewBaseSha) ->
+          "FeatureTaskRuntimeResolvedBranch.reviewBaseSha must be a 40- or 64-character lowercase commit SHA."
+        else -> null
+      }
+
+    private fun pathsViolation(
+      baselineUntrackedPaths: List<String>,
+      baselineOwnedPaths: List<String>,
+      workflowOwnedPaths: List<String>,
+      boundaryHistoryPaths: List<String>,
+      boundaryHistoryRoots: List<String>,
+    ): String? =
+      when {
+        baselineUntrackedPaths.any(String::isBlank) ->
+          "FeatureTaskRuntimeResolvedBranch.baselineUntrackedPaths must not contain blanks."
+        baselineOwnedPaths.any(String::isBlank) ->
+          "FeatureTaskRuntimeResolvedBranch.baselineOwnedPaths must not contain blanks."
+        workflowOwnedPaths.any(String::isBlank) ->
+          "FeatureTaskRuntimeResolvedBranch.workflowOwnedPaths must not contain blanks."
+        boundaryHistoryPaths.any(String::isBlank) ->
+          "FeatureTaskRuntimeResolvedBranch.boundaryHistoryPaths must not contain blanks."
+        boundaryHistoryRoots.any(String::isBlank) ->
+          "FeatureTaskRuntimeResolvedBranch.boundaryHistoryRoots must not contain blanks."
+        else -> null
+      }
+
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeResolvedBranch {
       val reader = durableArtifactMapReader(raw)
-      return try {
-        FeatureTaskRuntimeResolvedBranch(
-          branch = reader.requiredString(DecompositionPlanningPayloadKeys.BRANCH),
-          baseBranch = reader.optionalString(DecompositionPlanningPayloadKeys.BASE_BRANCH),
-          created = reader.optionalBoolean("created") ?: false,
-          reviewBaseSha = reader.optionalString("review_base_sha"),
-          baselineUntrackedPaths = reader.optionalStringList("baseline_untracked_paths"),
-          baselineOwnedPaths = reader.optionalStringList("baseline_owned_paths"),
-          workflowOwnedPaths = reader.optionalStringList("workflow_owned_paths"),
-          boundaryHistoryPaths = reader.optionalStringList("boundary_history_paths"),
-          boundaryHistoryRoots = reader.optionalStringList("boundary_history_roots"),
+      val branch = reader.requiredString(DecompositionPlanningPayloadKeys.BRANCH)
+      val baseBranch = reader.optionalString(DecompositionPlanningPayloadKeys.BASE_BRANCH)
+      val created = reader.optionalBoolean("created") ?: false
+      val reviewBaseSha = reader.optionalString("review_base_sha")
+      val baselineUntrackedPaths = reader.optionalStringList("baseline_untracked_paths")
+      val baselineOwnedPaths = reader.optionalStringList("baseline_owned_paths")
+      val workflowOwnedPaths = reader.optionalStringList("workflow_owned_paths")
+      val boundaryHistoryPaths = reader.optionalStringList("boundary_history_paths")
+      val boundaryHistoryRoots = reader.optionalStringList("boundary_history_roots")
+      val reason =
+        branchViolation(branch, reviewBaseSha) ?: pathsViolation(
+          baselineUntrackedPaths,
+          baselineOwnedPaths,
+          workflowOwnedPaths,
+          boundaryHistoryPaths,
+          boundaryHistoryRoots,
         )
-      } catch (error: IllegalArgumentException) {
-        throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime resolved-branch artifact is invalid.",
-          error,
-        )
+      if (reason != null) {
+        throw invalidWorkflowStateSchemaError("Feature-task-runtime resolved-branch artifact is invalid.")
       }
+      return FeatureTaskRuntimeResolvedBranch(
+        branch, baseBranch, created, reviewBaseSha, baselineUntrackedPaths, baselineOwnedPaths,
+        workflowOwnedPaths, boundaryHistoryPaths, boundaryHistoryRoots,
+      )
     }
   }
 }

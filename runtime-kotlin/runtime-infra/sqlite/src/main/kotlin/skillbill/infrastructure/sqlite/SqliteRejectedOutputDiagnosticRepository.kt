@@ -262,6 +262,11 @@ private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
       corruptRecord("<unreadable>", error)
     }
   return try {
+    val lifecycle =
+      RejectedOutputLifecycle.entries.firstOrNull { it.name == getString("lifecycle").uppercase() }
+        ?: corruptRecord(identity)
+    val repairTurn = getInt("repair_turn")
+    RejectedOutputDiagnostic.violation(repairTurn)?.let { corruptRecord(identity) }
     RejectedOutputDiagnosticRecord(
       metadata =
         RejectedOutputDiagnostic(
@@ -277,8 +282,8 @@ private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
           recordedAt = Instant.parse(getString("recorded_at")),
           byteSize = getLong("byte_size"),
           sha256 = getString("sha256"),
-          lifecycle = RejectedOutputLifecycle.valueOf(getString("lifecycle").uppercase()),
-          repairTurn = getInt("repair_turn"),
+          lifecycle = lifecycle,
+          repairTurn = repairTurn,
         ),
       payload = getBytes("payload"),
     )
@@ -286,14 +291,12 @@ private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
     corruptRecord(identity, error)
   } catch (error: DateTimeParseException) {
     corruptRecord(identity, error)
-  } catch (error: IllegalArgumentException) {
-    corruptRecord(identity, error)
   }
 }
 
 private fun corruptRecord(
   identity: String,
-  error: Throwable,
+  error: Throwable? = null,
 ): Nothing =
   throw SkillBillRuntimeException(
     RejectedOutputDiagnosticFailureCode.CORRUPT,

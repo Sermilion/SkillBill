@@ -152,8 +152,6 @@ internal fun stageInstalledSkill(input: StageInstalledSkillInput): RenderedSkill
       throw error
     } catch (error: IOException) {
       invalidStageInstalledSkill(input, error)
-    } catch (error: IllegalArgumentException) {
-      invalidStageInstalledSkill(input, error)
     }
   tryReusePreparedStageInstalledSkill(prepared, input.suppliedCompactIdentity)?.let { reused ->
     log.fine(
@@ -213,11 +211,13 @@ private fun invalidStageInstalledSkill(
   input: StageInstalledSkillInput,
   error: Throwable,
 ): Nothing =
-  throw InvalidInstallStagingError(
-    sourceLabel = input.sourceSkillDir.toString(),
-    reason = error.message ?: error::class.simpleName.orEmpty(),
-    cause = error,
-  )
+  invalidInstallStaging(input.sourceSkillDir.toString(), error.message ?: error::class.simpleName.orEmpty(), error)
+
+internal fun invalidInstallStaging(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): Nothing = throw InvalidInstallStagingError(sourceLabel = sourceLabel, reason = reason, cause = cause)
 
 private fun logInstallStagingFailure(
   inputs: FreshInstallInputs,
@@ -232,7 +232,7 @@ private fun logInstallStagingFailure(
       "promoted=$promoted error=${error.failureCodeLabel() ?: error::class.simpleName}",
     error,
   )
-  cleanupInstallStagingOnFailure(tempDir, inputs.finalStagingDir, promoted)
+  cleanupInstallStagingOnFailure(tempDir, inputs.finalStagingDir, promoted, error)
 }
 
 internal fun writeInstallStagingMarkers(

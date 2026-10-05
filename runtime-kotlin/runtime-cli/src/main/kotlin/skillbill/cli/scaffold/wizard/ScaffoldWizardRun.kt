@@ -8,6 +8,7 @@ import skillbill.cli.scaffold.payload.NativeScaffoldPayloadRun
 import skillbill.cli.scaffold.payload.NativeScaffoldRunOptions
 import skillbill.cli.scaffold.payload.completeScaffoldError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.scaffold.model.SkillKind
 
@@ -38,8 +39,6 @@ class ScaffoldWizardRun(
         collect()
       } catch (error: SkillBillRuntimeException) {
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
-      } catch (error: IllegalArgumentException) {
-        return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
     payloadRun.runPayload(payload, options)
   }
@@ -69,7 +68,7 @@ internal fun collectAssistedScaffoldWizardPayload(
   return when (kind) {
     SkillKind.PLATFORM_PACK.wireValue ->
       assistedPlatformPackWizardPayload(state, inputs, scaffoldCatalogGateway.platformPackPresets())
-    else -> throw IllegalArgumentException(
+    else -> throw invalidScaffoldInputError(
       "Assisted mode currently supports platform-pack scaffolds. Use the normal wizard for kind '$kind'.",
     )
   }
@@ -90,7 +89,7 @@ internal fun collectScaffoldWizardPayload(
       platformPackWizardPayload(state, inputs, scaffoldCatalogGateway.platformPackPresets())
     SkillKind.ADD_ON.wireValue -> addOnWizardPayload(state, inputs)
     SkillKind.AGENT_ADDON.wireValue -> agentAddonWizardPayload(state, inputs)
-    else -> throw IllegalArgumentException("Unsupported scaffold wizard kind '$kind'.")
+    else -> throw invalidScaffoldInputError("Unsupported scaffold wizard kind '$kind'.")
   }
 }
 

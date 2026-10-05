@@ -10,6 +10,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogEntry
 import skillbill.ports.process.model.ReleaseCatalogResult
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.telemetry.model.TelemetrySettings
 import java.nio.file.Files
@@ -234,4 +235,7 @@ private class TestDatabaseSessionFactory : DatabaseSessionFactory {
 
 private object TestTelemetrySettingsProvider : TelemetrySettingsProvider {
   override fun load(materialize: Boolean): TelemetrySettings = error("unused")
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }

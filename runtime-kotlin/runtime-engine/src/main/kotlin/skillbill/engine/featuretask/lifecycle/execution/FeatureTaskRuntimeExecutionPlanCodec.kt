@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
@@ -111,7 +112,7 @@ class FeatureTaskRuntimeExecutionPlanCodec(
       )
     return try {
       decodeExecutionPlan(payload)
-    } catch (_: IllegalArgumentException) {
+    } catch (_: InvalidPhaseStrategyCompositionError) {
       throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
     }
   }

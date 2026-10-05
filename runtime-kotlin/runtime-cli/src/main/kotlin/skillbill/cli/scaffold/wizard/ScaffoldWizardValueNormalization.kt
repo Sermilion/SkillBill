@@ -1,5 +1,6 @@
 package skillbill.cli.scaffold.wizard
 
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.scaffold.model.SkillKind
 import skillbill.scaffold.model.command.isRetiredPartialScaffoldCommandKindAlias
 import skillbill.scaffold.model.command.rejectRetiredPartialScaffoldCommandKind
@@ -22,14 +23,14 @@ internal fun normalizePlatformPackSourceMode(value: String): String =
   when (value.trim().lowercase()) {
     "1", "native", "in-repo" -> "native"
     "2", "external" -> "external"
-    else -> throw IllegalArgumentException("Unsupported pack source '$value'. Use native or external.")
+    else -> throw invalidScaffoldInputError("Unsupported pack source '$value'. Use native or external.")
   }
 
 internal fun normalizePlatformPackRegistration(value: String): String =
   when (value.trim().lowercase()) {
     "", "create", "1" -> "create"
     "register", "2" -> "register"
-    else -> throw IllegalArgumentException(
+    else -> throw invalidScaffoldInputError(
       "Unsupported pack registration '$value'. Use create or register.",
     )
   }
@@ -38,7 +39,7 @@ internal fun normalizeAddOnLocationMode(value: String): String =
   when (value.trim().lowercase()) {
     "1", "native", "pack", "pack-owned" -> "native"
     "2", "external" -> "external"
-    else -> throw IllegalArgumentException("Unsupported add-on source '$value'. Use native or external.")
+    else -> throw invalidScaffoldInputError("Unsupported add-on source '$value'. Use native or external.")
   }
 
 internal fun normalizeBillSkillName(name: String): String = if (name.startsWith("bill-")) name else "bill-$name"

@@ -58,11 +58,13 @@ import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.review.repository.ReviewRunCompletenessRepository
 import skillbill.ports.review.repository.UnavailableReviewRunCompletenessRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.ports.telemetry.model.TelemetryReconciliationResult
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryClient
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -757,6 +759,9 @@ internal class FakeTelemetrySettingsProvider(
       customProxyUrl = if (enabled) "https://telemetry.example.dev/ingest" else null,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 internal object FakeTelemetryConfigStore : TelemetryConfigStore {
@@ -764,7 +769,7 @@ internal object FakeTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
-  override fun read(): TelemetryConfigDocument? = null
+  override fun read(): TelemetryConfigRead = TelemetryConfigRead.Absent
 
   override fun ensure(): TelemetryConfigDocument = TelemetryConfigDocument(TelemetryOpenDocument.from(emptyMap()))
 

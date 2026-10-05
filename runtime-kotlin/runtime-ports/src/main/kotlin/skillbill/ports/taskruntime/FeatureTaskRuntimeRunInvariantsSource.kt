@@ -1,6 +1,6 @@
 package skillbill.ports.taskruntime
 
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import java.nio.file.Path
 
 /**
@@ -8,5 +8,5 @@ import java.nio.file.Path
  * keeping filesystem access out of the CLI module.
  */
 interface FeatureTaskRuntimeRunInvariantsSource {
-  fun read(specPath: Path): FeatureTaskRuntimeRunInvariants
+  fun read(specPath: Path): FeatureTaskRuntimeRunInvariantsRead
 }

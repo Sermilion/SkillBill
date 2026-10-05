@@ -12,11 +12,13 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.ports.telemetry.model.TelemetryReconciliationResult
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryClient
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -257,6 +259,9 @@ private class EnabledSettingsProvider(
       customProxyUrl = customProxyUrl,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 private class DiagnosticTelemetryConfigStore : TelemetryConfigStore {
@@ -264,7 +269,7 @@ private class DiagnosticTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
-  override fun read(): TelemetryConfigDocument? = null
+  override fun read(): TelemetryConfigRead = TelemetryConfigRead.Absent
 
   override fun ensure(): TelemetryConfigDocument =
     TelemetryConfigDocument(

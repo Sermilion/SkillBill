@@ -1,14 +1,15 @@
 package skillbill.cli.scaffold.payload
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import skillbill.application.scaffold.SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE
 import skillbill.application.scaffold.decodeScaffoldPayloadObject
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliFormat
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.model.SkillKind
 import java.nio.file.Path
@@ -54,9 +55,16 @@ internal fun createAndFillScaffoldPayload(
   bodyFile: String?,
   state: CliRunState,
 ): JsonObject {
-  val kind = scaffoldPayload["kind"]?.jsonPrimitive?.contentOrNull.orEmpty()
-  require(kind !in setOf(SkillKind.PLATFORM_PACK.wireValue, SkillKind.ADD_ON.wireValue)) {
-    "create-and-fill can only scaffold one content-managed skill; kind '$kind' is not supported."
+  val kindElement = scaffoldPayload["kind"]
+  val kindPrimitive = kindElement as? JsonPrimitive
+  if (kindElement != null && kindPrimitive == null) {
+    throw invalidScaffoldInputError("Element ${kindElement::class} is not a JsonPrimitive")
+  }
+  val kind = kindPrimitive?.contentOrNull.orEmpty()
+  if (kind in setOf(SkillKind.PLATFORM_PACK.wireValue, SkillKind.ADD_ON.wireValue)) {
+    throw invalidScaffoldInputError(
+      "create-and-fill can only scaffold one content-managed skill; kind '$kind' is not supported.",
+    )
   }
   return JsonObject(scaffoldPayload + createAndFillContentPayload(body, bodyFile, state))
 }
@@ -95,7 +103,7 @@ internal fun readScaffoldPayloadText(
   state: CliRunState,
 ): String =
   when {
-    payloadPath == null -> throw IllegalArgumentException("--payload is required for this command.")
+    payloadPath == null -> throw invalidScaffoldInputError("--payload is required for this command.")
     payloadPath == "-" -> state.wholeStdinText()
     else -> Path.of(payloadPath).toFile().readText()
   }

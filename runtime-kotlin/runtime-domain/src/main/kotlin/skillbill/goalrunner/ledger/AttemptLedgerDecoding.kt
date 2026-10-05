@@ -2,6 +2,7 @@ package skillbill.goalrunner.ledger
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
+import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
 import skillbill.workflow.engine.model.GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY
@@ -11,7 +12,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
-import skillbill.workflow.time.parsePersistedInstant
+import skillbill.workflow.time.parsePersistedInstantOrNull
 
 fun progressEventFrom(artifacts: Any): GoalRunnerProgressEvent? {
   val wire = artifacts.asGoalWorkflowArtifactMap("goal progress event artifacts")
@@ -33,11 +34,13 @@ fun declaredProgressEventFrom(artifacts: Any): GoalProgressEvent? {
 }
 
 fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgressEvent {
+  val artifact =
+    toStringKeyedArtifactMap {
+      invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", it)
+    }
   val reader =
     DurableArtifactMapReader(
-      toStringKeyedArtifactMap {
-        invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", it)
-      },
+      artifact,
     ) { detail ->
       invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", detail)
     }
@@ -45,10 +48,10 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
   val workflowId = reader.requiredString("workflow_id")
   val workflowPhase = reader.requiredString("workflow_phase")
   val timestamp =
-    runCatching { parsePersistedInstant(reader.requiredString("timestamp")) }
-      .getOrElse { error ->
-        throw invalidGoalProgressEventSchemaError(sourceLabel, "timestamp", "must be an RFC 3339 instant.", error)
-      }
+    (artifact[WorkflowTimestampPayloadKeys.TIMESTAMP] as? String)
+      ?.takeIf(String::isNotBlank)
+      ?.let(::parsePersistedInstantOrNull)
+      ?: throw invalidGoalProgressEventSchemaError(sourceLabel, "timestamp", "must be an RFC 3339 instant.")
   val sequenceNumber =
     reader.requiredInt("sequence_number").also { value ->
       if (value < 0) {
@@ -56,23 +59,27 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
       }
     }
   val outcome = optionalProgressOutcome(reader, sourceLabel)
-  return try {
-    GoalProgressEvent(
-      eventKind = eventKind,
-      workflowId = workflowId,
-      workflowPhase = workflowPhase,
-      processAlive = reader.optionalBoolean("process_alive") ?: false,
-      sequenceNumber = sequenceNumber,
-      timestamp = timestamp,
-      stepId = reader.optionalString(SharedPayloadKeys.STEP_ID),
-      operationName = reader.optionalString("operation_name"),
-      operationKind = reader.optionalString("operation_kind"),
-      expectedLong = reader.optionalBoolean("expected_long") ?: false,
-      outcome = outcome,
-    )
-  } catch (error: IllegalArgumentException) {
-    throw invalidGoalProgressEventSchemaError(sourceLabel, "<root>", error.message ?: "invalid event.", error)
+  val processAlive = reader.optionalBoolean("process_alive") ?: false
+  val stepId = reader.optionalString(SharedPayloadKeys.STEP_ID)
+  val operationName = reader.optionalString("operation_name")
+  val operationKind = reader.optionalString("operation_kind")
+  val expectedLong = reader.optionalBoolean("expected_long") ?: false
+  GoalProgressEvent.violation(eventKind, workflowId, workflowPhase, sequenceNumber, operationName)?.let { reason ->
+    invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", reason)
   }
+  return GoalProgressEvent(
+    eventKind = eventKind,
+    workflowId = workflowId,
+    workflowPhase = workflowPhase,
+    processAlive = processAlive,
+    sequenceNumber = sequenceNumber,
+    timestamp = timestamp,
+    stepId = stepId,
+    operationName = operationName,
+    operationKind = operationKind,
+    expectedLong = expectedLong,
+    outcome = outcome,
+  )
 }
 
 private fun invalidDeclaredGoalProgressEvent(

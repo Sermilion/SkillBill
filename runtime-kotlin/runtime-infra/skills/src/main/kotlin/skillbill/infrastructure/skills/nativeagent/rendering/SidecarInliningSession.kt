@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.nativeagent.rendering
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
 import skillbill.infrastructure.skills.nativeagent.composition.displayPath
+import skillbill.infrastructure.skills.nativeagent.composition.invalidCompositionInput
 import skillbill.infrastructure.skills.nativeagent.composition.platformPackRoot
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPointerSpec
 import skillbill.scaffold.model.PlatformManifest
@@ -104,14 +105,16 @@ private fun platformPointerSidecarResolver(
     val linkName = linkPath.substringAfterLast('/')
     val pointer =
       declared[linkName]
-        ?: throw IllegalArgumentException(
+        ?: invalidCompositionInput(
           "${displayPath(root, ownerPath)}: local markdown link '$rawTarget' is not declared in " +
             "platform.yaml pointers for '$skillRelativeDir'",
         )
     val sidecarPath = root.resolve(pointer.target).toAbsolutePath().normalize()
-    require(Files.isRegularFile(sidecarPath)) {
-      "${displayPath(root, ownerPath)}: declared markdown sidecar '$rawTarget' is missing at " +
-        "'${displayPath(root, sidecarPath)}'"
+    if (!Files.isRegularFile(sidecarPath)) {
+      invalidCompositionInput(
+        "${displayPath(root, ownerPath)}: declared markdown sidecar '$rawTarget' is missing at " +
+          "'${displayPath(root, sidecarPath)}'",
+      )
     }
     sidecarPath
   }
@@ -125,12 +128,16 @@ private fun siblingMarkdownSidecarResolver(
   val contentDir = contentPath.parent.toAbsolutePath().normalize()
   return MarkdownSidecarResolver(root) { rawTarget, ownerPath ->
     val linkPath = linkPathWithoutFragment(rawTarget)
-    require('/' !in linkPath && '\\' !in linkPath && ".." !in linkPath) {
-      "${displayPath(root, ownerPath)}: local markdown link '$rawTarget' must resolve to a sibling file"
+    if ('/' in linkPath || '\\' in linkPath || ".." in linkPath) {
+      invalidCompositionInput(
+        "${displayPath(root, ownerPath)}: local markdown link '$rawTarget' must resolve to a sibling file",
+      )
     }
     val sidecarPath = contentDir.resolve(linkPath).toAbsolutePath().normalize()
-    require(Files.isRegularFile(sidecarPath)) {
-      "${displayPath(root, ownerPath)}: local markdown link '$rawTarget' is unresolved"
+    if (!Files.isRegularFile(sidecarPath)) {
+      invalidCompositionInput(
+        "${displayPath(root, ownerPath)}: local markdown link '$rawTarget' is unresolved",
+      )
     }
     sidecarPath
   }
@@ -146,10 +153,11 @@ private class MarkdownSidecarResolver(
     rawTarget: String,
     ownerPath: Path,
   ): Path =
-    resolvePath(rawTarget, ownerPath)
-      .also { path ->
-        require(Files.isRegularFile(path)) {
-          "${displayPath(repoRoot, ownerPath)}: local markdown link '$rawTarget' is unresolved"
-        }
+    resolvePath(rawTarget, ownerPath).also { path ->
+      if (!Files.isRegularFile(path)) {
+        invalidCompositionInput(
+          "${displayPath(repoRoot, ownerPath)}: local markdown link '$rawTarget' is unresolved",
+        )
       }
+    }
 }
