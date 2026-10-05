@@ -1,0 +1,253 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
+title: Feature task runtime execution plan
+description: >-
+  Bounded semantic identity for the selected execution composition of a durable workflow.
+  The descriptor records behavior-bearing choices and excludes implementation source hashes.
+  Schema validity does not authorize execution. Admission must match supported semantic
+  identities and effective policies. Legacy workflows without a descriptor have no
+  automatic adoption mapping; retain their evidence and refuse continuation. A
+  descriptor without recorded execution settings also cannot enter crash recovery.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - definition
+  - selected_strategies
+  - review_selection
+  - quality_gate_selection
+  - traversal
+  - dispatch_ownership
+  - step_policies
+  - resume_interpretations
+  - effective_policies
+properties:
+  contract_version:
+    const: "0.1"
+  definition:
+    $ref: "#/$defs/definition"
+  selected_strategies:
+    type: array
+    minItems: 1
+    maxItems: 32
+    items:
+      $ref: "#/$defs/strategy"
+  review_selection:
+    enum: [auto, inline, delegated, null]
+  quality_gate_selection:
+    enum: [build, validate, null]
+  traversal:
+    $ref: "#/$defs/traversal"
+  dispatch_ownership:
+    type: array
+    minItems: 1
+    maxItems: 128
+    items:
+      $ref: "#/$defs/dispatch"
+  step_policies:
+    type: array
+    maxItems: 256
+    items:
+      $ref: "#/$defs/policy"
+  resume_interpretations:
+    type: array
+    maxItems: 256
+    items:
+      $ref: "#/$defs/policy"
+  effective_policies:
+    type: array
+    maxItems: 256
+    items:
+      $ref: "#/$defs/effective_policy"
+  effective_policy_settings:
+    description: Execution settings needed to re-evaluate effective policy during crash recovery.
+    type: object
+    additionalProperties: false
+    required: [validation_depth, phase_timeout_millis]
+    properties:
+      validation_depth:
+        enum: [full]
+      phase_timeout_millis:
+        type: [integer, "null"]
+        minimum: 0
+        maximum: 9223372036854775807
+$defs:
+  effective_policy:
+    type: object
+    additionalProperties: false
+    required: [id, semantic_revision, semantic_digest]
+    properties:
+      id:
+        $ref: "#/$defs/identifier"
+      semantic_revision:
+        $ref: "#/$defs/revision"
+      semantic_digest:
+        description: SHA-256 of bounded canonical effective inputs under the named policy revision.
+        $ref: "#/$defs/digest"
+  identifier:
+    type: string
+    minLength: 1
+    maxLength: 128
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+  revision:
+    type: integer
+    minimum: 1
+    maximum: 2147483647
+  digest:
+    type: string
+    minLength: 64
+    maxLength: 64
+    pattern: "^[0-9a-f]{64}$"
+  definition:
+    type: object
+    additionalProperties: false
+    required: [id, semantic_revision]
+    properties:
+      id:
+        $ref: "#/$defs/identifier"
+      semantic_revision:
+        $ref: "#/$defs/revision"
+  strategy:
+    type: object
+    additionalProperties: false
+    required: [slot, strategy_id, semantic_revision, selected_steps, entry_step]
+    properties:
+      slot:
+        $ref: "#/$defs/identifier"
+      strategy_id:
+        $ref: "#/$defs/identifier"
+      semantic_revision:
+        $ref: "#/$defs/revision"
+      selected_steps:
+        type: array
+        minItems: 1
+        maxItems: 128
+        uniqueItems: true
+        items:
+          $ref: "#/$defs/identifier"
+      entry_step:
+        $ref: "#/$defs/identifier"
+  traversal:
+    type: object
+    additionalProperties: false
+    required: [forward_steps, backward_edges, loop_only_steps, entry_gates, loop_only_successors]
+    properties:
+      forward_steps:
+        type: array
+        minItems: 1
+        maxItems: 128
+        uniqueItems: true
+        items:
+          $ref: "#/$defs/identifier"
+      backward_edges:
+        type: array
+        maxItems: 256
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - from_step
+            - verdict
+            - destination_step
+            - loop_id
+            - per_edge_cap
+            - cap_exhaustion_behavior
+            - cap_scope
+            - warn_after_iterations
+          properties:
+            from_step:
+              $ref: "#/$defs/identifier"
+            verdict:
+              $ref: "#/$defs/identifier"
+            destination_step:
+              $ref: "#/$defs/identifier"
+            loop_id:
+              $ref: "#/$defs/identifier"
+            per_edge_cap:
+              type: [integer, "null"]
+              minimum: 1
+              maximum: 2147483647
+            cap_exhaustion_behavior:
+              enum: [BLOCK, ADVANCE]
+            cap_scope:
+              enum: [PER_RUN, PER_SUBTASK]
+            warn_after_iterations:
+              type: [integer, "null"]
+              minimum: 1
+              maximum: 2147483647
+      loop_only_steps:
+        type: array
+        maxItems: 128
+        uniqueItems: true
+        items:
+          $ref: "#/$defs/identifier"
+      entry_gates:
+        type: array
+        maxItems: 256
+        items:
+          type: object
+          additionalProperties: false
+          required: [step, required_step, required_verdict]
+          properties:
+            step:
+              $ref: "#/$defs/identifier"
+            required_step:
+              $ref: "#/$defs/identifier"
+            required_verdict:
+              $ref: "#/$defs/identifier"
+      loop_only_successors:
+        type: array
+        maxItems: 256
+        items:
+          type: object
+          additionalProperties: false
+          required: [step, successor]
+          properties:
+            step:
+              $ref: "#/$defs/identifier"
+            successor:
+              $ref: "#/$defs/identifier"
+  dispatch:
+    type: object
+    additionalProperties: false
+    required: [step, slot, strategy_id, semantic_revision]
+    properties:
+      step:
+        $ref: "#/$defs/identifier"
+      slot:
+        $ref: "#/$defs/identifier"
+      strategy_id:
+        $ref: "#/$defs/identifier"
+      semantic_revision:
+        $ref: "#/$defs/revision"
+  policy:
+    type: object
+    additionalProperties: false
+    required: [step, identity, semantic_digest]
+    properties:
+      step:
+        $ref: "#/$defs/identifier"
+      identity:
+        $ref: "#/$defs/identifier"
+      semantic_digest:
+        description: >-
+          SHA-256 of the UTF-8 JSON string encoding of identity. The resolved-plan
+          codec verifies the digest before reconstructing policy references.
+        $ref: "#/$defs/digest"
+x-coherence-checks:
+  - name: encoded_byte_limit
+    description: The UTF-8 encoded artifact must not exceed 65536 bytes before parsing or writing.
+  - name: selected_strategy_and_step_limits
+    description: At most 32 strategies and 128 selected steps may be represented.
+  - name: traversal_edge_limits
+    description: Each traversal edge collection is limited to 256 entries.
+  - name: policy_identity_limit
+    description: At most 256 distinct step-policy, resume-interpretation, and effective-policy descriptors may be represented. Effective policy ids are unique.
+  - name: identifier_and_revision_limits
+    description: Identifiers use the declared ASCII token pattern and semantic revisions stay within the declared integer range.
+  - name: unique_ownership
+    description: Each selected step has exactly one strategy dispatch owner and one descriptor per policy family.
+  - name: references_resolve
+    description: Strategy entries, dispatch owners, policies, and traversal references resolve to selected steps.
+  - name: semantic_comparison
+    description: Object key order and nonsemantic metadata do not affect comparison; ordered steps, traversal, and command argv do.

@@ -10,6 +10,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
@@ -104,10 +105,11 @@ class PhaseStrategyLookup(
           }
           plan.qualityGateSelection?.let(::add)
         },
+        plan.stepLaunchAssignments,
       )
     return plan.selectedStrategies.all { identity ->
       selection.binds(identity.slot, recordedFacts) &&
-        selection.strategyIdFor(identity.slot, recordedFacts) == identity.strategyId
+        selection.specializedStrategyIdFor(identity.slot, recordedFacts, identity.steps) == identity.strategyId
     }
   }
 
@@ -123,6 +125,7 @@ class PhaseStrategyLookup(
           recorded.reviewSelection?.let { add(CodeReviewExecutionMode.valueOf(it.name)) }
           recorded.qualityGateSelection?.let(::add)
         },
+        recorded.stepLaunchAssignments,
       )
     val current = executionPlan(facts)
     return recorded.selectedStrategies.mapNotNull { identity ->
@@ -140,22 +143,44 @@ class PhaseStrategyLookup(
   }
 
   private fun resolve(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan {
+    val copied = facts.copy(values = facts.values.toSet(), stepAssignments = facts.copiedAssignments())
     val key =
       PlanKey(
-        facts.definition.id,
-        facts.definition.slots.map(PhaseSlot::wireValue),
-        facts.definition.stepIds.toList(),
-        facts.definition.runStateKind.wireValue,
-        facts.definition.intake.wireValue,
-        facts.definition.semanticRevision,
-        facts.values.map { "${it.javaClass.name}:${it.name}" }.sorted(),
+        copied.definition.id,
+        copied.definition.slots.map(PhaseSlot::wireValue),
+        copied.definition.stepIds.toList(),
+        copied.definition.runStateKind.wireValue,
+        copied.definition.intake.wireValue,
+        copied.definition.semanticRevision,
+        copied.values.map { "${it.javaClass.name}:${it.name}" }.sorted(),
+        copied.stepAssignments.map { (step, assignment) ->
+          listOf(
+            step,
+            assignment.agentId,
+            assignment.launch.requestedModel.orEmpty(),
+            assignment.launch.requestedEffort.orEmpty(),
+            assignment.launch.effectiveModel.orEmpty(),
+            assignment.launch.namespace.wireValue,
+            assignment.launch.provenance.wireValue,
+            assignment.launch.unknownReason?.wireValue.orEmpty(),
+            assignment.launch.profile.wireValue,
+          ).joinToString("\u0001")
+        }.sorted(),
       )
-    return plans.computeIfAbsent(key) { resolveUncached(facts.copy(values = facts.values.toSet())) }
+    return plans.computeIfAbsent(key) { resolveUncached(copied) }
   }
 
   private fun resolveUncached(facts: PhaseStrategySelectionFacts): ResolvedPhaseExecutionPlan {
-    val selected = facts.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, facts)) }
+    val canonical = facts.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, facts)) }
     val selectedSteps = linkedMapOf<String, PhaseStrategy>()
+    populateSelectedSteps(facts, canonical, selectedSteps)
+    val selected =
+      canonical.map { strategy ->
+        val participating = strategy.steps.filter { it in selectedSteps }
+        val specializedId = selection.specializedStrategyIdFor(strategy.slot, facts, participating)
+        registry.strategy(strategy.slot, specializedId)
+      }
+    selectedSteps.clear()
     populateSelectedSteps(facts, selected, selectedSteps)
     val entrySteps = selected.map { it.entryStep }.toSet()
     validateSelectedTraversalReferences(facts, selectedSteps.keys)
@@ -195,8 +220,12 @@ class PhaseStrategyLookup(
           selectedSteps.mapValues { (_, strategy) ->
             ResolvedPhaseStrategyDispatch(strategy.slot, strategy.strategyId, strategy.semanticRevision)
           },
-        stepPolicyIdentities = policies,
-        resumeInterpretationIdentities = resume,
+        stepRecords =
+          ResolvedPhaseStepRecords(
+            policies,
+            resume,
+            facts.stepAssignments.filterKeys { it in selectedSteps },
+          ),
       )
     return plan
   }
@@ -309,6 +338,7 @@ class PhaseStrategyLookup(
     val intake: String,
     val semanticRevision: Int,
     val facts: List<String>,
+    val assignments: List<String>,
   )
 
   private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)

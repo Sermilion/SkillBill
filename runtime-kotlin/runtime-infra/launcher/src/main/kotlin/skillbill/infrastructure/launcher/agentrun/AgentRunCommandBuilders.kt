@@ -11,6 +11,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
+import java.net.URI
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -118,16 +119,19 @@ internal fun goalContinuationEnvironment(request: SkillRunRequest): Map<String, 
 internal fun resolveClaudeModelDirective(
   directive: String?,
   providerEnvironment: Map<String, String>,
-): String? {
-  if (directive == null) return null
-  val endpoint = providerEnvironment["ANTHROPIC_BASE_URL"]
-  if (endpoint != null && !isOfficialAnthropicEndpoint(endpoint) && isAnthropicModelReference(directive)) {
-    return providerEnvironment["ANTHROPIC_MODEL"]?.takeIf(String::isNotBlank) ?: directive
-  }
-  return directive
+): String? = directive?.let { remapClaudeModel(it, providerEnvironment) }
+
+internal fun isOfficialAnthropicEndpoint(baseUrl: String): Boolean {
+  val host = anthropicEndpointHost(baseUrl) ?: return false
+  return host == "anthropic.com" || host.endsWith(".anthropic.com")
 }
 
-internal fun isOfficialAnthropicEndpoint(baseUrl: String): Boolean = baseUrl.contains("anthropic.com")
+private fun anthropicEndpointHost(baseUrl: String): String? {
+  val trimmed = baseUrl.trim()
+  if (trimmed.isEmpty()) return null
+  val candidate = if ("://" in trimmed) trimmed else "https://$trimmed"
+  return runCatching { URI(candidate).host }.getOrNull()?.lowercase()
+}
 
 internal val ANTHROPIC_MODEL_ALIASES = setOf("opus", "sonnet", "haiku")
 
@@ -161,7 +165,7 @@ internal class ClaudeAgentRunCommandBuilder(
 
           add(if (streaming) "stream-json" else "json")
           if (streaming) add("--verbose")
-          resolveClaudeModelDirective(request.modelOverride, providerEnvironment)?.let {
+          request.modelOverride?.let {
             add("--model")
             add(it)
           }

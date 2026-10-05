@@ -45,6 +45,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
+import skillbill.ports.taskruntime.model.implementationChecklistRelativePath
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -54,6 +55,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeH
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object PhaseLaunchPreparation {
@@ -397,6 +399,9 @@ object PhaseLaunchPreparation {
           session,
           run,
         )
+      val implementationContinuation =
+        FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run)
+      ImplementationChecklistLaunchPreparation.prepare(this, run, implementationContinuation)
       return FeatureTaskRuntimePhasePromptComposeInputs(
         issueKey = run.request.issueKey,
         briefing = briefing,
@@ -420,29 +425,37 @@ object PhaseLaunchPreparation {
         operatorBlockRetry =
           session.operatorBlockRetry
             ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
-        implementationContinuation =
-          FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run),
+        implementationContinuation = implementationContinuation,
         validationGateFindings = run.validationGateFindings,
         validationGateTriagePlan = run.validationGateTriagePlan,
         validationGateRepair = run.validationGateRepair,
         validationGateTriage = run.validationGateTriage,
         agentRunValidateFallback = run.agentRunValidateFallback,
-        packBuildCommand =
-          if (stepHooks(run).carriesPackBuildCommand) {
-            FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(checkpointArgs)
-          } else {
-            null
-          },
-        packCollectAllCommand =
-          if (stepHooks(run).carriesPackValidationCommand) {
-            FeatureTaskRuntimeRunLoopValidationScope.packCollectAllCommand(checkpointArgs)
-          } else {
-            null
-          },
+        packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
+        packCollectAllCommand = packCommand(run, checkpointArgs, carriesBuild = false),
         mutating = run.policy.mutating,
         singleAgentSession = run.policy.singleAgentSession,
         repoRoot = run.request.repoRoot,
+        stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
+        implementationChecklistAddress =
+          implementationChecklistRelativePath(run.request.workflowId)
+            .takeIf { run.request.workflowId.isNotBlank() },
       )
+    }
+  }
+
+  private fun PhaseAttemptLaunchPreparationContext.packCommand(
+    run: PhaseRun,
+    checkpointArgs: RepositoryCheckpointResolutionArgs,
+    carriesBuild: Boolean,
+  ): String? {
+    val hooks = stepHooks(run)
+    return when {
+      carriesBuild && hooks.carriesPackBuildCommand ->
+        FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(checkpointArgs)
+      !carriesBuild && hooks.carriesPackValidationCommand ->
+        FeatureTaskRuntimeRunLoopValidationScope.packCollectAllCommand(checkpointArgs)
+      else -> null
     }
   }
 }

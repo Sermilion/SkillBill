@@ -1,5 +1,61 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-05] Select Opus 5.5 from the resolved model
+Context: SKILL-403 needed a second strategy per slot for Opus 5.5. The slot skeleton still selects in code, and the operator input stays the existing model configuration.
+Decision: A participating step whose resolved profile is opus-5-5 selects that slot's Opus variant. Only steps with that recorded profile receive the Opus directive. An unselected step, including validate on a goal-child build plan, leaves the slot canonical.
+Reason: A manual strategy flag would diverge from the launched model. Specializing every step in the selected slot would change non-Opus repairs in the same plan.
+Alternatives considered: An operator toggle stays rejected, as in the 2026-09-26 slot-skeleton decision. Substring and agent-name matching were rejected because they are not the launched model.
+
+## [2026-10-05] Resume launches the recorded assignment
+Context: Current configuration can resolve a different model than the one admitted with the execution plan.
+Decision: Resume launches the recorded step assignment. Drift emits a diagnostics warning at seam execution_plan_resume, with expected and used set to the recorded assignment and current set to the fresh resolution. Refusal is limited to an unregistered strategy id or revision, or a record that fails validation, and it happens before workflow, parent, child, or lease mutation.
+Reason: Relaunching under today's config would change an admitted profile. Recording the drift keeps the plan immutable without treating every config edit as a hard failure.
+
+## [2026-10-05] Recognize only two exact Opus 5.5 identities
+Context: Provider names, aliases, and older Opus models must stay on the canonical strategies.
+Decision: The classifier returns opus-5-5 only for claude-opus-5-5 under anthropic_api, google, or claude_platform_aws, and for anthropic.claude-opus-5-5 under bedrock. opus, opusplan, claude-opus-5, claude-opus-4-6, regional prefixes, and substrings stay canonical.
+Reason: The directive text applies to that model generation. A requested Opus id remapped to another model, such as deepseek-v4-flash, stays canonical because the effective model is what launches.
+
+## [2026-10-05] Pin the opus alias only from an inherited environment
+Context: The alias opus is not an Opus 5.5 identity. Claude Code can pin it with ANTHROPIC_DEFAULT_OPUS_MODEL.
+Decision: The alias qualifies only when the launch inherits the process environment and that variable is an exact recognized Opus 5.5 id. Provenance is alias_pinned_by_environment, and the builder passes that exact id. Governed review and goal-child launches resolve as unknown with environment_not_inherited. The Claude provider passthrough key set stays as it is.
+Reason: An unpinned alias, or a pin the child process will not see, would attach Opus 5.5 directives to a launch that does not run that model.
+
+## [2026-10-05] Treat flag-free Claude launches as unknown
+Context: A launch with no model flag can still be changed by ANTHROPIC_MODEL, settings, or availableModels outside the adapter.
+Decision: A Claude launch with no requested model resolves as unknown with flag_free_default and stays canonical, even when ANTHROPIC_MODEL is set. Explicit effort is still recorded.
+Reason: The adapter cannot see which of those sources wins, so treating the environment variable as the launched model would select the wrong profile.
+
+## [2026-10-05] Keep execution-plan 0.1 canonical when reading it
+Context: Contract 0.2 adds immutable step_launch_assignments. Admitted 0.1 plans have no profile fields.
+Decision: New plans use contract 0.2. A validated 0.1 reader admits those records as canonical with no assignments and leaves them at 0.1. Unsupported or contradictory records refuse before workflow, parent, child, or lease mutation. Plan cache identity copies the assignments, so mutating the caller map cannot reuse another plan.
+Reason: A missing profile means the run was admitted on the canonical strategies. Rewriting old plans to specialize them would change an accepted strategy.
+
+## [2026-10-05] Keep runtime commit canonical and agent-free
+Context: The other participating slots gained an Opus 5.5 variant. Commit still stages, commits, and pushes in process.
+Decision: RuntimeCommitStrategy keeps its existing id and a fixed canonical binding. There is no Opus commit variant and no agent launch.
+Reason: Commit has no model to classify. A profile wrapper would imply an agent session the slot does not run.
+
+## [2026-10-05] Keep the implementation checklist out of workflow state
+Context: Implement and simplify need a resumable private task list, and the repository must not gain a committed TASKS.md.
+Decision: The address is .skill-bill/feature-task-tracking/<path segment>/checklist.md. Prepare seeds it from the accepted plan and implementation continuation. The agent may tick boxes. The runtime never reads ticks as completion. Missing, corrupt, or unwritable files degrade tracking and leave workflow state unchanged. Checkpoint scope excludes the checklist and still tracks config.yaml.
+Reason: The checklist is a projection. Reading ticks as completion would let a private file advance the accepted plan.
+
+## [2026-10-05] Meet checkpoint recovery from the recorded plan
+Context: The spec named CheckpointCommitRepair for recovery launches. That file is absent from this checkout, and no recovery agent launch exists here.
+Decision: Recorded step assignments stay on the admitted plan, which satisfies the recovery clause for this checkout. A later repair launch must use that recorded assignment.
+Reason: Re-resolving the model after a config change would drop the admitted profile. Copying the absent repair file into this checkout was out of scope.
+
+## [2026-10-05] Fall back to the request model when a step assignment is absent
+Context: Launch prefers the recorded effective model. Some steps have no recorded assignment.
+Decision: With no recorded launch assignment, launch uses the request model directive and its effort. A recorded assignment wins when present.
+Reason: Ignoring the request directive on a missing assignment would drop an explicit per-phase model and effort.
+
+## [2026-10-05] Resolve a goal child's models from the parent matrix
+Context: The child continuation command does not forward per-phase model flags, so an empty child assignment would ignore a parent matrix that names Opus 5.5.
+Decision: Goal run intake copies the resolved execution matrix onto the run request. Goal-child plan creation classifies that assignment with governed-child environment, so an opus alias pin is not inherited.
+Reason: Admission has to match the model the child CLI reproduces. Resolving the matrix at intake keeps that match. Governed-child environment still blocks a pin the child process will not see.
+
 ## [2026-10-05] SKILL-401: retain throwing config and settings edges
 Context: Config-read catches used defect exceptions to handle expected input rejection. The spec also requires unchanged edge exception classification, messages and persisted bytes.
 Decision: Return sealed config and settings outcomes internally, while retaining throwing read, ensure and load wrappers. Non-throwing parsers and their throwing forms use the same reason helpers.

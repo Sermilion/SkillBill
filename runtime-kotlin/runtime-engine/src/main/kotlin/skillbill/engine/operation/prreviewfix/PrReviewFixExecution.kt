@@ -1,5 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.operation.core.OperationContext
@@ -22,6 +23,7 @@ internal class PrReviewFixExecution(
   private val reviewThreads: PullRequestReviewThreadOperations,
   private val gitOperations: WorkflowGitOperations,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
+  private val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
   private val fixes = mutableListOf<ThreadFix>()
 
@@ -29,7 +31,12 @@ internal class PrReviewFixExecution(
     applySelectedFixes()?.let { return it }
     val agentId = requireNotNull(context.invokedAgentId)
     val gate =
-      when (val validation = runPhase(PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId))) {
+      when (
+        val validation =
+          runPhase(
+            PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId, modelAssignment = modelAssignment),
+          )
+      ) {
         is PhaseRunResult.Blocked ->
           return stopped(
             "validation (${validation.invocationId}) blocked at '${validation.stepId}': ${validation.reason}",

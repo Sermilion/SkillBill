@@ -41,10 +41,10 @@ internal class ChecklistOperationHarness : AutoCloseable {
         listOf(
           UnitTestValueCheckOperation(git),
           FeatureGuardOperation(),
-          FeatureGuardCleanupOperation { request ->
+          FeatureGuardCleanupOperation({ request ->
             validations += request
             PhaseRunResult.Completed("phr-validation", listOf("validation"), null, VALIDATION_VALUE)
-          },
+          }),
         ),
       ),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),

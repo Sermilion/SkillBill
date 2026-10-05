@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
@@ -34,6 +35,7 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
@@ -112,7 +114,7 @@ internal object InlineReviewPass : CodeReviewPass {
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
   ): ParallelCodeReviewRunOutcome {
-    val directive =
+    val composed =
       InlineReviewDirective.compose(
         target = run.reviewTarget,
         baseRevision = input.reviewBaseSha,
@@ -120,6 +122,12 @@ internal object InlineReviewPass : CodeReviewPass {
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
+    val directive =
+      if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
+        "$composed\n\n${InlineReviewOpus55Strategy.DIRECTIVE}"
+      } else {
+        composed
+      }
     val output = runner.run(reviewStepInput(run, directive), state.launchState)
     return ParallelCodeReviewRunOutcome.Reviewed(
       InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)

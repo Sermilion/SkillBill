@@ -35,8 +35,7 @@ class ResolvedPhaseExecutionPlanImmutabilityTest {
         qualityGateSelection = null,
         traversal = FeatureTaskRuntimeTransitionDeclaration(forward, edges, loopOnly, gates, successors),
         dispatchStrategyByStep = dispatch,
-        stepPolicyIdentities = policies,
-        resumeInterpretationIdentities = resumes,
+        stepRecords = ResolvedPhaseStepRecords(policies, resumes),
       )
 
     steps.clear()

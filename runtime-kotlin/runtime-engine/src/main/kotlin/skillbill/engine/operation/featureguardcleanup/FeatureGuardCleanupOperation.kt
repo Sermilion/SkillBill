@@ -1,5 +1,6 @@
 package skillbill.engine.operation.featureguardcleanup
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.operation.core.ConfirmableOperation
@@ -16,7 +17,14 @@ import skillbill.engine.operation.core.proposeFromStep
 
 class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
+  private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
 ) : ConfirmableOperation {
+  constructor(
+    runPhase: (PhaseRunRequest) -> PhaseRunResult,
+    modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  ) : this(runPhase, { modelAssignment })
+
+  private val modelAssignment: FeatureTaskRuntimeModelAssignment by lazy(modelAssignmentSource)
   override val id: String = "feature-guard-cleanup"
 
   override fun pre(context: OperationContext): OperationRefusal? =
@@ -54,7 +62,12 @@ class FeatureGuardCleanupOperation(
         is OperationStepResult.Settled -> step.value.trimEnd()
       }
     val agentId = requireNotNull(context.invokedAgentId)
-    return when (val validation = runPhase(PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId))) {
+    return when (
+      val validation =
+        runPhase(
+          PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId, modelAssignment = modelAssignment),
+        )
+    ) {
       is PhaseRunResult.Completed ->
         OperationOutcome.Completed(
           "$applied\n\nValidation passed (${validation.invocationId}).\n${validation.value.orEmpty().trimEnd()}\n",

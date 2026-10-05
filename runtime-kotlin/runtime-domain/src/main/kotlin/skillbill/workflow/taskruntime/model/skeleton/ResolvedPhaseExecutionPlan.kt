@@ -1,5 +1,6 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.util.Collections
 
@@ -55,6 +56,17 @@ data class ResolvedPhaseStrategyDispatch(
   }
 }
 
+class ResolvedPhaseStepRecords(
+  policyIdentities: Map<String, String>,
+  resumeInterpretationIdentities: Map<String, String>,
+  launchAssignments: Map<String, StepLaunchAssignment> = emptyMap(),
+) {
+  val policyIdentities: Map<String, String> = Collections.unmodifiableMap(LinkedHashMap(policyIdentities))
+  val resumeInterpretationIdentities: Map<String, String> =
+    Collections.unmodifiableMap(LinkedHashMap(resumeInterpretationIdentities))
+  val launchAssignments: Map<String, StepLaunchAssignment> = immutableStepLaunchAssignments(launchAssignments)
+}
+
 class ResolvedPhaseExecutionPlan(
   val definitionId: String,
   val definitionSemanticRevision: Int,
@@ -63,11 +75,14 @@ class ResolvedPhaseExecutionPlan(
   val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection?,
   traversal: FeatureTaskRuntimeTransitionDeclaration,
   dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch>,
-  stepPolicyIdentities: Map<String, String>,
-  resumeInterpretationIdentities: Map<String, String>,
+  stepRecords: ResolvedPhaseStepRecords,
   effectivePolicies: List<ResolvedExecutionPolicy> = emptyList(),
   val effectivePolicySettings: ResolvedFeatureTaskRuntimeExecutionSettings? = null,
+  val contractVersion: String = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
 ) {
+  val stepPolicyIdentities: Map<String, String> = stepRecords.policyIdentities
+  val resumeInterpretationIdentities: Map<String, String> = stepRecords.resumeInterpretationIdentities
+  val stepLaunchAssignments: Map<String, StepLaunchAssignment> = stepRecords.launchAssignments
   val effectivePolicies: List<ResolvedExecutionPolicy> = immutableList(effectivePolicies.sortedBy { it.id })
   val selectedStrategies: List<ResolvedPhaseStrategyIdentity> =
     Collections.unmodifiableList(selectedStrategies.map { it.copy(steps = immutableList(it.steps)) })
@@ -76,8 +91,6 @@ class ResolvedPhaseExecutionPlan(
   val selectedEntryStepIds: Set<String> =
     Collections.unmodifiableSet(this.selectedStrategies.mapTo(linkedSetOf(), ResolvedPhaseStrategyIdentity::entryStep))
   val dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch> = immutableMap(dispatchStrategyByStep)
-  val stepPolicyIdentities: Map<String, String> = immutableMap(stepPolicyIdentities)
-  val resumeInterpretationIdentities: Map<String, String> = immutableMap(resumeInterpretationIdentities)
   val selectedStepIds: Set<String> = Collections.unmodifiableSet(this.dispatchStrategyByStep.keys.toSet())
   val unselectedStepIds: Set<String> =
     Collections.unmodifiableSet(
@@ -101,17 +114,23 @@ class ResolvedPhaseExecutionPlan(
       qualityGateSelection = qualityGateSelection,
       traversal = value,
       dispatchStrategyByStep = dispatchStrategyByStep,
-      stepPolicyIdentities = stepPolicyIdentities,
-      resumeInterpretationIdentities = resumeInterpretationIdentities,
+      stepRecords =
+        ResolvedPhaseStepRecords(
+          stepPolicyIdentities,
+          resumeInterpretationIdentities,
+          stepLaunchAssignments,
+        ),
       effectivePolicies = effectivePolicies,
       effectivePolicySettings = effectivePolicySettings,
+      contractVersion = contractVersion,
     )
 
   fun withEffectivePolicies(value: List<ResolvedExecutionPolicy>): ResolvedPhaseExecutionPlan =
     ResolvedPhaseExecutionPlan(
       definitionId, definitionSemanticRevision, selectedStrategies, reviewSelection, qualityGateSelection,
-      traversal, dispatchStrategyByStep, stepPolicyIdentities, resumeInterpretationIdentities, value,
-      effectivePolicySettings,
+      traversal, dispatchStrategyByStep,
+      ResolvedPhaseStepRecords(stepPolicyIdentities, resumeInterpretationIdentities, stepLaunchAssignments),
+      value, effectivePolicySettings, contractVersion,
     )
 
   init {
@@ -140,6 +159,7 @@ class ResolvedPhaseExecutionPlan(
     require(this.dispatchStrategyByStep.keys == this.resumeInterpretationIdentities.keys)
     require(this.stepPolicyIdentities.values.all(String::isNotBlank))
     require(this.resumeInterpretationIdentities.values.all(String::isNotBlank))
+    require(this.stepLaunchAssignments.keys.all { it in this.dispatchStrategyByStep.keys })
     require(this.traversal.entryGates.all { it.phaseId in selectedStepIds && it.requiredPhaseId in selectedStepIds })
     require(
       this.traversal.backwardEdges.all {

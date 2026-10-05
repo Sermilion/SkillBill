@@ -15,6 +15,7 @@ import skillbill.error.shellcontent.missingValidationGate
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -25,6 +26,7 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -38,6 +40,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
   private val config: RepoLocalConfigPort,
   private val database: DatabaseSessionFactory,
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun resolveCreation(
     request: FeatureTaskRuntimeExecutionPlanCreationRequest,
@@ -61,7 +64,15 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       requireBuildGate(resolveRecordedInputs(repoRoot, plan), recorded = true)
       return ValidatedFeatureTaskRuntimeExecutionPlan.read(requireNotNull(recorded), validator)
     }
-    val plan = strategies.executionPlan(PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate)))
+    val plan =
+      strategies.executionPlan(
+        PhaseStrategySelectionFacts(
+          definition,
+          setOfNotNull(reviewMode, qualityGate),
+          request.stepLaunchAssignments,
+        ),
+      )
+    recordSelectedStrategies(plan)
     val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
     requireBuildGate(inputs, recorded = false)
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
@@ -156,6 +167,37 @@ class FeatureTaskRuntimeExecutionPlanResolver(
         " Repair pack routing or its build commands before creating the workflow."
       }
     throw missingValidationGate("$source build gate pack '$pack' has no complete build command pair.$recovery")
+  }
+
+  private fun recordSelectedStrategies(plan: ResolvedPhaseExecutionPlan) {
+    plan.selectedStrategies.forEach { identity ->
+      val participating = identity.steps.mapNotNull(plan.stepLaunchAssignments::get)
+      val unknownReasons = participating.mapNotNull { it.launch.unknownReason }
+      val profiles = participating.map { it.profile.wireValue }.distinct().joinToString(",")
+      val requested =
+        participating.mapNotNull { assignment ->
+          assignment.launch.requestedModel?.let(::boundedSafeModelIdentity)
+        }.distinct().joinToString(",")
+      val effective =
+        participating.mapNotNull { assignment ->
+          assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity)
+        }.distinct().joinToString(",")
+      val provenance = participating.map { it.launch.provenance.wireValue }.distinct().joinToString(",")
+      val reason = unknownReasons.map { it.wireValue }.distinct().joinToString(",")
+      val detail =
+        "slot=${identity.slot.wireValue} strategyId=${identity.strategyId} " +
+          "semanticRevision=${identity.semanticRevision} profiles=${profiles.ifBlank { "none" }} " +
+          "requested=${requested.ifBlank { "none" }} effective=${effective.ifBlank { "none" }} " +
+          "provenance=${provenance.ifBlank { "none" }} unknownReason=${reason.ifBlank { "none" }}"
+      if (unknownReasons.isEmpty()) {
+        diagnostics.info("launch strategy selected: $detail")
+      } else {
+        diagnostics.warning(
+          "seam=launch_model_resolution value_expected=resolved value_used=${reason.ifBlank { "none" }} " +
+            "model=${effective.ifBlank { requested }.ifBlank { "none" }} $detail",
+        )
+      }
+    }
   }
 
   private fun recordedPlan(workflowId: String): ResolvedPhaseExecutionPlan =

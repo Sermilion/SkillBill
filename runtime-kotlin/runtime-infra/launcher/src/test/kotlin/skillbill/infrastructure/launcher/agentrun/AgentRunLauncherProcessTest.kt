@@ -9,6 +9,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.test.Test
@@ -24,7 +25,13 @@ class AgentRunLauncherProcessTest {
     val runner = RecordingAgentRunProcessRunner()
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
 
-    requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CLAUDE]).launch(request)
+    requireNotNull(
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+      )[SupportedAgent.CLAUDE],
+    ).launch(request)
 
     val captured = runner.requests.single()
     assertEquals("claude", captured.launch.command[0])
@@ -38,7 +45,13 @@ class AgentRunLauncherProcessTest {
     val runner = RecordingAgentRunProcessRunner()
     val request = skillRunRequest(goalContinuation = null).copy(promptOverride = AGENT_RUN_LAUNCHER_PHASE_PROMPT)
 
-    requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.JUNIE]).launch(request)
+    requireNotNull(
+      headlessAgentRunAdapters(
+        runner,
+        ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
+      )[SupportedAgent.JUNIE],
+    ).launch(request)
 
     val captured = runner.requests.single()
     assertEquals("junie", captured.launch.command.first())
@@ -51,6 +64,7 @@ class AgentRunLauncherProcessTest {
       FileSystemAgentRunLauncher(
         JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()),
         ALL_EXECUTABLES_AVAILABLE,
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     assertFailsWith<IllegalArgumentException> {
@@ -79,7 +93,11 @@ class AgentRunLauncherProcessTest {
       )
     val timeout =
       requireNotNull(
-        headlessAgentRunAdapters(timeoutRunner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX],
+        headlessAgentRunAdapters(
+          timeoutRunner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+        )[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.TimedOut, timeout.termination)
 
@@ -97,7 +115,11 @@ class AgentRunLauncherProcessTest {
       )
     val spawnFailure =
       requireNotNull(
-        headlessAgentRunAdapters(spawnRunner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX],
+        headlessAgentRunAdapters(
+          spawnRunner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+        )[SupportedAgent.CODEX],
       ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.SpawnFailed, spawnFailure.termination)
     assertEquals("missing executable", spawnFailure.stderr)
@@ -121,7 +143,13 @@ class AgentRunLauncherProcessTest {
       )
 
     val facts =
-      requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX])
+      requireNotNull(
+        headlessAgentRunAdapters(
+          runner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+        )[SupportedAgent.CODEX],
+      )
         .launchFacts(skillRunRequest())
 
     assertEquals(rawBytes.size.toLong(), facts.stdoutByteSize)
@@ -145,7 +173,13 @@ class AgentRunLauncherProcessTest {
       )
 
     val facts =
-      requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CLAUDE])
+      requireNotNull(
+        headlessAgentRunAdapters(
+          runner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+        )[SupportedAgent.CLAUDE],
+      )
         .launchFacts(skillRunRequest())
 
     assertEquals("""{"status":"blocked"}""", facts.stdout)
@@ -156,7 +190,14 @@ class AgentRunLauncherProcessTest {
   @Test
   fun `adapter invokes process runner once per launch`() {
     val runner = RecordingAgentRunProcessRunner()
-    val adapter = requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX])
+    val adapter =
+      requireNotNull(
+        headlessAgentRunAdapters(
+          runner,
+          ALL_EXECUTABLES_AVAILABLE,
+          diagnostics = NoopRuntimeDiagnostics,
+        )[SupportedAgent.CODEX],
+      )
 
     adapter.launch(
       skillRunRequest(issueKey = "SKILL-56", goalContinuation = null)

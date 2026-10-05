@@ -1,3 +1,15 @@
+## [2026-10-05] SKILL-403 automatic Opus 5.5 slot selection
+Areas: runtime-domain launch facts; runtime-engine featuretask slots, execution plans, run loop, and goal-child prepare; runtime-ports agent launch and checklist; runtime-infra launcher and workflow; runtime-core slot registration; runtime-contracts and orchestration execution-plan 0.2; docs
+- Existing model configuration selects Opus 5.5. Fourteen slot variants compose the canonical strategies and append a directive resource only on steps whose recorded profile is opus-5-5. Runtime commit stays canonical and launches no agent.
+- The classifier accepts only claude-opus-5-5 for anthropic_api, google, and claude_platform_aws, and anthropic.claude-opus-5-5 for bedrock. Unpinned aliases, older models, substrings, and remapped models stay canonical.
+- Contract 0.2 stores immutable step_launch_assignments. A 0.1 reader keeps admitted canonical behavior and leaves those plans unchanged. Plan cache identity copies the assignments.
+- Launch uses the recorded effective model, or the request model when a step has no assignment. The adapter owns remap, environment-pinned opus, and flag-free unknown. Claude modelUsage keys are bounded reported identities and do not reselect the strategy. Codex, Cursor, and Junie report unsupported_agent.
+- Implement and simplify prepare a private checklist at .skill-bill/feature-task-tracking/<path segment>/checklist.md. Ticks are not completion. Goal intake resolves the execution matrix for child plans under governed-child environment.
+- reusable: canonical strategy composition, per-step directive resources, the checklist store, the 0.1 historical reader, and docs/model-specific-phase-strategies.md.
+- Limits: reported identity cannot see a provider-hidden model change. Governed children do not inherit an opus alias pin. Audit and review variants sit in an opus subpackage so package sibling ceilings hold.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-10-05] SKILL-401 subtask 4: config and telemetry reads
 Areas: runtime-application config and telemetry; runtime-domain telemetry; runtime-ports telemetry; runtime-infra/host config storage; runtime-infra/skills external sources and install; runtime-core and runtime-engine caller fixtures
 - Config reads return Absent, Malformed or Present. Machine-config and external pack/add-on consumers map malformed results to their existing error messages; external pack paths catch only InvalidPathException.

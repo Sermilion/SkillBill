@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.specSource
+import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
@@ -77,16 +78,12 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       phaseId = phaseId,
       declaration = phaseDeclarationForRun(context, request, phaseId),
       resolvedAgent = resolvedAgent,
-      modelDirective =
-        FeatureTaskRuntimeModelResolver.resolve(
-          phaseId,
-          resolvedAgent.resolvedAgentId,
-          request.modelAssignment,
-        ),
+      modelDirective = recordedModelDirective(context, phaseId, resolvedAgent.resolvedAgentId),
       compaction = request.compactionSettings.directiveFor(phaseId),
       request = request,
       specSource = context.specSource,
       policy = context.acceptedStepPolicy(phaseId),
+      launchAssignment = context.runState.stepLaunchAssignment(phaseId),
     )
   }
 
@@ -141,18 +138,26 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       phaseId = phaseId,
       declaration = phaseDeclarationForRun(context, request, phaseId),
       resolvedAgent = resolvedAgent,
-      modelDirective =
-        FeatureTaskRuntimeModelResolver.resolve(
-          phaseId,
-          resolvedAgent.resolvedAgentId,
-          request.modelAssignment,
-        ),
+      modelDirective = recordedModelDirective(context, phaseId, resolvedAgent.resolvedAgentId),
       compaction = request.compactionSettings.directiveFor(phaseId),
       request = request,
       specSource = specSource,
       policy = context.acceptedStepPolicy(phaseId),
+      launchAssignment = context.runState.stepLaunchAssignment(phaseId),
       reentry = reentry,
     )
+  }
+
+  private fun recordedModelDirective(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    resolvedAgentId: String,
+  ): PhaseModelDirective? {
+    val assignment = context.runState.stepLaunchAssignment(phaseId)
+    val recordedModel = assignment?.launch?.effectiveModel
+    if (recordedModel != null) return PhaseModelDirective(recordedModel, assignment.launch.requestedEffort)
+    if (assignment != null) return null
+    return FeatureTaskRuntimeModelResolver.resolve(phaseId, resolvedAgentId, context.request.modelAssignment)
   }
 
   internal fun runPreparedPhase(

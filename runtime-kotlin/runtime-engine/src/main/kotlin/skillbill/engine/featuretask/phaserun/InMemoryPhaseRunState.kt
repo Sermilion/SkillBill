@@ -36,6 +36,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -55,6 +56,7 @@ internal class InMemoryPhaseRunState(
   override val clock: Clock,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
+  override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override val diagnostics get() = telemetry.diagnostics
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
@@ -83,6 +85,8 @@ internal class InMemoryPhaseRunState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
+
+  override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
     require(run.request === facts)

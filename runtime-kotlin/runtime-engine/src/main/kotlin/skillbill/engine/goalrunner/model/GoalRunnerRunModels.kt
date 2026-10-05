@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.model
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -23,6 +24,7 @@ data class GoalRunnerRunRequest(
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val stopAfterSubtaskId: Int? = null,
   val intake: String? = null,
+  val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

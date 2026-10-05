@@ -53,6 +53,7 @@ internal object ImplementationPromptSections {
       authoringDiscipline = projectAuthoringDisciplineDirective(),
       testValueDiscipline = true,
       continuation = continuationFor(stepId, inputs, SegmentKind.IMPLEMENTATION),
+      stepContext = checklistGuidance(inputs, reconcile = true),
     )
 
   fun simplify(
@@ -64,7 +65,24 @@ internal object ImplementationPromptSections {
       authoringDiscipline = projectAuthoringDisciplineDirective(),
       scopeBoundary = SIMPLIFY_SCOPE_BOUNDARY,
       continuation = continuationFor(stepId, inputs, SegmentKind.SIMPLIFICATION),
+      stepContext = checklistGuidance(inputs, reconcile = false),
     )
+
+  private fun checklistGuidance(
+    inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+    reconcile: Boolean,
+  ): String {
+    val address =
+      inputs.implementationChecklistAddress
+        ?: return ""
+    val action =
+      if (reconcile) {
+        "Seed or tick boxes at `$address`. Ticks are a private projection; they never mark workflow tasks complete."
+      } else {
+        "Read `$address` and reconcile ticks with remaining work. Do not treat ticks as completion."
+      }
+    return "## Runtime-private checklist\n$action"
+  }
 
   private fun continuationFor(
     stepId: String,

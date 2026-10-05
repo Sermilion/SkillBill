@@ -6,8 +6,11 @@ import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -107,6 +110,9 @@ class CliPhasePlanRuntimeTest {
     private val repoRoot: Path,
   ) : AgentRunLauncher {
     val phaseIds = mutableListOf<String>()
+
+    override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+      passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
       val phaseId =

@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -46,7 +46,7 @@ class FeatureTaskRuntimeExecutionPlanCodec(
     validator.canonicalize(
       JsonCodec.mapToJsonString(
         linkedMapOf(
-          Keys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+          Keys.CONTRACT_VERSION to plan.contractVersion,
           Keys.DEFINITION to
             mapOf(
               Keys.ID to plan.definitionId,
@@ -85,6 +85,9 @@ class FeatureTaskRuntimeExecutionPlanCodec(
               )
             },
         ).apply {
+          if (plan.contractVersion != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION) {
+            put(Keys.STEP_LAUNCH_ASSIGNMENTS, encodeAssignments(plan))
+          }
           (
             effectiveInputs?.let {
               ResolvedFeatureTaskRuntimeExecutionSettings(it.validationDepth, it.phaseTimeoutMillis)
@@ -120,6 +123,23 @@ class FeatureTaskRuntimeExecutionPlanCodec(
   private fun encodePolicies(policies: Map<String, String>): List<Map<String, Any?>> =
     policies.map { (step, identity) ->
       mapOf(Keys.STEP to step, Keys.IDENTITY to identity, Keys.SEMANTIC_DIGEST to executionPolicyDigest(identity))
+    }
+
+  private fun encodeAssignments(plan: ResolvedPhaseExecutionPlan): List<Map<String, Any?>> =
+    plan.traversal.forwardPhaseIds.mapNotNull { stepId ->
+      val assignment = plan.stepLaunchAssignments[stepId] ?: return@mapNotNull null
+      linkedMapOf<String, Any?>(
+        Keys.STEP_ID to assignment.stepId,
+        Keys.AGENT_ID to assignment.agentId,
+        Keys.PROVIDER_NAMESPACE to assignment.launch.namespace.wireValue,
+        Keys.PROVENANCE to assignment.launch.provenance.wireValue,
+        Keys.PROFILE to assignment.launch.profile.wireValue,
+      ).apply {
+        assignment.launch.requestedModel?.let { put(Keys.REQUESTED_MODEL, it) }
+        assignment.launch.requestedEffort?.let { put(Keys.REQUESTED_EFFORT, it) }
+        assignment.launch.effectiveModel?.let { put(Keys.EFFECTIVE_MODEL, it) }
+        assignment.launch.unknownReason?.let { put(Keys.UNKNOWN_REASON, it.wireValue) }
+      }
     }
 
   private companion object {

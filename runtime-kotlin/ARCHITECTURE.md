@@ -1217,11 +1217,13 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   owner's runner after required persistence. The transition owner coordinates progress, session,
   evidence, retry and checkpoint state, with durable acknowledgement before in-memory advancement.
 - Execution lookup requires membership in `ResolvedPhaseExecutionPlan` and
-  checks the selected strategy revision, step policy identity, and resume
+  checks the   selected strategy revision, step policy identity, and resume
   interpretation identity before returning a strategy. Durable run state reads
   traversal from that same plan. `PhaseStrategyLookup.resumeRules(plan)` uses
   selected strategy rules for execution and the explicit revision-one history
-  policy for unselected records.
+  policy for unselected records. Model-specific variants, including Opus 5.5,
+  register through the same composition root and selection bindings. See
+  [Authoring model-specific phase strategies](../docs/model-specific-phase-strategies.md).
 - `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
   artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
   immutable domain data and checks policy digests. It does not select strategies

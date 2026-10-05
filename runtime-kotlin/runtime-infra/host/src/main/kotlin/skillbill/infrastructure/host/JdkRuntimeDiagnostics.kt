@@ -16,6 +16,10 @@ class JdkRuntimeDiagnostics : RuntimeDiagnostics {
     log(Level.WARNING, message, error)
   }
 
+  override fun info(message: String) {
+    log(Level.INFO, message, null)
+  }
+
   override fun error(
     message: String,
     error: Throwable?,

@@ -66,7 +66,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
             routedManifests = initial.detection.routed,
             budget = initial.budget,
             request = request,
-            modelOverride = null,
+            modelOverride = request.modelOverride,
           ),
         )
       }
@@ -87,6 +87,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
             args.routedManifests,
             args.agentId,
             args.request.reportContract,
+            args.request.directiveSuffix,
           ),
         bundleState = parallelCodeReviewAggregateBundleCompletion(bundleStates),
       )

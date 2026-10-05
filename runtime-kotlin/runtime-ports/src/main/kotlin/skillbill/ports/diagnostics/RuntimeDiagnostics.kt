@@ -10,4 +10,7 @@ interface RuntimeDiagnostics {
     message: String,
     error: Throwable? = null,
   )
+
+  fun info(message: String) {
+  }
 }

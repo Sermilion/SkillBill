@@ -12,12 +12,16 @@ internal object ParallelCodeReviewRunnerParentPrompt {
     routedManifests: List<PlatformManifest>,
     agentId: String,
     reportContract: ParallelCodeReviewReportContract = ParallelCodeReviewReportContract.DEFAULT,
-  ): String =
-    if (reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
-      buildStandalone(selected, routedManifests, agentId)
-    } else {
-      buildDefault(selected, routedManifests, agentId)
-    }
+    directiveSuffix: String = "",
+  ): String {
+    val body =
+      if (reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+        buildStandalone(selected, routedManifests, agentId)
+      } else {
+        buildDefault(selected, routedManifests, agentId)
+      }
+    return if (directiveSuffix.isBlank()) body else body.trimEnd() + "\n\n" + directiveSuffix.trimEnd()
+  }
 
   private fun buildDefault(
     selected: List<ReviewSpecialistLaunchRequest>,

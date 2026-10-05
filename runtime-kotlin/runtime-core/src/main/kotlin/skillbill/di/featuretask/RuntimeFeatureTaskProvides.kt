@@ -6,12 +6,14 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.sqlite.SqliteFeatureTaskPhaseSettlementRepository
+import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeSpecStatusWriter
 import skillbill.infrastructure.workflow.filesystem.FileSystemCheckedOutBranchSource
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -43,4 +45,9 @@ internal interface RuntimeFeatureTaskProvides {
   fun featureTaskRuntimeReadinessEvidencePort(
     recorder: FeatureTaskRuntimePhaseRecorder,
   ): FeatureTaskRuntimeReadinessEvidencePort = recorder
+
+  @Provides
+  fun featureTaskImplementationChecklistStore(
+    adapter: FileSystemFeatureTaskImplementationChecklistStore,
+  ): FeatureTaskImplementationChecklistStore = adapter
 }

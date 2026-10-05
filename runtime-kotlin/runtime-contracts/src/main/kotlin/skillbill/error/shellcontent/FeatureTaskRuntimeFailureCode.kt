@@ -22,6 +22,9 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   FEATURE_TASK_RUNTIME_CONTRACT_REJECTED,
+  MALFORMED_STEP_LAUNCH_ASSIGNMENT,
+  INCOHERENT_STEP_LAUNCH_ASSIGNMENTS,
+  UNSUPPORTED_EXECUTION_PLAN_VERSION,
 }
 
 fun invalidFeatureTaskRuntimeRepairReceipt(
@@ -226,6 +229,37 @@ fun invalidFeatureTaskRuntimeHandoffProjection(
       "for consumer phase '${context.consumerPhaseId.ifBlank { "<unknown>" }}' " +
       "in workflow '${context.workflowId?.ifBlank { null } ?: "<unknown>"}' " +
       "was rejected [${context.failureKind}]: ${context.reason}",
+    cause,
+  )
+
+fun malformedStepLaunchAssignment(
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.MALFORMED_STEP_LAUNCH_ASSIGNMENT,
+    "Feature-task-runtime execution plan step launch assignment is malformed: $reason",
+    cause,
+  )
+
+fun incoherentStepLaunchAssignments(
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS,
+    "Feature-task-runtime execution plan step launch assignments are incoherent: $reason",
+    cause,
+  )
+
+fun unsupportedExecutionPlanVersion(
+  actualContractVersion: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.UNSUPPORTED_EXECUTION_PLAN_VERSION,
+    "Feature-task-runtime execution plan uses unsupported contract version " +
+      "'${actualContractVersion.ifBlank { "<absent>" }}'.",
     cause,
   )
 

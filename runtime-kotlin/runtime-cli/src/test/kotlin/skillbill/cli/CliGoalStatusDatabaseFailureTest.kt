@@ -2,8 +2,11 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -149,5 +152,8 @@ class CliGoalStatusDatabaseFailureTest {
 private const val MAX_BOUNDED_REASON_CHARS = 240
 
 private object UnusedStatusAgentRunLauncher : AgentRunLauncher {
+  override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+    passThroughResolvedLaunchModel(request)
+
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome = error("Unexpected launch")
 }

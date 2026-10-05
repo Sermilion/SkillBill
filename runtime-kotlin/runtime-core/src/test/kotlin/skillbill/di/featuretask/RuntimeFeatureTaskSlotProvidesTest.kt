@@ -10,13 +10,20 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
+import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.model.EnvironmentContext
@@ -52,7 +59,14 @@ class RuntimeFeatureTaskSlotProvidesTest {
     val registered = strategies.registry.strategies
 
     assertEquals(
-      listOf(PackBuildStrategy.ID, PackValidationStrategy.ID, AgentValidateStrategy.ID),
+      listOf(
+        PackBuildStrategy.ID,
+        PackBuildOpus55Strategy.ID,
+        PackValidationStrategy.ID,
+        PackValidationOpus55Strategy.ID,
+        AgentValidateStrategy.ID,
+        AgentValidateOpus55Strategy.ID,
+      ),
       registered.filter { it.slot == PhaseSlot.QUALITY_GATE }.map { it.strategyId },
     )
     assertEquals(PhaseSlot.entries.toSet(), registered.map { it.slot }.toSet())
@@ -104,7 +118,12 @@ class RuntimeFeatureTaskSlotProvidesTest {
       SkeletonDefinition.GOAL_PLANNING.stepIds.map { step -> strategies.strategyFor(step, facts).strategyId },
     )
     assertEquals(
-      listOf(AgentPlanStrategy.ID, GoalPlanFanOutStrategy.ID),
+      listOf(
+        AgentPlanStrategy.ID,
+        AgentPlanOpus55Strategy.ID,
+        GoalPlanFanOutStrategy.ID,
+        GoalPlanFanOutOpus55Strategy.ID,
+      ),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.PLAN }.map { it.strategyId },
     )
   }
@@ -112,7 +131,12 @@ class RuntimeFeatureTaskSlotProvidesTest {
   @Test
   fun `delegated review is registered yet every accepted mode still selects inline`() {
     assertEquals(
-      listOf(InlineReviewStrategy.ID, DelegatedReviewStrategy.ID),
+      listOf(
+        InlineReviewStrategy.ID,
+        InlineReviewOpus55Strategy.ID,
+        DelegatedReviewStrategy.ID,
+        DelegatedReviewOpus55Strategy.ID,
+      ),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.CODE_REVIEW }.map { it.strategyId },
     )
     CodeReviewExecutionMode.entries.forEach { mode ->

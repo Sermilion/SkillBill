@@ -33,6 +33,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -48,6 +49,7 @@ internal class GoalPlanningPhaseRunState(
   override val diagnostics: RuntimeDiagnostics,
   override val specSource: SpecSource,
 ) : PhaseRunState {
+  override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
@@ -77,6 +79,8 @@ internal class GoalPlanningPhaseRunState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
+
+  override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
   internal fun authorizeSelectedStepRun(run: PhaseRun) {
     require(run.request === facts)
@@ -120,6 +124,11 @@ private class GoalPlanningUnitRunState(
   private val unitId: Int,
   override val attemptLoop: PhaseStepAttempts,
 ) : PhaseRunState {
+  override var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+    get() = parent.implementationChecklistStore
+    set(value) {
+      parent.implementationChecklistStore = value
+    }
   override val progress =
     FeatureTaskRuntimeRunState(
       initialRecords = emptyMap(),
@@ -147,6 +156,8 @@ private class GoalPlanningUnitRunState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
 
   override fun unselectedStepIds(): Set<String> = parent.unselectedStepIds()
+
+  override fun stepLaunchAssignment(stepId: String) = parent.stepLaunchAssignment(stepId)
 
   override fun fanOut(stepId: String): PhaseRunFanOut = error("Goal planning unit state cannot start nested fan-out.")
 

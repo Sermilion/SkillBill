@@ -16,6 +16,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -227,6 +228,31 @@ val AgentRunTermination.exitCode: Int?
       AgentRunTermination.TimedOut, AgentRunTermination.Interrupted, AgentRunTermination.SpawnFailed -> null
     }
 
+enum class ReportedLaunchIdentityReason {
+  NOT_REPORTED,
+  MALFORMED,
+  UNSUPPORTED_AGENT,
+}
+
+sealed interface ReportedLaunchIdentity {
+  data class Reported(
+    val identities: Set<String>,
+  ) : ReportedLaunchIdentity {
+    init {
+      require(identities.size in 1..MAX_REPORTED_LAUNCH_IDENTITIES)
+      identities.forEach { identity ->
+        require(identity.isNotBlank() && LAUNCH_MODEL_TOKEN_PATTERN.matches(identity))
+      }
+    }
+  }
+
+  data class Unavailable(
+    val reason: ReportedLaunchIdentityReason,
+  ) : ReportedLaunchIdentity
+}
+
+const val MAX_REPORTED_LAUNCH_IDENTITIES: Int = 8
+
 data class AgentRunLaunchFacts(
   override val agent: SupportedAgent,
   val termination: AgentRunTermination,
@@ -242,6 +268,10 @@ data class AgentRunLaunchFacts(
   val assistantEventCount: Int? = null,
   val rawOutputPreview: String? = null,
   val stdoutTruncated: Boolean = false,
+  val reportedIdentity: ReportedLaunchIdentity =
+    ReportedLaunchIdentity.Unavailable(
+      ReportedLaunchIdentityReason.NOT_REPORTED,
+    ),
 ) : AgentRunLaunchOutcome {
   init {
     assistantEventCount?.let { count -> require(count >= 0) { "assistantEventCount cannot be negative." } }

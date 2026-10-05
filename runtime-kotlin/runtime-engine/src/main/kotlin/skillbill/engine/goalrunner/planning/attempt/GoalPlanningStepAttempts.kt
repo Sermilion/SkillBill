@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
 import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 
 internal class GoalPlanningStepAttempts(
   private val progress: GoalPlanningRunProgress,
@@ -44,6 +45,9 @@ internal class GoalPlanningStepAttempts(
         prompt = call.description.prompt,
         policy = call.description.policy,
         invariantFields = owner.briefingInvariantFields(run.phaseId),
+        modelOverride = run.launchAssignment?.launch?.effectiveModel,
+        effortOverride = run.launchAssignment?.launch?.requestedEffort,
+        stepProfile = run.launchAssignment?.profile ?: PhaseModelProfile.CANONICAL,
       )
     val onRejected = { rejection: RequiredPhaseWrite.Rejected ->
       PhaseAttemptOnce.blockRequiredWriteRejection(context, run, rejection)

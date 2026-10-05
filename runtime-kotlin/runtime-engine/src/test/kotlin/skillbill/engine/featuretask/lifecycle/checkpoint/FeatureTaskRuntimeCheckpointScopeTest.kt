@@ -475,6 +475,10 @@ class FeatureTaskRuntimeCheckpointScopeTest {
   fun `trackable skill-bill config is not treated as runtime-private`() {
     assertFalse(isRuntimePrivatePath(".skill-bill/config.yaml"))
     assertTrue(isRuntimePrivatePath(".skill-bill/state.db"))
+    assertTrue(
+      isRuntimePrivatePath(".skill-bill/feature-task-tracking/wf/checklist.md"),
+      "private checklist tracking stays outside checkpoint staging",
+    )
   }
 
   @Test

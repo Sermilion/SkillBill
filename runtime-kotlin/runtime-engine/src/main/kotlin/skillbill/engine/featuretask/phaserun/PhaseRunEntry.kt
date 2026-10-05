@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
@@ -11,6 +13,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -30,6 +33,7 @@ class PhaseRunEntry(
   private val clock: Clock,
   private val intakeResolver: PhaseRunIntakeResolver,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+  private val agentRunLauncher: AgentRunLauncher,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
@@ -39,7 +43,24 @@ class PhaseRunEntry(
     val branch = currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
     val facts = InMemoryPhaseRunFacts(request, definition, intake)
-    val executionPlan = strategies.executionPlan(strategySelectionFacts(facts))
+    val selection = strategySelectionFacts(facts)
+    val executionPlan =
+      strategies.executionPlan(
+        selection.copy(
+          stepAssignments =
+            FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+              launcher = agentRunLauncher,
+              lookup = strategies,
+              facts = selection,
+              inputs =
+                StepLaunchAssignmentInputs(
+                  invokedAgentId = request.invokedAgentId,
+                  agentAssignment = facts.agentAssignment,
+                  modelAssignment = facts.modelAssignment,
+                ),
+            ),
+        ),
+      )
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),

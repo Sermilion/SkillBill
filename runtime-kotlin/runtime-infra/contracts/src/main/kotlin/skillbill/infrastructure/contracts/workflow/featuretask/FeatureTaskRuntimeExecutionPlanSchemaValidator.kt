@@ -10,6 +10,7 @@ import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.error.core.UnsupportedJsonValueError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -54,13 +55,13 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
       invalidPlan("execution plan must be a JSON object")
     }
     val version = instance.path(FeatureTaskRuntimeExecutionPlanKeys.CONTRACT_VERSION)
-    if (
-      version.isTextual && version.asText().matches(Regex("[0-9]{1,8}\\.[0-9]{1,8}")) &&
-      version.asText() != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
-    ) {
+    val versionText = version.takeIf { it.isTextual }?.asText()
+    val historical =
+      versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
+    if (unsupportedCurrentVersion(versionText, historical)) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
-    validateInstance(instance)
+    validateInstance(instance, historical)
     return JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(canonicalExecutionPlan(instance).toString()))
       ?: invalidPlan("execution plan must be a JSON object")
   }
@@ -85,26 +86,45 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
     write(payload, sourceLabel)
   }
 
-  private fun validateInstance(instance: JsonNode) {
-    val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema(), instance)
+  private fun validateInstance(
+    instance: JsonNode,
+    historical: Boolean,
+  ) {
+    val errors: Set<ValidationMessage> =
+      ClasspathContractSchemaLoader.validate(if (historical) historicalSchema() else schema(), instance)
     if (errors.isNotEmpty()) {
       throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
         "execution plan violates its schema",
       )
     }
-    validateExecutionPlanCoherence(instance)
+    validateExecutionPlanCoherence(instance, historical)
   }
 }
 
 private fun schema(): JsonSchema =
+  compiledExecutionPlanSchema(
+    FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+  )
+
+private fun historicalSchema(): JsonSchema =
+  compiledExecutionPlanSchema(
+    FeatureTaskRuntimeExecutionPlanSchemaPaths.HISTORICAL_0_1,
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION,
+  )
+
+private fun compiledExecutionPlanSchema(
+  resource: String,
+  expectedVersion: String,
+): JsonSchema =
   ClasspathContractSchemaLoader.compiledSchema(
     CompiledSchemaRequest(
-      cacheKey = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+      cacheKey = resource,
       classLoader = FeatureTaskRuntimeExecutionPlanSchemaValidator::class.java.classLoader,
-      classpathResource = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+      classpathResource = resource,
       missingResource = {
         InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
-          "Canonical schema is missing: ${FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE}",
+          "Canonical schema is missing: $resource",
         )
       },
       processingFailure = { cause ->
@@ -112,7 +132,7 @@ private fun schema(): JsonSchema =
       },
       loadFailureLogger = {},
       expectedSchemaId = FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+      expectedContractVersion = expectedVersion,
       identityFailure = ::InvalidFeatureTaskRuntimeExecutionPlanSchemaError,
     ),
   )
@@ -131,3 +151,14 @@ private fun requireBoundedBytes(encoded: ByteArray) {
 }
 
 private fun invalidPlan(reason: String): Nothing = throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(reason)
+
+private fun unsupportedCurrentVersion(
+  versionText: String?,
+  historical: Boolean,
+): Boolean {
+  if (versionText == null || historical) return false
+  if (versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION) return false
+  return EXECUTION_PLAN_VERSION.matches(versionText)
+}
+
+private val EXECUTION_PLAN_VERSION: Regex = Regex("[0-9]{1,8}\\.[0-9]{1,8}")

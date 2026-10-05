@@ -30,7 +30,7 @@ internal class GoalPlanningRunFacts(
     )
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
-  override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment()
+  override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment
   override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT
   override val environment: Map<String, String> = emptyMap()
   override val repoRoot: Path = shared.repoRoot

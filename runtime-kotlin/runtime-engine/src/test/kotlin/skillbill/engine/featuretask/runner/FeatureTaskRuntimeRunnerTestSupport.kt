@@ -57,6 +57,7 @@ import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVeri
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.core.retainingChecklistFrom
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableLaunch
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
@@ -90,6 +91,7 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.github.GitHubPullRequestCheckDiscovery
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
@@ -132,6 +134,7 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.DERIVING_SHARED_EVIDENCE_RESOLVER
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -1345,6 +1348,7 @@ private fun runnerExecutionEntry(
       config.gateRepoLocalConfig,
       database,
       fixture.compatibility,
+      diagnostics = NoopRuntimeDiagnostics,
     )
   if (!config.seedDurableWorkflow) {
     return FeatureTaskRuntimeExecutionEntry(
@@ -1446,6 +1450,8 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     ),
   sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
+  implementationChecklistStore: FeatureTaskImplementationChecklistStore =
+    FileSystemFeatureTaskImplementationChecklistStore(NoopRuntimeDiagnostics),
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
@@ -1456,6 +1462,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     readinessGateCoordinator,
     sharedEvidenceResolver,
     diffResolver,
+    implementationChecklistStore,
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 
@@ -2507,7 +2514,7 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
 internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): FeatureTaskRuntimeRunLoopContext =
   FeatureTaskRuntimeRunLoopContext(
     request,
-    state,
+    state.retainingChecklistFrom(runState),
     gitOperations,
     decompositionPlanner,
     findingVerificationBoundaryMemory,

@@ -5,6 +5,10 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "orchestration/contracts/feature-task-runtime-execution-plan.yaml"
   const val CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan.yaml"
+  const val HISTORICAL_0_1_REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-execution-plan-0.1.yaml"
+  const val HISTORICAL_0_1: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan-0.1.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }

@@ -166,6 +166,7 @@ class ExecutionPlanAdmissionFixture(
       repoLocalConfig(),
       database,
       compatibility,
+      diagnostics = NoopRuntimeDiagnostics,
     )
 
   fun recoveryResolver(
@@ -198,6 +199,7 @@ class ExecutionPlanAdmissionFixture(
       },
       database,
       compatibility,
+      diagnostics = NoopRuntimeDiagnostics,
     )
 
   fun encoded(inputs: EffectiveGatePolicyInputs = this.inputs): ByteArray = codec.encodeExecution(plan, inputs)

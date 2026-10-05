@@ -49,6 +49,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -65,6 +66,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -165,6 +167,7 @@ abstract class RuntimeComponent(
   abstract val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService
 
   abstract val phaseRunEntry: PhaseRunEntry
+  abstract val phaseStrategyLookup: PhaseStrategyLookup
   abstract val operationExecutor: OperationExecutor
   abstract val operationRegistry: OperationRegistry
   abstract val configResolutionService: ConfigResolutionService
@@ -172,6 +175,7 @@ abstract class RuntimeComponent(
   abstract val installService: InstallService
   abstract val externalAddonOverlayService: ExternalAddonOverlayService
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
+  abstract val agentRunLauncher: AgentRunLauncher
   abstract val agentRunService: AgentRunService
   abstract val featureTaskRuntimeRunner: FeatureTaskRuntimeRunner
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver

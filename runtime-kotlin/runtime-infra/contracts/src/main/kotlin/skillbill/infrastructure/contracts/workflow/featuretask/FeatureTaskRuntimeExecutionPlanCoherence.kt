@@ -3,9 +3,18 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.shellcontent.incoherentStepLaunchAssignments
+import skillbill.error.shellcontent.malformedStepLaunchAssignment
+import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
+import skillbill.workflow.taskruntime.model.skeleton.OPUS_55_STRATEGY_ID_SUFFIX
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
-internal fun validateExecutionPlanCoherence(instance: JsonNode) {
+internal fun validateExecutionPlanCoherence(
+  instance: JsonNode,
+  historical: Boolean = false,
+) {
   val effective = instance.path(Keys.EFFECTIVE_POLICIES).toList()
   val effectiveIds = effective.map { it.path(Keys.ID).asText() }
   val policyIdentities =
@@ -42,6 +51,64 @@ internal fun validateExecutionPlanCoherence(instance: JsonNode) {
   if (selectedSteps.size != selected.size || slots.size != slots.toSet().size) incoherentPlan()
   if (invalidEntry || invalidDispatch || invalidCoverage) incoherentPlan()
   validateExecutionPlanTraversal(instance.path(Keys.TRAVERSAL), selected)
+  if (!historical) validateStepLaunchAssignments(instance, selected)
+}
+
+private fun validateStepLaunchAssignments(
+  instance: JsonNode,
+  selected: Set<String>,
+) {
+  val rows = stepLaunchAssignmentRows(instance) ?: return
+  val stepIds = rows.map { it.path(Keys.STEP_ID).asText() }
+  if (stepIds.size != stepIds.toSet().size) {
+    throw incoherentStepLaunchAssignments("duplicate step_id")
+  }
+  if (stepIds.any { it.isBlank() || it !in selected }) {
+    throw incoherentStepLaunchAssignments("unknown or blank step_id")
+  }
+  val profileByStep = rows.associate { it.path(Keys.STEP_ID).asText() to classifiedAssignmentProfile(it) }
+  validateSelectedStrategyProfiles(instance, profileByStep)
+}
+
+private fun stepLaunchAssignmentRows(instance: JsonNode): List<JsonNode>? {
+  val assignments = instance.path(Keys.STEP_LAUNCH_ASSIGNMENTS)
+  if (assignments.isMissingNode || assignments.isNull) return null
+  if (!assignments.isArray) {
+    throw malformedStepLaunchAssignment("step_launch_assignments must be an array")
+  }
+  return assignments.toList()
+}
+
+private fun classifiedAssignmentProfile(row: JsonNode): String {
+  val namespace = assignmentNamespace(row)
+  val effective = row.path(Keys.EFFECTIVE_MODEL).takeIf { it.isTextual && !it.isNull }?.asText()
+  val profile = assignmentProfile(row)
+  if (profile != PhaseModelProfileClassifier.classify(namespace, effective)) {
+    throw incoherentStepLaunchAssignments("profile contradicts classifier")
+  }
+  return profile.wireValue
+}
+
+private fun assignmentNamespace(row: JsonNode): LaunchProviderNamespace =
+  LaunchProviderNamespace.fromWire(row.path(Keys.PROVIDER_NAMESPACE).asText())
+    ?: throw malformedStepLaunchAssignment("unknown provider_namespace")
+
+private fun assignmentProfile(row: JsonNode): PhaseModelProfile =
+  PhaseModelProfile.fromWire(row.path(Keys.PROFILE).asText())
+    ?: throw malformedStepLaunchAssignment("unknown profile")
+
+private fun validateSelectedStrategyProfiles(
+  instance: JsonNode,
+  profileByStep: Map<String, String>,
+) {
+  instance.path(Keys.SELECTED_STRATEGIES).forEach { strategy ->
+    val steps = strategy.path(Keys.SELECTED_STEPS).map(JsonNode::asText)
+    val hasOpus = steps.any { profileByStep[it] == PhaseModelProfile.OPUS_5_5.wireValue }
+    val isOpusStrategy = strategy.path(Keys.STRATEGY_ID).asText().endsWith(OPUS_55_STRATEGY_ID_SUFFIX)
+    if (hasOpus != isOpusStrategy) {
+      throw incoherentStepLaunchAssignments("slot strategy profile does not match participating steps")
+    }
+  }
 }
 
 private fun validateExecutionPlanTraversal(
@@ -157,8 +224,10 @@ private fun canonicalPlanValue(
                 it.path(Keys.SLOT).asText()
               }, { it.path(Keys.STRATEGY_ID).asText() }, { it.path(Keys.SEMANTIC_REVISION).asInt() }),
             )
-          listOf(Keys.DISPATCH_OWNERSHIP), listOf(Keys.STEP_POLICIES), listOf(Keys.RESUME_INTERPRETATIONS) ->
-            values.sortedBy { it.path(Keys.STEP).asText() }
+          listOf(Keys.DISPATCH_OWNERSHIP), listOf(Keys.STEP_POLICIES), listOf(Keys.RESUME_INTERPRETATIONS),
+          listOf(Keys.STEP_LAUNCH_ASSIGNMENTS),
+          ->
+            values.sortedBy { it.path(Keys.STEP).asText().ifEmpty { it.path(Keys.STEP_ID).asText() } }
           listOf(Keys.TRAVERSAL, Keys.LOOP_ONLY_STEPS) -> values.sortedBy(JsonNode::asText)
           listOf(Keys.EFFECTIVE_POLICIES) -> values.sortedBy { it.path(Keys.ID).asText() }
           else -> values

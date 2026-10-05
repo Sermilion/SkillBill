@@ -5,11 +5,14 @@ import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -242,6 +245,9 @@ class CliGoalIntakeTest {
 
   private class StoppedPlanningLauncher(private val db: Path) : AgentRunLauncher {
     val prompts = mutableListOf<String>()
+
+    override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+      passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
       assertEquals(1, parentCount(db))

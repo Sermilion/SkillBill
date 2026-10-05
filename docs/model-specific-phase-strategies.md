@@ -4,11 +4,9 @@ Model-specific strategies adapt a slot's agent instructions to a resolved model.
 They keep the slot's execution contract, including its phase ids, output validation,
 authority, retries, and checkpoints.
 
-The Opus 5.5 selection behavior belongs to
-[SKILL-403](../.feature-specs/SKILL-403-opus-55-slot-strategies/spec.md). It is planned work, not an
-installed extension point. This guide records the requirements for that work and
-future model strategies. Implementation must update this guide with the actual
-registration and configuration examples before describing them as available.
+Opus 5.5 automatic selection is installed. There is no operator strategy toggle.
+Existing model configuration is the only input. This guide records the landed
+registration and configuration path and the same steps a future model must follow.
 
 ## Start with the slot contract
 
@@ -28,61 +26,114 @@ preserve goal-planning fan-out. A gate strategy must preserve build versus
 validation selection and pack commands. A review strategy must preserve the
 difference between full-run repair and report-only standalone review.
 
-`commit_push` remains a runtime operation. Its model policy selects the existing
-runtime commit strategy. Do not create an agent session or a forwarding strategy
-just to give this slot a model-specific name.
+`commit_push` remains a runtime operation. `RuntimeCommitStrategy` stays
+canonical-only. Do not create an agent session or a forwarding strategy just to
+give this slot a model-specific name.
 
 ## Resolve model identity before selection
 
-Use one authoritative effective model resolution path for both selection and
-launch. Preserve per-phase overrides, execution-matrix precedence, and explicit
-effort. Provider adapters own provider defaults and remapping. Engine code consumes
-resolved facts through the existing boundaries instead of reading provider
-environment variables itself.
+`AgentRunLauncher.resolveLaunchModel` is the prelaunch operation. Adapter
+`resolveAgentRunLaunchModel` owns remapping and pinned-alias resolution.
+`PhaseModelProfileClassifier.classify` is the only exact-identity owner. The
+launcher consumes the same `EffectiveLaunchModel` that selection uses.
 
-Use documented version identities. An agent name, an unversioned alias, or a
-substring match does not prove a model version. Recognize an alias only when an
-authoritative source resolves it to that version. Preserve an explicit unknown
-outcome when version evidence is unavailable.
+Exact Opus 5.5 identities:
 
-Resolve participating steps separately. SKILL-403 proposes selecting an
-Opus-capable slot strategy when any participating agent step resolves to Opus 5.5.
-Only those steps receive Opus directives. Other steps keep their existing
-directives. Optional steps and delegated children need explicit inheritance rules.
-Future models must define equivalent mixed-model behavior before adding selection.
+- `anthropic_api`, `google`, and `claude_platform_aws` accept `claude-opus-5-5`
+- `bedrock` accepts `anthropic.claude-opus-5-5`
+
+Older, unknown, unrelated, unversioned, arbitrary deployment, and substring
+forms stay `canonical`. Alias `opus` qualifies only for inherited process
+environments when `ANTHROPIC_DEFAULT_OPUS_MODEL` is one of those exact ids
+(`alias_pinned_by_environment`). Governed-child launches resolve that alias as
+unknown (`environment_not_inherited`). Flag-free launches stay unknown
+(`flag_free_default`) even if `ANTHROPIC_MODEL` is set. A requested Opus remapped
+to `deepseek-v4-flash` stays canonical.
+
+A participating Opus step selects a capable slot variant. Only that step's
+directives specialize. Unselected gate members and absent optional steps cannot
+select a profile. Explicit child overrides win; unsupported inheritance stays
+unknown.
 
 ## Add behavior that earns a strategy
 
-Record the model guidance source and the concrete instruction changes it supports.
-Separate provider recommendations from project decisions. Each agent slot needs
-an observable behavior change, not a class that only forwards to another strategy.
-Reuse existing execution mechanics without copying validators or transition rules.
+Twelve Opus variants compose a canonical instance.
+`InlineStandaloneReviewOpus55Strategy` and `DelegatedStandaloneReviewOpus55Strategy`
+extend the canonical classes and override `promptSections`. Every variant uses id
+`<canonical-id>-opus-5-5` and appends a directive resource only when the step
+profile is `opus-5-5`. Resources live under
+`runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/<slot>/opus-5-5-<family>.md`.
 
-Keep model-specific decisions at selection and directive ownership boundaries.
-Do not add model-name branches throughout the process runner or shared run loop.
-Register implementations in the existing composition root, and compose model
-selection with definition, review mode, and gate facts.
+Register variants in
+[`RuntimeFeatureTaskSlotProvides.kt`](../runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/featuretask/RuntimeFeatureTaskSlotProvides.kt)
+and bind them through
+[`SkeletonStrategyBindings.kt`](../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/skeleton/SkeletonStrategyBindings.kt).
+Full-run `CODE_REVIEW` stays inline for every current mode. `REVIEW` standalone
+selects delegated only for explicit delegated mode.
 
-Keep task instructions within the accepted step's authority. A model's ability to
-delegate does not authorize build subagents or wider repository writes. Agent
-checklists, if used, are runtime-private projections. They do not replace durable
-workflow state or become committed task files by default.
+Implementation and simplify prompts name a runtime-private checklist at
+`.skill-bill/feature-task-tracking/<workflow-path-segment>/checklist.md`.
+Implement and simplify launch preparation calls
+`FileSystemFeatureTaskImplementationChecklistStore.prepare`. A missing file is
+seeded. Existing ticks for remaining keys are kept. A corrupt or unwritable file
+degrades and does not mark workflow tasks complete.
 
 ## Preserve execution identity
 
-Version semantic changes to strategy behavior. Include every model/profile fact
-that changes selection in cache identity and the admitted execution plan. Resolve
-the selected composition before launch, using the same effective facts at launch.
+Execution-plan contract `0.2` records `step_launch_assignments` and selected
+strategy identities. Version `0.1` reads as canonical with no assignments.
+Resume launches the recorded assignment. Current config that would resolve
+differently does not reselect an accepted attempt. Incompatible or unregistered
+recorded identities refuse before workflow, parent/child, or lease mutation.
 
-Resume the recorded composition. A changed default, alias, provider mapping, or
-model configuration must not silently select a new strategy for an existing run.
-Incompatible changes use the existing typed refusal and recovery contract before
-workflow or lease mutation. Do not reinterpret old plans through today's defaults.
+Launch evidence keeps requested identity, effective prelaunch identity, and
+bounded provider-reported identity separate. Claude `modelUsage` object keys
+supply reported evidence. Codex, Cursor, and Junie report `unsupported_agent`. Malformed
+fields degrade evidence and still admit ordinary output.
 
-Distinguish requested model identity from provider-reported execution identity.
-When a provider reports a change, record bounded evidence and retain the accepted
-attempt's strategy. State the evidence limit when the provider does not report
-actual identity. Do not infer it by scraping interactive notices.
+## Opus 5.5 registration example
+
+1. Confirm the wire identity against Claude model documentation. Add one
+   classifier case in `PhaseModelProfileClassifier`.
+2. Add a variant class next to the canonical strategy, for example
+   `AcceptanceAuditOpus55Strategy`, composing the canonical owner and appending
+   `opus-5-5-acceptance-audit.md` through `appendWhenOpus`.
+3. Register the variant and bind it with `PhaseStrategyBinding.withOpus`.
+4. Extend `PhaseStrategySelectionFacts.stepAssignments`. Plan cache identity
+   copies those assignments.
+5. Cover exact accept/reject, remapping, mixed audit/repair, cache isolation,
+   historical `0.1`, and decoder reported identity.
+
+Production owners: `PhaseModelProfileClassifier`, `AgentRunLauncher`,
+`resolveAgentRunLaunchModel`, `SkeletonStrategyBindings`,
+`FeatureTaskRuntimeExecutionPlanResolver`,
+`FeatureTaskRuntimeStepLaunchAssignmentFactory`.
+
+Test owners: `PhaseModelProfileSelectionTest`, `AgentRunCommandBuildersTest`,
+`PhaseStrategyCompositionTest`, `RuntimeFeatureTaskSlotProvidesTest`,
+`FeatureTaskRuntimeExecutionPlanCoherenceTest`,
+`FileSystemFeatureTaskImplementationChecklistStoreTest`,
+`FeatureTaskRuntimeCheckpointScopeTest`.
+
+## Future-model example
+
+A later model repeats the same seams without a strategy flag:
+
+1. Detection: one classifier case for documented exact identities. Aliases stay
+   unknown unless an inherited environment pins them to that exact id.
+2. Slot variants: compose each agent-capable canonical strategy except
+   `InlineStandaloneReviewOpus55Strategy` and `DelegatedStandaloneReviewOpus55Strategy`,
+   which subclass the canonical classes and override `promptSections`; keep
+   `RuntimeCommitStrategy` canonical-only.
+3. Mixed-model: specialize a slot when any participating step qualifies; append
+   directives only for qualifying steps.
+4. Authority: reuse existing validators, pack commands, standalone report-only
+   rules, and build's single-session policy.
+5. Immutable admission: add bounded fields to the next execution-plan contract
+   version and keep a historical reader for the previous version.
+6. Diagnostics: unknown resolution, resume drift, malformed reported identity,
+   and checklist failure use `seam=… value_expected=… value_used=…`.
+7. Tests: extend the owners named above; do not add a parallel harness.
 
 ## Prove behavior at the boundaries
 
@@ -94,19 +145,11 @@ Cover exact versions, unresolved aliases, provider remapping, precedence,
 mixed-model slots, definition variants, cache isolation, and immutable resume.
 Prove that directives reach the selected model's step and that rejected output
 still fails its existing contract. Keep standalone review read-only and
-`commit_push` agent-free. Include admission and cancellation failure paths when
-changing those boundaries.
+`commit_push` agent-free.
 
 Apply schema-first contract evolution and version parity when adding durable
-fields. Run required project validation, including architecture guards. Baselines
-and exemptions must not grow to accommodate a model strategy.
-
-## Keep the guide usable
-
-For each landed model, add its supported identifiers, alias policy, selection
-precedence, mixed-model behavior, registration example, and compatibility rules.
-Name the tests that prove them and the files that own the behavior. Mark unsupported
-provider evidence explicitly. Update this guide in the same change as the model.
+fields. Architecture guards stay in force. Baselines and exemptions must not
+grow to accommodate a model strategy.
 
 The first model-specific reference is
 [Getting the most out of Opus 5.5](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/).

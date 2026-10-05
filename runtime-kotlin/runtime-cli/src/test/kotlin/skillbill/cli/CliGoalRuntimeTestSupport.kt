@@ -10,10 +10,12 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
@@ -38,6 +40,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunk
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -405,6 +408,9 @@ internal class GoalFixtureAgentRunLauncher(
   val requests: MutableList<AgentRunLaunchRequest> = mutableListOf()
   val childLaunches: MutableList<AgentRunLaunchRequest> = mutableListOf()
 
+  override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+    passThroughResolvedLaunchModel(request)
+
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
     requests += request
     val skillRequest = request.skillRunRequest
@@ -713,6 +719,9 @@ internal fun subtaskSpecText(id: Int): String =
     "## Implementation Details\n\nPlanned implementation details for subtask $id.\n"
 
 internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
+  override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+    passThroughResolvedLaunchModel(request)
+
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome = error("Unexpected launch")
 }
 

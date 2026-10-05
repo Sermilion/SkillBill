@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.long
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.ConfigResolutionService
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
@@ -24,6 +25,7 @@ import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
 import skillbill.cli.kernel.cli.standaloneReportText
 import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -41,6 +43,7 @@ import kotlin.time.Duration.Companion.minutes
 @Inject
 class CodeReviewCommand(
   private val entry: PhaseRunEntry,
+  private val configResolution: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
@@ -132,7 +135,15 @@ class CodeReviewCommand(
         reviewSessionId = reviewSessionId,
         timeoutMinutes = timeoutMinutes,
       )
-    val result = runPhaseReview(entry, codeReviewPhaseRequest(flags), state) ?: return
+    val result =
+      runPhaseReview(
+        entry,
+        codeReviewPhaseRequest(
+          flags,
+          FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
+        ),
+        state,
+      ) ?: return
     writePhaseReviewResult(state, result)
   }
 
@@ -169,7 +180,10 @@ internal data class CodeReviewFlags(
   val timeoutMinutes: Long? = null,
 )
 
-internal fun codeReviewPhaseRequest(flags: CodeReviewFlags): PhaseRunRequest {
+internal fun codeReviewPhaseRequest(
+  flags: CodeReviewFlags,
+  modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+): PhaseRunRequest {
   val (resolvedBase, resolvedHead) =
     resolveCodeReviewRevisions(flags.target.commitRevision, flags.baseRevision, flags.headRevision)
   val revisionError =
@@ -214,6 +228,7 @@ internal fun codeReviewPhaseRequest(flags: CodeReviewFlags): PhaseRunRequest {
           ),
       ),
     timeout = flags.timeoutMinutes?.minutes,
+    modelAssignment = modelAssignment,
   )
 }
 

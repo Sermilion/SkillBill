@@ -5,9 +5,12 @@ import skillbill.application.agentrun.model.AgentRunStartRequest
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,6 +83,9 @@ class AgentRunServiceTest {
 
 private class RecordingAgentRunLauncher : AgentRunLauncher {
   val requests: MutableList<AgentRunLaunchRequest> = mutableListOf()
+
+  override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+    passThroughResolvedLaunchModel(request)
 
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
     requests += request

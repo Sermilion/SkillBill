@@ -4,6 +4,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -31,6 +32,7 @@ class AgentLauncherPreflightTest {
       commandBuilder = CursorAgentRunCommandBuilder(),
       processRunner = RecordingAgentRunProcessRunner(),
       executableLookup = lookup,
+      diagnostics = NoopRuntimeDiagnostics,
     )
 
   @Test
@@ -42,6 +44,7 @@ class AgentLauncherPreflightTest {
         commandBuilder = CursorAgentRunCommandBuilder(),
         processRunner = runner,
         executableLookup = executablesAvailable(),
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     val facts = adapter.launchFacts(request())
@@ -70,6 +73,7 @@ class AgentLauncherPreflightTest {
         commandBuilder = CursorAgentRunCommandBuilder(),
         processRunner = runner,
         executableLookup = executablesAvailable("cursor-agent"),
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     val facts = adapter.launchFacts(request())
@@ -88,6 +92,7 @@ class AgentLauncherPreflightTest {
         commandBuilder = CursorAgentRunCommandBuilder(),
         processRunner = runner,
         executableLookup = executablesAvailable("agent", "cursor-agent"),
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     adapter.launch(request())

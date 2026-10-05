@@ -56,12 +56,13 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.time.Duration.Companion.minutes
 
-class InlineStandaloneReviewStrategy(runner: PhaseRunner) : StandaloneReviewStrategy(runner, null) {
+open class InlineStandaloneReviewStrategy(runner: PhaseRunner) : StandaloneReviewStrategy(runner, null) {
   override val strategyId: String = ID
 
   companion object {
@@ -69,7 +70,7 @@ class InlineStandaloneReviewStrategy(runner: PhaseRunner) : StandaloneReviewStra
   }
 }
 
-class DelegatedStandaloneReviewStrategy(
+open class DelegatedStandaloneReviewStrategy(
   runner: PhaseRunner,
   reviewRunner: ParallelCodeReviewRunner,
 ) : StandaloneReviewStrategy(runner, reviewRunner) {
@@ -297,6 +298,15 @@ abstract class StandaloneReviewStrategy(
           "or launch another review command.",
       )
       appendLine("A changes_requested verdict is a valid completed report. The runtime will not repair findings.")
+      if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
+        val extra =
+          when (strategyId) {
+            DelegatedStandaloneReviewOpus55Strategy.ID -> DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
+            else -> InlineStandaloneReviewOpus55Strategy.DIRECTIVE
+          }
+        appendLine()
+        append(extra)
+      }
     }
 
   private fun launch(
@@ -395,6 +405,13 @@ abstract class StandaloneReviewStrategy(
             laneProgressIdleTimeout =
               launch.skillRunRequest.progressIdleTimeout
                 ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
+            modelOverride = run.launchAssignment?.launch?.effectiveModel,
+            directiveSuffix =
+              if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
+                DelegatedStandaloneReviewOpus55Strategy.DIRECTIVE
+              } else {
+                ""
+              },
           )
         when (val outcome = delegatedRunner.run(request)) {
           is ParallelCodeReviewRunOutcome.PlanningFailed -> {
