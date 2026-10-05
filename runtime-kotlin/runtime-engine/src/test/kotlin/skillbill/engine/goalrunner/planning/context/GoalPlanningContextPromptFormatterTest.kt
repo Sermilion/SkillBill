@@ -76,6 +76,8 @@ class GoalPlanningContextPromptFormatterTest {
     assertContains(composed, "## Selected boundary memory")
     assertContains(composed, FIRST_BODY)
     assertFalse(SECOND_BODY in composed, "an unselected entry's body never enters the composed plan prompt")
+    assertFalse("second-entry" in composed, "the boundary catalog stays out of the composed plan prompt")
+    assertContains(composed, "\"packet_version\":\"0.4\"")
   }
 
   @Test

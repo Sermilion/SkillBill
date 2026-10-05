@@ -34,6 +34,8 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
       assertContains(prompt, "workflow_id \"wftr-20260904-210526-r3x0\"", false, "pinned workflow id for $phaseId")
       assertContains(prompt, "phase_id \"$phaseId\", attempt 2", false, "pinned attempt for $phaseId")
       assertContains(prompt, FALLBACK_HEADING, false, "minimal fallback for $phaseId")
+      assertContains(prompt, "## Installed runtime owns phase output and settlement", false, "authority for $phaseId")
+      assertFalse(prompt.contains("## Phase output is your final prose"), "no prose authority for $phaseId")
       assertFalse(prompt.contains("validated schema gate"), "no envelope for $phaseId")
       assertTrue(
         prompt.indexOf("## Required final output (durable settlement)") < prompt.indexOf(FALLBACK_HEADING),

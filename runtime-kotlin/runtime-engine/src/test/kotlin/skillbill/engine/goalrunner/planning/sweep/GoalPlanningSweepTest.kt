@@ -372,7 +372,7 @@ class GoalPlanningSweepMigrateTest {
 
     assertIs<GoalPlanningSweepOutcome.PreparedAll>(outcome)
     val planPrompt = harness.launcher.requests[1].skillRunRequest.promptOverride.orEmpty()
-    assertContains(planPrompt, FIXTURE_HEADING_ID)
+    assertFalse(planPrompt.contains(FIXTURE_HEADING_ID))
     assertFalse(planPrompt.contains("## Selected boundary memory"))
     assertFalse(planPrompt.contains(FIXTURE_BODY))
   }

@@ -1,6 +1,7 @@
 
 package skillbill.engine.featuretask.phase.prompt.compose
 
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
@@ -16,8 +17,12 @@ import kotlin.test.assertTrue
 class FeatureTaskRuntimePhasePromptComposerContentTest {
   @Test
   fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
+    val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
     listOf("implement", "audit").forEach { phaseId ->
-      val prompt = composePromptForPhase(phaseId)
+      val prompt =
+        composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+          copy(phaseSettlement = target)
+        }
 
       assertContains(
         prompt,
@@ -41,7 +46,19 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
         "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
       )
       assertContains(prompt, "including on retries and continuation.")
-      assertContains(prompt, "Reading the installed skill-bill skill does not make this phase a new invocation.")
+    }
+  }
+
+  @Test
+  fun `a phase without settlement tools reports through prose and is not sent to inspect the runtime`() {
+    listOf("preplan", "plan").forEach { phaseId ->
+      val prompt = composePromptForPhase(phaseId)
+
+      assertContains(prompt, "## Phase output is your final prose")
+      assertContains(prompt, "Finish from this briefing alone.")
+      assertContains(prompt, "Do not read the installed skill-bill skill")
+      assertFalse(prompt.contains("settlement"), "settlement stays unnamed for $phaseId")
+      assertFalse(prompt.contains("feature_task_phase_complete"), "no complete tool for $phaseId")
     }
   }
 

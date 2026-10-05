@@ -35,6 +35,7 @@ fun phasePromptHeader(
   issueKey: String,
   phaseId: String,
   taskDirective: String,
+  settlesThroughTools: Boolean,
 ): String {
   val label = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepLabels[phaseId] ?: phaseId
   return buildString {
@@ -46,7 +47,11 @@ fun phasePromptHeader(
     appendLine("The initial user-facing goal invocation owns update checks and launch confirmation.")
     appendLine("Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher")
     appendLine("intake, preflight, or confirmation, including on retries and continuation.")
-    appendLine("Reading the installed skill-bill skill does not make this phase a new invocation.")
+    if (settlesThroughTools) {
+      appendLine("Reading the installed skill-bill skill does not make this phase a new invocation.")
+    } else {
+      appendLine("Do not read the installed skill-bill skill; this briefing is the whole instruction set.")
+    }
     appendLine()
     appendLine("Phase: $phaseId ($label)")
     append("Task: ")
@@ -54,14 +59,27 @@ fun phasePromptHeader(
   }
 }
 
-fun installedRuntimeAuthorityDirective(): String =
+fun installedRuntimeAuthorityDirective(settlesThroughTools: Boolean): String =
+  if (settlesThroughTools) "$TOOL_SETTLEMENT_AUTHORITY\n\n$CHECKOUT_CONTRACT_WORK" else PROSE_OUTPUT_AUTHORITY
+
+private val TOOL_SETTLEMENT_AUTHORITY: String =
   """
   ## Installed runtime owns phase output and settlement
   The installed Skill Bill runtime validates this phase's output and MCP settlement.
   Keep this phase's output and settlement on the contract supplied by this briefing, including
   contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
   schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
+  """.trimIndent()
 
+private val PROSE_OUTPUT_AUTHORITY: String =
+  """
+  ## Phase output is your final prose
+  The runtime records the prose your response ends with. The final output section of this briefing
+  describes what that prose carries. Finish from this briefing alone.
+  """.trimIndent()
+
+private val CHECKOUT_CONTRACT_WORK: String =
+  """
   Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
   when the assigned implementation or audit requires them, subject to this phase's edit scope.
   New implementation contracts may be absent from the installed runtime. That absence does not

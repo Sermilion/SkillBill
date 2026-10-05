@@ -6,24 +6,14 @@ Execute this supplied phase briefing with the current installed runtime.
 The initial user-facing goal invocation owns update checks and launch confirmation.
 Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
 intake, preflight, or confirmation, including on retries and continuation.
-Reading the installed skill-bill skill does not make this phase a new invocation.
+Do not read the installed skill-bill skill; this briefing is the whole instruction set.
 
 Phase: preplan (Phase 1: Pre-plan)
 Task: Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository files during this phase. This is the feature's only discovery: the plan phase plans every subtask from this digest and never reads the repository. Write what the plan phase needs: the boundaries the change touches, the patterns and decisions that apply, concrete risks, and rollout and validation considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, type hierarchies, the tests and test helpers the change affects, and the existing patterns to follow. Settle every question the repository can answer here. Leave open only decisions the repository cannot answer, each with the facts that bear on it and the option you recommend. Walk the boundary memory headings for relevance and weave their context into the prose; name a heading by its heading_id exactly as the boundary catalog spells it. Do not forward progress diagnostics or a generic summary.
 
-## Installed runtime owns phase output and settlement
-The installed Skill Bill runtime validates this phase's output and MCP settlement.
-Keep this phase's output and settlement on the contract supplied by this briefing, including
-contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
-schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
-
-Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
-when the assigned implementation or audit requires them, subject to this phase's edit scope.
-New implementation contracts may be absent from the installed runtime. That absence does not
-block repository work or require permission to inspect the checkout. Implement and audit those
-contracts against the repository's requirements while reporting this phase through the installed
-runtime's output and settlement contract. Use installed schemas when resolving that reporting
-contract; use checkout schemas when examining the feature under work.
+## Phase output is your final prose
+The runtime records the prose your response ends with. The final output section of this briefing
+describes what that prose carries. Finish from this briefing alone.
 
 ## Runtime ceremony scaling
 feature_size: MEDIUM

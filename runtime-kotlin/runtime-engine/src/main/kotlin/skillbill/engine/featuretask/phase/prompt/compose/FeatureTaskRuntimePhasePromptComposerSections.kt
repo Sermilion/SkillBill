@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyDirective
 import skillbill.engine.featuretask.phase.prompt.directives.findingCoverageDirective
 import skillbill.engine.featuretask.phase.prompt.directives.installedRuntimeAuthorityDirective
@@ -16,10 +17,11 @@ import skillbill.engine.featuretask.phase.prompt.directives.testValueDisciplineD
 fun phasePromptLeadingSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   sections: PhaseStepPromptSections,
-): List<String> =
-  listOf(
-    phasePromptHeader(inputs.issueKey, inputs.briefing.phaseId, sections.taskDirective),
-    installedRuntimeAuthorityDirective(),
+): List<String> {
+  val settlesThroughTools = settlementTarget(inputs, sections) != null
+  return listOf(
+    phasePromptHeader(inputs.issueKey, inputs.briefing.phaseId, sections.taskDirective, settlesThroughTools),
+    installedRuntimeAuthorityDirective(settlesThroughTools),
     ceremonyDirective(inputs.briefing, sections.ceremonyLine),
     mutatingPhaseIdempotencyDirective(inputs.mutating),
     nonValidatePhaseValidationOwnershipDirective(sections.runsValidationGate),
@@ -29,6 +31,7 @@ fun phasePromptLeadingSections(
     testValueDisciplineDirective(sections.testValueDiscipline),
     sections.authoringDiscipline,
   )
+}
 
 fun phasePromptMiddleSections(
   inputs: FeatureTaskRuntimePhasePromptComposeInputs,
@@ -52,7 +55,13 @@ fun phasePromptTrailingSections(
     sections.outputContract
       ?: minimalSettlementContract(
         inputs.briefing.phaseId,
-        inputs.phaseSettlement?.takeIf { sections.settles },
+        settlementTarget(inputs, sections),
         sections.valueContent,
       ),
   )
+
+private fun settlementTarget(
+  inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+  sections: PhaseStepPromptSections,
+): FeatureTaskRuntimePhaseSettlementTarget? =
+  inputs.phaseSettlement?.takeIf { sections.settles && sections.outputContract == null }
