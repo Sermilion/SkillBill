@@ -9,7 +9,6 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import java.io.Closeable
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path

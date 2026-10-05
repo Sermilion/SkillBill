@@ -1,10 +1,10 @@
 package skillbill.application.reviewevidence
 
+import skillbill.review.model.repositoryRelativePathViolation
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
-import skillbill.review.model.repositoryRelativePathViolation
 
 private const val REVIEW_DIFF_GIT_OCTAL_WIDTH = 3
 private const val REVIEW_DIFF_GIT_OCTAL_RADIX = 8
@@ -17,20 +17,10 @@ internal fun parseReviewDiffGitTokens(value: String): ReviewDiffParseOutcome<Lis
     if (index == value.length) break
     val start = index
     if (value[index] == '"') {
-      index++
-      var closed = false
-      while (index < value.length) {
-        if (value[index] == '\\') {
-          if (index + 1 >= value.length) {
-            return ReviewDiffParseOutcome.Rejected("Malformed quoted Git path ends with an escape.")
-          }
-          index += 2
-        } else if (value[index++] == '"') {
-          closed = true
-          break
-        }
+      when (val end = quotedReviewDiffTokenEnd(value, index + 1)) {
+        is ReviewDiffParseOutcome.Accepted -> index = end.value
+        is ReviewDiffParseOutcome.Rejected -> return end
       }
-      if (!closed) return ReviewDiffParseOutcome.Rejected("Malformed quoted Git path is missing its closing quote.")
     } else {
       while (index < value.length && !value[index].isWhitespace()) index++
     }
@@ -39,32 +29,50 @@ internal fun parseReviewDiffGitTokens(value: String): ReviewDiffParseOutcome<Lis
   return ReviewDiffParseOutcome.Accepted(tokens)
 }
 
+private fun quotedReviewDiffTokenEnd(
+  value: String,
+  start: Int,
+): ReviewDiffParseOutcome<Int> {
+  var index = start
+  while (index < value.length) {
+    if (value[index] == '\\') {
+      if (index + 1 >= value.length) {
+        return ReviewDiffParseOutcome.Rejected("Malformed quoted Git path ends with an escape.")
+      }
+      index += 2
+    } else if (value[index++] == '"') {
+      return ReviewDiffParseOutcome.Accepted(index)
+    }
+  }
+  return ReviewDiffParseOutcome.Rejected("Malformed quoted Git path is missing its closing quote.")
+}
+
 internal fun reviewDiffRepositoryPath(
   value: String,
   prefix: String?,
 ): ReviewDiffParseOutcome<String?> {
   if (value.trim() == "/dev/null") return ReviewDiffParseOutcome.Accepted(null)
-  val path = when (val result = decodeReviewDiffGitPath(value)) {
-    is ReviewDiffParseOutcome.Accepted -> result.value
-    is ReviewDiffParseOutcome.Rejected -> return result
-  }
-  val relativePath =
-    if (prefix == null) {
-      path
+  return decodeReviewDiffGitPath(value).flatMap { path ->
+    if (prefix != null && !path.startsWith(prefix)) {
+      ReviewDiffParseOutcome.Rejected("Git path source must carry the '$prefix' prefix.")
     } else {
-      if (!path.startsWith(prefix)) {
-        return ReviewDiffParseOutcome.Rejected("Git path source must carry the '$prefix' prefix.")
-      }
-      path.removePrefix(prefix)
+      validateReviewDiffRepositoryPath(if (prefix == null) path else path.removePrefix(prefix))
     }
-  val violation = repositoryRelativePathViolation(relativePath)
-  if (
-    relativePath.isBlank() || relativePath.startsWith('/') || ".." in relativePath.split('/')
-  ) {
-    return ReviewDiffParseOutcome.Rejected("Malformed Git diff record has a non-repository path '$relativePath'.")
   }
-  if (violation != null) return ReviewDiffParseOutcome.Rejected(violation)
-  return ReviewDiffParseOutcome.Accepted(relativePath)
+}
+
+private fun validateReviewDiffRepositoryPath(path: String): ReviewDiffParseOutcome<String> {
+  val violation =
+    if (path.isBlank() || path.startsWith('/') || ".." in path.split('/')) {
+      "Malformed Git diff record has a non-repository path '$path'."
+    } else {
+      repositoryRelativePathViolation(path)
+    }
+  return if (violation == null) {
+    ReviewDiffParseOutcome.Accepted(path)
+  } else {
+    ReviewDiffParseOutcome.Rejected(violation)
+  }
 }
 
 private fun decodeReviewDiffGitPath(value: String): ReviewDiffParseOutcome<String> {
@@ -95,22 +103,22 @@ private fun decodeReviewDiffQuotedGitPathSegment(
     return ReviewDiffParseOutcome.Accepted(index + 1)
   }
   val octal = consumeReviewDiffGitOctalBytes(body, index)
-  if (octal != null) {
-    when (val result = decodeReviewDiffGitOctalUtf8(octal.bytes)) {
-      is ReviewDiffParseOutcome.Accepted -> decoded.append(result.value)
-      is ReviewDiffParseOutcome.Rejected -> return result
+  return if (octal != null) {
+    decodeReviewDiffGitOctalUtf8(octal.bytes).flatMap { value ->
+      decoded.append(value)
+      ReviewDiffParseOutcome.Accepted(octal.nextIndex)
     }
-    return ReviewDiffParseOutcome.Accepted(octal.nextIndex)
+  } else {
+    val escapedIndex = index + 1
+    if (escapedIndex >= body.length) {
+      ReviewDiffParseOutcome.Rejected("Malformed quoted Git path ends with an escape.")
+    } else {
+      decodeReviewDiffGitEscapeChar(body[escapedIndex]).flatMap { value ->
+        decoded.append(value)
+        ReviewDiffParseOutcome.Accepted(escapedIndex + 1)
+      }
+    }
   }
-  val escapedIndex = index + 1
-  if (escapedIndex >= body.length) {
-    return ReviewDiffParseOutcome.Rejected("Malformed quoted Git path ends with an escape.")
-  }
-  when (val result = decodeReviewDiffGitEscapeChar(body[escapedIndex])) {
-    is ReviewDiffParseOutcome.Accepted -> decoded.append(result.value)
-    is ReviewDiffParseOutcome.Rejected -> return result
-  }
-  return ReviewDiffParseOutcome.Accepted(escapedIndex + 1)
 }
 
 private data class ReviewDiffGitOctalBytes(val bytes: ByteArray, val nextIndex: Int)

@@ -108,7 +108,10 @@ internal object NativeAgentLinkInventoryDecode {
     entries.forEach { entry -> validateDecodedEntry(entry, home, managedRoots, path) }
   }
 
-  private fun decodePath(value: String, source: Path): Path =
+  private fun decodePath(
+    value: String,
+    source: Path,
+  ): Path =
     try {
       Path.of(value)
     } catch (error: InvalidPathException) {

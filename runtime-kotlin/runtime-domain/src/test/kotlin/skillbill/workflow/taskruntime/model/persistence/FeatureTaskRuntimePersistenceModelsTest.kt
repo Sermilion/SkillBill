@@ -69,7 +69,6 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -842,7 +841,7 @@ class FeatureTaskRuntimePersistenceModelsTest {
   }
 
   @Test
-  fun `run-invariants decode translates constructor invariant failures to typed schema errors`() {
+  fun `run-invariants decode rejects too many criteria before constructing the model`() {
     val malformed =
       mapOf(
         "contract_version" to FEATURE_TASK_RUNTIME_RUN_INVARIANTS_CONTRACT_VERSION,
@@ -858,7 +857,7 @@ class FeatureTaskRuntimePersistenceModelsTest {
         featureTaskRuntimeRunInvariantsFromArtifactMap(malformed)
       }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
-    assertIs<IllegalArgumentException>(error.cause)
+    assertNull(error.cause)
     assertTrue(error.message.orEmpty().contains("supports at most 999 criteria"))
   }
 

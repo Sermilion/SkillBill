@@ -1,6 +1,6 @@
 # SKILL-401 Subtask 2 - domain-taskruntime-decoders
 
-Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](spec.md)
 Issue key: SKILL-401
 
 ## Scope
@@ -69,7 +69,7 @@ skill-bill goal SKILL-401
 
 ## Implementation Details
 
-This plan uses the upstream preplan digest as its only repository evidence. Historical line numbers in Scope are anchors, not instructions to rediscover the census. Paths below are relative to `runtime-kotlin/`. Domain production files live under `runtime-domain/src/main/kotlin/skillbill/`; domain tests live under `runtime-domain/src/test/kotlin/skillbill/`. The subtask has no dependencies and must remain independently implementable.
+This plan uses the upstream preplan digest as its only repository evidence. Historical line numbers in Scope are anchors, not instructions to rediscover the census. Paths below are relative to `../../../runtime-kotlin`. Domain production files live under `runtime-domain/src/main/kotlin/skillbill/`; domain tests live under `runtime-domain/src/test/kotlin/skillbill/`. The subtask has no dependencies and must remain independently implementable.
 
 ### Ordered implementation tasks
 
@@ -131,7 +131,7 @@ This plan uses the upstream preplan digest as its only repository evidence. Hist
 
    Keep codec signatures, function names registered as `ParseBoundarySite`, failure factories, wire keys, field order, exact numeric behavior, schema versions, and emitted bytes. Preserve cancellation and interruption propagation. If a registered function must move, update its inventory location without dropping the entry. Domain helpers remain pure and import neither ports nor `java.nio`. Add no throwable, typealias, result library, collaborator bag, runner branch, suppression, or widened architecture baseline. Keep model ownership and rules A1, A2, A4, A7, A10, A11, and G7. Follow existing wire-key owners, the 1,200-line ceiling, comment/KDoc rules, and detekt limits through small owner-local helpers.
 
-   Kind-D removals need no new tests. Later audit inspects all three criteria and inventories retained regression evidence. Later validate runs the named behavioral suites, detekt, `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, wire-vocabulary, comment/KDoc, file-size, and module/package guards as part of the repository's actual full gate, plus `scripts/validate_agent_configs` required by CI. No guard or parity coverage may be weakened.
+   Kind-D removals need no new tests. Later audit inspects all three criteria and inventories retained regression evidence. Later validate runs the named behavioral suites, detekt, `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, wire-vocabulary, comment/KDoc, file-size, and module/package guards as part of the repository's actual full gate, plus `../../../scripts/validate_agent_configs` required by CI. No guard or parity coverage may be weakened.
 
 ### Phase ownership and settled assumptions
 

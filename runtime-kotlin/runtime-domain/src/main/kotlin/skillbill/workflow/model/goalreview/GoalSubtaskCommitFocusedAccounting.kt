@@ -92,29 +92,38 @@ data class GoalSubtaskCommitFocusedAccounting(
       val focusedCommitCount = reader.requiredInt("focused_commit_count")
       val skippedCommitCount = reader.requiredInt("skipped_commit_count")
       val outcomeWire = reader.requiredString("integration_terminal_outcome")
-      val outcome = ReviewIntegrationTerminalOutcome.fromWire(outcomeWire)
-        ?: onInvalid("Unknown integration terminal outcome at '$path.integration_terminal_outcome'.")
+      val outcome =
+        ReviewIntegrationTerminalOutcome.fromWire(outcomeWire)
+          ?: onInvalid("Unknown integration terminal outcome at '$path.integration_terminal_outcome'.")
       val routingDigest = reader.optionalString("routing_digest")
       val focusedPairCount = reader.optionalInt("focused_pair_count")
       val skippedPairCount = reader.optionalInt("skipped_pair_count")
       val laneBundleSizes = raw.longCountMap("lane_bundle_sizes", path)
-      val laneSegmentCounts = raw.longCountMap("lane_segment_counts", path)
-        .mapValues { (entryKey, value) ->
-          value.asExactIntOrNull() ?: reviewStateError("$path.lane_segment_counts.$entryKey", "must be an integer.")
-        }
-      val incompleteLanes = reader.optionalList("incomplete_lanes")
-        .orEmpty()
-        .mapIndexed { index, value ->
-          (value as? String)?.takeIf(String::isNotBlank)
-            ?: reviewStateError("$path.incomplete_lanes[$index]", "must be a non-blank string.")
-        }
+      val laneSegmentCounts =
+        raw.longCountMap("lane_segment_counts", path)
+          .mapValues { (entryKey, value) ->
+            value.asExactIntOrNull() ?: reviewStateError("$path.lane_segment_counts.$entryKey", "must be an integer.")
+          }
+      val incompleteLanes =
+        reader.optionalList("incomplete_lanes")
+          .orEmpty()
+          .mapIndexed { index, value ->
+            (value as? String)?.takeIf(String::isNotBlank)
+              ?: reviewStateError("$path.incomplete_lanes[$index]", "must be a non-blank string.")
+          }
       val parentAnalysisPairs = reader.optionalInt("parent_analysis_pairs")
       val parentAnalysisBytes = reader.optionalInt("parent_analysis_bytes")?.toLong()
       val integrationSkipReason = reader.optionalString("integration_skip_reason")
       val integrationFindingCount = reader.optionalInt("integration_finding_count")
       GoalSubtaskCommitFocusedAccountingValidation(
-        digest, commitCount, laneCount, focusedCommitCount, skippedCommitCount,
-        incompleteLanes, outcome, integrationSkipReason,
+        digest,
+        commitCount,
+        laneCount,
+        focusedCommitCount,
+        skippedCommitCount,
+        incompleteLanes,
+        outcome,
+        integrationSkipReason,
       ).violation()?.let(onInvalid)
       return GoalSubtaskCommitFocusedAccounting(
         commitSequenceDigest = digest,

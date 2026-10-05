@@ -40,33 +40,37 @@ internal fun reviewDiffRecordPaths(record: String): ReviewDiffParseOutcome<Revie
       is ReviewDiffParseOutcome.Rejected -> return path
     }
   }
-  val headerPaths =
-    when (val result = parseReviewDiffHeader(record.lineSequence().first(), oldSources, newSources)) {
-      is ReviewDiffParseOutcome.Accepted -> result.value
-      is ReviewDiffParseOutcome.Rejected -> return result
-    }
-  if (oldAbsent && newAbsent) return ReviewDiffParseOutcome.Rejected("Git diff record cannot have /dev/null on both sides.")
-  val old =
-    if (oldAbsent) {
-      null
-    } else {
-      when (val result = agreeReviewDiffPaths("old", oldSources + listOfNotNull(headerPaths?.first))) {
-        is ReviewDiffParseOutcome.Accepted -> result.value
-        is ReviewDiffParseOutcome.Rejected -> return result
+  return parseReviewDiffHeader(record.lineSequence().first(), oldSources, newSources).flatMap { header ->
+    resolveReviewDiffRecordPaths(
+      oldAbsent,
+      newAbsent,
+      oldSources + listOfNotNull(header?.first),
+      newSources + listOfNotNull(header?.second),
+    )
+  }
+}
+
+private fun resolveReviewDiffRecordPaths(
+  oldAbsent: Boolean,
+  newAbsent: Boolean,
+  oldSources: List<String>,
+  newSources: List<String>,
+): ReviewDiffParseOutcome<ReviewDiffRecordPaths> {
+  if (oldAbsent && newAbsent) {
+    return ReviewDiffParseOutcome.Rejected("Git diff record cannot have /dev/null on both sides.")
+  }
+  val old = if (oldAbsent) ReviewDiffParseOutcome.Accepted(null) else agreeReviewDiffPaths("old", oldSources)
+  val new = if (newAbsent) ReviewDiffParseOutcome.Accepted(null) else agreeReviewDiffPaths("new", newSources)
+  return old.flatMap { oldPath ->
+    new.flatMap { newPath ->
+      val authoritative = newPath ?: oldPath
+      if (authoritative == null) {
+        ReviewDiffParseOutcome.Rejected("Malformed Git diff record has no attributable repository path.")
+      } else {
+        ReviewDiffParseOutcome.Accepted(ReviewDiffRecordPaths(oldPath, newPath, authoritative))
       }
     }
-  val new =
-    if (newAbsent) {
-      null
-    } else {
-      when (val result = agreeReviewDiffPaths("new", newSources + listOfNotNull(headerPaths?.second))) {
-        is ReviewDiffParseOutcome.Accepted -> result.value
-        is ReviewDiffParseOutcome.Rejected -> return result
-      }
-    }
-  val authoritative =
-    new ?: old ?: return ReviewDiffParseOutcome.Rejected("Malformed Git diff record has no attributable repository path.")
-  return ReviewDiffParseOutcome.Accepted(ReviewDiffRecordPaths(old, new, authoritative))
+  }
 }
 
 private fun parseReviewDiffHeader(
@@ -75,45 +79,63 @@ private fun parseReviewDiffHeader(
   corroboratedNew: List<String>,
 ): ReviewDiffParseOutcome<Pair<String, String>?> {
   val body = line.removePrefix("diff --git ").takeIf { it != line } ?: return ReviewDiffParseOutcome.Accepted(null)
-  val tokens = when (val result = parseReviewDiffGitTokens(body)) {
-    is ReviewDiffParseOutcome.Accepted -> result.value
-    is ReviewDiffParseOutcome.Rejected -> return result
-  }
-  if (tokens.size == 2) {
-    val old =
-      when (val result = reviewDiffRepositoryPath(tokens[0], REVIEW_DIFF_OLD_PREFIX)) {
-        is ReviewDiffParseOutcome.Accepted -> result.value ?: return ReviewDiffParseOutcome.Rejected("Required value was null.")
-        is ReviewDiffParseOutcome.Rejected -> return result
-      }
-    val new =
-      when (val result = reviewDiffRepositoryPath(tokens[1], REVIEW_DIFF_NEW_PREFIX)) {
-        is ReviewDiffParseOutcome.Accepted -> result.value ?: return ReviewDiffParseOutcome.Rejected("Required value was null.")
-        is ReviewDiffParseOutcome.Rejected -> return result
-      }
-    return ReviewDiffParseOutcome.Accepted(old to new)
-  }
-  val candidates = mutableListOf<Pair<String, String>>()
-  for (boundary in Regex(" b/").findAll(body)) {
-    val old = reviewDiffRepositoryPath(body.substring(0, boundary.range.first), REVIEW_DIFF_OLD_PREFIX)
-    val new = reviewDiffRepositoryPath(body.substring(boundary.range.first + 1), REVIEW_DIFF_NEW_PREFIX)
-    if (
-      old is ReviewDiffParseOutcome.Accepted && new is ReviewDiffParseOutcome.Accepted &&
-      old.value != null && new.value != null
-    ) {
-      candidates += old.value to new.value
+  return parseReviewDiffGitTokens(body).flatMap { tokens ->
+    if (tokens.size == 2) {
+      reviewDiffHeaderPair(tokens[0], tokens[1])
+    } else {
+      ambiguousReviewDiffHeader(body, corroboratedOld, corroboratedNew)
     }
   }
-  val candidatesMatchingRecord =
-    candidates.filter { (old, new) ->
-      (corroboratedOld.isEmpty() || old in corroboratedOld) &&
-        (corroboratedNew.isEmpty() || new in corroboratedNew) &&
-        (corroboratedOld.isNotEmpty() || corroboratedNew.isNotEmpty() || old == new)
-    }.distinct()
-  if (candidatesMatchingRecord.size != 1) {
-    return ReviewDiffParseOutcome.Rejected("Ambiguous Git diff header cannot establish repository path ownership.")
-  }
-  return ReviewDiffParseOutcome.Accepted(candidatesMatchingRecord.single())
 }
+
+private fun reviewDiffHeaderPair(
+  oldRaw: String,
+  newRaw: String,
+): ReviewDiffParseOutcome<Pair<String, String>> =
+  reviewDiffRepositoryPath(oldRaw, REVIEW_DIFF_OLD_PREFIX).flatMap { old ->
+    if (old == null) {
+      ReviewDiffParseOutcome.Rejected("Required value was null.")
+    } else {
+      reviewDiffRepositoryPath(newRaw, REVIEW_DIFF_NEW_PREFIX).flatMap { new ->
+        if (new == null) {
+          ReviewDiffParseOutcome.Rejected("Required value was null.")
+        } else {
+          ReviewDiffParseOutcome.Accepted(old to new)
+        }
+      }
+    }
+  }
+
+private fun ambiguousReviewDiffHeader(
+  body: String,
+  corroboratedOld: List<String>,
+  corroboratedNew: List<String>,
+): ReviewDiffParseOutcome<Pair<String, String>> {
+  val candidates =
+    Regex(" b/").findAll(body).mapNotNull { boundary ->
+      val result =
+        reviewDiffHeaderPair(
+          body.substring(0, boundary.range.first),
+          body.substring(boundary.range.first + 1),
+        )
+      (result as? ReviewDiffParseOutcome.Accepted)?.value
+    }
+  val matching =
+    candidates.filter { (old, new) ->
+      pathCorroborated(old, corroboratedOld) && pathCorroborated(new, corroboratedNew) &&
+        (corroboratedOld.isNotEmpty() || corroboratedNew.isNotEmpty() || old == new)
+    }.distinct().toList()
+  return if (matching.size != 1) {
+    ReviewDiffParseOutcome.Rejected("Ambiguous Git diff header cannot establish repository path ownership.")
+  } else {
+    ReviewDiffParseOutcome.Accepted(matching.single())
+  }
+}
+
+private fun pathCorroborated(
+  path: String,
+  sources: List<String>,
+): Boolean = sources.isEmpty() || path in sources
 
 private fun agreeReviewDiffPaths(
   side: String,

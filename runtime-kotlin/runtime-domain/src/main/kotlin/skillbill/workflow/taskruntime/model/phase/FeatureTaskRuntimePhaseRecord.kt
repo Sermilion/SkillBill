@@ -99,8 +99,9 @@ data class FeatureTaskRuntimePhaseRecord(
   )
 
   init {
-    val reason = executionViolation(phaseId, attemptCount, resolvedAgentId, durationMillis, edgeIteration)
-      ?: reviewAndLaunchViolation(phaseId, reviewPassNumber, launchedModel, launchedEffort, reviewRunId)
+    val reason =
+      executionViolation(phaseId, attemptCount, resolvedAgentId, durationMillis, edgeIteration)
+        ?: reviewAndLaunchViolation(phaseId, reviewPassNumber, launchedModel, launchedEffort, reviewRunId)
     require(reason == null) { reason.orEmpty() }
   }
 
@@ -144,16 +145,17 @@ data class FeatureTaskRuntimePhaseRecord(
       resolvedAgentId: String,
       durationMillis: Long?,
       edgeIteration: Int?,
-    ): String? = when {
-      phaseId.isBlank() -> "FeatureTaskRuntimePhaseRecord.phaseId must be non-blank."
-      attemptCount < 1 -> "FeatureTaskRuntimePhaseRecord.attemptCount must be >= 1, was $attemptCount."
-      resolvedAgentId.isBlank() -> "FeatureTaskRuntimePhaseRecord.resolvedAgentId must be non-blank."
-      durationMillis != null && durationMillis < 0 ->
-        "FeatureTaskRuntimePhaseRecord.durationMillis must be non-negative, was $durationMillis."
-      edgeIteration != null && edgeIteration < 1 ->
-        "FeatureTaskRuntimePhaseRecord.edgeIteration must be >= 1 when present, was $edgeIteration."
-      else -> null
-    }
+    ): String? =
+      when {
+        phaseId.isBlank() -> "FeatureTaskRuntimePhaseRecord.phaseId must be non-blank."
+        attemptCount < 1 -> "FeatureTaskRuntimePhaseRecord.attemptCount must be >= 1, was $attemptCount."
+        resolvedAgentId.isBlank() -> "FeatureTaskRuntimePhaseRecord.resolvedAgentId must be non-blank."
+        durationMillis != null && durationMillis < 0 ->
+          "FeatureTaskRuntimePhaseRecord.durationMillis must be non-negative, was $durationMillis."
+        edgeIteration != null && edgeIteration < 1 ->
+          "FeatureTaskRuntimePhaseRecord.edgeIteration must be >= 1 when present, was $edgeIteration."
+        else -> null
+      }
 
     private fun reviewAndLaunchViolation(
       phaseId: String,
@@ -161,19 +163,20 @@ data class FeatureTaskRuntimePhaseRecord(
       launchedModel: String?,
       launchedEffort: String?,
       reviewRunId: String?,
-    ): String? = when {
-      reviewPassNumber != null && (phaseId != "review" || reviewPassNumber < 1) ->
-        "FeatureTaskRuntimePhaseRecord.reviewPassNumber must be >= 1 and present only for review."
-      launchedModel != null && launchedModel.isBlank() ->
-        "FeatureTaskRuntimePhaseRecord.launchedModel must be non-blank when present."
-      launchedEffort != null && launchedEffort.isBlank() ->
-        "FeatureTaskRuntimePhaseRecord.launchedEffort must be non-blank when present."
-      launchedEffort != null && launchedModel == null ->
-        "FeatureTaskRuntimePhaseRecord.launchedEffort requires launchedModel; the launch pair moves as a unit."
-      reviewRunId != null && (phaseId != "review" || reviewRunId.isBlank()) ->
-        "FeatureTaskRuntimePhaseRecord.reviewRunId must be non-blank and present only for review."
-      else -> null
-    }
+    ): String? =
+      when {
+        reviewPassNumber != null && (phaseId != "review" || reviewPassNumber < 1) ->
+          "FeatureTaskRuntimePhaseRecord.reviewPassNumber must be >= 1 and present only for review."
+        launchedModel != null && launchedModel.isBlank() ->
+          "FeatureTaskRuntimePhaseRecord.launchedModel must be non-blank when present."
+        launchedEffort != null && launchedEffort.isBlank() ->
+          "FeatureTaskRuntimePhaseRecord.launchedEffort must be non-blank when present."
+        launchedEffort != null && launchedModel == null ->
+          "FeatureTaskRuntimePhaseRecord.launchedEffort requires launchedModel; the launch pair moves as a unit."
+        reviewRunId != null && (phaseId != "review" || reviewRunId.isBlank()) ->
+          "FeatureTaskRuntimePhaseRecord.reviewRunId must be non-blank and present only for review."
+        else -> null
+      }
 
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePhaseRecord {
       requireCompatibleShape(raw)
@@ -183,43 +186,49 @@ data class FeatureTaskRuntimePhaseRecord(
           SharedPayloadKeys.PHASE_ID,
         )
       val reader = durableArtifactMapReader(raw)
-      val status = WorkflowStepStatus.fromWire(reader.requiredString(SharedPayloadKeys.STATUS))
-        ?: incompatiblePhaseRecord(listOf("unknown status '${raw[SharedPayloadKeys.STATUS]}'"))
+      val status =
+        WorkflowStepStatus.fromWire(reader.requiredString(SharedPayloadKeys.STATUS))
+          ?: incompatiblePhaseRecord(listOf("unknown status '${raw[SharedPayloadKeys.STATUS]}'"))
       val attemptCount = reader.requiredInt("attempt_count")
       val startedAt = parsePersistedInstantOrNull(reader.requiredString("started_at")) ?: incompatiblePhaseRecord()
       val firstStartedAt =
         parsePersistedInstantOrNull(reader.requiredString("first_started_at")) ?: incompatiblePhaseRecord()
-      val finishedAt = reader.optionalString("finished_at")?.let { value ->
-        parsePersistedInstantOrNull(value) ?: incompatiblePhaseRecord()
-      }
+      val finishedAt =
+        reader.optionalString("finished_at")?.let { value ->
+          parsePersistedInstantOrNull(value) ?: incompatiblePhaseRecord()
+        }
       val durationMillis = reader.optionalLong("duration_millis")
       val resolvedAgentId = reader.requiredString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID)
-      val executionOrigin = FeatureTaskRuntimePhaseExecutionOrigin.fromWireValue(
-        reader.requiredString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN),
-      )
+      val executionOrigin =
+        FeatureTaskRuntimePhaseExecutionOrigin.fromWireValue(
+          reader.requiredString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN),
+        )
       val outputArtifact = reader.optionalString("output_artifact")
       val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
-      val failureDisposition = reader.optionalString(SharedPayloadKeys.FAILURE_DISPOSITION)?.let { value ->
-        FeatureTaskRuntimeFailureDisposition.fromWireValue(value) ?: incompatiblePhaseRecord()
-      }
+      val failureDisposition =
+        reader.optionalString(SharedPayloadKeys.FAILURE_DISPOSITION)?.let { value ->
+          FeatureTaskRuntimeFailureDisposition.fromWireValue(value) ?: incompatiblePhaseRecord()
+        }
       val fileManifestBefore = reader.optionalStringList("file_manifest_before")
       val fileManifestAfter = reader.optionalStringList("file_manifest_after")
       val fileManifestIntroduced = reader.optionalStringList("file_manifest_introduced")
       val loopId = reader.optionalString("loop_id")
       val edgeIteration = reader.optionalInt("edge_iteration")
       val reviewPassNumber = reader.optionalInt("review_pass_number")
-      val repairEvidence = raw[FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE]?.let { value ->
-        val evidence = value as? Map<*, *> ?: incompatiblePhaseRecord()
-        FeatureTaskRuntimePhaseOutputRepairEvidence.fromArtifactMap(
-          evidence.entries.associate { (key, item) -> key.toString() to item },
-          { incompatiblePhaseRecord() },
-        )
-      }
+      val repairEvidence =
+        raw[FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE]?.let { value ->
+          val evidence = value as? Map<*, *> ?: incompatiblePhaseRecord()
+          FeatureTaskRuntimePhaseOutputRepairEvidence.fromArtifactMap(
+            evidence.entries.associate { (key, item) -> key.toString() to item },
+            { incompatiblePhaseRecord() },
+          )
+        }
       val launchedModel = reader.optionalString("launched_model")
       val launchedEffort = reader.optionalString("launched_effort")
       val reviewRunId = reader.optionalString("review_run_id")
-      val reason = executionViolation(phaseId, attemptCount, resolvedAgentId, durationMillis, edgeIteration)
-        ?: reviewAndLaunchViolation(phaseId, reviewPassNumber, launchedModel, launchedEffort, reviewRunId)
+      val reason =
+        executionViolation(phaseId, attemptCount, resolvedAgentId, durationMillis, edgeIteration)
+          ?: reviewAndLaunchViolation(phaseId, reviewPassNumber, launchedModel, launchedEffort, reviewRunId)
       if (reason != null) incompatiblePhaseRecord()
       return FeatureTaskRuntimePhaseRecord(
         phaseId, status, attemptCount, startedAt, firstStartedAt, finishedAt, durationMillis,

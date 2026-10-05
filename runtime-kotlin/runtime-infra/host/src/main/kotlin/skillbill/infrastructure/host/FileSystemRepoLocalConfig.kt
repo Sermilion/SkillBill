@@ -129,12 +129,14 @@ class FileSystemRepoLocalConfig(
     val maxSpecIntentProjectionBytes = defaults.maxSpecIntentProjectionBytes
     val violation =
       ReviewContextBudgetPolicy.byteLimitViolation(
-        maxParentPacketBytes,
-        maxLaneLaunchBytes,
-        maxLaneEvidenceBytes,
-        maxEvidenceResultBytes,
-        maxLaneResultBytes,
-        maxSpecIntentProjectionBytes,
+        listOf(
+          maxParentPacketBytes,
+          maxLaneLaunchBytes,
+          maxLaneEvidenceBytes,
+          maxEvidenceResultBytes,
+          maxLaneResultBytes,
+          maxSpecIntentProjectionBytes,
+        ),
       ) ?: ReviewContextBudgetPolicy.executionLimitViolation(
         maxAssignmentExpansions,
         maxSpecialistToolCalls,

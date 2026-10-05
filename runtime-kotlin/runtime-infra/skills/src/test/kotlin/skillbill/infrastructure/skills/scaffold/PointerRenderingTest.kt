@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.scaffold
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.pointer.normalizePointerPath
 import skillbill.infrastructure.skills.scaffold.pointer.renderPointer
 import skillbill.scaffold.model.PointerSpec
@@ -99,7 +101,7 @@ class PointerRenderingTest {
     Files.createDirectories(packRoot.resolve("code-review/bill-kotlin-code-review"))
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         renderPointer(
           repoRoot = tempRoot,
           packRoot = packRoot,
@@ -111,6 +113,7 @@ class PointerRenderingTest {
             ),
         )
       }
+    assertEquals(ScaffoldFailureCode.INVALID_INPUT, error.code)
     assertTrue(
       error.message?.contains("does not exist") == true,
       "expected missing-target error, got '${error.message}'",
@@ -118,14 +121,14 @@ class PointerRenderingTest {
   }
 
   @Test
-  fun `fails with IllegalArgumentException when pointer file resolves to itself`() {
+  fun `fails with invalid input when pointer file resolves to itself`() {
     val packRoot = tempRoot.resolve("platform-packs/kotlin")
     val pointerDir = packRoot.resolve("code-review/bill-kotlin-code-review")
     Files.createDirectories(pointerDir)
     Files.writeString(pointerDir.resolve("self.md"), "# self")
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         renderPointer(
           repoRoot = tempRoot,
           packRoot = packRoot,
@@ -137,6 +140,7 @@ class PointerRenderingTest {
             ),
         )
       }
+    assertEquals(ScaffoldFailureCode.INVALID_INPUT, error.code)
     assertTrue(
       error.message?.contains("resolves to itself") == true,
       "expected self-reference error, got '${error.message}'",
@@ -144,7 +148,7 @@ class PointerRenderingTest {
   }
 
   @Test
-  fun `fails with IllegalArgumentException when target escapes repoRoot`() {
+  fun `fails with invalid input when target escapes repoRoot`() {
     val outsideRepo = Files.createTempDirectory("skillbill-outside-repo-")
     try {
       Files.writeString(outsideRepo.resolve("evil.md"), "# evil")
@@ -156,7 +160,7 @@ class PointerRenderingTest {
         ).toString().replace('\\', '/')
 
       val error =
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<SkillBillRuntimeException> {
           renderPointer(
             repoRoot = tempRoot,
             packRoot = packRoot,
@@ -168,6 +172,7 @@ class PointerRenderingTest {
               ),
           )
         }
+      assertEquals(ScaffoldFailureCode.INVALID_INPUT, error.code)
       assertTrue(
         error.message?.contains("escapes repoRoot") == true,
         "expected escape error, got '${error.message}'",
@@ -180,13 +185,13 @@ class PointerRenderingTest {
   }
 
   @Test
-  fun `fails with IllegalArgumentException when target is a directory not a regular file`() {
+  fun `fails with invalid input when target is a directory not a regular file`() {
     val packRoot = tempRoot.resolve("platform-packs/kotlin")
     Files.createDirectories(packRoot.resolve("code-review/skill"))
     Files.createDirectories(tempRoot.resolve("orchestration/dir-target"))
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         renderPointer(
           repoRoot = tempRoot,
           packRoot = packRoot,
@@ -198,6 +203,7 @@ class PointerRenderingTest {
             ),
         )
       }
+    assertEquals(ScaffoldFailureCode.INVALID_INPUT, error.code)
     assertTrue(
       error.message?.contains("does not exist") == true,
       "expected directory rejection (handled via 'does not exist'), got '${error.message}'",

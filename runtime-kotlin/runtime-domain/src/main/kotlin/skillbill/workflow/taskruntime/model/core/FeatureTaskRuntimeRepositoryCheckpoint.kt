@@ -27,7 +27,10 @@ data class FeatureTaskRuntimeRepositoryCheckpoint(
   }
 
   companion object {
-    internal fun violation(fingerprint: String, workingTreeOwnedPaths: List<String>): String? =
+    internal fun violation(
+      fingerprint: String,
+      workingTreeOwnedPaths: List<String>,
+    ): String? =
       when {
         fingerprint.isBlank() ->
           "FeatureTaskRuntimeRepositoryCheckpoint.fingerprint must be non-blank; an unidentified checkpoint " +

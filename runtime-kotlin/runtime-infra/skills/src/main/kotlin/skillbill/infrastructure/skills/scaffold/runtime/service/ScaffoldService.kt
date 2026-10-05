@@ -1,6 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.scaffold.payload.detectKind
@@ -93,8 +94,8 @@ internal fun scaffoldWithAdapters(
   hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   runtime: ScaffoldRuntimeContext = ScaffoldRuntimeContext(resolveUserHome(null, hostPlatform)),
 ): ScaffoldResult {
-  require(payload.isNotEmpty()) {
-    "Scaffold payload must be a JSON object mapping string keys to values."
+  if (payload.isEmpty()) {
+    throw invalidScaffoldInputError("Scaffold payload must be a JSON object mapping string keys to values.")
   }
 
   validatePayloadVersion(payload)

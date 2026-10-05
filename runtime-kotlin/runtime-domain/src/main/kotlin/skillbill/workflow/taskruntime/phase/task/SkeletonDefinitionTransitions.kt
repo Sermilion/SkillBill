@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 
 fun SkeletonDefinition.declaration(): FeatureTaskRuntimeTransitionDeclaration =
   deriveTransitions(stepIds, entryStepIds = emptySet())
@@ -21,14 +22,21 @@ fun SkeletonDefinition.traversalOrViolation(
       "FeatureTaskRuntimeTransitionDeclaration.forwardPhaseIds must list at least one phase.",
     )
   } else {
-    SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds))
+    val reversedGate =
+      FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates.firstOrNull {
+        it.phaseId in steps && it.requiredPhaseId in steps &&
+          steps.indexOf(it.requiredPhaseId) >= steps.indexOf(it.phaseId)
+      }
+    if (reversedGate == null) {
+      SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds))
+    } else {
+      SkeletonTraversalResult.Rejected(
+        "FeatureTaskRuntimePhaseEntryGate requires '${reversedGate.requiredPhaseId}' to precede " +
+          "'${reversedGate.phaseId}' in the forward pipeline, but it is at index " +
+          "${steps.indexOf(reversedGate.requiredPhaseId)} against ${steps.indexOf(reversedGate.phaseId)}.",
+      )
+    }
   }
-}
-
-sealed interface SkeletonTraversalResult {
-  data class Ready(val declaration: FeatureTaskRuntimeTransitionDeclaration) : SkeletonTraversalResult
-
-  data class Rejected(val reason: String) : SkeletonTraversalResult
 }
 
 private fun deriveTransitions(

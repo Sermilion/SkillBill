@@ -1,6 +1,6 @@
 # SKILL-401 Subtask 5 - application-and-infra-adapters
 
-Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](spec.md)
 Issue key: SKILL-401
 
 ## Scope
@@ -96,7 +96,7 @@ skill-bill goal SKILL-401
 
 This plan uses only the supplied preplan digest for checkout HEAD `5a17798c15c908c1d5a9c40ca025f0cb1bcb50d6`. Historical line numbers above are anchors, not current locations. No repository discovery, branch preparation, implementation, or command validation occurred in plan. The runtime owns branch preparation. This subtask has no dependencies and must remain independently implementable.
 
-Paths below are relative to `runtime-kotlin/`. Production paths use `<module>/src/main/kotlin/skillbill/`; test paths use `<module>/src/test/kotlin/skillbill/`. Infrastructure owners are nested modules such as `runtime-infra/host` and `runtime-infra/sqlite`.
+Paths below are relative to `../../../runtime-kotlin`. Production paths use `<module>/src/main/kotlin/skillbill/`; test paths use `<module>/src/test/kotlin/skillbill/`. Infrastructure owners are nested modules such as `runtime-infra/host` and `runtime-infra/sqlite`.
 
 ### Ordered tasks
 
@@ -152,6 +152,6 @@ Expected input rejection uses nullable parsing or an ordered violation; malforme
 
 Use small helpers within existing owners, obey detekt limits, keep files below 1,200 lines, and add no authored Kotlin line or non-KDoc block comments. In touched functions, replace relevant `runCatching` with direct or narrow handling; retained broad wrappers must rethrow cooperative cancellation and interruption. Do not move forbidden catches behind wrappers. Review and validate may repair production wiring, tests, formatting, or lint needed to satisfy these same end states.
 
-Implement writes the repository changes and test updates without executing builds or tests. Audit and review inspect the changes. Build owns the pack build command. Validate owns all test execution and full gates, including the manifest-declared collect-all gate and its cache-bypassing counterpart, unit tests, detekt, runtime-core repoTest, and `scripts/validate_agent_configs`. Preserve `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, `PortsDeclarationArchitectureTest`, `WireVocabularyArchitectureTest`, comment/KDoc, file-size, and module/package ownership guards. Spotless must run in a plain clone. Exact command argv comes from the owning phase's installed runtime and repository guidance, not an invented command here.
+Implement writes the repository changes and test updates without executing builds or tests. Audit and review inspect the changes. Build owns the pack build command. Validate owns all test execution and full gates, including the manifest-declared collect-all gate and its cache-bypassing counterpart, unit tests, detekt, runtime-core repoTest, and `../../../scripts/validate_agent_configs`. Preserve `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, `PortsDeclarationArchitectureTest`, `WireVocabularyArchitectureTest`, comment/KDoc, file-size, and module/package ownership guards. Spotless must run in a plain clone. Exact command argv comes from the owning phase's installed runtime and repository guidance, not an invented command here.
 
 No command evidence is claimed by this plan; tests_executed remains empty. History, commit/push, PR, and runtime settlement stay with their owning phases. No migration, feature flag, public workflow command, install refresh, or skill-source change is needed. All missing checkout facts above are bounded implementation confirmations, not product questions or planning blockers. Preserve the title and all existing scope, criteria, dependency context, validation strategy, and next-path text.

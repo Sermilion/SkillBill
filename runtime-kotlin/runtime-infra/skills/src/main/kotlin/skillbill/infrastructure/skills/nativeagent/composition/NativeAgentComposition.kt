@@ -34,7 +34,7 @@ internal fun parseCompositionDirective(
     NativeAgentCompositionDirective(kind)
   }
 
-private fun invalidCompositionInput(message: String): Nothing =
+internal fun invalidCompositionInput(message: String): Nothing =
   throw SkillBillRuntimeException(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, message)
 
 internal fun resolveNativeAgentCompositionTarget(
@@ -65,7 +65,7 @@ internal fun resolveNativeAgentCompositionTarget(
     )
   } else {
     resolveSiblingContentTarget(sourcePath, source)
-  } ?: throw IllegalArgumentException(
+  } ?: invalidCompositionInput(
     "${displayPath(root, sourcePath)}: native agent compose directive 'governed-content' " +
       "could not resolve a corresponding content.md for '${source.name}'",
   )

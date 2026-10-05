@@ -77,13 +77,14 @@ data class FeatureTaskRuntimeHandoffEnvelope(
       val projectionContractVersion = reader.requiredString("projection_contract_version")
       val promptVisibility =
         FeatureTaskRuntimeHandoffPromptVisibility.fromWire(reader.requiredString("prompt_visibility"))
-      val producerIteration = reader.requiredNestedObject("producer_iteration").let {
-        val iterationReader = handoffReader(it)
-        val phaseId = iterationReader.requiredString(SharedPayloadKeys.PHASE_ID)
-        val iteration = iterationReader.requiredInt("iteration")
-        FeatureTaskRuntimeProducerIteration.violation(phaseId, iteration)?.let(::decodeError)
-        FeatureTaskRuntimeProducerIteration(phaseId, iteration)
-      }
+      val producerIteration =
+        reader.requiredNestedObject("producer_iteration").let {
+          val iterationReader = handoffReader(it)
+          val phaseId = iterationReader.requiredString(SharedPayloadKeys.PHASE_ID)
+          val iteration = iterationReader.requiredInt("iteration")
+          FeatureTaskRuntimeProducerIteration.violation(phaseId, iteration)?.let(::decodeError)
+          FeatureTaskRuntimeProducerIteration(phaseId, iteration)
+        }
       val fields = reader.requiredList("fields").map(::fieldFromWire)
       return FeatureTaskRuntimeHandoffProjection(
         projectionName = projectionName,
@@ -101,18 +102,18 @@ data class FeatureTaskRuntimeHandoffEnvelope(
       val name = reader.requiredString(DecompositionPlanningPayloadKeys.NAME)
       val value =
         when (val kind = reader.requiredString("kind")) {
-            "text" -> FeatureTaskRuntimeHandoffProjectionValue.Text(reader.requiredString("text"))
-            "text_list" ->
-              FeatureTaskRuntimeHandoffProjectionValue.TextList(
-                reader.optionalStringList("items"),
-              )
-            "compact_reference" ->
-              FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-                kind = FeatureTaskRuntimeCompactReferenceKind.fromWire(reader.requiredString("reference_kind")),
-                value = reader.requiredString("reference_value"),
-              )
-            else -> decodeError("projection field '$name' has unknown value kind '$kind'.")
-          }
+          "text" -> FeatureTaskRuntimeHandoffProjectionValue.Text(reader.requiredString("text"))
+          "text_list" ->
+            FeatureTaskRuntimeHandoffProjectionValue.TextList(
+              reader.optionalStringList("items"),
+            )
+          "compact_reference" ->
+            FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+              kind = FeatureTaskRuntimeCompactReferenceKind.fromWire(reader.requiredString("reference_kind")),
+              value = reader.requiredString("reference_value"),
+            )
+          else -> decodeError("projection field '$name' has unknown value kind '$kind'.")
+        }
       FeatureTaskRuntimeHandoffProjectionField.violation(name)?.let(::decodeError)
       return FeatureTaskRuntimeHandoffProjectionField(name, value)
     }

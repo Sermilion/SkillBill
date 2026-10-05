@@ -76,12 +76,13 @@ data class FeatureTaskRuntimeValidationEvidence(
   }
 
   companion object {
-    internal fun violation(results: List<FeatureTaskRuntimeValidationCommandResult>): String? = when {
-      results.isEmpty() -> "Validation evidence must contain at least one result."
-      results.size > MAX_VALIDATION_RESULTS ->
-        "Validation evidence cannot contain more than $MAX_VALIDATION_RESULTS results."
-      else -> null
-    }
+    internal fun violation(results: List<FeatureTaskRuntimeValidationCommandResult>): String? =
+      when {
+        results.isEmpty() -> "Validation evidence must contain at least one result."
+        results.size > MAX_VALIDATION_RESULTS ->
+          "Validation evidence cannot contain more than $MAX_VALIDATION_RESULTS results."
+        else -> null
+      }
 
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,

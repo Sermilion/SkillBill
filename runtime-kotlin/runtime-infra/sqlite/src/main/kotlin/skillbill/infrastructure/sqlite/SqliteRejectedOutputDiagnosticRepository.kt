@@ -262,8 +262,9 @@ private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
       corruptRecord("<unreadable>", error)
     }
   return try {
-    val lifecycle = RejectedOutputLifecycle.entries.firstOrNull { it.name == getString("lifecycle").uppercase() }
-      ?: corruptRecord(identity)
+    val lifecycle =
+      RejectedOutputLifecycle.entries.firstOrNull { it.name == getString("lifecycle").uppercase() }
+        ?: corruptRecord(identity)
     val repairTurn = getInt("repair_turn")
     RejectedOutputDiagnostic.violation(repairTurn)?.let { corruptRecord(identity) }
     RejectedOutputDiagnosticRecord(

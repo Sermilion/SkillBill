@@ -303,14 +303,20 @@ data class GoalSubtaskReviewState(
       )
     }
 
-    private fun decodeBaselineUntrackedPaths(raw: Map<String, Any?>, sourceLabel: String): List<String> =
+    private fun decodeBaselineUntrackedPaths(
+      raw: Map<String, Any?>,
+      sourceLabel: String,
+    ): List<String> =
       reviewStateReader(raw, sourceLabel).optionalList("baseline_untracked_paths")
         ?.mapIndexed { index, value ->
           (value as? String)?.takeIf(String::isNotBlank)
             ?: reviewStateError("$sourceLabel.baseline_untracked_paths[$index]", "must be a non-blank string.")
         }.orEmpty()
 
-    private fun decodeResolvedTier(raw: Map<String, Any?>, sourceLabel: String): CodeReviewExecutionMode? =
+    private fun decodeResolvedTier(
+      raw: Map<String, Any?>,
+      sourceLabel: String,
+    ): CodeReviewExecutionMode? =
       reviewStateReader(raw, sourceLabel).optionalString("resolved_tier")?.let { wire ->
         CodeReviewExecutionMode.fromWireOrNull(wire)
           ?: reviewStateError(sourceLabel, CodeReviewExecutionMode.unknownWireValueMessage(wire))
@@ -375,8 +381,7 @@ private data class GoalSubtaskReviewStateValidation(
   val remediationBaseSha: String?,
   val repairReceipts: List<FeatureTaskRuntimeRepairReceipt>,
 ) {
-  fun violation(): String? =
-    identityViolation() ?: baselineViolation() ?: passViolation() ?: dispositionViolation()
+  fun violation(): String? = identityViolation() ?: baselineViolation() ?: passViolation() ?: dispositionViolation()
 
   private fun identityViolation(): String? =
     when {
@@ -394,13 +399,14 @@ private data class GoalSubtaskReviewStateValidation(
     }
 
   private fun reviewedIdentityViolation(): String? =
-    listOf("reviewed target" to reviewedTargetSha, "reviewed tree" to reviewedTreeSha).firstNotNullOfOrNull { (label, sha) ->
-      if (sha != null && !GIT_COMMIT_SHA.matches(sha)) {
-        "Goal $label SHA must be a 40- or 64-character lowercase object SHA."
-      } else {
-        null
+    listOf("reviewed target" to reviewedTargetSha, "reviewed tree" to reviewedTreeSha)
+      .firstNotNullOfOrNull { (label, sha) ->
+        if (sha != null && !GIT_COMMIT_SHA.matches(sha)) {
+          "Goal $label SHA must be a 40- or 64-character lowercase object SHA."
+        } else {
+          null
+        }
       }
-    }
 
   private fun baselineViolation(): String? {
     if (baselineUntrackedPaths.any(String::isBlank)) return "Baseline untracked paths must be non-blank."

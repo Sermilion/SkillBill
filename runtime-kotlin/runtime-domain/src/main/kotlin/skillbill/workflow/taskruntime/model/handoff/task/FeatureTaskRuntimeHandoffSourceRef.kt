@@ -14,8 +14,11 @@ sealed interface FeatureTaskRuntimeHandoffSourceRef {
 
     companion object {
       internal fun violation(producingPhaseId: String): String? =
-        if (producingPhaseId.isNotBlank()) null
-        else "FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput.producingPhaseId must be non-blank."
+        if (producingPhaseId.isNotBlank()) {
+          null
+        } else {
+          "FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput.producingPhaseId must be non-blank."
+        }
     }
 
     override val wireValue: String get() = "$UPSTREAM_PHASE_OUTPUT_PREFIX$producingPhaseId"

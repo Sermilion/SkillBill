@@ -1,6 +1,6 @@
 # SKILL-401 Subtask 1 - domain-goalrunner-review-decoders
 
-Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-401-defect-exception-control-flow/spec.md](spec.md)
 Issue key: SKILL-401
 
 ## Scope
@@ -70,7 +70,7 @@ skill-bill goal SKILL-401
 
 ## Implementation Details
 
-This plan uses the upstream preplan digest at checkout HEAD `5a17798c15c908c1d5a9c40ca025f0cb1bcb50d6`. Planning performed no repository discovery. Paths below are relative to `runtime-kotlin/`; domain production paths start at `runtime-domain/src/main/kotlin/skillbill/`, and domain test paths start at `runtime-domain/src/test/kotlin/skillbill/`. Historical line numbers in Scope are not implementation anchors.
+This plan uses the upstream preplan digest at checkout HEAD `5a17798c15c908c1d5a9c40ca025f0cb1bcb50d6`. Planning performed no repository discovery. Paths below are relative to `../../../runtime-kotlin`; domain production paths start at `runtime-domain/src/main/kotlin/skillbill/`, and domain test paths start at `runtime-domain/src/test/kotlin/skillbill/`. Historical line numbers in Scope are not implementation anchors.
 
 ### Ordered tasks
 
@@ -88,7 +88,7 @@ This plan uses the upstream preplan digest at checkout HEAD `5a17798c15c908c1d5a
 
    Validate citation input before constructing `ReviewFindingCitation` in `parseCitationToken`. The model is in `review/model/ReviewStageState.kt`; share its ordered nonblank-path, positive-line, and repository-relative-path checks through a violation helper. Preserve line-number `toIntOrNull`, zero-to-one coercion, `invalid_path`, and all existing diagnostic fields. Retain the shared path validator's ordered checks and its re-export in `review/context/model/hunk/ReviewContextCanonical.kt`.
 
-   Test obligations are limited to the two existing sub-spec obligations. Keep `review/parallel/ParallelReviewFindingParserTest.kt`'s `invalid path still parses and does not abort later findings`, which already covers a short Unicode escape and both rejection categories. Add one traversing-path case in that existing suite to catch the realistic bug where a decoded `../` path is admitted or receives the decoding-failure category instead of `NO_ADMISSIBLE_LOCATION`. Assert the parser's observable rejection and continued parsing of later findings. Retain `goalrunner/subtaskreview/GoalSubtaskReviewStructuredFindingTest.kt`; do not add duplicate malformed-escape cases.
+   Test obligations are limited to the two existing sub-spec obligations. Keep `review/parallel/ParallelReviewFindingParserTest.kt`'s `invalid path still parses and does not abort later findings`, which already covers a short Unicode escape and both rejection categories. Add one traversing-path case in that existing suite to catch the realistic bug where a decoded `../..` path is admitted or receives the decoding-failure category instead of `NO_ADMISSIBLE_LOCATION`. Assert the parser's observable rejection and continued parsing of later findings. Retain `goalrunner/subtaskreview/GoalSubtaskReviewStructuredFindingTest.kt`; do not add duplicate malformed-escape cases.
 
 3. Convert lane-accounting and observation timestamp decoding. Serves AC-001 and AC-002.
 
@@ -112,7 +112,7 @@ This plan uses the upstream preplan digest at checkout HEAD `5a17798c15c908c1d5a
 
    Implement removes the digest's 11 domain catch sites and the two bounded caller wrappers rather than hiding them behind another exception boundary. Preserve true invariant assertions and edge-only throwing wrappers. Keep named `ParseBoundarySite` functions; if a required rename occurs, update its location in `runtime-core/src/repoTest/kotlin/skillbill/architecture/PrincipleEnforcementInventory.kt` without removing coverage. No guard, baseline, or suppression may widen. The `fromMeasurements` example in Scope belongs to subtask 2 and is not an additional task here; the digest also confirms its invalid-measurement rejection must remain coded there.
 
-   Audit inspects every criterion, validation order, failure code, exact message, rejection category, diagnostic, and bounded caller result. Review retains branch-diff scope. Buildability proof belongs only to the build phase. Validate runs the behavioural suites named above, detekt, `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, and the full runtime-core repoTest and repository gates. It also runs `scripts/validate_agent_configs` as required by CI. The digest identifies the Kotlin pack's collect-all gate and cache-bypassing counterpart but omits their exact argv; validate resolves those commands from the declared manifest rather than this plan inventing them. Validation may repair production wiring, test setup, formatting, or lint while preserving behaviour, assertions, and architecture rules.
+   Audit inspects every criterion, validation order, failure code, exact message, rejection category, diagnostic, and bounded caller result. Review retains branch-diff scope. Buildability proof belongs only to the build phase. Validate runs the behavioural suites named above, detekt, `TypedParseBoundaryArchitectureTest`, `FailureCodeTotalityArchitectureTest`, and the full runtime-core repoTest and repository gates. It also runs `../../../scripts/validate_agent_configs` as required by CI. The digest identifies the Kotlin pack's collect-all gate and cache-bypassing counterpart but omits their exact argv; validate resolves those commands from the declared manifest rather than this plan inventing them. Validation may repair production wiring, test setup, formatting, or lint while preserving behaviour, assertions, and architecture rules.
 
 ### Constraints and implementation assumptions
 

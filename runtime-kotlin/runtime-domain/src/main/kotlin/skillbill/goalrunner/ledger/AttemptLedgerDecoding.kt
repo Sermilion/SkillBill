@@ -68,18 +68,18 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
     invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", reason)
   }
   return GoalProgressEvent(
-      eventKind = eventKind,
-      workflowId = workflowId,
-      workflowPhase = workflowPhase,
-      processAlive = processAlive,
-      sequenceNumber = sequenceNumber,
-      timestamp = timestamp,
-      stepId = stepId,
-      operationName = operationName,
-      operationKind = operationKind,
-      expectedLong = expectedLong,
-      outcome = outcome,
-    )
+    eventKind = eventKind,
+    workflowId = workflowId,
+    workflowPhase = workflowPhase,
+    processAlive = processAlive,
+    sequenceNumber = sequenceNumber,
+    timestamp = timestamp,
+    stepId = stepId,
+    operationName = operationName,
+    operationKind = operationKind,
+    expectedLong = expectedLong,
+    outcome = outcome,
+  )
 }
 
 private fun invalidDeclaredGoalProgressEvent(

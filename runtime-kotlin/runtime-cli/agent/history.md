@@ -1,3 +1,14 @@
+## [2026-10-05] SKILL-401 CLI install, scaffold and agent add-on defect control flow, subtask 7
+Areas: runtime-cli/install, scaffold and kernel/agent; runtime-contracts/shellcontent; runtime-domain; runtime-application; runtime-engine; runtime-infra/skills, host, http, sqlite and workflow; runtime-mcp
+- Removed CLI defect-exception control flow. Stale install selections use an explicit completion branch; path parsing retains narrow InvalidPathException handling.
+- Scaffold payload, wizard and pointer input rejections use ScaffoldFailureCode.INVALID_INPUT with their existing reasons. Only that scaffold code joins shell-content classification, preserving MCP capture behavior for older scaffold codes.
+- Persisted add-on entries and duplicate slugs use the domain violation helpers before construction, retaining UsageError wording. Nullable scaffold-object decoding and true model invariants remain.
+- Boundary parser repairs retain rejection reasons; review lane failure admission handles anticipated I/O and typed runtime failures while parser defects propagate. SkeletonTraversalResult lives with its domain models.
+- reusable: invalidScaffoldInputError centralizes input failure construction; existing model violation helpers supply the same reasons to invariants and CLI parsing.
+- No user-visible message, stream, exit-code or persisted-format change. Top-level crash classification and true invariant assertions remain outside this conversion.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-01] SKILL-392 — CLI composition and guard integrity (subtask 1)
 Areas: runtime-kotlin/runtime-cli (agentaddon, codereview, config, core, featuretask, goal, install, kernel, learning, model, scaffold, skillremove, workflow), runtime-core architecture repoTests, ARCHITECTURE.md
 - RepositoryEnclosingRootPort is injected where used and no longer rides on CliRunInputs; CliRunState result setter is private and results settle through state methods.

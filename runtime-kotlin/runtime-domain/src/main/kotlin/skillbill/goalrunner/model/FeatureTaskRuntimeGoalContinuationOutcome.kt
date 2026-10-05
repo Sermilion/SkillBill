@@ -66,7 +66,12 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
     }
 
   companion object {
-    private fun violation(issueKey: String, subtaskId: Int, workflowId: String, step: String): String? =
+    private fun violation(
+      issueKey: String,
+      subtaskId: Int,
+      workflowId: String,
+      step: String,
+    ): String? =
       when {
         issueKey.isBlank() -> "FeatureTaskRuntimeGoalContinuationOutcome.issueKey must be non-blank."
         subtaskId <= 0 -> "FeatureTaskRuntimeGoalContinuationOutcome.subtaskId must be positive."
@@ -80,8 +85,9 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
       val issueKey = reader.requiredString("issue_key")
       val subtaskId = reader.requiredInt("subtask_id")
       val statusWire = reader.requiredString("status")
-      val status = GoalRunnerTerminalStatus.fromWire(statusWire)
-        ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
+      val status =
+        GoalRunnerTerminalStatus.fromWire(statusWire)
+          ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime goal-continuation outcome is invalid.")
       val workflowId = reader.requiredString(SharedPayloadKeys.WORKFLOW_ID)
       val commitSha = reader.optionalString(DecompositionManifestPayloadKeys.COMMIT_SHA)
       val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)

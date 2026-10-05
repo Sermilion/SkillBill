@@ -80,8 +80,7 @@ private fun readTelemetrySettingsConfig(
         if (
           telemetry != null &&
           !telemetry.containsKey("level") &&
-          enabled is String &&
-          parseTelemetryBoolValueOrNull(enabled) == null
+          invalidTelemetryEnabledValue(enabled)
         ) {
           TelemetrySettingsValue.Unavailable(telemetryBoolValueError("telemetry.enabled"))
         } else {
@@ -236,3 +235,6 @@ private fun applyEnvironmentOverrides(
     ),
   )
 }
+
+private fun invalidTelemetryEnabledValue(value: Any?): Boolean =
+  value is String && parseTelemetryBoolValueOrNull(value) == null

@@ -14,8 +14,8 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispat
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import skillbill.workflow.taskruntime.phase.task.SkeletonTraversalResult
 import skillbill.workflow.taskruntime.phase.task.traversalOrViolation
 import java.util.concurrent.ConcurrentHashMap
 

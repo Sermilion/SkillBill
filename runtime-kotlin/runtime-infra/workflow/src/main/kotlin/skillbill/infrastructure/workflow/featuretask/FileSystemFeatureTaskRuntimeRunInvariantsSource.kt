@@ -29,6 +29,13 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
     }
     val realPath = authorizedRealPath(normalizedPath) ?: return rejected(authorizationReason(normalizedPath))
     requireSelectedBundleEntry(normalizedPath)?.let { return rejected(it) }
+    return readSpecInvariants(normalizedPath, realPath)
+  }
+
+  private fun readSpecInvariants(
+    normalizedPath: Path,
+    realPath: Path,
+  ): FeatureTaskRuntimeRunInvariantsRead {
     val specText = Files.readString(realPath)
     val featureSize = parseFeatureSize(specText)
     val acceptanceCriteria =
@@ -58,21 +65,31 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
   private fun requireSelectedBundleEntry(normalizedPath: Path): String? {
     val bundleDirectory = normalizedPath.parent
     val manifestPath = bundleDirectory.resolve(MANIFEST_FILE_NAME)
-    try {
+    return try {
       DecompositionManifestBundleJournal().failIfPending(bundleDirectory)
-      if (!Files.isRegularFile(manifestPath)) return null
-      val manifest = readManifest(manifestPath)
-      if (normalizedPath.fileName.toString() == Path.of(manifest.parentSpecPath).fileName.toString()) return null
-      return if (manifest.subtasks.any { it.specPath.fileNameOrNull() == normalizedPath.fileName }) {
-        null
+      if (Files.isRegularFile(manifestPath)) {
+        selectedBundleEntryViolation(normalizedPath, readManifest(manifestPath), manifestPath)
       } else {
-        "feature-task-runtime spec path '$normalizedPath' is not a subtask selected by '$manifestPath'."
+        null
       }
     } catch (error: InvalidPathException) {
-      return error.message.orEmpty()
+      error.message.orEmpty()
     } catch (error: SkillBillRuntimeException) {
       error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
-      return error.message.orEmpty()
+      error.message.orEmpty()
+    }
+  }
+
+  private fun selectedBundleEntryViolation(
+    normalizedPath: Path,
+    manifest: DecompositionManifest,
+    manifestPath: Path,
+  ): String? {
+    if (normalizedPath.fileName.toString() == Path.of(manifest.parentSpecPath).fileName.toString()) return null
+    return if (manifest.subtasks.any { it.specPath.fileNameOrNull() == normalizedPath.fileName }) {
+      null
+    } else {
+      "feature-task-runtime spec path '$normalizedPath' is not a subtask selected by '$manifestPath'."
     }
   }
 

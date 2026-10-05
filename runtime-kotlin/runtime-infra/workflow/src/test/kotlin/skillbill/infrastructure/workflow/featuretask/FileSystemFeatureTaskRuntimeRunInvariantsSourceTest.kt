@@ -252,7 +252,11 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
       )
     refusals.forEach { (case, build) ->
       val fixture = build()
-      assertEquals(true, fixture.read() is FeatureTaskRuntimeRunInvariantsRead.Rejected, "case '$case' must refuse launch")
+      assertEquals(
+        true,
+        fixture.read() is FeatureTaskRuntimeRunInvariantsRead.Rejected,
+        "case '$case' must refuse launch",
+      )
     }
   }
 

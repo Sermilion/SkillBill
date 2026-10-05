@@ -152,23 +152,25 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
       val action =
         FeatureTaskRuntimePhaseLedgerAction.fromWire(reader.requiredString(DecompositionManifestPayloadKeys.ACTION))
       val sequenceNumber = reader.requiredInt(FeatureTaskRuntimePhasePayloadKeys.SEQUENCE_NUMBER)
-      val timestamp = parsePersistedInstantOrNull(reader.requiredString("timestamp"))
-        ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")
+      val timestamp =
+        parsePersistedInstantOrNull(reader.requiredString("timestamp"))
+          ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")
       val phaseId =
         requireKnownFeatureTaskRuntimePhaseId(
           reader.requiredString(SharedPayloadKeys.PHASE_ID),
           SharedPayloadKeys.PHASE_ID,
         )
       val resolvedAgentId = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID)
-      val executionOrigin = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN)?.let(
-        FeatureTaskRuntimePhaseExecutionOrigin::fromWireValue,
-      ) ?: FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED
+      val executionOrigin =
+        reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN)?.let(
+          FeatureTaskRuntimePhaseExecutionOrigin::fromWireValue,
+        ) ?: FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED
       val fixLoopIteration = reader.optionalInt("fix_loop_iteration")
       val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
       val loopId = reader.optionalString("loop_id")
       val edgeIteration = reader.optionalInt("edge_iteration")
-      if (violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration) != null) {
-        throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")
+      violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration)?.let {
+        invalidLedgerEntry()
       }
       return FeatureTaskRuntimePhaseLedgerEntry(
         action, sequenceNumber, timestamp, phaseId, attemptCount, resolvedAgentId, executionOrigin,
@@ -177,3 +179,6 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
     }
   }
 }
+
+private fun invalidLedgerEntry(): Nothing =
+  throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")

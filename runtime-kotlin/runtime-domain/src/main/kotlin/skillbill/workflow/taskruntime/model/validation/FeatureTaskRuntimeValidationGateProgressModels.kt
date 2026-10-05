@@ -65,8 +65,9 @@ data class FeatureTaskRuntimeValidationGateRunRecord(
   )
 
   init {
-    val reason = executionViolation(durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint)
-      ?: checksViolation(outcome, exitCode, executedChecksRecorded, executedChecks)
+    val reason =
+      executionViolation(durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint)
+        ?: checksViolation(outcome, exitCode, executedChecksRecorded, executedChecks)
     require(reason == null) { reason.orEmpty() }
   }
 
@@ -77,31 +78,33 @@ data class FeatureTaskRuntimeValidationGateRunRecord(
       command: String?,
       exitCode: Int?,
       repositoryCheckpoint: String?,
-    ): String? = when {
-      durationMs < 0 -> "Validation gate duration_ms must be >= 0, was $durationMs."
-      executedWorkUnits < 0 -> "Validation gate executed_work_units must be >= 0, was $executedWorkUnits."
-      (command == null) != (exitCode == null) -> "Validation gate command and exit_code must be present together."
-      command != null && command.isBlank() -> "Validation gate command must be non-blank when present."
-      repositoryCheckpoint != null && repositoryCheckpoint.isBlank() ->
-        "Validation gate repository_checkpoint must be non-blank when present."
-      command.isNullOrBlank() || exitCode == null || repositoryCheckpoint.isNullOrBlank() ->
-        "Validation gate run must retain command, exit code, and repository checkpoint."
-      else -> null
-    }
+    ): String? =
+      when {
+        durationMs < 0 -> "Validation gate duration_ms must be >= 0, was $durationMs."
+        executedWorkUnits < 0 -> "Validation gate executed_work_units must be >= 0, was $executedWorkUnits."
+        (command == null) != (exitCode == null) -> "Validation gate command and exit_code must be present together."
+        command != null && command.isBlank() -> "Validation gate command must be non-blank when present."
+        repositoryCheckpoint != null && repositoryCheckpoint.isBlank() ->
+          "Validation gate repository_checkpoint must be non-blank when present."
+        command.isNullOrBlank() || exitCode == null || repositoryCheckpoint.isNullOrBlank() ->
+          "Validation gate run must retain command, exit code, and repository checkpoint."
+        else -> null
+      }
 
     internal fun checksViolation(
       outcome: ValidationGateRunOutcome,
       exitCode: Int?,
       executedChecksRecorded: Boolean,
       executedChecks: List<String>,
-    ): String? = when {
-      !executedChecksRecorded ->
-        "Validation gate run must explicitly record executed_checks, including an empty list."
-      outcome == ValidationGateRunOutcome.PASSED && exitCode != 0 ->
-        "A passed validation gate run must have a zero command exit code."
-      executedChecks.any(String::isBlank) -> "Validation gate executed check identities must be non-blank."
-      else -> null
-    }
+    ): String? =
+      when {
+        !executedChecksRecorded ->
+          "Validation gate run must explicitly record executed_checks, including an empty list."
+        outcome == ValidationGateRunOutcome.PASSED && exitCode != 0 ->
+          "A passed validation gate run must have a zero command exit code."
+        executedChecks.any(String::isBlank) -> "Validation gate executed check identities must be non-blank."
+        else -> null
+      }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -154,15 +157,17 @@ data class FeatureTaskRuntimeValidationGateProgress(
       gateRunCount: Int,
       gateRuns: List<FeatureTaskRuntimeValidationGateRunRecord>,
       repairsUsed: Int,
-    ): String? = when {
-      gateRunCount < 0 ->
-        "FeatureTaskRuntimeValidationGateProgress.gateRunCount must be >= 0, was $gateRunCount."
-      gateRuns.size != gateRunCount ->
-        "FeatureTaskRuntimeValidationGateProgress.gateRuns size ${gateRuns.size} must equal gateRunCount $gateRunCount."
-      repairsUsed < 0 ->
-        "FeatureTaskRuntimeValidationGateProgress.repairsUsed must be >= 0, was $repairsUsed."
-      else -> null
-    }
+    ): String? =
+      when {
+        gateRunCount < 0 ->
+          "FeatureTaskRuntimeValidationGateProgress.gateRunCount must be >= 0, was $gateRunCount."
+        gateRuns.size != gateRunCount ->
+          "FeatureTaskRuntimeValidationGateProgress.gateRuns size ${gateRuns.size} " +
+            "must equal gateRunCount $gateRunCount."
+        repairsUsed < 0 ->
+          "FeatureTaskRuntimeValidationGateProgress.repairsUsed must be >= 0, was $repairsUsed."
+        else -> null
+      }
 
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeValidationGateProgress {
       if (raw[SharedPayloadKeys.CONTRACT_VERSION] != FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION) {
@@ -176,16 +181,23 @@ data class FeatureTaskRuntimeValidationGateProgress(
         FeatureTaskRuntimeValidationGateRepairWindowPhase.fromWire(raw["repair_window_phase"] as? String)
       val repairsUsed = raw.asStarMap().gateProgressOptionalInt("repairs_used") ?: 0
       val capturedTriagePlan = raw["captured_triage_plan"] as? String
-      val lastAgentUnfixedCriteria = decodeStringList(
-        raw[ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA],
-        ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA,
-      )
+      val lastAgentUnfixedCriteria =
+        decodeStringList(
+          raw[ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA],
+          ValidationEvidencePayloadKeys.LAST_AGENT_UNFIXED_CRITERIA,
+        )
       violation(gateRunCount, gateRuns, repairsUsed)?.let { reason ->
         throw invalidWorkflowStateSchemaError("FeatureTaskRuntimeValidationGateProgress is incoherent: $reason")
       }
       return FeatureTaskRuntimeValidationGateProgress(
-        gateRunCount, gateRuns, remainingFindings, completeFindings, repairWindowPhase,
-        repairsUsed, capturedTriagePlan, lastAgentUnfixedCriteria,
+        gateRunCount,
+        gateRuns,
+        remainingFindings,
+        completeFindings,
+        repairWindowPhase,
+        repairsUsed,
+        capturedTriagePlan,
+        lastAgentUnfixedCriteria,
       )
     }
 
@@ -200,27 +212,35 @@ data class FeatureTaskRuntimeValidationGateProgress(
         val durationMs = map.gateProgressLong(ValidationEvidencePayloadKeys.DURATION_MS)
         val outcome =
           ValidationGateRunOutcome.fromWire(map.gateProgressString(ValidationEvidencePayloadKeys.OUTCOME))
-          ?: throw invalidWorkflowStateSchemaError(
-            "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: Unknown validation gate " +
-              "outcome.",
-          )
+            ?: invalidGateRuns(
+              "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: Unknown validation gate " +
+                "outcome.",
+            )
         val cacheMode =
           ValidationGateCacheMode.fromWire(map.gateProgressString(ValidationEvidencePayloadKeys.CACHE_MODE))
-          ?: throw invalidWorkflowStateSchemaError(
-            "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: Unknown validation gate " +
-              "cache mode.",
-          )
+            ?: invalidGateRuns(
+              "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: Unknown validation gate " +
+                "cache mode.",
+            )
         val executedWorkUnits = map.gateProgressInt(ValidationEvidencePayloadKeys.EXECUTED_WORK_UNITS)
         val executedChecks = decodeExecutedChecks(map)
         val command = map.gateProgressOptionalString(ValidationEvidencePayloadKeys.COMMAND)
         val exitCode = map.gateProgressOptionalInt(ValidationEvidencePayloadKeys.EXIT_CODE)
         val repositoryCheckpoint = map.gateProgressOptionalString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)
         val executedChecksRecorded = map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS)
-        val reason = FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
-          durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint,
-        ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
-          outcome, exitCode, executedChecksRecorded, executedChecks,
-        )
+        val reason =
+          FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
+            durationMs,
+            executedWorkUnits,
+            command,
+            exitCode,
+            repositoryCheckpoint,
+          ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
+            outcome,
+            exitCode,
+            executedChecksRecorded,
+            executedChecks,
+          )
         if (reason != null) {
           throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: $reason",

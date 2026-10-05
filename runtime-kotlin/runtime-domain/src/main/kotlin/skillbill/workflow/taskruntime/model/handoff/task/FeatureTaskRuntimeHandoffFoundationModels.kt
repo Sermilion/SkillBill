@@ -18,7 +18,10 @@ data class FeatureTaskRuntimeProducerIteration(
   }
 
   companion object {
-    internal fun violation(phaseId: String, iteration: Int): String? =
+    internal fun violation(
+      phaseId: String,
+      iteration: Int,
+    ): String? =
       when {
         phaseId.isBlank() -> "FeatureTaskRuntimeProducerIteration.phaseId must be non-blank."
         iteration < 1 -> "FeatureTaskRuntimeProducerIteration.iteration must be >= 1."

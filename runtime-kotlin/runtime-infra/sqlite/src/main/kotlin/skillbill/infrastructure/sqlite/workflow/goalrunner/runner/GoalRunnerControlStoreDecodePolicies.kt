@@ -23,11 +23,12 @@ internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {
   val mode =
     policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
       ?: goalRunnerControlSchemaError("review policy durable record is missing code_review_mode.")
-  val codeReviewMode = CodeReviewExecutionMode.fromWireOrNull(mode)
-    ?: goalRunnerControlSchemaError(
-      "review policy durable record has invalid code_review_mode: " +
-        CodeReviewExecutionMode.unknownWireValueMessage(mode),
-    )
+  val codeReviewMode =
+    CodeReviewExecutionMode.fromWireOrNull(mode)
+      ?: goalRunnerControlSchemaError(
+        "review policy durable record has invalid code_review_mode: " +
+          CodeReviewExecutionMode.unknownWireValueMessage(mode),
+      )
   val decodedAddons = decodeReviewPolicyAddons(policy)
   val selectionViolation = AgentAddonSelection.violation(decodedAddons)
   if (selectionViolation != null) {

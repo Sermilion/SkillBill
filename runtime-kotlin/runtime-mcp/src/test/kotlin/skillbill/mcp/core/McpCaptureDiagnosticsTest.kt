@@ -4,6 +4,7 @@ import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.telemetryProxyRequestFailure
 import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.callToolError
@@ -90,6 +91,14 @@ class McpCaptureDiagnosticsTest {
           failingRequester(SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "selection invalid")),
         environment = environment,
       ).callToolError(CAPTURED_TOOL)
+    val scaffoldInput =
+      McpRuntimeContext(
+        requester =
+          failingRequester(
+            SkillBillRuntimeException(ScaffoldFailureCode.INVALID_INPUT, "scaffold input invalid"),
+          ),
+        environment = environment,
+      ).callToolError(CAPTURED_TOOL)
     val probe =
       McpRuntimeContext(
         requester = failingRequester(SkillBillRuntimeException(ProbeFailureCode.PROBE, "probe failed")),
@@ -98,6 +107,8 @@ class McpCaptureDiagnosticsTest {
 
     assertEquals(CAPTURED_TOOL, shellContent["tool"])
     assertEquals("selection invalid", shellContent["error"])
+    assertEquals(CAPTURED_TOOL, scaffoldInput["tool"])
+    assertEquals("scaffold input invalid", scaffoldInput["error"])
     assertEquals(CAPTURED_TOOL, probe["tool"])
     assertEquals("probe failed", probe["error"])
     assertEquals(listOf("ProbeFailureCode.PROBE"), capturedErrorTypes(dbPath))

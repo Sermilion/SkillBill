@@ -62,6 +62,7 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
       val repository = SqliteRejectedOutputDiagnosticRepository(connection)
       val diagnostic = record(byteArrayOf(1))
       repository.insert(diagnostic)
+      connection.createStatement().use { it.execute("PRAGMA ignore_check_constraints = ON") }
       connection.prepareStatement(
         "UPDATE rejected_output_diagnostics SET lifecycle = ? WHERE identity = ?",
       ).use { statement ->
@@ -70,6 +71,7 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
         statement.executeUpdate()
       }
 
+      connection.createStatement().use { it.execute("PRAGMA ignore_check_constraints = OFF") }
       val error = assertFailsWith<SkillBillRuntimeException> { repository.read(diagnostic.metadata.identity) }
 
       assertEquals(RejectedOutputDiagnosticFailureCode.CORRUPT, error.code)

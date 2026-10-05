@@ -17,10 +17,14 @@ data class FeatureTaskRuntimeResolvedBranch(
   val boundaryHistoryRoots: List<String> = emptyList(),
 ) {
   init {
-    val reason = branchViolation(branch, reviewBaseSha) ?: pathsViolation(
-      baselineUntrackedPaths, baselineOwnedPaths, workflowOwnedPaths,
-      boundaryHistoryPaths, boundaryHistoryRoots,
-    )
+    val reason =
+      branchViolation(branch, reviewBaseSha) ?: pathsViolation(
+        baselineUntrackedPaths,
+        baselineOwnedPaths,
+        workflowOwnedPaths,
+        boundaryHistoryPaths,
+        boundaryHistoryRoots,
+      )
     require(reason == null) { reason.orEmpty() }
   }
 
@@ -82,9 +86,14 @@ data class FeatureTaskRuntimeResolvedBranch(
       val workflowOwnedPaths = reader.optionalStringList("workflow_owned_paths")
       val boundaryHistoryPaths = reader.optionalStringList("boundary_history_paths")
       val boundaryHistoryRoots = reader.optionalStringList("boundary_history_roots")
-      val reason = branchViolation(branch, reviewBaseSha) ?: pathsViolation(
-        baselineUntrackedPaths, baselineOwnedPaths, workflowOwnedPaths, boundaryHistoryPaths, boundaryHistoryRoots,
-      )
+      val reason =
+        branchViolation(branch, reviewBaseSha) ?: pathsViolation(
+          baselineUntrackedPaths,
+          baselineOwnedPaths,
+          workflowOwnedPaths,
+          boundaryHistoryPaths,
+          boundaryHistoryRoots,
+        )
       if (reason != null) {
         throw invalidWorkflowStateSchemaError("Feature-task-runtime resolved-branch artifact is invalid.")
       }

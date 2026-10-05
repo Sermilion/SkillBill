@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.scaffold.pointer
 
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidScaffoldInputError
 import skillbill.infrastructure.host.jvm.atomicWriteBytes
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
@@ -72,8 +73,10 @@ private fun writePointerIfChanged(
 ) {
   val resolvedPackRoot = packRoot.toAbsolutePath().normalize()
   val pointerFile = resolvedPackRoot.resolve(spec.skillRelativeDir).resolve(spec.name).normalize()
-  require(pointerFile.startsWith(resolvedPackRoot)) {
-    "Pointer '${spec.name}' under '${spec.skillRelativeDir}' resolves outside packRoot '$resolvedPackRoot'."
+  if (!pointerFile.startsWith(resolvedPackRoot)) {
+    throw invalidScaffoldInputError(
+      "Pointer '${spec.name}' under '${spec.skillRelativeDir}' resolves outside packRoot '$resolvedPackRoot'.",
+    )
   }
   val rendered = renderPointer(context.repoRoot, packRoot, spec)
 

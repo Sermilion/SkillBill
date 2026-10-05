@@ -56,32 +56,36 @@ private fun Map<String, Any?>.optionalAgentAddonSelection(): AgentAddonSelection
   val entries =
     value as? List<*>
       ?: runInvariantSchemaError("Feature-task-runtime artifact field 'agent_addon_selection' must decode to a list.")
-  val decodedEntries = entries.mapIndexed { index, rawEntry ->
-        val entry =
-          rawEntry as? Map<*, *>
-            ?: runInvariantSchemaError("Agent add-on selection entry $index must decode to a map.")
-        val keys =
-          entry.keys.map {
-            it as? String
-              ?: runInvariantSchemaError("Agent add-on selection entry $index has a non-string field.")
-          }.toSet()
-        val expected = setOf("slug", "source_identity", "content_sha256")
-        if (keys != expected) {
-          runInvariantSchemaError(
-            "Agent add-on selection entry $index fields must be exactly ${expected.sorted()}.",
-          )
-        }
-        val slug = entry["slug"] as? String
+  val decodedEntries =
+    entries.mapIndexed { index, rawEntry ->
+      val entry =
+        rawEntry as? Map<*, *>
+          ?: runInvariantSchemaError("Agent add-on selection entry $index must decode to a map.")
+      val keys =
+        entry.keys.map {
+          it as? String
+            ?: runInvariantSchemaError("Agent add-on selection entry $index has a non-string field.")
+        }.toSet()
+      val expected = setOf("slug", "source_identity", "content_sha256")
+      if (keys != expected) {
+        runInvariantSchemaError(
+          "Agent add-on selection entry $index fields must be exactly ${expected.sorted()}.",
+        )
+      }
+      val slug =
+        entry["slug"] as? String
           ?: runInvariantSchemaError("Agent add-on selection entry $index slug is invalid.")
-        val sourceIdentity = entry["source_identity"] as? String
+      val sourceIdentity =
+        entry["source_identity"] as? String
           ?: runInvariantSchemaError("Agent add-on selection entry $index source_identity is invalid.")
-        val contentSha256 = entry["content_sha256"] as? String
+      val contentSha256 =
+        entry["content_sha256"] as? String
           ?: runInvariantSchemaError("Agent add-on selection entry $index content_sha256 is invalid.")
-        PersistedAgentAddonSelectionEntry.violation(slug, sourceIdentity, contentSha256)?.let { reason ->
-          throw invalidWorkflowStateSchemaError("Agent add-on selection is invalid: $reason")
-        }
-        PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
-  }
+      PersistedAgentAddonSelectionEntry.violation(slug, sourceIdentity, contentSha256)?.let { reason ->
+        throw invalidWorkflowStateSchemaError("Agent add-on selection is invalid: $reason")
+      }
+      PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
+    }
   AgentAddonSelection.violation(decodedEntries)?.let { reason ->
     throw invalidWorkflowStateSchemaError("Agent add-on selection is invalid: $reason")
   }

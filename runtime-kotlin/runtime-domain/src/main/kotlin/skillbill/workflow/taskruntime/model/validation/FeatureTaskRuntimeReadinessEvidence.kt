@@ -29,11 +29,15 @@ data class FeatureTaskRuntimeReadinessCheckResult(
   }
 
   companion object {
-    internal fun violation(checkId: String, command: String): String? = when {
-      checkId.isBlank() -> "Readiness check_id must be non-blank."
-      command.isBlank() -> "Readiness command must be non-blank."
-      else -> null
-    }
+    internal fun violation(
+      checkId: String,
+      command: String,
+    ): String? =
+      when {
+        checkId.isBlank() -> "Readiness check_id must be non-blank."
+        command.isBlank() -> "Readiness command must be non-blank."
+        else -> null
+      }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -126,20 +130,21 @@ data class FeatureTaskRuntimeReadinessEvidence(
       headSha: String,
       selectedChecks: List<String>,
       checkResults: List<FeatureTaskRuntimeReadinessCheckResult>,
-    ): String? = when {
-      sourceTreeSha.isBlank() -> "Readiness source_tree_sha must be non-blank."
-      baseRefSha.isBlank() -> "Readiness base_ref_sha must be non-blank."
-      headSha.isBlank() -> "Readiness head_sha must be non-blank."
-      selectedChecks.size > MAX_READINESS_CHECK_RESULTS ->
-        "Readiness evidence cannot select more than $MAX_READINESS_CHECK_RESULTS checks."
-      selectedChecks.any(String::isBlank) -> "Readiness selected_checks must be non-blank."
-      selectedChecks.distinct().size != selectedChecks.size -> "Readiness selected_checks must be unique."
-      checkResults.size > MAX_READINESS_CHECK_RESULTS ->
-        "Readiness evidence cannot contain more than $MAX_READINESS_CHECK_RESULTS check results."
-      checkResults.map(FeatureTaskRuntimeReadinessCheckResult::checkId).distinct().size != checkResults.size ->
-        "Readiness check_results must contain at most one result per check."
-      else -> null
-    }
+    ): String? =
+      when {
+        sourceTreeSha.isBlank() -> "Readiness source_tree_sha must be non-blank."
+        baseRefSha.isBlank() -> "Readiness base_ref_sha must be non-blank."
+        headSha.isBlank() -> "Readiness head_sha must be non-blank."
+        selectedChecks.size > MAX_READINESS_CHECK_RESULTS ->
+          "Readiness evidence cannot select more than $MAX_READINESS_CHECK_RESULTS checks."
+        selectedChecks.any(String::isBlank) -> "Readiness selected_checks must be non-blank."
+        selectedChecks.distinct().size != selectedChecks.size -> "Readiness selected_checks must be unique."
+        checkResults.size > MAX_READINESS_CHECK_RESULTS ->
+          "Readiness evidence cannot contain more than $MAX_READINESS_CHECK_RESULTS check results."
+        checkResults.map(FeatureTaskRuntimeReadinessCheckResult::checkId).distinct().size != checkResults.size ->
+          "Readiness check_results must contain at most one result per check."
+        else -> null
+      }
 
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,

@@ -23,12 +23,14 @@ data class ReviewContextBudgetPolicy(
   init {
     val reason =
       byteLimitViolation(
-        maxParentPacketBytes,
-        maxLaneLaunchBytes,
-        maxLaneEvidenceBytes,
-        maxEvidenceResultBytes,
-        maxLaneResultBytes,
-        maxSpecIntentProjectionBytes,
+        listOf(
+          maxParentPacketBytes,
+          maxLaneLaunchBytes,
+          maxLaneEvidenceBytes,
+          maxEvidenceResultBytes,
+          maxLaneResultBytes,
+          maxSpecIntentProjectionBytes,
+        ),
       ) ?: executionLimitViolation(
         maxAssignmentExpansions,
         maxSpecialistToolCalls,
@@ -42,23 +44,7 @@ data class ReviewContextBudgetPolicy(
   companion object {
     val DEFAULT: ReviewContextBudgetPolicy = ReviewContextBudgetPolicy()
 
-    fun byteLimitViolation(
-      maxParentPacketBytes: Long,
-      maxLaneLaunchBytes: Long,
-      maxLaneEvidenceBytes: Long,
-      maxEvidenceResultBytes: Long,
-      maxLaneResultBytes: Long,
-      maxSpecIntentProjectionBytes: Long,
-    ): String? {
-      val byteLimits =
-        listOf(
-          maxParentPacketBytes,
-          maxLaneLaunchBytes,
-          maxLaneEvidenceBytes,
-          maxEvidenceResultBytes,
-          maxLaneResultBytes,
-          maxSpecIntentProjectionBytes,
-        )
+    fun byteLimitViolation(byteLimits: List<Long>): String? {
       return if (byteLimits.all { it > 0 }) null else "Review-context byte limits must be positive."
     }
 

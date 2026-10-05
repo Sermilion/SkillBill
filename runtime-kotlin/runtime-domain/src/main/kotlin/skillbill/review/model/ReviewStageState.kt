@@ -82,7 +82,10 @@ data class ReviewFindingCitation(
   fun encoded(): String = "$path\t$line"
 
   companion object {
-    internal fun violation(path: String, line: Int): String? =
+    internal fun violation(
+      path: String,
+      line: Int,
+    ): String? =
       when {
         path.isBlank() -> "Finding citation path must not be blank."
         line < 1 -> "Finding citation line must be a positive integer."

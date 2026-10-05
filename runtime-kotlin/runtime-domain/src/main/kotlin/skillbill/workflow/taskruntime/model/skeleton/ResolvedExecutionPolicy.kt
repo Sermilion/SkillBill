@@ -17,10 +17,16 @@ data class ResolvedExecutionPolicy(
       semanticDigest: String,
     ): String? =
       if (
-        id.length in 1..MAX_POLICY_ID_LENGTH && id.matches(Regex("[A-Za-z0-9][A-Za-z0-9._:/-]*")) &&
-        semanticRevision > 0 && semanticDigest.matches(Regex("[0-9a-f]{64}"))
-      ) null else "Failed requirement."
+        validPolicyId(id) && semanticRevision > 0 && semanticDigest.matches(Regex("[0-9a-f]{64}"))
+      ) {
+        null
+      } else {
+        "Failed requirement."
+      }
   }
 }
 
 private const val MAX_POLICY_ID_LENGTH = 128
+
+private fun validPolicyId(id: String): Boolean =
+  id.length in 1..MAX_POLICY_ID_LENGTH && id.matches(Regex("[A-Za-z0-9][A-Za-z0-9._:/-]*"))

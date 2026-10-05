@@ -107,6 +107,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
+import java.io.IOException
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
@@ -960,17 +961,17 @@ class ParallelCodeReviewRunnerFailureTest {
   }
 
   @Test
-  fun `launcher exception produces ExecutionException outcome`() {
+  fun `launcher I O failure produces a failed lane outcome`() {
     val launcher =
       GoalRunnerSubtaskLauncher { _ ->
-        error("internal failure in launcher")
+        throw IOException("I/O failure in launcher")
       }
     val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
     val result = runner.reviewed(baseRequest(agent1Id = "claude", scope = ParallelReviewScope.STAGED))
 
     assertFalse(result.lane1.success)
-    assertContains(result.lane1.failureReason.orEmpty(), "IllegalStateException")
+    assertContains(result.lane1.failureReason.orEmpty(), "IOException")
   }
 
   @Test

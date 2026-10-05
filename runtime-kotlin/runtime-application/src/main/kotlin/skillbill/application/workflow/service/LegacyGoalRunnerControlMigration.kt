@@ -58,10 +58,11 @@ private fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts)
   val mode =
     policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
       ?: legacyControlSchemaError("review policy artifact '${artifactFamily.label()}' is missing code_review_mode.")
-  val codeReviewMode = CodeReviewExecutionMode.fromWireOrNull(mode)
-    ?: throw invalidWorkflowStateSchemaError(
-      "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
-    )
+  val codeReviewMode =
+    CodeReviewExecutionMode.fromWireOrNull(mode)
+      ?: throw invalidWorkflowStateSchemaError(
+        "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
+      )
   val agentAddonSelection =
     decodeGoalAgentAddonSelection(
       policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION],

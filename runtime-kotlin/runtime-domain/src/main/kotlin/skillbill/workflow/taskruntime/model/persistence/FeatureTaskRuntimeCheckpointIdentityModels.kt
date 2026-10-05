@@ -44,9 +44,10 @@ data class FeatureTaskRuntimeCheckpointIdentity(
   val parentSha: String? = null,
 ) {
   init {
-    val reason = identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
-      ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
-      ?: continuationViolation(recordedAt, parentSha, loopId)
+    val reason =
+      identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
+        ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
+        ?: continuationViolation(recordedAt, parentSha, loopId)
     require(reason == null) { reason.orEmpty() }
   }
 
@@ -82,22 +83,23 @@ data class FeatureTaskRuntimeCheckpointIdentity(
       subtaskId: String,
       checkpointRef: String,
       branch: String,
-    ): String? = when {
-      sequenceNumber < 0 ->
-        "FeatureTaskRuntimeCheckpointIdentity.sequenceNumber must be non-negative, was $sequenceNumber."
-      issueKey.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.issueKey must be non-blank."
-      !subtaskId.matches(SUBTASK_ID_PATTERN) ->
-        "FeatureTaskRuntimeCheckpointIdentity.subtaskId must be a positive integer or " +
-          "'$FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID', was '$subtaskId'."
-      !checkpointRef.matches(CHECKPOINT_REF_PATTERN) || checkpointRef.length > CHECKPOINT_REF_MAX_LENGTH ->
-        "FeatureTaskRuntimeCheckpointIdentity.checkpointRef must be a bounded skill-bill checkpoint ref."
-      checkpointRef != featureTaskRuntimeCheckpointRefName(issueKey, subtaskId, sequenceNumber) ->
-        "FeatureTaskRuntimeCheckpointIdentity.checkpointRef '$checkpointRef' does not derive from issueKey " +
-          "'$issueKey', subtaskId '$subtaskId' and sequenceNumber $sequenceNumber; the ref is the identity, so a " +
-          "ref naming a different authority boundary than its own record is rejected."
-      branch.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.branch must be non-blank."
-      else -> null
-    }
+    ): String? =
+      when {
+        sequenceNumber < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.sequenceNumber must be non-negative, was $sequenceNumber."
+        issueKey.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.issueKey must be non-blank."
+        !subtaskId.matches(SUBTASK_ID_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.subtaskId must be a positive integer or " +
+            "'$FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID', was '$subtaskId'."
+        !checkpointRef.matches(CHECKPOINT_REF_PATTERN) || checkpointRef.length > CHECKPOINT_REF_MAX_LENGTH ->
+          "FeatureTaskRuntimeCheckpointIdentity.checkpointRef must be a bounded skill-bill checkpoint ref."
+        checkpointRef != featureTaskRuntimeCheckpointRefName(issueKey, subtaskId, sequenceNumber) ->
+          "FeatureTaskRuntimeCheckpointIdentity.checkpointRef '$checkpointRef' does not derive from issueKey " +
+            "'$issueKey', subtaskId '$subtaskId' and sequenceNumber $sequenceNumber; the ref is the identity, so a " +
+            "ref naming a different authority boundary than its own record is rejected."
+        branch.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.branch must be non-blank."
+        else -> null
+      }
 
     private fun evidenceViolation(
       phaseId: String,
@@ -105,26 +107,32 @@ data class FeatureTaskRuntimeCheckpointIdentity(
       ownedPathDigest: String,
       ownedPathCount: Int,
       commitSha: String,
-    ): String? = when {
-      phaseId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.phaseId must be non-blank."
-      generation < 0 ->
-        "FeatureTaskRuntimeCheckpointIdentity.generation must be non-negative, was $generation."
-      ownedPathCount < 0 ->
-        "FeatureTaskRuntimeCheckpointIdentity.ownedPathCount must be non-negative, was $ownedPathCount."
-      !ownedPathDigest.matches(DIGEST_PATTERN) ->
-        "FeatureTaskRuntimeCheckpointIdentity.ownedPathDigest must be a lowercase SHA-256 hex digest."
-      !commitSha.matches(SHA_PATTERN) ->
-        "FeatureTaskRuntimeCheckpointIdentity.commitSha must be a lowercase commit sha."
-      else -> null
-    }
+    ): String? =
+      when {
+        phaseId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.phaseId must be non-blank."
+        generation < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.generation must be non-negative, was $generation."
+        ownedPathCount < 0 ->
+          "FeatureTaskRuntimeCheckpointIdentity.ownedPathCount must be non-negative, was $ownedPathCount."
+        !ownedPathDigest.matches(DIGEST_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.ownedPathDigest must be a lowercase SHA-256 hex digest."
+        !commitSha.matches(SHA_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.commitSha must be a lowercase commit sha."
+        else -> null
+      }
 
-    private fun continuationViolation(recordedAt: String, parentSha: String?, loopId: String?): String? = when {
-      recordedAt.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.recordedAt must be non-blank."
-      parentSha != null && !parentSha.matches(SHA_PATTERN) ->
-        "FeatureTaskRuntimeCheckpointIdentity.parentSha must be a lowercase commit sha when present."
-      loopId != null && loopId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.loopId must be non-blank."
-      else -> null
-    }
+    private fun continuationViolation(
+      recordedAt: String,
+      parentSha: String?,
+      loopId: String?,
+    ): String? =
+      when {
+        recordedAt.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.recordedAt must be non-blank."
+        parentSha != null && !parentSha.matches(SHA_PATTERN) ->
+          "FeatureTaskRuntimeCheckpointIdentity.parentSha must be a lowercase commit sha when present."
+        loopId != null && loopId.isBlank() -> "FeatureTaskRuntimeCheckpointIdentity.loopId must be non-blank."
+        else -> null
+      }
 
     private val ALLOWED_FIELDS =
       setOf(
@@ -165,9 +173,10 @@ data class FeatureTaskRuntimeCheckpointIdentity(
       val recordedAt = reader.requiredString("recorded_at")
       val loopId = reader.optionalString("loop_id")
       val parentSha = reader.optionalString("parent_sha")
-      val reason = identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
-        ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
-        ?: continuationViolation(recordedAt, parentSha, loopId)
+      val reason =
+        identityViolation(sequenceNumber, issueKey, subtaskId, checkpointRef, branch)
+          ?: evidenceViolation(phaseId, generation, ownedPathDigest, ownedPathCount, commitSha)
+          ?: continuationViolation(recordedAt, parentSha, loopId)
       if (reason != null) {
         checkpointIdentityError("Feature-task-runtime checkpoint-identity entry is malformed: $reason")
       }

@@ -52,7 +52,11 @@ internal fun decodeParallelReviewStructuredStringOrNull(encoded: String): String
   return result.toString()
 }
 
-private fun decodeParallelReviewEscapedCharacterOrNull(escaped: Char, body: String, index: Int): Char? =
+private fun decodeParallelReviewEscapedCharacterOrNull(
+  escaped: Char,
+  body: String,
+  index: Int,
+): Char? =
   when (escaped) {
     '"', '\\', '/' -> escaped
     'b' -> '\b'

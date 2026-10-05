@@ -484,10 +484,11 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     Files.delete(fixture.repoRoot.resolve("skills/bill-code-review/content.md"))
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(fixture.request())
       }
 
+    assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, error.code)
     assertContains(error.message.orEmpty(), "without content.md")
     assertContains(error.message.orEmpty(), "bill-code-review")
   }
@@ -499,7 +500,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     Files.createDirectories(emptySkillsRoot.resolve("notes"))
 
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           fixture.request(
             targetPaths = fixture.targetPaths().copy(skillsRoot = emptySkillsRoot.toFileLocation()),
@@ -507,6 +508,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
         )
       }
 
+    assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, error.code)
     assertContains(error.message.orEmpty(), "does not contain any bill-* skills with content.md")
   }
 

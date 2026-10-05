@@ -39,7 +39,12 @@ data class GoalSubtaskReviewCompactFinding(
     ).apply { findingId?.let { put(ReviewFindingPayloadKeys.FINDING_ID, it) } }
 
   companion object {
-    private fun violation(severity: String, label: String, text: String, findingId: String?): String? =
+    private fun violation(
+      severity: String,
+      label: String,
+      text: String,
+      findingId: String?,
+    ): String? =
       when {
         severity !in FeatureTaskRuntimeReviewSeverity.entries.map { it.wireValue } ->
           "Invalid review finding severity '$severity'."
@@ -87,8 +92,7 @@ data class GoalSubtaskReviewPassResult(
         verdict,
         reviewResultArtifact,
         unresolvedFindingCount,
-        executedMode,
-        commitFocusedAccounting,
+        commitFocusedAccounting != null && executedMode == CodeReviewExecutionMode.INLINE,
       )
     require(reason == null) { reason.orEmpty() }
   }
@@ -113,8 +117,7 @@ data class GoalSubtaskReviewPassResult(
       verdict: FeatureTaskRuntimeVerdict,
       reviewResultArtifact: String,
       unresolvedFindingCount: Int,
-      executedMode: CodeReviewExecutionMode?,
-      commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting?,
+      hasInlineAccounting: Boolean,
     ): String? =
       when {
         passNumber < 1 -> "Goal review pass number must be a positive integer."
@@ -123,7 +126,7 @@ data class GoalSubtaskReviewPassResult(
         reviewResultArtifact != "$GOAL_SUBTASK_REVIEW_RESULT_ARTIFACT_PREFIX.$passNumber" ->
           "Goal review result artifact must identify its exact review pass."
         unresolvedFindingCount < 0 -> "Goal unresolved finding count must be non-negative."
-        commitFocusedAccounting != null && executedMode == CodeReviewExecutionMode.INLINE ->
+        hasInlineAccounting ->
           "An inline review pass has no delegated commit sequence and must omit commit-focused accounting."
         else -> null
       }
@@ -158,10 +161,11 @@ data class GoalSubtaskReviewPassResult(
       val verdict = FeatureTaskRuntimeVerdict.fromWire(reader.requiredString("verdict"))
       val reviewResultArtifact = reader.requiredString("review_result_artifact")
       val unresolvedFindingCount = reader.requiredInt("unresolved_finding_count")
-      val executedMode = reader.optionalString("executed_mode")?.let { wire ->
-        CodeReviewExecutionMode.fromWireOrNull(wire)
-          ?: onInvalid(CodeReviewExecutionMode.unknownWireValueMessage(wire))
-      }
+      val executedMode =
+        reader.optionalString("executed_mode")?.let { wire ->
+          CodeReviewExecutionMode.fromWireOrNull(wire)
+            ?: onInvalid(CodeReviewExecutionMode.unknownWireValueMessage(wire))
+        }
       val commitFocusedAccounting =
         raw["commit_focused_accounting"]?.let {
           GoalSubtaskCommitFocusedAccounting.fromArtifactMap(
@@ -175,8 +179,7 @@ data class GoalSubtaskReviewPassResult(
         verdict,
         reviewResultArtifact,
         unresolvedFindingCount,
-        executedMode,
-        commitFocusedAccounting,
+        commitFocusedAccounting != null && executedMode == CodeReviewExecutionMode.INLINE,
       )?.let(onInvalid)
       return GoalSubtaskReviewPassResult(
         passNumber = passNumber,

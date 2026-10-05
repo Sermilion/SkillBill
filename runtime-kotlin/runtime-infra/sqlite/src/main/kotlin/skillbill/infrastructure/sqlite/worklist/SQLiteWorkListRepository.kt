@@ -148,8 +148,7 @@ internal fun parseInstant(
   value: String,
   workflowId: String,
   column: String,
-): Instant =
-  parsePersistedInstantOrNull(value) ?: invalid(workflowId, "invalid $column '$value'")
+): Instant = parsePersistedInstantOrNull(value) ?: invalid(workflowId, "invalid $column '$value'")
 
 private fun invalid(
   workflowId: String,

@@ -16,6 +16,7 @@ import skillbill.ports.review.launch.ReviewLaunchAgentStagingPort
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.preparation.ReviewRubricResolver
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -41,7 +42,7 @@ class ParallelCodeReviewRunnerLaneLaunchOwnershipTest {
           catalogGateway = stubCatalogGateway(listOf(platformManifest("kotlin", listOf("*.kt")))),
           diffResolver = RecordingDiffResolver(default = diffFor("src/FooTest.kt")),
           rubricResolver = delegatedCursorRubricResolver(),
-          reviewLaunchAgentStaging = ReviewLaunchAgentStagingPort { throw IllegalStateException("staging failed") },
+          reviewLaunchAgentStaging = ReviewLaunchAgentStagingPort { throw IOException("staging failed") },
           evidenceEndpointBinder = countingEndpointBinder(endpointRoot, closeCount),
         ),
       )
@@ -136,7 +137,7 @@ private fun launchOwnershipCases(): List<LaunchOwnershipCase> =
     LaunchOwnershipCase(
       "throwing launch",
       noOpStaging(),
-      throwingLauncher(IllegalStateException("launch failed")),
+      throwingLauncher(IOException("launch failed")),
       false,
       false,
     ),
@@ -198,7 +199,7 @@ private fun assertLaunchCount(case: LaunchOwnershipCase) {
 private fun noOpStaging(): ReviewLaunchAgentStagingPort = ReviewLaunchAgentStagingPort { }
 
 private fun throwingStaging(): ReviewLaunchAgentStagingPort =
-  ReviewLaunchAgentStagingPort { throw IllegalStateException("staging failed") }
+  ReviewLaunchAgentStagingPort { throw IOException("staging failed") }
 
 private fun throwingLauncher(error: Throwable): GoalRunnerSubtaskLauncher = GoalRunnerSubtaskLauncher { throw error }
 

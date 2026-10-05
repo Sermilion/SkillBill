@@ -166,8 +166,9 @@ private fun nativeAgentYamlDoubleQuotedScalar(value: String): String =
 private fun invalidBundle(
   message: String,
   cause: Throwable? = null,
-): Nothing = throw SkillBillRuntimeException(
-  InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
-  message,
-  cause,
-)
+): Nothing =
+  throw SkillBillRuntimeException(
+    InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
+    message,
+    cause,
+  )

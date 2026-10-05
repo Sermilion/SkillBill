@@ -138,7 +138,7 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
           },
         validationDepth =
           reader.optionalString(
-          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
+            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
           )?.let { rawValue ->
             ValidationDepth.fromWireOrNull(rawValue)
               ?: goalContinuationSchemaError("Goal-continuation artifact validation_depth is invalid.")

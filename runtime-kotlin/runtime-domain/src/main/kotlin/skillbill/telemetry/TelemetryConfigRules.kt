@@ -54,8 +54,7 @@ fun parseTelemetryBoolValueOrNull(rawValue: String): Boolean? =
     else -> null
   }
 
-fun telemetryBoolValueError(name: String): String =
-  "$name must be one of: 1, 0, true, false, yes, no, on, off."
+fun telemetryBoolValueError(name: String): String = "$name must be one of: 1, 0, true, false, yes, no, on, off."
 
 fun parsePositiveTelemetryInt(
   rawValue: String,
@@ -68,8 +67,7 @@ fun parsePositiveTelemetryIntOrNull(rawValue: String): Int? = rawValue.toIntOrNu
 fun positiveTelemetryIntError(
   rawValue: String,
   name: String,
-): String =
-  if (rawValue.toIntOrNull() == null) "$name must be an integer." else "$name must be greater than zero."
+): String = if (rawValue.toIntOrNull() == null) "$name must be an integer." else "$name must be greater than zero."
 
 fun parseTelemetryLevelValue(
   rawValue: String,
@@ -81,5 +79,4 @@ fun parseTelemetryLevelValueOrNull(rawValue: String): String? {
   return normalized.takeIf { it in telemetryLevels }
 }
 
-fun telemetryLevelValueError(name: String): String =
-  "$name must be one of: ${telemetryLevels.joinToString(", ")}."
+fun telemetryLevelValueError(name: String): String = "$name must be one of: ${telemetryLevels.joinToString(", ")}."

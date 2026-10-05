@@ -54,13 +54,19 @@ data class FeatureTaskRuntimePhaseOutputSourceLocation(
   }
 
   companion object {
-    internal fun violation(sourceLabel: String, offset: Int, line: Int, column: Int): String? = when {
-      sourceLabel.isBlank() -> "Phase-output sourceLabel must be non-blank."
-      offset < 0 -> "Phase-output source offset must be non-negative."
-      line < 1 -> "Phase-output source line must be >= 1."
-      column < 1 -> "Phase-output source column must be >= 1."
-      else -> null
-    }
+    internal fun violation(
+      sourceLabel: String,
+      offset: Int,
+      line: Int,
+      column: Int,
+    ): String? =
+      when {
+        sourceLabel.isBlank() -> "Phase-output sourceLabel must be non-blank."
+        offset < 0 -> "Phase-output source offset must be non-negative."
+        line < 1 -> "Phase-output source line must be >= 1."
+        column < 1 -> "Phase-output source column must be >= 1."
+        else -> null
+      }
   }
 }
 
@@ -86,18 +92,19 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
       validatorVersion: String,
       originalDigest: String,
       repairedDigest: String,
-    ): String? = when {
-      contractVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
-        "Phase-output repair evidence has unsupported contract version '$contractVersion'."
-      validatorVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
-        "Phase-output repair evidence has unsupported validator version '$validatorVersion'."
-      !originalDigest.matches(SHA256_HEX) ->
-        "Phase-output repair evidence originalDigest must be lowercase SHA-256."
-      !repairedDigest.matches(SHA256_HEX) ->
-        "Phase-output repair evidence repairedDigest must be lowercase SHA-256."
-      originalDigest == repairedDigest -> "Phase-output repair evidence must describe a changed payload."
-      else -> null
-    }
+    ): String? =
+      when {
+        contractVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
+          "Phase-output repair evidence has unsupported contract version '$contractVersion'."
+        validatorVersion != FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION ->
+          "Phase-output repair evidence has unsupported validator version '$validatorVersion'."
+        !originalDigest.matches(SHA256_HEX) ->
+          "Phase-output repair evidence originalDigest must be lowercase SHA-256."
+        !repairedDigest.matches(SHA256_HEX) ->
+          "Phase-output repair evidence repairedDigest must be lowercase SHA-256."
+        originalDigest == repairedDigest -> "Phase-output repair evidence must describe a changed payload."
+        else -> null
+      }
 
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePhaseOutputRepairEvidence =
       decode(raw, null)
@@ -133,7 +140,13 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
       val evidenceReason = violation(contractVersion, validatorVersion, originalDigest, repairedDigest)
       if (evidenceReason != null && onInvariantViolation != null) onInvariantViolation()
       return FeatureTaskRuntimePhaseOutputRepairEvidence(
-        contractVersion, validatorVersion, format, originalDigest, repairedDigest, operation, sourceLocation,
+        contractVersion,
+        validatorVersion,
+        format,
+        originalDigest,
+        repairedDigest,
+        operation,
+        sourceLocation,
       )
     }
   }

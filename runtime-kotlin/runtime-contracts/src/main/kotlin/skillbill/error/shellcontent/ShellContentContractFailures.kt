@@ -16,6 +16,7 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is GovernedReviewFailureCode ||
     failureCode is GoalTelemetryRowFailureCode ||
     failureCode is InstallFailureCode ||
+    failureCode == ScaffoldFailureCode.INVALID_INPUT ||
     failureCode is FeatureTaskRuntimeFailureCode ||
     failureCode is WorkflowFailureCode
 }

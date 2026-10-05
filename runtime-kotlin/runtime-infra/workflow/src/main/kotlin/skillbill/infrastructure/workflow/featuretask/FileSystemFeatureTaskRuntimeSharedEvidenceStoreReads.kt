@@ -191,6 +191,13 @@ private fun intactPayloadRef(
   if (expectedSize != actualSize) {
     return degraded("stored_payload_size", "re-derive", "$expectedSize bytes", "truncated to $actualSize bytes")
   }
+  return validatedPayloadRef(relativePath, actualSize)
+}
+
+private fun validatedPayloadRef(
+  relativePath: String,
+  actualSize: Long,
+): FeatureTaskRuntimeSharedEvidenceDiffPayloadRef? {
   FeatureTaskRuntimeSharedEvidenceDiffPayloadRef.violation(relativePath, actualSize)?.let { reason ->
     return degraded(
       seam = "stored_payload_relative_path",

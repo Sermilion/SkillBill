@@ -3,6 +3,8 @@ package skillbill.infrastructure.skills.nativeagent.composition
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
 import java.nio.file.Files
 import java.nio.file.Path
@@ -39,8 +41,8 @@ fun parseNativeAgentSource(path: Path): NativeAgentSource {
   val text = Files.readString(path)
   val parsed = parseNativeAgentSourceText(text, path.toString())
   val expectedFileName = "${parsed.name}.md"
-  require(path.fileName.toString() == expectedFileName) {
-    "$path: native agent source filename must match frontmatter name '${parsed.name}'"
+  if (path.fileName.toString() != expectedFileName) {
+    invalidNativeAgentSourceInput("$path: native agent source filename must match frontmatter name '${parsed.name}'")
   }
   return parsed.copy(path = path)
 }
@@ -57,12 +59,12 @@ fun parseNativeAgentSourceText(
   label: String = "native agent source",
 ): NativeAgentSource {
   val normalized = text.replace("\r\n", "\n")
-  require(normalized.startsWith("---\n")) {
-    "$label: native agent source must start with YAML frontmatter"
+  if (!normalized.startsWith("---\n")) {
+    invalidNativeAgentSourceInput("$label: native agent source must start with YAML frontmatter")
   }
   val end = normalized.indexOf("\n---\n", startIndex = FRONTMATTER_OPEN_LENGTH)
-  require(end >= 0) {
-    "$label: native agent source frontmatter must close with ---"
+  if (end < 0) {
+    invalidNativeAgentSourceInput("$label: native agent source frontmatter must close with ---")
   }
   val frontmatterBlock = normalized.substring(FRONTMATTER_OPEN_LENGTH, end)
   val frontmatter = parseSimpleFrontmatter(frontmatterBlock, label)
@@ -70,29 +72,18 @@ fun parseNativeAgentSourceText(
   val description = frontmatter["description"].orEmpty()
   val composition = parseCompositionDirective(frontmatter["compose"], label)
   val tools = parseNativeAgentTools(frontmatter["tools"]?.let { decodeFlowSequence(it, label) }, label)
-  require(name.matches(Regex("^[a-z][a-z0-9-]*$"))) {
-    "$label: native agent name must be lowercase kebab-case"
+  if (!name.matches(Regex("^[a-z][a-z0-9-]*$"))) {
+    invalidNativeAgentSourceInput("$label: native agent name must be lowercase kebab-case")
   }
-  require(description.isNotBlank()) {
-    "$label: native agent description is required"
+  if (description.isBlank()) {
+    invalidNativeAgentSourceInput("$label: native agent description is required")
   }
   val body = normalized.substring(end + "\n---\n".length).removePrefix("\n").trimEnd()
-  require(body.isNotBlank() || composition != null) {
-    "$label: native agent body is required"
+  if (body.isBlank() && composition == null) {
+    invalidNativeAgentSourceInput("$label: native agent body is required")
   }
 
-  val instance: ObjectNode = JsonNodeFactory.instance.objectNode()
-  frontmatter["name"]?.let { instance.put("name", it) }
-  frontmatter["description"]?.let { instance.put("description", it) }
-  frontmatter["compose"]?.let { instance.put("compose", it) }
-  frontmatter[SharedPayloadKeys.CONTRACT_VERSION]?.let { instance.put(SharedPayloadKeys.CONTRACT_VERSION, it) }
-  if (tools.isNotEmpty()) {
-    instance.putArray("tools").apply { tools.forEach { add(it) } }
-  }
-  if (body.isNotBlank()) {
-    instance.put("body", body)
-  }
-  NativeAgentCompositionSchemaValidator.validateParsedNode(instance, label)
+  validateNativeAgentSourceNode(frontmatter, tools, body, label)
   return NativeAgentSource(
     name = name,
     description = description,
@@ -107,8 +98,8 @@ private fun decodeFlowSequence(
   label: String,
 ): List<String> {
   val trimmed = value.trim()
-  require(trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    "$label: native agent frontmatter 'tools' must use the inline form [A, B]"
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    invalidNativeAgentSourceInput("$label: native agent frontmatter 'tools' must use the inline form [A, B]")
   }
   return trimmed.substring(1, trimmed.length - 1)
     .split(',')
@@ -143,14 +134,14 @@ private fun parseSimpleFrontmatter(
   val parsed = linkedMapOf<String, String>()
   raw.lineSequence().filter { it.isNotBlank() }.forEach { line ->
     val separator = line.indexOf(':')
-    require(separator > 0) {
-      "$label: native agent frontmatter line must use key: value syntax"
+    if (separator <= 0) {
+      invalidNativeAgentSourceInput("$label: native agent frontmatter line must use key: value syntax")
     }
     val key = line.substring(0, separator).trim()
     val value = decodeYamlScalar(line.substring(separator + 1).trimStart(), label)
 
-    require(key in setOf("name", "description", "compose", "contract_version", "tools")) {
-      "$label: unsupported native agent frontmatter key '$key'"
+    if (key !in setOf("name", "description", "compose", "contract_version", "tools")) {
+      invalidNativeAgentSourceInput("$label: unsupported native agent frontmatter key '$key'")
     }
     parsed[key] = value
   }
@@ -169,8 +160,8 @@ private fun decodeYamlScalar(
   }
   return when (value.first()) {
     '"' -> {
-      require(value.length >= 2 && value.endsWith('"')) {
-        "$label: native agent frontmatter has unterminated double-quoted scalar"
+      if (value.length < 2 || !value.endsWith('"')) {
+        invalidNativeAgentSourceInput("$label: native agent frontmatter has unterminated double-quoted scalar")
       }
       val inner = value.substring(1, value.length - 1)
 
@@ -180,14 +171,14 @@ private fun decodeYamlScalar(
         trailingBackslashes += 1
         probe -= 1
       }
-      require(trailingBackslashes % 2 == 0) {
-        "$label: native agent frontmatter has unterminated double-quoted scalar"
+      if (trailingBackslashes % 2 != 0) {
+        invalidNativeAgentSourceInput("$label: native agent frontmatter has unterminated double-quoted scalar")
       }
       decodeYamlDoubleQuoted(inner, label)
     }
     '\'' -> {
-      require(value.length >= 2 && value.endsWith('\'')) {
-        "$label: native agent frontmatter has unterminated single-quoted scalar"
+      if (value.length < 2 || !value.endsWith('\'')) {
+        invalidNativeAgentSourceInput("$label: native agent frontmatter has unterminated single-quoted scalar")
       }
       decodeYamlSingleQuoted(value.substring(1, value.length - 1), label)
     }
@@ -204,19 +195,21 @@ private fun decodeYamlDoubleQuoted(
     while (index < inner.length) {
       val char = inner[index]
       if (char == '\\') {
-        require(index + 1 < inner.length) {
-          "$label: native agent frontmatter has unterminated double-quoted scalar"
+        if (index + 1 >= inner.length) {
+          invalidNativeAgentSourceInput("$label: native agent frontmatter has unterminated double-quoted scalar")
         }
         val next = inner[index + 1]
         val decoded = DOUBLE_QUOTE_DECODE_MAP["\\$next"]
-        require(decoded != null) {
-          "$label: native agent frontmatter has unknown escape sequence \\$next"
+        if (decoded == null) {
+          invalidNativeAgentSourceInput("$label: native agent frontmatter has unknown escape sequence \\$next")
         }
         append(decoded)
         index += 2
       } else {
-        require(char != '"') {
-          "$label: native agent frontmatter has unescaped double quote inside double-quoted scalar"
+        if (char == '"') {
+          invalidNativeAgentSourceInput(
+            "$label: native agent frontmatter has unescaped double quote inside double-quoted scalar",
+          )
         }
         append(char)
         index += 1
@@ -233,8 +226,10 @@ private fun decodeYamlSingleQuoted(
     while (index < inner.length) {
       val char = inner[index]
       if (char == '\'') {
-        require(index + 1 < inner.length && inner[index + 1] == '\'') {
-          "$label: native agent frontmatter has unescaped single quote inside single-quoted scalar"
+        if (index + 1 >= inner.length || inner[index + 1] != '\'') {
+          invalidNativeAgentSourceInput(
+            "$label: native agent frontmatter has unescaped single quote inside single-quoted scalar",
+          )
         }
         append('\'')
         index += 2
@@ -244,3 +239,26 @@ private fun decodeYamlSingleQuoted(
       }
     }
   }
+
+private fun invalidNativeAgentSourceInput(message: String): Nothing =
+  throw SkillBillRuntimeException(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, message)
+
+private fun validateNativeAgentSourceNode(
+  frontmatter: Map<String, String>,
+  tools: List<String>,
+  body: String,
+  label: String,
+) {
+  val instance: ObjectNode = JsonNodeFactory.instance.objectNode()
+  frontmatter["name"]?.let { instance.put("name", it) }
+  frontmatter["description"]?.let { instance.put("description", it) }
+  frontmatter["compose"]?.let { instance.put("compose", it) }
+  frontmatter[SharedPayloadKeys.CONTRACT_VERSION]?.let { instance.put(SharedPayloadKeys.CONTRACT_VERSION, it) }
+  if (tools.isNotEmpty()) {
+    instance.putArray("tools").apply { tools.forEach { add(it) } }
+  }
+  if (body.isNotBlank()) {
+    instance.put("body", body)
+  }
+  NativeAgentCompositionSchemaValidator.validateParsedNode(instance, label)
+}

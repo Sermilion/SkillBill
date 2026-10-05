@@ -9,6 +9,7 @@ import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_REGISTER_ABS
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_STDERR_EXCERPT_MAX_LENGTH
 import skillbill.application.review.parallel.runner.ParallelCodeReviewInlineParentLaunch
 import skillbill.application.review.parallel.runner.ParallelCodeReviewSoftRegisterAdmission
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.terminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -21,6 +22,7 @@ import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
+import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
 @Inject
@@ -168,7 +170,7 @@ internal fun parallelCodeReviewCaptureLane(lane: () -> ParallelReviewLaneOutcome
   val terminal =
     when (error) {
       is CancellationException, is InterruptedException -> error
-      is Exception -> return ParallelReviewLaneOutcome(
+      is IOException, is SkillBillRuntimeException -> return ParallelReviewLaneOutcome(
         success = false,
         rawOutput = "",
         failureReason =

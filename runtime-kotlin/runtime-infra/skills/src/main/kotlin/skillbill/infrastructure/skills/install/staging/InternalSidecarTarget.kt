@@ -63,9 +63,9 @@ internal fun prepareInternalStaging(request: InternalStagingPreparation): Prepar
       parentSkillName = request.parentSkillName,
       skillsRoot = request.skillsRoot,
       selectedPackSkills = request.selectedPackSkills,
-      failureSourceLabel = request.parentSourceDir.toString(),
       packDiscovery =
         InternalSidecarPackDiscovery(
+          failureSourceLabel = request.parentSourceDir.toString(),
           enforceContractVersion = request.enforceContractVersion,
           userHome = request.userHome,
           environment = request.environment,
@@ -125,6 +125,7 @@ private fun mergeInternalSupportPointers(
 }
 
 internal data class InternalSidecarPackDiscovery(
+  val failureSourceLabel: String? = null,
   val enforceContractVersion: Boolean = true,
   val userHome: Path? = null,
   val environment: Map<String, String> = emptyMap(),
@@ -136,9 +137,9 @@ internal fun discoverInternalSidecarTargets(
   parentSkillName: String,
   skillsRoot: Path,
   selectedPackSkills: List<InstallPlanSkill> = emptyList(),
-  failureSourceLabel: String = parentSkillName,
   packDiscovery: InternalSidecarPackDiscovery = InternalSidecarPackDiscovery(),
 ): List<InternalSidecarTarget> {
+  val failureSourceLabel = packDiscovery.failureSourceLabel ?: parentSkillName
   val baseChildren = discoverBaseSkillSidecarTargets(parentSkillName, skillsRoot)
   val packChildren =
     selectedPackSkills
@@ -188,7 +189,10 @@ internal fun discoverInternalSidecarTargets(
   return byName.values.toList()
 }
 
-private fun discoverAuthoredCompanions(sourceDir: Path, failureSourceLabel: String): List<InternalSidecarCompanion> {
+private fun discoverAuthoredCompanions(
+  sourceDir: Path,
+  failureSourceLabel: String,
+): List<InternalSidecarCompanion> {
   val normalizedSource = sourceDir.toAbsolutePath().normalize()
   val realSource = normalizedSource.toRealPath()
   val companions =

@@ -217,8 +217,7 @@ internal fun invalidInstallStaging(
   sourceLabel: String,
   reason: String,
   cause: Throwable? = null,
-): Nothing =
-  throw InvalidInstallStagingError(sourceLabel = sourceLabel, reason = reason, cause = cause)
+): Nothing = throw InvalidInstallStagingError(sourceLabel = sourceLabel, reason = reason, cause = cause)
 
 private fun logInstallStagingFailure(
   inputs: FreshInstallInputs,

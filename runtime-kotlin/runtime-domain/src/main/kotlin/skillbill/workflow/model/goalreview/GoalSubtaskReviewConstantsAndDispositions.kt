@@ -57,7 +57,10 @@ data class GoalSubtaskBlockerDisposition(
     )
 
   companion object {
-    private fun violation(findingId: String, evidence: List<String>): String? =
+    private fun violation(
+      findingId: String,
+      evidence: List<String>,
+    ): String? =
       when {
         findingId.isBlank() -> "GoalSubtaskBlockerDisposition.findingId must be non-blank."
         evidence.isEmpty() -> "GoalSubtaskBlockerDisposition.evidence must contain at least one evidence entry."

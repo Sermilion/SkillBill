@@ -3,14 +3,14 @@ contract_version: "0.5"
 issue_key: "SKILL-401"
 feature_name: "defect-exception-control-flow"
 parent_spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-401-defect-exception-control-flow"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 6
-  action: "resume"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "domain-goalrunner-review-decoders"
@@ -80,12 +80,12 @@ subtasks:
 - id: 6
   name: "infra-skills-install-and-authoring"
   spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec_subtask_6_infra-skills-install-and-authoring.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261005-120204-160e"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -93,12 +93,12 @@ subtasks:
 - id: 7
   name: "cli-install-scaffold-agent-addon"
   spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec_subtask_7_cli-install-scaffold-agent-addon.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261005-124653-krh6"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

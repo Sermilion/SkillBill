@@ -64,30 +64,32 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
       validationStatus: String,
       gateRunCount: Int,
       gateRuns: List<FeatureTaskRuntimeValidationGateRunRecord>,
-    ): String? = when {
-      validationStatus.isBlank() ->
-        "FeatureTaskRuntimeValidationGateExecutionEvidence.validationStatus must be non-blank."
-      gateRunCount < 0 -> "FeatureTaskRuntimeValidationGateExecutionEvidence.gateRunCount must be >= 0."
-      gateRuns.size != gateRunCount ->
-        "FeatureTaskRuntimeValidationGateExecutionEvidence.gateRuns size ${gateRuns.size} " +
-          "must equal gateRunCount $gateRunCount."
-      else -> null
-    }
+    ): String? =
+      when {
+        validationStatus.isBlank() ->
+          "FeatureTaskRuntimeValidationGateExecutionEvidence.validationStatus must be non-blank."
+        gateRunCount < 0 -> "FeatureTaskRuntimeValidationGateExecutionEvidence.gateRunCount must be >= 0."
+        gateRuns.size != gateRunCount ->
+          "FeatureTaskRuntimeValidationGateExecutionEvidence.gateRuns size ${gateRuns.size} " +
+            "must equal gateRunCount $gateRunCount."
+        else -> null
+      }
 
-    private fun passedViolation(gateRuns: List<FeatureTaskRuntimeValidationGateRunRecord>): String? = when {
-      gateRuns.isEmpty() -> "Passed validation evidence must contain a gate run."
-      gateRuns.last().outcome != ValidationGateRunOutcome.PASSED || gateRuns.last().exitCode != 0 ->
-        "Passed validation evidence must end with a successful required command."
-      gateRuns.any {
-        it.command.isNullOrBlank() || it.exitCode == null || it.repositoryCheckpoint.isNullOrBlank()
-      } -> "Validation gate runs must retain command, exit code, and repository checkpoint evidence."
-      gateRuns.any { !it.executedChecksRecorded } ->
-        "Validation gate runs must explicitly record executed_checks, including an empty list."
-      gateRuns.any {
-        it.outcome == ValidationGateRunOutcome.PASSED && it.exitCode != 0
-      } -> "Passed validation gate outcomes must have zero command exit codes."
-      else -> null
-    }
+    private fun passedViolation(gateRuns: List<FeatureTaskRuntimeValidationGateRunRecord>): String? =
+      when {
+        gateRuns.isEmpty() -> "Passed validation evidence must contain a gate run."
+        gateRuns.last().outcome != ValidationGateRunOutcome.PASSED || gateRuns.last().exitCode != 0 ->
+          "Passed validation evidence must end with a successful required command."
+        gateRuns.any {
+          it.command.isNullOrBlank() || it.exitCode == null || it.repositoryCheckpoint.isNullOrBlank()
+        } -> "Validation gate runs must retain command, exit code, and repository checkpoint evidence."
+        gateRuns.any { !it.executedChecksRecorded } ->
+          "Validation gate runs must explicitly record executed_checks, including an empty list."
+        gateRuns.any {
+          it.outcome == ValidationGateRunOutcome.PASSED && it.exitCode != 0
+        } -> "Passed validation gate outcomes must have zero command exit codes."
+        else -> null
+      }
 
     fun fromGateMeasurements(
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
@@ -163,38 +165,55 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
         val map =
           entry as? Map<*, *>
             ?: invalid(onInvalid, "gate_runs[$index] must be a mapping.")
-        val durationMs = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressLong(ValidationEvidencePayloadKeys.DURATION_MS)
-        }
-        val outcomeWire = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressString(ValidationEvidencePayloadKeys.OUTCOME)
-        }
-        val outcome = ValidationGateRunOutcome.fromWire(outcomeWire)
-          ?: invalid(onInvalid, "Unknown validation gate outcome.")
-        val cacheModeWire = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressString(ValidationEvidencePayloadKeys.CACHE_MODE)
-        }
-        val cacheMode = ValidationGateCacheMode.fromWire(cacheModeWire)
-          ?: invalid(onInvalid, "Unknown validation gate cache mode.")
-        val executedWorkUnits = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressInt(ValidationEvidencePayloadKeys.EXECUTED_WORK_UNITS)
-        }
+        val durationMs =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressLong(ValidationEvidencePayloadKeys.DURATION_MS)
+          }
+        val outcomeWire =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressString(ValidationEvidencePayloadKeys.OUTCOME)
+          }
+        val outcome =
+          ValidationGateRunOutcome.fromWire(outcomeWire)
+            ?: invalid(onInvalid, "Unknown validation gate outcome.")
+        val cacheModeWire =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressString(ValidationEvidencePayloadKeys.CACHE_MODE)
+          }
+        val cacheMode =
+          ValidationGateCacheMode.fromWire(cacheModeWire)
+            ?: invalid(onInvalid, "Unknown validation gate cache mode.")
+        val executedWorkUnits =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressInt(ValidationEvidencePayloadKeys.EXECUTED_WORK_UNITS)
+          }
         val executedChecks = decodeGateRunExecutedChecks(map, onInvalid, index)
-        val command = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressOptionalString(ValidationEvidencePayloadKeys.COMMAND)
-        }
-        val exitCode = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressOptionalInt(ValidationEvidencePayloadKeys.EXIT_CODE)
-        }
-        val repositoryCheckpoint = readExecutionField(sourceLabel, remapInvalid) {
-          map.gateProgressOptionalString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)
-        }
+        val command =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressOptionalString(ValidationEvidencePayloadKeys.COMMAND)
+          }
+        val exitCode =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressOptionalInt(ValidationEvidencePayloadKeys.EXIT_CODE)
+          }
+        val repositoryCheckpoint =
+          readExecutionField(sourceLabel, remapInvalid) {
+            map.gateProgressOptionalString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)
+          }
         val executedChecksRecorded = map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS)
-        val reason = FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
-          durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint,
-        ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
-          outcome, exitCode, executedChecksRecorded, executedChecks,
-        )
+        val reason =
+          FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
+            durationMs,
+            executedWorkUnits,
+            command,
+            exitCode,
+            repositoryCheckpoint,
+          ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
+            outcome,
+            exitCode,
+            executedChecksRecorded,
+            executedChecks,
+          )
         if (reason != null) invalid(onInvalid, reason)
         FeatureTaskRuntimeValidationGateRunRecord(
           durationMs, outcome, cacheMode, executedWorkUnits, executedChecks, command,
@@ -207,15 +226,16 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
       sourceLabel: String,
       remapInvalid: (String, SkillBillRuntimeException) -> SkillBillRuntimeException,
       read: () -> T,
-    ): T = try {
-      read()
-    } catch (error: SkillBillRuntimeException) {
-      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
-      val reason = "Gate run execution fields are missing or malformed."
-      val failure = invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason)
-      failure.addSuppressed(error)
-      throw remapInvalid(reason, failure)
-    }
+    ): T =
+      try {
+        read()
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+        val reason = "Gate run execution fields are missing or malformed."
+        val failure = invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason)
+        failure.addSuppressed(error)
+        throw remapInvalid(reason, failure)
+      }
 
     private fun decodeGateRunExecutedChecks(
       map: Map<*, *>,

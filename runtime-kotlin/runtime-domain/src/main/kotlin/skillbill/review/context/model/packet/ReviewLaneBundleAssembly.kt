@@ -155,7 +155,12 @@ data class ReviewLaneSegmentAccounting(
   }
 
   companion object {
-    internal fun violation(segmentId: String, measuredBytes: Long, entryCount: Int, compositionDigest: String): String? =
+    internal fun violation(
+      segmentId: String,
+      measuredBytes: Long,
+      entryCount: Int,
+      compositionDigest: String,
+    ): String? =
       when {
         segmentId.isBlank() -> "Failed requirement."
         measuredBytes < REVIEW_MIN_ORDER_INDEX || entryCount < REVIEW_MIN_ORDER_INDEX -> "Failed requirement."

@@ -22,10 +22,18 @@ data class ResolvedPhaseStrategyIdentity(
   }
 
   companion object {
-    fun violation(strategyId: String, semanticRevision: Int, steps: List<String>, entryStep: String): String? =
-      if (strategyId.isNotBlank() && semanticRevision > 0 && steps.isNotEmpty() &&
-        steps.distinct().size == steps.size && entryStep in steps
-      ) null else "Failed requirement."
+    fun violation(
+      strategyId: String,
+      semanticRevision: Int,
+      steps: List<String>,
+      entryStep: String,
+    ): String? =
+      if (strategyId.isNotBlank() && semanticRevision > 0 && validStrategySteps(steps, entryStep)
+      ) {
+        null
+      } else {
+        "Failed requirement."
+      }
   }
 }
 
@@ -40,8 +48,10 @@ data class ResolvedPhaseStrategyDispatch(
   }
 
   companion object {
-    fun violation(strategyId: String, semanticRevision: Int): String? =
-      if (strategyId.isNotBlank() && semanticRevision > 0) null else "Failed requirement."
+    fun violation(
+      strategyId: String,
+      semanticRevision: Int,
+    ): String? = if (strategyId.isNotBlank() && semanticRevision > 0) null else "Failed requirement."
   }
 }
 
@@ -148,3 +158,8 @@ class ResolvedPhaseExecutionPlan(
 
   private fun <K, V> immutableMap(values: Map<K, V>): Map<K, V> = Collections.unmodifiableMap(LinkedHashMap(values))
 }
+
+private fun validStrategySteps(
+  steps: List<String>,
+  entryStep: String,
+): Boolean = steps.isNotEmpty() && steps.distinct().size == steps.size && entryStep in steps

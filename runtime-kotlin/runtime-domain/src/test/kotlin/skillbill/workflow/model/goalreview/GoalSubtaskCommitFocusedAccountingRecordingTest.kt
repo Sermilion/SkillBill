@@ -1,5 +1,7 @@
 package skillbill.workflow.model.goalreview
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -83,11 +85,11 @@ class GoalSubtaskCommitFocusedAccountingRecordingTest {
 
   @Test
   fun `an unknown integration outcome is rejected at the artifact boundary`() {
-    assertFailsWith<IllegalArgumentException> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskCommitFocusedAccounting.fromArtifactMap(
         accounting.toArtifactMap() + ("integration_terminal_outcome" to "complete"),
         "accounting",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 }

@@ -26,7 +26,10 @@ data class FeatureTaskRuntimeRunInvariants(
   }
 
   companion object {
-    fun violation(specReference: String, acceptanceCriteria: List<String>): String? =
+    fun violation(
+      specReference: String,
+      acceptanceCriteria: List<String>,
+    ): String? =
       when {
         specReference.isBlank() ->
           "FeatureTaskRuntimeRunInvariants.specReference must be a non-blank spec reference; " +

@@ -7,6 +7,7 @@ enum class ScaffoldFailureCode : RuntimeFailureCode {
   SCAFFOLD_FAILURE,
   PAYLOAD_VERSION_MISMATCH,
   INVALID_PAYLOAD,
+  INVALID_INPUT,
   RETIRED_KIND,
   UNKNOWN_SKILL_KIND,
   UNKNOWN_PRE_SHELL_FAMILY,
@@ -27,6 +28,11 @@ fun invalidScaffoldPayloadError(
   message: String,
   cause: Throwable? = null,
 ): SkillBillRuntimeException = SkillBillRuntimeException(ScaffoldFailureCode.INVALID_PAYLOAD, message, cause)
+
+fun invalidScaffoldInputError(
+  message: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(ScaffoldFailureCode.INVALID_INPUT, message, cause)
 
 fun retiredScaffoldKindError(
   message: String,

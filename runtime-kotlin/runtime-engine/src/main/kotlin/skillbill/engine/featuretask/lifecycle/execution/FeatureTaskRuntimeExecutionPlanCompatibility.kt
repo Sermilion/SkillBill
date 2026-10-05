@@ -13,7 +13,7 @@ import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPla
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.task.SkeletonTraversalResult
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonTraversalResult
 import skillbill.workflow.taskruntime.phase.task.traversalOrViolation
 
 @Inject

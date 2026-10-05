@@ -36,37 +36,40 @@ internal fun parseAgentAddonSelection(raw: String?): AgentAddonSelection {
   val entries =
     map[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES] as? List<*>
       ?: invalidAgentAddonSelection("Agent add-on selection entries must be an ordered array.")
-  return try {
-    AgentAddonSelection(
-      entries.mapIndexed { index, valueEntry ->
-        val entry =
-          JsonCodec.anyToStringAnyMap(valueEntry)
-            ?: invalidAgentAddonSelection("Agent add-on selection entry $index must be an object.")
-        val persistedKeys =
-          setOf(
-            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG,
-            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
-            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
-          )
-        if (!entry.keys.containsAll(persistedKeys) || entry.keys.any { it !in persistedKeys }) {
-          invalidAgentAddonSelection("Agent add-on selection entry $index has unsupported or missing fields.")
-        }
-        PersistedAgentAddonSelectionEntry(
-          slug =
-            entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG] as? String
-              ?: invalidAgentAddonSelection("Entry $index slug is required."),
-          sourceIdentity =
-            entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY] as? String
-              ?: invalidAgentAddonSelection("Entry $index source_identity is required."),
-          contentSha256 =
-            entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256] as? String
-              ?: invalidAgentAddonSelection("Entry $index content_sha256 is required."),
-        )
-      },
+  val persistedKeys =
+    setOf(
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
     )
-  } catch (error: IllegalArgumentException) {
-    invalidAgentAddonSelection("Invalid agent add-on selection: ${error.message}", error)
+  val parsedEntries =
+    entries.mapIndexed { index, valueEntry ->
+      val entry =
+        JsonCodec.anyToStringAnyMap(valueEntry)
+          ?: invalidAgentAddonSelection("Agent add-on selection entry $index must be an object.")
+      if (entry.keys != persistedKeys) {
+        invalidAgentAddonSelection("Agent add-on selection entry $index has unsupported or missing fields.")
+      }
+      val slug =
+        entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG] as? String
+          ?: invalidAgentAddonSelection("Entry $index slug is required.")
+      val sourceIdentity =
+        entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY] as? String
+          ?: invalidAgentAddonSelection("Entry $index source_identity is required.")
+      val contentSha256 =
+        entry[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256] as? String
+          ?: invalidAgentAddonSelection("Entry $index content_sha256 is required.")
+      val violation = PersistedAgentAddonSelectionEntry.violation(slug, sourceIdentity, contentSha256)
+      if (violation != null) {
+        invalidAgentAddonSelection("Invalid agent add-on selection: $violation")
+      }
+      PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
+    }
+  val selectionViolation = AgentAddonSelection.violation(parsedEntries)
+  if (selectionViolation != null) {
+    invalidAgentAddonSelection("Invalid agent add-on selection: $selectionViolation")
   }
+  return AgentAddonSelection(parsedEntries)
 }
 
 internal fun invalidAgentAddonSelection(
