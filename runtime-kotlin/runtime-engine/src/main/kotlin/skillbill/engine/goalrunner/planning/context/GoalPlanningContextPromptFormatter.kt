@@ -24,7 +24,11 @@ object GoalPlanningContextPromptFormatter {
           "Use this immutable shared context for the parent goal: "
         },
       )
-      append(JsonCodec.mapToJsonString(packet))
+      append(
+        JsonCodec.mapToJsonString(
+          if (phaseId == "plan") packet - GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY else packet,
+        ),
+      )
       append(
         "\nThis is child-only planning context. Do not copy its payload, implementation summary, " +
           "audit, review, diagnostic, or raw child output into the parent conversation or parent projection.",

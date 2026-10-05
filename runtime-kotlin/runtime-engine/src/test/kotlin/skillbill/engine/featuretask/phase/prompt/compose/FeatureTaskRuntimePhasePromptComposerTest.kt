@@ -419,12 +419,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       assertFalse(prompt.contains("\"phase_id\": must be"), "$phaseId must not pin the phase id")
       assertFalse(prompt.contains("\"contract_version\": must be"), "$phaseId must not pin the contract version")
       assertFalse(prompt.contains("\"derived_notes\""), "$phaseId must not offer derived_notes")
-      assertContains(
-        prompt,
-        "schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.",
-        false,
-        "installed-runtime authority for $phaseId",
-      )
+      assertContains(prompt, "## Phase output is your final prose", false, "prose output authority for $phaseId")
     }
   }
 }
