@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
@@ -58,7 +59,7 @@ class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution ->
-      val sourceInvariants = runInvariantsSource.read(specPath)
+      val sourceInvariants = runInvariantsSource.read(specPath).requireInvariants()
       runner.run(
         FeatureTaskRuntimeRunRequest(
           issueKey = input.issueKey,
@@ -112,7 +113,7 @@ class FeatureTaskRuntimeRunEntry(
                 definition = SkeletonDefinition.forRun(goalContinuation != null),
                 reviewMode =
                   goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
-                    ?: runInvariantsSource.read(specPath).codeReviewMode,
+                    ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode,
                 qualityGate = goalContinuation?.qualityGateSelection,
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
@@ -129,3 +130,9 @@ class FeatureTaskRuntimeRunEntry(
   private fun routeScope(goalChild: Boolean): FeatureTaskRouteScope =
     if (goalChild) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE
 }
+
+private fun FeatureTaskRuntimeRunInvariantsRead.requireInvariants() =
+  when (this) {
+    is FeatureTaskRuntimeRunInvariantsRead.Read -> invariants
+    is FeatureTaskRuntimeRunInvariantsRead.Rejected -> throw IllegalArgumentException(reason)
+  }

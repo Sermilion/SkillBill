@@ -6,6 +6,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.infrastructure.workflow.decomposition.DecompositionManifestBundleJournal
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.review.spec.GovernedSpecSectionParser.MANDATES_HEADINGS
@@ -16,58 +17,76 @@ import skillbill.workflow.decomposition.model.isDecompositionManifestSchemaFailu
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 @Inject
 class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInvariantsSource {
-  override fun read(specPath: Path): FeatureTaskRuntimeRunInvariants {
+  override fun read(specPath: Path): FeatureTaskRuntimeRunInvariantsRead {
     val normalizedPath = specPath.toAbsolutePath().normalize()
-    require(Files.isRegularFile(normalizedPath) && Files.isReadable(normalizedPath)) {
-      "feature-task-runtime spec path '$normalizedPath' must point to a readable spec file."
+    if (!Files.isRegularFile(normalizedPath) || !Files.isReadable(normalizedPath)) {
+      return rejected("feature-task-runtime spec path '$normalizedPath' must point to a readable spec file.")
     }
-    val realPath = authorizedRealPath(normalizedPath)
-    requireSelectedBundleEntry(normalizedPath)
+    val realPath = authorizedRealPath(normalizedPath) ?: return rejected(authorizationReason(normalizedPath))
+    requireSelectedBundleEntry(normalizedPath)?.let { return rejected(it) }
     val specText = Files.readString(realPath)
-    return FeatureTaskRuntimeRunInvariants(
-      specReference = normalizedPath.toString(),
-      featureSize = parseFeatureSize(specText),
-      acceptanceCriteria =
-        GovernedSpecSectionParser.parseListSection(specText) {
-          it.startsWith(ACCEPTANCE_CRITERIA_PREFIX)
-        },
-      mandatesAndOverrides = GovernedSpecSectionParser.parseListSection(specText) { it in MANDATES_HEADINGS },
+    val featureSize = parseFeatureSize(specText)
+    val acceptanceCriteria =
+      GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
+    val invariantsViolation = FeatureTaskRuntimeRunInvariants.violation(normalizedPath.toString(), acceptanceCriteria)
+    if (invariantsViolation != null) return rejected(invariantsViolation)
+    return FeatureTaskRuntimeRunInvariantsRead.Read(
+      FeatureTaskRuntimeRunInvariants(
+        specReference = normalizedPath.toString(),
+        featureSize = featureSize,
+        acceptanceCriteria = acceptanceCriteria,
+        mandatesAndOverrides = GovernedSpecSectionParser.parseListSection(specText) { it in MANDATES_HEADINGS },
+      ),
     )
   }
 
-  private fun authorizedRealPath(normalizedPath: Path): Path {
+  private fun authorizedRealPath(normalizedPath: Path): Path? {
     val realPath = normalizedPath.toRealPath()
     val specsRoot =
       generateSequence(normalizedPath.parent) { it.parent }.firstOrNull {
         it.fileName?.toString() == FEATURE_SPECS_DIRECTORY
       }
     val authorizedRoot = (specsRoot ?: normalizedPath.parent).toRealPath()
-    require(realPath.startsWith(authorizedRoot)) {
-      "feature-task-runtime spec path '$normalizedPath' resolves to '$realPath' outside '$authorizedRoot'."
-    }
-    return realPath
+    return realPath.takeIf { it.startsWith(authorizedRoot) }
   }
 
-  private fun requireSelectedBundleEntry(normalizedPath: Path) {
+  private fun requireSelectedBundleEntry(normalizedPath: Path): String? {
     val bundleDirectory = normalizedPath.parent
     val manifestPath = bundleDirectory.resolve(MANIFEST_FILE_NAME)
     try {
       DecompositionManifestBundleJournal().failIfPending(bundleDirectory)
-      if (!Files.isRegularFile(manifestPath)) return
+      if (!Files.isRegularFile(manifestPath)) return null
       val manifest = readManifest(manifestPath)
-      if (normalizedPath.fileName.toString() == Path.of(manifest.parentSpecPath).fileName.toString()) return
-      require(manifest.subtasks.any { it.specPath.fileNameOrNull() == normalizedPath.fileName }) {
+      if (normalizedPath.fileName.toString() == Path.of(manifest.parentSpecPath).fileName.toString()) return null
+      return if (manifest.subtasks.any { it.specPath.fileNameOrNull() == normalizedPath.fileName }) {
+        null
+      } else {
         "feature-task-runtime spec path '$normalizedPath' is not a subtask selected by '$manifestPath'."
       }
+    } catch (error: InvalidPathException) {
+      return error.message.orEmpty()
     } catch (error: SkillBillRuntimeException) {
       error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
-      throw IllegalArgumentException(error.message, error)
+      return error.message.orEmpty()
     }
   }
+
+  private fun authorizationReason(normalizedPath: Path): String {
+    val realPath = normalizedPath.toRealPath()
+    val specsRoot =
+      generateSequence(normalizedPath.parent) { it.parent }.firstOrNull {
+        it.fileName?.toString() == FEATURE_SPECS_DIRECTORY
+      }
+    val authorizedRoot = (specsRoot ?: normalizedPath.parent).toRealPath()
+    return "feature-task-runtime spec path '$normalizedPath' resolves to '$realPath' outside '$authorizedRoot'."
+  }
+
+  private fun rejected(reason: String) = FeatureTaskRuntimeRunInvariantsRead.Rejected(reason)
 
   private fun readManifest(manifestPath: Path): DecompositionManifest {
     val raw: Any? = YAMLMapper().readValue(Files.readString(manifestPath), Any::class.java)

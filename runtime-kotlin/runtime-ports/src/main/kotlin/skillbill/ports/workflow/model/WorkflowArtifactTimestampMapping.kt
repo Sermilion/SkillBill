@@ -4,7 +4,7 @@ import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.time.parsePersistedInstant
+import skillbill.workflow.time.parsePersistedInstantOrNull
 
 private val timestampArtifactFamilies =
   setOf(
@@ -63,9 +63,10 @@ private fun preserveTimestampText(
   value: String,
   source: String,
 ): String {
-  return try {
-    if (parsePersistedInstant(value) == parsePersistedInstant(source)) source else value
-  } catch (error: IllegalArgumentException) {
-    throw invalidWorkflowStateSchemaError("Workflow artifact contains an invalid timestamp.", error)
+  val parsedValue = parsePersistedInstantOrNull(value)
+  val parsedSource = parsePersistedInstantOrNull(source)
+  if (parsedValue == null || parsedSource == null) {
+    throw invalidWorkflowStateSchemaError("Workflow artifact contains an invalid timestamp.")
   }
+  return if (parsedValue == parsedSource) source else value
 }

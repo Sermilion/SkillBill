@@ -17,64 +17,111 @@ private val REVIEW_DIFF_COPY_TO = Regex("(?m)^copy to (.+)$")
 
 internal data class ReviewDiffRecordPaths(val old: String?, val new: String?, val authoritative: String)
 
-internal fun reviewDiffRecordPaths(record: String): ReviewDiffRecordPaths {
+internal fun reviewDiffRecordPaths(record: String): ReviewDiffParseOutcome<ReviewDiffRecordPaths> {
   val oldHeaderValue = REVIEW_DIFF_OLD_HEADER_PATH.find(record)?.groupValues?.get(1)
   val newHeaderValue = REVIEW_DIFF_HEADER_PATH.find(record)?.groupValues?.get(1)
   val oldAbsent = oldHeaderValue?.trim() == "/dev/null"
   val newAbsent = newHeaderValue?.trim() == "/dev/null"
-  val oldSources =
-    listOfNotNull(
-      oldHeaderValue?.let { reviewDiffRepositoryPath(it, REVIEW_DIFF_OLD_PREFIX) },
-      REVIEW_DIFF_RENAME_FROM.find(record)?.groupValues?.get(1)?.let { reviewDiffRepositoryPath(it, null) },
-      REVIEW_DIFF_COPY_FROM.find(record)?.groupValues?.get(1)?.let { reviewDiffRepositoryPath(it, null) },
+  val oldSources = mutableListOf<String>()
+  val newSources = mutableListOf<String>()
+  val sources =
+    listOf(
+      Triple(oldHeaderValue, REVIEW_DIFF_OLD_PREFIX, oldSources),
+      Triple(REVIEW_DIFF_RENAME_FROM.find(record)?.groupValues?.get(1), null, oldSources),
+      Triple(REVIEW_DIFF_COPY_FROM.find(record)?.groupValues?.get(1), null, oldSources),
+      Triple(newHeaderValue, REVIEW_DIFF_NEW_PREFIX, newSources),
+      Triple(REVIEW_DIFF_RENAME_TO.find(record)?.groupValues?.get(1), null, newSources),
+      Triple(REVIEW_DIFF_COPY_TO.find(record)?.groupValues?.get(1), null, newSources),
     )
-  val newSources =
-    listOfNotNull(
-      newHeaderValue?.let { reviewDiffRepositoryPath(it, REVIEW_DIFF_NEW_PREFIX) },
-      REVIEW_DIFF_RENAME_TO.find(record)?.groupValues?.get(1)?.let { reviewDiffRepositoryPath(it, null) },
-      REVIEW_DIFF_COPY_TO.find(record)?.groupValues?.get(1)?.let { reviewDiffRepositoryPath(it, null) },
-    )
-  val headerPaths = parseReviewDiffHeader(record.lineSequence().first(), oldSources, newSources)
-  require(!(oldAbsent && newAbsent)) { "Git diff record cannot have /dev/null on both sides." }
-  val old = if (oldAbsent) null else agreeReviewDiffPaths("old", oldSources + listOfNotNull(headerPaths?.first))
-  val new = if (newAbsent) null else agreeReviewDiffPaths("new", newSources + listOfNotNull(headerPaths?.second))
+  for ((raw, prefix, target) in sources) {
+    if (raw == null) continue
+    when (val path = reviewDiffRepositoryPath(raw, prefix)) {
+      is ReviewDiffParseOutcome.Accepted -> path.value?.let(target::add)
+      is ReviewDiffParseOutcome.Rejected -> return path
+    }
+  }
+  val headerPaths =
+    when (val result = parseReviewDiffHeader(record.lineSequence().first(), oldSources, newSources)) {
+      is ReviewDiffParseOutcome.Accepted -> result.value
+      is ReviewDiffParseOutcome.Rejected -> return result
+    }
+  if (oldAbsent && newAbsent) return ReviewDiffParseOutcome.Rejected("Git diff record cannot have /dev/null on both sides.")
+  val old =
+    if (oldAbsent) {
+      null
+    } else {
+      when (val result = agreeReviewDiffPaths("old", oldSources + listOfNotNull(headerPaths?.first))) {
+        is ReviewDiffParseOutcome.Accepted -> result.value
+        is ReviewDiffParseOutcome.Rejected -> return result
+      }
+    }
+  val new =
+    if (newAbsent) {
+      null
+    } else {
+      when (val result = agreeReviewDiffPaths("new", newSources + listOfNotNull(headerPaths?.second))) {
+        is ReviewDiffParseOutcome.Accepted -> result.value
+        is ReviewDiffParseOutcome.Rejected -> return result
+      }
+    }
   val authoritative =
-    new ?: old
-      ?: throw IllegalArgumentException("Malformed Git diff record has no attributable repository path.")
-  return ReviewDiffRecordPaths(old, new, authoritative)
+    new ?: old ?: return ReviewDiffParseOutcome.Rejected("Malformed Git diff record has no attributable repository path.")
+  return ReviewDiffParseOutcome.Accepted(ReviewDiffRecordPaths(old, new, authoritative))
 }
 
 private fun parseReviewDiffHeader(
   line: String,
   corroboratedOld: List<String>,
   corroboratedNew: List<String>,
-): Pair<String, String>? {
-  val body = line.removePrefix("diff --git ").takeIf { it != line } ?: return null
-  val tokens = parseReviewDiffGitTokens(body)
-  if (tokens.size == 2) {
-    return requireNotNull(reviewDiffRepositoryPath(tokens[0], REVIEW_DIFF_OLD_PREFIX)) to
-      requireNotNull(reviewDiffRepositoryPath(tokens[1], REVIEW_DIFF_NEW_PREFIX))
+): ReviewDiffParseOutcome<Pair<String, String>?> {
+  val body = line.removePrefix("diff --git ").takeIf { it != line } ?: return ReviewDiffParseOutcome.Accepted(null)
+  val tokens = when (val result = parseReviewDiffGitTokens(body)) {
+    is ReviewDiffParseOutcome.Accepted -> result.value
+    is ReviewDiffParseOutcome.Rejected -> return result
   }
-  val candidates =
-    Regex(" b/").findAll(body).mapNotNull { boundary ->
-      runCatching {
-        requireNotNull(reviewDiffRepositoryPath(body.substring(0, boundary.range.first), REVIEW_DIFF_OLD_PREFIX)) to
-          requireNotNull(reviewDiffRepositoryPath(body.substring(boundary.range.first + 1), REVIEW_DIFF_NEW_PREFIX))
-      }.getOrNull()
-    }.filter { (old, new) ->
+  if (tokens.size == 2) {
+    val old =
+      when (val result = reviewDiffRepositoryPath(tokens[0], REVIEW_DIFF_OLD_PREFIX)) {
+        is ReviewDiffParseOutcome.Accepted -> result.value ?: return ReviewDiffParseOutcome.Rejected("Required value was null.")
+        is ReviewDiffParseOutcome.Rejected -> return result
+      }
+    val new =
+      when (val result = reviewDiffRepositoryPath(tokens[1], REVIEW_DIFF_NEW_PREFIX)) {
+        is ReviewDiffParseOutcome.Accepted -> result.value ?: return ReviewDiffParseOutcome.Rejected("Required value was null.")
+        is ReviewDiffParseOutcome.Rejected -> return result
+      }
+    return ReviewDiffParseOutcome.Accepted(old to new)
+  }
+  val candidates = mutableListOf<Pair<String, String>>()
+  for (boundary in Regex(" b/").findAll(body)) {
+    val old = reviewDiffRepositoryPath(body.substring(0, boundary.range.first), REVIEW_DIFF_OLD_PREFIX)
+    val new = reviewDiffRepositoryPath(body.substring(boundary.range.first + 1), REVIEW_DIFF_NEW_PREFIX)
+    if (
+      old is ReviewDiffParseOutcome.Accepted && new is ReviewDiffParseOutcome.Accepted &&
+      old.value != null && new.value != null
+    ) {
+      candidates += old.value to new.value
+    }
+  }
+  val candidatesMatchingRecord =
+    candidates.filter { (old, new) ->
       (corroboratedOld.isEmpty() || old in corroboratedOld) &&
         (corroboratedNew.isEmpty() || new in corroboratedNew) &&
         (corroboratedOld.isNotEmpty() || corroboratedNew.isNotEmpty() || old == new)
-    }.distinct().toList()
-  require(candidates.size == 1) { "Ambiguous Git diff header cannot establish repository path ownership." }
-  return candidates.single()
+    }.distinct()
+  if (candidatesMatchingRecord.size != 1) {
+    return ReviewDiffParseOutcome.Rejected("Ambiguous Git diff header cannot establish repository path ownership.")
+  }
+  return ReviewDiffParseOutcome.Accepted(candidatesMatchingRecord.single())
 }
 
 private fun agreeReviewDiffPaths(
   side: String,
   paths: List<String>,
-): String? {
+): ReviewDiffParseOutcome<String?> {
   val distinct = paths.distinct()
-  require(distinct.size <= 1) { "Git diff $side path sources disagree: ${distinct.joinToString()}" }
-  return distinct.singleOrNull()
+  if (distinct.size > 1) {
+    return ReviewDiffParseOutcome.Rejected("Git diff $side path sources disagree: ${distinct.joinToString()}")
+  }
+  return ReviewDiffParseOutcome.Accepted(distinct.singleOrNull())
 }

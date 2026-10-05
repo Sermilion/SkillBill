@@ -21,12 +21,18 @@ internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecu
     definitionSemanticRevision = planRevision(definition),
     selectedStrategies =
       planObjects(payload, Keys.SELECTED_STRATEGIES).map { strategy ->
+        val slot = planSlot(strategy)
+        val strategyId = planString(strategy, Keys.STRATEGY_ID)
+        val revision = planRevision(strategy)
+        val steps = planStrings(strategy, Keys.SELECTED_STEPS)
+        val entryStep = planString(strategy, Keys.ENTRY_STEP)
+        if (ResolvedPhaseStrategyIdentity.violation(strategyId, revision, steps, entryStep) != null) invalidPlanValue()
         ResolvedPhaseStrategyIdentity(
-          slot = planSlot(strategy),
-          strategyId = planString(strategy, Keys.STRATEGY_ID),
-          semanticRevision = planRevision(strategy),
-          steps = planStrings(strategy, Keys.SELECTED_STEPS),
-          entryStep = planString(strategy, Keys.ENTRY_STEP),
+          slot = slot,
+          strategyId = strategyId,
+          semanticRevision = revision,
+          steps = steps,
+          entryStep = entryStep,
         )
       }.sortedBy { it.slot.ordinal },
     reviewSelection =
@@ -40,40 +46,34 @@ internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecu
     traversal = decodeExecutionPlanTraversal(planObject(payload[Keys.TRAVERSAL])),
     dispatchStrategyByStep =
       planObjects(payload, Keys.DISPATCH_OWNERSHIP).associate { dispatch ->
-        planString(dispatch, Keys.STEP) to
-          ResolvedPhaseStrategyDispatch(
-            slot = planSlot(dispatch),
-            strategyId = planString(dispatch, Keys.STRATEGY_ID),
-            semanticRevision = planRevision(dispatch),
-          )
+        val strategyId = planString(dispatch, Keys.STRATEGY_ID)
+        val revision = planRevision(dispatch)
+        if (ResolvedPhaseStrategyDispatch.violation(strategyId, revision) != null) invalidPlanValue()
+        planString(dispatch, Keys.STEP) to ResolvedPhaseStrategyDispatch(planSlot(dispatch), strategyId, revision)
       },
     stepPolicyIdentities = decodePolicies(payload, Keys.STEP_POLICIES),
     resumeInterpretationIdentities = decodePolicies(payload, Keys.RESUME_INTERPRETATIONS),
     effectivePolicies =
       planObjects(payload, Keys.EFFECTIVE_POLICIES).map { policy ->
-        ResolvedExecutionPolicy(
-          planString(policy, Keys.ID),
-          planRevision(policy),
-          planString(policy, Keys.SEMANTIC_DIGEST),
-        )
+        val id = planString(policy, Keys.ID)
+        val revision = planRevision(policy)
+        val digest = planString(policy, Keys.SEMANTIC_DIGEST)
+        if (ResolvedExecutionPolicy.violation(id, revision, digest) != null) {
+          throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan cannot be reconstructed")
+        }
+        ResolvedExecutionPolicy(id, revision, digest)
       },
     effectivePolicySettings =
       payload[Keys.EFFECTIVE_POLICY_SETTINGS]?.let { raw ->
         val settings = planObject(raw)
-        try {
-          ResolvedFeatureTaskRuntimeExecutionSettings(
-            validationDepth =
-              ValidationDepth.fromWire(
-                planString(settings, Keys.VALIDATION_DEPTH),
-              ),
-            phaseTimeoutMillis =
-              (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong(),
-          )
-        } catch (error: IllegalArgumentException) {
-          throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
-            "execution plan settings are invalid: ${error.message}",
-          ).also { it.addSuppressed(error) }
-        }
+        val rawDepth = planString(settings, Keys.VALIDATION_DEPTH)
+        val validationDepth =
+          ValidationDepth.fromWireOrNull(rawDepth)
+            ?: invalidSettings(ValidationDepth.unknownWireValueMessage(rawDepth))
+        val phaseTimeoutMillis = (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong()
+        val violation = ResolvedFeatureTaskRuntimeExecutionSettings.violation(phaseTimeoutMillis)
+        if (violation != null) invalidSettings(violation)
+        ResolvedFeatureTaskRuntimeExecutionSettings(validationDepth, phaseTimeoutMillis)
       },
   )
 }
@@ -114,3 +114,6 @@ internal fun planStrings(
 
 private fun invalidPlanValue(): Nothing =
   throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan contains an invalid semantic value or digest")
+
+private fun invalidSettings(reason: String): Nothing =
+  throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan settings are invalid: $reason")

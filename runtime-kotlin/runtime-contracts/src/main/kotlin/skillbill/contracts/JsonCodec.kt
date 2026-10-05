@@ -108,8 +108,6 @@ private fun JsonCodec.parseJsonElementStrict(rawValue: String): JsonElement =
     json.parseToJsonElement(rawValue)
   } catch (error: SerializationException) {
     throw MalformedJsonTextError(error)
-  } catch (error: IllegalArgumentException) {
-    throw MalformedJsonTextError(error)
   }
 
 private fun jsonPrimitiveToValue(primitive: JsonPrimitive): Any? =

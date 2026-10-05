@@ -7,6 +7,12 @@ data class ResolvedFeatureTaskRuntimeExecutionSettings(
   val phaseTimeoutMillis: Long?,
 ) {
   init {
-    require(phaseTimeoutMillis == null || phaseTimeoutMillis >= 0)
+    val reason = violation(phaseTimeoutMillis)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(phaseTimeoutMillis: Long?): String? =
+      if (phaseTimeoutMillis == null || phaseTimeoutMillis >= 0) null else "Failed requirement."
   }
 }

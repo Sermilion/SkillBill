@@ -87,4 +87,9 @@ fun unresolvedSpecReason(subtask: DecompositionSubtask): String =
 fun invariantReadReason(
   subtask: DecompositionSubtask,
   error: Throwable,
-): String = "Goal planning subtask '${subtask.id}' run-invariants could not be read: ${error.message.orEmpty()}"
+): String = invariantReadReason(subtask, error.message.orEmpty())
+
+fun invariantReadReason(
+  subtask: DecompositionSubtask,
+  reason: String,
+): String = "Goal planning subtask '${subtask.id}' run-invariants could not be read: $reason"

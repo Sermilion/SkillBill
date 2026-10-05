@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
@@ -51,10 +52,12 @@ internal fun decodeExecutionPlanTraversal(payload: Map<String, Any?>): FeatureTa
           loopId = planString(edge, Keys.LOOP_ID),
           perEdgeCap = (edge[Keys.PER_EDGE_CAP] as? Number)?.toInt(),
           capExhaustionBehavior =
-            FeatureTaskRuntimeCapExhaustionBehavior.valueOf(
-              planString(edge, Keys.CAP_EXHAUSTION_BEHAVIOR),
-            ),
-          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.valueOf(planString(edge, Keys.CAP_SCOPE)),
+            FeatureTaskRuntimeCapExhaustionBehavior.entries.singleOrNull {
+              it.name == planString(edge, Keys.CAP_EXHAUSTION_BEHAVIOR)
+            } ?: invalidExecutionPlanTraversal(),
+          capScope =
+            FeatureTaskRuntimeBackwardEdgeCapScope.entries.singleOrNull { it.name == planString(edge, Keys.CAP_SCOPE) }
+              ?: invalidExecutionPlanTraversal(),
           warnAfterIterations = (edge[Keys.WARN_AFTER_ITERATIONS] as? Number)?.toInt(),
         )
       },
@@ -72,3 +75,6 @@ internal fun decodeExecutionPlanTraversal(payload: Map<String, Any?>): FeatureTa
         planString(it, Keys.STEP) to planString(it, Keys.SUCCESSOR)
       },
   )
+
+private fun invalidExecutionPlanTraversal(): Nothing =
+  throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan contains an invalid semantic value or digest")

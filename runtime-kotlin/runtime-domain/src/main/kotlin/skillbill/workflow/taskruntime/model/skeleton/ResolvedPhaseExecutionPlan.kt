@@ -17,10 +17,15 @@ data class ResolvedPhaseStrategyIdentity(
   val entryStep: String,
 ) {
   init {
-    require(strategyId.isNotBlank())
-    require(semanticRevision > 0)
-    require(steps.isNotEmpty() && steps.distinct().size == steps.size)
-    require(entryStep in steps)
+    val reason = violation(strategyId, semanticRevision, steps, entryStep)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(strategyId: String, semanticRevision: Int, steps: List<String>, entryStep: String): String? =
+      if (strategyId.isNotBlank() && semanticRevision > 0 && steps.isNotEmpty() &&
+        steps.distinct().size == steps.size && entryStep in steps
+      ) null else "Failed requirement."
   }
 }
 
@@ -30,8 +35,13 @@ data class ResolvedPhaseStrategyDispatch(
   val semanticRevision: Int,
 ) {
   init {
-    require(strategyId.isNotBlank())
-    require(semanticRevision > 0)
+    val reason = violation(strategyId, semanticRevision)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    fun violation(strategyId: String, semanticRevision: Int): String? =
+      if (strategyId.isNotBlank() && semanticRevision > 0) null else "Failed requirement."
   }
 }
 

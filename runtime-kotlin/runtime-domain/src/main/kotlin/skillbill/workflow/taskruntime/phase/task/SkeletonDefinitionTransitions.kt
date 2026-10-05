@@ -11,6 +11,26 @@ fun SkeletonDefinition.traversal(
   entryStepIds: Set<String>,
 ): FeatureTaskRuntimeTransitionDeclaration = deriveTransitions(stepIds.filter { it in selectedStepIds }, entryStepIds)
 
+fun SkeletonDefinition.traversalOrViolation(
+  selectedStepIds: Set<String>,
+  entryStepIds: Set<String>,
+): SkeletonTraversalResult {
+  val steps = stepIds.filter { it in selectedStepIds }
+  return if (steps.isEmpty()) {
+    SkeletonTraversalResult.Rejected(
+      "FeatureTaskRuntimeTransitionDeclaration.forwardPhaseIds must list at least one phase.",
+    )
+  } else {
+    SkeletonTraversalResult.Ready(deriveTransitions(steps, entryStepIds))
+  }
+}
+
+sealed interface SkeletonTraversalResult {
+  data class Ready(val declaration: FeatureTaskRuntimeTransitionDeclaration) : SkeletonTraversalResult
+
+  data class Rejected(val reason: String) : SkeletonTraversalResult
+}
+
 private fun deriveTransitions(
   steps: List<String>,
   entryStepIds: Set<String>,

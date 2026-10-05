@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.featuretask
 
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import java.nio.file.Files
 import java.nio.file.Path
@@ -9,6 +10,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
+  private fun readResult(spec: Path) = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+
+  private fun readInvariants(spec: Path) =
+    when (val result = readResult(spec)) {
+      is FeatureTaskRuntimeRunInvariantsRead.Read -> result.invariants
+      is FeatureTaskRuntimeRunInvariantsRead.Rejected -> error(result.reason)
+    }
+
   @Test
   fun `reads explicit governed feature size from spec text`() {
     val spec =
@@ -23,7 +32,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(FeatureTaskRuntimeFeatureSize.LARGE, invariants.featureSize)
   }
@@ -40,7 +49,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(FeatureTaskRuntimeFeatureSize.MEDIUM, invariants.featureSize)
   }
@@ -78,7 +87,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(FeatureTaskRuntimeFeatureSize.SMALL, invariants.featureSize)
   }
@@ -96,7 +105,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(listOf("First criterion.", "Second criterion."), invariants.acceptanceCriteria)
   }
@@ -113,7 +122,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(listOf("First criterion."), invariants.acceptanceCriteria)
   }
@@ -131,7 +140,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(listOf("AC1: bullet criterion one.", "AC2: bullet criterion two."), invariants.acceptanceCriteria)
   }
@@ -149,7 +158,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(listOf("unchecked criterion.", "checked criterion."), invariants.acceptanceCriteria)
   }
@@ -169,7 +178,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(
       listOf(
@@ -193,9 +202,13 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    assertFailsWith<IllegalArgumentException> {
-      FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
-    }
+    assertEquals(
+      FeatureTaskRuntimeRunInvariantsRead.Rejected(
+        "FeatureTaskRuntimeRunInvariants.acceptanceCriteria must list at least one criterion; " +
+          "a run with no acceptance criteria has no contract to satisfy.",
+      ),
+      readResult(spec),
+    )
   }
 
   @Test
@@ -216,7 +229,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
         """.trimIndent(),
       )
 
-    val invariants = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+    val invariants = readInvariants(spec)
 
     assertEquals(listOf("First criterion.", "Second criterion."), invariants.acceptanceCriteria)
   }
@@ -224,8 +237,9 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
   @Test
   fun `launch admission reads the ready selected spec and refuses every unusable artifact`() {
     val ready = SelectedSpecFixture()
-    assertEquals(listOf("Selected criterion."), ready.read().acceptanceCriteria)
-    assertEquals(ready.spec.toString(), ready.read().specReference)
+    val accepted = (ready.read() as FeatureTaskRuntimeRunInvariantsRead.Read).invariants
+    assertEquals(listOf("Selected criterion."), accepted.acceptanceCriteria)
+    assertEquals(ready.spec.toString(), accepted.specReference)
 
     val refusals: Map<String, () -> SelectedSpecFixture> =
       mapOf(
@@ -238,7 +252,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
       )
     refusals.forEach { (case, build) ->
       val fixture = build()
-      assertFailsWith<IllegalArgumentException>("case '$case' must refuse launch") { fixture.read() }
+      assertEquals(true, fixture.read() is FeatureTaskRuntimeRunInvariantsRead.Rejected, "case '$case' must refuse launch")
     }
   }
 

@@ -13,7 +13,8 @@ import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPla
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.task.traversal
+import skillbill.workflow.taskruntime.phase.task.SkeletonTraversalResult
+import skillbill.workflow.taskruntime.phase.task.traversalOrViolation
 
 @Inject
 class FeatureTaskRuntimeExecutionPlanCompatibility(
@@ -92,10 +93,9 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
       }
     if (!selectionMatches) incompatible()
     val traversal =
-      try {
-        definition.traversal(plan.selectedStepIds, plan.selectedEntryStepIds)
-      } catch (_: IllegalArgumentException) {
-        incompatible()
+      when (val result = definition.traversalOrViolation(plan.selectedStepIds, plan.selectedEntryStepIds)) {
+        is SkeletonTraversalResult.Ready -> result.declaration
+        is SkeletonTraversalResult.Rejected -> incompatible()
       }
     if (plan.traversal != traversal) incompatible()
     requireSupportedPolicies(plan.effectivePolicies)

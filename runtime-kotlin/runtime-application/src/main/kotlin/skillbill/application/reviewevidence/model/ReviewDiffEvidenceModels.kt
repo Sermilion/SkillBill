@@ -1,7 +1,7 @@
 package skillbill.application.reviewevidence.model
 
 import skillbill.application.reviewevidence.parseAttributableReviewDiffEvidence
-import skillbill.application.reviewevidence.parseReviewDiffEvidence
+import skillbill.application.reviewevidence.parseReviewDiffEvidenceOrRejection
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 
 data class ReviewDiffEvidence(
@@ -17,8 +17,20 @@ data class ReviewDiffEvidence(
   companion object {
     fun parseAttributable(diff: String): ReviewDiffEvidence? = parseAttributableReviewDiffEvidence(diff)
 
-    fun parse(diff: String): ReviewDiffEvidence = parseReviewDiffEvidence(diff)
+    fun parse(diff: String): ReviewDiffEvidence =
+      when (val result = parseOrRejection(diff)) {
+        is ReviewDiffEvidenceParseResult.Parsed -> result.evidence
+        is ReviewDiffEvidenceParseResult.Rejected -> throw IllegalArgumentException(result.reason)
+      }
+
+    fun parseOrRejection(diff: String): ReviewDiffEvidenceParseResult = parseReviewDiffEvidenceOrRejection(diff)
   }
+}
+
+sealed interface ReviewDiffEvidenceParseResult {
+  data class Parsed(val evidence: ReviewDiffEvidence) : ReviewDiffEvidenceParseResult
+
+  data class Rejected(val reason: String) : ReviewDiffEvidenceParseResult
 }
 
 data class ReviewChangedFileEvidence(

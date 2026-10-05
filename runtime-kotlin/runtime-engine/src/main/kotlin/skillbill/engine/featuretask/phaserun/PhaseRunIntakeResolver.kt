@@ -7,6 +7,7 @@ import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
@@ -77,10 +78,9 @@ class PhaseRunIntakeResolver(
             ?.let(Path::of)
         }
         ?: return null
-    return try {
-      invariantsSource.read(specPath)
-    } catch (_: IllegalArgumentException) {
-      null
+    return when (val read = invariantsSource.read(specPath)) {
+      is FeatureTaskRuntimeRunInvariantsRead.Read -> read.invariants
+      is FeatureTaskRuntimeRunInvariantsRead.Rejected -> null
     }
   }
 
