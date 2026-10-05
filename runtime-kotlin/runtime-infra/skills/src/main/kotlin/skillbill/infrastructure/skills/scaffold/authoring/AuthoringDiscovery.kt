@@ -10,7 +10,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.display
 import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
-import java.io.IOException
+import java.io.Closeable
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.name
@@ -37,19 +37,12 @@ internal fun <T> runWithUpgradeRollback(
   originalBytes: Map<Path, ByteArray>,
   createdPaths: List<Path> = emptyList(),
   block: () -> T,
-): T =
-  try {
-    block()
-  } catch (error: SkillBillRuntimeException) {
-    rollbackUpgrade(originalBytes, createdPaths)
-    throw error
-  } catch (error: IOException) {
-    rollbackUpgrade(originalBytes, createdPaths)
-    throw error
-  } catch (error: IllegalArgumentException) {
-    rollbackUpgrade(originalBytes, createdPaths)
-    throw error
+): T {
+  var committed = false
+  return Closeable { if (!committed) rollbackUpgrade(originalBytes, createdPaths) }.use {
+    block().also { committed = true }
   }
+}
 
 private fun rollbackUpgrade(
   originalBytes: Map<Path, ByteArray>,

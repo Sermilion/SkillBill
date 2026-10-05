@@ -216,7 +216,7 @@ class NativeAgentSourceParserTest {
   @Test
   fun `unsupported compose directive fails strictly`() {
     val error =
-      assertFailsWith<IllegalArgumentException> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentSourceText(
           "---\n" +
             "name: bill-composed\n" +
@@ -227,6 +227,7 @@ class NativeAgentSourceParserTest {
         )
       }
 
+    assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, error.code)
     assertContains(error.message.orEmpty(), "test source")
     assertContains(error.message.orEmpty(), "unsupported native agent compose directive 'local-file'")
   }

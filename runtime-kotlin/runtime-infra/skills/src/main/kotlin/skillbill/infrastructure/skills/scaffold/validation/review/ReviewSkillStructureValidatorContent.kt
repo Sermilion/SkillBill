@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.validation.review
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentBundle
 import skillbill.infrastructure.skills.scaffold.authoring.parentViolation
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
@@ -89,7 +91,8 @@ internal object ReviewSkillStructureValidatorContent {
     val agents =
       try {
         parseNativeAgentBundle(agentsFile)
-      } catch (error: IllegalArgumentException) {
+      } catch (error: SkillBillRuntimeException) {
+        if (error.code != InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA) throw error
         invalidNativeAgentBundle(agentsFile, error)
       } catch (error: IOException) {
         invalidNativeAgentBundle(agentsFile, error)

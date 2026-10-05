@@ -12,6 +12,7 @@ import skillbill.ports.system.HostPlatformPort
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.ScaffoldResult
+import java.io.Closeable
 import java.nio.file.Path
 
 internal data class ManifestSnapshot(
@@ -143,7 +144,11 @@ internal fun runScaffold(
 ): ScaffoldResult {
   val txn = ScaffoldTransaction()
   var committed = false
-  try {
+  return Closeable {
+    if (!committed) {
+      rollback(txn, adapters)
+    }
+  }.use {
     val execution =
       executeScaffold(
         txn,
@@ -153,7 +158,7 @@ internal fun runScaffold(
         runtime,
       )
     committed = true
-    return ScaffoldResult(
+    ScaffoldResult(
       kind = plan.kind,
       skillName = plan.skillName,
       skillPath = plan.skillPath.toFileLocation(),
@@ -163,9 +168,5 @@ internal fun runScaffold(
       installTargets = execution.installTargets.map { entry -> entry.toFileLocation() },
       notes = plan.notes + execution.notes,
     )
-  } finally {
-    if (!committed) {
-      rollback(txn, adapters)
-    }
   }
 }

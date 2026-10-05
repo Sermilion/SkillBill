@@ -136,10 +136,8 @@ internal fun validateAgentAddonConsumerId(id: String) {
       "Agent add-on consumer '$id' is retired; declare '${AgentAddonConsumer.SKILL_BILL.id}' instead.",
     )
   }
-  try {
-    AgentAddonConsumer.fromId(id)
-  } catch (error: IllegalArgumentException) {
-    throw invalidScaffoldPayloadError(error.message ?: "Unknown agent add-on consumer '$id'.", error)
+  if (AgentAddonConsumer.fromIdOrNull(id) == null) {
+    throw invalidScaffoldPayloadError(AgentAddonConsumer.unknownIdMessage(id))
   }
 }
 

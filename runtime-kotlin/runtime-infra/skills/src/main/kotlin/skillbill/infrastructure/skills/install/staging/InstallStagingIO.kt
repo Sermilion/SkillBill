@@ -199,14 +199,15 @@ internal fun cleanupInstallStagingOnFailure(
   tempDir: Path,
   finalStagingDir: Path,
   promoted: Boolean,
+  primaryError: Throwable,
 ) {
   log.log(
     Level.WARNING,
     "cleanupInstallStagingOnFailure tempDir=$tempDir finalDir=$finalStagingDir promoted=$promoted",
   )
-  suppressedDelete(tempDir)
+  suppressedDelete(tempDir, primaryError)
   if (promoted) {
-    suppressedDelete(finalStagingDir)
+    suppressedDelete(finalStagingDir, primaryError)
   }
 }
 

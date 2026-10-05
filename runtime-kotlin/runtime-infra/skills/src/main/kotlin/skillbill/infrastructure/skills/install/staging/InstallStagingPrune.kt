@@ -4,6 +4,7 @@ import skillbill.infrastructure.skills.install.staging.content.INSTALL_CACHE_KEY
 import skillbill.infrastructure.skills.install.staging.content.installedSkillNameSlug
 import skillbill.infrastructure.skills.install.staging.content.installedSkillSlug
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -76,7 +77,7 @@ private fun pruneCacheDirs(
       deleteInstallStagingDirectory(stale)
     } catch (error: IOException) {
       logDeleteFailure(label, stale, error)
-    } catch (error: IllegalStateException) {
+    } catch (error: UncheckedIOException) {
       logDeleteFailure(label, stale, error)
     }
   }

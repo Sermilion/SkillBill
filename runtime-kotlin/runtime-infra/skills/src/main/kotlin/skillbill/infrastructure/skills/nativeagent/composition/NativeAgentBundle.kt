@@ -3,7 +3,6 @@ package skillbill.infrastructure.skills.nativeagent.composition
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.error.YAMLException
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
 import skillbill.infrastructure.skills.nativeagent.rendering.YAML_DOUBLE_QUOTE_ESCAPES
@@ -16,9 +15,7 @@ fun parseNativeAgentBundle(path: Path): List<NativeAgentSource> {
   return try {
     parseValidatedNativeAgentBundle(path, yamlText)
   } catch (error: SkillBillRuntimeException) {
-    error.rethrowUnless(error.code == InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA)
-    throw error
-  } catch (error: IllegalArgumentException) {
+    if (error.code != InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA) throw error
     throw invalidNativeAgentCompositionSchemaError(
       sourceLabel = path.toString(),
       reason = error.message.orEmpty().ifBlank { "native agent bundle is invalid" },
@@ -45,8 +42,8 @@ private fun parseValidatedNativeAgentBundle(
   val agents =
     root["agents"] as? List<*>
       ?: invalidBundle("$path: native agent bundle field 'agents' must be a list")
-  require(agents.isNotEmpty()) {
-    "$path: native agent bundle field 'agents' must not be empty"
+  if (agents.isEmpty()) {
+    invalidBundle("$path: native agent bundle field 'agents' must not be empty")
   }
   val parsed =
     agents.mapIndexed { index, entry ->
@@ -70,14 +67,14 @@ private fun parseNativeAgentBundleEntry(
   val description = map.requiredString("description", label)
   val composition = parseCompositionDirective(map.optionalString("compose", label), label)
   val body = map.optionalString("body", label).orEmpty().trimEnd()
-  require(name.matches(Regex("^[a-z][a-z0-9-]*$"))) {
-    "$label: native agent name must be lowercase kebab-case"
+  if (!name.matches(Regex("^[a-z][a-z0-9-]*$"))) {
+    invalidBundle("$label: native agent name must be lowercase kebab-case")
   }
-  require(description.isNotBlank()) {
-    "$label: native agent description is required"
+  if (description.isBlank()) {
+    invalidBundle("$label: native agent description is required")
   }
-  require(body.isNotBlank() || composition != null) {
-    "$label: native agent body is required"
+  if (body.isBlank() && composition == null) {
+    invalidBundle("$label: native agent body is required")
   }
   return NativeAgentSource(
     name = name,
@@ -98,22 +95,20 @@ internal fun parseNativeAgentTools(
     return emptyList()
   }
   val entries =
-    raw as? List<*> ?: throw IllegalArgumentException(
-      "$label: native agent 'tools' must be a list of tool names",
-    )
-  require(entries.isNotEmpty()) {
-    "$label: native agent 'tools' must not be empty; omit the key to inherit every host tool"
+    raw as? List<*> ?: invalidBundle("$label: native agent 'tools' must be a list of tool names")
+  if (entries.isEmpty()) {
+    invalidBundle("$label: native agent 'tools' must not be empty; omit the key to inherit every host tool")
   }
   val names =
     entries.map { entry ->
       val name = (entry as? String)?.trim().orEmpty()
-      require(name.isNotEmpty()) {
-        "$label: native agent 'tools' entries must be non-empty tool names"
+      if (name.isEmpty()) {
+        invalidBundle("$label: native agent 'tools' entries must be non-empty tool names")
       }
       name
     }
-  require(names.distinct().size == names.size) {
-    "$label: native agent 'tools' must not repeat a tool name"
+  if (names.distinct().size != names.size) {
+    invalidBundle("$label: native agent 'tools' must not repeat a tool name")
   }
   return names
 }
@@ -147,8 +142,8 @@ private fun requireSupportedKeys(
   message: (Any?) -> String,
 ) {
   val unsupported = keys.firstOrNull { it !in supported }
-  require(unsupported == null) {
-    message(unsupported)
+  if (unsupported != null) {
+    invalidBundle(message(unsupported))
   }
 }
 
@@ -171,4 +166,8 @@ private fun nativeAgentYamlDoubleQuotedScalar(value: String): String =
 private fun invalidBundle(
   message: String,
   cause: Throwable? = null,
-): Nothing = throw IllegalArgumentException(message, cause)
+): Nothing = throw SkillBillRuntimeException(
+  InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
+  message,
+  cause,
+)

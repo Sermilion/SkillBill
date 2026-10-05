@@ -9,11 +9,13 @@ enum class AgentAddonConsumer(val id: String) {
   companion object {
     const val LEGACY_BILL_FEATURE_ID: String = "bill-feature"
 
+    fun fromIdOrNull(id: String): AgentAddonConsumer? = entries.firstOrNull { it.id == id }
+
+    fun unknownIdMessage(id: String): String =
+      "Unknown agent add-on consumer '$id'. Supported: ${entries.joinToString { it.id }}."
+
     fun fromId(id: String): AgentAddonConsumer =
-      entries.firstOrNull { it.id == id }
-        ?: throw IllegalArgumentException(
-          "Unknown agent add-on consumer '$id'. Supported: ${entries.joinToString { it.id }}.",
-        )
+      fromIdOrNull(id) ?: throw IllegalArgumentException(unknownIdMessage(id))
 
     fun decode(id: String): AgentAddonConsumerDecoding =
       if (id == LEGACY_BILL_FEATURE_ID) {

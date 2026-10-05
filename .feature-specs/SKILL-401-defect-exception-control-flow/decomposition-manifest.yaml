@@ -9,7 +9,7 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-401-defect-exception-control-flow"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 5
+  subtask_id: 6
   action: "resume"
 subtasks:
 - id: 1
@@ -67,12 +67,12 @@ subtasks:
 - id: 5
   name: "application-and-infra-adapters"
   spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec_subtask_5_application-and-infra-adapters.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261005-111831-4dt1"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -80,10 +80,10 @@ subtasks:
 - id: 6
   name: "infra-skills-install-and-authoring"
   spec_path: ".feature-specs/SKILL-401-defect-exception-control-flow/spec_subtask_6_infra-skills-install-and-authoring.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261005-120204-160e"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

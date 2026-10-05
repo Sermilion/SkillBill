@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install.scaffold
 import skillbill.infrastructure.skills.install.plan.uninstallTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldTransaction
 import java.io.IOException
+import java.io.UncheckedIOException
 
 internal fun rollbackScaffoldInstallTargets(
   txn: ScaffoldTransaction,
@@ -22,7 +23,7 @@ private fun recordRollbackFailure(
     action()
   } catch (error: IOException) {
     errors += "$label: ${error.message}"
-  } catch (error: IllegalStateException) {
+  } catch (error: UncheckedIOException) {
     errors += "$label: ${error.message}"
   }
 }

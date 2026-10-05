@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.nativeagent
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
@@ -64,10 +66,14 @@ class NativeAgentToolsetContractTest {
 
   @Test
   fun `an empty or repeated toolset fails loudly rather than silently widening access`() {
-    assertFailsWith<IllegalArgumentException> { parseNativeAgentTools(emptyList<String>(), "fixture") }
-    assertFailsWith<IllegalArgumentException> { parseNativeAgentTools(listOf("Read", "Read"), "fixture") }
-    assertFailsWith<IllegalArgumentException> { parseNativeAgentTools(listOf("Read", ""), "fixture") }
-    assertFailsWith<IllegalArgumentException> { parseNativeAgentTools("Read", "fixture") }
+    val errors =
+      listOf(
+        assertFailsWith<SkillBillRuntimeException> { parseNativeAgentTools(emptyList<String>(), "fixture") },
+        assertFailsWith<SkillBillRuntimeException> { parseNativeAgentTools(listOf("Read", "Read"), "fixture") },
+        assertFailsWith<SkillBillRuntimeException> { parseNativeAgentTools(listOf("Read", ""), "fixture") },
+        assertFailsWith<SkillBillRuntimeException> { parseNativeAgentTools("Read", "fixture") },
+      )
+    assertTrue(errors.all { error -> error.code == InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA })
   }
 
   @Test

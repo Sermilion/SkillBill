@@ -8,6 +8,7 @@ import skillbill.infrastructure.host.jvm.rollbackDeleteRegularFileOrSymlink
 import skillbill.infrastructure.host.jvm.rollbackRestoreBytes
 import skillbill.infrastructure.skills.scaffold.runtime.service.externalpack.rollbackRegisteredExternalPlatformPack
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -84,7 +85,7 @@ private fun recordRollbackFailure(
     action()
   } catch (error: IOException) {
     errors += "$label: ${error.message}"
-  } catch (error: IllegalStateException) {
+  } catch (error: UncheckedIOException) {
     errors += "$label: ${error.message}"
   }
 }

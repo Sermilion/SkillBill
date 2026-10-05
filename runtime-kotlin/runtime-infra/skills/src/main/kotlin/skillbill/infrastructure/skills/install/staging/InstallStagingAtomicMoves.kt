@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install.staging
 
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -44,27 +45,29 @@ internal fun restoreInstallStagingBackup(
   finalStagingDir: Path,
   primaryError: Throwable,
 ) {
-  suppressedDelete(finalStagingDir)
+  suppressedDelete(finalStagingDir, primaryError)
   try {
     atomicMoveReplacing(backup, finalStagingDir)
   } catch (restoreError: IOException) {
     primaryError.addSuppressed(restoreError)
     stagingSupportLog.log(Level.SEVERE, "Failed to restore install staging backup '$backup'.", restoreError)
-  } catch (restoreError: IllegalStateException) {
-    primaryError.addSuppressed(restoreError)
-    stagingSupportLog.log(Level.SEVERE, "Failed to restore install staging backup '$backup'.", restoreError)
   }
 }
 
-internal fun suppressedDelete(path: Path) {
+internal fun suppressedDelete(
+  path: Path,
+  primaryError: Throwable? = null,
+) {
   if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
     return
   }
   try {
     deleteInstallStagingDirectory(path)
   } catch (error: IOException) {
+    primaryError?.addSuppressed(error)
     stagingSupportLog.log(Level.WARNING, "suppressedDelete failed path=$path (cleanup error suppressed)", error)
-  } catch (error: IllegalStateException) {
+  } catch (error: UncheckedIOException) {
+    primaryError?.addSuppressed(error)
     stagingSupportLog.log(Level.WARNING, "suppressedDelete failed path=$path (cleanup error suppressed)", error)
   }
 }
