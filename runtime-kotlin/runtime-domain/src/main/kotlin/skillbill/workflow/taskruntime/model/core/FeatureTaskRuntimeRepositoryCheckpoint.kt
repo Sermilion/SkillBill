@@ -22,17 +22,23 @@ data class FeatureTaskRuntimeRepositoryCheckpoint(
   val workingTreeOwnedPaths: List<String> = emptyList(),
 ) {
   init {
-    require(fingerprint.isNotBlank()) {
-      "FeatureTaskRuntimeRepositoryCheckpoint.fingerprint must be non-blank; an unidentified checkpoint " +
-        "cannot satisfy must_match or refresh_from_repository."
-    }
-    require(fingerprint.length <= MAX_REPOSITORY_FINGERPRINT_LENGTH) {
-      "FeatureTaskRuntimeRepositoryCheckpoint.fingerprint allows at most " +
-        "$MAX_REPOSITORY_FINGERPRINT_LENGTH characters, had ${fingerprint.length}."
-    }
-    require(workingTreeOwnedPaths.none(String::isBlank)) {
-      "FeatureTaskRuntimeRepositoryCheckpoint.workingTreeOwnedPaths must not contain blank entries."
-    }
+    val reason = violation(fingerprint, workingTreeOwnedPaths)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(fingerprint: String, workingTreeOwnedPaths: List<String>): String? =
+      when {
+        fingerprint.isBlank() ->
+          "FeatureTaskRuntimeRepositoryCheckpoint.fingerprint must be non-blank; an unidentified checkpoint " +
+            "cannot satisfy must_match or refresh_from_repository."
+        fingerprint.length > MAX_REPOSITORY_FINGERPRINT_LENGTH ->
+          "FeatureTaskRuntimeRepositoryCheckpoint.fingerprint allows at most " +
+            "$MAX_REPOSITORY_FINGERPRINT_LENGTH characters, had ${fingerprint.length}."
+        workingTreeOwnedPaths.any(String::isBlank) ->
+          "FeatureTaskRuntimeRepositoryCheckpoint.workingTreeOwnedPaths must not contain blank entries."
+        else -> null
+      }
   }
 
   internal fun toEnvelopeMap(): Map<String, Any?> =

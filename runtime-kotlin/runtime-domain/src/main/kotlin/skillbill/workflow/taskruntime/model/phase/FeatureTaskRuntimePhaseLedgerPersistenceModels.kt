@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKe
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.time.parsePersistedInstant
+import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.time.Instant
 
 enum class FeatureTaskRuntimePhaseExecutionOrigin(val wireValue: String) {
@@ -100,23 +101,8 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
   )
 
   init {
-    require(sequenceNumber >= 0) {
-      "FeatureTaskRuntimePhaseLedgerEntry.sequenceNumber must be non-negative, was $sequenceNumber."
-    }
-    require(phaseId.isNotBlank()) { "FeatureTaskRuntimePhaseLedgerEntry.phaseId must be non-blank." }
-    require(attemptCount >= 1) {
-      "FeatureTaskRuntimePhaseLedgerEntry.attemptCount must be >= 1, was $attemptCount."
-    }
-    fixLoopIteration?.let { iteration ->
-      require(iteration >= 1) {
-        "FeatureTaskRuntimePhaseLedgerEntry.fixLoopIteration must be >= 1 when present, was $iteration."
-      }
-    }
-    edgeIteration?.let { iteration ->
-      require(iteration >= 1) {
-        "FeatureTaskRuntimePhaseLedgerEntry.edgeIteration must be >= 1 when present, was $iteration."
-      }
-    }
+    val reason = violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -136,6 +122,25 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
     }
 
   companion object {
+    internal fun violation(
+      sequenceNumber: Int,
+      phaseId: String,
+      attemptCount: Int,
+      fixLoopIteration: Int?,
+      edgeIteration: Int?,
+    ): String? =
+      when {
+        sequenceNumber < 0 ->
+          "FeatureTaskRuntimePhaseLedgerEntry.sequenceNumber must be non-negative, was $sequenceNumber."
+        phaseId.isBlank() -> "FeatureTaskRuntimePhaseLedgerEntry.phaseId must be non-blank."
+        attemptCount < 1 -> "FeatureTaskRuntimePhaseLedgerEntry.attemptCount must be >= 1, was $attemptCount."
+        fixLoopIteration != null && fixLoopIteration < 1 ->
+          "FeatureTaskRuntimePhaseLedgerEntry.fixLoopIteration must be >= 1 when present, was $fixLoopIteration."
+        edgeIteration != null && edgeIteration < 1 ->
+          "FeatureTaskRuntimePhaseLedgerEntry.edgeIteration must be >= 1 when present, was $edgeIteration."
+        else -> null
+      }
+
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePhaseLedgerEntry {
       val reader = durableArtifactMapReader(raw)
       val attemptCount = reader.requiredInt("attempt_count")
@@ -144,36 +149,31 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
           "Feature-task-runtime phase ledger entry attempt_count must be >= 1, was $attemptCount.",
         )
       }
-      return try {
-        FeatureTaskRuntimePhaseLedgerEntry(
-          action =
-            FeatureTaskRuntimePhaseLedgerAction.fromWire(
-              reader.requiredString(DecompositionManifestPayloadKeys.ACTION),
-            ),
-          sequenceNumber = reader.requiredInt(FeatureTaskRuntimePhasePayloadKeys.SEQUENCE_NUMBER),
-          timestamp = parsePersistedInstant(reader.requiredString("timestamp")),
-          phaseId =
-            requireKnownFeatureTaskRuntimePhaseId(
-              reader.requiredString(SharedPayloadKeys.PHASE_ID),
-              SharedPayloadKeys.PHASE_ID,
-            ),
-          attemptCount = attemptCount,
-          resolvedAgentId = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID),
-          executionOrigin =
-            reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN)?.let(
-              FeatureTaskRuntimePhaseExecutionOrigin::fromWireValue,
-            ) ?: FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED,
-          fixLoopIteration = reader.optionalInt("fix_loop_iteration"),
-          blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON),
-          loopId = reader.optionalString("loop_id"),
-          edgeIteration = reader.optionalInt("edge_iteration"),
+      val action =
+        FeatureTaskRuntimePhaseLedgerAction.fromWire(reader.requiredString(DecompositionManifestPayloadKeys.ACTION))
+      val sequenceNumber = reader.requiredInt(FeatureTaskRuntimePhasePayloadKeys.SEQUENCE_NUMBER)
+      val timestamp = parsePersistedInstantOrNull(reader.requiredString("timestamp"))
+        ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")
+      val phaseId =
+        requireKnownFeatureTaskRuntimePhaseId(
+          reader.requiredString(SharedPayloadKeys.PHASE_ID),
+          SharedPayloadKeys.PHASE_ID,
         )
-      } catch (error: IllegalArgumentException) {
-        throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime phase ledger entry is invalid.",
-          error,
-        )
+      val resolvedAgentId = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID)
+      val executionOrigin = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN)?.let(
+        FeatureTaskRuntimePhaseExecutionOrigin::fromWireValue,
+      ) ?: FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED
+      val fixLoopIteration = reader.optionalInt("fix_loop_iteration")
+      val blockedReason = reader.optionalString(DecompositionManifestPayloadKeys.BLOCKED_REASON)
+      val loopId = reader.optionalString("loop_id")
+      val edgeIteration = reader.optionalInt("edge_iteration")
+      if (violation(sequenceNumber, phaseId, attemptCount, fixLoopIteration, edgeIteration) != null) {
+        throw invalidWorkflowStateSchemaError("Feature-task-runtime phase ledger entry is invalid.")
       }
+      return FeatureTaskRuntimePhaseLedgerEntry(
+        action, sequenceNumber, timestamp, phaseId, attemptCount, resolvedAgentId, executionOrigin,
+        fixLoopIteration, blockedReason, loopId, edgeIteration,
+      )
     }
   }
 }

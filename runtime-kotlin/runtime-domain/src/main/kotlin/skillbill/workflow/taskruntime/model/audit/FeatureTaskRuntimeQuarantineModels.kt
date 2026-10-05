@@ -36,25 +36,11 @@ data class FeatureTaskRuntimeQuarantineEntry(
   val diagnosticDegraded: Boolean = false,
 ) {
   init {
-    require(producingPhaseId.isNotBlank()) { "FeatureTaskRuntimeQuarantineEntry.producingPhaseId must be non-blank." }
-    require(consumingPhaseId.isNotBlank()) { "FeatureTaskRuntimeQuarantineEntry.consumingPhaseId must be non-blank." }
-    require(producingIteration >= 1) { "FeatureTaskRuntimeQuarantineEntry.producingIteration must be >= 1." }
-    require(rejectionClass in QUARANTINE_REJECTION_CLASSES) {
-      "FeatureTaskRuntimeQuarantineEntry.rejectionClass must be a declared class."
-    }
-    require(rejectionDetail.isNotBlank()) { "FeatureTaskRuntimeQuarantineEntry.rejectionDetail must be non-blank." }
-    require(regenerationAttempt >= 1) { "FeatureTaskRuntimeQuarantineEntry.regenerationAttempt must be >= 1." }
-    require(quarantinedAtIteration >= 1) { "FeatureTaskRuntimeQuarantineEntry.quarantinedAtIteration must be >= 1." }
-    require(diagnosticDegraded xor (diagnosticIdentity != null)) {
-      "FeatureTaskRuntimeQuarantineEntry must carry diagnosticIdentity xor diagnosticDegraded=true."
-    }
-    require(diagnosticIdentity == null || diagnosticIdentity.isNotBlank()) {
-      "FeatureTaskRuntimeQuarantineEntry.diagnosticIdentity must be non-blank when present."
-    }
-    require(rejectedRecordByteSize >= 0) { "FeatureTaskRuntimeQuarantineEntry.rejectedRecordByteSize must be >= 0." }
-    require(Regex("[0-9a-f]{64}").matches(rejectedRecordSha256)) {
-      "FeatureTaskRuntimeQuarantineEntry.rejectedRecordSha256 must be a lowercase SHA-256 digest."
-    }
+    val reason = productionViolation(
+      producingPhaseId, consumingPhaseId, producingIteration, rejectionClass, rejectionDetail,
+    ) ?: regenerationViolation(regenerationAttempt, quarantinedAtIteration)
+      ?: diagnosticViolation(diagnosticIdentity, rejectedRecordByteSize, rejectedRecordSha256, diagnosticDegraded)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> {
@@ -81,6 +67,44 @@ data class FeatureTaskRuntimeQuarantineEntry(
   fun recordIdentifier(): String = "$producingPhaseId#$producingIteration"
 
   companion object {
+    private fun productionViolation(
+      producingPhaseId: String,
+      consumingPhaseId: String,
+      producingIteration: Int,
+      rejectionClass: String,
+      rejectionDetail: String,
+    ): String? = when {
+      producingPhaseId.isBlank() -> "FeatureTaskRuntimeQuarantineEntry.producingPhaseId must be non-blank."
+      consumingPhaseId.isBlank() -> "FeatureTaskRuntimeQuarantineEntry.consumingPhaseId must be non-blank."
+      producingIteration < 1 -> "FeatureTaskRuntimeQuarantineEntry.producingIteration must be >= 1."
+      rejectionClass !in QUARANTINE_REJECTION_CLASSES ->
+        "FeatureTaskRuntimeQuarantineEntry.rejectionClass must be a declared class."
+      rejectionDetail.isBlank() -> "FeatureTaskRuntimeQuarantineEntry.rejectionDetail must be non-blank."
+      else -> null
+    }
+
+    private fun regenerationViolation(regenerationAttempt: Int, quarantinedAtIteration: Int): String? = when {
+      regenerationAttempt < 1 -> "FeatureTaskRuntimeQuarantineEntry.regenerationAttempt must be >= 1."
+      quarantinedAtIteration < 1 -> "FeatureTaskRuntimeQuarantineEntry.quarantinedAtIteration must be >= 1."
+      else -> null
+    }
+
+    private fun diagnosticViolation(
+      diagnosticIdentity: String?,
+      rejectedRecordByteSize: Long,
+      rejectedRecordSha256: String,
+      diagnosticDegraded: Boolean,
+    ): String? = when {
+      !(diagnosticDegraded xor (diagnosticIdentity != null)) ->
+        "FeatureTaskRuntimeQuarantineEntry must carry diagnosticIdentity xor diagnosticDegraded=true."
+      diagnosticIdentity != null && diagnosticIdentity.isBlank() ->
+        "FeatureTaskRuntimeQuarantineEntry.diagnosticIdentity must be non-blank when present."
+      rejectedRecordByteSize < 0 -> "FeatureTaskRuntimeQuarantineEntry.rejectedRecordByteSize must be >= 0."
+      !Regex("[0-9a-f]{64}").matches(rejectedRecordSha256) ->
+        "FeatureTaskRuntimeQuarantineEntry.rejectedRecordSha256 must be a lowercase SHA-256 digest."
+      else -> null
+    }
+
     private val ALLOWED_FIELDS: Set<String> =
       setOf(
         "producing_phase_id",
@@ -104,32 +128,34 @@ data class FeatureTaskRuntimeQuarantineEntry(
             "the store is left untouched rather than rewritten without that evidence.",
         )
       }
-      return try {
-        val reader = durableArtifactMapReader(raw)
-        FeatureTaskRuntimeQuarantineEntry(
-          producingPhaseId = reader.requiredString("producing_phase_id"),
-          consumingPhaseId = reader.requiredString("consuming_phase_id"),
-          producingIteration = reader.requiredInt("producing_iteration"),
-          rejectionClass = reader.requiredString("rejection_class"),
-          rejectionDetail = reader.requiredString("rejection_detail"),
-          regenerationAttempt = reader.requiredInt("regeneration_attempt"),
-          quarantinedAtIteration = reader.requiredInt("quarantined_at_iteration"),
-          diagnosticIdentity = reader.optionalString("diagnostic_identity"),
-          rejectedRecordByteSize = reader.requiredInt("rejected_record_byte_size").toLong(),
-          rejectedRecordSha256 = reader.requiredString("rejected_record_sha256"),
-          diagnosticDegraded =
-            when (reader.optionalBoolean("diagnostic_degraded")) {
-              null -> false
-              true -> true
-              false ->
-                quarantineSchemaError(
-                  "Feature-task-runtime quarantine entry 'diagnostic_degraded' must be true when present.",
-                )
-            },
+      val reader = durableArtifactMapReader(raw)
+      val producingPhaseId = reader.requiredString("producing_phase_id")
+      val consumingPhaseId = reader.requiredString("consuming_phase_id")
+      val producingIteration = reader.requiredInt("producing_iteration")
+      val rejectionClass = reader.requiredString("rejection_class")
+      val rejectionDetail = reader.requiredString("rejection_detail")
+      val regenerationAttempt = reader.requiredInt("regeneration_attempt")
+      val quarantinedAtIteration = reader.requiredInt("quarantined_at_iteration")
+      val diagnosticIdentity = reader.optionalString("diagnostic_identity")
+      val rejectedRecordByteSize = reader.requiredInt("rejected_record_byte_size").toLong()
+      val rejectedRecordSha256 = reader.requiredString("rejected_record_sha256")
+      val diagnosticDegraded = when (reader.optionalBoolean("diagnostic_degraded")) {
+        null -> false
+        true -> true
+        false -> quarantineSchemaError(
+          "Feature-task-runtime quarantine entry 'diagnostic_degraded' must be true when present.",
         )
-      } catch (error: IllegalArgumentException) {
-        quarantineSchemaError("Feature-task-runtime quarantine entry is malformed: ${error.message}")
       }
+      val reason = productionViolation(
+        producingPhaseId, consumingPhaseId, producingIteration, rejectionClass, rejectionDetail,
+      ) ?: regenerationViolation(regenerationAttempt, quarantinedAtIteration)
+        ?: diagnosticViolation(diagnosticIdentity, rejectedRecordByteSize, rejectedRecordSha256, diagnosticDegraded)
+      if (reason != null) quarantineSchemaError("Feature-task-runtime quarantine entry is malformed: $reason")
+      return FeatureTaskRuntimeQuarantineEntry(
+        producingPhaseId, consumingPhaseId, producingIteration, rejectionClass, rejectionDetail,
+        regenerationAttempt, quarantinedAtIteration, diagnosticIdentity, rejectedRecordByteSize,
+        rejectedRecordSha256, diagnosticDegraded,
+      )
     }
   }
 }

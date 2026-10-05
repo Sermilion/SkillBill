@@ -24,8 +24,16 @@ data class FeatureTaskRuntimeReadinessCheckResult(
   val status: FeatureTaskRuntimeReadinessCheckStatus,
 ) {
   init {
-    require(checkId.isNotBlank()) { "Readiness check_id must be non-blank." }
-    require(command.isNotBlank()) { "Readiness command must be non-blank." }
+    val reason = violation(checkId, command)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(checkId: String, command: String): String? = when {
+      checkId.isBlank() -> "Readiness check_id must be non-blank."
+      command.isBlank() -> "Readiness command must be non-blank."
+      else -> null
+    }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -45,24 +53,8 @@ data class FeatureTaskRuntimeReadinessEvidence(
   val checkResults: List<FeatureTaskRuntimeReadinessCheckResult>,
 ) {
   init {
-    require(sourceTreeSha.isNotBlank()) { "Readiness source_tree_sha must be non-blank." }
-    require(baseRefSha.isNotBlank()) { "Readiness base_ref_sha must be non-blank." }
-    require(headSha.isNotBlank()) { "Readiness head_sha must be non-blank." }
-    require(selectedChecks.size <= MAX_READINESS_CHECK_RESULTS) {
-      "Readiness evidence cannot select more than $MAX_READINESS_CHECK_RESULTS checks."
-    }
-    require(selectedChecks.all { it.isNotBlank() }) { "Readiness selected_checks must be non-blank." }
-    require(selectedChecks.distinct().size == selectedChecks.size) {
-      "Readiness selected_checks must be unique."
-    }
-    require(checkResults.size <= MAX_READINESS_CHECK_RESULTS) {
-      "Readiness evidence cannot contain more than $MAX_READINESS_CHECK_RESULTS check results."
-    }
-    require(
-      checkResults.map(FeatureTaskRuntimeReadinessCheckResult::checkId).distinct().size == checkResults.size,
-    ) {
-      "Readiness check_results must contain at most one result per check."
-    }
+    val reason = violation(sourceTreeSha, baseRefSha, headSha, selectedChecks, checkResults)
+    require(reason == null) { reason.orEmpty() }
   }
 
   internal fun toArtifactMap(): Map<String, Any?> =
@@ -128,6 +120,27 @@ data class FeatureTaskRuntimeReadinessEvidence(
   companion object {
     private const val MAX_READINESS_CHECK_RESULTS = 20
 
+    internal fun violation(
+      sourceTreeSha: String,
+      baseRefSha: String,
+      headSha: String,
+      selectedChecks: List<String>,
+      checkResults: List<FeatureTaskRuntimeReadinessCheckResult>,
+    ): String? = when {
+      sourceTreeSha.isBlank() -> "Readiness source_tree_sha must be non-blank."
+      baseRefSha.isBlank() -> "Readiness base_ref_sha must be non-blank."
+      headSha.isBlank() -> "Readiness head_sha must be non-blank."
+      selectedChecks.size > MAX_READINESS_CHECK_RESULTS ->
+        "Readiness evidence cannot select more than $MAX_READINESS_CHECK_RESULTS checks."
+      selectedChecks.any(String::isBlank) -> "Readiness selected_checks must be non-blank."
+      selectedChecks.distinct().size != selectedChecks.size -> "Readiness selected_checks must be unique."
+      checkResults.size > MAX_READINESS_CHECK_RESULTS ->
+        "Readiness evidence cannot contain more than $MAX_READINESS_CHECK_RESULTS check results."
+      checkResults.map(FeatureTaskRuntimeReadinessCheckResult::checkId).distinct().size != checkResults.size ->
+        "Readiness check_results must contain at most one result per check."
+      else -> null
+    }
+
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       sourceLabel: String,
@@ -176,11 +189,10 @@ data class FeatureTaskRuntimeReadinessEvidence(
         )
       val selectedChecks = selectedChecks(raw, sourceLabel)
       val checkResults = checkResults(raw, sourceLabel)
-      return try {
-        FeatureTaskRuntimeReadinessEvidence(sourceTreeSha, baseRefSha, headSha, selectedChecks, checkResults)
-      } catch (error: IllegalArgumentException) {
-        invalid(sourceLabel, error.message.orEmpty())
+      violation(sourceTreeSha, baseRefSha, headSha, selectedChecks, checkResults)?.let { reason ->
+        invalid(sourceLabel, reason)
       }
+      return FeatureTaskRuntimeReadinessEvidence(sourceTreeSha, baseRefSha, headSha, selectedChecks, checkResults)
     }
 
     private fun requiredString(
@@ -236,6 +248,7 @@ data class FeatureTaskRuntimeReadinessEvidence(
       val status =
         FeatureTaskRuntimeReadinessCheckStatus.fromWire(statusWire)
           ?: invalid(sourceLabel, "check_results[$index].status '$statusWire' is unsupported.")
+      FeatureTaskRuntimeReadinessCheckResult.violation(checkId, command)?.let { reason -> invalid(sourceLabel, reason) }
       return FeatureTaskRuntimeReadinessCheckResult(checkId, command, exitCode, status)
     }
 

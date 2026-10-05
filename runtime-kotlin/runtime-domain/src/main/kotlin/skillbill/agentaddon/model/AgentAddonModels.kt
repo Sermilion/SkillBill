@@ -83,11 +83,19 @@ data class PersistedAgentAddonSelectionEntry(
   val contentSha256: String,
 ) {
   init {
-    require(slug.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*"))) { "Invalid agent add-on slug '$slug'." }
-    require(contentSha256.matches(Regex("[0-9a-f]{64}"))) {
-      "Agent add-on '$slug' content digest must be a lowercase SHA-256 value."
-    }
-    require(sourceIdentity.isNotBlank()) { "Agent add-on '$slug' source identity is required." }
+    val reason = violation(slug, sourceIdentity, contentSha256)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(slug: String, sourceIdentity: String, contentSha256: String): String? =
+      when {
+        !slug.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*")) -> "Invalid agent add-on slug '$slug'."
+        !contentSha256.matches(Regex("[0-9a-f]{64}")) ->
+          "Agent add-on '$slug' content digest must be a lowercase SHA-256 value."
+        sourceIdentity.isBlank() -> "Agent add-on '$slug' source identity is required."
+        else -> null
+      }
   }
 }
 
@@ -101,9 +109,14 @@ data class AgentAddonSelection(
   val entries: List<PersistedAgentAddonSelectionEntry> = emptyList(),
 ) {
   init {
-    require(entries.map { it.slug }.distinct().size == entries.size) {
-      "Agent add-on selection contains duplicate slugs."
-    }
+    val reason = violation(entries)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(entries: List<PersistedAgentAddonSelectionEntry>): String? =
+      if (entries.map { it.slug }.distinct().size == entries.size) null
+      else "Agent add-on selection contains duplicate slugs."
   }
 }
 

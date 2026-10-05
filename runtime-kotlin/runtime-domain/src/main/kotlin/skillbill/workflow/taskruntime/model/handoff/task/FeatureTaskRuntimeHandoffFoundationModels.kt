@@ -13,8 +13,17 @@ data class FeatureTaskRuntimeProducerIteration(
   val iteration: Int,
 ) {
   init {
-    require(phaseId.isNotBlank()) { "FeatureTaskRuntimeProducerIteration.phaseId must be non-blank." }
-    require(iteration >= 1) { "FeatureTaskRuntimeProducerIteration.iteration must be >= 1." }
+    val reason = violation(phaseId, iteration)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(phaseId: String, iteration: Int): String? =
+      when {
+        phaseId.isBlank() -> "FeatureTaskRuntimeProducerIteration.phaseId must be non-blank."
+        iteration < 1 -> "FeatureTaskRuntimeProducerIteration.iteration must be >= 1."
+        else -> null
+      }
   }
 }
 

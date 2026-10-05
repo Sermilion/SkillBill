@@ -21,21 +21,26 @@ data class FeatureTaskRuntimeRunInvariants(
   val agentAddonSelection: AgentAddonSelection = AgentAddonSelection(),
 ) {
   init {
-    require(specReference.isNotBlank()) {
-      "FeatureTaskRuntimeRunInvariants.specReference must be a non-blank spec reference; " +
-        "run-invariants cannot be partially specified."
-    }
-    require(acceptanceCriteria.isNotEmpty()) {
-      "FeatureTaskRuntimeRunInvariants.acceptanceCriteria must list at least one criterion; " +
-        "a run with no acceptance criteria has no contract to satisfy."
-    }
-    require(acceptanceCriteria.none(String::isBlank)) {
-      "FeatureTaskRuntimeRunInvariants.acceptanceCriteria must not contain blank entries."
-    }
-    require(acceptanceCriteria.size <= MAX_ACCEPTANCE_CRITERION_ORDINAL) {
-      "FeatureTaskRuntimeRunInvariants.acceptanceCriteria supports at most " +
-        "$MAX_ACCEPTANCE_CRITERION_ORDINAL criteria, had ${acceptanceCriteria.size}."
-    }
+    val reason = violation(specReference, acceptanceCriteria)
+    require(reason == null) { reason.orEmpty() }
+  }
+
+  companion object {
+    internal fun violation(specReference: String, acceptanceCriteria: List<String>): String? =
+      when {
+        specReference.isBlank() ->
+          "FeatureTaskRuntimeRunInvariants.specReference must be a non-blank spec reference; " +
+            "run-invariants cannot be partially specified."
+        acceptanceCriteria.isEmpty() ->
+          "FeatureTaskRuntimeRunInvariants.acceptanceCriteria must list at least one criterion; " +
+            "a run with no acceptance criteria has no contract to satisfy."
+        acceptanceCriteria.any(String::isBlank) ->
+          "FeatureTaskRuntimeRunInvariants.acceptanceCriteria must not contain blank entries."
+        acceptanceCriteria.size > MAX_ACCEPTANCE_CRITERION_ORDINAL ->
+          "FeatureTaskRuntimeRunInvariants.acceptanceCriteria supports at most " +
+            "$MAX_ACCEPTANCE_CRITERION_ORDINAL criteria, had ${acceptanceCriteria.size}."
+        else -> null
+      }
   }
 }
 

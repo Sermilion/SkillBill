@@ -138,13 +138,10 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
           },
         validationDepth =
           reader.optionalString(
-            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
+          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
           )?.let { rawValue ->
-            try {
-              ValidationDepth.fromWire(rawValue)
-            } catch (error: IllegalArgumentException) {
-              goalContinuationSchemaError("Goal-continuation artifact validation_depth is invalid.", error)
-            }
+            ValidationDepth.fromWireOrNull(rawValue)
+              ?: goalContinuationSchemaError("Goal-continuation artifact validation_depth is invalid.")
           },
         qualityGateSelection =
           reader.optionalString(
