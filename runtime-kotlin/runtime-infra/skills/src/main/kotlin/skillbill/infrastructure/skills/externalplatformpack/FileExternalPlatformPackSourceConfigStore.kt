@@ -3,7 +3,7 @@ package skillbill.infrastructure.skills.externalplatformpack
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
-import skillbill.infrastructure.host.readTelemetryConfigFile
+import skillbill.infrastructure.host.readTelemetryConfigFileRead
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
 import skillbill.infrastructure.host.writeTelemetryConfigFile
 import skillbill.install.model.ExternalPlatformPackSource
@@ -16,9 +16,11 @@ import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConf
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceRegistrationRequest
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceUnregisterRequest
 import skillbill.ports.repository.toFileLocation
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
 @Inject
@@ -31,11 +33,11 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       return ExternalPlatformPackSourceConfigResult()
     }
     val payload =
-      try {
-        readTelemetryConfigFile(configPath)?.payload
-      } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
-      } ?: return ExternalPlatformPackSourceConfigResult()
+      when (val read = readTelemetryConfigFileRead(configPath)) {
+        TelemetryConfigRead.Absent -> return ExternalPlatformPackSourceConfigResult()
+        is TelemetryConfigRead.Malformed -> throw ExternalPlatformPackConfigError(read.reason)
+        is TelemetryConfigRead.Present -> read.document.payload
+      }
 
     val raw =
       payload[ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES]
@@ -58,10 +60,10 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
   ): ExternalPlatformPackSourceConfigResult {
     val configPath = resolveTelemetryConfigPath(request.environment, request.userHome)
     val existing =
-      try {
-        readTelemetryConfigFile(configPath)
-      } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
+      when (val read = readTelemetryConfigFileRead(configPath)) {
+        TelemetryConfigRead.Absent -> null
+        is TelemetryConfigRead.Malformed -> throw ExternalPlatformPackConfigError(read.reason)
+        is TelemetryConfigRead.Present -> read.document
       }
     val payload = LinkedHashMap<String, Any?>(existing?.payload.orEmpty())
     val rawSources = rawExternalPlatformPackSources(configPath, payload)
@@ -95,11 +97,11 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
   ): ExternalPlatformPackSourceConfigResult {
     val configPath = resolveTelemetryConfigPath(request.environment, request.userHome)
     val existing =
-      try {
-        readTelemetryConfigFile(configPath)
-      } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
-      } ?: return ExternalPlatformPackSourceConfigResult()
+      when (val read = readTelemetryConfigFileRead(configPath)) {
+        TelemetryConfigRead.Absent -> return ExternalPlatformPackSourceConfigResult()
+        is TelemetryConfigRead.Malformed -> throw ExternalPlatformPackConfigError(read.reason)
+        is TelemetryConfigRead.Present -> read.document
+      }
     val payload = LinkedHashMap<String, Any?>(existing.payload)
     val rawSources = rawExternalPlatformPackSources(configPath, payload)
     val target = request.source.normalized().path
@@ -148,7 +150,7 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       resolveExternalPlatformPackSourcePath(userHome, rawPath)
     } catch (error: ExternalPlatformPackConfigError) {
       throw error
-    } catch (error: IllegalArgumentException) {
+    } catch (error: InvalidPathException) {
       throw ExternalPlatformPackConfigError(
         "External platform pack config at '$configPath': " +
           "external_platform_pack_sources[$index].path is not a valid path.",

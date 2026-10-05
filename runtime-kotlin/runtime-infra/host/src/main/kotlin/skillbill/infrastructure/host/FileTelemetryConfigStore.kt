@@ -2,6 +2,7 @@ package skillbill.infrastructure.host
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.model.EnvironmentContext
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
 import skillbill.telemetry.defaultLocalTelemetryConfig
@@ -22,25 +23,32 @@ class FileTelemetryConfigStore(
 
   override fun configPath(): Path = resolveTelemetryConfigPath(resolvedContext.environment, resolvedContext.userHome)
 
-  override fun read(): TelemetryConfigDocument? = readTelemetryConfigFile(configPath())
+  override fun read(): TelemetryConfigRead = readTelemetryConfigFileRead(configPath())
 
   override fun ensure(): TelemetryConfigDocument = ensureTelemetryConfigFile(configPath(), resolvedContext.environment)
 
   override fun write(document: TelemetryConfigDocument) = writeTelemetryConfigFile(configPath(), document)
 }
 
-fun readTelemetryConfigFile(path: Path): TelemetryConfigDocument? {
+fun readTelemetryConfigFileRead(path: Path): TelemetryConfigRead {
   if (!Files.exists(path)) {
-    return null
+    return TelemetryConfigRead.Absent
   }
-  val rawPayload =
+  val parsedObject =
     JsonCodec.parseObjectOrNull(Files.readString(path))
-      ?: throw IllegalArgumentException("Telemetry config at '$path' is not valid JSON.")
+      ?: return TelemetryConfigRead.Malformed("Telemetry config at '$path' is not valid JSON.")
   val payload =
-    JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(rawPayload))
-      ?: throw IllegalArgumentException("Telemetry config at '$path' must contain a JSON object.")
-  return TelemetryConfigDocument(TelemetryOpenDocument.from(payload))
+    JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(parsedObject))
+      ?: return TelemetryConfigRead.Malformed("Telemetry config at '$path' must contain a JSON object.")
+  return TelemetryConfigRead.Present(TelemetryConfigDocument(TelemetryOpenDocument.from(payload)))
 }
+
+fun readTelemetryConfigFile(path: Path): TelemetryConfigDocument? =
+  when (val result = readTelemetryConfigFileRead(path)) {
+    TelemetryConfigRead.Absent -> null
+    is TelemetryConfigRead.Malformed -> throw IllegalArgumentException(result.reason)
+    is TelemetryConfigRead.Present -> result.document
+  }
 
 internal fun ensureTelemetryConfigFile(
   path: Path,

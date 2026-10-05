@@ -1,6 +1,7 @@
 package skillbill.application.telemetry.settings
 
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.telemetry.model.TelemetrySettings
 import kotlin.coroutines.cancellation.CancellationException
@@ -16,6 +17,9 @@ class TelemetrySettingsLoadFailureTest {
     val provider =
       object : TelemetrySettingsProvider {
         override fun load(materialize: Boolean): TelemetrySettings = error("config unreadable")
+
+        override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+          TelemetrySettingsLoad.Unavailable("config unreadable")
       }
 
     val settings = telemetrySettingsOrNull(provider, diagnostics)
@@ -31,10 +35,14 @@ class TelemetrySettingsLoadFailureTest {
     val cancelled =
       object : TelemetrySettingsProvider {
         override fun load(materialize: Boolean) = throw CancellationException("cancelled")
+
+        override fun loadOrUnavailable(materialize: Boolean) = throw CancellationException("cancelled")
       }
     val interrupted =
       object : TelemetrySettingsProvider {
         override fun load(materialize: Boolean) = throw InterruptedException("interrupted")
+
+        override fun loadOrUnavailable(materialize: Boolean) = throw InterruptedException("interrupted")
       }
     val diagnostics = RecordingRuntimeDiagnostics()
 

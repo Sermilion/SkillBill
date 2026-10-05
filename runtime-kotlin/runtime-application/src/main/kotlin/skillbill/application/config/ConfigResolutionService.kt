@@ -14,6 +14,7 @@ import skillbill.config.model.parseExecutionMatrix
 import skillbill.error.shellcontent.malformedMachineConfigError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import java.nio.file.Path
 
@@ -25,17 +26,17 @@ class ConfigResolutionService(
   fun resolveExecutionMatrix(): ExecutionMatrix? {
     val configPath = machineConfigStore.configPath()
     val payload =
-      try {
-        machineConfigStore.read()?.payload
-      } catch (error: IllegalArgumentException) {
-        throw malformedMachineConfigError(
-          path = configPath.toString(),
-          key = "",
-          value = "<document>",
-          reason = "is not valid JSON.",
-          cause = error,
-        )
-      } ?: return null
+      when (val read = machineConfigStore.read()) {
+        TelemetryConfigRead.Absent -> return null
+        is TelemetryConfigRead.Malformed ->
+          throw malformedMachineConfigError(
+            path = configPath.toString(),
+            key = "",
+            value = "<document>",
+            reason = "is not valid JSON.",
+          )
+        is TelemetryConfigRead.Present -> read.document.payload
+      }
     if (!payload.containsKey(EXECUTION_MATRIX_KEY)) return null
     return when (val parsed = parseExecutionMatrix(payload[EXECUTION_MATRIX_KEY])) {
       is ExecutionMatrixParse.Valid -> parsed.matrix
@@ -51,17 +52,17 @@ class ConfigResolutionService(
   fun resolveCompactionSettings(): CompactionSettings {
     val configPath = machineConfigStore.configPath()
     val payload =
-      try {
-        machineConfigStore.read()?.payload
-      } catch (error: IllegalArgumentException) {
-        throw malformedMachineConfigError(
-          path = configPath.toString(),
-          key = "",
-          value = "<document>",
-          reason = "is not valid JSON.",
-          cause = error,
-        )
-      } ?: return CompactionSettings.DEFAULT
+      when (val read = machineConfigStore.read()) {
+        TelemetryConfigRead.Absent -> return CompactionSettings.DEFAULT
+        is TelemetryConfigRead.Malformed ->
+          throw malformedMachineConfigError(
+            path = configPath.toString(),
+            key = "",
+            value = "<document>",
+            reason = "is not valid JSON.",
+          )
+        is TelemetryConfigRead.Present -> read.document.payload
+      }
     if (!payload.containsKey(COMPACTION_KEY)) return CompactionSettings.DEFAULT
     return when (val parsed = parseCompactionSettings(payload[COMPACTION_KEY])) {
       is CompactionSettingsParse.Valid -> parsed.settings

@@ -143,6 +143,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
@@ -774,6 +775,9 @@ private object DisabledRuntimeTelemetrySettingsProvider : TelemetrySettingsProvi
       customProxyUrl = null,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 internal fun smallRuntimeConfig(): RuntimeHarnessConfig =
@@ -2137,6 +2141,9 @@ internal object EnabledRuntimeTelemetrySettingsProvider : TelemetrySettingsProvi
       customProxyUrl = null,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwnership(

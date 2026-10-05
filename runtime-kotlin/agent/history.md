@@ -1,3 +1,13 @@
+## [2026-10-05] SKILL-401 subtask 4: config and telemetry reads
+Areas: runtime-application config and telemetry; runtime-domain telemetry; runtime-ports telemetry; runtime-infra/host config storage; runtime-infra/skills external sources and install; runtime-core and runtime-engine caller fixtures
+- Config reads return Absent, Malformed or Present. Machine-config and external pack/add-on consumers map malformed results to their existing error messages; external pack paths catch only InvalidPathException.
+- Settings resolution returns Loaded or Unavailable for config and environment rejection, including enabled telemetry without an install id. Optional telemetry records its existing failure diagnostic and returns null only for Unavailable.
+- Non-throwing domain parsers share reason helpers with throwing edge wrappers. Existing defaults, precedence, normalization, materialization and persisted config format stay unchanged.
+- reusable: TelemetryConfigRead and TelemetrySettingsLoad port models let application and infrastructure consumers branch on expected rejection without catching defect exceptions.
+- Compatibility limits: Kotlin config-store callers must adopt the changed read result, and settings-provider implementations must supply loadOrUnavailable. Throwing read, ensure and load edges retain IAE reasons; other SKILL-401 catch sites remain outside this subtask.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-04] SKILL-402 standalone review slot
 Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask slots and bindings; runtime-application review; runtime-ports review; runtime-core composition and architecture guards; runtime-cli review; orchestration review guidance; docs; skills/skill-bill
 - Both standalone review commands now run only `standalone_review` with `present_findings`. Inline, auto, and omitted mode use one session; delegated mode uses the existing parallel review runner with report-only parent and lane instructions.

@@ -7,6 +7,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.preparation.ReviewAttributionPort
 import skillbill.ports.review.preparation.ReviewInputSource
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.review.plan.model.ReviewLaunchPlan
 import skillbill.telemetry.model.TelemetrySettings
@@ -74,6 +75,9 @@ private object PreviewImportBlockingDatabase : DatabaseSessionFactory {
 
 private object PreviewImportTelemetrySettings : TelemetrySettingsProvider {
   override fun load(materialize: Boolean): TelemetrySettings = error("previewImport must not load telemetry settings")
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 private object PreviewImportReviewAttribution : ReviewAttributionPort {

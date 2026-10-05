@@ -18,9 +18,11 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.ports.telemetry.model.TelemetryOutboxSettlementResult
+import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -190,7 +192,12 @@ class TelemetryLevelMutationServiceTest {
       settingsProvider = fixture.settingsProvider,
     )
 
-    val payload = fixture.configStore.read()?.payload.orEmpty()
+    val payload =
+      when (val read = fixture.configStore.read()) {
+        TelemetryConfigRead.Absent -> emptyMap()
+        is TelemetryConfigRead.Malformed -> error(read.reason)
+        is TelemetryConfigRead.Present -> read.document.payload
+      }
     assertEquals(listOf("/tmp/addons", "/tmp/more"), payload["external_addon_sources"])
     assertEquals(mapOf("default" to "claude", "review" to "codex"), payload["execution_matrix"])
   }
@@ -396,6 +403,9 @@ private class LeveledMutationTelemetrySettingsProvider(private val level: String
       customProxyUrl = null,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 private object DisabledMutationTelemetrySettingsProvider : TelemetrySettingsProvider {
@@ -409,6 +419,9 @@ private object DisabledMutationTelemetrySettingsProvider : TelemetrySettingsProv
       customProxyUrl = null,
       batchSize = 50,
     )
+
+  override fun loadOrUnavailable(materialize: Boolean): TelemetrySettingsLoad =
+    TelemetrySettingsLoad.Loaded(load(materialize))
 }
 
 private class FakeMutationTelemetryConfigStore : TelemetryConfigStore {
@@ -426,7 +439,7 @@ private class FakeMutationTelemetryConfigStore : TelemetryConfigStore {
 
   override fun configPath(): Path = Path.of("/fake/config.json")
 
-  override fun read(): TelemetryConfigDocument = document
+  override fun read(): TelemetryConfigRead = TelemetryConfigRead.Present(document)
 
   override fun ensure(): TelemetryConfigDocument = document
 

@@ -45,29 +45,41 @@ fun TelemetryConfigDocument.withTelemetryLevel(
 fun parseTelemetryBoolValue(
   rawValue: String,
   name: String,
-): Boolean =
+): Boolean = parseTelemetryBoolValueOrNull(rawValue) ?: throw IllegalArgumentException(telemetryBoolValueError(name))
+
+fun parseTelemetryBoolValueOrNull(rawValue: String): Boolean? =
   when (rawValue.trim().lowercase()) {
     "1", "true", "yes", "on" -> true
     "0", "false", "no", "off" -> false
-    else -> throw IllegalArgumentException("$name must be one of: 1, 0, true, false, yes, no, on, off.")
+    else -> null
   }
+
+fun telemetryBoolValueError(name: String): String =
+  "$name must be one of: 1, 0, true, false, yes, no, on, off."
 
 fun parsePositiveTelemetryInt(
   rawValue: String,
   name: String,
-): Int {
-  val value = rawValue.toIntOrNull() ?: throw IllegalArgumentException("$name must be an integer.")
-  require(value > 0) { "$name must be greater than zero." }
-  return value
-}
+): Int =
+  parsePositiveTelemetryIntOrNull(rawValue) ?: throw IllegalArgumentException(positiveTelemetryIntError(rawValue, name))
+
+fun parsePositiveTelemetryIntOrNull(rawValue: String): Int? = rawValue.toIntOrNull()?.takeIf { it > 0 }
+
+fun positiveTelemetryIntError(
+  rawValue: String,
+  name: String,
+): String =
+  if (rawValue.toIntOrNull() == null) "$name must be an integer." else "$name must be greater than zero."
 
 fun parseTelemetryLevelValue(
   rawValue: String,
   name: String,
-): String {
+): String = parseTelemetryLevelValueOrNull(rawValue) ?: throw IllegalArgumentException(telemetryLevelValueError(name))
+
+fun parseTelemetryLevelValueOrNull(rawValue: String): String? {
   val normalized = rawValue.trim().lowercase()
-  require(normalized in telemetryLevels) {
-    "$name must be one of: ${telemetryLevels.joinToString(", ")}."
-  }
-  return normalized
+  return normalized.takeIf { it in telemetryLevels }
 }
+
+fun telemetryLevelValueError(name: String): String =
+  "$name must be one of: ${telemetryLevels.joinToString(", ")}."

@@ -2,8 +2,9 @@ package skillbill.infrastructure.skills.externaladdon
 
 import skillbill.error.core.ExternalAddonConfigError
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
-import skillbill.infrastructure.host.readTelemetryConfigFile
+import skillbill.infrastructure.host.readTelemetryConfigFileRead
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
+import skillbill.ports.telemetry.model.TelemetryConfigRead
 import skillbill.scaffold.model.SkillKind
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,11 +22,11 @@ internal fun readExternalAddonSourceEntries(
   val configPath = resolveTelemetryConfigPath(environment, userHome)
   if (!Files.exists(configPath)) return null
   val payload =
-    try {
-      readTelemetryConfigFile(configPath)?.payload
-    } catch (error: IllegalArgumentException) {
-      throw ExternalAddonConfigError(error.message.orEmpty(), error)
-    } ?: return null
+    when (val read = readTelemetryConfigFileRead(configPath)) {
+      TelemetryConfigRead.Absent -> return null
+      is TelemetryConfigRead.Malformed -> throw ExternalAddonConfigError(read.reason)
+      is TelemetryConfigRead.Present -> read.document.payload
+    }
   val raw = payload["external_addon_sources"] ?: return null
   if (raw !is List<*>) {
     throw ExternalAddonConfigError(

@@ -1,5 +1,15 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-05] SKILL-401: retain throwing config and settings edges
+Context: Config-read catches used defect exceptions to handle expected input rejection. The spec also requires unchanged edge exception classification, messages and persisted bytes.
+Decision: Return sealed config and settings outcomes internally, while retaining throwing read, ensure and load wrappers. Non-throwing parsers and their throwing forms use the same reason helpers.
+Reason: Callers need rejection reasons as values, but changing the edge exception type can change MCP telemetry capture. Shared reasons preserve message text and validation order without maintaining separate validators.
+
+## [2026-10-05] SKILL-401: disable optional telemetry only for explicit unavailability
+Context: Optional telemetry previously caught IAE and ISE from settings loading to report disabled telemetry.
+Decision: telemetrySettingsOrNull branches on loadOrUnavailable. Unavailable records TELEMETRY_SETTINGS_LOAD_FAILURE_MESSAGE with its rejection reason and returns null; other failures propagate.
+Reason: The existing fallback must remain observable without treating real defects as configuration rejection. Removing the catches also preserves cancellation and interruption propagation.
+
 ## [2026-10-04] Separate standalone reporting from full-run repair, SKILL-402
 Context: A dirty standalone review reached the full repair slot, staged operator changes, then failed because its in-memory state cannot commit a checkpoint.
 Decision: Keep the shared run loop and give standalone review its own read-only `standalone_review` slot with only `present_findings`. Full runs retain `code_review` and its repair steps.
