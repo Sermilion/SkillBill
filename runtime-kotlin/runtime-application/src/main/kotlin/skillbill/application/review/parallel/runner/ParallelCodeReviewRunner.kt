@@ -15,6 +15,7 @@ import skillbill.application.review.parallel.planning.ParallelCodeReviewRunnerPl
 import skillbill.application.review.parallel.planning.hasSuppliedDiff
 import skillbill.application.review.parallel.planning.resolveDiff
 import skillbill.application.review.parallel.planning.resolveReviewRevisions
+import skillbill.application.review.parallel.planning.routedReviewSkillName
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerVerificationStages
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
@@ -113,7 +114,7 @@ class ParallelCodeReviewRunner(
           budget = initial.budget,
           stageResume = resultAssembly.stageResumeReport(initial.request.reviewRunId),
         ),
-      )
+      ).copy(routedSkill = routedReviewSkillName(initial.detection.routed))
     return if (failures.isEmpty()) {
       result
     } else {

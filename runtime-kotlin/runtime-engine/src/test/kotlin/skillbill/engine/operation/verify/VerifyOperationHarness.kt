@@ -121,6 +121,7 @@ internal class VerifyOperationHarness : AutoCloseable {
             ParallelCodeReviewResult(
               mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
               lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+              routedSkill = DELEGATED_ROUTED_SKILL,
             ),
           )
         },
@@ -319,12 +320,14 @@ internal class VerifyOperationHarness : AutoCloseable {
     const val AGENT = "codex"
     const val REVIEW_REGISTER = "Verdict: approved\n"
     const val SKILL_SESSION_ID = "fvr-skill"
+    const val DELEGATED_ROUTED_SKILL = "bill-kotlin-code-review"
   }
 }
 
 internal class VerifyScriptedRunner : PhaseRunner {
   val inputs = mutableListOf<PhaseStepInput>()
   val sideEffects = mutableMapOf<String, () -> Unit>()
+  val replies = mutableMapOf<String, String>()
   var failAt: String? = null
 
   override fun run(
@@ -337,7 +340,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
       failAt = null
       error("interrupted at ${input.stepName}")
     }
-    return settled(REPLIES.getValue(input.stepName))
+    return settled(replies[input.stepName] ?: REPLIES.getValue(input.stepName))
   }
 
   override fun run(

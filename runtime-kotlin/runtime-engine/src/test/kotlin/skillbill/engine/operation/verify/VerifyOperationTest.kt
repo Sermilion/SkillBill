@@ -154,6 +154,37 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `the imported review names the generic pack inline and the runner's routed pack delegated`() {
+    listOf(
+      "inline" to "bill-generic-code-review",
+      "delegated" to VerifyOperationHarness.DELEGATED_ROUTED_SKILL,
+    ).forEach { (mode, routedSkill) ->
+      VerifyOperationHarness().use { harness ->
+        val parked = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(mode = mode))
+        assertIs<OperationOutcome.Completed>(harness.confirm(parked.token), mode)
+
+        val imported = harness.telemetry.imports.single()
+        assertTrue("Routed to: $routedSkill\n" in imported, imported)
+      }
+    }
+  }
+
+  @Test
+  fun `a long evaluator report reaches its receipt and the verdict step whole`() {
+    VerifyOperationHarness().use { harness ->
+      val lines = (1..60).map { index -> "[FAIL] criterion $index ${"x".repeat(500)}" }
+      harness.runner.replies[VerifyPromptSections.COMPLETENESS_AUDIT_STEP] = lines.joinToString("\n")
+      val parked = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose())
+      assertIs<OperationOutcome.Completed>(harness.confirm(parked.token))
+
+      val receipt = harness.snapshot(parked.token).artifacts["completeness_audit_receipt"]
+      assertEquals(lines, VerifyWorkflow.strings(receipt, VerifyWorkflow.FINDINGS))
+      val verdictInput = harness.runner.input(VerifyPromptSections.VERDICT_STEP).priorValues
+      assertTrue(lines.last() in verdictInput.getValue("completeness_audit_receipt"))
+    }
+  }
+
+  @Test
   fun `an interrupted run resumes at its current step without rerunning the settled ones`() {
     VerifyOperationHarness().use { harness ->
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token

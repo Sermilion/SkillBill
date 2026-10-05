@@ -44,7 +44,6 @@ internal class VerifyStepSequence(
   private val gitOperations: WorkflowGitOperations,
   private val telemetry: VerifyTelemetry,
   private val codeReview: VerifyCodeReviewStep,
-  private val budget: VerifyBudget,
   private val clock: Clock,
 ) {
   fun run(
@@ -110,7 +109,6 @@ internal class VerifyStepSequence(
   fun diffProjection(
     context: OperationContext,
     target: VerifyTarget,
-    workflowId: String,
   ): VerifyDiffProjection {
     val fingerprint =
       when (val result = gitOperations.repositoryFingerprint(context.repoRoot)) {
@@ -126,7 +124,7 @@ internal class VerifyStepSequence(
       mapOf(
         VerifyWorkflow.CHECKPOINT to fingerprint,
         VerifyWorkflow.COMPARISON_SCOPE to target.comparisonScope,
-        VerifyWorkflow.CHANGED_FILES to budget.paths(changed, workflowId),
+        VerifyWorkflow.CHANGED_FILES to changed,
       ),
     )
   }
@@ -147,7 +145,7 @@ internal class VerifyStepSequence(
     }
 
   private fun gatherDiff(run: VerifyRun): VerifyStepDone =
-    when (val projection = diffProjection(run.context, run.target, run.workflowId)) {
+    when (val projection = diffProjection(run.context, run.target)) {
       is VerifyDiffProjection.Unavailable -> VerifyStepDone.Failed(projection.reason)
       is VerifyDiffProjection.Ready ->
         VerifyStepDone.Settled(
@@ -172,10 +170,10 @@ internal class VerifyStepSequence(
     val receiptKey = VerifyWorkflow.FEATURE_FLAG_AUDIT_RECEIPT
     if (first.startsWith(VerifyPromptSections.SKIPPED_PREFIX)) {
       val reason = first.removePrefix(VerifyPromptSections.SKIPPED_PREFIX).trim()
-      return settled(receiptKey, VerifyWorkflow.SKIPPED, listOf(reason), run, WorkflowStepStatus.SKIPPED)
+      return settled(receiptKey, VerifyWorkflow.SKIPPED, listOf(reason), WorkflowStepStatus.SKIPPED)
     }
     val verdict = if (FLAG_CHECK_FAILED.containsMatchIn(value)) "fail" else "pass"
-    return settled(receiptKey, verdict, value.lines(), run)
+    return settled(receiptKey, verdict, value.lines())
   }
 
   private fun codeReview(
@@ -190,8 +188,8 @@ internal class VerifyStepSequence(
       is VerifyCodeReviewOutcome.Refused -> VerifyStepDone.Refused(outcome.refusal)
       is VerifyCodeReviewOutcome.Reviewed -> {
         val register = outcome.review.findings.map(::registerLine)
-        telemetry.reviewImported(importText(run, register))
-        settled(VerifyWorkflow.CODE_REVIEW_RECEIPT, outcome.review.verdict.wireValue, register, run)
+        telemetry.reviewImported(importText(run, outcome.review.routedSkill, register))
+        settled(VerifyWorkflow.CODE_REVIEW_RECEIPT, outcome.review.verdict.wireValue, register)
       }
     }
   }
@@ -204,11 +202,11 @@ internal class VerifyStepSequence(
     val receiptKey = VerifyWorkflow.UNIT_TEST_VALUE_RECEIPT
     if (tests.isEmpty()) {
       val reason = "No unit tests changed in ${run.target.comparisonScope}."
-      return settled(receiptKey, VerifyWorkflow.SKIPPED, listOf(reason), run, WorkflowStepStatus.SKIPPED)
+      return settled(receiptKey, VerifyWorkflow.SKIPPED, listOf(reason), WorkflowStepStatus.SKIPPED)
     }
     val directive = UnitTestValueCheckPromptRules.reviewDirective(run.target.comparisonScope, tests)
     val value = readOnly(run, UnitTestValueCheckPromptRules.REVIEW_STEP, directive, prior) { return it }
-    return settled(receiptKey, REPORTED, value.lines(), run)
+    return settled(receiptKey, REPORTED, value.lines())
   }
 
   private inline fun unitTestsInScope(
@@ -234,7 +232,7 @@ internal class VerifyStepSequence(
     val directive = VerifyPromptSections.completenessAuditDirective(run.target.comparisonScope)
     val value = readOnly(run, VerifyPromptSections.COMPLETENESS_AUDIT_STEP, directive, prior) { return it }
     val verdict = if (value.lines().any(CRITERION_GAP::containsMatchIn)) HAD_GAPS else ALL_PASS
-    return settled(VerifyWorkflow.COMPLETENESS_AUDIT_RECEIPT, verdict, value.lines(), run)
+    return settled(VerifyWorkflow.COMPLETENESS_AUDIT_RECEIPT, verdict, value.lines())
   }
 
   private fun verdict(
@@ -247,7 +245,7 @@ internal class VerifyStepSequence(
       }
     val section = report.substringAfter(VERDICT_HEADING, missingDelimiterValue = report)
     val verdict = VERDICTS.firstOrNull { candidate -> section.contains(candidate) } ?: UNKNOWN_VERDICT
-    val findings = budget.lines(reportLines(section.lines()), VerifyWorkflow.VERDICT_RESULT, run.workflowId)
+    val findings = receiptLines(section.lines())
     return VerifyStepDone.Settled(
       WorkflowStepStatus.COMPLETED,
       mapOf(VerifyWorkflow.VERDICT_RESULT to VerifyWorkflow.receipt(verdict, findings)),
@@ -283,7 +281,7 @@ internal class VerifyStepSequence(
     val steps = listOf(stepEntry(stepId, WorkflowStepStatus.FAILED, attempt))
     val failed = store.write(run.workflowId, WorkflowStatus.FAILED, stepId, steps)
     if (failed is VerifyWrite.Rejected) {
-      (diffProjection(run.context, run.target, run.workflowId) as? VerifyDiffProjection.Ready)?.let { refreshed ->
+      (diffProjection(run.context, run.target) as? VerifyDiffProjection.Ready)?.let { refreshed ->
         store.write(
           run.workflowId,
           WorkflowStatus.FAILED,
@@ -350,10 +348,9 @@ internal class VerifyStepSequence(
     receiptKey: String,
     verdict: String,
     lines: List<String>,
-    run: VerifyRun,
     status: WorkflowStepStatus = WorkflowStepStatus.COMPLETED,
   ): VerifyStepDone.Settled {
-    val findings = budget.lines(reportLines(lines), receiptKey, run.workflowId)
+    val findings = receiptLines(lines)
     return VerifyStepDone.Settled(status, mapOf(receiptKey to VerifyWorkflow.receipt(verdict, findings)))
   }
 
@@ -365,11 +362,13 @@ internal class VerifyStepSequence(
 
   private fun importText(
     run: VerifyRun,
+    routedSkill: String,
     register: List<String>,
   ): String =
     buildString {
       appendLine("Review run ID: ${InlineReviewEnvelope.mintReviewRunId(clock)}")
       appendLine("Review session ID: ${run.sessionId.ifBlank { run.workflowId }}")
+      appendLine("Routed to: $routedSkill")
       appendLine("Execution mode: ${run.mode.wireValue}")
       appendLine()
       register.forEach(::appendLine)
@@ -412,6 +411,9 @@ internal class VerifyStepSequence(
     val CRITERION_GAP = Regex("""^\s*\[(FAIL|PARTIAL)]""")
 
     fun reportLines(lines: List<String>): List<String> = lines.filterNot { line -> line.trim().startsWith("```") }
+
+    fun receiptLines(lines: List<String>): List<String> =
+      reportLines(lines).map(String::trim).filter(String::isNotEmpty)
   }
 }
 

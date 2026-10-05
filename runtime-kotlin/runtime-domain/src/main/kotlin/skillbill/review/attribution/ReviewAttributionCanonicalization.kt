@@ -9,6 +9,8 @@ import skillbill.review.model.UNRESOLVED_ATTRIBUTION
 
 const val EXECUTION_MODE_DELEGATED: String = "delegated"
 
+const val GENERIC_REVIEW_SKILL_NAME: String = "bill-generic-code-review"
+
 val canonicalPlatformSlugs: Set<String> =
   setOf(
     "kmp",

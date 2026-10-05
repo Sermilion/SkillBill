@@ -1,9 +1,8 @@
 package skillbill.application.review.parallel.planning
 
+import skillbill.review.attribution.GENERIC_REVIEW_SKILL_NAME
 import skillbill.scaffold.model.PlatformManifest
 import java.util.UUID
-
-internal const val GENERIC_REVIEW_SKILL_NAME: String = "bill-generic-code-review"
 
 internal const val REVIEW_SESSION_ID_PREFIX: String = "rvs-"
 
