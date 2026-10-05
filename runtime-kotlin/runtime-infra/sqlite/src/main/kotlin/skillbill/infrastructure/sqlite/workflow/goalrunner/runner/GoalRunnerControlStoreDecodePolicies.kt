@@ -23,18 +23,17 @@ internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {
   val mode =
     policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
       ?: goalRunnerControlSchemaError("review policy durable record is missing code_review_mode.")
-  val codeReviewMode =
-    try {
-      CodeReviewExecutionMode.fromWire(mode)
-    } catch (error: IllegalArgumentException) {
-      goalRunnerControlSchemaError("review policy durable record has invalid code_review_mode: ${error.message}")
-    }
-  val selection =
-    try {
-      AgentAddonSelection(decodeReviewPolicyAddons(policy))
-    } catch (error: IllegalArgumentException) {
-      goalRunnerControlSchemaError("review policy durable record has invalid add-on selection: ${error.message}")
-    }
+  val codeReviewMode = CodeReviewExecutionMode.fromWireOrNull(mode)
+    ?: goalRunnerControlSchemaError(
+      "review policy durable record has invalid code_review_mode: " +
+        CodeReviewExecutionMode.unknownWireValueMessage(mode),
+    )
+  val decodedAddons = decodeReviewPolicyAddons(policy)
+  val selectionViolation = AgentAddonSelection.violation(decodedAddons)
+  if (selectionViolation != null) {
+    goalRunnerControlSchemaError("review policy durable record has invalid add-on selection: $selectionViolation")
+  }
+  val selection = AgentAddonSelection(decodedAddons)
   return GoalRunnerReviewPolicy(codeReviewMode, selection)
 }
 
@@ -71,11 +70,15 @@ private fun decodeReviewPolicyAddonEntry(
       index,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
     )
-  return try {
-    PersistedAgentAddonSelectionEntry(slug = slug, sourceIdentity = sourceIdentity, contentSha256 = contentSha256)
-  } catch (error: IllegalArgumentException) {
-    goalRunnerControlSchemaError("review policy durable add-on entry $index is invalid: ${error.message}")
+  val reason = PersistedAgentAddonSelectionEntry.violation(slug, sourceIdentity, contentSha256)
+  if (reason != null) {
+    goalRunnerControlSchemaError("review policy durable add-on entry $index is invalid: $reason")
   }
+  return PersistedAgentAddonSelectionEntry(
+    slug = slug,
+    sourceIdentity = sourceIdentity,
+    contentSha256 = contentSha256,
+  )
 }
 
 private fun requireReviewPolicyAddonField(
@@ -97,8 +100,6 @@ private fun parseAcceptanceJsonElement(raw: String): JsonElement =
   } catch (error: CancellationException) {
     throw error
   } catch (error: SerializationException) {
-    invalidAcceptanceJson(error)
-  } catch (error: IllegalArgumentException) {
     invalidAcceptanceJson(error)
   }
 

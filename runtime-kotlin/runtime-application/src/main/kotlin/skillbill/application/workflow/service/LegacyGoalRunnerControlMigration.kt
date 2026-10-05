@@ -58,15 +58,10 @@ private fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts)
   val mode =
     policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
       ?: legacyControlSchemaError("review policy artifact '${artifactFamily.label()}' is missing code_review_mode.")
-  val codeReviewMode =
-    try {
-      CodeReviewExecutionMode.fromWire(mode)
-    } catch (error: IllegalArgumentException) {
-      throw invalidWorkflowStateSchemaError(
-        "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
-        error,
-      )
-    }
+  val codeReviewMode = CodeReviewExecutionMode.fromWireOrNull(mode)
+    ?: throw invalidWorkflowStateSchemaError(
+      "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
+    )
   val agentAddonSelection =
     decodeGoalAgentAddonSelection(
       policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION],
@@ -108,21 +103,16 @@ private fun requiredAcceptanceString(
   (entry[key] as? String)?.takeIf(String::isNotBlank)
     ?: legacyControlSchemaError("acceptance artifact entry is missing a nonblank $key.")
 
-private fun addonSelectionError(
-  message: String,
-  cause: Throwable? = null,
-): Nothing =
-  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "Goal review policy $message", cause)
+private fun addonSelectionError(message: String): Nothing =
+  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "Goal review policy $message")
 
 private fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()
   val entries = values as? List<*> ?: addonSelectionError("agent_addon_selection must be a list.")
   val decoded = entries.mapIndexed(::decodeGoalAgentAddonSelectionEntry)
-  return try {
-    AgentAddonSelection(decoded)
-  } catch (error: IllegalArgumentException) {
-    addonSelectionError("agent_addon_selection is invalid: ${error.message}", error)
-  }
+  val reason = AgentAddonSelection.violation(decoded)
+  if (reason != null) addonSelectionError("agent_addon_selection is invalid: $reason")
+  return AgentAddonSelection(decoded)
 }
 
 private fun decodeGoalAgentAddonSelectionEntry(
@@ -146,11 +136,9 @@ private fun decodeGoalAgentAddonSelectionEntry(
     requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY)
   val contentSha256 =
     requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256)
-  return try {
-    PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
-  } catch (error: IllegalArgumentException) {
-    addonSelectionError("agent_addon_selection entry $index is invalid: ${error.message}", error)
-  }
+  val reason = PersistedAgentAddonSelectionEntry.violation(slug, sourceIdentity, contentSha256)
+  if (reason != null) addonSelectionError("agent_addon_selection entry $index is invalid: $reason")
+  return PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
 }
 
 private fun requiredAddonField(

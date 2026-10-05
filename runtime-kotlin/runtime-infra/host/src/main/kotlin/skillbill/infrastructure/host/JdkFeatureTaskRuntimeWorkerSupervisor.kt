@@ -1,6 +1,8 @@
 package skillbill.infrastructure.host
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
@@ -193,11 +195,8 @@ private class HeartbeatLoop(
         reportFailure(error)
         scheduleNext(plan.retryDelaySeconds)
         return
-      } catch (error: IllegalArgumentException) {
-        reportFailure(error)
-        scheduleNext(plan.retryDelaySeconds)
-        return
-      } catch (error: IllegalStateException) {
+      } catch (error: SkillBillRuntimeException) {
+        if (error.code != DatabaseFailureCode.ACCESS && error.code != DatabaseFailureCode.BUSY) throw error
         reportFailure(error)
         scheduleNext(plan.retryDelaySeconds)
         return

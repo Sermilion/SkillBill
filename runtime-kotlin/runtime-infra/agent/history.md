@@ -1,5 +1,17 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-05] SKILL-401 subtask 5: application and infrastructure adapters
+Areas: runtime-application review admission and legacy control migration; runtime-domain add-on, review-budget and shared-evidence models; runtime-ports rejected-output diagnostics; runtime-infra/host, http, contracts, sqlite and workflow
+- Goal-runner controls, repo-local budgets, rejected-output records and shared-evidence indexes validate input before model construction. Work-list timestamps and stored lifecycle values use nullable parsing with existing typed rejection boundaries.
+- Lane-register parser defects and constant GitHub request defects propagate. URI parsing catches URISyntaxException; Jackson conversion catches JsonProcessingException; trailing YAML documents retain the existing MALFORMED failure and text.
+- Worker heartbeats still report and reschedule IOException and database ACCESS/BUSY renewal failures. Other coded failures and defects propagate.
+- Pattern followed: adapters branch on ordered violation reasons or nullable parses; constructors keep true invariants and share the same reason helpers.
+- reusable: ReviewContextBudgetPolicy, RejectedOutputDiagnostic and shared-evidence model violation helpers support boundary validation without catching constructor defects.
+- Compatibility: user-facing messages, failure codes, persisted formats and shared-evidence degradation fields retain their existing values, including the literal "IllegalArgumentException: " cause prefix.
+- Limits: remaining runtime-infra/skills and CLI catch conversions belong to later SKILL-401 subtasks. No new wire contract or migration.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-03] One-shot process success ignores leftover descendants
 Areas: runtime-infra/host process
 - A client exit of 0 stays 0 when an owned descendant is still alive. The runner no longer waits on that descendant or records a read failure for it. Cleanup still destroys the captured tree.

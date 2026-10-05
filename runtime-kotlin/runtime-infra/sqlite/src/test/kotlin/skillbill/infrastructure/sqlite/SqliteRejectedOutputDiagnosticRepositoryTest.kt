@@ -56,6 +56,28 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
   }
 
   @Test
+  fun `unknown stored lifecycle keeps the corrupt diagnostic boundary`() {
+    val directory = Files.createTempDirectory("rejected-output-corrupt-lifecycle")
+    DatabaseRuntime.ensureDatabase(directory.resolve("runtime.db")).use { connection ->
+      val repository = SqliteRejectedOutputDiagnosticRepository(connection)
+      val diagnostic = record(byteArrayOf(1))
+      repository.insert(diagnostic)
+      connection.prepareStatement(
+        "UPDATE rejected_output_diagnostics SET lifecycle = ? WHERE identity = ?",
+      ).use { statement ->
+        statement.setString(1, "UNKNOWN")
+        statement.setString(2, diagnostic.metadata.identity)
+        statement.executeUpdate()
+      }
+
+      val error = assertFailsWith<SkillBillRuntimeException> { repository.read(diagnostic.metadata.identity) }
+
+      assertEquals(RejectedOutputDiagnosticFailureCode.CORRUPT, error.code)
+      assertEquals("Rejected output diagnostic '${diagnostic.metadata.identity}' is corrupt.", error.message)
+    }
+  }
+
+  @Test
   fun `conflicting duplicate cannot replace immutable evidence`() {
     val directory = Files.createTempDirectory("rejected-output-conflict-test")
     DatabaseRuntime.ensureDatabase(directory.resolve("runtime.db")).use { connection ->

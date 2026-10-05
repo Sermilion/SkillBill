@@ -103,8 +103,6 @@ object ClasspathContractSchemaLoader {
       rethrow(error)
     } catch (error: IOException) {
       throw request.processingFailure(error)
-    } catch (error: IllegalArgumentException) {
-      throw request.processingFailure(error)
     }
 
   fun compiledSchema(request: CompiledSchemaRequest): JsonSchema =
@@ -123,8 +121,6 @@ object ClasspathContractSchemaLoader {
       } catch (cancellation: CancellationException) {
         rethrow(cancellation)
       } catch (error: JsonProcessingException) {
-        throw processingFailure(error)
-      } catch (error: IllegalArgumentException) {
         throw processingFailure(error)
       }
     }
@@ -167,8 +163,6 @@ object ClasspathContractSchemaLoader {
     } catch (error: JsonProcessingException) {
       throwCompiledSchemaFailure(request, error)
     } catch (error: IOException) {
-      throwCompiledSchemaFailure(request, error)
-    } catch (error: IllegalArgumentException) {
       throwCompiledSchemaFailure(request, error)
     }
   }

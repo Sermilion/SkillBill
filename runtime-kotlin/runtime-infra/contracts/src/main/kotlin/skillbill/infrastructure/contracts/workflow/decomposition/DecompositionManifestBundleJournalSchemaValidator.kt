@@ -1,13 +1,14 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
 import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.BUNDLE_JOURNAL_CONTRACT_VERSION
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -23,6 +24,7 @@ object DecompositionManifestBundleJournalSchemaValidator {
     get() = ClasspathContractSchemaLoader.sharedObjectMapper()
   private val yamlMapper: YAMLMapper =
     YAMLMapper(YAMLFactory().apply { enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION) })
+  private val mapType = object : TypeReference<Map<String, Any?>>() {}
 
   fun validateYamlText(
     yamlText: String,
@@ -102,7 +104,7 @@ object DecompositionManifestBundleJournalSchemaValidator {
   ): Map<String, Any?> =
     try {
       val converted =
-        JsonCodec.anyToStringAnyMap(yamlMapper.convertValue(node, Map::class.java))
+        yamlMapper.readerFor(mapType).readValue<Map<String, Any?>>(node)
           ?: throw invalidDecompositionManifestBundleJournal(
             sourceLabel = sourceLabel,
             reason = "<root> must be an object.",
@@ -111,7 +113,7 @@ object DecompositionManifestBundleJournalSchemaValidator {
       converted
     } catch (error: CancellationException) {
       throw error
-    } catch (error: IllegalArgumentException) {
+    } catch (error: JsonProcessingException) {
       throw invalidDecompositionManifestBundleJournal(
         sourceLabel = sourceLabel,
         reason = error.message ?: "Malformed YAML object.",

@@ -105,35 +105,63 @@ class FileSystemRepoLocalConfig(
     val active = raw - "provider_token_thresholds"
     validateBudgetKeys(path, active, "review_context_budget", REVIEW_CONTEXT_BUDGET_KEYS)
     val defaults = ReviewContextBudgetPolicy.DEFAULT
-    return try {
-      buildReviewContextBudget(path, active, defaults)
-    } catch (error: IllegalArgumentException) {
-      throw malformedRepoLocalConfigError(
-        path.toString(),
-        "review_context_budget",
-        value.toString(),
-        error.message ?: "is inconsistent.",
-        error,
-      )
-    }
+    return buildReviewContextBudget(path, active, defaults, value.toString())
   }
 
   private fun buildReviewContextBudget(
     path: Path,
     raw: Map<*, *>,
     defaults: ReviewContextBudgetPolicy,
+    originalValue: String,
   ): ReviewContextBudgetPolicy {
+    val maxParentPacketBytes = budgetLong(path, raw, "max_parent_packet_bytes", defaults.maxParentPacketBytes)
+    val maxLaneLaunchBytes = budgetLong(path, raw, "max_lane_launch_bytes", defaults.maxLaneLaunchBytes)
+    val maxLaneEvidenceBytes = budgetLong(path, raw, "max_lane_evidence_bytes", defaults.maxLaneEvidenceBytes)
+    val maxEvidenceResultBytes = budgetLong(path, raw, "max_evidence_result_bytes", defaults.maxEvidenceResultBytes)
+    val maxLaneResultBytes = budgetLong(path, raw, "max_lane_result_bytes", defaults.maxLaneResultBytes)
+    val maxAssignmentExpansions = assignmentExpansions(path, raw, defaults.maxAssignmentExpansions)
+    val maxSpecialistToolCalls = budgetInt(path, raw, "max_specialist_tool_calls", defaults.maxSpecialistToolCalls)
+    val maxSpecialistModelTurns =
+      budgetInt(path, raw, "max_specialist_model_turns", defaults.maxSpecialistModelTurns)
+    val maxRoutingAnalysisPairs =
+      budgetInt(path, raw, "max_routing_analysis_pairs", defaults.maxRoutingAnalysisPairs)
+    val maxRoutingAnalysisBytes = budgetLong(path, raw, "max_routing_analysis_bytes", defaults.maxRoutingAnalysisBytes)
+    val maxSpecIntentProjectionBytes = defaults.maxSpecIntentProjectionBytes
+    val violation =
+      ReviewContextBudgetPolicy.byteLimitViolation(
+        maxParentPacketBytes,
+        maxLaneLaunchBytes,
+        maxLaneEvidenceBytes,
+        maxEvidenceResultBytes,
+        maxLaneResultBytes,
+        maxSpecIntentProjectionBytes,
+      ) ?: ReviewContextBudgetPolicy.executionLimitViolation(
+        maxAssignmentExpansions,
+        maxSpecialistToolCalls,
+        maxSpecialistModelTurns,
+        maxRoutingAnalysisPairs,
+        maxRoutingAnalysisBytes,
+      ) ?: ReviewContextBudgetPolicy.relationshipViolation(
+        maxEvidenceResultBytes,
+        maxLaneEvidenceBytes,
+        maxLaneLaunchBytes,
+        maxParentPacketBytes,
+      )
+    if (violation != null) {
+      throw malformedRepoLocalConfigError(path.toString(), "review_context_budget", originalValue, violation)
+    }
     return ReviewContextBudgetPolicy(
-      maxParentPacketBytes = budgetLong(path, raw, "max_parent_packet_bytes", defaults.maxParentPacketBytes),
-      maxLaneLaunchBytes = budgetLong(path, raw, "max_lane_launch_bytes", defaults.maxLaneLaunchBytes),
-      maxLaneEvidenceBytes = budgetLong(path, raw, "max_lane_evidence_bytes", defaults.maxLaneEvidenceBytes),
-      maxEvidenceResultBytes = budgetLong(path, raw, "max_evidence_result_bytes", defaults.maxEvidenceResultBytes),
-      maxLaneResultBytes = budgetLong(path, raw, "max_lane_result_bytes", defaults.maxLaneResultBytes),
-      maxAssignmentExpansions = assignmentExpansions(path, raw, defaults.maxAssignmentExpansions),
-      maxSpecialistToolCalls = budgetInt(path, raw, "max_specialist_tool_calls", defaults.maxSpecialistToolCalls),
-      maxSpecialistModelTurns = budgetInt(path, raw, "max_specialist_model_turns", defaults.maxSpecialistModelTurns),
-      maxRoutingAnalysisPairs = budgetInt(path, raw, "max_routing_analysis_pairs", defaults.maxRoutingAnalysisPairs),
-      maxRoutingAnalysisBytes = budgetLong(path, raw, "max_routing_analysis_bytes", defaults.maxRoutingAnalysisBytes),
+      maxParentPacketBytes,
+      maxLaneLaunchBytes,
+      maxLaneEvidenceBytes,
+      maxEvidenceResultBytes,
+      maxLaneResultBytes,
+      maxAssignmentExpansions,
+      maxSpecialistToolCalls,
+      maxSpecialistModelTurns,
+      maxRoutingAnalysisPairs,
+      maxRoutingAnalysisBytes,
+      maxSpecIntentProjectionBytes,
     )
   }
 

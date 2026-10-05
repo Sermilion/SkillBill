@@ -88,7 +88,7 @@ data class PersistedAgentAddonSelectionEntry(
   }
 
   companion object {
-    internal fun violation(slug: String, sourceIdentity: String, contentSha256: String): String? =
+    fun violation(slug: String, sourceIdentity: String, contentSha256: String): String? =
       when {
         !slug.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*")) -> "Invalid agent add-on slug '$slug'."
         !contentSha256.matches(Regex("[0-9a-f]{64}")) ->
@@ -114,7 +114,7 @@ data class AgentAddonSelection(
   }
 
   companion object {
-    internal fun violation(entries: List<PersistedAgentAddonSelectionEntry>): String? =
+    fun violation(entries: List<PersistedAgentAddonSelectionEntry>): String? =
       if (entries.map { it.slug }.distinct().size == entries.size) null
       else "Agent add-on selection contains duplicate slugs."
   }

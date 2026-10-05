@@ -8,7 +8,7 @@ import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import skillbill.workflow.time.parsePersistedInstant
+import skillbill.workflow.time.parsePersistedInstantOrNull
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.sql.Connection
 import java.sql.ResultSet
@@ -149,11 +149,7 @@ internal fun parseInstant(
   workflowId: String,
   column: String,
 ): Instant =
-  try {
-    parsePersistedInstant(value)
-  } catch (error: IllegalArgumentException) {
-    invalid(workflowId, "invalid $column '$value'", error)
-  }
+  parsePersistedInstantOrNull(value) ?: invalid(workflowId, "invalid $column '$value'")
 
 private fun invalid(
   workflowId: String,

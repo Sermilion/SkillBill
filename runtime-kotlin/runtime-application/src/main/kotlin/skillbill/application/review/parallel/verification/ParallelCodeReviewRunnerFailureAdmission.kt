@@ -3,7 +3,6 @@ package skillbill.application.review.parallel.verification
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.agentoutput.agentFailureExcerpt
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
-import skillbill.application.review.parallel.runner.LANE_FINDING_PARSE_SEAM
 import skillbill.application.review.parallel.runner.NO_OP_RESUME_TERMINAL_STATUS
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_FIRST_SOURCE_LINE
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_REGISTER_ABSENCE_EXCERPT_MAX_LENGTH
@@ -32,17 +31,13 @@ class ParallelCodeReviewRunnerFailureAdmission(
     stdout: String,
     launch: ParallelCodeReviewInlineParentLaunch,
   ): ParallelCodeReviewSoftRegisterAdmission =
-    when (val parse = parseLaneRegisterSeam(stdout, launch.assignment.lane, registerParse)) {
-      is LaneRegisterParse.Parsed -> {
-        val parsed = parse.result
-        ParallelCodeReviewSoftRegisterAdmission(
-          findings = attributeLaneFindings(parsed, launch.selected),
-          droppedCandidateDiagnostic = rejectedCandidateDiagnostic(parsed),
-          rejectedCandidateCount = parsed.rejections.size,
-          citationDiagnostics = parsed.citationDiagnostics,
-        )
-      }
-      is LaneRegisterParse.Failed -> ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
+    registerParse(stdout).let { parsed ->
+      ParallelCodeReviewSoftRegisterAdmission(
+        findings = attributeLaneFindings(parsed, launch.selected),
+        droppedCandidateDiagnostic = rejectedCandidateDiagnostic(parsed),
+        rejectedCandidateCount = parsed.rejections.size,
+        citationDiagnostics = parsed.citationDiagnostics,
+      )
     }
 
   private fun attributeLaneFindings(
@@ -132,50 +127,6 @@ class ParallelCodeReviewRunnerFailureAdmission(
       rejection.lineText.take(PARALLEL_REVIEW_REGISTER_ABSENCE_EXCERPT_MAX_LENGTH)
   }
 }
-
-private const val CAUSE_DETAIL_MAX_LENGTH: Int = 200
-
-internal sealed interface LaneRegisterParse {
-  data class Parsed(val result: ParallelReviewParseResult) : LaneRegisterParse
-
-  data class Failed(
-    val seam: String,
-    val lane: String,
-    val detail: String,
-  ) : LaneRegisterParse {
-    init {
-      require(seam.isNotBlank() && lane.isNotBlank()) {
-        "Review register parse seam failure must name its seam and lane."
-      }
-    }
-  }
-}
-
-internal fun parseLaneRegisterSeam(
-  stdout: String,
-  lane: String,
-  parse: (String) -> ParallelReviewParseResult = ParallelReviewFindingParser::parse,
-): LaneRegisterParse =
-  try {
-    LaneRegisterParse.Parsed(parse(stdout))
-  } catch (thrown: IllegalArgumentException) {
-    laneRegisterFailure(lane, thrown)
-  } catch (thrown: IllegalStateException) {
-    laneRegisterFailure(lane, thrown)
-  }
-
-private fun laneRegisterFailure(
-  lane: String,
-  cause: Throwable,
-): LaneRegisterParse.Failed =
-  LaneRegisterParse.Failed(
-    seam = LANE_FINDING_PARSE_SEAM,
-    lane = lane,
-    detail =
-      "Review register parse seam '$LANE_FINDING_PARSE_SEAM' failed for lane '$lane': " +
-        "${cause.failureCodeLabel() ?: cause::class.simpleName}: " +
-        (cause.message?.take(CAUSE_DETAIL_MAX_LENGTH) ?: "no detail"),
-  )
 
 internal fun parallelCodeReviewNoOpResumeOutcome(agentId: String) =
   ParallelReviewLaneOutcome(

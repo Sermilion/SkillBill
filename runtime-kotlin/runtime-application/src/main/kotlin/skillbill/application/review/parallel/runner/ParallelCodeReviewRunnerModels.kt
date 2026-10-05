@@ -250,8 +250,6 @@ internal const val PARALLEL_REVIEW_NO_FINDINGS_TOKEN = "NO_FINDINGS"
 
 internal val NO_OP_RESUME_TERMINAL_STATUS = ReviewAccountingTerminalOutcome.NO_OP_RESUME
 internal val UNSUPPORTED_PROVIDER_TERMINAL_STATUS = ReviewAccountingTerminalOutcome.UNSUPPORTED_PROVIDER
-internal const val LANE_FINDING_PARSE_SEAM: String = "attributeLaneFindings"
-
 internal const val PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE: String =
   "Assign each routed rubric above to its own specialist worker over that rubric's owned paths. " +
     "Accept each specialist's raw return as-is with no shape check. Synthesize the final review " +

@@ -1,7 +1,5 @@
 package skillbill.application
 
-import skillbill.application.review.parallel.verification.LaneRegisterParse
-import skillbill.application.review.parallel.verification.parseLaneRegisterSeam
 import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.simulateGovernedEvidenceReads
 import skillbill.application.reviewevidence.model.ParallelReviewScope
@@ -12,6 +10,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -111,23 +110,6 @@ class ParallelCodeReviewRegisterSeamTest {
   }
 
   @Test
-  fun `a throwing parse at the register seam returns a failed parse instead of an empty register`() {
-    val laneBody = "lane body line ".repeat(200)
-    val failed =
-      assertIs<LaneRegisterParse.Failed>(
-        parseLaneRegisterSeam(laneBody, lane = "lane-1") { error(laneBody) },
-      )
-
-    assertEquals("attributeLaneFindings", failed.seam)
-    assertEquals("lane-1", failed.lane)
-    assertFalse(failed.detail.contains(laneBody), "the seam failure must not carry the full lane output body")
-    assertTrue(
-      failed.detail.length < laneBody.length,
-      "the cause detail must be bounded even when the parser echoes the lane body: ${failed.detail.length}",
-    )
-  }
-
-  @Test
   fun `a short sibling F-id is padded and admitted alongside a canonical register line`() {
     val runner =
       runner(
@@ -210,7 +192,7 @@ class ParallelCodeReviewRegisterSeamTest {
   }
 
   @Test
-  fun `a parser fault at the register seam soft-admits instead of failing the lane`() {
+  fun `a parser fault at the register seam propagates`() {
     val runner =
       createRunner(
         stdoutLauncher("prose with no register\nverdict: approved"),
@@ -220,14 +202,12 @@ class ParallelCodeReviewRegisterSeamTest {
         ),
       )
 
-    val result =
-      runner.reviewed(
-        baseRequest(scope = ParallelReviewScope.STAGED),
-      )
+    val error =
+      assertFailsWith<IllegalStateException> {
+        runner.reviewed(baseRequest(scope = ParallelReviewScope.STAGED))
+      }
 
-    assertTrue(result.lane1.success)
-    assertNull(result.lane1.failureReason)
-    assertTrue(result.mergeResult.findings.isEmpty())
+    assertEquals("parser exploded", error.message)
   }
 
   private fun stdoutLauncher(stdout: String) =

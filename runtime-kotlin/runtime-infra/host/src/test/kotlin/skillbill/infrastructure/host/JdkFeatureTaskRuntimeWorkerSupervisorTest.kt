@@ -1,5 +1,7 @@
 package skillbill.infrastructure.host
 
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -214,7 +216,9 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
     val heartbeat =
       supervisor.startHeartbeat(plan()) {
-        if (ticks.incrementAndGet() == 1) error("database is locked")
+        if (ticks.incrementAndGet() == 1) {
+          throw SkillBillRuntimeException(DatabaseFailureCode.BUSY, "database is locked")
+        }
         renewedAfterFailure.countDown()
         FeatureTaskRuntimeHeartbeatTick.Renewed
       }
@@ -243,7 +247,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     val heartbeat =
       supervisor.startHeartbeat(plan(leaseSeconds = 0)) {
         escalated.countDown()
-        error("database is locked")
+        throw SkillBillRuntimeException(DatabaseFailureCode.BUSY, "database is locked")
       }
 
     try {

@@ -21,29 +21,75 @@ data class ReviewContextBudgetPolicy(
   val maxSpecIntentProjectionBytes: Long = 32_768,
 ) {
   init {
-    val byteLimits =
-      listOf(
+    val reason =
+      byteLimitViolation(
         maxParentPacketBytes,
         maxLaneLaunchBytes,
         maxLaneEvidenceBytes,
         maxEvidenceResultBytes,
         maxLaneResultBytes,
         maxSpecIntentProjectionBytes,
-      )
-    require(byteLimits.all { it > 0 }) { "Review-context byte limits must be positive." }
-    require(maxAssignmentExpansions >= 0) { "Assignment expansions cannot be negative." }
-    require(maxSpecialistToolCalls > 0) { "Specialist tool-call budget must be positive." }
-    require(maxSpecialistModelTurns > 0) { "Specialist model-turn budget must be positive." }
-    require(maxRoutingAnalysisPairs > 0) { "Routing-analysis commit/lane pair budget must be positive." }
-    require(maxRoutingAnalysisBytes > 0) { "Routing-analysis hunk-material byte budget must be positive." }
-    require(maxEvidenceResultBytes <= maxLaneEvidenceBytes) {
-      "Evidence-result bytes cannot exceed cumulative lane-evidence bytes."
-    }
-    require(maxLaneLaunchBytes <= maxParentPacketBytes) { "Lane-launch bytes cannot exceed parent-packet bytes." }
+      ) ?: executionLimitViolation(
+        maxAssignmentExpansions,
+        maxSpecialistToolCalls,
+        maxSpecialistModelTurns,
+        maxRoutingAnalysisPairs,
+        maxRoutingAnalysisBytes,
+      ) ?: relationshipViolation(maxEvidenceResultBytes, maxLaneEvidenceBytes, maxLaneLaunchBytes, maxParentPacketBytes)
+    require(reason == null) { reason.orEmpty() }
   }
 
   companion object {
     val DEFAULT: ReviewContextBudgetPolicy = ReviewContextBudgetPolicy()
+
+    fun byteLimitViolation(
+      maxParentPacketBytes: Long,
+      maxLaneLaunchBytes: Long,
+      maxLaneEvidenceBytes: Long,
+      maxEvidenceResultBytes: Long,
+      maxLaneResultBytes: Long,
+      maxSpecIntentProjectionBytes: Long,
+    ): String? {
+      val byteLimits =
+        listOf(
+          maxParentPacketBytes,
+          maxLaneLaunchBytes,
+          maxLaneEvidenceBytes,
+          maxEvidenceResultBytes,
+          maxLaneResultBytes,
+          maxSpecIntentProjectionBytes,
+        )
+      return if (byteLimits.all { it > 0 }) null else "Review-context byte limits must be positive."
+    }
+
+    fun executionLimitViolation(
+      maxAssignmentExpansions: Int,
+      maxSpecialistToolCalls: Int,
+      maxSpecialistModelTurns: Int,
+      maxRoutingAnalysisPairs: Int,
+      maxRoutingAnalysisBytes: Long,
+    ): String? =
+      when {
+        maxAssignmentExpansions < 0 -> "Assignment expansions cannot be negative."
+        maxSpecialistToolCalls <= 0 -> "Specialist tool-call budget must be positive."
+        maxSpecialistModelTurns <= 0 -> "Specialist model-turn budget must be positive."
+        maxRoutingAnalysisPairs <= 0 -> "Routing-analysis commit/lane pair budget must be positive."
+        maxRoutingAnalysisBytes <= 0 -> "Routing-analysis hunk-material byte budget must be positive."
+        else -> null
+      }
+
+    fun relationshipViolation(
+      maxEvidenceResultBytes: Long,
+      maxLaneEvidenceBytes: Long,
+      maxLaneLaunchBytes: Long,
+      maxParentPacketBytes: Long,
+    ): String? =
+      when {
+        maxEvidenceResultBytes > maxLaneEvidenceBytes ->
+          "Evidence-result bytes cannot exceed cumulative lane-evidence bytes."
+        maxLaneLaunchBytes > maxParentPacketBytes -> "Lane-launch bytes cannot exceed parent-packet bytes."
+        else -> null
+      }
 
     fun deriveLaneEvidenceBytes(
       basePolicy: ReviewContextBudgetPolicy,

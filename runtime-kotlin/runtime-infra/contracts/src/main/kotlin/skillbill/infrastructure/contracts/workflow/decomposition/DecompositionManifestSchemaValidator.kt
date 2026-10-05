@@ -118,7 +118,13 @@ class DecompositionManifestSchemaValidator : DecompositionManifestValidator {
     try {
       yamlMapper.factory.createParser(yamlText).use { parser ->
         val parsed = yamlMapper.readTree<JsonNode>(parser)
-        require(parser.nextToken() == null) { "YAML contains trailing content or multiple documents." }
+        if (parser.nextToken() != null) {
+          throw invalidDecompositionManifestSchema(
+            sourceLabel = sourceLabel,
+            reason = "YAML is malformed: YAML contains trailing content or multiple documents.",
+            code = DecompositionManifestValidationFailureCode.MALFORMED,
+          )
+        }
         parsed
       }
     } catch (error: CancellationException) {
@@ -137,13 +143,6 @@ class DecompositionManifestSchemaValidator : DecompositionManifestValidator {
         code = DecompositionManifestValidationFailureCode.MALFORMED,
         cause = error,
       )
-    } catch (error: IllegalArgumentException) {
-      throw invalidDecompositionManifestSchema(
-        sourceLabel = sourceLabel,
-        reason = "YAML is malformed: ${error.message.orEmpty()}",
-        code = DecompositionManifestValidationFailureCode.MALFORMED,
-        cause = error,
-      )
     }
 
   private fun yamlObjectNodeToMap(
@@ -151,8 +150,8 @@ class DecompositionManifestSchemaValidator : DecompositionManifestValidator {
     sourceLabel: String,
   ): Map<String, Any?> =
     try {
-      ClasspathContractSchemaLoader.sharedObjectMapper().convertValue(node, mapType)
-    } catch (error: IllegalArgumentException) {
+      ClasspathContractSchemaLoader.sharedObjectMapper().readerFor(mapType).readValue(node)
+    } catch (error: JsonProcessingException) {
       throw invalidDecompositionManifestSchema(
         sourceLabel = sourceLabel,
         reason = "YAML root object cannot be converted to a string-keyed map: ${error.message.orEmpty()}",
