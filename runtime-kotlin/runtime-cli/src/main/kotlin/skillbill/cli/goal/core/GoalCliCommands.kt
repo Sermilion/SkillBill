@@ -11,6 +11,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
+import skillbill.application.config.ConfigResolutionService
 import skillbill.application.system.RuntimeProvenanceService
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.cli.goal.control.GoalAcceptCommand
@@ -48,6 +49,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
@@ -106,6 +108,7 @@ class GoalRunCommand(
   private val inputPreparation: GoalRunInputPreparation,
   private val telemetryService: TelemetryService,
   private val diagnostics: RuntimeDiagnostics,
+  private val configResolutionService: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
   private val hostPlatform: HostPlatformPort,
@@ -266,5 +269,7 @@ class GoalRunCommand(
       codeReviewMode = parseCodeReviewMode(codeReviewMode),
       agentAddonSelection = hydratedSelection,
       stopAfterSubtaskId = stopAfterSubtask,
+      modelAssignment =
+        FeatureTaskRuntimeModelAssignment(matrix = configResolutionService.resolveExecutionMatrix()),
     )
 }

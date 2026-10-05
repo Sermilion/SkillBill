@@ -884,7 +884,7 @@
             }
         },
         "feature_task_runtime_execution_plan": {
-            "contract_version": "0.1",
+            "contract_version": "0.2",
             "definition": {
                 "id": "goal-child",
                 "semantic_revision": 2
@@ -1163,6 +1163,7 @@
                     "strategy_id": "boundary-history"
                 }
             ],
+            "step_launch_assignments": [],
             "step_policies": [
                 {
                     "identity": "step-policy-v2:__NORMALIZED_SHA64__",

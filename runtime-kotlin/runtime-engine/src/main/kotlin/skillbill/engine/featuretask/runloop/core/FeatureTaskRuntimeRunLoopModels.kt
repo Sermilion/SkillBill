@@ -29,6 +29,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 
 internal data class RemediationCheckpointCommit(
   val commitSha: String,
@@ -283,6 +284,7 @@ internal data class PhaseRun(
   val request: FeatureTaskRuntimeRunFacts,
   val specSource: SpecSource,
   val policy: PhaseStepPolicy,
+  val launchAssignment: StepLaunchAssignment? = null,
   val reentry: PendingReentry? = null,
   val goalReviewInput: GoalSubtaskReviewInput? = null,
   val reviewTarget: ReviewTarget = ReviewTarget.LastCommit,

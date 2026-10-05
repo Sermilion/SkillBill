@@ -13,8 +13,10 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import java.time.Clock
 
 /**
@@ -62,6 +64,9 @@ internal interface PhaseRunState :
 
   val diagnostics: RuntimeDiagnostics
 
+  /** The private implementation checklist for this run, when the run entry supplied one. */
+  var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+
   /**
    * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails
    * with a typed error.
@@ -78,6 +83,8 @@ internal interface PhaseRunState :
 
   /** The steps of the definition no strategy selected for this run owns. */
   fun unselectedStepIds(): Set<String>
+
+  fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = null
 
   /** The state [run] reads and writes for one call of its step. */
   fun step(run: PhaseRun): PhaseAcceptedStepExecution

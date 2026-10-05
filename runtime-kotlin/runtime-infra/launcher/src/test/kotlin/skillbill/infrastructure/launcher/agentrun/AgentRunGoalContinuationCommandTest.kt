@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
@@ -211,6 +212,7 @@ class AgentRunGoalContinuationCommandTest {
       runner,
       ALL_EXECUTABLES_AVAILABLE,
       Path.of("/tmp/skillbill-agent-run/metrics.db"),
+      diagnostics = NoopRuntimeDiagnostics,
     )
 
   private fun goalContinuationContext(

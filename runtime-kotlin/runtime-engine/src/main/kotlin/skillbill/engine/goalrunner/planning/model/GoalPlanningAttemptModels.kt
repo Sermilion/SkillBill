@@ -16,6 +16,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal data class GoalPlanningAttemptScope(
@@ -31,6 +32,9 @@ internal data class GoalPlanningLaunch(
   val prompt: PhaseStepPromptSource,
   val policy: PhaseStepPolicy,
   val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+  val modelOverride: String? = null,
+  val effortOverride: String? = null,
+  val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
 )
 
 internal data class GoalPlanningPhaseContext(

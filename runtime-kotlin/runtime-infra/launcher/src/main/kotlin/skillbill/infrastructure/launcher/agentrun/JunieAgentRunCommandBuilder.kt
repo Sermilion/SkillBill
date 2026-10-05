@@ -18,6 +18,7 @@ internal class JunieAgentRunCommandBuilder(
 ) : AgentRunCommandBuilder {
   override val agent: SupportedAgent = SupportedAgent.JUNIE
   override val reviewIsolation: ReviewLaunchIsolationStrategy = ReviewLaunchIsolationStrategy.FRESH_PROCESS
+  override val outputDecoder: AgentRunOutputDecoder = AgentRunOutputDecoder.JUNIE_TEXT
 
   override fun build(request: SkillRunRequest): AgentRunCommand {
     requireProcessLaunch(request, reviewIsolation)

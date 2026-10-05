@@ -8,19 +8,29 @@ import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.lifecycle.execution.expectedFeatureTaskExecutionIdentity
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
+import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -32,6 +42,9 @@ class FeatureTaskRuntimeRunEntry(
   private val runInvariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   private val runner: FeatureTaskRuntimeRunner,
   private val repositories: RepositoryEnclosingRootPort,
+  private val strategies: PhaseStrategyLookup,
+  private val agentRunLauncher: AgentRunLauncher,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun run(
     input: FeatureTaskRuntimeRunInput,
@@ -59,6 +72,9 @@ class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution ->
+      if (input.explicitWorkflowId != null) {
+        warnIfResumeAssignmentDiffers(input, admittedExecution)
+      }
       val sourceInvariants = runInvariantsSource.read(specPath).requireInvariants()
       runner.run(
         FeatureTaskRuntimeRunRequest(
@@ -96,6 +112,12 @@ class FeatureTaskRuntimeRunEntry(
   ): String {
     val goalContinuation = input.goalContinuation
     val specPath = Path.of(input.specPath)
+    val definition = SkeletonDefinition.forRun(goalContinuation != null)
+    val reviewMode =
+      goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
+        ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
+    val qualityGate = goalContinuation?.qualityGateSelection
+    val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))
     val opened =
       workflowService.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
@@ -110,13 +132,23 @@ class FeatureTaskRuntimeRunEntry(
             executionPlans.resolveCreation(
               FeatureTaskRuntimeExecutionPlanCreationRequest(
                 repoRoot = input.repoRoot,
-                definition = SkeletonDefinition.forRun(goalContinuation != null),
-                reviewMode =
-                  goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
-                    ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode,
-                qualityGate = goalContinuation?.qualityGateSelection,
+                definition = definition,
+                reviewMode = reviewMode,
+                qualityGate = qualityGate,
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
+                stepLaunchAssignments =
+                  FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+                    launcher = agentRunLauncher,
+                    lookup = strategies,
+                    facts = facts,
+                    inputs =
+                      StepLaunchAssignmentInputs(
+                        invokedAgentId = input.invokedAgentId,
+                        agentAssignment = input.agentAssignment,
+                        modelAssignment = input.modelAssignment,
+                      ),
+                  ),
               ),
             ),
         ),
@@ -126,6 +158,47 @@ class FeatureTaskRuntimeRunEntry(
       is WorkflowOpenResult.Error -> onOpenFailure(opened)
     }
   }
+
+  private fun warnIfResumeAssignmentDiffers(
+    input: FeatureTaskRuntimeRunInput,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+  ) {
+    val goalContinuation = input.goalContinuation
+    val definition = SkeletonDefinition.forRun(goalContinuation != null)
+    val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
+    val qualityGate = goalContinuation?.qualityGateSelection
+    val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))
+    val resolved =
+      FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+        launcher = agentRunLauncher,
+        lookup = strategies,
+        facts = facts,
+        inputs =
+          StepLaunchAssignmentInputs(
+            invokedAgentId = input.invokedAgentId,
+            agentAssignment = input.agentAssignment,
+            modelAssignment = input.modelAssignment,
+            environmentKind =
+              when (admittedExecution.identity.routeScope) {
+                FeatureTaskRouteScope.GOAL_CHILD -> LaunchEnvironmentKind.GOVERNED_CHILD
+                FeatureTaskRouteScope.STANDALONE -> LaunchEnvironmentKind.INHERITED
+              },
+          ),
+      )
+    val expected = boundedAssignmentIdentity(admittedExecution.plan.stepLaunchAssignments)
+    val current = boundedAssignmentIdentity(resolved)
+    if (expected != current) {
+      diagnostics.warning(
+        "seam=execution_plan_resume value_expected=$expected value_used=$expected current=$current",
+      )
+    }
+  }
+
+  private fun boundedAssignmentIdentity(assignments: Map<String, StepLaunchAssignment>): String =
+    assignments.entries.sortedBy { it.key }.joinToString(";") { (stepId, assignment) ->
+      val model = assignment.launch.effectiveModel?.let(::boundedSafeModelIdentity) ?: "none"
+      "$stepId=$model/${assignment.profile.wireValue}"
+    }.ifBlank { "none" }
 
   private fun routeScope(goalChild: Boolean): FeatureTaskRouteScope =
     if (goalChild) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE

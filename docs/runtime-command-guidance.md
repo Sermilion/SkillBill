@@ -39,6 +39,16 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## Model selection at launch
+
+Resume uses the recorded per-step assignment. A later alias, remap, or default
+does not reselect an accepted attempt. Alias `opus` qualifies only when the
+inherited process environment pins `ANTHROPIC_DEFAULT_OPUS_MODEL` to
+`claude-opus-5-5` or `anthropic.claude-opus-5-5`. `commit_push` stays the
+runtime commit strategy and launches no agent. Details:
+[Authoring model-specific phase strategies](model-specific-phase-strategies.md).
+
+
 ## Phase and operation concepts
 
 An existing `spec.md` without a manifest is preparation intake. The full run reads its requirements and writes the manifest and executable subtask specs in the same folder, preserving the parent file and design assets. File paths, folder paths, bundle keys, and issue keys resolve to that existing bundle. Preparation uses the current branch as its base. Unrelated manifest bundles do not participate in its nested-decomposition check.

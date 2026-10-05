@@ -3,22 +3,36 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
+import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
+import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -53,36 +67,55 @@ fun testPhaseStrategies(
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
+  val prCanonical =
+    PrDescriptionStrategy(
+      pullRequestIdentityLookup,
+      PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
+      LocalPullRequestTemplateFiles,
+    )
+  val prOpus = PrDescriptionOpus55Strategy(prCanonical)
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
+        PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
+        PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
         PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner), codeReviewRunner),
+        PhaseStrategyRegistration(InlineReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
         PhaseStrategyRegistration(InlineStandaloneReviewStrategy(codeReviewRunner), codeReviewRunner),
+        PhaseStrategyRegistration(InlineStandaloneReviewOpus55Strategy(codeReviewRunner), codeReviewRunner),
         delegatedReviewRunner?.let {
           val delegatedRunner = runner()
           PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)
         },
         delegatedReviewRunner?.let {
           val delegatedRunner = runner()
+          PhaseStrategyRegistration(DelegatedStandaloneReviewOpus55Strategy(delegatedRunner, it), delegatedRunner)
+        },
+        delegatedReviewRunner?.let {
+          val delegatedRunner = runner()
           PhaseStrategyRegistration(DelegatedReviewStrategy(delegatedRunner, it), delegatedRunner)
         },
+        delegatedReviewRunner?.let {
+          val delegatedRunner = runner()
+          PhaseStrategyRegistration(DelegatedReviewOpus55Strategy(delegatedRunner, it), delegatedRunner)
+        },
         PhaseStrategyRegistration(PackBuildStrategy(), runner()),
+        PhaseStrategyRegistration(PackBuildOpus55Strategy(), runner()),
         PhaseStrategyRegistration(PackValidationStrategy(), runner()),
+        PhaseStrategyRegistration(PackValidationOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
+        PhaseStrategyRegistration(AgentValidateOpus55Strategy(), runner()),
         PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
+        PhaseStrategyRegistration(BoundaryHistoryOpus55Strategy(), runner()),
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
-        PhaseStrategyRegistration(
-          PrDescriptionStrategy(
-            pullRequestIdentityLookup,
-            PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
-            LocalPullRequestTemplateFiles,
-          ),
-          runner(),
-        ),
+        PhaseStrategyRegistration(prCanonical, runner()),
+        PhaseStrategyRegistration(prOpus, runner()),
       ),
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
@@ -96,20 +129,26 @@ fun goalPlanningPhaseStrategies(
   planFanOutCap: Int,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, NoopWorkflowGitOperations) }
+  val fanOut = GoalPlanFanOutStrategy(fanOutPort, planFanOutCap)
   val registry =
     PhaseStrategyRegistry(
       listOf(
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(GoalPlanFanOutStrategy(fanOutPort, planFanOutCap), runner()),
+        PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
+        PhaseStrategyRegistration(fanOut, runner()),
+        PhaseStrategyRegistration(GoalPlanFanOutOpus55Strategy(fanOut), runner()),
       ),
     )
   val bindings =
     mapOf(
       SkeletonDefinition.GOAL_PLANNING to
         mapOf(
-          PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
-          PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID),
+          PhaseSlot.PREPLAN to
+            PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
+          PhaseSlot.PLAN to
+            PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID).withOpus(GoalPlanFanOutOpus55Strategy.ID),
         ),
     )
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
@@ -150,23 +189,47 @@ object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
 fun testPhaseStrategyBindings(
   codeReviewStrategyId: String = InlineReviewStrategy.ID,
 ): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {
+  val codeReviewOpusId =
+    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
+      DelegatedReviewOpus55Strategy.ID
+    } else {
+      InlineReviewOpus55Strategy.ID
+    }
+  val standaloneDelegatedId =
+    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
+      DelegatedStandaloneReviewStrategy.ID
+    } else {
+      codeReviewStrategyId
+    }
+  val standaloneDelegatedOpusId =
+    if (codeReviewStrategyId == DelegatedReviewStrategy.ID) {
+      DelegatedStandaloneReviewOpus55Strategy.ID
+    } else {
+      InlineStandaloneReviewOpus55Strategy.ID
+    }
   val shared =
     mapOf(
-      PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
-      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID),
-      PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID),
-      PhaseSlot.AUDIT to PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID),
+      PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
+      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID).withOpus(AgentPlanOpus55Strategy.ID),
+      PhaseSlot.IMPLEMENTATION to
+        PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID).withOpus(ImplementThenSimplifyOpus55Strategy.ID),
+      PhaseSlot.AUDIT to
+        PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID).withOpus(AcceptanceAuditOpus55Strategy.ID),
       PhaseSlot.CODE_REVIEW to
-        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { codeReviewStrategyId }),
-      PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID),
+        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { codeReviewStrategyId })
+          .withOpus(codeReviewOpusId),
+      PhaseSlot.WRITE_HISTORY to
+        PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID).withOpus(BoundaryHistoryOpus55Strategy.ID),
       PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
     )
   return mapOf(
     SkeletonDefinition.STANDALONE to
       shared +
       mapOf(
-        PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID),
-        PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID),
+        PhaseSlot.QUALITY_GATE to
+          PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
+        PhaseSlot.PULL_REQUEST to
+          PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
       ),
     SkeletonDefinition.GOAL_CHILD to
       shared +
@@ -177,19 +240,42 @@ fun testPhaseStrategyBindings(
               FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
               FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
             ),
+          ).withOpus(
+            mapOf(
+              PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
+              AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
+            ),
           ),
       ),
     SkeletonDefinition.REVIEW to
       mapOf(
         PhaseSlot.STANDALONE_REVIEW to
-          PhaseStrategyBinding.ByFact(
-            CodeReviewExecutionMode.entries.associateWith { mode ->
-              if (mode == CodeReviewExecutionMode.DELEGATED) codeReviewStrategyId else InlineReviewStrategy.ID
-            },
-          ),
+          reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
       ),
     SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
     SkeletonDefinition.PLAN to shared.filterKeys { slot -> slot == PhaseSlot.PREPLAN || slot == PhaseSlot.PLAN },
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
   )
+}
+
+private fun reviewStandaloneBinding(
+  delegatedId: String,
+  delegatedOpusId: String,
+): PhaseStrategyBinding {
+  val facts =
+    PhaseStrategyBinding.ByFact(
+      CodeReviewExecutionMode.entries.associateWith { mode ->
+        if (mode == CodeReviewExecutionMode.DELEGATED) delegatedId else InlineStandaloneReviewStrategy.ID
+      },
+    )
+  return if (delegatedId == InlineStandaloneReviewStrategy.ID) {
+    facts.withOpus(InlineStandaloneReviewOpus55Strategy.ID)
+  } else {
+    facts.withOpus(
+      mapOf(
+        InlineStandaloneReviewStrategy.ID to InlineStandaloneReviewOpus55Strategy.ID,
+        delegatedId to delegatedOpusId,
+      ),
+    )
+  }
 }

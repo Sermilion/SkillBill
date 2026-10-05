@@ -23,7 +23,7 @@ required:
   - effective_policies
 properties:
   contract_version:
-    const: "0.1"
+    const: "0.2"
   definition:
     $ref: "#/$defs/definition"
   selected_strategies:
@@ -59,6 +59,11 @@ properties:
     maxItems: 256
     items:
       $ref: "#/$defs/effective_policy"
+  step_launch_assignments:
+    type: array
+    maxItems: 128
+    items:
+      $ref: "#/$defs/step_launch_assignment"
   effective_policy_settings:
     description: Execution settings needed to re-evaluate effective policy during crash recovery.
     type: object
@@ -234,6 +239,43 @@ $defs:
           SHA-256 of the UTF-8 JSON string encoding of identity. The resolved-plan
           codec verifies the digest before reconstructing policy references.
         $ref: "#/$defs/digest"
+  step_launch_assignment:
+    type: object
+    additionalProperties: false
+    required:
+      - step_id
+      - agent_id
+      - provider_namespace
+      - provenance
+      - profile
+    properties:
+      step_id:
+        $ref: "#/$defs/identifier"
+      agent_id:
+        $ref: "#/$defs/identifier"
+      requested_model:
+        type: ["string", "null"]
+        minLength: 1
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._:/@=\\[\\]-]{1,128}$"
+      requested_effort:
+        type: ["string", "null"]
+        minLength: 1
+        maxLength: 128
+      effective_model:
+        type: ["string", "null"]
+        minLength: 1
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._:/@=\\[\\]-]{1,128}$"
+      provider_namespace:
+        enum: [anthropic_api, google, claude_platform_aws, bedrock, opaque]
+      provenance:
+        enum: [requested_exact, provider_remapped, alias_pinned_by_environment, unresolved]
+      unknown_reason:
+        type: ["string", "null"]
+        enum: [flag_free_default, unpinned_alias, opaque_provider, environment_not_inherited, unsupported_agent, null]
+      profile:
+        enum: [canonical, opus-5-5]
 x-coherence-checks:
   - name: encoded_byte_limit
     description: The UTF-8 encoded artifact must not exceed 65536 bytes before parsing or writing.
@@ -251,3 +293,9 @@ x-coherence-checks:
     description: Strategy entries, dispatch owners, policies, and traversal references resolve to selected steps.
   - name: semantic_comparison
     description: Object key order and nonsemantic metadata do not affect comparison; ordered steps, traversal, and command argv do.
+  - name: step_launch_assignment_limits
+    description: >-
+      At most 128 step launch assignments may be represented. Each step_id exists in the
+      traversal, assignments are unique, profile equals the classifier result for
+      (provider_namespace, effective_model), and a slot strategy is an Opus variant if and
+      only if at least one participating step is opus-5-5.

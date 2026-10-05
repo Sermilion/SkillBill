@@ -136,6 +136,9 @@ scope and safety basis, the actual outcome or nonexecution reason, remaining fin
 for deferred work. No raw transcripts or diff hunks. If evidence cannot fit, state the limitation explicitly.
 tests_executed stays empty.
 
+## Runtime-private checklist
+Read `.skill-bill/feature-task-tracking/wftr-20260602-test-0001/checklist.md` and reconcile ticks with remaining work. Do not treat ticks as completion.
+
 # Feature-task-runtime phase briefing
 phase: simplify
 

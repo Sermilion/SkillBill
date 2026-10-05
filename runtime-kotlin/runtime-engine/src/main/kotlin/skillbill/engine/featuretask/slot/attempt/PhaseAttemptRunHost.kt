@@ -45,6 +45,7 @@ import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCo
 import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -139,6 +140,9 @@ internal class PhaseAttemptRunHost(
 
   val diagnostics: RuntimeDiagnostics
     get() = backingRunState.diagnostics
+
+  val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+    get() = backingRunState.implementationChecklistStore
 
   fun selectedOwnerOf(stepId: String): PhaseStrategy? = backingRunState.selectedOwnerOf(stepId)
 

@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.slot.PhaseExecutionPlanMapping
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AuditPlanningExecutionPlanMapping {
@@ -79,20 +80,21 @@ internal object AuditPlanningExecutionPlanMapping {
       (current.dispatchStrategyByStep - omitted).mapValues { (_, owner) ->
         if (owner.slot == PhaseSlot.AUDIT) owner.copy(semanticRevision = revision) else owner
       },
-      (current.stepPolicyIdentities - omitted).mapValues { (step, identity) ->
-        if (step in auditSteps) {
-          audit.policyFor(
-            step,
-          ).semanticIdentity(audit.strategyId, revision, step)
-        } else {
-          identity
-        }
-      },
-      (current.resumeInterpretationIdentities - omitted).mapValues { (step, identity) ->
-        if (step in auditSteps) "${audit.strategyId}/$revision:$step" else identity
-      },
+      ResolvedPhaseStepRecords(
+        (current.stepPolicyIdentities - omitted).mapValues { (step, identity) ->
+          if (step in auditSteps) {
+            audit.policyFor(step).semanticIdentity(audit.strategyId, revision, step)
+          } else {
+            identity
+          }
+        },
+        (current.resumeInterpretationIdentities - omitted).mapValues { (step, identity) ->
+          if (step in auditSteps) "${audit.strategyId}/$revision:$step" else identity
+        },
+      ),
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
+      recorded.contractVersion,
     )
   }
 
@@ -108,8 +110,10 @@ internal object AuditPlanningExecutionPlanMapping {
       current.qualityGateSelection,
       current.traversal,
       current.dispatchStrategyByStep,
-      current.stepPolicyIdentities,
-      current.resumeInterpretationIdentities,
+      ResolvedPhaseStepRecords(
+        current.stepPolicyIdentities,
+        current.resumeInterpretationIdentities,
+      ),
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
     )

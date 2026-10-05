@@ -4,7 +4,12 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
@@ -28,6 +33,7 @@ import skillbill.engine.goalrunner.status.supervisionEvent
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -44,6 +50,8 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
@@ -59,6 +67,8 @@ class GoalRunnerSubtaskLaunchPrepare(
   private val clock: Clock,
   private val random: Random,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
+  private val strategies: PhaseStrategyLookup,
+  private val agentRunLauncher: AgentRunLauncher,
 ) {
   fun goalReviewBaseline(
     state: GoalRunnerManifestState,
@@ -191,18 +201,9 @@ class GoalRunnerSubtaskLaunchPrepare(
       requireNotNull(state.manifest.subtasks.firstOrNull { it.id == subtaskId }) {
         "Goal subtask '$subtaskId' is missing from the decomposition manifest."
       }
-    val executionPlan =
-      executionPlans.resolveCreation(
-        FeatureTaskRuntimeExecutionPlanCreationRequest(
-          repoRoot = request.repoRoot,
-          definition = SkeletonDefinition.GOAL_CHILD,
-          reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
-          qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
-          validationDepth = ValidationDepth.FULL,
-          timeout = request.timeout,
-          workflowId = priorWorkflowId,
-        ),
-      )
+    val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
+    val qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId)
+    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
@@ -301,6 +302,40 @@ class GoalRunnerSubtaskLaunchPrepare(
       blockedBranchSetupIteration(state, subtaskId, error, request)
     }
   }
+
+  private fun childExecutionPlan(
+    request: GoalRunnerRunRequest,
+    reviewMode: CodeReviewExecutionMode,
+    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+    priorWorkflowId: String?,
+  ) = executionPlans.resolveCreation(
+    FeatureTaskRuntimeExecutionPlanCreationRequest(
+      repoRoot = request.repoRoot,
+      definition = SkeletonDefinition.GOAL_CHILD,
+      reviewMode = reviewMode,
+      qualityGate = qualityGate,
+      validationDepth = ValidationDepth.FULL,
+      timeout = request.timeout,
+      workflowId = priorWorkflowId,
+      stepLaunchAssignments =
+        FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+          launcher = agentRunLauncher,
+          lookup = strategies,
+          facts =
+            PhaseStrategySelectionFacts(
+              SkeletonDefinition.GOAL_CHILD,
+              setOfNotNull(reviewMode, qualityGate),
+            ),
+          inputs =
+            StepLaunchAssignmentInputs(
+              invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+              agentAssignment = FeatureTaskRuntimeAgentAssignment(),
+              modelAssignment = request.modelAssignment,
+              environmentKind = LaunchEnvironmentKind.GOVERNED_CHILD,
+            ),
+        ),
+    ),
+  )
 
   private fun blockedBranchSetupIteration(
     state: GoalRunnerManifestState,

@@ -666,6 +666,7 @@ object PrincipleEnforcementInventory {
 
   val runtimeComponentInboundApi: List<String> =
     listOf(
+      "agentRunLauncher",
       "agentRunService",
       "configResolutionService",
       "externalAddonOverlayService",
@@ -695,6 +696,7 @@ object PrincipleEnforcementInventory {
       "operationExecutor",
       "operationRegistry",
       "phaseRunEntry",
+      "phaseStrategyLookup",
       "repoValidationGateway",
       "repositoryEnclosingRootPort",
       "resolvedEnvironmentContext",

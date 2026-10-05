@@ -181,6 +181,11 @@ governedResources {
     "SKILL-384: canonical execution-plan schema",
   )
   copy(
+    "copyFeatureTaskRuntimeExecutionPlanSchemaV01",
+    "feature-task-runtime-execution-plan-0.1.yaml",
+    "SKILL-403: historical execution-plan schema for admitted 0.1 plans",
+  )
+  copy(
     "copyFeatureTaskRuntimePhaseOutputSchema",
     "feature-task-runtime-phase-output-schema.yaml",
     "SKILL-380: canonical current phase-output schema",

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.agentrun
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessEnvironmentFields
 import skillbill.infrastructure.launcher.process.launch.AgentRunProcessLaunchFields
@@ -19,7 +20,12 @@ import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.agentrun.model.MAX_REPORTED_LAUNCH_IDENTITIES
+import skillbill.ports.agentrun.model.ReportedLaunchIdentity
+import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import java.nio.file.Path
 
 internal sealed interface LauncherResolution {
@@ -33,6 +39,7 @@ internal class ProcessAgentRunAdapter(
   private val commandBuilder: AgentRunCommandBuilder,
   private val processRunner: AgentRunProcessRunner,
   private val executableLookup: ExecutableLookup = PathExecutableLookup(),
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
     val built = commandBuilder.build(request)
@@ -70,6 +77,7 @@ internal class ProcessAgentRunAdapter(
       } else {
         normalizedStdout.encodeToByteArray()
       }
+    recordReportedLaunchIdentity(request, decoded.reportedIdentity)
     return AgentRunLaunchFacts(
       agent = agent,
       termination = result.termination(),
@@ -85,6 +93,7 @@ internal class ProcessAgentRunAdapter(
       childSessionId = childSessionId(agent, request, command.workingDirectory),
       assistantEventCount = decoded.assistantEventCount,
       rawOutputPreview = decoded.rawOutputPreview,
+      reportedIdentity = decoded.reportedIdentity,
     )
   }
 
@@ -172,6 +181,33 @@ internal class ProcessAgentRunAdapter(
       ),
   )
 
+  private fun recordReportedLaunchIdentity(
+    request: SkillRunRequest,
+    reportedIdentity: ReportedLaunchIdentity,
+  ) {
+    when (reportedIdentity) {
+      is ReportedLaunchIdentity.Unavailable -> {
+        if (reportedIdentity.reason == ReportedLaunchIdentityReason.MALFORMED) {
+          diagnostics.warning(
+            "seam=reported_launch_identity value_expected=object value_used=malformed",
+          )
+        }
+      }
+      is ReportedLaunchIdentity.Reported -> {
+        val expected = request.modelOverride
+        val identities = reportedIdentity.identities
+        if (expected != null && identities.size == 1 && identities.single() == expected) return
+        diagnostics.warning(
+          "seam=reported_launch_identity value_expected=${
+            expected?.let(::boundedSafeModelIdentity) ?: "none"
+          } value_used=${
+            identities.map(::boundedSafeModelIdentity).sorted().joinToString(",")
+          }",
+        )
+      }
+    }
+  }
+
   private fun childSessionId(
     agent: SupportedAgent,
     request: SkillRunRequest,
@@ -205,6 +241,8 @@ data class DecodedAgentRunOutput(
   val text: String,
   val assistantEventCount: Int? = null,
   val rawOutputPreview: String? = null,
+  val reportedIdentity: ReportedLaunchIdentity =
+    ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED),
 )
 
 interface AgentRunOutputDecoder {
@@ -220,6 +258,13 @@ interface AgentRunOutputDecoder {
 
   companion object {
     val PLAIN = decoder { DecodedAgentRunOutput(it) }
+    val JUNIE_TEXT =
+      decoder { stdout ->
+        DecodedAgentRunOutput(
+          text = stdout,
+          reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
+        )
+      }
     val CLAUDE_JSON = decoder { stdout -> decodeClaudeJson(stdout) }
     val CLAUDE_STREAM_JSON = decoder { stdout -> decodeClaudeStreamJson(stdout) }
     val CODEX_JSONL = decoder { stdout -> decodeCodexJsonl(stdout) }
@@ -244,6 +289,7 @@ private fun decodeClaudeJson(stdout: String): DecodedAgentRunOutput =
     val root = structuredOutputMapper.readTree(stdout.trim())
     DecodedAgentRunOutput(
       text = root.path("result").takeIf { it.isTextual }?.asText().orEmpty(),
+      reportedIdentity = reportedClaudeIdentity(root.path("modelUsage")),
     )
   }.getOrElse { DecodedAgentRunOutput(stdout) }
 
@@ -263,7 +309,28 @@ private fun decodeClaudeStreamJson(stdout: String): DecodedAgentRunOutput {
       )
   return DecodedAgentRunOutput(
     text = terminal.path("result").takeIf { it.isTextual }?.asText().orEmpty(),
+    reportedIdentity = reportedClaudeIdentity(terminal.path("modelUsage")),
   )
+}
+
+private fun reportedClaudeIdentity(modelUsage: JsonNode): ReportedLaunchIdentity {
+  if (modelUsage.isMissingNode || modelUsage.isNull) {
+    return ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED)
+  }
+  if (!modelUsage.isObject) {
+    return ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.MALFORMED)
+  }
+  val identities =
+    modelUsage.fieldNames().asSequence()
+      .map(String::trim)
+      .filter(String::isNotEmpty)
+      .take(MAX_REPORTED_LAUNCH_IDENTITIES)
+      .toSet()
+  if (identities.isEmpty()) {
+    return ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED)
+  }
+  return runCatching { ReportedLaunchIdentity.Reported(identities) }
+    .getOrElse { ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.MALFORMED) }
 }
 
 private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
@@ -278,6 +345,7 @@ private fun decodeCodexJsonl(stdout: String): DecodedAgentRunOutput {
   }
   return DecodedAgentRunOutput(
     text = text ?: if (decodedEnvelope) "" else stdout,
+    reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
   )
 }
 
@@ -287,9 +355,11 @@ internal fun headlessAgentRunAdapters(
   processRunner: AgentRunProcessRunner,
   executableLookup: ExecutableLookup = PathExecutableLookup(),
   databasePath: Path? = null,
+  providerEnvironment: Map<String, String> = emptyMap(),
+  diagnostics: RuntimeDiagnostics,
 ): Map<SupportedAgent, ProcessAgentRunAdapter> =
   listOf(
-    ClaudeAgentRunCommandBuilder(databasePath = databasePath),
+    ClaudeAgentRunCommandBuilder(providerEnvironment = providerEnvironment, databasePath = databasePath),
     CodexAgentRunCommandBuilder(databasePath = databasePath),
     JunieAgentRunCommandBuilder(databasePath = databasePath),
     CursorAgentRunCommandBuilder(databasePath = databasePath),
@@ -300,5 +370,6 @@ internal fun headlessAgentRunAdapters(
         commandBuilder = builder,
         processRunner = processRunner,
         executableLookup = executableLookup,
+        diagnostics = diagnostics,
       )
   }

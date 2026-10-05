@@ -17,24 +17,38 @@ import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrai
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
+import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
+import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
+import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -88,13 +102,20 @@ class PhaseStrategyCompositionTest {
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
+    val fanOut = GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
     return PhaseStrategyRegistry(
       (
         strategies +
           listOf(
             DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
+            DelegatedReviewOpus55Strategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
             DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-            GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
+            DelegatedStandaloneReviewOpus55Strategy(
+              runner,
+              scriptedDelegatedReviewRunner(database, home, LaneScript()),
+            ),
+            fanOut,
+            GoalPlanFanOutOpus55Strategy(fanOut),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
     )
@@ -108,24 +129,38 @@ class PhaseStrategyCompositionTest {
       ): PhaseStepOutput = error("Policy lookups must not launch a step.")
     }
 
+  private val prDescriptionStrategy =
+    PrDescriptionStrategy(
+      UnavailablePullRequestIdentityLookup,
+      PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
+      LocalPullRequestTemplateFiles,
+    )
+
   private val strategies =
     listOf(
       AgentPreplanStrategy(),
+      AgentPreplanOpus55Strategy(),
       AgentPlanStrategy(),
+      AgentPlanOpus55Strategy(),
       ImplementThenSimplifyStrategy(),
+      ImplementThenSimplifyOpus55Strategy(),
       AcceptanceAuditStrategy(),
+      AcceptanceAuditOpus55Strategy(),
       InlineReviewStrategy(runner),
+      InlineReviewOpus55Strategy(runner),
       InlineStandaloneReviewStrategy(runner),
+      InlineStandaloneReviewOpus55Strategy(runner),
       PackBuildStrategy(),
+      PackBuildOpus55Strategy(),
       PackValidationStrategy(),
+      PackValidationOpus55Strategy(),
       AgentValidateStrategy(),
+      AgentValidateOpus55Strategy(),
       BoundaryHistoryStrategy(),
+      BoundaryHistoryOpus55Strategy(),
       RuntimeCommitStrategy(),
-      PrDescriptionStrategy(
-        UnavailablePullRequestIdentityLookup,
-        PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
-        LocalPullRequestTemplateFiles,
-      ),
+      prDescriptionStrategy,
+      PrDescriptionOpus55Strategy(prDescriptionStrategy),
     )
 
   @Test

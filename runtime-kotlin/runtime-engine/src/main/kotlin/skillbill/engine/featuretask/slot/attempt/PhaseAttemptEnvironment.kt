@@ -36,6 +36,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -256,6 +257,8 @@ internal interface PhaseAttemptLaunchPreparationContext :
   fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField>
 
   fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget?
+
+  val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
 }
 
 /** Run-loop and attempt helpers that resolve strategies for arbitrary selected steps. */
@@ -304,6 +307,9 @@ internal open class PhaseAttemptSettlementScope(
 
   override val diagnostics: RuntimeDiagnostics
     get() = boundHost.diagnostics
+
+  val implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+    get() = boundHost.implementationChecklistStore
 
   override val progress: FeatureTaskRuntimeProgressSnapshotAccess
     get() = boundHost.progress

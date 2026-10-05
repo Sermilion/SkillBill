@@ -1,5 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.operation.core.ConfirmableOperation
@@ -28,7 +29,16 @@ class PrReviewFixOperation(
   private val reviewThreads: PullRequestReviewThreadOperations,
   private val gitOperations: WorkflowGitOperations,
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
+  private val modelAssignmentSource: () -> FeatureTaskRuntimeModelAssignment,
 ) : ConfirmableOperation {
+  constructor(
+    reviewThreads: PullRequestReviewThreadOperations,
+    gitOperations: WorkflowGitOperations,
+    runPhase: (PhaseRunRequest) -> PhaseRunResult,
+    modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  ) : this(reviewThreads, gitOperations, runPhase, { modelAssignment })
+
+  private val modelAssignment: FeatureTaskRuntimeModelAssignment by lazy(modelAssignmentSource)
   override val id: String = "pr-review-fix"
 
   override fun pre(context: OperationContext): OperationRefusal? = usageError(context.arguments, context.confirming)
@@ -159,6 +169,7 @@ class PrReviewFixOperation(
       reviewThreads = reviewThreads,
       gitOperations = gitOperations,
       runPhase = runPhase,
+      modelAssignment = modelAssignment,
     ).run()
   }
 

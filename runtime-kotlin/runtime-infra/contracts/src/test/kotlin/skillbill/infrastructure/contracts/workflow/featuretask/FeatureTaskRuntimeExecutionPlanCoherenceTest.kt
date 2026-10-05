@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -90,6 +92,42 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   fun `coherence accepts reachable loop only remediation and a single step definition`() {
     validate(descriptor())
     validate(descriptor(listOf("validate"), emptyList()))
+  }
+
+  @Test
+  fun `coherence refuses a profile that contradicts the classifier or an opus strategy without an opus step`() {
+    val contradicting = descriptor()
+    contradicting.putArray(Keys.STEP_LAUNCH_ASSIGNMENTS).addObject().apply {
+      put(Keys.STEP_ID, "implement")
+      put(Keys.AGENT_ID, "claude")
+      put(Keys.EFFECTIVE_MODEL, "claude-sonnet-4-5")
+      put(Keys.PROVIDER_NAMESPACE, "anthropic_api")
+      put(Keys.PROVENANCE, "requested_exact")
+      put(Keys.PROFILE, "opus-5-5")
+    }
+    val profileError =
+      assertFailsWith<SkillBillRuntimeException> { validate(contradicting) }
+    assertEquals(FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS, profileError.code)
+
+    val unmatched = descriptor()
+    unmatched.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "implementation-opus-5-5")
+    unmatched.rows(Keys.DISPATCH_OWNERSHIP).forEach { node ->
+      val row = node as ObjectNode
+      if (row.path(Keys.SLOT).asText() == "implementation") {
+        row.put(Keys.STRATEGY_ID, "implementation-opus-5-5")
+      }
+    }
+    unmatched.putArray(Keys.STEP_LAUNCH_ASSIGNMENTS).addObject().apply {
+      put(Keys.STEP_ID, "implement")
+      put(Keys.AGENT_ID, "claude")
+      put(Keys.EFFECTIVE_MODEL, "claude-sonnet-4-5")
+      put(Keys.PROVIDER_NAMESPACE, "anthropic_api")
+      put(Keys.PROVENANCE, "requested_exact")
+      put(Keys.PROFILE, "canonical")
+    }
+    val unmatchedError =
+      assertFailsWith<SkillBillRuntimeException> { validate(unmatched) }
+    assertEquals(FeatureTaskRuntimeFailureCode.INCOHERENT_STEP_LAUNCH_ASSIGNMENTS, unmatchedError.code)
   }
 
   @Test

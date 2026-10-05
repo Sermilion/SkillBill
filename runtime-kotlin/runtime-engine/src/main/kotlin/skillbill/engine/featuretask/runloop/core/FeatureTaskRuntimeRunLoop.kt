@@ -31,6 +31,7 @@ import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCo
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -201,12 +202,14 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   private val diffResolver: DiffResolverPort,
+  private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
 ) {
   internal fun context(
     request: FeatureTaskRuntimeRunFacts,
     runState: PhaseRunState,
-  ): FeatureTaskRuntimeRunLoopContext =
-    FeatureTaskRuntimeRunLoopContext(
+  ): FeatureTaskRuntimeRunLoopContext {
+    runState.implementationChecklistStore = implementationChecklistStore
+    return FeatureTaskRuntimeRunLoopContext(
       request,
       runState,
       gitOperations,
@@ -219,6 +222,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
       sharedEvidenceResolver,
       diffResolver,
     )
+  }
 
   internal open fun run(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -302,4 +306,10 @@ class FeatureTaskRuntimeRunLoop internal constructor(
         )
       }
     }
+}
+
+internal fun PhaseRunState.retainingChecklistFrom(previous: PhaseRunState): PhaseRunState {
+  val store = previous.implementationChecklistStore ?: return this
+  if (implementationChecklistStore == null) implementationChecklistStore = store
+  return this
 }

@@ -6,21 +6,23 @@ import skillbill.infrastructure.launcher.review.CursorReviewStreamForbiddenOpera
 import skillbill.infrastructure.launcher.review.CursorReviewStreamMalformedError
 import skillbill.infrastructure.launcher.review.CursorReviewStreamProviderFailureError
 import skillbill.infrastructure.launcher.review.CursorReviewStreamTerminationError
+import skillbill.ports.agentrun.model.ReportedLaunchIdentity
+import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.review.parallel.ParallelReviewFindingParser
 
 internal fun decodeCursorStreamJson(stdout: String): DecodedAgentRunOutput {
   if (stdout.isBlank()) {
-    return DecodedAgentRunOutput("")
+    return cursorOutput("")
   }
   val lines = stdout.lineSequence().toList()
   if (lines.isEmpty()) {
-    return DecodedAgentRunOutput("")
+    return cursorOutput("")
   }
   val parsed = parseCursorStreamLines(lines)
   parsed.error?.let { throw it }
   val harvested = pickCursorHarvest(parsed.terminalText, parsed.lastAssistantText, parsed.longestAssistantText)
-  return DecodedAgentRunOutput(
-    text = harvested,
+  return cursorOutput(
+    harvested,
     assistantEventCount = parsed.assistantEventCount.takeIf { parsed.decodedEnvelope },
     rawOutputPreview = stdout.take(RAW_OUTPUT_PREVIEW_MAX_CHARS).takeIf { harvested.isBlank() },
   )
@@ -168,6 +170,18 @@ private fun cursorAssistantText(event: JsonNode): String? {
   return event.path("message").path("text").takeIf { it.isTextual }?.asText()?.takeIf(String::isNotBlank)
     ?: event.path("text").takeIf { it.isTextual }?.asText()?.takeIf(String::isNotBlank)
 }
+
+private fun cursorOutput(
+  text: String,
+  assistantEventCount: Int? = null,
+  rawOutputPreview: String? = null,
+): DecodedAgentRunOutput =
+  DecodedAgentRunOutput(
+    text = text,
+    assistantEventCount = assistantEventCount,
+    rawOutputPreview = rawOutputPreview,
+    reportedIdentity = ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
+  )
 
 private const val NO_FINDINGS_TOKEN = "NO_FINDINGS"
 private const val CURSOR_STREAM_MAX_TOTAL_BYTES = 10_000_000

@@ -20,8 +20,9 @@ object FeatureTaskRuntimeRunLoopLaunch {
   }
 
   internal fun launchedModelDirective(run: PhaseRun): LaunchedModelDirective {
-    val model = run.modelDirective?.model
-    val effort = run.modelDirective?.effort
+    val assignment = run.launchAssignment?.launch
+    val model = assignment?.effectiveModel ?: run.modelDirective?.model
+    val effort = assignment?.requestedEffort ?: run.modelDirective?.effort
     if (run.resolvedAgent.resolvedAgentId == SupportedAgent.CURSOR.id && model != null && effort != null) {
       return LaunchedModelDirective("$model[effort=$effort]", effort, persistedEffort = null)
     }

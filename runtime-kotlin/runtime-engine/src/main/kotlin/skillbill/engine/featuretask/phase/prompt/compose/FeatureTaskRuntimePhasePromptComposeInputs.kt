@@ -9,6 +9,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import java.nio.file.Path
 
 data class FeatureTaskRuntimePhasePromptComposeInputs(
@@ -41,4 +42,6 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val mutating: Boolean = false,
   val singleAgentSession: Boolean = false,
   val repoRoot: Path? = null,
+  val stepProfile: PhaseModelProfile = PhaseModelProfile.CANONICAL,
+  val implementationChecklistAddress: String? = null,
 )

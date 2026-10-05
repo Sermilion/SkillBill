@@ -17,6 +17,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.standaloneReportText
 import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -81,6 +82,8 @@ class PhaseCommand(
             codeReviewMode = invocation.mode?.let(RequestedReviewMode::parse),
             reviewInvocation = ReviewInvocation(target = invocation.target),
             specSource = specSource ?: SpecSource.LOCAL,
+            modelAssignment =
+              FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
           ),
         )
       } ?: return

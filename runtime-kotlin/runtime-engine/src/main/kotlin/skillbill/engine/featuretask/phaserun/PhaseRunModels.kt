@@ -30,6 +30,7 @@ data class PhaseRunRequest(
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val timeout: Duration? = null,
   val specSource: SpecSource = SpecSource.LOCAL,
+  val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -76,7 +77,7 @@ internal data class InMemoryPhaseRunFacts(
   override val specBundleRequired: Boolean = definition.slots.last() == PhaseSlot.PLAN
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
-  override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment()
+  override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment
   override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT
   override val environment: Map<String, String> = emptyMap()
   override val repoRoot: Path = request.repoRoot

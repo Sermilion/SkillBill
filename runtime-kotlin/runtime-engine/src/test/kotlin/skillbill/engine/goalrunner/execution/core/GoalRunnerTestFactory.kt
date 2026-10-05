@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
+import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
@@ -43,11 +44,16 @@ import skillbill.engine.goalrunner.planning.recovery.IDLE_GOAL_PLANNING_REFRESH_
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
 import skillbill.engine.goalrunner.planning.remedies.NO_GOAL_PLANNING_REJECTION_RECORDER
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningLaunchResolution
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
+import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -300,6 +306,8 @@ private fun testGoalRunnerLoopAssembler(
       wiring.clock,
       Random(GOAL_RUNNER_TEST_WORKFLOW_ID_SEED),
       executionPlans,
+      testPhaseStrategies(wiring.subtaskLauncher, wiring.gitOperations),
+      testAgentRunLauncher(),
     )
   val iterationOutcome =
     GoalRunnerIterationOutcome(
@@ -452,8 +460,12 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
     attemptGate = attemptGate,
     checkpoint = params.checkpoint,
     repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
-    phaseStrategies =
-      goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
+    launchResolution =
+      GoalPlanningLaunchResolution(
+        strategies =
+          goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
+        launcher = testAgentRunLauncher(),
+      ),
     clock = params.clock,
     diagnostics = NoopRuntimeDiagnostics,
     runLoopEntry = params.runLoopEntry,
@@ -528,3 +540,11 @@ private fun goalRunnerExecutionPlans(
   }
   return resolver to reconciler
 }
+
+private fun testAgentRunLauncher(): AgentRunLauncher =
+  object : AgentRunLauncher {
+    override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
+
+    override fun launch(request: AgentRunLaunchRequest) =
+      error("Goal runner tests must not launch through the assignment resolver.")
+  }

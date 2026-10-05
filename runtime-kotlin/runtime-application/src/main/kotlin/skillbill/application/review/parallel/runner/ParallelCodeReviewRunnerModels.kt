@@ -88,22 +88,28 @@ internal data class ParallelCodeReviewInitialRun(
   val appliedLearnings: String,
 )
 
-internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegatedStageLaunch =
-  ReviewDelegatedStageLaunch(
+internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegatedStageLaunch {
+  val addOnOrStandalone =
+    if (request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+      listOf(request.selectedAgentAddonsSection, STANDALONE_REPORT_ONLY_PROMPT_RULES)
+        .filter(String::isNotBlank)
+        .joinToString("\n\n")
+    } else {
+      request.selectedAgentAddonsSection
+    }
+  return ReviewDelegatedStageLaunch(
     budget = budget,
     brokerId = agent1Id,
     repoRoot = request.repoRoot,
     timeout = request.timeout,
+    modelOverride = request.modelOverride,
     promptSuffix =
-      if (request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
-        listOf(request.selectedAgentAddonsSection, STANDALONE_REPORT_ONLY_PROMPT_RULES)
-          .filter(String::isNotBlank)
-          .joinToString("\n\n")
-      } else {
-        request.selectedAgentAddonsSection
-      },
+      listOf(addOnOrStandalone, request.directiveSuffix)
+        .filter(String::isNotBlank)
+        .joinToString("\n\n"),
     laneProgressIdleTimeout = request.laneProgressIdleTimeout,
   )
+}
 
 private const val STANDALONE_REPORT_ONLY_PROMPT_RULES: String =
   "This review is report-only. Do not edit, stage, commit, amend, or reset files, " +

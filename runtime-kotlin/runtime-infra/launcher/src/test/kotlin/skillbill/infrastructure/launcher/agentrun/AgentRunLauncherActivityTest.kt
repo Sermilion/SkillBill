@@ -12,6 +12,7 @@ import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
@@ -255,7 +256,7 @@ class AgentRunLauncherActivityTest {
   @Test
   fun `launch facts expose provider-neutral child session path and id for codex and other builders`() {
     val runner = RecordingAgentRunProcessRunner()
-    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)
+    val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE, diagnostics = NoopRuntimeDiagnostics)
     listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
       val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")

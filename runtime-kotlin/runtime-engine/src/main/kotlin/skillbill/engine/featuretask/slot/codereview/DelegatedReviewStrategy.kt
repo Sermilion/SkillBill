@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
@@ -36,6 +37,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
@@ -182,6 +184,13 @@ internal class DelegatedReviewPass(
         specPath = reviewSpecPath(run),
         selectedAgentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
         laneProgressIdleTimeout = launch.progressIdleTimeout ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
+        modelOverride = run.launchAssignment?.launch?.effectiveModel,
+        directiveSuffix =
+          if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
+            DelegatedReviewOpus55Strategy.DIRECTIVE
+          } else {
+            ""
+          },
       )
   }
 }

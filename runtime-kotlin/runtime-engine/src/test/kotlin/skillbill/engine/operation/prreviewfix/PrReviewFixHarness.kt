@@ -67,14 +67,14 @@ internal class PrReviewFixHarness : AutoCloseable {
     OperationExecutor(
       OperationRegistry(
         listOf(
-          PrReviewFixOperation(github, git) { request ->
+          PrReviewFixOperation(github, git, runPhase = { request ->
             validations += request
             if (validationBlocks) {
               PhaseRunResult.Blocked("phr-validation", emptyList(), null, "validation", "check failed")
             } else {
               PhaseRunResult.Completed("phr-validation", listOf("validation"), null, "Validation verdict: pass")
             }
-          },
+          }),
         ),
       ),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),

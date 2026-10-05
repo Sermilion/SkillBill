@@ -8,8 +8,15 @@ import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.skills.install.mcp.McpConfigFormat
 import skillbill.install.model.MODEL_DIRECTIVE_CAPABLE_AGENTS
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
+import skillbill.ports.agentrun.model.ReportedLaunchIdentity
+import skillbill.ports.agentrun.model.ReportedLaunchIdentityReason
 import skillbill.ports.review.model.ReviewLaunchIsolationStrategy
 import skillbill.review.context.model.launch.ReviewConversationIsolation
+import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
+import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -83,6 +90,36 @@ class AgentRunCommandBuildersTest {
 
     assertEquals(fromBuffered.text, fromStream.text)
     assertEquals("PLAN-OK", fromStream.text)
+  }
+
+  @Test
+  fun `claude reports bounded modelUsage identities and keeps malformed evidence from blocking the result`() {
+    val twoModels =
+      AgentRunOutputDecoder.CLAUDE_JSON.decode(
+        """{"result":"ok","modelUsage":{"claude-opus-5-5":{},"claude-sonnet-4-5":{}}}""",
+      )
+    assertEquals("ok", twoModels.text)
+    assertEquals(
+      ReportedLaunchIdentity.Reported(setOf("claude-opus-5-5", "claude-sonnet-4-5")),
+      twoModels.reportedIdentity,
+    )
+    val missing =
+      AgentRunOutputDecoder.CLAUDE_JSON.decode("""{"result":"ok"}""")
+    assertEquals(
+      ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.NOT_REPORTED),
+      missing.reportedIdentity,
+    )
+    val malformed =
+      AgentRunOutputDecoder.CLAUDE_JSON.decode("""{"result":"kept","modelUsage":"not-an-object"}""")
+    assertEquals("kept", malformed.text)
+    assertEquals(
+      ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.MALFORMED),
+      malformed.reportedIdentity,
+    )
+    assertEquals(
+      ReportedLaunchIdentity.Unavailable(ReportedLaunchIdentityReason.UNSUPPORTED_AGENT),
+      AgentRunOutputDecoder.CODEX_JSONL.decode("""{"item":{"text":"finding"}}""").reportedIdentity,
+    )
   }
 
   @Test
@@ -199,19 +236,65 @@ class AgentRunCommandBuildersTest {
 
   @Test
   fun `claude directive naming an anthropic model falls back to the parent model on a non-anthropic endpoint`() {
-    val builder =
-      ClaudeAgentRunCommandBuilder(
-        mapOf(
-          "ANTHROPIC_BASE_URL" to "https://api.deepseek.com/anthropic",
-          "ANTHROPIC_MODEL" to "deepseek-v4-flash",
-        ),
+    val env =
+      mapOf(
+        "ANTHROPIC_BASE_URL" to "https://api.deepseek.com/anthropic",
+        "ANTHROPIC_MODEL" to "deepseek-v4-flash",
+      )
+    val resolved =
+      resolveAgentRunLaunchModel(
+        AgentRunLaunchModelRequest("claude", "claude-opus-5-5", "high", LaunchEnvironmentKind.INHERITED),
+        env,
       )
 
-    val command = builder.build(request(model = "claude-opus-5", effort = "high")).command
-
+    assertEquals("deepseek-v4-flash", resolved.effectiveModel)
+    assertEquals(PhaseModelProfile.CANONICAL, resolved.profile)
+    assertEquals(LaunchModelProvenance.PROVIDER_REMAPPED, resolved.provenance)
+    val command =
+      ClaudeAgentRunCommandBuilder(env)
+        .build(request(model = resolved.effectiveModel, effort = resolved.requestedEffort))
+        .command
     val modelIndex = command.indexOf("--model")
     assertTrue(modelIndex >= 0)
     assertEquals("deepseek-v4-flash", command[modelIndex + 1])
+    assertEquals("high", command[command.indexOf("--effort") + 1])
+
+    val lookalike =
+      resolveAgentRunLaunchModel(
+        AgentRunLaunchModelRequest("claude", "claude-opus-5-5", null, LaunchEnvironmentKind.INHERITED),
+        mapOf(
+          "ANTHROPIC_BASE_URL" to "https://notanthropic.com",
+          "ANTHROPIC_MODEL" to "deepseek-v4-flash",
+        ),
+      )
+    assertEquals("deepseek-v4-flash", lookalike.effectiveModel)
+    assertEquals(PhaseModelProfile.CANONICAL, lookalike.profile)
+  }
+
+  @Test
+  fun `a pinned opus alias resolves to the documented Opus identity and an unpinned alias stays unknown`() {
+    val pinned =
+      resolveAgentRunLaunchModel(
+        AgentRunLaunchModelRequest("claude", "opus", "high", LaunchEnvironmentKind.INHERITED),
+        mapOf(ANTHROPIC_DEFAULT_OPUS_MODEL to PhaseModelProfileClassifier.ANTHROPIC_OPUS_55),
+      )
+    assertEquals(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55, pinned.effectiveModel)
+    assertEquals(PhaseModelProfile.OPUS_5_5, pinned.profile)
+    assertEquals(LaunchModelProvenance.ALIAS_PINNED_BY_ENVIRONMENT, pinned.provenance)
+
+    val unpinned =
+      resolveAgentRunLaunchModel(
+        AgentRunLaunchModelRequest("claude", "opus", null, LaunchEnvironmentKind.INHERITED),
+        emptyMap(),
+      )
+    assertEquals(null, unpinned.effectiveModel)
+    assertEquals(PhaseModelProfile.CANONICAL, unpinned.profile)
+    val child =
+      resolveAgentRunLaunchModel(
+        AgentRunLaunchModelRequest("claude", "opus", null, LaunchEnvironmentKind.GOVERNED_CHILD),
+        mapOf(ANTHROPIC_DEFAULT_OPUS_MODEL to PhaseModelProfileClassifier.ANTHROPIC_OPUS_55),
+      )
+    assertEquals(PhaseModelProfile.CANONICAL, child.profile)
   }
 
   @Test

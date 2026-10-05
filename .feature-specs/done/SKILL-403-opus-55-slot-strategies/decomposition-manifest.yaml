@@ -3,22 +3,25 @@ contract_version: "0.5"
 issue_key: "SKILL-403"
 feature_name: "opus-55-slot-strategies"
 parent_spec_path: ".feature-specs/SKILL-403-opus-55-slot-strategies/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-403-opus-55-slot-strategies"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Automatic Opus 5.5 selection and directive delivery"
   spec_path: ".feature-specs/SKILL-403-opus-55-slot-strategies/spec_subtask_1_automatic_selection.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261005-121838-c53k"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []

@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -290,6 +291,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         repoLocalConfig(wrapper),
         database,
         execution.compatibility,
+        diagnostics = NoopRuntimeDiagnostics,
       )
 
     fun create() =

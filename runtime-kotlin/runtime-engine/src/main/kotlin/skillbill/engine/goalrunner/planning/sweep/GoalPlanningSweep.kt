@@ -2,6 +2,9 @@ package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
+import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
@@ -29,6 +32,7 @@ import skillbill.engine.goalrunner.planning.state.GoalPlanningRunFacts
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
@@ -46,6 +50,16 @@ fun interface GoalPlanningSweep {
 }
 
 @Inject
+class GoalPlanningLaunchResolution(
+  private val strategies: PhaseStrategyLookup,
+  private val launcher: AgentRunLauncher,
+) {
+  internal fun strategies(): PhaseStrategyLookup = strategies
+
+  internal fun launcher(): AgentRunLauncher = launcher
+}
+
+@Inject
 class DefaultGoalPlanningSweep(
   private val sharedPreplanProduction: GoalPlanningSharedPreplanProduction,
   private val sharedPreplanSettlement: GoalPlanningSharedPreplanSettlement,
@@ -53,7 +67,7 @@ class DefaultGoalPlanningSweep(
   private val attemptGate: GoalPlanningPhaseAttemptGate,
   private val checkpoint: GoalPlanningPreparationCheckpoint,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-  private val phaseStrategies: PhaseStrategyLookup,
+  private val launchResolution: GoalPlanningLaunchResolution,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
@@ -126,20 +140,36 @@ class DefaultGoalPlanningSweep(
       )
     val facts = GoalPlanningRunFacts(shared, request)
     val selection = strategySelectionFacts(facts)
-    val executionPlan = phaseStrategies.executionPlan(selection)
+    val executionPlan =
+      launchResolution.strategies().executionPlan(
+        selection.copy(
+          stepAssignments =
+            FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+              launcher = launchResolution.launcher(),
+              lookup = launchResolution.strategies(),
+              facts = selection,
+              inputs =
+                StepLaunchAssignmentInputs(
+                  invokedAgentId = request.invokedAgentId,
+                  agentAssignment = FeatureTaskRuntimeAgentAssignment(),
+                  modelAssignment = facts.modelAssignment,
+                ),
+            ),
+        ),
+      )
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = executionPlan.traversal,
-        stepVerdictRule = slotStepVerdictRule(phaseStrategies, executionPlan, diagnostics),
-        resumeRulesFn = phaseStrategies.resumeRules(executionPlan),
+        stepVerdictRule = slotStepVerdictRule(launchResolution.strategies(), executionPlan, diagnostics),
+        resumeRulesFn = launchResolution.strategies().resumeRules(executionPlan),
       )
     val runState =
       GoalPlanningPhaseRunState(
         facts = facts,
         progress = progress,
         planning = planning,
-        strategies = phaseStrategies,
+        strategies = launchResolution.strategies(),
         executionPlan = executionPlan,
         clock = clock,
         diagnostics = diagnostics,

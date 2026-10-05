@@ -27,6 +27,7 @@ import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -45,6 +46,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   private val launch: FeatureTaskRuntimeRunLoopDurableLaunch,
   override val clock: Clock,
 ) : PhaseRunState {
+  override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
   private val facts get() = telemetry.request
   override val records get() = telemetry.recorder
   override val diagnostics get() = telemetry.diagnostics
@@ -61,6 +63,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
+
+  override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
 

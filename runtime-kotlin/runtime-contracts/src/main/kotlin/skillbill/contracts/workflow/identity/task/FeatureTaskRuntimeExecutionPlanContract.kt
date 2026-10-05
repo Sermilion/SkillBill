@@ -2,7 +2,9 @@ package skillbill.contracts.workflow.identity.task
 
 import skillbill.contracts.SharedPayloadKeys
 
-const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.1"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.2"
+
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION: String = "0.1"
 
 object FeatureTaskRuntimeExecutionPlanKeys {
   const val CONTRACT_VERSION: String = "contract_version"
@@ -16,6 +18,7 @@ object FeatureTaskRuntimeExecutionPlanKeys {
   const val RESUME_INTERPRETATIONS: String = "resume_interpretations"
   const val EFFECTIVE_POLICIES: String = "effective_policies"
   const val EFFECTIVE_POLICY_SETTINGS: String = "effective_policy_settings"
+  const val STEP_LAUNCH_ASSIGNMENTS: String = "step_launch_assignments"
   const val VALIDATION_DEPTH: String = "validation_depth"
   const val PHASE_TIMEOUT_MILLIS: String = "phase_timeout_millis"
   const val ID: String = "id"
@@ -24,6 +27,15 @@ object FeatureTaskRuntimeExecutionPlanKeys {
   const val STRATEGY_ID: String = "strategy_id"
   const val SELECTED_STEPS: String = "selected_steps"
   const val ENTRY_STEP: String = "entry_step"
+  const val STEP_ID: String = "step_id"
+  const val AGENT_ID: String = "agent_id"
+  const val REQUESTED_MODEL: String = "requested_model"
+  const val REQUESTED_EFFORT: String = "requested_effort"
+  const val EFFECTIVE_MODEL: String = "effective_model"
+  const val PROVIDER_NAMESPACE: String = "provider_namespace"
+  const val PROVENANCE: String = "provenance"
+  const val UNKNOWN_REASON: String = "unknown_reason"
+  const val PROFILE: String = "profile"
   const val FORWARD_STEPS: String = "forward_steps"
   const val BACKWARD_EDGES: String = "backward_edges"
   const val LOOP_ONLY_STEPS: String = "loop_only_steps"

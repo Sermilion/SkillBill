@@ -1,11 +1,13 @@
 package skillbill.di.operation
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.application.config.ConfigResolutionService
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.ReviewService
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.application.updatecheck.UpdateCheckService
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.featureguard.FeatureGuardOperation
@@ -28,11 +30,31 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 
 internal interface RuntimeOperationProvides {
   @Provides
+  fun featureGuardCleanupOperation(
+    phaseRunEntry: PhaseRunEntry,
+    configResolution: ConfigResolutionService,
+  ): FeatureGuardCleanupOperation =
+    FeatureGuardCleanupOperation(phaseRunEntry::run) {
+      FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix())
+    }
+
+  @Provides
+  fun prReviewFixOperation(
+    reviewThreads: PullRequestReviewThreadOperations,
+    gitOperations: WorkflowGitOperations,
+    phaseRunEntry: PhaseRunEntry,
+    configResolution: ConfigResolutionService,
+  ): PrReviewFixOperation =
+    PrReviewFixOperation(reviewThreads, gitOperations, phaseRunEntry::run) {
+      FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix())
+    }
+
+  @Provides
   fun operationRegistry(
     updateCheckService: UpdateCheckService,
     gitOperations: WorkflowGitOperations,
-    phaseRunEntry: PhaseRunEntry,
-    reviewThreads: PullRequestReviewThreadOperations,
+    featureGuardCleanup: FeatureGuardCleanupOperation,
+    prReviewFix: PrReviewFixOperation,
     verifyOperation: VerifyOperation,
   ): OperationRegistry =
     OperationRegistry(
@@ -41,8 +63,8 @@ internal interface RuntimeOperationProvides {
         ReleaseOperation(gitOperations),
         UnitTestValueCheckOperation(gitOperations),
         FeatureGuardOperation(),
-        FeatureGuardCleanupOperation(phaseRunEntry::run),
-        PrReviewFixOperation(reviewThreads, gitOperations, phaseRunEntry::run),
+        featureGuardCleanup,
+        prReviewFix,
         verifyOperation,
       ),
     )

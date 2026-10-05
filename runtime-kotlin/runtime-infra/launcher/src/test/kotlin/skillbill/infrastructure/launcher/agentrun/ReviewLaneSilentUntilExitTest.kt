@@ -11,6 +11,7 @@ import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.withBoundedLaneProgress
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
@@ -73,6 +74,7 @@ class ReviewLaneSilentUntilExitTest {
     commandBuilder = ClaudeAgentRunCommandBuilder(),
     processRunner = SilentScriptRunner(silentPeriod),
     executableLookup = ALL_EXECUTABLES_AVAILABLE,
+    diagnostics = NoopRuntimeDiagnostics,
   ).launchFacts(request)
 
   private class SilentScriptRunner(

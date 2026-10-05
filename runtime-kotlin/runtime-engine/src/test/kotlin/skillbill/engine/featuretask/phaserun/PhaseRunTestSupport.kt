@@ -14,6 +14,10 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
+import skillbill.ports.agentrun.AgentRunLauncher
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
+import skillbill.ports.agentrun.model.AgentRunLaunchRequest
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -70,6 +74,13 @@ internal fun phaseRunEntry(
     intakeResolver =
       PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource()),
     runLoopEntry = runLoopEntry,
+    agentRunLauncher =
+      object : AgentRunLauncher {
+        override fun resolveLaunchModel(request: AgentRunLaunchModelRequest) = passThroughResolvedLaunchModel(request)
+
+        override fun launch(request: AgentRunLaunchRequest) =
+          error("A phase run fixture must not resolve launches through the test support launcher.")
+      },
   )
 
 internal fun DatabaseSessionFactory.assertNoDurableWorkflowState() {

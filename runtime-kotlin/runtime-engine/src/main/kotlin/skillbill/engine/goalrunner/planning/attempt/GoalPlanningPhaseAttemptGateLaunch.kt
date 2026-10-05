@@ -39,8 +39,8 @@ internal fun launchPlanningAttempt(
       timeout = request.planningBudget,
       invokedAgentId = shared.invokedAgentId,
       configuredAgentOverrideId = shared.configuredAgentOverrideId,
-      modelOverride = null,
-      effortOverride = null,
+      modelOverride = launch.modelOverride,
+      effortOverride = launch.effortOverride,
       compaction = null,
       attempt = null,
       observeLaunch = false,
@@ -100,6 +100,7 @@ internal inline fun composePlanningPrompt(
         issueKey = phase.request.issueKey,
         briefing = briefing,
         suppressDecomposition = true,
+        stepProfile = phase.launch.stepProfile,
       ),
       phase.launch.prompt,
     )
