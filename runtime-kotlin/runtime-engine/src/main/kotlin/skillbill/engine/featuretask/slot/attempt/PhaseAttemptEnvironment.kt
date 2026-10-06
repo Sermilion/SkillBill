@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
@@ -222,6 +223,8 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   val checkpoints: PhaseRunCheckpoints
+
+  val commitPushManifestCompletion: CommitPushManifestCompletion?
 }
 
 /** Post-completion traversal hook inputs for planning and decomposition stops. */
@@ -343,6 +346,9 @@ internal open class PhaseAttemptSettlementScope(
 
   override val checkpoints: PhaseRunCheckpoints
     get() = boundHost.checkpoints
+
+  override val commitPushManifestCompletion: CommitPushManifestCompletion?
+    get() = boundHost.commitPushManifestCompletion
 
   override fun acceptedStepPolicy(stepId: String): PhaseStepPolicy =
     boundHost.selectedOwnerOf(stepId)?.policyFor(stepId)

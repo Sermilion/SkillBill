@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSet
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
@@ -66,6 +67,9 @@ internal interface PhaseRunState :
 
   /** The private implementation checklist for this run, when the run entry supplied one. */
   var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
+
+  /** Writes the completed decomposition manifest before a goal child's final commit. */
+  var commitPushManifestCompletion: CommitPushManifestCompletion?
 
   /**
    * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails

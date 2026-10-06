@@ -321,10 +321,10 @@ Required workflow artifacts for the pilot:
 - `validation_result` — routed skill or repo-native validator result
 - `history_result` — written/skipped outcome for boundary history
 - `commit_push_result` — reserved shell-owned artifact for Step 10. The runtime stages every dirty
-  non-ignored path, including `.feature-specs/`, into the owned subtask commit using a subject from
-  the issue key and subtask name, then captures the sha, pushes, and prunes checkpoint refs after
-  the manifest records `commit_sha`. If nothing remains to commit, it finishes and pushes the
-  current HEAD. This phase does not launch an agent.
+  non-ignored path into the owned subtask commit using a subject from the issue key and subtask
+  name. Feature-spec files are included only when they are not gitignored. It then captures the sha,
+  pushes, and prunes checkpoint refs after the manifest records `commit_sha`. If nothing remains to
+  commit, it finishes and pushes the current HEAD. This phase does not launch an agent.
 - `pr_result` — PR url/title or terminal failure note
 
 Pilot-specific retry rules:

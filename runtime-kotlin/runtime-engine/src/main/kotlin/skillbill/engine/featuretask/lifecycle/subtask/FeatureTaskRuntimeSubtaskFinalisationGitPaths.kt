@@ -9,7 +9,10 @@ const val GIT_PORCELAIN_STATUS_PREFIX_LENGTH = 3
 
 internal sealed interface DirtyPathsResult
 
-internal data class DirtyPaths(val paths: List<String>) : DirtyPathsResult
+internal data class DirtyPaths(
+  val paths: List<String>,
+  val omittedGitignoredFeatureSpecs: Boolean = false,
+) : DirtyPathsResult
 
 internal data class DirtyPathsError(val reason: String) : DirtyPathsResult
 
@@ -24,5 +27,14 @@ internal fun WorkflowGitOperations.dirtyImplementationPaths(repoRoot: Path): Dir
       .filter { it.isNotBlank() }
       .distinct()
       .sorted()
-  return DirtyPaths(paths)
+  val ignored = gitignoredFeatureSpecPaths(repoRoot, paths)
+  if (ignored !is WorkflowGitOperationResult.Ok) {
+    return DirtyPathsError("gitignored feature-spec paths could not be read before staging (${ignored.error})")
+  }
+  val ignoredSet =
+    ignored.value.lineSequence().map(String::trim).filter(String::isNotBlank).toSet()
+  return DirtyPaths(
+    paths = paths.filterNot { it in ignoredSet },
+    omittedGitignoredFeatureSpecs = ignoredSet.isNotEmpty(),
+  )
 }

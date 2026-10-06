@@ -1,5 +1,13 @@
 # featuretask runtime boundary history
 
+## [2026-10-06] commit_push stages feature specs only when they are not gitignored
+Areas: runtime-engine featuretask, runtime-infra workflow git staging
+- Feature-spec paths that match gitignore are left out of `git add`, including paths that are already tracked. Other tracked ignored paths are still staged.
+- When those feature specs are the only dirty paths, finalisation records and pushes the current HEAD.
+- Pattern: gitignore is the repository's statement that a feature spec stays local. reusable
+Feature flag: N/A
+Acceptance criteria: n/a
+
 ## [2026-10-02] SKILL-398 subtask 2 - Operation, diagnostic and phase-write results as values
 Areas: runtime-engine (operation, featuretask slot/runloop/phaserun, goalrunner planning), runtime-contracts, runtime-ports, runtime-application diagnostics, runtime-infra sqlite, runtime-cli, runtime-core throwable baseline
 - Operations return a sealed OperationRefusal (Blocked, Usage) instead of throwing OperationErrors; the executor has no catch and the CLI maps Usage to a UsageError. Refusal text is unchanged. reusable

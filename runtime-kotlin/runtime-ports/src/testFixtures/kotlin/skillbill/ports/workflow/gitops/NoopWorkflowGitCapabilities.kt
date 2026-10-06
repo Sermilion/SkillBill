@@ -52,6 +52,11 @@ object UnavailableScopedStagingGitOperations : ScopedStagingGitOperations {
   ): WorkflowPathContentIdentitiesResult =
     WorkflowPathContentIdentitiesResult.Failed(unavailableReason("read owned-path content identities"))
 
+  override fun gitignoredFeatureSpecPaths(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
+
   private fun unavailable(capability: String) = WorkflowGitOperationResult.Failed(error = unavailableReason(capability))
 
   private fun unavailableReason(capability: String) =

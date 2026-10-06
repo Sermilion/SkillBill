@@ -1,3 +1,10 @@
+## [2026-10-06] Feature specs are staged only when they are not gitignored
+
+Context: commit_push stages every dirty non-ignored path, and a tracked path that later matches gitignore is still updated in the index. A repository that gitignores `.feature-specs/` therefore still commits those files once they have been tracked.
+Decision: `stagePaths` and subtask finalisation omit feature-spec paths that `git check-ignore --no-index` reports. Untracked ignored paths of every kind stay omitted. A tracked ignored path outside `.feature-specs/` is still staged. When the only dirty paths are gitignored feature specs, finalisation records and pushes the current HEAD.
+Reason: Feature specs are deliverable only when the repository tracks them. Gitignore is the repository's statement that those files stay local. Tracked files outside that tree keep the existing index update.
+Supersedes: The feature-spec inclusion sentence of [2026-09-16] commit_push has no extra-files category.
+
 ## [2026-10-02] Return rejected required phase writes as values (SKILL-398)
 
 Context: A rejected required start or briefing write is an expected outcome, but it travelled as the exception RequiredPhaseWriteRejected through the recorders, the run-loop bindings and goal planning, and was caught at the attempt boundary. The failure model reserves exceptions for defects.

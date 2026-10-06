@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunSettlements
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
@@ -50,6 +51,7 @@ internal class GoalPlanningPhaseRunState(
   override val specSource: SpecSource,
 ) : PhaseRunState {
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
+  override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
@@ -128,6 +130,11 @@ private class GoalPlanningUnitRunState(
     get() = parent.implementationChecklistStore
     set(value) {
       parent.implementationChecklistStore = value
+    }
+  override var commitPushManifestCompletion: CommitPushManifestCompletion?
+    get() = parent.commitPushManifestCompletion
+    set(value) {
+      parent.commitPushManifestCompletion = value
     }
   override val progress =
     FeatureTaskRuntimeRunState(

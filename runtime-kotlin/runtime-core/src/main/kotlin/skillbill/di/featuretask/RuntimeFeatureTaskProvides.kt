@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Provides
 import skillbill.application.runtime.RuntimeSingleton
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
+import skillbill.engine.featuretask.runloop.finalization.DecompositionManifestCommitCompletion
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.sqlite.SqliteFeatureTaskPhaseSettlementRepository
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
@@ -45,6 +47,10 @@ internal interface RuntimeFeatureTaskProvides {
   fun featureTaskRuntimeReadinessEvidencePort(
     recorder: FeatureTaskRuntimePhaseRecorder,
   ): FeatureTaskRuntimeReadinessEvidencePort = recorder
+
+  @Provides
+  fun commitPushManifestCompletion(completion: DecompositionManifestCommitCompletion): CommitPushManifestCompletion =
+    completion
 
   @Provides
   fun featureTaskImplementationChecklistStore(

@@ -315,12 +315,12 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `commit_push prompt forbids amending foreign commits and includes every dirty path`() {
+  fun `commit_push prompt keeps foreign commits and gitignored feature specs out`() {
     val prompt = composePromptForPhase("commit_push")
 
     assertContains(prompt, "Commit ownership")
     assertContains(prompt, "Never amend, reset, or restage a commit this runtime does not own")
-    assertContains(prompt, "including `.feature-specs/`")
+    assertContains(prompt, "Feature-spec files are staged only when they are not gitignored")
     assertTrue(!prompt.contains("Never list any `.feature-specs/`"))
     assertTrue(!prompt.contains("Feature-spec commit exclusion"))
     assertTrue(

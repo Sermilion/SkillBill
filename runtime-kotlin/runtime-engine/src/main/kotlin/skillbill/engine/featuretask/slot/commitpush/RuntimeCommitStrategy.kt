@@ -75,10 +75,10 @@ class RuntimeCommitStrategy : PhaseStrategy() {
     const val ID = "runtime-commit"
 
     private const val DIRECTIVE: String =
-      "This phase does not launch an agent. The runtime stages every dirty non-ignored path, including " +
-        "`.feature-specs/`, commits with a subject from the issue key and subtask name, pushes, and records " +
-        "commit_sha. If goal-continuation suppresses PR, this phase is the terminal success signal for the goal " +
-        "subtask."
+      "This phase does not launch an agent. The runtime stages every dirty non-ignored path. Feature-spec " +
+        "files are staged only when they are not gitignored. It commits with a subject from the issue key and " +
+        "subtask name, pushes, and records commit_sha. If goal-continuation suppresses PR, this phase is the " +
+        "terminal success signal for the goal subtask."
 
     private const val COMMIT_OWNERSHIP: String =
       "## Commit ownership\n" +
