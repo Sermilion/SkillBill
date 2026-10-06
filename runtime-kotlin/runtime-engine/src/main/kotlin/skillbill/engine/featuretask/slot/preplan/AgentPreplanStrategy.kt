@@ -69,12 +69,16 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "files during this phase. This is the feature's only discovery: the plan phase plans every subtask " +
         "from this digest and never reads the repository. Write what the plan phase needs: the boundaries the " +
         "change touches, the patterns and decisions that apply, concrete risks, and rollout and validation " +
-        "considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, type " +
-        "hierarchies, the tests and test helpers the change affects, and the existing patterns to follow. " +
-        "Settle every question the repository can answer here. Leave open only decisions the repository " +
-        "cannot answer, each with the facts that bear on it and the option you recommend. Walk the boundary " +
-        "memory headings for relevance and weave their context into the prose; name a heading by its " +
-        "heading_id exactly as the boundary catalog spells it. Do not forward progress diagnostics or a " +
-        "generic summary."
+        "considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, and " +
+        "type hierarchies of the code this task changes, the tests that exercise that code, and the existing " +
+        "patterns those files already follow. Read only files this task directly touches. Do not read unrelated " +
+        "modules, docs, or tests, and do not read dependency jars, Gradle caches, generated sources, or library " +
+        "internals. The boundary catalog in this briefing is the heading list. Judge each heading from that " +
+        "heading text. An irrelevant heading stays unread. Open a history or decisions file only for a heading " +
+        "that bears on this task, and read only that heading's section. Never read a history or decisions file " +
+        "from start to finish. Leave open any decision this task's own code cannot answer, including dependency, " +
+        "account, and environment questions, each with the facts that bear on it and the option you recommend. " +
+        "Name a cited heading by its heading_id exactly as the boundary catalog spells it. Do not forward " +
+        "progress diagnostics or a generic summary."
   }
 }
