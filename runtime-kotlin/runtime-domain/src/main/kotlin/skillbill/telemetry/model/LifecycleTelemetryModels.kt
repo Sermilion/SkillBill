@@ -32,6 +32,8 @@ data class FeatureTaskRuntimeFinishedRecord(
   val auditGapIterationCount: Int? = null,
   val resolvedAgentIds: List<String>? = null,
   val launchedModels: List<String>? = null,
+  val phaseStrategies: String? = null,
+  val phaseStrategyAvailability: String? = null,
 )
 
 data class QualityCheckStartedRecord(

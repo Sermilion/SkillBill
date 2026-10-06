@@ -578,8 +578,11 @@ The same terminal event reports which agents and models the run's phases actuall
 | `resolved_agent_ids` | array \| null | Distinct, sorted agent slugs the run's phases resolved. Null unless `resolved_agent_availability` is `measured`. |
 | `launched_model_availability` | string | `measured` when at least one phase launched under a model directive; `unavailable_no_durable_state` when none did. |
 | `launched_models` | array \| null | Distinct, sorted model strings the phases were launched with, in the exact form handed to the agent CLI. Null unless `launched_model_availability` is `measured`. |
+| `phase_strategy_measurement_grain` | string | Always `admitted_strategy_per_recorded_phase`. One unit is the admitted dispatch entry for a recorded phase. |
+| `phase_strategy_availability` | string | `measured` when every recorded phase has an admitted dispatch entry; `unavailable_no_durable_state` when there are no phase records or no admitted dispatch; `unavailable_incomplete` when a recorded phase is missing from dispatch; `unknown` when the availability column is null. |
+| `phase_strategies` | object \| null | Recorded phase ids mapped to the admitted `strategy_id` and `semantic_revision`. Registered configuration tokens, the same class as `launched_models`: present at `anonymous` and `full`, unhashed. Null unless `phase_strategy_availability` is `measured`. |
 
-A run can know its agents and not its models: a phase that ran with no model directive resolves an agent and launches no model. Segment on `resolved_agent_ids` only after filtering on `resolved_agent_availability`; a null set means the run recorded nothing, never that it ran without an agent.
+A run can know its agents and not its models: a phase that ran with no model directive resolves an agent and launches no model. Segment on `resolved_agent_ids` only after filtering on `resolved_agent_availability`; a null set means the run recorded nothing, never that it ran without an agent. Segment on `phase_strategies` only after filtering on `phase_strategy_availability`; a null map means the join was not measured, never that the run selected no strategy.
 
 ## PostHog dashboard spec
 

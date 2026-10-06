@@ -50,6 +50,8 @@ fun FeatureTaskRuntimeFinishedRequest.toRecord(): FeatureTaskRuntimeFinishedReco
     auditGapIterationCount = auditGapIterationCount,
     resolvedAgentIds = agentContext.resolvedAgentIds,
     launchedModels = agentContext.launchedModels,
+    phaseStrategies = phaseStrategies,
+    phaseStrategyAvailability = phaseStrategyAvailability,
   )
 
 fun QualityCheckStartedRequest.toRecord(sessionId: String): QualityCheckStartedRecord =

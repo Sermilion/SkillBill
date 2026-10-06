@@ -2,9 +2,11 @@ package skillbill.engine.featuretask.runner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentContextTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
+import skillbill.engine.featuretask.lifecycle.core.featureTaskRuntimePhaseStrategies
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingVerificationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
@@ -12,6 +14,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRegenerationTel
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.PHASE_STRATEGIES_DISPATCH_JOIN_EXPECTED
+import skillbill.engine.featuretask.model.core.PHASE_STRATEGIES_DISPATCH_JOIN_SEAM
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
@@ -27,6 +31,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 @Inject
@@ -112,6 +117,7 @@ class FeatureTaskRuntimeRunnerExecute(
         telemetrySessionId,
         reconciliation,
         state,
+        executionPlan.dispatchStrategyByStep,
       )
     val report =
       runCatching {
@@ -138,22 +144,39 @@ class FeatureTaskRuntimeRunnerExecute(
     telemetrySessionId: String,
     reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
     state: FeatureTaskRuntimeRunState,
-  ) = FeatureTaskRuntimeFinishedTelemetryContext(
-    telemetrySessionId = telemetrySessionId,
-    phaseOutcomes = {
+    dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch>,
+  ): FeatureTaskRuntimeFinishedTelemetryContext {
+    val phaseOutcomes = {
       recorder
         .loadPhaseRecords(runRequest.workflowId)
         .orEmpty()
         .mapValues { (_, record) -> record.status.wireValue }
-    },
-    reviewFixIterationCount = { loadReviewFixIterationCount(runRequest) },
-    auditGapIterationCount = { reviewFixBudget.auditGapIterationCount(runRequest.workflowId) },
-    agentContext = { agentContextTelemetry.context(runRequest.workflowId) },
-    regenerationTelemetry = { loadRegenerationTelemetry(runRequest) },
-    findingVerificationTelemetry = { loadFindingVerificationTelemetry(runRequest) },
-    phaseTokenData = { serializeTokenData(state.phaseTokenView) },
-    crashReconciliation = { reconciliation },
-  )
+    }
+    val phaseStrategies =
+      lazy {
+        featureTaskRuntimePhaseStrategies(phaseOutcomes().keys, dispatchStrategyByStep).also { result ->
+          if (result.availability == TelemetryMeasurementAvailability.UNAVAILABLE_INCOMPLETE) {
+            diagnostics.warning(
+              "degraded $PHASE_STRATEGIES_DISPATCH_JOIN_SEAM; " +
+                "expected=$PHASE_STRATEGIES_DISPATCH_JOIN_EXPECTED; " +
+                "used=${result.missingPhaseIds.joinToString(",")}",
+            )
+          }
+        }
+      }
+    return FeatureTaskRuntimeFinishedTelemetryContext(
+      telemetrySessionId = telemetrySessionId,
+      phaseOutcomes = phaseOutcomes,
+      phaseStrategies = { phaseStrategies.value },
+      reviewFixIterationCount = { loadReviewFixIterationCount(runRequest) },
+      auditGapIterationCount = { reviewFixBudget.auditGapIterationCount(runRequest.workflowId) },
+      agentContext = { agentContextTelemetry.context(runRequest.workflowId) },
+      regenerationTelemetry = { loadRegenerationTelemetry(runRequest) },
+      findingVerificationTelemetry = { loadFindingVerificationTelemetry(runRequest) },
+      phaseTokenData = { serializeTokenData(state.phaseTokenView) },
+      crashReconciliation = { reconciliation },
+    )
+  }
 
   internal fun loadReviewFixIterationCount(request: FeatureTaskRuntimeRunRequest): Int =
     recorder.loadPhaseLedger(request.workflowId)

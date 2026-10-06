@@ -115,6 +115,8 @@ private fun updateFeatureTaskRuntimeFinished(
       audit_gap_availability = ?,
       resolved_agent_ids = ?,
       launched_models = ?,
+      phase_strategies = ?,
+      phase_strategy_availability = ?,
       finished_at = CURRENT_TIMESTAMP
     WHERE session_id = ?
       AND (finished_event_emitted_at IS NULL OR completion_status = 'stale')
@@ -154,6 +156,8 @@ private fun bindFeatureTaskRuntimeFinishedUpdate(
     record.auditGapIterationCount.availabilityWire(),
     record.resolvedAgentIds.namesJson(),
     record.launchedModels.namesJson(),
+    record.phaseStrategies,
+    record.phaseStrategyAvailability,
     record.sessionId,
   )
 }
@@ -191,8 +195,8 @@ private fun insertFeatureTaskRuntimeFinished(
       finding_verification_verified_count, finding_verification_rejected_count,
       review_fix_cap_exhausted, review_fix_cap_exhausted_availability,
       audit_gap_iteration_count, audit_gap_availability,
-      resolved_agent_ids, launched_models, finished_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      resolved_agent_ids, launched_models, phase_strategies, phase_strategy_availability, finished_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
@@ -219,6 +223,8 @@ private fun insertFeatureTaskRuntimeFinished(
       record.auditGapIterationCount.availabilityWire(),
       record.resolvedAgentIds.namesJson(),
       record.launchedModels.namesJson(),
+      record.phaseStrategies,
+      record.phaseStrategyAvailability,
     )
     statement.executeUpdate()
   }

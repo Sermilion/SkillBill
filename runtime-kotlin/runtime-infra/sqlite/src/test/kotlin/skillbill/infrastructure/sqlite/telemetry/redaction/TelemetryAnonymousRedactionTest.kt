@@ -1,12 +1,16 @@
 package skillbill.infrastructure.sqlite.telemetry.redaction
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.reconcileStaleTelemetrySessions
 import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
 import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
@@ -153,6 +157,58 @@ class TelemetryAnonymousRedactionTest {
           )
         }
       }
+    }
+  }
+
+  @Test
+  fun `anonymous redaction leaves a phase strategy id as the raw token`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(
+        FeatureTaskRuntimeStartedRecord(
+          sessionId = "session-strategy",
+          featureSize = "MEDIUM",
+          issueKey = ISSUE_KEY,
+          featureName = "anonymous redaction",
+        ),
+        "anonymous",
+      )
+      store.featureTaskRuntimeFinished(
+        FeatureTaskRuntimeFinishedRecord(
+          sessionId = "session-strategy",
+          completionStatus = "completed",
+          completedPhaseIds = listOf("implement"),
+          phaseOutcomes = mapOf("implement" to "completed"),
+          lastIncompletePhase = "completed",
+          blockedReason = "",
+          resolvedBranch = "feat/$ISSUE_KEY",
+          phaseStrategies =
+            JsonCodec.mapToJsonString(
+              mapOf(
+                "implement" to
+                  mapOf(
+                    FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID to "implement-then-simplify-opus-5-5",
+                    FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION to 1,
+                  ),
+              ),
+            ),
+          phaseStrategyAvailability = TelemetryMeasurementAvailability.MEASURED.wireValue,
+        ),
+        "anonymous",
+      )
+
+      val payload = requireNotNull(storedPayloads(connection)["skillbill_feature_task_runtime_finished"])
+      assertTrue(
+        payload.contains("implement-then-simplify-opus-5-5"),
+        "a registered strategy id must stay the raw token at anonymous",
+      )
+      val parsed = JsonCodec.parseObjectOrNull(payload)?.let(JsonCodec::jsonElementToValue)
+      val properties = JsonCodec.anyToStringAnyMap(parsed).orEmpty()
+      val strategies = properties[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES] as Map<*, *>
+      assertEquals(
+        "implement-then-simplify-opus-5-5",
+        (strategies["implement"] as Map<*, *>)[FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID],
+      )
     }
   }
 
