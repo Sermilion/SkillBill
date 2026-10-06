@@ -21,6 +21,8 @@ private const val INDEX_REMOVAL_OBJECT = "00000000000000000000000000000000000000
 
 private const val PATHSPEC_BATCH_SIZE = 200
 
+private const val FEATURE_SPEC_ROOT = ".feature-specs"
+
 internal object GitScopedStagingOperations : ScopedStagingGitOperations {
   override fun stagePaths(
     repoRoot: Path,
@@ -103,6 +105,17 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
     return WorkflowPathContentIdentitiesResult.Resolved(identities)
   }
 
+  override fun gitignoredFeatureSpecPaths(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult {
+    val ignored = gitignoredFeatureSpecs(repoRoot, paths)
+    if (ignored !is WorkflowGitOperationResult.Ok) return ignored
+    return WorkflowGitOperationResult.Ok(
+      value = ignored.value.orEmpty().split(GIT_NUL).filter(String::isNotBlank).joinToString("\n"),
+    )
+  }
+
   private fun indexEntryPath(entry: String): String? =
     entry.substringAfter('\t', missingDelimiterValue = "").takeIf(String::isNotBlank)
 
@@ -120,9 +133,15 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
     }
     val materialized = materializePathspecs(repoRoot, normalized)
     val presentOrIndexed = materialized.filter { Files.isRegularFile(repoRoot.resolve(it)) || it in indexed }
-    val ignored = ignoredUntrackedPaths(repoRoot, presentOrIndexed)
-    if (ignored !is WorkflowGitOperationResult.Ok) return ignored
-    val ignoredSet = ignored.value.orEmpty().split(GIT_NUL).filter(String::isNotBlank).toSet()
+    val ignoredUntracked = ignoredUntrackedPaths(repoRoot, presentOrIndexed)
+    if (ignoredUntracked !is WorkflowGitOperationResult.Ok) return ignoredUntracked
+    val ignoredFeatureSpecs = gitignoredFeatureSpecs(repoRoot, presentOrIndexed)
+    if (ignoredFeatureSpecs !is WorkflowGitOperationResult.Ok) return ignoredFeatureSpecs
+    val ignoredSet =
+      (
+        ignoredUntracked.value.orEmpty().split(GIT_NUL) +
+          ignoredFeatureSpecs.value.orEmpty().split(GIT_NUL)
+      ).filter(String::isNotBlank).toSet()
     val stageable = presentOrIndexed.filterNot { it in ignoredSet }
     return WorkflowGitOperationResult.Ok(value = stageable.joinToString(GIT_NUL.toString()))
   }
@@ -152,24 +171,42 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
   private fun ignoredUntrackedPaths(
     repoRoot: Path,
     paths: List<String>,
+  ): WorkflowGitOperationResult = checkIgnore(repoRoot, paths, noIndex = false)
+
+  private fun gitignoredFeatureSpecs(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult = checkIgnore(repoRoot, paths.filter(::isFeatureSpecPath), noIndex = true)
+
+  private fun checkIgnore(
+    repoRoot: Path,
+    paths: List<String>,
+    noIndex: Boolean,
   ): WorkflowGitOperationResult {
     if (paths.isEmpty()) return WorkflowGitOperationResult.Ok(value = "")
+    val args =
+      buildList {
+        add("check-ignore")
+        add("-z")
+        if (noIndex) add("--no-index")
+        add("--stdin")
+      }
     val ignored = mutableListOf<String>()
     for (batch in paths.chunked(PATHSPEC_BATCH_SIZE)) {
       val stdin = batch.joinToString(separator = GIT_NUL.toString(), postfix = GIT_NUL.toString()).toByteArray()
-      val parsed = parseCheckIgnore(runGitProcess(repoRoot, listOf("check-ignore", "-z", "--stdin"), stdin))
+      val parsed = parseCheckIgnore(args, runGitProcess(repoRoot, args, stdin))
       if (parsed !is WorkflowGitOperationResult.Ok) return parsed
       ignored += parsed.value.orEmpty().split(GIT_NUL).filter(String::isNotBlank)
     }
     return WorkflowGitOperationResult.Ok(value = ignored.joinToString(GIT_NUL.toString()))
   }
 
-  private fun parseCheckIgnore(result: GitProcessResult): WorkflowGitOperationResult =
+  private fun parseCheckIgnore(
+    args: List<String>,
+    result: GitProcessResult,
+  ): WorkflowGitOperationResult =
     when {
-      result.timedOut ->
-        WorkflowGitOperationResult.Failed(
-          error = gitTimedOutError(listOf("check-ignore", "-z", "--stdin")),
-        )
+      result.timedOut -> WorkflowGitOperationResult.Failed(error = gitTimedOutError(args))
       result.readFailure != null ->
         WorkflowGitOperationResult.Failed(
           error = result.readFailure.message.orEmpty(),
@@ -181,4 +218,10 @@ internal object GitScopedStagingOperations : ScopedStagingGitOperations {
           error = "git check-ignore failed with exit code ${result.exitCode}: ${result.output}",
         )
     }
+}
+
+private fun isFeatureSpecPath(path: String): Boolean {
+  val normalized = path.trim().trimEnd('/').removeSurrounding("\"").removePrefix("./")
+  val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
+  return dotted == FEATURE_SPEC_ROOT || dotted.startsWith("$FEATURE_SPEC_ROOT/")
 }

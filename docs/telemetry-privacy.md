@@ -116,6 +116,7 @@ the identity is not part of that content.
 | `correlation_availability`, `redacted_workflow_id`, `goal_parent_workflow_id` | — | hashed where the issue key is embedded | ✓ | `correlationFields` → `redactIssueKeyReferences` |
 | `goal_subtask_id` | — | ✓ | ✓ | `correlationFields` |
 | `agent_context_measurement_grain`, `resolved_agent_ids`, `resolved_agent_availability`, `launched_models`, `launched_model_availability` | — | ✓ | ✓ | `agentContextFields` |
+| `phase_strategy_measurement_grain`, `phase_strategies`, `phase_strategy_availability` | — | ✓ | ✓ | helper beside `agentContextFields` |
 | `feature_name` | — | — | ✓ | `featureTaskRuntimeStartedPayload` |
 | `resolved_branch` | — | — | ✓ | `featureTaskRuntimeFinishedPayload` |
 
@@ -133,6 +134,12 @@ content: no prompt, repository path, issue text, or agent output rides them, whi
 carried at `anonymous` while `feature_name` and `resolved_branch` are not. A run whose phases
 launched with no model directive reports `launched_model_availability` as
 `unavailable_no_durable_state` and a null list, never an empty one.
+
+`phase_strategies` maps each recorded phase id to the admitted `strategy_id` and
+`semantic_revision`. These are registered configuration tokens, the same class as
+`launched_models`: present at `anonymous` and `full`, unhashed. The object is null
+unless `phase_strategy_availability` is `measured`. A null availability column
+surfaces `unknown` and a null map. The grain is `admitted_strategy_per_recorded_phase`.
 
 ### Availability fields
 

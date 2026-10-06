@@ -1,5 +1,42 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-06] Copy the admitted dispatch onto finish
+Context: Selection already lives on the admitted execution plan. Finish has to report the strategy that owned each recorded phase without choosing again.
+Decision: Join recorded phase ids to the admitted dispatch and copy strategy id and semantic revision only. The slot stays off the payload. The join does not append an Opus suffix and has no branch for a contract 0.1 plan or a resumed plan.
+Reason: Those plans already hold the ids the historical reader or the resume record admitted. Reselecting from current config, or mapping slots onto phases, would add steps the run did not record.
+Alternatives considered: A slot-to-phase table was rejected because an unselected step is absent from dispatch, and implement and simplify share one id only when the admitted plan stored it for both.
+
+## [2026-10-06] Store a null strategy map unless coverage is complete
+Context: A measured empty object or a partial map would hide a missing plan or a missing phase.
+Decision: No phase records, a null dispatch, or an empty dispatch yields unavailable_no_durable_state and a null map. Any recorded phase missing from dispatch yields unavailable_incomplete, a null map, and the missing ids in phase-outcome order. The runner emits one diagnostics warning for that case, naming the finish-join seam and expecting an admitted dispatch entry.
+Reason: An empty map is not an admitted dispatch. A partial object would look measured. The join returns those facts and does not emit the warning. The finish closure records it once.
+
+## [2026-10-06] Leave a null strategy availability as unknown
+Context: Both unavailable states store a null map, and a session row written before the columns existed must stay distinguishable from unavailable_no_durable_state.
+Decision: The strategy map and its availability are nullable text columns on the same ensure path as launched models, with no default. Insert and update bind SQL NULL. The grain stays on the payload only. Start does not write the columns. Reconciliation reads the session row, does not load the workflow artifact, and does not backfill.
+Reason: The launched-models availability helper turns null into unavailable_no_durable_state, and a name list cannot tell the two unavailable states apart. A null availability column therefore stays null and emits unknown with a present null map.
+Alternatives considered: Backfill and rewriting queued outbox payloads were rejected, so pre-column rows stay unknown.
+
+## [2026-10-06] Leave strategy ids unhashed at anonymous detail
+Context: Anonymous redaction hashes issue keys. Strategy ids are registered configuration tokens.
+Decision: The strategy map, its availability, and its measurement grain are present at anonymous and full, unhashed, null unless measured, and unknown when the availability column is null. The grain is one admitted strategy per recorded phase.
+Reason: Hashing or stripping the id would break correlation with the registered strategy catalog. This is the same privacy class as launched models. The settings-load switch for optional telemetry does not define this availability vocabulary.
+
+## [2026-10-06] Keep finish strategy fields off the event and phase-record contracts
+Context: The admitted plan is already stored. Finish only reports the strategies that plan recorded for the phases that ran.
+Decision: Phase records gain no strategy field. Phase outcomes stay status wires. The execution plan stays 0.2 with previous 0.1, persistence stays 0.2, and the telemetry event schema stays 1.12.0 with no feature-task-runtime-finished branch. Feature-task stats and in-memory phase runs stay unchanged.
+Reason: An unknown key on the phase record fails its shape allow-list. A contract bump would move current plans off 0.2 and would stop treating 0.1 plans as canonical. The finish envelope is duration-checked and is not passed to the event schema validator.
+
+## [2026-10-06] Keep the strategy join result out of model.core
+Context: The finish context lives in model.core and the join lives in lifecycle.core. The plan added no new production file.
+Decision: The join result type lives in the finished telemetry context file, in the same module. model.core does not import lifecycle.core.
+Reason: That import would point model.core at lifecycle.core. Placing the result beside the finish context keeps the module edge and avoids a new file.
+
+## [2026-10-06] Default the finish join to no admitted dispatch
+Context: Some finish-context constructors supply only phase outcomes and the review-fix iteration count. A crash before admission never builds this context.
+Decision: The strategy join defaults to no admitted dispatch, which reports unavailable_no_durable_state and a null map. Success finish and the error finish both use the context that closed over the admitted map and evaluated the join once.
+Reason: The default keeps those constructors compiling and matches a run that never admitted a plan. One payload loader then writes the same result on both finish paths.
+
 ## [2026-10-05] Select Opus 5.5 from the resolved model
 Context: SKILL-403 needed a second strategy per slot for Opus 5.5. The slot skeleton still selects in code, and the operator input stays the existing model configuration.
 Decision: A participating step whose resolved profile is opus-5-5 selects that slot's Opus variant. Only steps with that recorded profile receive the Opus directive. An unselected step, including validate on a goal-child build plan, leaves the slot canonical.

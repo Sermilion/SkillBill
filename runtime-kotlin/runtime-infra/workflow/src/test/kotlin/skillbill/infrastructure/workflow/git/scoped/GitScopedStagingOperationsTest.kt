@@ -145,6 +145,53 @@ class GitScopedStagingOperationsTest {
   }
 
   @Test
+  fun `stagePaths adds a feature spec only when it is not gitignored`() {
+    write(".feature-specs/kept/spec.md", "kept\n")
+    write(".feature-specs/tracked/spec.md", "tracked\n")
+    git("add", "-A")
+    git("commit", "-m", "track feature specs")
+    write(".gitignore", ".feature-specs/tracked/\n.feature-specs/ignored/\n")
+    git("add", "--", ".gitignore")
+    git("commit", "-m", "ignore one feature-spec tree")
+    write(".feature-specs/kept/spec.md", "kept updated\n")
+    write(".feature-specs/kept/new.md", "kept new\n")
+    write(".feature-specs/tracked/spec.md", "tracked updated\n")
+    write(".feature-specs/ignored/new.md", "ignored new\n")
+    val trackedBefore = indexSnapshot()[".feature-specs/tracked/spec.md"]
+    val paths =
+      listOf(
+        ".feature-specs/kept/spec.md",
+        ".feature-specs/kept/new.md",
+        ".feature-specs/tracked/spec.md",
+        ".feature-specs/ignored/new.md",
+      )
+
+    val ignored =
+      assertIs<WorkflowGitOperationResult.Ok>(
+        GitScopedStagingOperations.gitignoredFeatureSpecPaths(repo, paths),
+      )
+    assertEquals(
+      setOf(".feature-specs/tracked/spec.md", ".feature-specs/ignored/new.md"),
+      ignored.value.lineSequence().map(String::trim).filter(String::isNotBlank).toSet(),
+    )
+
+    val result = GitScopedStagingOperations.stagePaths(repo, paths)
+
+    assertTrue(result is WorkflowGitOperationResult.Ok, result.error)
+    val index = indexSnapshot()
+    assertEquals(
+      trackedBefore,
+      index[".feature-specs/tracked/spec.md"],
+      "a gitignored tracked feature spec must stay at its indexed blob",
+    )
+    assertFalse(".feature-specs/ignored/new.md" in index.keys, "a gitignored untracked feature spec must not be added")
+    assertTrue(".feature-specs/kept/new.md" in index.keys)
+    val keptSha = index[".feature-specs/kept/spec.md"]?.split(' ')?.getOrNull(1)
+    val keptWorktree = runGitCommand(repo, "hash-object", "--", ".feature-specs/kept/spec.md").value.orEmpty().trim()
+    assertEquals(keptWorktree, keptSha, "a feature spec that is not gitignored must be staged")
+  }
+
+  @Test
   fun `stagePaths round-trips paths carrying spaces and non-ASCII bytes`() {
     write("owned/a file with spaces.kt", "spaces\n")
     write("owned/ünïcødé.kt", "unicode\n")

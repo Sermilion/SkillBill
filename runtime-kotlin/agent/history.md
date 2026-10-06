@@ -1,3 +1,14 @@
+## [2026-10-06] SKILL-404 record admitted phase strategies
+Areas: runtime-contracts telemetry keys; runtime-domain and runtime-application finish records; runtime-engine featuretask finish join and runner; runtime-infra/sqlite session columns and finish payload; docs telemetry privacy and review telemetry
+- A durable feature-task finish joins recorded phase ids to the admitted dispatch and stores each strategy id and semantic revision. The join copies that map. It does not reselect, map slots to phases, or append an Opus suffix. Implement and simplify share one id when the admitted plan stored one id for both.
+- Full coverage is measured, in phase-outcome order, with extra unrecorded dispatch entries left out. No records, a null dispatch, or an empty dispatch is unavailable_no_durable_state and a null map. Any missing recorded id is unavailable_incomplete, a null map, and one diagnostics warning that names the finish-join seam and those ids.
+- The session row gains nullable phase_strategies and phase_strategy_availability on the same ensure path as launched_models. The grain stays on the payload only. Null availability stays SQL NULL, so a pre-column row emits unknown. Reconciliation reads the session row and does not backfill.
+- Strategy ids stay raw registered tokens at anonymous and full, the same class as launched_models. Nested entry keys reuse the execution-plan strategy id and semantic revision constants.
+- reusable: the pure phase-strategy join beside agent-context telemetry, and the single finish-payload loader shared by success and finishedError.
+- Limits: phase records, phase outcome statuses, feature-task stats, and in-memory phase runs stay unchanged. Execution-plan, persistence, and telemetry-event contracts stay at their present versions. Queued payloads are not rewritten.
+Feature flag: N/A
+Acceptance criteria: 13/13 implemented
+
 ## [2026-10-05] SKILL-403 automatic Opus 5.5 slot selection
 Areas: runtime-domain launch facts; runtime-engine featuretask slots, execution plans, run loop, and goal-child prepare; runtime-ports agent launch and checklist; runtime-infra launcher and workflow; runtime-core slot registration; runtime-contracts and orchestration execution-plan 0.2; docs
 - Existing model configuration selects Opus 5.5. Fourteen slot variants compose the canonical strategies and append a directive resource only on steps whose recorded profile is opus-5-5. Runtime commit stays canonical and launches no agent.

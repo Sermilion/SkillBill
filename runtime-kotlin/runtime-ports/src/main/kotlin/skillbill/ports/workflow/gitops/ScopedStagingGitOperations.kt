@@ -30,4 +30,13 @@ interface ScopedStagingGitOperations {
     repoRoot: Path,
     paths: List<String>,
   ): WorkflowPathContentIdentitiesResult
+
+  /**
+   * Feature-spec paths from [paths] that match a gitignore rule, including paths already in the index.
+   * The ok value is a newline-separated list. Adapters that do not read gitignore return an empty list.
+   */
+  fun gitignoredFeatureSpecPaths(
+    repoRoot: Path,
+    paths: List<String>,
+  ): WorkflowGitOperationResult
 }

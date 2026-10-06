@@ -3,10 +3,13 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.telemetry.model.FeatureTaskRuntimeAgentContext
 import skillbill.application.telemetry.model.FeatureTaskRuntimeFinishedRequest
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingVerificationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStrategies
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRegenerationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
@@ -45,6 +48,8 @@ internal fun emitFeatureTaskRuntimeFinished(
       reviewFixCapExhausted = telemetryPayload.verificationTelemetry.reviewFixCapExhausted,
       auditGapIterationCount = telemetryPayload.auditGapIterationCount,
       agentContext = telemetryPayload.agentContext,
+      phaseStrategies = telemetryPayload.phaseStrategies,
+      phaseStrategyAvailability = telemetryPayload.phaseStrategyAvailability,
     ),
   )
 }
@@ -86,6 +91,8 @@ internal fun emitFeatureTaskRuntimeFinishedError(
       reviewFixCapExhausted = telemetryPayload.verificationTelemetry.reviewFixCapExhausted,
       auditGapIterationCount = telemetryPayload.auditGapIterationCount,
       agentContext = telemetryPayload.agentContext,
+      phaseStrategies = telemetryPayload.phaseStrategies,
+      phaseStrategyAvailability = telemetryPayload.phaseStrategyAvailability,
     ),
   )
 }
@@ -104,6 +111,8 @@ internal data class ResolvedFeatureTaskRuntimeTelemetryPayload(
   val verificationTelemetry: FeatureTaskRuntimeFindingVerificationTelemetry,
   val regeneration: FeatureTaskRuntimeRegenerationTelemetry,
   val reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
+  val phaseStrategies: String?,
+  val phaseStrategyAvailability: String?,
 )
 
 internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
@@ -118,6 +127,12 @@ internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
   val reconciliation =
     runCatching(context.crashReconciliation).getOrNull()
       ?: FeatureTaskRuntimeCrashReconciliationResult.NONE
+  val phaseStrategies =
+    runCatching(context.phaseStrategies).getOrNull()
+      ?: FeatureTaskRuntimePhaseStrategies(
+        availability = TelemetryMeasurementAvailability.UNAVAILABLE_NO_DURABLE_STATE,
+        values = null,
+      )
   return ResolvedFeatureTaskRuntimeTelemetryPayload(
     tokenBreakdownJson = tokenBreakdownJson,
     totalTokens = totalTokens,
@@ -127,6 +142,11 @@ internal fun resolvedFeatureTaskRuntimeTelemetryPayload(
     verificationTelemetry = verificationTelemetry,
     regeneration = regeneration,
     reconciliation = reconciliation,
+    phaseStrategies =
+      phaseStrategies.values
+        ?.takeIf { phaseStrategies.availability.measured }
+        ?.let(JsonCodec::mapToJsonString),
+    phaseStrategyAvailability = phaseStrategies.availability.wireValue,
   )
 }
 

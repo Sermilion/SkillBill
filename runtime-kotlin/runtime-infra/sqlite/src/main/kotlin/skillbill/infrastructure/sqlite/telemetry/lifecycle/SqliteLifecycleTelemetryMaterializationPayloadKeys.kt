@@ -4,6 +4,9 @@ const val AUDIT_GAP_MEASUREMENT_GRAIN_PER_RUN: String = "audit_gap_rounds_per_ru
 
 const val AGENT_CONTEXT_MEASUREMENT_GRAIN_DISTINCT_PER_RUN: String = "distinct_resolved_agents_per_run"
 
+const val PHASE_STRATEGY_MEASUREMENT_GRAIN_ADMITTED_PER_RECORDED_PHASE: String =
+  "admitted_strategy_per_recorded_phase"
+
 object SqliteLifecycleTelemetryMaterializationPayloadKeys {
   const val FEATURE_SIZE: String = "feature_size"
   const val ORCHESTRATED: String = "orchestrated"

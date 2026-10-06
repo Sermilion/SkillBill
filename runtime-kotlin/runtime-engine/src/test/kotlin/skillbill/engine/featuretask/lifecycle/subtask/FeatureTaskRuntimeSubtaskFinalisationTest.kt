@@ -144,6 +144,64 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
   }
 
   @Test
+  fun `commit_push leaves a gitignored feature spec unstaged and still commits the other dirty paths`() {
+    val repo = repoWithRemote()
+    Files.createDirectories(repo.root.resolve(".feature-specs/$issueKey"))
+    Files.writeString(repo.root.resolve(".feature-specs/$issueKey/spec.md"), "spec\n")
+    git(repo.root, "add", ".feature-specs")
+    git(repo.root, "commit", "-m", "operator committed the spec")
+    Files.writeString(repo.root.resolve(".gitignore"), ".feature-specs/\n")
+    git(repo.root, "add", ".gitignore")
+    git(repo.root, "commit", "-m", "ignore feature specs")
+    Files.writeString(repo.root.resolve(".feature-specs/$issueKey/spec.md"), "spec edited by the run\n")
+    Files.writeString(repo.root.resolve("owned.txt"), "work\n")
+
+    val finalised =
+      assertIs<FeatureTaskRuntimeSubtaskFinalised>(
+        finalise(repo, durableCommitSha = null, paths = emptyList()),
+      )
+
+    val committed =
+      git(repo.root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+        .lines().filter { it.isNotBlank() }.sorted()
+    assertEquals(listOf("owned.txt"), committed)
+    assertEquals(listOf("owned.txt"), finalised.stagedPaths)
+    assertEquals(
+      listOf(".feature-specs/$issueKey/spec.md"),
+      git(repo.root, "diff", "--name-only").lines().filter { it.isNotBlank() },
+    )
+  }
+
+  @Test
+  fun `commit_push pushes the current head when every dirty path is a gitignored feature spec`() {
+    val repo = repoWithRemote()
+    Files.createDirectories(repo.root.resolve(".feature-specs/$issueKey"))
+    Files.writeString(repo.root.resolve(".feature-specs/$issueKey/spec.md"), "spec\n")
+    git(repo.root, "add", ".feature-specs")
+    git(repo.root, "commit", "-m", "operator committed the spec")
+    Files.writeString(repo.root.resolve(".gitignore"), ".feature-specs/\n")
+    git(repo.root, "add", ".gitignore")
+    git(repo.root, "commit", "-m", "ignore feature specs")
+    val headBefore = git(repo.root, "rev-parse", "HEAD")
+    val commitsBefore = commitCount(repo.root)
+    Files.writeString(repo.root.resolve(".feature-specs/$issueKey/spec.md"), "spec edited by the run\n")
+
+    val finalised =
+      assertIs<FeatureTaskRuntimeSubtaskFinalised>(
+        finalise(repo, durableCommitSha = null, paths = emptyList()),
+      )
+
+    assertEquals(headBefore, finalised.commitSha)
+    assertEquals(commitsBefore, commitCount(repo.root))
+    assertEquals(emptyList(), finalised.stagedPaths)
+    assertEquals(headBefore, git(repo.remote, "rev-parse", branch))
+    assertEquals(
+      "spec\n",
+      git(repo.root, "show", "HEAD:.feature-specs/$issueKey/spec.md") + "\n",
+    )
+  }
+
+  @Test
   fun `commit_push includes dirty paths outside the remembered inventory`() {
     val repo = repoWithRemote()
     Files.writeString(repo.root.resolve("owned.txt"), "owned\n")

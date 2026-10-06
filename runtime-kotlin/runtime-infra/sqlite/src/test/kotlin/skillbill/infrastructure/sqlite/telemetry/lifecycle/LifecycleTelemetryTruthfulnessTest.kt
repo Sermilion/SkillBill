@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleSessionCompletion
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
@@ -183,6 +184,141 @@ class LifecycleTelemetryTruthfulnessTest {
       )
       assertNull(payload[LifecycleTelemetryPayloadKeys.LAUNCHED_MODELS])
       assertTrue(LifecycleTelemetryPayloadKeys.LAUNCHED_MODELS in payload)
+    }
+  }
+
+  @Test
+  fun `a measured shared-slot row round-trips strategy ids and compares revision as a number`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(startedRuntimeSession(), "anonymous")
+      store.featureTaskRuntimeFinished(
+        finishedRuntimeSession().copy(
+          phaseStrategies =
+            phaseStrategiesJson(
+              "implement" to ("implement-then-simplify-opus-5-5" to 1),
+              "simplify" to ("implement-then-simplify-opus-5-5" to 1),
+              "commit_push" to ("runtime-commit" to 1),
+              "audit" to ("acceptance-audit" to 3),
+            ),
+          phaseStrategyAvailability = TelemetryMeasurementAvailability.MEASURED.wireValue,
+        ),
+        "anonymous",
+      )
+
+      val payload = payloadFor(connection, "skillbill_feature_task_runtime_finished")
+      assertEquals(
+        TelemetryMeasurementAvailability.MEASURED.wireValue,
+        payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGY_AVAILABILITY],
+      )
+      val strategies = payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES] as Map<*, *>
+      assertEquals(
+        "implement-then-simplify-opus-5-5",
+        (strategies["implement"] as Map<*, *>)[FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID],
+      )
+      assertEquals(
+        "implement-then-simplify-opus-5-5",
+        (strategies["simplify"] as Map<*, *>)[FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID],
+      )
+      assertEquals(
+        "runtime-commit",
+        (strategies["commit_push"] as Map<*, *>)[FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID],
+      )
+      assertEquals(
+        3,
+        ((strategies["audit"] as Map<*, *>)[FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION] as Number).toInt(),
+      )
+      assertTrue(FeatureTaskRuntimeExecutionPlanKeys.SLOT !in (strategies["audit"] as Map<*, *>))
+      assertTrue(LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES in payload)
+    }
+  }
+
+  @Test
+  fun `a stored goal-child build map keeps build and has no validate key`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(startedRuntimeSession(), "anonymous")
+      store.featureTaskRuntimeFinished(
+        finishedRuntimeSession().copy(
+          phaseStrategies = phaseStrategiesJson("build" to ("pack-build" to 1)),
+          phaseStrategyAvailability = TelemetryMeasurementAvailability.MEASURED.wireValue,
+        ),
+        "anonymous",
+      )
+
+      val payload = payloadFor(connection, "skillbill_feature_task_runtime_finished")
+      val strategies = payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES] as Map<*, *>
+      assertTrue("build" in strategies)
+      assertTrue("validate" !in strategies)
+    }
+  }
+
+  @Test
+  fun `an explicit unavailable plan emits a present null phase strategies map`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(startedRuntimeSession(), "anonymous")
+      store.featureTaskRuntimeFinished(
+        finishedRuntimeSession().copy(
+          phaseStrategyAvailability =
+            TelemetryMeasurementAvailability.UNAVAILABLE_NO_DURABLE_STATE.wireValue,
+        ),
+        "anonymous",
+      )
+
+      val payload = payloadFor(connection, "skillbill_feature_task_runtime_finished")
+      assertEquals(
+        TelemetryMeasurementAvailability.UNAVAILABLE_NO_DURABLE_STATE.wireValue,
+        payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGY_AVAILABILITY],
+      )
+      assertNull(payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES])
+      assertTrue(LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES in payload)
+    }
+  }
+
+  @Test
+  fun `an incomplete dispatch row emits a present null phase strategies map`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(startedRuntimeSession(), "anonymous")
+      store.featureTaskRuntimeFinished(
+        finishedRuntimeSession().copy(
+          phaseStrategyAvailability = TelemetryMeasurementAvailability.UNAVAILABLE_INCOMPLETE.wireValue,
+        ),
+        "anonymous",
+      )
+
+      val payload = payloadFor(connection, "skillbill_feature_task_runtime_finished")
+      assertEquals(
+        TelemetryMeasurementAvailability.UNAVAILABLE_INCOMPLETE.wireValue,
+        payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGY_AVAILABILITY],
+      )
+      assertNull(payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES])
+      assertTrue(LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES in payload)
+    }
+  }
+
+  @Test
+  fun `a null phase strategy availability column surfaces unknown and a null map`() {
+    withConnection { connection ->
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+      store.featureTaskRuntimeStarted(startedRuntimeSession(), "anonymous")
+      store.featureTaskRuntimeFinished(finishedRuntimeSession(), "anonymous")
+      clearAvailabilityColumns(connection)
+
+      val payload =
+        featureTaskRuntimeFinishedPayload(
+          sessionRow(connection, "ftr-truth"),
+          level = "anonymous",
+          salt = "salt",
+          diagnostics = SqliteTestDiagnostics,
+        )
+      assertEquals(
+        TelemetryMeasurementAvailability.UNKNOWN.wireValue,
+        payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGY_AVAILABILITY],
+      )
+      assertNull(payload[LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES])
+      assertTrue(LifecycleTelemetryPayloadKeys.PHASE_STRATEGIES in payload)
     }
   }
 
@@ -412,6 +548,17 @@ class LifecycleTelemetryTruthfulnessTest {
       goalParentWorkflowId = "wftr-20260915-084500-parent",
     )
 
+  private fun phaseStrategiesJson(vararg entries: Pair<String, Pair<String, Int>>): String =
+    JsonCodec.mapToJsonString(
+      entries.associate { (phaseId, strategy) ->
+        phaseId to
+          mapOf(
+            FeatureTaskRuntimeExecutionPlanKeys.STRATEGY_ID to strategy.first,
+            FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION to strategy.second,
+          )
+      },
+    )
+
   private fun finishedRuntimeSession(): FeatureTaskRuntimeFinishedRecord =
     FeatureTaskRuntimeFinishedRecord(
       sessionId = "ftr-truth",
@@ -430,7 +577,9 @@ class LifecycleTelemetryTruthfulnessTest {
         UPDATE feature_task_runtime_sessions SET
           review_fix_cap_exhausted_availability = NULL,
           audit_gap_availability = NULL,
-          audit_gap_iteration_count = NULL
+          audit_gap_iteration_count = NULL,
+          phase_strategy_availability = NULL,
+          phase_strategies = NULL
         WHERE session_id = 'ftr-truth'
         """.trimIndent(),
       )

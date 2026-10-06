@@ -35,6 +35,8 @@ data class FeatureTaskRuntimeFinishedRequest(
   val reviewFixCapExhausted: Boolean? = null,
   val auditGapIterationCount: Int? = null,
   val agentContext: FeatureTaskRuntimeAgentContext = FeatureTaskRuntimeAgentContext(),
+  val phaseStrategies: String? = null,
+  val phaseStrategyAvailability: String? = null,
 )
 
 data class FeatureTaskRuntimeAgentContext(

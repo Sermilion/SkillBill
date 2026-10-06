@@ -42,6 +42,50 @@
         "verify_findings": "completed",
         "write_history": "completed"
     },
+    "phase_strategies": {
+        "audit": {
+            "semantic_revision": 3,
+            "strategy_id": "acceptance-audit"
+        },
+        "commit_push": {
+            "semantic_revision": 1,
+            "strategy_id": "runtime-commit"
+        },
+        "implement": {
+            "semantic_revision": 1,
+            "strategy_id": "implement-then-simplify"
+        },
+        "plan": {
+            "semantic_revision": 1,
+            "strategy_id": "agent-plan"
+        },
+        "preplan": {
+            "semantic_revision": 1,
+            "strategy_id": "agent-preplan"
+        },
+        "review": {
+            "semantic_revision": 1,
+            "strategy_id": "inline"
+        },
+        "simplify": {
+            "semantic_revision": 1,
+            "strategy_id": "implement-then-simplify"
+        },
+        "validate": {
+            "semantic_revision": 1,
+            "strategy_id": "agent-validate"
+        },
+        "verify_findings": {
+            "semantic_revision": 1,
+            "strategy_id": "inline"
+        },
+        "write_history": {
+            "semantic_revision": 1,
+            "strategy_id": "boundary-history"
+        }
+    },
+    "phase_strategy_availability": "measured",
+    "phase_strategy_measurement_grain": "admitted_strategy_per_recorded_phase",
     "redacted_workflow_id": "wftr-20260602-test-0001",
     "regeneration_activation_count": 0,
     "regeneration_attempt_count": 0,

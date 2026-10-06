@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
@@ -57,6 +58,7 @@ internal class InMemoryPhaseRunState(
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
+  override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
   override val diagnostics get() = telemetry.diagnostics
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =

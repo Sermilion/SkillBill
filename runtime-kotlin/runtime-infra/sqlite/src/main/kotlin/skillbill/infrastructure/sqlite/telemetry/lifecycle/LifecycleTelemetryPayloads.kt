@@ -84,6 +84,7 @@ internal fun featureTaskRuntimeFinishedPayload(
     putAll(reviewFixCapExhaustionFields(row))
     putAll(auditGapFields(row))
     putAll(agentContextFields(row))
+    putAll(phaseStrategyFields(row))
     put(MatKeys.REGENERATION_ACTIVATION_COUNT, row.intOrZero(MatKeys.REGENERATION_ACTIVATION_COUNT))
     put(MatKeys.REGENERATION_ATTEMPT_COUNT, row.intOrZero(MatKeys.REGENERATION_ATTEMPT_COUNT))
     put(MatKeys.REGENERATION_OUTCOME_COUNTS, parsePhaseOutcomes(row.stringOrEmpty("regeneration_outcome_counts_json")))
@@ -141,6 +142,18 @@ private fun agentContextFields(row: Map<String, Any?>): Map<String, Any?> {
     LifeKeys.RESOLVED_AGENT_IDS to agents.values.takeIf { it.isNotEmpty() },
     LifeKeys.LAUNCHED_MODEL_AVAILABILITY to models.availability().wireValue,
     LifeKeys.LAUNCHED_MODELS to models.values.takeIf { it.isNotEmpty() },
+  )
+}
+
+private fun phaseStrategyFields(row: Map<String, Any?>): Map<String, Any?> {
+  val availability = row.availability(LifeKeys.PHASE_STRATEGY_AVAILABILITY)
+  return linkedMapOf(
+    LifeKeys.PHASE_STRATEGY_MEASUREMENT_GRAIN to PHASE_STRATEGY_MEASUREMENT_GRAIN_ADMITTED_PER_RECORDED_PHASE,
+    LifeKeys.PHASE_STRATEGY_AVAILABILITY to availability.wireValue,
+    LifeKeys.PHASE_STRATEGIES to
+      row.stringOrEmpty(LifeKeys.PHASE_STRATEGIES)
+        .takeIf { availability.measured }
+        ?.let(::parsePhaseOutcomes),
   )
 }
 

@@ -196,6 +196,9 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         context.diagnostics,
         identity,
       )
+    context.commitPushManifestCompletion
+      ?.markCompleteBeforeFinalCommit(context.request, run.phaseId)
+      ?.let { return context.block(run, iteration, it) }
     val outcome =
       finaliseSubtask(
         context,

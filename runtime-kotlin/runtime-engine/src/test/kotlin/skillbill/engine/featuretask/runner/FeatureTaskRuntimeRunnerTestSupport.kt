@@ -61,6 +61,8 @@ import skillbill.engine.featuretask.runloop.core.retainingChecklistFrom
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableLaunch
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
+import skillbill.engine.featuretask.runloop.finalization.NoopCommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -1452,6 +1454,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   implementationChecklistStore: FeatureTaskImplementationChecklistStore =
     FileSystemFeatureTaskImplementationChecklistStore(NoopRuntimeDiagnostics),
+  commitPushManifestCompletion: CommitPushManifestCompletion = NoopCommitPushManifestCompletion,
 ) : FeatureTaskRuntimeRunLoopEntry(
     gitOperations,
     decompositionPlanner,
@@ -1463,6 +1466,7 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     sharedEvidenceResolver,
     diffResolver,
     implementationChecklistStore,
+    commitPushManifestCompletion,
   ) {
   private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
 

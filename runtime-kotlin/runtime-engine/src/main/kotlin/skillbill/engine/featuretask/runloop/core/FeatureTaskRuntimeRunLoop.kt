@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
@@ -53,6 +54,8 @@ internal class FeatureTaskRuntimeRunLoopContext(
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
 ) : PhaseRunLoopAttemptCollaborators {
+  val commitPushManifestCompletion: CommitPushManifestCompletion?
+    get() = runState.commitPushManifestCompletion
   override val progress get() = runState.coupledProgress().progressSnapshot
 
   internal val state: FeatureTaskRuntimeRunState get() = runState.coupledProgress()
@@ -203,12 +206,14 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
+  private val commitPushManifestCompletion: CommitPushManifestCompletion,
 ) {
   internal fun context(
     request: FeatureTaskRuntimeRunFacts,
     runState: PhaseRunState,
   ): FeatureTaskRuntimeRunLoopContext {
     runState.implementationChecklistStore = implementationChecklistStore
+    runState.commitPushManifestCompletion = commitPushManifestCompletion
     return FeatureTaskRuntimeRunLoopContext(
       request,
       runState,
@@ -309,7 +314,10 @@ class FeatureTaskRuntimeRunLoop internal constructor(
 }
 
 internal fun PhaseRunState.retainingChecklistFrom(previous: PhaseRunState): PhaseRunState {
-  val store = previous.implementationChecklistStore ?: return this
-  if (implementationChecklistStore == null) implementationChecklistStore = store
+  val store = previous.implementationChecklistStore
+  if (store != null && implementationChecklistStore == null) implementationChecklistStore = store
+  if (commitPushManifestCompletion == null) {
+    commitPushManifestCompletion = previous.commitPushManifestCompletion
+  }
   return this
 }

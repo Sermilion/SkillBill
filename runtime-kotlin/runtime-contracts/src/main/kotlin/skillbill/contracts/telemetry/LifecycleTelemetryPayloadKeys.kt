@@ -53,6 +53,9 @@ object LifecycleTelemetryPayloadKeys {
   const val RESOLVED_AGENT_AVAILABILITY: String = "resolved_agent_availability"
   const val LAUNCHED_MODELS: String = "launched_models"
   const val LAUNCHED_MODEL_AVAILABILITY: String = "launched_model_availability"
+  const val PHASE_STRATEGIES: String = "phase_strategies"
+  const val PHASE_STRATEGY_AVAILABILITY: String = "phase_strategy_availability"
+  const val PHASE_STRATEGY_MEASUREMENT_GRAIN: String = "phase_strategy_measurement_grain"
   const val AGENT_CONTEXT_MEASUREMENT_GRAIN: String = "agent_context_measurement_grain"
 }
 

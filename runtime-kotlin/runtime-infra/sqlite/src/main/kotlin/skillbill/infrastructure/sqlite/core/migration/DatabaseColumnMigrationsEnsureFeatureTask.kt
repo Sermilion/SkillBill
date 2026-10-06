@@ -134,6 +134,8 @@ private fun ensureFeatureTaskRuntimeSessionAvailabilityColumns(connection: Conne
   listOf(
     "resolved_agent_ids",
     "launched_models",
+    "phase_strategies",
+    "phase_strategy_availability",
   ).forEach { column ->
     DatabaseColumnMigrationsEnsure.ensureColumn(connection, "feature_task_runtime_sessions", column, "TEXT")
   }

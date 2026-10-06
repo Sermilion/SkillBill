@@ -23,7 +23,9 @@ class FeatureTaskRuntimeSubtaskFinalisation(
   fun finalise(request: FeatureTaskRuntimeSubtaskFinaliseRequest): FeatureTaskRuntimeSubtaskFinalisationResult {
     val dirtyOrError = gitOperations.dirtyImplementationPaths(repoRoot)
     if (dirtyOrError is DirtyPathsError) return blocked(dirtyOrError.reason)
-    val paths = (dirtyOrError as DirtyPaths).paths
+    val dirty = dirtyOrError as DirtyPaths
+    if (dirty.paths.isEmpty() && dirty.omittedGitignoredFeatureSpecs) return publishUnchangedHead(request)
+    val paths = dirty.paths
     val staging =
       when (val outcome = prepareStaging(paths)) {
         is FinalisationStagingBlocked -> return outcome.result
@@ -175,6 +177,26 @@ fun FeatureTaskRuntimeSubtaskFinalisation.restoring(
     "$error; the pre-finalisation index could NOT be restored (${restored.error}) — inspect " +
       "`git status` before committing anything yourself"
   }
+}
+
+private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
+  request: FeatureTaskRuntimeSubtaskFinaliseRequest,
+): FeatureTaskRuntimeSubtaskFinalisationResult {
+  val head = gitOperations.headCommitSha(repoRoot)
+  val commitSha =
+    head.value.orEmpty().trim().takeIf { head is WorkflowGitOperationResult.Ok && it.isNotBlank() }
+      ?: return blocked("the finalisation commit returned an empty sha")
+  val recordFailure = recordCommit(commitSha, emptyList())
+  if (recordFailure != null) return FeatureTaskRuntimeSubtaskFinalisationBlocked(recordFailure)
+  return finalizeCommittedSubtask(
+    FinalizeCommittedSubtaskInput(
+      request = request,
+      branch = request.metadata.branch,
+      stageable = emptyList(),
+      commitSha = commitSha,
+      rewrites = false,
+    ),
+  )
 }
 
 fun FeatureTaskRuntimeSubtaskFinalisation.blocked(reason: String) =

@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -47,6 +48,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val clock: Clock,
 ) : PhaseRunState {
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore? = null
+  override var commitPushManifestCompletion: CommitPushManifestCompletion? = null
   private val facts get() = telemetry.request
   override val records get() = telemetry.recorder
   override val diagnostics get() = telemetry.diagnostics

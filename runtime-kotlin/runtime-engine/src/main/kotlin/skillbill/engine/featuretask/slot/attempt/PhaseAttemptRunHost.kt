@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
+import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
@@ -125,6 +126,9 @@ internal class PhaseAttemptRunHost(
 
   val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
     get() = directReadinessGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val commitPushManifestCompletion: CommitPushManifestCompletion?
+    get() = backingRunState.commitPushManifestCompletion
 
   val telemetry: FeatureTaskRuntimeRunObservability
     get() = backingRunState.telemetry
