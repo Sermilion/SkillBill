@@ -76,8 +76,10 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "internals. When this briefing includes a boundary heading list, that list is headings only, in walk " +
         "order. Walk it from the start and judge each heading from its heading text alone. Stop when the three " +
         "headings you just read are all irrelevant to this task. Then read the body of each heading you judged " +
-        "relevant: open its source file, find that heading, and read only that section. Do not read a history or " +
-        "decisions file from start to finish, and do not read the body of a heading you judged irrelevant. " +
+        "relevant: open its source file, find that heading, and read only that section. The heading list is " +
+        "complete. Do not grep, search, or list a history or decisions file to rediscover headings. Do not " +
+        "search those files for symbols: a content match returns the body. The only read of a history or " +
+        "decisions file is that section read. Do not read the body of a heading you judged irrelevant. " +
         "Leave open any decision this task's own code cannot answer, including dependency, " +
         "account, and environment questions, each with the facts that bear on it and the option you recommend. " +
         "Name a cited heading by its heading_id exactly as the boundary catalog spells it. Do not forward " +

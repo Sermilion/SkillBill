@@ -69,31 +69,28 @@ object GoalPlanningContextPromptFormatter {
     val catalog = boundary[GoalPlanningSharedContextPacketPayloadKeys.CATALOG] as? List<*> ?: emptyList<Any?>()
     append("\n\n## Boundary heading list\n")
     append("Headings only, in walk order. No entry bodies.\n")
-    var listed = 0
-    for (raw in catalog) {
-      val entry = raw as? Map<*, *> ?: continue
-      val headingId = entry[GoalPlanningSharedContextPacketPayloadKeys.HEADING_ID] as? String ?: continue
-      val sourcePath = entry[GoalPlanningSharedContextPacketPayloadKeys.SOURCE_PATH] as? String ?: continue
-      val kind = entry[GoalPlanningSharedContextPacketPayloadKeys.KIND] as? String ?: continue
-      val heading = entry[GoalPlanningSharedContextPacketPayloadKeys.HEADING] as? String ?: continue
-      listed += 1
-      append(listed)
-      append(". ")
-      append(singleLine(headingId))
-      append(" | ")
-      append(singleLine(sourcePath))
-      append(" | ")
-      append(singleLine(kind))
-      append(" | ")
-      append(singleLine(heading))
-      append("\n")
+    val rows = catalog.mapNotNull(::boundaryHeadingRow)
+    if (rows.isEmpty()) {
+      append("The heading list is empty.\n")
+    } else {
+      rows.forEachIndexed { index, row ->
+        append(index + 1)
+        append(". ")
+        append(row)
+        append("\n")
+      }
     }
-    if (listed == 0) append("The heading list is empty.\n")
     if (boundary[GoalPlanningSharedContextPacketPayloadKeys.TRUNCATED] == true) {
       append("The heading list was truncated.\n")
     }
     append(BOUNDARY_HEADING_WALK)
     append("\n")
+  }
+
+  private fun boundaryHeadingRow(raw: Any?): String? {
+    val entry = raw as? Map<*, *> ?: return null
+    val fields = HEADING_ROW_KEYS.mapNotNull { key -> entry[key] as? String }
+    return fields.takeIf { it.size == HEADING_ROW_KEYS.size }?.joinToString(" | ", transform = ::singleLine)
   }
 
   private fun StringBuilder.appendSelectedBoundaryMemory(resolved: GoalPlanningResolvedBoundaryBodies) {
@@ -132,9 +129,19 @@ object GoalPlanningContextPromptFormatter {
 
   private val WHITESPACE_RUN = Regex("\\s+")
 
+  private val HEADING_ROW_KEYS =
+    listOf(
+      GoalPlanningSharedContextPacketPayloadKeys.HEADING_ID,
+      GoalPlanningSharedContextPacketPayloadKeys.SOURCE_PATH,
+      GoalPlanningSharedContextPacketPayloadKeys.KIND,
+      GoalPlanningSharedContextPacketPayloadKeys.HEADING,
+    )
+
   internal const val BOUNDARY_HEADING_WALK: String =
     "Walk this list from the start. Judge each heading from its heading text alone. Stop when the three " +
       "headings you just read are all irrelevant to this task. Then read the body of each heading you judged " +
-      "relevant: open its source file, find that heading, and read only that section. Do not read a history or " +
-      "decisions file from start to finish, and do not read the body of a heading you judged irrelevant."
+      "relevant: open its source file, find that heading, and read only that section. The heading list is " +
+      "complete. Do not grep, search, or list a history or decisions file to rediscover headings. Do not search " +
+      "those files for symbols: a content match returns the body. The only read of a history or decisions file " +
+      "is that section read. Do not read the body of a heading you judged irrelevant."
 }
