@@ -328,7 +328,14 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     }
     val preplan = composePromptForPhase("preplan")
     assertContains(preplan, "never reads the repository")
-    assertContains(preplan, "Settle every question the repository can answer here")
+    assertContains(preplan, "Read only files this task directly touches")
+    assertContains(preplan, "do not read dependency jars, Gradle caches")
+    assertContains(preplan, "Stop when the three headings you just read are all irrelevant to this task")
+    assertContains(preplan, "The heading list is complete")
+    assertContains(preplan, "Do not grep, search, or list a history or decisions file")
+    assertContains(preplan, "a content match returns the body")
+    assertContains(preplan, "Do not read the body of a heading you judged irrelevant")
+    assertFalse(preplan.contains("Settle every question the repository can answer"))
   }
 
   @Test
