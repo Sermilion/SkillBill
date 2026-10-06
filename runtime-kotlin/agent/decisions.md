@@ -1,5 +1,25 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-06] A preplan lookup must answer an open question about this task
+
+Context: NEWS-152 preplan spent about six minutes after it already had the failing call. It repeated filename searches, read one mapper in four slices, and opened text-to-speech types, Gradle coordinates, and platform wrappers that only forward the click. The 2026-10-02 digest authority still forbids plan from reading, and the preplan directive told the worker to carry type hierarchies, so it read neighbors in case the plan was blind.
+
+Decision: The digest still carries every fact the plan needs to specify this task: paths, symbols, signatures, tests, and the patterns those files follow. Decide that scope before looking anything up. A lookup is in scope only when the plan cannot write this task without that fact. A lookup that cannot change the digest is waste, including one made just in case. Do not inventory a type hierarchy, sibling feature, shared client, platform wrapper, or dependency coordinate unless the plan needs that fact. A wrapper that only forwards a call already read is not a new question. Do not search for a file already opened, do not re-read it in slices, and do not open an out-of-scope file to confirm. Plan still does not read the repository.
+
+Reason: The 2026-10-02 rule stopped plan from repeating discovery. Completeness applies to the decided scope. It does not license adjacent reads just in case the plan is blind.
+
+Revisit when: Plan regularly records an assumption about the code this task changes because the digest omitted a fact inside that scope.
+
+## [2026-10-06] Preplan batches lookups and reads each file once
+
+Context: With the scoped-lookup rule, NEWS-136 preplan stayed on the task but still took 286 seconds over 23 tool rounds, about 12 seconds each. It spent four sequential rounds on Linear (schema, issue, schema, comments), issued one or two independent lookups per round, read two files in offset slices and went back for the rest, and searched the repository root for `preferred` and `fun add`.
+
+Decision: Preplan still fetches the tracker issue and its comments when the intake lacks the comments, because comments can carry requirements the title does not. It requests every tool schema in one round, makes every tracker call in the next alongside its first code lookups, and does not fetch the tracker again. It issues every lookup it can already name in one round and starts a new round only for a dependent lookup. Batching never adds a lookup; each one still answers an open question. It opens each file once and reads every part the task needs in that read, reading a file under 300 lines whole, and never opens it again. Searches are scoped to a module or directory already located. A repository-root search for a common word is refused.
+
+Reason: Each round resends the full conversation, so pointless rounds and pointless reads both cost time and tokens. Run length is acceptable when every action is useful. The goal is removing waste, not a time budget.
+
+Revisit when: Single reads of large files regularly pull in code outside the task, or a dependent-lookup chain cannot be batched.
+
 ## [2026-10-06] Copy the admitted dispatch onto finish
 Context: Selection already lives on the admitted execution plan. Finish has to report the strategy that owned each recorded phase without choosing again.
 Decision: Join recorded phase ids to the admitted dispatch and copy strategy id and semantic revision only. The slot stays off the payload. The join does not append an Opus suffix and has no branch for a contract 0.1 plan or a resumed plan.

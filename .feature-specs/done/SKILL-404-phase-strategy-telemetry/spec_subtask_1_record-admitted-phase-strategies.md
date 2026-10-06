@@ -14,13 +14,13 @@ Primary files:
 - `ensureColumn` on the feature-task session table, following the `launched_models` path in `ensureFeatureTaskRuntimeSessionAvailabilityColumns` and `DatabaseSchemaStatements.kt`
 - `insertFeatureTaskRuntimeFinished` and `updateFeatureTaskRuntimeFinished` in `LifecycleTelemetryRuntimeSave.kt`
 - `StaleSessionReconciler.reconcileStaleFeatureTaskRuntimeSessions`
-- `docs/telemetry-privacy.md`
-- the resolved-agent section of `docs/review-telemetry.md`
+- `../../../docs/telemetry-privacy.md`
+- the resolved-agent section of `../../../docs/review-telemetry.md`
 - `LifecycleTelemetryTruthfulnessTest`
 - `TelemetryAnonymousRedactionTest`
-- `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/standalone/feature-task-runtime-finished.json`
-- `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-validate/feature-task-runtime-finished.json`
-- `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-build/feature-task-runtime-finished.json`
+- `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/standalone/feature-task-runtime-finished.json`
+- `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-validate/feature-task-runtime-finished.json`
+- `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-build/feature-task-runtime-finished.json`
 
 This list is the intended change, not a closed allowlist. Review and validate may edit production wiring, test setup, formatting, and lint when a required check fails, as long as the acceptance criteria and the architecture rules stay intact.
 
@@ -54,9 +54,9 @@ Phase ids the join may see are `preplan`, `plan`, `implement`, `simplify`, `audi
 8. Any recorded phase missing from dispatch produces `unavailable_incomplete`, a null map, and one diagnostics degradation. The degradation names the finish-join seam, states that an admitted dispatch entry was expected, and includes the missing phase id.
 9. The feature-task session table has a nullable `phase_strategies` column added through `ensureColumn`, on the same ensure path that adds `launched_models`. `insertFeatureTaskRuntimeFinished` and `updateFeatureTaskRuntimeFinished` bind the column. `FeatureTaskRuntimeFinishedRecord` and `FeatureTaskRuntimeFinishedRequest` default the new fields to null.
 10. `reconcileStaleFeatureTaskRuntimeSessions` emits `phase_strategies` and its availability from the session row. A null availability column on that row surfaces `unknown` and a null map. Reconciliation does not read the workflow artifact and does not backfill the column.
-11. `docs/telemetry-privacy.md` and the resolved-agent section of `docs/review-telemetry.md` describe `phase_strategies`, its availability, and its measurement grain at detail levels `anonymous` and `full`.
+11. `../../../docs/telemetry-privacy.md` and the resolved-agent section of `docs/review-telemetry.md` describe `phase_strategies`, its availability, and its measurement grain at detail levels `anonymous` and `full`.
 12. `LifecycleTelemetryTruthfulnessTest` asserts the five cases in Test Obligations. The three slot-baseline `feature-task-runtime-finished.json` files named in Scope include `phase_strategies`, `phase_strategy_availability`, and `phase_strategy_measurement_grain` for the phases those fixtures already record. `TelemetryAnonymousRedactionTest` leaves a strategy id as the raw token at anonymous detail.
-13. `FeatureTaskRuntimePhaseRecord` has no strategy field. `feature-task-runtime-execution-plan.yaml`, `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION`, and `FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION` keep their present values. `orchestration/contracts/telemetry-event-schema.yaml` stays at contract `1.12.0` with no `skillbill_feature_task_runtime_finished` branch, and `TELEMETRY_EVENT_CONTRACT_VERSION` stays aligned with that file. `phase_outcomes` values stay status wire values.
+13. `FeatureTaskRuntimePhaseRecord` has no strategy field. `feature-task-runtime-execution-plan.yaml`, `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION`, and `FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION` keep their present values. `../../../orchestration/contracts/telemetry-event-schema.yaml` stays at contract `1.12.0` with no `skillbill_feature_task_runtime_finished` branch, and `TELEMETRY_EVENT_CONTRACT_VERSION` stays aligned with that file. `phase_outcomes` values stay status wire values.
 
 ## Non-Goals
 
@@ -93,7 +93,7 @@ Production files stay under the 1200-line ceiling. New helpers sit beside the fu
 
 1. Declare the three payload keys and the grain token. Serves criteria 1 and 2.
 
-   In `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/telemetry/LifecycleTelemetryPayloadKeys.kt`, declare `phase_strategies`, `phase_strategy_availability`, and `phase_strategy_measurement_grain` once each, next to `LAUNCHED_MODELS` and `LAUNCHED_MODEL_AVAILABILITY`. Name the constants `PHASE_STRATEGIES`, `PHASE_STRATEGY_AVAILABILITY`, and `PHASE_STRATEGY_MEASUREMENT_GRAIN`. `payloadKeyValues` already reflects every string constant on that object into the sqlite materialization seam, so this needs no inventory edit.
+   In `../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/telemetry/LifecycleTelemetryPayloadKeys.kt`, declare `phase_strategies`, `phase_strategy_availability`, and `phase_strategy_measurement_grain` once each, next to `LAUNCHED_MODELS` and `LAUNCHED_MODEL_AVAILABILITY`. Name the constants `PHASE_STRATEGIES`, `PHASE_STRATEGY_AVAILABILITY`, and `PHASE_STRATEGY_MEASUREMENT_GRAIN`. `payloadKeyValues` already reflects every string constant on that object into the sqlite materialization seam, so this needs no inventory edit.
 
    In `SqliteLifecycleTelemetryMaterializationPayloadKeys.kt`, declare the grain value `admitted_strategy_per_recorded_phase` once, as a top-level const beside `AGENT_CONTEXT_MEASUREMENT_GRAIN_DISTINCT_PER_RUN`. Keep that const out of the `SqliteLifecycleTelemetryMaterializationPayloadKeys` object so reflection does not treat the grain token as a payload key.
 
@@ -103,7 +103,7 @@ Production files stay under the 1200-line ceiling. New helpers sit beside the fu
 
 2. Add the pure join. Serves criteria 3, 4, 5, 6, 7, and 8.
 
-   Put `featureTaskRuntimePhaseStrategies` in `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/core/FeatureTaskRuntimeAgentContextTelemetry.kt`, beside `featureTaskRuntimeAgentContext`. Inputs are the ordered phase-outcome keys and `Map<String, ResolvedPhaseStrategyDispatch>?`. The return carries availability, the map or null, and the missing phase ids. The function returns those facts and does not touch diagnostics.
+   Put `featureTaskRuntimePhaseStrategies` in `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/core/FeatureTaskRuntimeAgentContextTelemetry.kt`, beside `featureTaskRuntimeAgentContext`. Inputs are the ordered phase-outcome keys and `Map<String, ResolvedPhaseStrategyDispatch>?`. The return carries availability, the map or null, and the missing phase ids. The function returns those facts and does not touch diagnostics.
 
    An empty phase-id list, a null dispatch, or an empty dispatch yields `unavailable_no_durable_state` and a null map. An empty map is not an admitted dispatch. `ResolvedPhaseExecutionPlan` requires `dispatchStrategyByStep.isNotEmpty()`.
 
@@ -157,7 +157,7 @@ Production files stay under the 1200-line ceiling. New helpers sit beside the fu
 
 6. Document the fields. Serves criterion 11.
 
-   In the `skillbill_feature_task_runtime_finished` table of `docs/telemetry-privacy.md`, and in the resolved-agent section of `docs/review-telemetry.md`, describe `phase_strategies`, `phase_strategy_availability`, and `phase_strategy_measurement_grain`. They are registered configuration tokens, the same class as `launched_models`, present at `anonymous` and `full`, unhashed, null unless availability is `measured`, and `unknown` when the availability column is null. State the grain `admitted_strategy_per_recorded_phase`. `runtime-kotlin/agent/decisions.md#13a9e72e3604` is the settings-load switch for optional telemetry and does not define this availability vocabulary.
+   In the `skillbill_feature_task_runtime_finished` table of `../../../docs/telemetry-privacy.md`, and in the resolved-agent section of `docs/review-telemetry.md`, describe `phase_strategies`, `phase_strategy_availability`, and `phase_strategy_measurement_grain`. They are registered configuration tokens, the same class as `launched_models`, present at `anonymous` and `full`, unhashed, null unless availability is `measured`, and `unknown` when the availability column is null. State the grain `admitted_strategy_per_recorded_phase`. `runtime-kotlin/agent/decisions.md#13a9e72e3604` is the settings-load switch for optional telemetry and does not define this availability vocabulary.
 
    Tests: Test Obligation 6.
 
@@ -165,17 +165,17 @@ Production files stay under the 1200-line ceiling. New helpers sit beside the fu
 
    `SlotBaselineNormalizer.normalizeMap` sorts keys, and `SlotBaselineDurableBundle.fromRun` copies the latest outbox payload. Their current dispatches are canonical, not Opus. Omit `audit_plan_fix`, `audit_implement_fix`, and `implement_fix`. Those ids are in `dispatch_ownership` and absent from `phase_outcomes`. Every included entry uses sorted keys `semantic_revision` then `strategy_id`. Availability is `measured`. The grain is `admitted_strategy_per_recorded_phase`.
 
-   `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/standalone/feature-task-runtime-finished.json` records `audit` `acceptance-audit` 3, `commit_push` `runtime-commit` 1, `implement` and `simplify` `implement-then-simplify` 1, `plan` `agent-plan` 1, `pr` `pr-description` 1, `preplan` `agent-preplan` 1, `review` and `verify_findings` `inline` 1, `validate` `agent-validate` 1, `write_history` `boundary-history` 1.
+   `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/standalone/feature-task-runtime-finished.json` records `audit` `acceptance-audit` 3, `commit_push` `runtime-commit` 1, `implement` and `simplify` `implement-then-simplify` 1, `plan` `agent-plan` 1, `pr` `pr-description` 1, `preplan` `agent-preplan` 1, `review` and `verify_findings` `inline` 1, `validate` `agent-validate` 1, `write_history` `boundary-history` 1.
 
-   `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-build/feature-task-runtime-finished.json` uses that same set with `build` `pack-build` 1, and it has no `validate` and no `pr`.
+   `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-build/feature-task-runtime-finished.json` uses that same set with `build` `pack-build` 1, and it has no `validate` and no `pr`.
 
-   `runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-validate/feature-task-runtime-finished.json` uses that same set with `validate` `agent-validate` 1, and it has no `build` and no `pr`.
+   `../../../runtime-kotlin/runtime-engine/src/test/resources/featuretask/slotbaseline/goal-child-validate/feature-task-runtime-finished.json` uses that same set with `validate` `agent-validate` 1, and it has no `build` and no `pr`.
 
    Tests: the existing slot-baseline comparison. Add no new snapshot test.
 
 8. Leave the excluded contracts and behaviors unchanged. Serves criterion 13 and the Non-Goals.
 
-   `FeatureTaskRuntimePhaseRecord` has no strategy field. Its `requireCompatibleShape` allow-list would reject an unknown key. `FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION` stays `0.2` in `FeatureTaskRuntimeContractVersions.kt`. `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION` stays `0.2` and `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION` stays `0.1` in `FeatureTaskRuntimeExecutionPlanContract.kt`. `orchestration/contracts/feature-task-runtime-execution-plan.yaml` stays `const: "0.2"`. `orchestration/contracts/telemetry-event-schema.yaml` stays `1.12.0` with no `skillbill_feature_task_runtime_finished` branch. `TELEMETRY_EVENT_CONTRACT_VERSION` in `TelemetryEventSchemaValidator.kt` stays `1.12.0`. `phase_outcomes` values stay status wire values: `pending`, `running`, `completed`, `failed`, `blocked`, `skipped`, or `paused`.
+   `FeatureTaskRuntimePhaseRecord` has no strategy field. Its `requireCompatibleShape` allow-list would reject an unknown key. `FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION` stays `0.2` in `FeatureTaskRuntimeContractVersions.kt`. `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION` stays `0.2` and `FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION` stays `0.1` in `FeatureTaskRuntimeExecutionPlanContract.kt`. `../../../orchestration/contracts/feature-task-runtime-execution-plan.yaml` stays `const: "0.2"`. `orchestration/contracts/telemetry-event-schema.yaml` stays `1.12.0` with no `skillbill_feature_task_runtime_finished` branch. `TELEMETRY_EVENT_CONTRACT_VERSION` in `TelemetryEventSchemaValidator.kt` stays `1.12.0`. `phase_outcomes` values stay status wire values: `pending`, `running`, `completed`, `failed`, `blocked`, `skipped`, or `paused`.
 
    `TelemetryReliabilityContractTest` duration-checks `featureTaskRuntimeFinishedEnvelope` and does not pass that envelope to `TelemetryEventSchemaValidator`.
 
