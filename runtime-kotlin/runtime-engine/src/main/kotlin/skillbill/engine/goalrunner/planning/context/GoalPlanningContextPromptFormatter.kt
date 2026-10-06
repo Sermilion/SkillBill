@@ -26,7 +26,7 @@ object GoalPlanningContextPromptFormatter {
       )
       append(
         JsonCodec.mapToJsonString(
-          if (phaseId == "plan") packet - GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY else packet,
+          packet - GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY,
         ),
       )
       append(
@@ -59,14 +59,42 @@ object GoalPlanningContextPromptFormatter {
         append("Do not execute, simulate, edit, or mutate dependency work.")
         appendSelectedBoundaryMemory(resolvedBodies)
       } else {
-        append(
-          "\nboundary_memory is a heading catalog: heading text and stable heading_id only, no entry bodies. " +
-            "Walk the headings, stop once they are no longer relevant to this goal's scope, and weave the " +
-            "relevant context into your final prose for the plan phase. Recommended headings " +
-            "may guide your prose; selected_boundary_headings is not required.",
-        )
+        appendBoundaryHeadingList(packet)
       }
     }
+
+  private fun StringBuilder.appendBoundaryHeadingList(packet: Map<String, Any?>) {
+    val boundary =
+      packet[GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY] as? Map<*, *> ?: return
+    val catalog = boundary[GoalPlanningSharedContextPacketPayloadKeys.CATALOG] as? List<*> ?: emptyList<Any?>()
+    append("\n\n## Boundary heading list\n")
+    append("Headings only, in walk order. No entry bodies.\n")
+    var listed = 0
+    for (raw in catalog) {
+      val entry = raw as? Map<*, *> ?: continue
+      val headingId = entry[GoalPlanningSharedContextPacketPayloadKeys.HEADING_ID] as? String ?: continue
+      val sourcePath = entry[GoalPlanningSharedContextPacketPayloadKeys.SOURCE_PATH] as? String ?: continue
+      val kind = entry[GoalPlanningSharedContextPacketPayloadKeys.KIND] as? String ?: continue
+      val heading = entry[GoalPlanningSharedContextPacketPayloadKeys.HEADING] as? String ?: continue
+      listed += 1
+      append(listed)
+      append(". ")
+      append(singleLine(headingId))
+      append(" | ")
+      append(singleLine(sourcePath))
+      append(" | ")
+      append(singleLine(kind))
+      append(" | ")
+      append(singleLine(heading))
+      append("\n")
+    }
+    if (listed == 0) append("The heading list is empty.\n")
+    if (boundary[GoalPlanningSharedContextPacketPayloadKeys.TRUNCATED] == true) {
+      append("The heading list was truncated.\n")
+    }
+    append(BOUNDARY_HEADING_WALK)
+    append("\n")
+  }
 
   private fun StringBuilder.appendSelectedBoundaryMemory(resolved: GoalPlanningResolvedBoundaryBodies) {
     if (resolved.bodies.isEmpty() && resolved.unresolvedHeadingIds.isEmpty()) return
@@ -94,6 +122,8 @@ object GoalPlanningContextPromptFormatter {
     if (resolved.truncated) append("\nSelected boundary memory was truncated at its resolved-body cap.\n")
   }
 
+  private fun singleLine(value: String): String = value.replace(WHITESPACE_RUN, " ").trim()
+
   private fun singleLineId(headingId: String): String =
     headingId
       .replace(WHITESPACE_RUN, " ")
@@ -101,4 +131,10 @@ object GoalPlanningContextPromptFormatter {
       .take(GoalPlanningContext.MAX_REPORTED_UNRESOLVED_ID_CHARS)
 
   private val WHITESPACE_RUN = Regex("\\s+")
+
+  internal const val BOUNDARY_HEADING_WALK: String =
+    "Walk this list from the start. Judge each heading from its heading text alone. Stop when the three " +
+      "headings you just read are all irrelevant to this task. Then read the body of each heading you judged " +
+      "relevant: open its source file, find that heading, and read only that section. Do not read a history or " +
+      "decisions file from start to finish, and do not read the body of a heading you judged irrelevant."
 }

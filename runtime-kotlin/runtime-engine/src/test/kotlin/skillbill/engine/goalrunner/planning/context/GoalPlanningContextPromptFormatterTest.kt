@@ -46,8 +46,12 @@ class GoalPlanningContextPromptFormatterTest {
     val composed = GoalPlanningContextPromptFormatter.append("base", packet, null, "preplan")
 
     assertContains(composed, "first-entry")
+    assertContains(composed, "## Boundary heading list")
+    assertContains(composed, GoalPlanningContextPromptFormatter.BOUNDARY_HEADING_WALK)
+    assertTrue(composed.indexOf("first-entry") < composed.indexOf("second-entry"))
+    assertFalse("boundary_memory" in composed)
     assertFalse("produced_outputs.value" in composed)
-    assertContains(composed, "Recommended headings")
+    assertFalse("Recommended headings" in composed)
     assertFalse(FIRST_BODY in composed)
     assertFalse(SECOND_BODY in composed)
   }

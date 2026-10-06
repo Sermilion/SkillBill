@@ -73,10 +73,12 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "type hierarchies of the code this task changes, the tests that exercise that code, and the existing " +
         "patterns those files already follow. Read only files this task directly touches. Do not read unrelated " +
         "modules, docs, or tests, and do not read dependency jars, Gradle caches, generated sources, or library " +
-        "internals. The boundary catalog in this briefing is the heading list. Judge each heading from that " +
-        "heading text. An irrelevant heading stays unread. Open a history or decisions file only for a heading " +
-        "that bears on this task, and read only that heading's section. Never read a history or decisions file " +
-        "from start to finish. Leave open any decision this task's own code cannot answer, including dependency, " +
+        "internals. When this briefing includes a boundary heading list, that list is headings only, in walk " +
+        "order. Walk it from the start and judge each heading from its heading text alone. Stop when the three " +
+        "headings you just read are all irrelevant to this task. Then read the body of each heading you judged " +
+        "relevant: open its source file, find that heading, and read only that section. Do not read a history or " +
+        "decisions file from start to finish, and do not read the body of a heading you judged irrelevant. " +
+        "Leave open any decision this task's own code cannot answer, including dependency, " +
         "account, and environment questions, each with the facts that bear on it and the option you recommend. " +
         "Name a cited heading by its heading_id exactly as the boundary catalog spells it. Do not forward " +
         "progress diagnostics or a generic summary."

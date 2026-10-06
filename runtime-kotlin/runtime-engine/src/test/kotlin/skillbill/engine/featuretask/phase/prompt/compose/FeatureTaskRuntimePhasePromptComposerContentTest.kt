@@ -330,8 +330,8 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplan, "never reads the repository")
     assertContains(preplan, "Read only files this task directly touches")
     assertContains(preplan, "do not read dependency jars, Gradle caches")
-    assertContains(preplan, "An irrelevant heading stays unread")
-    assertContains(preplan, "Never read a history or decisions file from start to finish")
+    assertContains(preplan, "Stop when the three headings you just read are all irrelevant to this task")
+    assertContains(preplan, "do not read the body of a heading you judged irrelevant")
     assertFalse(preplan.contains("Settle every question the repository can answer"))
   }
 
