@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.engine.featuretask.runner.PLAN_OUTPUT
 import skillbill.engine.featuretask.runner.PREPLAN_OUTPUT
 import skillbill.engine.featuretask.runner.VALID_REVIEW_OUTPUT
-import skillbill.engine.featuretask.runner.auditSatisfiedOutput
+import skillbill.engine.featuretask.runner.auditRemainingAcOutput
 import skillbill.engine.featuretask.runner.settledAuditSatisfiedRecord
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
@@ -16,10 +16,14 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -91,7 +95,7 @@ class AmbientInputsAndLoudFailSeamsTest {
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
               completedRecord(
                 FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-                auditSatisfiedOutput(),
+                settledAuditSatisfiedRecord(),
               ),
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
@@ -105,6 +109,60 @@ class AmbientInputsAndLoudFailSeamsTest {
 
     assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
     assertFalse(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)
+  }
+
+  @Test
+  fun `explicit resume of an audit that must advance stays on the completed audit`() {
+    val state =
+      FeatureTaskRuntimeRunState(
+        initialRecords =
+          mapOf(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+                PREPLAN_OUTPUT,
+              ),
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+                PLAN_OUTPUT,
+              ),
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
+              completedRecord(
+                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+                auditRemainingAcOutput("AC-007 revision editor is still unresolved."),
+              ),
+          ),
+        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        stepVerdictRule = { stepId ->
+          AcceptanceAuditVerdictRule(SilentDiagnostics)
+            .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
+        },
+        resumeRulesFn = RESUME_RULES,
+      )
+
+    val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, start.phaseId)
+    assertFalse(start.reopen)
+    assertEquals(
+      FeatureTaskRuntimeVerdict.ADVANCE,
+      state.durableVerdictFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT),
+    )
+    val transition =
+      FeatureTaskRuntimeTransitionFunction.nextTransition(
+        declaration = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        currentPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        verdict = FeatureTaskRuntimeVerdict.ADVANCE,
+        edgeIterationCount = 0,
+      )
+    val resolved = assertIs<FeatureTaskRuntimeTransitionResult.Resolved>(transition)
+    val next = assertIs<FeatureTaskRuntimeNextPhase.Next>(resolved.next)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX, next.phaseId)
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+
+    val reviewStart = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
+    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT, reviewStart.phaseId)
+    assertFalse(reviewStart.reopen)
   }
 
   @Test

@@ -20,6 +20,7 @@ import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -364,18 +365,21 @@ internal class FeatureTaskRuntimeRunState(
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
     val requestedStart = ExplicitResumeStart(requestedPhaseId, reopen = true)
-    if (!resumeRules(requestedPhaseId).resumesPastCompletion || !(requestedPhaseId in completedPhases)) {
-      return requestedStart
-    }
-    val auditIndex = transitions.forwardPhaseIds.indexOf(requestedPhaseId)
-    if (auditIndex < 0) return requestedStart
-    val laterPhaseIds = transitions.forwardPhaseIds.drop(auditIndex + 1)
-    val furthestLater =
-      laterPhaseIds.lastOrNull { phaseId ->
-        (phaseId in priorRecords) || (phaseId in completedPhases)
+    val phaseId =
+      transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
+        ?: requestedPhaseId
+    if (!resumeRules(phaseId).resumesPastCompletion || phaseId !in completedPhases) {
+      return if (phaseId == requestedPhaseId) {
+        requestedStart
+      } else {
+        ExplicitResumeStart(phaseId, reopen = phaseId !in completedPhases)
       }
-    val resumePhaseId = furthestLater ?: laterPhaseIds.firstOrNull() ?: return requestedStart
-    return ExplicitResumeStart(resumePhaseId, reopen = !(resumePhaseId in completedPhases))
+    }
+    if (openRepairReentry(phaseId)) {
+      return ExplicitResumeStart(phaseId, reopen = false)
+    }
+    if (phaseId != requestedPhaseId) return requestedStart
+    return completedResumePast(phaseId) ?: requestedStart
   }
 
   internal fun reopenFromExplicitResume(phaseId: String) {
@@ -553,6 +557,29 @@ internal class FeatureTaskRuntimeRunState(
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
     return FeatureTaskRuntimeOutputVerification.verdictFor(parsedOutput(output), stepVerdictRuleFor(phaseId))
+  }
+
+  private fun completedResumePast(requestedPhaseId: String): ExplicitResumeStart? {
+    val phaseIndex = transitions.forwardPhaseIds.indexOf(requestedPhaseId)
+    if (phaseIndex < 0) return null
+    val laterPhaseIds = transitions.forwardPhaseIds.drop(phaseIndex + 1)
+    val furthestLater =
+      laterPhaseIds.lastOrNull { phaseId ->
+        (phaseId in priorRecords) || (phaseId in completedPhases)
+      }
+    val resumePhaseId = furthestLater ?: laterPhaseIds.firstOrNull() ?: return null
+    return ExplicitResumeStart(resumePhaseId, reopen = resumePhaseId !in completedPhases)
+  }
+
+  private fun openRepairReentry(phaseId: String): Boolean {
+    val verdict = durableVerdictFor(phaseId)
+    val edge =
+      transitions.backwardEdges.firstOrNull { candidate ->
+        candidate.fromPhaseId == phaseId && candidate.triggeringVerdict == verdict
+      } ?: return false
+    val iteration = edgeIterationByLoop[edge.loopId] ?: 0
+    val mayReenter = edge.perEdgeCap?.let { iteration < it } ?: true
+    return mayReenter || edge.capExhaustionBehavior == FeatureTaskRuntimeCapExhaustionBehavior.BLOCK
   }
 }
 
