@@ -120,6 +120,7 @@ object PhaseLaunchPreparation {
                   session = session,
                   run = run,
                   diagnostics = diagnostics,
+                  extendsOwnedInventory = context::extendsOwnedInventory,
                 ),
               )
             },
@@ -400,6 +401,7 @@ object PhaseLaunchPreparation {
           session,
           run,
           diagnostics,
+          this::extendsOwnedInventory,
         )
       val implementationContinuation =
         FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run)

@@ -89,7 +89,7 @@ fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
-  (none)
+  - src/Foo.kt
 
 ## Derived context (layer 3, declared)
 (none)

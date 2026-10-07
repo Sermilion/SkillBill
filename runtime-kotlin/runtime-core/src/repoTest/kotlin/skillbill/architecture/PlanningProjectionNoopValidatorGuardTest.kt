@@ -45,6 +45,9 @@ class PlanningProjectionNoopValidatorGuardTest {
       "WorkflowServiceTest.kt" to "test fixture",
       "FeatureTaskContinuationLookupServiceTest.kt" to "test fixture",
       "FeatureTaskRouterContinuationTest.kt" to "test fixture",
+      "FeatureTaskRuntimeRepositoryCheckpointResolutionTest.kt" to
+        "Checkpoint refresh fallbacks never accept a planning projection; the quality-gate " +
+        "collaborator is an unused constructor argument.",
     )
 
   @Test

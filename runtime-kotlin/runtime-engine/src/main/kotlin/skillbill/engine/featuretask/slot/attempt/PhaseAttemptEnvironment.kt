@@ -175,6 +175,8 @@ internal interface PhaseQualityGateCycleContext :
   PhaseAttemptEnvironment,
   PhaseAttemptTransitionDeclarationAccess,
   PhaseQualityGateReporting {
+  fun extendsOwnedInventory(stepId: String): Boolean
+
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
   val session: FeatureTaskRuntimeRunSessionObservations

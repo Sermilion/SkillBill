@@ -413,7 +413,9 @@
                 {
                     "fields": [
                         {
-                            "items": [],
+                            "items": [
+                                "src/Foo.kt"
+                            ],
                             "kind": "text_list",
                             "name": "changed_paths"
                         },
@@ -564,7 +566,10 @@
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
                 "fingerprint": "slot-baseline-checkpoint",
-                "head_ref": "__NORMALIZED_SHA40__"
+                "head_ref": "__NORMALIZED_SHA40__",
+                "working_tree_owned_paths": [
+                    "src/Foo.kt"
+                ]
             }
         },
         "record_kind": "delivered_projection",
@@ -677,7 +682,10 @@
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
                 "fingerprint": "slot-baseline-checkpoint",
-                "head_ref": "__NORMALIZED_SHA40__"
+                "head_ref": "__NORMALIZED_SHA40__",
+                "working_tree_owned_paths": [
+                    "src/Foo.kt"
+                ]
             }
         },
         "record_kind": "delivered_projection",
@@ -827,7 +835,10 @@
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
                 "fingerprint": "slot-baseline-checkpoint",
-                "head_ref": "__NORMALIZED_SHA40__"
+                "head_ref": "__NORMALIZED_SHA40__",
+                "working_tree_owned_paths": [
+                    "src/Foo.kt"
+                ]
             }
         },
         "record_kind": "delivered_projection",
@@ -875,12 +886,16 @@
                 {
                     "fields": [
                         {
-                            "items": [],
+                            "items": [
+                                "src/Foo.kt"
+                            ],
                             "kind": "text_list",
                             "name": "changed_paths"
                         },
                         {
-                            "items": [],
+                            "items": [
+                                "src"
+                            ],
                             "kind": "text_list",
                             "name": "boundary_candidates"
                         }
@@ -1013,7 +1028,10 @@
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
                 "fingerprint": "slot-baseline-checkpoint",
-                "head_ref": "__NORMALIZED_SHA40__"
+                "head_ref": "__NORMALIZED_SHA40__",
+                "working_tree_owned_paths": [
+                    "src/Foo.kt"
+                ]
             }
         },
         "record_kind": "delivered_projection",

@@ -213,6 +213,11 @@ class FeatureTaskRuntimeRepositoryCheckpointResolutionTest {
         session = FeatureTaskRuntimeRunLoopSession(null, null),
         run = simplifyRun(),
         diagnostics = diagnostics,
+        extendsOwnedInventory = { stepId ->
+          stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT ||
+            stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX ||
+            stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
+        },
       ),
     )
   }
