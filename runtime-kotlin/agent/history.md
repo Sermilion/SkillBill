@@ -1,3 +1,14 @@
+## [2026-10-07] SKILL-406 freshly resolved repository checkpoint
+Areas: runtime-engine featuretask run loop and phase attempt; runtime-domain handoff checkpoint policy; runtime-core planning-projection allow-list; slot-baseline fixtures
+- `refresh_from_repository` and `must_match` require a non-null freshly resolved repository checkpoint. `not_required` leaves the checkpoint fields unchanged. A resolved checkpoint satisfies both policies when its fingerprint differs from the expected checkpoint.
+- Incomplete git refresh still returns a checkpoint. Owned-path persist is best-effort, an unresolvable review base keeps HEAD, an unreadable committed range is omitted, an empty inventory uses file manifests from phases whose policy extends the owned inventory, and a failed scoped fingerprint falls back to the whole-tree fingerprint then HEAD. Each fallback is recorded.
+- The empty-inventory fallback asks `extendsOwnedInventory`, the same predicate writing phases already use. The checkpoint-resolution call sites pass that predicate.
+- Resolution tests cover persist, review-base, working-tree, committed-range, and scoped-fingerprint misses. The noop planning-projection validator allow-list admits that test because its quality-gate collaborator is unused. Slot-baseline fixtures now carry the resolved working-tree owned paths.
+- Pattern: checkpoint-aware consumers receive a live snapshot with a recorded fallback, while the domain validator stays git-agnostic. reusable
+- Limits: the last fingerprint fallback can be the whole tree or HEAD, wider than the owned-path list. `expectedCheckpoint` stays unused on the validator path.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented
+
 ## [2026-10-06] SKILL-404 record admitted phase strategies
 Areas: runtime-contracts telemetry keys; runtime-domain and runtime-application finish records; runtime-engine featuretask finish join and runner; runtime-infra/sqlite session columns and finish payload; docs telemetry privacy and review telemetry
 - A durable feature-task finish joins recorded phase ids to the admitted dispatch and stores each strategy id and semantic revision. The join copies that map. It does not reselect, map slots to phases, or append an Opus suffix. Implement and simplify share one id when the admitted plan stored one id for both.

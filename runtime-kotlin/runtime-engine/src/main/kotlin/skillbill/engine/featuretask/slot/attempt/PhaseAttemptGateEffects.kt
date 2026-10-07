@@ -42,6 +42,7 @@ internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<
         session = session,
         run = run,
         diagnostics = diagnostics,
+        extendsOwnedInventory = this::extendsOwnedInventory,
       ),
     ).orEmpty()
 

@@ -158,6 +158,7 @@ mandates_and_overrides:
 ## Upstream projections (layer 2, declared and validated)
 ### from: implement
 changed_paths:
+  - src/Foo.kt
 repository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
@@ -181,7 +182,7 @@ fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
-  (none)
+  - src/Foo.kt
 
 ## Derived context (layer 3, declared)
 - diff: read the branch diff yourself; it is not delivered in this briefing

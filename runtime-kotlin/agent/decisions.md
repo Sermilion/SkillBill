@@ -1,10 +1,15 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-07] Checkpoint-aware policies require a fresh checkpoint and accept movement
+Context: `refresh_from_repository` and legacy `must_match` both carry repository scope into the next phase. `must_match` is a durable wire value whose name suggests an equality check.
+Decision: Both policies reject a null resolved checkpoint and accept a non-null one, including when its fingerprint differs from the expected checkpoint. The domain stays git-agnostic. The run loop resolves the checkpoint through the existing git port.
+Reason: The consumer re-derives scope from the live tree. Comparing the expected and resolved fingerprints would reject ordinary repository movement. A policy that returns the original fields when the checkpoint is null stays out of scope.
+
 ## [2026-10-07] Simplify launch still carries a checkpoint when git refresh is incomplete
 
 Context: RMCP-1 blocked in simplify because `subtask_scope` requires `refresh_from_repository` and `buildRepositoryCheckpoint` returned null. Persist of owned paths, an unresolvable review base, a failed committed-range listing, or a scoped fingerprint miss each aborted the whole snapshot. The validator then refused to start simplify. `changed_paths` are taken from that snapshot, so dropping it is not the same as accepting movement.
 
-Decision: Keep the validator strict. Resolve the live checkpoint with fallbacks instead of returning null: persist owned paths best-effort, ignore an unresolvable review base and keep HEAD, keep working-tree paths when the committed range is unreadable, fall back to implement/implement-fix claimed manifests when the working tree cannot be listed, and fall back to the whole-tree fingerprint then HEAD when the scoped fingerprint fails. Record each fallback.
+Decision: Keep the validator strict. Resolve the live checkpoint with fallbacks instead of returning null: persist owned paths best-effort, ignore an unresolvable review base and keep HEAD, keep working-tree paths when the committed range is unreadable, fall back to file manifests of phases whose policy extends the owned inventory when the working tree cannot be listed, and fall back to the whole-tree fingerprint then HEAD when the scoped fingerprint fails. Record each fallback. The manifest fallback asks `extendsOwnedInventory`, the same policy shared checkpoint code already uses for writing phases.
 
 Reason: `refresh_from_repository` is supposed to re-scope after implement, not halt the goal. An empty or missing checkpoint either wanders or no-ops. A partial live snapshot is still a boundary.
 

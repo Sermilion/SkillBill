@@ -59,17 +59,9 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 object FeatureTaskRuntimeRunLoopOutputVerification {
-  private val WRITING_PHASE_CLAIM_IDS =
-    listOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
-    )
-
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
     FeatureTaskRuntimeImplementationObligations(
       plannedTaskIds = emptyList(),
@@ -470,10 +462,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   private fun writingPhaseClaimedPaths(args: RepositoryCheckpointResolutionArgs): List<String> {
     val records = args.recorder.loadPhaseRecords(args.run.request.workflowId).orEmpty()
     val claimed =
-      WRITING_PHASE_CLAIM_IDS.flatMap { phaseId ->
-        val record = records[phaseId] ?: return@flatMap emptyList()
-        record.fileManifestAfter + record.fileManifestIntroduced
-      }
+      records
+        .filterKeys(args.extendsOwnedInventory)
+        .values
+        .flatMap { record -> record.fileManifestAfter + record.fileManifestIntroduced }
     return claimed
       .map(String::trim)
       .filter(String::isNotBlank)

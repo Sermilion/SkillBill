@@ -125,6 +125,7 @@ internal data class RepositoryCheckpointResolutionArgs(
   val session: FeatureTaskRuntimeRunSessionObservations,
   val run: PhaseRun,
   val diagnostics: RuntimeDiagnostics,
+  val extendsOwnedInventory: (String) -> Boolean,
 )
 
 internal data class PersistAcceptedOutputArgs(
