@@ -99,6 +99,29 @@ class GateJvmResolverTest {
   }
 
   @Test
+  fun `an empty PATH still evaluates the guard through an absolute POSIX sh`() {
+    testGateJvmResolver().resolve(mutableMapOf(GateJvmEnvironmentKeys.PATH to ""))
+  }
+
+  @Test
+  fun `a PATH that only names the runtime image still evaluates the guard`() {
+    val imageRoot = Files.createTempDirectory("gate-jvm-image-path")
+    try {
+      val leaked = writeJdkShapedHome(Files.createDirectories(imageRoot.resolve("jdk")))
+      val environment =
+        mutableMapOf(
+          GateJvmEnvironmentKeys.JAVA_HOME to leaked.toString(),
+          GateJvmEnvironmentKeys.PATH to leaked.resolve("bin").toString(),
+        )
+      dropRuntimeImageJava(environment, imageRoot.toRealPath())
+
+      testGateJvmResolver().resolve(environment)
+    } finally {
+      imageRoot.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `an unresolved gate JVM clears JAVA_HOME at the launch surface instead of failing the launch`() {
     val environment =
       mutableMapOf(

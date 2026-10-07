@@ -72,7 +72,7 @@ class GateJvmResolver(
     val result =
       BoundedExternalProcessRunner.run(
         BoundedExternalProcessRequest(
-          argv = listOf("sh", "-c", GUARD_PROGRAM, "sh", guard.toString()),
+          argv = listOf(posixShCommand(), "-c", GUARD_PROGRAM, "sh", guard.toString()),
           environment = environment,
           clearEnvironment = true,
           mergeStderr = false,
@@ -148,6 +148,11 @@ class GateJvmResolver(
     const val GUARD_OUTPUT_LINES = 3
 
     val OWNER_ONLY = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
+
+    val POSIX_SH_CANDIDATES = listOf("/bin/sh", "/usr/bin/sh")
+
+    fun posixShCommand(): String =
+      POSIX_SH_CANDIDATES.firstOrNull { candidate -> Files.isExecutable(Path.of(candidate)) } ?: "sh"
 
     val GUARD_PROGRAM =
       """
