@@ -2,8 +2,9 @@ package skillbill.engine.featuretask.runloop.output
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
-import skillbill.engine.featuretask.lifecycle.continuation.matches
+import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
@@ -42,6 +43,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -57,8 +59,17 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 
 object FeatureTaskRuntimeRunLoopOutputVerification {
+  private val WRITING_PHASE_CLAIM_IDS =
+    listOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+    )
+
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
     FeatureTaskRuntimeImplementationObligations(
       plannedTaskIds = emptyList(),
@@ -293,7 +304,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         run = run,
         headRevision = resolvedBranchRecord?.branch?.takeIf(String::isNotBlank) ?: "HEAD",
         baseRevision = goalReviewState?.reviewBaseSha ?: resolvedBranchRecord?.reviewBaseSha,
-      ) ?: return null
+        diagnostics = args.diagnostics,
+      )
     val ownedPaths =
       resolveCheckpointOwnedPaths(
         args = args,
@@ -306,21 +318,19 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             args.recorder.goalStartBaselinePaths(run.request),
           ),
         revisions = revisions,
-      ) ?: return null
+      )
     val fingerprint =
-      args.gitOperations
-        .repositoryCheckpointFingerprint(
-          run.request.repoRoot,
-          revisions.base,
-          revisions.head,
-          ownedPaths,
-        ).takeIf { it is WorkflowGitOperationResult.Ok }
-        ?.value
-        ?.takeIf(String::isNotBlank) ?: return null
+      resolveCheckpointFingerprint(
+        gitOperations = args.gitOperations,
+        repoRoot = run.request.repoRoot,
+        revisions = revisions,
+        ownedPaths = ownedPaths,
+        diagnostics = args.diagnostics,
+      ) ?: return null
     return FeatureTaskRuntimeRepositoryCheckpoint(
       fingerprint = fingerprint,
-      baseRef = revisions.base,
-      headRef = revisions.head,
+      baseRef = revisions?.base,
+      headRef = revisions?.head,
       workingTreeOwnedPaths = ownedPaths,
     )
   }
@@ -329,35 +339,32 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     args: RepositoryCheckpointResolutionArgs,
     persistedOwnedPaths: List<String>?,
     baselineOwnedPaths: List<String>,
-    revisions: CheckpointRevisions,
-  ): List<String>? {
+    revisions: CheckpointRevisions?,
+  ): List<String> {
     val run = args.run
     val workingTreePaths =
       FeatureTaskRuntimeRunLoopOutputVerification.checkpointOwnedPaths(
         args.gitOperations,
         run,
         baselineOwnedPaths,
-      ) ?: return null
-    val committedPaths =
-      revisions.base
-        ?.let { base ->
-          (
-            args.gitOperations
-              .runtimePhaseChangedPathsBetweenCommits(run.request.repoRoot, base, revisions.head)
-              as? WorkflowGitNameListResult.Listed
-          )?.names
-            ?.distinct()
-            ?.sorted()
-            ?: return null
-        }.orEmpty()
+      )
+    if (workingTreePaths == null) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        args.diagnostics,
+        "Feature-task-runtime could not read the working-tree owned-path inventory for " +
+          "'${run.request.workflowId}'; the checkpoint continues with persisted, committed, or " +
+          "writing-phase claimed paths.",
+      )
+    }
+    val committedPaths = committedCheckpointPaths(args, revisions)
     val durableInventory = persistedOwnedPaths.orEmpty().filter(String::isNotBlank)
     val discovered =
       if (args.session.checkpointOwnershipDecided && durableInventory.isNotEmpty()) {
         durableInventory
       } else {
-        (durableInventory + workingTreePaths).distinct()
+        (durableInventory + workingTreePaths.orEmpty()).distinct()
       }
-    val inventory =
+    val reconciled =
       reconcileCheckpointPathInventory(
         repoRoot = run.request.repoRoot,
         issueKey = run.request.issueKey,
@@ -365,12 +372,21 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         workflowId = run.request.workflowId,
         paths = (discovered + committedPaths).distinct(),
       ).sorted()
-    return inventory.takeIf {
-      args.recorder.recordWorkflowOwnedPaths(
+    val inventory =
+      reconciled.ifEmpty { writingPhaseClaimedPaths(args) }.distinct().sorted()
+    if (
+      !args.recorder.recordWorkflowOwnedPaths(
         run.request.workflowId,
         inventory,
       )
+    ) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        args.diagnostics,
+        "Feature-task-runtime could not persist workflow-owned paths for " +
+          "'${run.request.workflowId}'; the resolved checkpoint still carries the discovered inventory.",
+      )
     }
+    return inventory
   }
 
   internal fun resolveCheckpointRevisions(
@@ -378,6 +394,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     run: PhaseRun,
     headRevision: String,
     baseRevision: String?,
+    diagnostics: RuntimeDiagnostics,
   ): CheckpointRevisions? {
     val immutableHead =
       gitOperations
@@ -398,9 +415,13 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           .takeIf { it is WorkflowGitOperationResult.Ok }
           ?.value
           ?.takeIf(String::isNotBlank)
-          ?: revision.takeIf { it.matches(Regex("^[0-9a-fA-F]{40,64}$")) }
       }
-    if (baseRevision != null && immutableBase == null) return null
+    if (baseRevision != null && immutableBase == null) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Feature-task-runtime could not resolve review base '$baseRevision'; the checkpoint uses HEAD only.",
+      )
+    }
     return CheckpointRevisions(base = immutableBase, head = immutableHead)
   }
 
@@ -417,10 +438,91 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         .map(String::trim)
         .filter(String::isNotBlank)
         .filterNot { it in baseline }
+        .filterNot(::isRuntimePrivatePath)
         .filterNot { path -> isFeatureSpecPathForIssue(path, run.request.issueKey) }
         .distinct()
         .sorted()
     return paths
+  }
+
+  private fun committedCheckpointPaths(
+    args: RepositoryCheckpointResolutionArgs,
+    revisions: CheckpointRevisions?,
+  ): List<String> {
+    val base = revisions?.base ?: return emptyList()
+    val listed =
+      args.gitOperations.runtimePhaseChangedPathsBetweenCommits(
+        args.run.request.repoRoot,
+        base,
+        revisions.head,
+      )
+    if (listed is WorkflowGitNameListResult.Listed) {
+      return listed.names.map(String::trim).filter(String::isNotBlank).distinct().sorted()
+    }
+    RuntimeDiagnosticsBestEffortWarning.record(
+      args.diagnostics,
+      "Feature-task-runtime could not list committed paths between '$base' and '${revisions.head}'; " +
+        "the checkpoint continues without that range.",
+    )
+    return emptyList()
+  }
+
+  private fun writingPhaseClaimedPaths(args: RepositoryCheckpointResolutionArgs): List<String> {
+    val records = args.recorder.loadPhaseRecords(args.run.request.workflowId).orEmpty()
+    val claimed =
+      WRITING_PHASE_CLAIM_IDS.flatMap { phaseId ->
+        val record = records[phaseId] ?: return@flatMap emptyList()
+        record.fileManifestAfter + record.fileManifestIntroduced
+      }
+    return claimed
+      .map(String::trim)
+      .filter(String::isNotBlank)
+      .filterNot(::isRuntimePrivatePath)
+      .filterNot { path -> isFeatureSpecPathForIssue(path, args.run.request.issueKey) }
+      .distinct()
+      .sorted()
+  }
+
+  private fun resolveCheckpointFingerprint(
+    gitOperations: WorkflowGitOperations,
+    repoRoot: Path,
+    revisions: CheckpointRevisions?,
+    ownedPaths: List<String>,
+    diagnostics: RuntimeDiagnostics,
+  ): String? {
+    val scoped =
+      revisions?.let { revision ->
+        gitOperations
+          .repositoryCheckpointFingerprint(repoRoot, revision.base, revision.head, ownedPaths)
+          .takeIf { it is WorkflowGitOperationResult.Ok }
+          ?.value
+          ?.takeIf(String::isNotBlank)
+      }
+    if (scoped != null) return scoped
+    if (revisions != null) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Feature-task-runtime could not fingerprint the scoped checkpoint; falling back to the " +
+          "whole-tree fingerprint.",
+      )
+    }
+    val wholeTree =
+      gitOperations
+        .repositoryFingerprint(repoRoot)
+        .takeIf { it is WorkflowGitOperationResult.Ok }
+        ?.value
+        ?.takeIf(String::isNotBlank)
+    if (wholeTree != null) return wholeTree
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Feature-task-runtime could not fingerprint the whole tree; falling back to HEAD.",
+    )
+    return revisions?.head?.takeIf(String::isNotBlank)
+      ?: gitOperations
+        .headCommitSha(repoRoot)
+        .takeIf { it is WorkflowGitOperationResult.Ok }
+        ?.value
+        ?.takeIf(String::isNotBlank)
   }
 
   internal fun validationGatePersistedAttempt(

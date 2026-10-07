@@ -41,6 +41,7 @@ internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<
         coupledRunTransitions = coupledRunTransitions,
         session = session,
         run = run,
+        diagnostics = diagnostics,
       ),
     ).orEmpty()
 

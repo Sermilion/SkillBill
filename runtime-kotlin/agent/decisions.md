@@ -1,5 +1,15 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-07] Simplify launch still carries a checkpoint when git refresh is incomplete
+
+Context: RMCP-1 blocked in simplify because `subtask_scope` requires `refresh_from_repository` and `buildRepositoryCheckpoint` returned null. Persist of owned paths, an unresolvable review base, a failed committed-range listing, or a scoped fingerprint miss each aborted the whole snapshot. The validator then refused to start simplify. `changed_paths` are taken from that snapshot, so dropping it is not the same as accepting movement.
+
+Decision: Keep the validator strict. Resolve the live checkpoint with fallbacks instead of returning null: persist owned paths best-effort, ignore an unresolvable review base and keep HEAD, keep working-tree paths when the committed range is unreadable, fall back to implement/implement-fix claimed manifests when the working tree cannot be listed, and fall back to the whole-tree fingerprint then HEAD when the scoped fingerprint fails. Record each fallback.
+
+Reason: `refresh_from_repository` is supposed to re-scope after implement, not halt the goal. An empty or missing checkpoint either wanders or no-ops. A partial live snapshot is still a boundary.
+
+Revisit when: Simplify regularly receives an empty owned-path list because every refresh source failed.
+
 ## [2026-10-06] A preplan lookup must answer an open question about this task
 
 Context: NEWS-152 preplan spent about six minutes after it already had the failing call. It repeated filename searches, read one mapper in four slices, and opened text-to-speech types, Gradle coordinates, and platform wrappers that only forward the click. The 2026-10-02 digest authority still forbids plan from reading, and the preplan directive told the worker to carry type hierarchies, so it read neighbors in case the plan was blind.

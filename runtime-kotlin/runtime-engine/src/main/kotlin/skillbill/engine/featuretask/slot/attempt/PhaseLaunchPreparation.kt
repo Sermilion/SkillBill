@@ -119,6 +119,7 @@ object PhaseLaunchPreparation {
                   coupledRunTransitions = coupledRunTransitions,
                   session = session,
                   run = run,
+                  diagnostics = diagnostics,
                 ),
               )
             },
@@ -398,6 +399,7 @@ object PhaseLaunchPreparation {
           coupledRunTransitions,
           session,
           run,
+          diagnostics,
         )
       val implementationContinuation =
         FeatureTaskRuntimeRunLoopOutputVerification.implementationContinuationFor(recorder, run)

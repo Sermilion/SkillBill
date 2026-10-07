@@ -49,6 +49,8 @@ class RecordingWorkflowGitOperations(
   val repositoryFingerprintSequence = ArrayDeque<String>()
   var repositoryFingerprintValue: String? = null
   var repositoryFingerprintCalls: Int = 0
+  var repositoryCheckpointFingerprintResult: WorkflowGitOperationResult? = null
+  var changedPathsBetweenCommitsResult: WorkflowGitNameListResult? = null
   var readinessTreeIdentity: ReadinessTreeIdentity =
     ReadinessTreeIdentity(
       sourceTreeSha = "a".repeat(40),
@@ -314,9 +316,10 @@ class RecordingWorkflowGitOperations(
     beforeCommit: String,
     afterCommit: String,
   ): WorkflowGitNameListResult =
-    WorkflowGitNameListResult.Listed(
-      if (beforeCommit == afterCommit) emptyList() else changedPathsBetweenCommitsValue,
-    )
+    changedPathsBetweenCommitsResult
+      ?: WorkflowGitNameListResult.Listed(
+        if (beforeCommit == afterCommit) emptyList() else changedPathsBetweenCommitsValue,
+      )
 
   override fun validateBranchBase(
     repoRoot: Path,
@@ -419,6 +422,7 @@ class RecordingWorkflowGitOperations(
     ownedPaths: List<String>,
   ): WorkflowGitOperationResult {
     repositoryFingerprintCalls += 1
+    repositoryCheckpointFingerprintResult?.let { return it }
     val scopeHash =
       listOf(
         baseCommit.orEmpty(),
