@@ -3,7 +3,7 @@ package skillbill.ports.workflow.gitops
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
 
-interface WorkflowGitBranchOperations {
+interface WorkflowGitBranchOperations : DefaultBranchGitOperations {
   fun checkoutBranch(
     repoRoot: Path,
     branch: String,
@@ -22,4 +22,9 @@ interface WorkflowGitBranchOperations {
     branch: String,
     expectedBaseBranch: String,
   ): WorkflowGitOperationResult
+}
+
+interface DefaultBranchGitOperations {
+  /** The branch the repository integrates into: `origin/HEAD`, else the first of main, master, trunk that exists. */
+  fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult
 }

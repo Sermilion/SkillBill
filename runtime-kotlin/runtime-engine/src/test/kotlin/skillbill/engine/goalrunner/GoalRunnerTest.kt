@@ -1997,6 +1997,8 @@ private class CommitAllRecordingGitOperations(
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "sha-finalize")
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,
@@ -4930,6 +4932,8 @@ private class FixedBranchGitOperations(
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "sha-test")
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,
@@ -4986,6 +4990,8 @@ private object StatusDiffGitOperations : WorkflowGitOperationsTestBase() {
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "sha-test")
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,
@@ -5040,6 +5046,8 @@ private class RecordingGitOperations(
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "sha-test")
+
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
 
   override fun validateBranchBase(
     repoRoot: Path,

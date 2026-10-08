@@ -8,6 +8,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
@@ -127,7 +128,8 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         gitOperations,
       )
         ?: return settleUnownedHead(run, iteration)
-    val baseBranch = recorder.loadResolvedBranch(request.workflowId)?.baseBranch ?: "main"
+    val baseBranch =
+      gitOperations.baseBranchOrDefault(request.repoRoot, recorder.loadResolvedBranch(request.workflowId)?.baseBranch)
     val readiness = commitPushReadiness(this, run.phaseId, baseBranch)
     if (readiness is ReadinessCommitPushSettleResult.Blocked) {
       return blockAndPersistInPhase(
@@ -143,7 +145,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     iteration: Int,
   ): PhaseOutcome {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
-    val baseBranch = resolved?.baseBranch ?: "main"
+    val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     val result = InMemoryCommitPush(gitOperations, request.repoRoot).run(branch, request.issueKey)
     if (result !is WorkflowGitOperationResult.Ok) return block(run, iteration, result.error)

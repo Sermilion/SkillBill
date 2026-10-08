@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.state
 
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
+import skillbill.ports.workflow.gitops.DefaultBranchGitOperations
 import skillbill.ports.workflow.gitops.GoalSubtaskReviewGitOperations
 import skillbill.ports.workflow.gitops.RepositoryFingerprintGitOperations
 import skillbill.ports.workflow.gitops.RepositoryOwnedPathsGitOperations
@@ -15,6 +16,7 @@ internal fun WorkflowGitOperations.repositoryObservations(): PhaseRepositoryObse
 private class RepositoryObservationView(
   private val git: WorkflowGitOperations,
 ) : PhaseRepositoryObservations,
+  DefaultBranchGitOperations by git,
   GoalSubtaskReviewGitOperations by git,
   RepositoryFingerprintGitOperations by git,
   RepositoryOwnedPathsGitOperations by git,

@@ -75,8 +75,8 @@ class FeatureTaskRuntimeBranchSetupTest {
   }
 
   @Test
-  fun `protected branches master and trunk and blank also create`() {
-    listOf("master", "trunk", "MAIN", "  ").forEach { current ->
+  fun `protected branches create from the branch they start on`() {
+    listOf("master", "trunk", "MAIN").forEach { current ->
       val decision =
         assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
           FeatureTaskRuntimeBranchSetup.decide(
@@ -87,12 +87,77 @@ class FeatureTaskRuntimeBranchSetupTest {
         )
       assertTrue(decision.create, "expected create for current branch '$current'")
       assertEquals("feat/SKILL-65.1-runtime", decision.branch, "branch for current '$current'")
-      assertEquals("main", decision.baseBranch, "base branch for current '$current'")
+      assertEquals(current, decision.baseBranch, "base branch for current '$current'")
     }
   }
 
   @Test
-  fun `non-default branch is reused as-is without a base branch`() {
+  fun `detached head creates from the repository default branch`() {
+    val decision =
+      assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
+        FeatureTaskRuntimeBranchSetup.decide(
+          issueKey = "SKILL-65.1",
+          specReference = ".feature-specs/SKILL-65.1-runtime/spec.md",
+          currentBranch = "  ",
+          defaultBranch = "develop",
+        ),
+      )
+
+    assertTrue(decision.create)
+    assertEquals("develop", decision.baseBranch)
+  }
+
+  @Test
+  fun `detached head without a known default branch creates from main`() {
+    val decision =
+      assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
+        FeatureTaskRuntimeBranchSetup.decide(
+          issueKey = "SKILL-65.1",
+          specReference = ".feature-specs/SKILL-65.1-runtime/spec.md",
+          currentBranch = "",
+        ),
+      )
+
+    assertTrue(decision.create)
+    assertEquals("main", decision.baseBranch)
+  }
+
+  @Test
+  fun `unprotected repository default branch creates a feature branch from it`() {
+    val decision =
+      assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
+        FeatureTaskRuntimeBranchSetup.decide(
+          issueKey = "SKILL-65.1",
+          specReference = ".feature-specs/SKILL-65.1-runtime/spec.md",
+          currentBranch = "develop",
+          defaultBranch = "develop",
+        ),
+      )
+
+    assertTrue(decision.create)
+    assertEquals("feat/SKILL-65.1-runtime", decision.branch)
+    assertEquals("develop", decision.baseBranch)
+  }
+
+  @Test
+  fun `non-default branch is reused and records the repository default as its base`() {
+    val decision =
+      assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
+        FeatureTaskRuntimeBranchSetup.decide(
+          issueKey = "SKILL-65.1",
+          specReference = ".feature-specs/SKILL-65.1-runtime/spec.md",
+          currentBranch = "feat/pre-created",
+          defaultBranch = "develop",
+        ),
+      )
+
+    assertFalse(decision.create)
+    assertEquals("feat/pre-created", decision.branch)
+    assertEquals("develop", decision.baseBranch)
+  }
+
+  @Test
+  fun `non-default branch is reused without a base when the default branch is unknown`() {
     val decision =
       assertIs<FeatureTaskRuntimeBranchDecisionResolved>(
         FeatureTaskRuntimeBranchSetup.decide(

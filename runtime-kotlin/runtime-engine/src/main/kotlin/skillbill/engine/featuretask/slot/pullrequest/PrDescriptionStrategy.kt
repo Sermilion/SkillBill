@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -69,11 +70,11 @@ class PrDescriptionStrategy(
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       ): NormalizedFeatureTaskRuntimePhaseOutput {
         val resolved = context.resolvedBranch()
+        val lookup = lookups[context.request.workflowId]
         val branchName =
-          requirePublishableBranch(resolved?.branch, resolved?.baseBranch ?: DEFAULT_BASE_BRANCH)
+          requirePublishableBranch(resolved?.branch, lookup?.baseBranch ?: resolved?.baseBranch.orEmpty())
         val measurement =
           PullRequestMeasurement(pullRequestIdentityLookup, context.request.repoRoot, context.diagnostics)
-        val lookup = lookups[context.request.workflowId]
         val after = measurement.identity(branchName).also { identity -> lookup?.after = identity }
         return attested.withMeasuredFacts(measurement.facts(lookup?.before, after))
       }
@@ -112,8 +113,8 @@ class PrDescriptionStrategy(
           ?: error("PR requires its accepted execution binding.")
       ).pullRequestContext()
     val resolved = context.resolvedBranch()
-    val branch = requirePublishableBranch(resolved?.branch, resolved?.baseBranch ?: DEFAULT_BASE_BRANCH)
-    val baseBranch = resolved?.baseBranch ?: DEFAULT_BASE_BRANCH
+    val baseBranch = context.gitOperations.baseBranchOrDefault(context.request.repoRoot, resolved?.baseBranch)
+    val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     if (context.request.skeletonDefinition?.runStateKind != SkeletonRunStateKind.IN_MEMORY &&
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH in context.transitions.forwardPhaseIds
     ) {
@@ -134,7 +135,7 @@ class PrDescriptionStrategy(
     }
     val workflowId = context.request.workflowId
     val measurement = measurement(context)
-    val lookup = Lookups(before = measurement.identity(branch))
+    val lookup = Lookups(before = measurement.identity(branch), baseBranch = baseBranch)
     lookups[workflowId] = lookup
     templates[repoRoot] = template
     val outcome =
@@ -161,13 +162,13 @@ class PrDescriptionStrategy(
 
   private class Lookups(
     val before: PullRequestIdentity,
+    val baseBranch: String,
   ) {
     @Volatile var after: PullRequestIdentity? = null
   }
 
   companion object {
     const val ID = "pr-description"
-    private const val DEFAULT_BASE_BRANCH = "main"
     private const val RULES_RESOURCE = "/skillbill/engine/featuretask/slot/pullrequest/pr-description-directive.md"
 
     private val RULES: String by lazy { directiveResource(RULES_RESOURCE).trimEnd() }

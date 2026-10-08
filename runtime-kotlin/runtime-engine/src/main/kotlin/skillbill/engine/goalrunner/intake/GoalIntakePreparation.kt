@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.issueAndFeature
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
@@ -52,11 +53,11 @@ class GoalIntakePreparation(
         ?: newWorkFeatureName(GoalIntake.parse(suppliedIntake))
     val baseBranch =
       if (specPath == null) {
-        "main"
+        gitOperations.baseBranchOrDefault(request.repoRoot, recordedBaseBranch = null)
       } else {
         val branch = gitOperations.currentBranch(request.repoRoot)
         if (!branch.ok) invalidIntake("base_branch", branch.error)
-        branch.value.ifBlank { "main" }
+        gitOperations.baseBranchOrDefault(request.repoRoot, branch.value)
       }
     val criteria = acceptanceCriteria(intake)
     val constraints = listOf(TRACKER_RESOLUTION)

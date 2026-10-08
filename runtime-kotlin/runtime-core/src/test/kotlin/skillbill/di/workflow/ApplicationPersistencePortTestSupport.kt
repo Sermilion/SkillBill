@@ -1340,6 +1340,8 @@ internal class FakeWorkflowGitOperations(
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = commitSha)
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,

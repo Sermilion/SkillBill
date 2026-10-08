@@ -20,6 +20,8 @@ internal object GitStandardWorkflowGitBranchOperations : WorkflowGitBranchOperat
   override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
     runGitCommand(repoRoot, "branch", "--show-current")
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = gitDefaultBranch(repoRoot)
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,

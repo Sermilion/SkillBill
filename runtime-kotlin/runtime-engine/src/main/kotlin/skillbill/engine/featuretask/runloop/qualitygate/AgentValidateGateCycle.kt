@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.qualitygate
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.attempt.PhaseQualityGateCycleContext
@@ -17,8 +18,6 @@ import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
-
-private const val DEFAULT_BASE_BRANCH = "main"
 
 internal class AgentValidateGateCycle(
   private val context: PhaseQualityGateCycleContext,
@@ -92,7 +91,10 @@ internal class AgentValidateGateCycle(
         workflowId = context.request.workflowId,
         repoRoot = context.request.repoRoot,
         baseBranch =
-          context.recorder.loadResolvedBranch(context.request.workflowId)?.baseBranch ?: DEFAULT_BASE_BRANCH,
+          context.gitOperations.baseBranchOrDefault(
+            context.request.repoRoot,
+            context.recorder.loadResolvedBranch(context.request.workflowId)?.baseBranch,
+          ),
         changedPaths = context.gateChangedPaths(run),
         gitOperations = context.gitOperations,
       ),

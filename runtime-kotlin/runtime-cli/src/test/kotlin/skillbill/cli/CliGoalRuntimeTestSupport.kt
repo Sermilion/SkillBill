@@ -815,6 +815,8 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
     descendantSha: String,
   ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "main")
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,
