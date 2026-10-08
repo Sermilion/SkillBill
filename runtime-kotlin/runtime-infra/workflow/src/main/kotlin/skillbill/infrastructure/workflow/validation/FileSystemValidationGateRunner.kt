@@ -76,7 +76,9 @@ class FileSystemValidationGateRunner(
         cacheMode = request.cacheMode,
         executedWorkUnits = executedWorkUnits,
         executedCheckIdentities = executedCheckIdentities,
-        findings = finalizeFindings(request, parsedFindings, exitCode, outcome, stdout),
+        findings =
+          finalizeFindings(request, parsedFindings, exitCode, outcome, stdout)
+            .map { finding -> finding.withUnresolvedGateJvmNote(gateJvm) },
         stdout = stdout,
         command = request.argv.joinToString(" "),
       )
@@ -159,6 +161,17 @@ internal fun rejectGateJvmFailure(
   }
   if (JVM_STARTUP_FAILURE_MARKERS.none { marker -> stdout.contains(marker) }) return
   throw GateJvmStartupFailureException(resolvedGateJvmLabel(disposition), gateStdoutExcerpt(stdout))
+}
+
+internal fun ValidationGateFinding.withUnresolvedGateJvmNote(disposition: GateJvmDisposition): ValidationGateFinding {
+  if (disposition !is GateJvmDisposition.Unresolved) return this
+  if (ruleOrTestId != FileSystemValidationGateRunner.UNPARSEABLE_GATE_RULE_ID) return this
+  return copy(
+    message =
+      "$message\nNo Java ${disposition.requiredMajor}+ was resolved for this gate " +
+        "(rejected candidate: ${disposition.rejectedCandidate}). If the gate needs Java, this failure is " +
+        "environmental: set SKILL_BILL_JAVA_HOME to a Java ${disposition.requiredMajor}+ installation.",
+  )
 }
 
 private fun reportsMissingOrTooOldJava(stdout: String): Boolean =

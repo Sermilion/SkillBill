@@ -650,7 +650,7 @@ class FileSystemValidationGateRunnerTest {
   }
 
   @Test
-  fun `an unresolvable gate JVM leaves a failing non-JVM gate to finding parsing`() {
+  fun `an unresolvable gate JVM notes the missing Java on an unrecognized gate failure`() {
     val repo = Files.createTempDirectory("gate-unresolved-jvm-npm-failure")
     try {
       val script = writeScript(repo, "printf '%s\\n' 'npm ERR! Lifecycle script `test` failed with error'", "exit 1")
@@ -658,6 +658,10 @@ class FileSystemValidationGateRunnerTest {
       val result = runWithUnresolvedGateJvm(repo, script)
 
       assertEquals(ValidationGateRunOutcome.FAILED, result.outcome)
+      val finding = result.findings.single()
+      assertEquals(FileSystemValidationGateRunner.UNPARSEABLE_GATE_RULE_ID, finding.ruleOrTestId)
+      assertTrue("No Java 21+ was resolved for this gate" in finding.message, finding.message)
+      assertTrue("SKILL_BILL_JAVA_HOME" in finding.message, finding.message)
     } finally {
       repo.toFile().deleteRecursively()
     }

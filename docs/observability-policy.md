@@ -35,8 +35,11 @@ these seams:
   entry dropped because it pointed inside the runtime image root.
   `unresolved` is a recorded degradation with `JAVA_HOME` left absent at both the runtime-run
   gate and the agent-run launch surface, so a gate that never runs Java (npm, go, cargo) still
-  runs; it becomes a typed error at the runtime-run gate only when the gate exits non-zero,
-  parses no findings, and reports a missing or too-old Java; the `unresolved`
+  runs. Detection of a gate that needed Java is best-effort: the runtime-run gate raises the typed
+  error when the gate exits non-zero, parses no findings, and its output matches a known
+  missing-or-too-old-Java message; any other failure without findings becomes an
+  `unparseable_gate_failure` finding whose message notes that no Java was resolved and names
+  `SKILL_BILL_JAVA_HOME`; the `unresolved`
   record names the rejected candidate and the required major so the degraded launch carries the
   same attribution as the typed error
 - gate JVM startup failure: a gate command that exits non-zero, parses no findings, and reports a
