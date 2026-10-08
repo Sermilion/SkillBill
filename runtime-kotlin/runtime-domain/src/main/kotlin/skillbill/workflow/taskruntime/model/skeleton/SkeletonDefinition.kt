@@ -74,6 +74,12 @@ data class SkeletonDefinition(
         listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.PULL_REQUEST, PhaseSlot.MONITOR),
         SkeletonRunStateKind.IN_MEMORY,
       )
+    val MONITOR: SkeletonDefinition =
+      SkeletonDefinition(
+        "monitor",
+        listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.MONITOR),
+        SkeletonRunStateKind.IN_MEMORY,
+      )
     val GOAL_PLANNING: SkeletonDefinition =
       SkeletonDefinition(
         "goal-planning",
@@ -82,7 +88,7 @@ data class SkeletonDefinition(
       )
 
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, GOAL_PLANNING)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR, GOAL_PLANNING)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
 

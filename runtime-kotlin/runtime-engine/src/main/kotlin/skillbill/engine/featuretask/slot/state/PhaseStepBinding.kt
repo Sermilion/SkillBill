@@ -123,6 +123,8 @@ internal sealed interface PullRequestCiOutcome {
 
   data object NoCiConfigured : PullRequestCiOutcome
 
+  data object NoPullRequest : PullRequestCiOutcome
+
   data class Failed(val failingChecks: List<PullRequestCheck>) : PullRequestCiOutcome
 
   data class Blocked(val reason: String) : PullRequestCiOutcome

@@ -29,6 +29,7 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
 internal object FeatureTaskRuntimeRunLoopMonitorCycle {
@@ -72,6 +73,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
             verdict = null,
           ),
         )
+      PullRequestCiOutcome.NoPullRequest -> settleWithoutPullRequest(run, iteration, branch)
       is PullRequestCiOutcome.Failed -> {
         observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
         complete(
@@ -143,6 +145,26 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     if (verdict != null) envelope[SharedPayloadKeys.VERDICT] = verdict.wireValue
     return JsonCodec.mapToJsonString(envelope)
   }
+
+  private fun PhaseRuntimeFinalizationContext.settleWithoutPullRequest(
+    run: PhaseRun,
+    iteration: Int,
+    branch: String,
+  ): PhaseOutcome =
+    if (request.skeletonDefinition?.slots?.contains(PhaseSlot.PULL_REQUEST) != false) {
+      block(run, iteration, "No open pull request was found for branch '$branch' to watch.")
+    } else {
+      complete(
+        run,
+        iteration,
+        monitorOutput(
+          run.phaseId,
+          "No open pull request for the branch.",
+          "No open pull request was found for branch '$branch', so there is no CI to monitor.",
+          verdict = null,
+        ),
+      )
+    }
 
   private fun PhaseRuntimeFinalizationContext.complete(
     run: PhaseRun,

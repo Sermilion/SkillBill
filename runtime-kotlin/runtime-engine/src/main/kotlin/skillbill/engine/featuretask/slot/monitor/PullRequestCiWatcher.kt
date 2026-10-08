@@ -26,8 +26,7 @@ internal class PullRequestCiWatcher(
   ): PullRequestCiOutcome =
     when (val identity = identityLookup.lookup(repoRoot, branch)) {
       is PullRequestIdentity.Found -> poll(repoRoot, identity.number)
-      PullRequestIdentity.Absent ->
-        PullRequestCiOutcome.Blocked("No open pull request was found for branch '$branch' to watch.")
+      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
       is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(identity.reason)
     }
 

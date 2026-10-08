@@ -90,13 +90,12 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `a missing pull request blocks the watch`() {
+  fun `a missing pull request settles without reading checks`() {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 
     val outcome = watcher(checks, identity = PullRequestIdentity.Absent).watch(REPO_ROOT, BRANCH)
 
-    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
-    assertTrue(BRANCH in blocked.reason, blocked.reason)
+    assertEquals(PullRequestCiOutcome.NoPullRequest, outcome)
     assertEquals(0, checks.calls)
   }
 

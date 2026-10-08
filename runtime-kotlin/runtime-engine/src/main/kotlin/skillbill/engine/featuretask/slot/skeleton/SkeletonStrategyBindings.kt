@@ -106,6 +106,11 @@ object SkeletonStrategyBindings {
             PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
           PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
         ),
+      SkeletonDefinition.MONITOR to
+        mapOf(
+          PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
+          PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
+        ),
     )
 
   private fun sharedBindings(): Map<PhaseSlot, PhaseStrategyBinding> =

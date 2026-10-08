@@ -65,6 +65,8 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.finalization.NoopCommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
+import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
@@ -126,6 +128,7 @@ import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
@@ -673,6 +676,8 @@ internal data class RuntimeHarnessConfig(
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
+  val monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1003,6 +1008,8 @@ private fun harnessRunner(
       deps.runtimeConfig.pullRequestIdentityLookup,
       readinessEvidence = deps.recorder,
       delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
+      monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
+      pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
     )
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
@@ -1262,6 +1269,8 @@ private fun telemetryHarnessRunner(
       runtimeConfig.pullRequestIdentityLookup,
       readinessEvidence = workflow.recorder,
       delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
+      monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
+      pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
     )
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)

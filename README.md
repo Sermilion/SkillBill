@@ -186,7 +186,8 @@ There are three kinds of form:
 | `/skill-bill <intake> phase:plan` | Prepare a parent spec, executable subtask specs, and a manifest without implementing | `skill-bill phase plan` |
 | `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
 | `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
-| `/skill-bill phase:pr` | Commit pending changes, push the branch, and create or update a PR | `skill-bill phase pr` |
+| `/skill-bill phase:pr` | Commit pending changes, push the branch, create or update a PR, and monitor its CI | `skill-bill phase pr` |
+| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | Watch CI on the checked-out branch's PR and fix failures, up to three attempts | `skill-bill phase monitor` |
 | `/skill-bill <intake> operation:feature-guard` | Guard an implementation with a feature flag | `skill-bill operation feature-guard` |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | Remove a rolled-out feature flag and its legacy path | `skill-bill operation feature-guard-cleanup` |
 | `/skill-bill operation:verify <linear-issue\|requirements\|spec:<path>> [target:<pr\|branch\|base..head>]` | Verify a change against a Linear issue, requirements text, or a task spec | `skill-bill operation verify` |

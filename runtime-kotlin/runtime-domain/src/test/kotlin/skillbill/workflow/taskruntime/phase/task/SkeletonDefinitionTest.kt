@@ -128,6 +128,7 @@ class SkeletonDefinitionTest {
       listOf("commit_push", "pr", "monitor", "monitor_fix"),
       SkeletonDefinition.PR.stepIds,
     )
+    assertEquals(listOf("commit_push", "monitor", "monitor_fix"), SkeletonDefinition.MONITOR.stepIds)
     assertFalse(PhaseSlot.MONITOR in SkeletonDefinition.GOAL_CHILD.slots)
   }
 

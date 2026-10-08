@@ -89,7 +89,7 @@ class PhaseInvocationParserTest {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("standalone", emptyList()) }
 
     assertEquals(
-      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, or pr.",
+      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, pr, or monitor.",
       error.message,
     )
   }
