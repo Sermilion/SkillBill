@@ -3037,6 +3037,7 @@
             "source_tree_sha": "__NORMALIZED_SHA40__"
         },
         "feature_task_runtime_resolved_branch": {
+            "base_branch": "main",
             "baseline_owned_paths": [],
             "boundary_history_paths": [],
             "boundary_history_roots": [],

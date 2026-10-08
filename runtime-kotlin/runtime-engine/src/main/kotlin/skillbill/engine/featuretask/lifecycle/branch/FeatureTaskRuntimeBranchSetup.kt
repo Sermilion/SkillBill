@@ -36,17 +36,24 @@ object FeatureTaskRuntimeBranchSetup {
     issueKey: String,
     specReference: String,
     currentBranch: String,
+    defaultBranch: String? = null,
   ): FeatureTaskRuntimeBranchDecision {
     val normalizedCurrent = currentBranch.trim()
-    val mustCreate = normalizedCurrent.isBlank() || protectedBranchName(normalizedCurrent) != null
-    if (!mustCreate) {
-      return FeatureTaskRuntimeBranchDecision.resolved(branch = normalizedCurrent, baseBranch = null, create = false)
+    val normalizedDefault = defaultBranch?.trim()?.takeIf(String::isNotBlank)
+    val onBaseBranch = protectedBranchName(normalizedCurrent) != null || normalizedCurrent == normalizedDefault
+    if (normalizedCurrent.isNotBlank() && !onBaseBranch) {
+      return FeatureTaskRuntimeBranchDecision.resolved(
+        branch = normalizedCurrent,
+        baseBranch = normalizedDefault,
+        create = false,
+      )
     }
+    val baseBranch = normalizedCurrent.ifBlank { normalizedDefault ?: DEFAULT_BASE_BRANCH }
     val target = targetBranch(issueKey, specReference)
     return target.resolvedBranch?.let { resolvedBranch ->
       FeatureTaskRuntimeBranchDecision.resolved(
         branch = resolvedBranch,
-        baseBranch = DEFAULT_BASE_BRANCH,
+        baseBranch = baseBranch,
         create = true,
       )
     } ?: FeatureTaskRuntimeBranchDecision.invalid(requireNotNull(target.invalidReason))

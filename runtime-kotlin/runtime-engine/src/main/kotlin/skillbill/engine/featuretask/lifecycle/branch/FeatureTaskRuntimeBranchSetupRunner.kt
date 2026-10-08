@@ -131,6 +131,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
         issueKey = request.issueKey,
         specReference = request.runInvariants.specReference,
         currentBranch = currentBranch,
+        defaultBranch = gitOperations.repositoryDefaultBranch(request.repoRoot),
       )
     return when (decision) {
       is FeatureTaskRuntimeBranchDecisionInvalid ->
@@ -139,7 +140,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
         if (decision.create) {
           createAndSwitch(request, resolved, decision.branch, requireNotNull(decision.baseBranch))
         } else {
-          establishBranch(request, resolved, decision.branch, baseBranch = null, created = false)
+          establishBranch(request, resolved, decision.branch, decision.baseBranch, created = false)
         }
     }
   }

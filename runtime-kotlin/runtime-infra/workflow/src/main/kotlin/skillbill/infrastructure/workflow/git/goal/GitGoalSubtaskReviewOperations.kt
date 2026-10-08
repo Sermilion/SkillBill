@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.git.goal
 
 import skillbill.infrastructure.contracts.newSha256Digest
+import skillbill.infrastructure.workflow.git.standard.gitDefaultBranch
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.infrastructure.workflow.process.runGitProcess
 import skillbill.ports.workflow.gitops.GoalSubtaskReviewGitOperations
@@ -224,7 +225,8 @@ private fun recoveredBaselineSnapshot(
     }
   val branchBase =
     head?.takeIf { nearestAncestor == null }?.let { currentHead ->
-      listOf("origin/main", "main")
+      val defaultBranch = (gitDefaultBranch(repoRoot) as? WorkflowGitOperationResult.Ok)?.value?.trim()
+      listOfNotNull(defaultBranch?.let { "origin/$it" }, defaultBranch, "origin/main", "main")
         .filter { runGitCommand(repoRoot, "rev-parse", "--verify", "--quiet", it) is WorkflowGitOperationResult.Ok }
         .distinct()
         .firstNotNullOfOrNull { candidate ->

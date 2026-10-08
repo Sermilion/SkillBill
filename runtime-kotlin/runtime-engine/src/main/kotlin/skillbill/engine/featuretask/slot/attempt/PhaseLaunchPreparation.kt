@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.review.service.RuntimeOwnedReviewMode
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
@@ -351,7 +352,7 @@ object PhaseLaunchPreparation {
               .expectedLaunchCheckpoint(run, repositoryCheckpoint?.fingerprint)
               ?.let(::FeatureTaskRuntimeRepositoryCheckpoint),
           branchIdentity = resolvedBranchRecord?.branch,
-          baseBranch = resolvedBranchRecord?.baseBranch ?: "main",
+          baseBranch = gitOperations.baseBranchOrDefault(run.request.repoRoot, resolvedBranchRecord?.baseBranch),
           validationDepth = run.request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
           unselectedStepIds = unselectedStepIds(),
         ),

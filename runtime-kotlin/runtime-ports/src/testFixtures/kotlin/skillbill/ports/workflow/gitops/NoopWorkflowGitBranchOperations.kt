@@ -23,6 +23,10 @@ internal object NoopWorkflowGitBranchOperations : WorkflowGitBranchOperations {
     return WorkflowGitOperationResult.Ok(value = "")
   }
 
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult {
+    return WorkflowGitOperationResult.Ok(value = "")
+  }
+
   override fun validateBranchBase(
     repoRoot: Path,
     branch: String,

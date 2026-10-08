@@ -88,7 +88,7 @@ internal fun ParallelCodeReviewRunnerPlanning.detectPrBase(repoRoot: Path): Diff
     ?: detectBranchBase(repoRoot)
 
 internal fun ParallelCodeReviewRunnerPlanning.detectBranchBase(repoRoot: Path): DiffResolution<String> {
-  val candidates = listOf("main", "master", "origin/main", "origin/master")
+  val candidates = listOf("main", "master", "origin/main", "origin/master", "origin/HEAD")
   for (candidate in candidates) {
     mergeBase(repoRoot, candidate)?.let { return DiffResolution.Resolved(it) }
   }

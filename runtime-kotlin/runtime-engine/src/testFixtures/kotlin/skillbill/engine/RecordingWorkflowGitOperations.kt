@@ -34,6 +34,7 @@ class RecordingWorkflowGitOperations(
   var existingBranches: Set<String>? = null,
   var branchExistsResult: WorkflowGitOperationResult? = null,
 ) : WorkflowGitOperationsTestBase() {
+  var defaultBranchValue: String = "main"
   var headCommitShaValue: String = ""
   var headCommitShaResult: WorkflowGitOperationResult? = null
   val runtimePhaseHeadCommitSequence = ArrayDeque<String>()
@@ -126,6 +127,9 @@ class RecordingWorkflowGitOperations(
     currentBranchCalls++
     return currentBranchResult ?: WorkflowGitOperationResult.Ok(value = currentBranchValue)
   }
+
+  override fun defaultBranch(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = defaultBranchValue)
 
   override fun createCommit(
     repoRoot: Path,

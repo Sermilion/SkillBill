@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.output
 import skillbill.application.decomposition.baseBranch
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
@@ -143,10 +144,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             expectedRepositoryCheckpoint = checkpoint,
             branchIdentity = sessionObservations.resolvedBranch,
             baseBranch =
-              recorder
-                .loadResolvedBranch(run.request.workflowId)
-                ?.baseBranch
-                ?: "main",
+              gitOperations.baseBranchOrDefault(
+                run.request.repoRoot,
+                recorder.loadResolvedBranch(run.request.workflowId)?.baseBranch,
+              ),
           ),
         )
       return when (
