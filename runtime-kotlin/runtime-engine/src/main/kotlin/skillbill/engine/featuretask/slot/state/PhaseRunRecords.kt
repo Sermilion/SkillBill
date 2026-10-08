@@ -14,6 +14,7 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionCon
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -204,5 +205,14 @@ internal interface PhaseLaunchRecords {
   fun persistBuildGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
+  )
+
+  /** The no-change pause a confirmed no-change claim left on [workflowId], if any. */
+  fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause?
+
+  /** Persists the no-change pause of a confirmed no-change claim. */
+  fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
   )
 }

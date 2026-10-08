@@ -23,6 +23,9 @@ internal class AcceptanceAuditVerdictRule(
       return FeatureTaskRuntimeVerdict.ADVANCE
     }
     if (wireVerdict == FeatureTaskRuntimeVerdict.SATISFIED) return FeatureTaskRuntimeVerdict.SATISFIED
+    if (wireVerdict == FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED) return FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED
+    // A rejected claim repairs like any unmet round: its reasons travel in the prose, so the word routes as ADVANCE.
+    if (wireVerdict == FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED) return UNKNOWN_WORD_DEFAULT
     if (wireVerdict != null && wireVerdict != UNKNOWN_WORD_DEFAULT && recordedFallbacks.add(wireVerdict.wireValue)) {
       diagnostics.warning(
         "Audit verdict '${wireVerdict.wireValue}' conflicts with its remaining criteria; " +

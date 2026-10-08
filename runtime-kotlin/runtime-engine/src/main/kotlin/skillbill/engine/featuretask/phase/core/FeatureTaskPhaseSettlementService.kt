@@ -15,6 +15,7 @@ import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaim
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -27,6 +28,7 @@ class FeatureTaskPhaseSettlementService(
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
     require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
+    require(request.noChange == null || request.phaseId in NO_CHANGE_CLAIM_PHASE_IDS) { NO_CHANGE_PHASE_REQUIREMENT }
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
@@ -34,7 +36,7 @@ class FeatureTaskPhaseSettlementService(
         summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
         output = PhaseOutput(value = request.value, prompt = request.prompt),
         verdict = request.verdict?.takeIf(String::isNotBlank),
-      ).envelopeWireMap()
+      ).envelopeWireMap().withNoChangeClaim(request.noChange)
     return persist(
       PersistRequest(
         workflowId = request.workflowId,
@@ -123,6 +125,17 @@ class FeatureTaskPhaseSettlementService(
     )
   }
 
+  private fun FeatureTaskRuntimeWorkflowArtifactMap.withNoChangeClaim(
+    claim: Map<String, Any?>?,
+  ): FeatureTaskRuntimeWorkflowArtifactMap {
+    if (claim == null) return this
+    val envelope = toMutableMap()
+    val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
+    produced[FeatureTaskRuntimeNoChangeClaim.KEY] = claim
+    envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(envelope)
+  }
+
   private fun truncateSummary(value: String): String {
     val compact = value.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
     return when {
@@ -147,8 +160,15 @@ class FeatureTaskPhaseSettlementService(
     val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
     private const val SETTLEABLE_PHASE_REQUIREMENT: String =
       "phase_id must be an agent-run feature-task phase step (every workflow step except commit_push)."
+    private const val NO_CHANGE_PHASE_REQUIREMENT: String =
+      "no_change is accepted only for implement and audit_implement_fix."
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
+    private val NO_CHANGE_CLAIM_PHASE_IDS: Set<String> =
+      setOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+      )
 
     fun isSettleablePhase(phaseId: String): Boolean =
       phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds

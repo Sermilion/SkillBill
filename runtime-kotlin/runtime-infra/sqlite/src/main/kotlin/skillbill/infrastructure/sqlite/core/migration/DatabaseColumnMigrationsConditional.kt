@@ -41,6 +41,7 @@ internal object DatabaseColumnMigrationsConditional {
       "TEXT NOT NULL DEFAULT 'runtime'",
     )
     DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "stop_reason", "TEXT")
+    DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "no_change_reason", "TEXT")
     DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "parent_workflow_id", "TEXT")
   }
 

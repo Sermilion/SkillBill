@@ -128,6 +128,7 @@ class GoalRunnerTelemetryEmitter(
           },
         mode = "runtime",
         stopReason = stopReason,
+        noChangeReason = (report as? GoalRunnerRunReport.Stopped)?.stop?.noChangeReason,
         parentWorkflowId = state.parentWorkflowId,
       ),
     )
@@ -137,6 +138,8 @@ class GoalRunnerTelemetryEmitter(
     when {
       report is GoalRunnerRunReport.Completed -> "completed"
       (report as? GoalRunnerRunReport.Stopped)?.stop?.reason == GoalRunnerStopReason.PAUSED -> "paused"
+      (report as? GoalRunnerRunReport.Stopped)?.stop?.reason == GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION ->
+        "paused"
       else -> "blocked"
     }
 

@@ -10,6 +10,7 @@ import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedgerEntry
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptDecodeObservations
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptDecoded
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.audit.featureTaskRuntimeQuarantineEntriesFromWire
 import skillbill.workflow.taskruntime.model.audit.featureTaskRuntimeQuarantineRecordToWire
@@ -161,6 +162,12 @@ internal fun decodeValidationEvidenceFromArtifact(
   raw: Map<String, Any?>,
   sourceLabel: String,
 ): FeatureTaskRuntimeValidationEvidence = FeatureTaskRuntimeValidationEvidence.fromArtifactMap(raw, sourceLabel)
+
+fun FeatureTaskRuntimeNoChangePause.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
+
+fun decodeNoChangePauseFromArtifact(raw: Any?): FeatureTaskRuntimeNoChangePause? =
+  JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeNoChangePause::fromArtifactMap)
 
 fun FeatureTaskRuntimeRepairReceipt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())

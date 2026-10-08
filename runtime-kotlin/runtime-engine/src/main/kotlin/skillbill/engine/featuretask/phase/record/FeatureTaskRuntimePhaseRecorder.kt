@@ -34,6 +34,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeDiagnosticSignal
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
@@ -272,6 +273,13 @@ class FeatureTaskRuntimePhaseRecorder
       workflowId: String,
       progress: FeatureTaskRuntimeValidationGateProgress,
     ) = gateProgress.persistBuildGateProgress(workflowId, progress)
+
+    fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? = gateProgress.loadNoChangePause(workflowId)
+
+    fun persistNoChangePause(
+      workflowId: String,
+      pause: FeatureTaskRuntimeNoChangePause,
+    ) = gateProgress.persistNoChangePause(workflowId, pause)
   }
 
 private interface FeatureTaskRuntimePhaseEvidenceApi {

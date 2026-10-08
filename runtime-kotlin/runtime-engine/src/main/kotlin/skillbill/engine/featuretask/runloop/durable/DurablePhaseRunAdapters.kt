@@ -38,6 +38,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -176,6 +177,14 @@ internal class DurablePhaseRunRecords(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) = recorder.persistBuildGateProgress(workflowId, progress)
+
+  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
+    recorder.loadNoChangePause(workflowId)
+
+  override fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ) = recorder.persistNoChangePause(workflowId, pause)
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
     recorder.appendLedgerEntry(request)

@@ -26,6 +26,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val priorTerminalFailure: String? = null,
   val priorFindingCoverage: String? = null,
   val priorAcceptanceAudit: String? = null,
+  val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,
   val validationGateFindings: ValidationFindingSetProjection? = null,

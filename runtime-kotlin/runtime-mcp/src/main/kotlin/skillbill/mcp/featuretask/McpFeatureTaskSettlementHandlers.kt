@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementComple
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
 import skillbill.mcp.shared.McpToolPayloadKeys
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaim
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 internal fun featureTaskPhaseComplete(
@@ -24,6 +25,7 @@ internal fun featureTaskPhaseComplete(
       prompt = arguments.optionalString(SharedPayloadKeys.PROMPT),
       summary = arguments.optionalString(SharedPayloadKeys.SUMMARY),
       verdict = arguments.optionalString(SharedPayloadKeys.VERDICT),
+      noChange = arguments.optionalMap(FeatureTaskRuntimeNoChangeClaim.KEY),
     ),
   ).toWireMap()
 

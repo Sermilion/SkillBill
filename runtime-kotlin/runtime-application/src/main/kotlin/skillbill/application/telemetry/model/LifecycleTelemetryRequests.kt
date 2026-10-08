@@ -144,6 +144,7 @@ data class GoalFinishedRequest(
   val subtasksSkipped: Int,
   val mode: String,
   val stopReason: String? = null,
+  val noChangeReason: String? = null,
   val parentWorkflowId: String? = null,
 )
 

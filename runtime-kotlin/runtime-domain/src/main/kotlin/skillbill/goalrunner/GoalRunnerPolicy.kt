@@ -272,18 +272,30 @@ object GoalRunnerOutcomeReconciler {
           liveness = liveness,
         )
 
-      GoalRunnerTerminalStatus.PAUSED ->
-        stop(
-          reason = GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
-          blockedReason =
-            storedOutcome.blockedReason.orEmpty().ifBlank {
-              "Subtask $subtaskId paused with an unresolved Blocker or Major after remediation; " +
-                "choose retry_fix, accept_and_advance, or abandon_subtask, then resume the goal. " +
-                "Location-bearing evidence: skill-bill goal findings --issue-key <KEY>."
-            },
-          storedOutcome = storedOutcome,
-          liveness = liveness,
-        )
+      GoalRunnerTerminalStatus.PAUSED -> {
+        val noChangePause = storedOutcome.noChangePause
+        if (noChangePause != null) {
+          stop(
+            reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
+            blockedReason = noChangePause.stopDetail(subtaskId),
+            storedOutcome = storedOutcome,
+            liveness = liveness,
+            noChangeReason = noChangePause.reason.wireValue,
+          )
+        } else {
+          stop(
+            reason = GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+            blockedReason =
+              storedOutcome.blockedReason.orEmpty().ifBlank {
+                "Subtask $subtaskId paused with an unresolved Blocker or Major after remediation; " +
+                  "choose retry_fix, accept_and_advance, or abandon_subtask, then resume the goal. " +
+                  "Location-bearing evidence: skill-bill goal findings --issue-key <KEY>."
+              },
+            storedOutcome = storedOutcome,
+            liveness = liveness,
+          )
+        }
+      }
     }
 
   private fun completeOutcome(
@@ -337,6 +349,7 @@ object GoalRunnerOutcomeReconciler {
     blockedReason: String,
     storedOutcome: GoalRunnerStoredOutcome?,
     liveness: GoalRunnerLivenessSnapshot? = null,
+    noChangeReason: String? = null,
   ): GoalRunnerReconciledOutcome.Stop =
     GoalRunnerReconciledOutcome.Stop(
       reason = reason,
@@ -345,5 +358,6 @@ object GoalRunnerOutcomeReconciler {
       commitSha = storedOutcome?.commitSha,
       lastResumableStep = storedOutcome?.lastResumableStep.orEmpty().ifBlank { "preplan" },
       liveness = liveness,
+      noChangeReason = noChangeReason,
     )
 }

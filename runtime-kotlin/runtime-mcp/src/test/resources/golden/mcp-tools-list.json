@@ -173,6 +173,10 @@
           "verdict": {
             "type": "string",
             "minLength": 1
+          },
+          "no_change": {
+            "type": "object",
+            "description": "No-change claim for implement or audit_implement_fix; the runtime stores it as produced_outputs.no_change and validates it structurally."
           }
         }
       }

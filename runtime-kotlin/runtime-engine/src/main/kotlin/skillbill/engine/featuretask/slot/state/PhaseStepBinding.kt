@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 /** Step binding for one accepted step; strategies read launch facts through [launchState] only. */
@@ -59,7 +60,16 @@ internal interface PhaseStepBinding {
 /** Accepted-step agent launch and branch guard without review-only persistence. */
 internal interface PhaseAcceptedStepExecution :
   PhaseStepBinding,
-  PhaseAcceptedStepCallTarget
+  PhaseAcceptedStepCallTarget {
+  /**
+   * Records [stepId] as completed by the runtime from [output], ahead of any launch. Throws when the completion
+   * cannot persist atomically.
+   */
+  fun settleRuntimeAuthoredCompletion(
+    stepId: String,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  )
+}
 
 /** Agent and side-effect steps execute through the accepted attempt owner only. */
 internal interface PhaseAgentStepBinding :

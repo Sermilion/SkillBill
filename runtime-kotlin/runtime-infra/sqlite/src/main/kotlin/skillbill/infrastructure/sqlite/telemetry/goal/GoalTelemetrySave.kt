@@ -79,6 +79,7 @@ private fun updateGoalFinished(
       subtasks_skipped = ?,
       mode = ?,
       stop_reason = ?,
+      no_change_reason = ?,
       parent_workflow_id = COALESCE(?, parent_workflow_id)
     WHERE workflow_id = ? AND status IS NULL AND finished_at IS NULL
     """.trimIndent(),
@@ -94,6 +95,7 @@ private fun updateGoalFinished(
       record.subtasksSkipped,
       record.mode,
       record.stopReason,
+      record.noChangeReason,
       record.parentWorkflowId,
       record.workflowId,
     )
@@ -109,8 +111,8 @@ private fun insertGoalFinished(
     INSERT INTO goal_run_sessions (
       workflow_id, issue_key, started_at, status, finished_at,
       finished_duration_ms, subtasks_complete, subtasks_blocked, subtasks_skipped, mode, stop_reason,
-      parent_workflow_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      no_change_reason, parent_workflow_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """.trimIndent(),
   ).use { statement ->
     statement.bindAll(
@@ -125,6 +127,7 @@ private fun insertGoalFinished(
       record.subtasksSkipped,
       record.mode,
       record.stopReason,
+      record.noChangeReason,
       record.parentWorkflowId,
     )
     statement.executeUpdate()

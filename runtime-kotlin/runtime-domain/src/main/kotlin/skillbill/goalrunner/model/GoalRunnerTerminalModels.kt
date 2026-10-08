@@ -1,6 +1,7 @@
 package skillbill.goalrunner.model
 
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 
 enum class GoalRunnerTerminalStatus(val wireValue: String) {
   COMPLETE("complete"),
@@ -38,12 +39,14 @@ enum class GoalRunnerStopReason {
   RECONCILED_RESUMABLE,
 
   AWAITING_OPERATOR_DECISION,
+  AWAITING_NO_CHANGE_DECISION,
 
   PAUSED,
   ;
 
   companion object {
-    val RESUMABLE_STOP_REASONS = setOf(RECONCILED_RESUMABLE, AWAITING_OPERATOR_DECISION, PAUSED)
+    val RESUMABLE_STOP_REASONS =
+      setOf(RECONCILED_RESUMABLE, AWAITING_OPERATOR_DECISION, AWAITING_NO_CHANGE_DECISION, PAUSED)
   }
 }
 
@@ -54,6 +57,8 @@ data class GoalRunnerStoredOutcome(
   val blockedReason: String? = null,
   val lastResumableStep: String? = null,
   val suppressPr: Boolean,
+  /** The child's no-change pause when no operator decision has settled it yet. */
+  val noChangePause: FeatureTaskRuntimeNoChangePause? = null,
 )
 
 sealed interface GoalRunnerReconciledOutcome {
@@ -70,6 +75,7 @@ sealed interface GoalRunnerReconciledOutcome {
     val commitSha: String?,
     val lastResumableStep: String,
     val liveness: GoalRunnerLivenessSnapshot? = null,
+    val noChangeReason: String? = null,
   ) : GoalRunnerReconciledOutcome
 }
 
@@ -98,6 +104,7 @@ data class GoalRunnerStopReport(
   val blockedReason: String,
   val workflowId: String?,
   val lastResumableStep: String,
+  val noChangeReason: String? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {
@@ -150,6 +157,7 @@ fun GoalRunnerStopReason.toLedgerAction(): GoalAttemptLedgerAction =
     GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME
   }
@@ -167,6 +175,7 @@ fun GoalRunnerStopReason.toDiagnosticClass(): String =
     GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> name.lowercase()
   }
@@ -178,6 +187,7 @@ fun GoalRunnerStopReason.nextSafeAction(): String =
     GoalRunnerStopReason.INTERRUPTED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> "resume_from_last_resumable_step"
     GoalRunnerStopReason.FAILED -> "inspect_child_output_then_resume"

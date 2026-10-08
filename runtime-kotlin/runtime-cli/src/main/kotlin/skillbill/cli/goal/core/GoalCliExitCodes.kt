@@ -28,5 +28,6 @@ private fun GoalRunnerStopReason.goalExitCode(): Int =
     GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     -> GOAL_EXIT_BLOCKED
   }

@@ -52,6 +52,7 @@ fun GoalFinishedRequest.toRecord(): GoalFinishedRecord =
     subtasksSkipped = subtasksSkipped,
     mode = mode,
     stopReason = stopReason,
+    noChangeReason = noChangeReason,
     parentWorkflowId = parentWorkflowId,
   )
 

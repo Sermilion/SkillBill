@@ -93,7 +93,12 @@ internal fun goalFinishedPayload(
     GoalTelemetryPayloadKeys.SUBTASKS_SKIPPED to row.intOrZero(GoalTelemetryPayloadKeys.SUBTASKS_SKIPPED),
     LifecycleTelemetryPayloadKeys.MODE to row.stringOrEmpty(LifecycleTelemetryPayloadKeys.MODE).ifBlank { "runtime" },
     GoalTelemetryPayloadKeys.STOP_REASON to row[GoalTelemetryPayloadKeys.STOP_REASON]?.toString(),
-  )
+  ).apply {
+    // Only a no-change pause carries a reason; the key is omitted otherwise.
+    row[GoalTelemetryPayloadKeys.NO_CHANGE_REASON]?.toString()?.let { reason ->
+      put(GoalTelemetryPayloadKeys.NO_CHANGE_REASON, reason)
+    }
+  }
 
 internal fun goalIssueFinishedPayload(
   row: Map<String, Any?>,

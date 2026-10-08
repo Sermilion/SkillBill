@@ -19,6 +19,7 @@ import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -42,6 +43,7 @@ internal class InMemoryPhaseRunRecords(
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
   private val buildGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
+  private val noChangePauses = mutableMapOf<String, FeatureTaskRuntimeNoChangePause>()
   private val unaddressedLedger = mutableListOf<UnaddressedFinding>()
   private var verificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null
   private var verificationBoundary: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = null
@@ -207,6 +209,15 @@ internal class InMemoryPhaseRunRecords(
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
     buildGateProgress[workflowId] = progress.detached()
+  }
+
+  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? = noChangePauses[workflowId]
+
+  override fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ) {
+    noChangePauses[workflowId] = pause
   }
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean = true

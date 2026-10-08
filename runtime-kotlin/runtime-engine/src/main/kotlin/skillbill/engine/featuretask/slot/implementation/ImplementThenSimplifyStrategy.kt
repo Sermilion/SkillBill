@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
@@ -47,6 +48,7 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
   override val strategyId: String = ID
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
+  override val loopRules: PhaseLoopRules = ImplementThenSimplifyLoopRules
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 

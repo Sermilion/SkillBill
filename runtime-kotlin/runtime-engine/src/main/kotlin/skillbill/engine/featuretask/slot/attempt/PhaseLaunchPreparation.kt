@@ -36,6 +36,7 @@ import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
+import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -427,6 +428,10 @@ object PhaseLaunchPreparation {
             progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
               .output?.normalizedOutput?.envelopeWireMap(),
           ),
+        noChangeClaim =
+          NoChangeClaimResolution.activeClaimMap(progress)
+            ?.takeIf { run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
+            ?.let(NoChangeClaimResolution::renderForAudit),
         operatorBlockRetry =
           session.operatorBlockRetry
             ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
