@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
@@ -82,6 +83,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.PLAN,
           SkeletonDefinition.GOAL_PLANNING,
           SkeletonDefinition.PR,
+          SkeletonDefinition.MONITOR,
         ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
           strategies.selectedStepIds(facts).forEach { step ->
@@ -97,7 +99,8 @@ class RuntimeFeatureTaskSlotProvidesTest {
     val expected =
       mapOf(
         SkeletonDefinition.PLAN to setOf(AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
-        SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID),
+        SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID, MonitorStrategy.ID),
+        SkeletonDefinition.MONITOR to setOf(RuntimeCommitStrategy.ID, MonitorStrategy.ID),
       )
     expected.forEach { (definition, strategyIds) ->
       val facts = PhaseStrategySelectionFacts(definition, emptySet())

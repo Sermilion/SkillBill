@@ -1,3 +1,22 @@
+## [2026-10-08] Monitor fix returns to commit_push through a backward edge
+Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
+Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` (three traversals, BLOCK on exhaustion). Return from `monitor_fix` to `commit_push` through an uncapped backward edge on ADVANCE with its own loop id. `monitor_fix` sits after `monitor` in forward order.
+Reason: The existing backward-edge machinery already handles this shape. Leaving the return uncapped means the cap counts only failed CI rounds, so exactly three repair runs are possible.
+Alternatives considered: The spec's forward loop-only successor, rejected because the declaration validator refuses it.
+Revisit when: The transition validator accepts a loop-only successor that is not forward, or a second phase needs a monitor-owned repair path.
+
+## [2026-10-08] Monitor watches CI through a port and runs without an agent
+Context: The run loop must not import the monitor slot's phase constants, and the architecture guards enforce that. CI watching has to finish without a model session.
+Decision: `monitor` observes CI through a `PhaseCiObservation` port in slot state and gets back a `PullRequestCiOutcome`. The run loop dispatches it through a `CI_MONITOR` execution binding kind. The GitHub lookup sits behind `PullRequestChecksLookup` in ports.
+Reason: The run loop depends only on port types, and the monitor slot owns the GitHub-specific polling. This follows the runtime-settled pattern `commit_push` already uses.
+Alternatives considered: Reading the phase id from the monitor slot inside the run loop, rejected by the architecture guards.
+
+## [2026-10-08] A standalone run completes at monitor, not at pr
+Context: With `monitor` after `pr`, a run whose last step was `monitor` stayed "running" after `pr` finished, so it could be re-entered.
+Decision: The workflow becomes completed only when a monitor-slot step finishes, is not loop-only, and did not trigger a backward edge. A CI_FAILED monitor or a finished `monitor_fix` leaves the workflow running.
+Reason: `monitor` owns the PR's final outcome, so `pr` finishing is no longer the end of the run.
+Alternatives considered: Completing at `pr` as before, rejected because a PR with failing CI would read as finished.
+
 ## [2026-10-06] Feature specs are staged only when they are not gitignored
 
 Context: commit_push stages every dirty non-ignored path, and a tracked path that later matches gitignore is still updated in the index. A repository that gitignores `.feature-specs/` therefore still commits those files once they have been tracked.

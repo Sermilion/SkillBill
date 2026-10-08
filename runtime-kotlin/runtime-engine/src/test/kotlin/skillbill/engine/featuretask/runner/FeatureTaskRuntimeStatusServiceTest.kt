@@ -150,10 +150,10 @@ class FeatureTaskRuntimeStatusServiceTest {
 
     assertEquals("LARGE", projection.featureSize)
     assertEquals(0, projection.completeCount)
-    assertEquals(15, projection.pendingCount)
+    assertEquals(17, projection.pendingCount)
     assertEquals(0, projection.blockedCount)
     assertEquals("preplan", projection.currentPhaseId)
-    assertEquals(List(15) { "pending" }, projection.phases.map { it.status })
+    assertEquals(List(17) { "pending" }, projection.phases.map { it.status })
   }
 
   @Test
@@ -625,6 +625,7 @@ class FeatureTaskRuntimeStatusServiceTest {
       "write_history",
       "commit_push",
       "pr",
+      "monitor",
     )
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
 
@@ -633,8 +634,9 @@ class FeatureTaskRuntimeStatusServiceTest {
         harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
       )
 
-    assertEquals(11, projection.completeCount)
+    assertEquals(12, projection.completeCount)
     assertEquals("pending", projection.phases.single { it.phaseId == "implement_fix" }.status)
+    assertEquals("pending", projection.phases.single { it.phaseId == "monitor_fix" }.status)
     assertNull(projection.currentPhaseId, "a completed forward run reports no current phase, not implement_fix")
   }
 

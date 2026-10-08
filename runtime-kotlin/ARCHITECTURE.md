@@ -1389,6 +1389,15 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 | `write_history` | write_history | `boundary-history` |
 | `commit_push` | commit_push | `runtime-commit` |
 | `pull_request` | pr | `pr-description` |
+| `monitor` | monitor, monitor_fix | `monitor-ci` |
+
+`monitor` runs after `pr` in standalone and PR skeletons and is excluded from
+goal children. `PullRequestCiWatcher` polls the PR checks through
+`PullRequestChecksLookup` until they settle. A failing result sets verdict
+`ci_failed`, which routes backward to `monitor_fix` and then to `commit_push`.
+The loop is capped at 3 attempts per subtask. Exhausting the cap blocks the run
+through the cap-exhaustion reason. Monitor-owned steps never emit a verdict
+other than `ci_failed` or the default advance.
 
 Composition:
 

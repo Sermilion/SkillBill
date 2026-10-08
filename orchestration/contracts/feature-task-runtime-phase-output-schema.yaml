@@ -206,7 +206,7 @@ $defs:
     if:
       properties:
         phase_id:
-          enum: [preplan, plan, implement, simplify, audit, validate, write_history, pr]
+          enum: [preplan, plan, implement, simplify, audit, validate, write_history, pr, monitor_fix]
       required: [phase_id]
     then:
       properties:

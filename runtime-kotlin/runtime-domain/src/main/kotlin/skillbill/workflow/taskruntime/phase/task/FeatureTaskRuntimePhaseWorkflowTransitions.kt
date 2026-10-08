@@ -44,7 +44,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
             capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
-        ) +
+        ) + monitorFixEdges() +
           FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.map { (producer, loopId) ->
             FeatureTaskRuntimeBackwardEdge(
               fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
@@ -62,12 +62,34 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
         ),
       loopOnlySuccessors =
         mapOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         ),
+    )
+
+  private fun monitorFixEdges(): List<FeatureTaskRuntimeBackwardEdge> =
+    listOf(
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID,
+        perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS,
+        capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_COMMIT_LOOP_ID,
+        perEdgeCap = null,
+        capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+      ),
     )
 
   fun backwardEdgeForLoop(

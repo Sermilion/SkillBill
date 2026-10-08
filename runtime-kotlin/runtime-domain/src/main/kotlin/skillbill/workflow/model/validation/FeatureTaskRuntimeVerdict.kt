@@ -30,6 +30,8 @@ data class FeatureTaskRuntimeVerdict(
 
     val RECORD_REJECTED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("record_rejected")
 
+    val CI_FAILED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("ci_failed")
+
     val REPAIR_PLANNED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("repair_planned")
 
     val ESCALATED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("escalated")

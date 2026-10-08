@@ -62,6 +62,7 @@ after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<issue-key\|pr-url>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
 | `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
@@ -347,11 +348,23 @@ it finished; report it and exit non-zero.
 
 ## Phase PR
 
-`phase:pr` composes `commit_push` followed by `pr`. The runtime refuses a detached,
-protected, or base branch before staging. It commits staged, unstaged, and untracked
-changes, excluding ignored and runtime-private files, then pushes. The PR step
-creates or updates the branch's open PR. A clean retry reuses the existing commit.
-The phase creates no workflow row, branch, or checkpoint commit.
+`phase:pr` composes `commit_push`, `pr`, and `monitor`. The runtime refuses a
+detached, protected, or base branch before staging. It commits staged, unstaged, and
+untracked changes, excluding ignored and runtime-private files, then pushes. The PR
+step creates or updates the branch's open PR, and monitor then watches its CI as in
+Phase Monitor. A clean retry reuses the existing commit. The phase creates no
+workflow row, branch, or checkpoint commit.
+
+## Phase Monitor
+
+`phase:monitor` watches CI on the open PR of the checked-out branch. An issue key
+or PR URL intake names the work; it does not switch branches. The phase composes
+`commit_push` followed by `monitor`, so it commits and pushes any pending changes
+first, like `phase:pr`. When every check passes or is skipped, the phase completes.
+When a check fails, `monitor_fix` repairs it, the runtime commits and pushes the
+fix, and monitor watches again, up to three fix attempts. The phase then blocks
+with the failing checks and the last fix summary. When the branch has no open PR,
+the phase completes and reports that there is nothing to monitor.
 
 ## Phase Validation
 

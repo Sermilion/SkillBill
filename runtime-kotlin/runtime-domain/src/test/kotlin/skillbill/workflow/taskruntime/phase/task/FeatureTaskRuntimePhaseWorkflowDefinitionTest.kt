@@ -133,6 +133,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
       )
     assertEquals(expectedOrder, definition.stepIds)
     assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN, definition.defaultInitialStepId)
@@ -153,6 +155,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to "Phase 7: Boundary History",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to "Phase 8: Commit and Push",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR to "Phase 9: Pull Request",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to "Phase 10: Monitor",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to "Phase 10b: Monitor Fix",
       ),
       definition.stepLabels,
     )
@@ -186,7 +190,13 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val transitions = def.transitions
     assertEquals(
-      setOf(def.PHASE_AUDIT_PLAN_FIX, def.PHASE_AUDIT_IMPLEMENT_FIX, def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD),
+      setOf(
+        def.PHASE_AUDIT_PLAN_FIX,
+        def.PHASE_AUDIT_IMPLEMENT_FIX,
+        def.PHASE_IMPLEMENT_FIX,
+        def.PHASE_BUILD,
+        def.PHASE_MONITOR_FIX,
+      ),
       transitions.loopOnlyPhaseIds,
     )
     assertEquals(mapOf(def.PHASE_AUDIT_PLAN_FIX to def.PHASE_AUDIT_IMPLEMENT_FIX), transitions.loopOnlySuccessors)
@@ -212,7 +222,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   fun `audit repair remains unbounded and review_fix remains bounded`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val transitions = def.transitions
-    assertEquals(2, transitions.backwardEdges.count { !def.isRegenerationLoopId(it.loopId) })
+    assertEquals(4, transitions.backwardEdges.count { !def.isRegenerationLoopId(it.loopId) })
     assertEquals(null, transitions.backwardEdges.single { it.fromPhaseId == def.PHASE_AUDIT }.perEdgeCap)
   }
 

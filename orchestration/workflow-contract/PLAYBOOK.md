@@ -326,6 +326,11 @@ Required workflow artifacts for the pilot:
   pushes, and prunes checkpoint refs after the manifest records `commit_sha`. If nothing remains to
   commit, it finishes and pushes the current HEAD. This phase does not launch an agent.
 - `pr_result` — PR url/title or terminal failure note
+- `monitor` (no named artifact) — settles the CI verdict for the PR the run
+  created with a prose value. The runtime watches the PR checks and settles as
+  passed, no-CI-configured, or failing. Failing checks route to `monitor_fix`.
+  Monitor is runtime-owned: it does not launch an agent and does not read CI
+  state from agent output.
 
 Pilot-specific retry rules:
 
@@ -337,6 +342,11 @@ Pilot-specific retry rules:
 - `commit_push` and `pr_description` are terminal gates; no downstream step may
   continue if they fail. `commit_push` is runtime-owned: it does not launch an
   agent, and it does not run `git commit` or `git push` from agent output.
+- `monitor` runs after `pr`. On failing CI it routes to `monitor_fix`, which
+  fixes the failures and returns to `commit_push`, then `monitor` re-checks the
+  PR. At most 3 `monitor_fix` attempts run per subtask. When CI still fails
+  after the third attempt, the run blocks with the last failing checks and the
+  last fix summary as the reason.
 
 ## Authoring Boundary
 

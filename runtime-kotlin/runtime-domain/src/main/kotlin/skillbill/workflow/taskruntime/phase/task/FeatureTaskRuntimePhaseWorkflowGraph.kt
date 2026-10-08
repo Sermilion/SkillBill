@@ -68,6 +68,8 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to "Phase 7: Boundary History",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to "Phase 8: Commit and Push",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR to "Phase 9: Pull Request",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to "Phase 10: Monitor",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to "Phase 10b: Monitor Fix",
         ),
       requiredArtifactsByStep =
         mapOf(
@@ -129,6 +131,15 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
             ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+            ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+            ),
         ),
       resumeActions =
         mapOf(
@@ -169,6 +180,12 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR to
             "Resume PR creation from the latest implement output, commit output, and derived " +
             "diff context.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to
+            "Resume CI monitoring by re-reading the pull request and its checks, starting a fresh watch " +
+            "without re-applying any fix.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to
+            "Resume the monitor fix from the latest failing CI checks, reconciling the current tree " +
+            "without committing or pushing, then persist the validated output.",
         ),
       continuationReferenceSections = emptyMap(),
       continuationDirectives = emptyMap(),

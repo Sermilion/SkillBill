@@ -188,6 +188,7 @@ internal data class CapExhaustionReasonArgs(
   val edgeIteration: Int,
   val verdict: FeatureTaskRuntimeVerdict,
   val unresolvedFindings: List<FeatureTaskRuntimeReviewFinding>,
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess? = null,
 )
 
 internal data class UnownedWorktreeCommitShaArgs(

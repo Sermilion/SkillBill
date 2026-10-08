@@ -46,7 +46,7 @@ class McpTelemetrySchemaEnumParityTest {
     )
     val settleablePhaseIds =
       FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-        .filter { it != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH }.sorted()
+        .filter { it !in FeatureTaskRuntimePhaseWorkflowDefinition.runtimeSettledPhaseIds }.sorted()
     assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id").sorted())
     assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id").sorted())
     assertEquals(
