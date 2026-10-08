@@ -12,6 +12,7 @@ import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -292,8 +293,7 @@ class AgentRunLauncherLivenessTest {
                 return "${workflowStep(startedNanos)}-$probeCount"
               }
 
-              override fun progressLabel(): String =
-                "subtask 8 workflow wfl-child step ${workflowStep(startedNanos)}"
+              override fun progressLabel(): String = "subtask 8 workflow wfl-child step ${workflowStep(startedNanos)}"
             }
         },
       )
@@ -327,7 +327,7 @@ class AgentRunLauncherLivenessTest {
 }
 
 private fun workflowStep(startedNanos: Long): String =
-  if (java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos) < 400L) {
+  if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos) < 400L) {
     "implement"
   } else {
     "validate"
