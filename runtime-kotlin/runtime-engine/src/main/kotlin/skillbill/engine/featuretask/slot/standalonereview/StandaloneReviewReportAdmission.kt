@@ -42,8 +42,9 @@ internal object StandaloneReviewReportAdmission {
         .any { it == ParallelReviewSeverity.BLOCKER || it == ParallelReviewSeverity.MAJOR }
     val unparsedCandidates =
       parsed.rejections.isNotEmpty() || hasMalformedFindingIdentifier(rawOutput) || result.rejectedCandidateCount > 0
+    val contradictsApproval = severe || unparsedCandidates || proseContradictsApproval(rawOutput)
     val finalVerdict =
-      if (token != null && (severe || unparsedCandidates)) {
+      if (token != null && contradictsApproval) {
         FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
       } else {
         token
@@ -77,16 +78,32 @@ internal object StandaloneReviewReportAdmission {
       .singleOrNull()
       ?.takeIf { it in CANONICAL_VERDICTS }
 
+  private fun proseContradictsApproval(rawOutput: String): Boolean =
+    proseLines(rawOutput).any { line ->
+      INCOMPLETE_REVIEW_PATTERN.containsMatchIn(line) || SEVERE_PROSE_FINDING_PATTERN.containsMatchIn(line)
+    }
+
+  private fun proseLines(rawOutput: String): List<String> =
+    rawOutput.lines()
+      .map(String::trim)
+      .filter { line ->
+        line.isNotEmpty() &&
+          line != NO_FINDINGS &&
+          !line.lowercase().startsWith(VERDICT_PREFIX) &&
+          !ParallelReviewFindingParser.parallelFindingPattern.matches(line)
+      }
+
   private fun registerBody(
     rawOutput: String,
     result: ParallelCodeReviewResult,
     requireDelegatedCoverage: Boolean,
   ): String {
-    val reportLines = rawOutput.lines().filterNot { it.trim().lowercase().startsWith(VERDICT_PREFIX) }
-    val hasProse =
-      reportLines.map(String::trim)
-        .any { it.isNotEmpty() && it != NO_FINDINGS && !ParallelReviewFindingParser.parallelFindingPattern.matches(it) }
-    if (!requireDelegatedCoverage && hasProse) return reportLines.joinToString("\n").trim()
+    if (!requireDelegatedCoverage && proseLines(rawOutput).isNotEmpty()) {
+      return rawOutput.lines()
+        .filterNot { it.trim().lowercase().startsWith(VERDICT_PREFIX) }
+        .joinToString("\n")
+        .trim()
+    }
     return ParallelReviewMerger.formattedOutput(result.mergeResult.findings).ifBlank { NO_FINDINGS }
   }
 
@@ -139,5 +156,19 @@ private const val VERDICT_PREFIX = "verdict:"
 private const val NO_FINDINGS = "NO_FINDINGS"
 private val CANONICAL_VERDICTS =
   setOf(FeatureTaskRuntimeVerdict.APPROVED.wireValue, FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue)
+private val INCOMPLETE_REVIEW_PATTERN =
+  Regex(
+    "\\breview (?:was |is )?incomplete\\b|\\bincomplete review\\b|\\bnot (?:fully )?reviewed\\b|" +
+      "\\b(?:could not|couldn't|unable to|was not able to|wasn't able to) " +
+      "(?:inspect|review|read|open|access|load|fetch)\\b",
+    RegexOption.IGNORE_CASE,
+  )
+private val SEVERE_PROSE_FINDING_PATTERN =
+  Regex(
+    "\\[(?:blocker|critical|major|high)\\b|" +
+      "(?<!\\bno )(?<!\\bwithout )\\b(?:blocker|critical|major|high)[- ]severity\\b|" +
+      "\\bseverity\\s*[:=]?\\s*(?:blocker|critical|major|high)\\b",
+    RegexOption.IGNORE_CASE,
+  )
 private const val MAX_REPORT_DIAGNOSTICS = 20
 private const val MAX_DIAGNOSTIC_CHARS = 200

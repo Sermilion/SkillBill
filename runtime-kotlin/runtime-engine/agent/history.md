@@ -1,7 +1,7 @@
 ## [2026-10-08] Standalone review admits prose reports
 Areas: runtime-engine featuretask/slot/standalonereview
 - `StandaloneReviewReportAdmission` now rejects only blank or truncated output, a verdict that is missing, conflicting or not `approved`/`changes_requested` (case-insensitive, anywhere in the report, identical repeats allowed), and incomplete delegated coverage.
-- Inline reports with prose present the report as written; pure register reports keep the merged register. Blocker/Major findings and rejected or malformed finding candidates present `changes_requested`.
+- Inline reports with prose present the report as written; pure register reports keep the merged register. Blocker/Major findings, rejected or malformed finding candidates, and prose that admits an incomplete review or labels a finding high/major/blocker/critical present `changes_requested`.
 - `finishReport` blocks only on execution failure or rejection reasons; parser diagnostics are appended to a block, never a block of their own.
 - Supersedes the SKILL-402 strict admission rules for standalone review; full-run code_review is unchanged.
 Feature flag: N/A

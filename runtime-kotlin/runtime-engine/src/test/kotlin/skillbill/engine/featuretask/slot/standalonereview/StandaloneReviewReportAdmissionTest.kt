@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 class StandaloneReviewReportAdmissionTest {
   @Test
-  fun `an incomplete review warning stays in the presented register`() {
+  fun `an incomplete review warning stays visible and cannot present as approved`() {
     val warning = "Review incomplete: could not inspect the diff"
     val outputs =
       listOf(
@@ -30,8 +30,44 @@ class StandaloneReviewReportAdmissionTest {
       val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
 
       assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertEquals("changes_requested", report.verdict, rawOutput)
       assertTrue(warning in report.registerOutput, report.registerOutput)
-      assertTrue(report.registerOutput.endsWith("verdict: approved"), report.registerOutput)
+    }
+  }
+
+  @Test
+  fun `prose that admits a gap or names a severe finding cannot present as approved`() {
+    val outputs =
+      listOf(
+        "I couldn't open the diffs of the agent notes, so they are not covered.",
+        "Some files were not reviewed.",
+        "- `src/Gate.kt:124` [high, correctness]: the marker list misses too-old Java output.",
+        "One high-severity issue in the token refresh path.",
+        "Severity: critical. The migration drops the users table.",
+      )
+
+    outputs.forEach { prose ->
+      val report = StandaloneReviewReportAdmission.admit("$prose\nverdict: approved", emptyResult(), false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertEquals("changes_requested", report.verdict, prose)
+    }
+  }
+
+  @Test
+  fun `clean prose approvals stay approved`() {
+    val outputs =
+      listOf(
+        "I reviewed all six files and could not find any issues.",
+        "No high-severity issues found; the change is small and well tested.",
+        "- `src/Gate.kt:124` [low, style]: consider a shorter name.",
+      )
+
+    outputs.forEach { prose ->
+      val report = StandaloneReviewReportAdmission.admit("$prose\nverdict: approved", emptyResult(), false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertEquals("approved", report.verdict, prose)
     }
   }
 
