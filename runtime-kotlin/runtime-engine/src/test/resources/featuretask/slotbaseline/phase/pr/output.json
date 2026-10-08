@@ -3,23 +3,19 @@
     "blocked_step_id": null,
     "completed_step_ids": [
         "commit_push",
-        "pr"
+        "pr",
+        "monitor"
     ],
     "invocation_id": "__NORMALIZED_INVOCATION_ID__",
     "review_result": null,
     "status": "completed",
     "value": {
         "contract_version": "0.7",
-        "phase_id": "pr",
+        "phase_id": "monitor",
         "produced_outputs": {
-            "runtime_measured_facts": {
-                "pr_created": "unknown",
-                "pr_number": "unknown",
-                "pr_url": "unknown"
-            },
-            "value": "Opened the pull request for the branch."
+            "value": "CI passed on branch 'feat/existing-runtime-branch': every check on the pull request passed or was skipped."
         },
         "status": "completed",
-        "summary": "Opened the pull request for the branch."
+        "summary": "CI passed for the pull request."
     }
 }

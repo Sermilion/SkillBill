@@ -24,6 +24,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_WRITE_HISTORY: String = FeatureTaskRuntimePhaseIds.WRITE_HISTORY
   const val PHASE_COMMIT_PUSH: String = FeatureTaskRuntimePhaseIds.COMMIT_PUSH
   const val PHASE_PR: String = FeatureTaskRuntimePhaseIds.PR
+  const val PHASE_MONITOR: String = FeatureTaskRuntimePhaseIds.MONITOR
+  const val PHASE_MONITOR_FIX: String = FeatureTaskRuntimePhaseIds.MONITOR_FIX
   const val PHASE_PRESENT_FINDINGS: String = FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS
 
   const val DERIVED_CONTEXT_DIFF: String = "diff"
@@ -36,6 +38,11 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val AUDIT_REPAIR_LOOP_ID: String = "audit_repair"
 
   const val AUDIT_GAP_LOOP_ID: String = "audit_gap"
+
+  const val MONITOR_FIX_LOOP_ID: String = "monitor_fix"
+
+  const val MAX_MONITOR_FIX_ATTEMPTS: Int = 3
+  const val MONITOR_FIX_COMMIT_LOOP_ID: String = "monitor_fix_commit"
 
   const val SEMANTIC_LOOP_WARNING_THRESHOLD: Int = 3
 
@@ -58,7 +65,9 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
 
-  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - PHASE_COMMIT_PUSH
+  val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_COMMIT_PUSH, PHASE_MONITOR)
+
+  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds
 
   const val UPSTREAM_PHASE_RECEIPT_CONTRACT_ID: String = "feature_task_runtime.upstream_phase_receipt"
 

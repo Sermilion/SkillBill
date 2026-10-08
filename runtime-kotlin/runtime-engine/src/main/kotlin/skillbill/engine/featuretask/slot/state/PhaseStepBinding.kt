@@ -10,9 +10,11 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import java.nio.file.Path
 
 /** Step binding for one accepted step; strategies read launch facts through [launchState] only. */
 internal interface PhaseStepBinding {
@@ -92,6 +94,40 @@ internal interface PhaseQualityGateStepBinding : PhaseAcceptedStepExecution {
 
 internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
   fun runCommitPush(run: PhaseRun): PhaseOutcome
+}
+
+internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
+  fun runMonitor(
+    run: PhaseRun,
+    observation: PhaseCiObservation,
+  ): PhaseOutcome
+}
+
+/** Pull request CI observation the monitor step drives; the selected monitor strategy supplies it. */
+internal interface PhaseCiObservation {
+  /** Watches the pull request open for [branch] until its checks settle, time out, or cannot be read. */
+  fun watch(
+    repoRoot: Path,
+    branch: String,
+  ): PullRequestCiOutcome
+
+  /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
+  fun recordFailingChecks(
+    issueKey: String,
+    checks: List<PullRequestCheck>,
+  )
+}
+
+internal sealed interface PullRequestCiOutcome {
+  data object Passed : PullRequestCiOutcome
+
+  data object NoCiConfigured : PullRequestCiOutcome
+
+  data class Failed(val failingChecks: List<PullRequestCheck>) : PullRequestCiOutcome
+
+  data class Blocked(val reason: String) : PullRequestCiOutcome
+
+  data class Unavailable(val reason: String) : PullRequestCiOutcome
 }
 
 internal interface PhasePullRequestStepBinding : PhaseAgentStepBinding {

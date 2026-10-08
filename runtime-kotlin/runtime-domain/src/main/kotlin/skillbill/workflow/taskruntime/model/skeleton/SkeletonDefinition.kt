@@ -47,13 +47,14 @@ data class SkeletonDefinition(
         PhaseSlot.WRITE_HISTORY,
         PhaseSlot.COMMIT_PUSH,
         PhaseSlot.PULL_REQUEST,
+        PhaseSlot.MONITOR,
       )
 
     val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", FEATURE_RUN_SLOTS, semanticRevision = 2)
     val GOAL_CHILD: SkeletonDefinition =
       SkeletonDefinition(
         "goal-child",
-        FEATURE_RUN_SLOTS.filter { it != PhaseSlot.PULL_REQUEST },
+        FEATURE_RUN_SLOTS.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
         semanticRevision = 2,
       )
     val REVIEW: SkeletonDefinition =
@@ -68,7 +69,11 @@ data class SkeletonDefinition(
         PhaseIntakeRequirement.ISSUE_KEY,
       )
     val PR: SkeletonDefinition =
-      SkeletonDefinition("pr", listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.PULL_REQUEST), SkeletonRunStateKind.IN_MEMORY)
+      SkeletonDefinition(
+        "pr",
+        listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.PULL_REQUEST, PhaseSlot.MONITOR),
+        SkeletonRunStateKind.IN_MEMORY,
+      )
     val GOAL_PLANNING: SkeletonDefinition =
       SkeletonDefinition(
         "goal-planning",

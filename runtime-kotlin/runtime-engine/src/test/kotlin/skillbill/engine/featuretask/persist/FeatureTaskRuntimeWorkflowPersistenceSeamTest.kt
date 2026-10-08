@@ -2,6 +2,9 @@ package skillbill.engine.featuretask.persist
 
 import org.junit.jupiter.api.Test
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -10,6 +13,7 @@ import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFro
 import skillbill.workflow.taskruntime.artifact.decodeHandoffEnvelopeFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
@@ -128,5 +132,38 @@ class FeatureTaskRuntimeWorkflowPersistenceSeamTest {
     ).forEach { name ->
       assertFalse(featuretaskDir.resolve(name).toFile().exists(), "expected $name to be removed")
     }
+  }
+
+  @Test
+  fun `only a monitor pass completes the workflow while a CI failure and its fix keep it running`() {
+    assertEquals("completed", workflowStatusFor(finishedPhase("monitor", verdict = null)))
+    assertEquals("running", workflowStatusFor(finishedPhase("monitor", verdict = "ci_failed")))
+    assertEquals("running", workflowStatusFor(finishedPhase("monitor_fix", verdict = null)))
+    assertEquals("running", workflowStatusFor(finishedPhase("pr", verdict = null)))
+  }
+
+  private fun finishedPhase(
+    phaseId: String,
+    verdict: String?,
+  ): FeatureTaskRuntimePhaseStateRequest {
+    val envelope =
+      mapOf(
+        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        SharedPayloadKeys.PHASE_ID to phaseId,
+        SharedPayloadKeys.STATUS to "completed",
+        SharedPayloadKeys.SUMMARY to "Phase finished.",
+        SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to "Phase finished."),
+      ) + listOfNotNull(verdict?.let { SharedPayloadKeys.VERDICT to it })
+    val text = JsonCodec.mapToJsonString(envelope)
+    return FeatureTaskRuntimePhaseStateRequest(
+      workflowId = "wftr-monitor",
+      phaseId = phaseId,
+      status = "completed",
+      attemptCount = 1,
+      resolvedAgentId = "claude",
+      finished = true,
+      outputArtifact = text,
+      normalizedOutput = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(text, phaseId),
+    )
   }
 }

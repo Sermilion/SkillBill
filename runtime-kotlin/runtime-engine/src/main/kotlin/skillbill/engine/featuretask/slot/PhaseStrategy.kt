@@ -103,7 +103,14 @@ internal sealed interface PhaseQualityGateOperation {
   data object AgentValidation : PhaseQualityGateOperation
 }
 
-internal enum class PhaseExecutionBindingKind { AGENT, PLANNING, REVIEW, FINDING_VERIFICATION, REPAIR_RECEIPT }
+internal enum class PhaseExecutionBindingKind {
+  AGENT,
+  PLANNING,
+  REVIEW,
+  FINDING_VERIFICATION,
+  REPAIR_RECEIPT,
+  CI_MONITOR,
+}
 
 internal data class PhaseExecutionPlanMapping(
   val previous: ResolvedPhaseExecutionPlan,

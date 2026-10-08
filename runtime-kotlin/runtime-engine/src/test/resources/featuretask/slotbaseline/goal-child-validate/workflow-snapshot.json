@@ -2736,6 +2736,16 @@
             "attempt_count": 0,
             "status": "pending",
             "step_id": "pr"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "monitor"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "monitor_fix"
         }
     ],
     "workflow_id": "wftr-20260602-test-0001",

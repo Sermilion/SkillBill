@@ -385,6 +385,31 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
             ),
           ),
         ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR to
+        listOf(
+          phaseProjection(
+            PhaseHandoffProjectionTemplate(
+              consumerPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+              producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+              name = "commit_receipt",
+              contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.COMMIT_RECEIPT,
+              fields = listOf(SharedPayloadKeys.VALUE),
+              checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED,
+              required = true,
+            ),
+          ),
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+          ),
+        ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX to
+        listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+          ),
+        ),
     )
 
   fun runtimeProjectorProducerPhaseIds(consumerPhaseId: String): Set<String> =

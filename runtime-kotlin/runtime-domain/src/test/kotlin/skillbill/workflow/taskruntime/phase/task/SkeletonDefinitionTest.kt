@@ -14,6 +14,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class SkeletonDefinitionTest {
   private val goalChildForward =
@@ -83,13 +84,51 @@ class SkeletonDefinitionTest {
     )
 
   @Test
-  fun `standalone derives today's transition declaration`() {
-    assertEquals(todaysDeclaration(goalChildForward + "pr"), SkeletonDefinition.STANDALONE.declaration())
+  fun `standalone derives today's transition declaration plus the monitor fix loop`() {
+    val expected = todaysDeclaration(goalChildForward + listOf("pr", "monitor", "monitor_fix"))
+    val monitorLoop =
+      listOf(
+        FeatureTaskRuntimeBackwardEdge(
+          fromPhaseId = "monitor",
+          triggeringVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
+          destinationPhaseId = "monitor_fix",
+          loopId = "monitor_fix",
+          perEdgeCap = 3,
+          capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        ),
+        FeatureTaskRuntimeBackwardEdge(
+          fromPhaseId = "monitor_fix",
+          triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
+          destinationPhaseId = "commit_push",
+          loopId = "monitor_fix_commit",
+          perEdgeCap = null,
+          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        ),
+      )
+
+    assertEquals(
+      expected.copy(
+        backwardEdges = expected.backwardEdges.take(2) + monitorLoop + expected.backwardEdges.drop(2),
+        loopOnlyPhaseIds = expected.loopOnlyPhaseIds + "monitor_fix",
+      ),
+      SkeletonDefinition.STANDALONE.declaration(),
+    )
   }
 
   @Test
   fun `goal-child derives today's declaration without the pull request step`() {
     assertEquals(todaysDeclaration(goalChildForward), SkeletonDefinition.GOAL_CHILD.declaration())
+  }
+
+  @Test
+  fun `monitor closes the standalone and pr skeletons and goal-child excludes it`() {
+    assertEquals(PhaseSlot.MONITOR, SkeletonDefinition.STANDALONE.slots.last())
+    assertEquals(
+      listOf("commit_push", "pr", "monitor", "monitor_fix"),
+      SkeletonDefinition.PR.stepIds,
+    )
+    assertFalse(PhaseSlot.MONITOR in SkeletonDefinition.GOAL_CHILD.slots)
   }
 
   @Test

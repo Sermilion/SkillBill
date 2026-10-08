@@ -5,6 +5,7 @@ import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
@@ -42,6 +43,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
           edgeIteration = transition.edgeIteration,
           verdict = transition.unresolvedVerdict,
           unresolvedFindings = unresolvedFindings,
+          progress = state,
         ),
       )
     val run = capExhaustionPhaseRun(context, phaseId)
@@ -241,6 +243,9 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     val edgeIteration = args.edgeIteration
     val verdict = args.verdict
     val unresolvedFindings = args.unresolvedFindings
+    if (loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
+      return FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason(loopId, edgeIteration, args.progress)
+    }
     if (FeatureTaskRuntimePhaseWorkflowDefinition.isRegenerationLoopId(loopId)) {
       val producer =
         FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.entries

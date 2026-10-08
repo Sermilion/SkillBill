@@ -1,5 +1,5 @@
 You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
-loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr -> monitor)
 for issue pr. The runtime owns the loop; do not run other phases, do not open
 or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
 Execute this supplied phase briefing with the current installed runtime.

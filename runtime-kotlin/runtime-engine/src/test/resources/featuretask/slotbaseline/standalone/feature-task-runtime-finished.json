@@ -17,7 +17,8 @@
         "validate",
         "write_history",
         "commit_push",
-        "pr"
+        "pr",
+        "monitor"
     ],
     "completion_status": "completed",
     "correlation_availability": "measured",
@@ -35,6 +36,7 @@
         "audit": "completed",
         "commit_push": "completed",
         "implement": "completed",
+        "monitor": "completed",
         "plan": "completed",
         "pr": "completed",
         "preplan": "completed",
@@ -56,6 +58,10 @@
         "implement": {
             "semantic_revision": 1,
             "strategy_id": "implement-then-simplify"
+        },
+        "monitor": {
+            "semantic_revision": 1,
+            "strategy_id": "monitor-ci"
         },
         "plan": {
             "semantic_revision": 1,
@@ -108,7 +114,8 @@
         "agent-simplify",
         "agent-validate",
         "agent-verify_findings",
-        "agent-write_history"
+        "agent-write_history",
+        "claude-code"
     ],
     "resolved_branch": "feat/SKILL-380-phase-slot-strategies",
     "review_fix_cap_exhausted": false,

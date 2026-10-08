@@ -1001,8 +1001,8 @@ private fun harnessRunner(
       gitOperations,
       harnessReviewRunner(deps.runtimeConfig, deps.launcher),
       deps.runtimeConfig.pullRequestIdentityLookup,
-      deps.recorder,
-      deps.runtimeConfig.delegatedReviewRunner,
+      readinessEvidence = deps.recorder,
+      delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
     )
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
@@ -1260,8 +1260,8 @@ private fun telemetryHarnessRunner(
       runtimeConfig.harnessGitOperations,
       harnessReviewRunner(runtimeConfig, launcher),
       runtimeConfig.pullRequestIdentityLookup,
-      workflow.recorder,
-      runtimeConfig.delegatedReviewRunner,
+      readinessEvidence = workflow.recorder,
+      delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
     )
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)

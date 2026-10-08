@@ -1,0 +1,195 @@
+package skillbill.engine.featuretask.runloop.finalization
+
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
+import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
+import skillbill.engine.featuretask.phase.core.auditProseValue
+import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
+import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
+import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.runner.STATUS_COMPLETED
+import skillbill.engine.featuretask.slot.attempt.PhaseRuntimeFinalizationContext
+import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
+import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
+import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
+import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.engine.featuretask.slot.state.PhaseCiObservation
+import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
+
+internal object FeatureTaskRuntimeRunLoopMonitorCycle {
+  internal fun PhaseRuntimeFinalizationContext.runDeclaredMonitorCycle(
+    run: PhaseRun,
+    observation: PhaseCiObservation,
+  ): PhaseOutcome {
+    val iteration = progress.phase(run.phaseId).nextIteration
+    persistFinalizationRequiredRunning(run, iteration)?.let { return it }
+    observability.started(
+      run.phaseId,
+      run.resolvedAgent.resolvedAgentId,
+      iteration,
+      run.modelDirective,
+      FeatureTaskRuntimePhaseStartReentry.FIRST_VISIT,
+    )
+    val resolved = recorder.loadResolvedBranch(request.workflowId)
+    val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
+    val branch = requirePublishableBranch(resolved?.branch, baseBranch)
+    return when (val outcome = observation.watch(request.repoRoot, branch)) {
+      PullRequestCiOutcome.Passed ->
+        complete(
+          run,
+          iteration,
+          monitorOutput(
+            run.phaseId,
+            "CI passed for the pull request.",
+            "CI passed on branch '$branch': every check on the pull request passed or was skipped.",
+            verdict = null,
+          ),
+        )
+      PullRequestCiOutcome.NoCiConfigured ->
+        complete(
+          run,
+          iteration,
+          monitorOutput(
+            run.phaseId,
+            "No CI checks configured for the pull request head.",
+            "No CI checks were reported for branch '$branch' within the registration grace period, so no CI is " +
+              "configured for the pull request head.",
+            verdict = null,
+          ),
+        )
+      is PullRequestCiOutcome.Failed -> {
+        observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
+        complete(
+          run,
+          iteration,
+          monitorOutput(
+            run.phaseId,
+            "CI is failing for the pull request.",
+            failingChecksProse(branch, outcome.failingChecks),
+            verdict = FeatureTaskRuntimeVerdict.CI_FAILED,
+          ),
+        )
+      }
+      is PullRequestCiOutcome.Blocked -> block(run, iteration, outcome.reason)
+      is PullRequestCiOutcome.Unavailable -> {
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Monitor could not observe CI for branch '$branch': ${outcome.reason}",
+        )
+        block(run, iteration, outcome.reason)
+      }
+    }
+  }
+
+  internal fun monitorCapExhaustionReason(
+    loopId: String,
+    edgeIteration: Int,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess?,
+  ): String {
+    val edge = FeatureTaskRuntimePhaseWorkflowQueries.backwardEdgeForLoop(loopId)
+    val failingChecks = monitorPhaseProse(progress, edge?.fromPhaseId)
+    val lastFixSummary = monitorPhaseProse(progress, edge?.destinationPhaseId)
+    return "CI is still failing after $edgeIteration fix attempt(s); the run blocks rather than fixing past the cap. " +
+      (failingChecks ?: "The last failing checks were not recorded.") +
+      " Last monitor_fix summary: " +
+      (lastFixSummary ?: "none recorded.")
+  }
+
+  private fun monitorPhaseProse(
+    progress: FeatureTaskRuntimeProgressSnapshotAccess?,
+    phaseId: String?,
+  ): String? =
+    phaseId?.let { id -> progress?.phase(id)?.output }
+      ?.normalizedOutput
+      ?.envelopeWireMap()
+      ?.let(::auditProseValue)
+
+  private fun failingChecksProse(
+    branch: String,
+    checks: List<PullRequestCheck>,
+  ): String =
+    "CI is failing on branch '$branch'. Failing checks: " +
+      checks.joinToString("; ") { check -> "${check.name} (${check.link})" } + "."
+
+  private fun monitorOutput(
+    phaseId: String,
+    summary: String,
+    value: String,
+    verdict: FeatureTaskRuntimeVerdict?,
+  ): String {
+    val envelope =
+      linkedMapOf<String, Any?>(
+        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        SharedPayloadKeys.PHASE_ID to phaseId,
+        SharedPayloadKeys.STATUS to STATUS_COMPLETED,
+        SharedPayloadKeys.SUMMARY to summary,
+        SharedPayloadKeys.PRODUCED_OUTPUTS to mapOf(SharedPayloadKeys.VALUE to value),
+      )
+    if (verdict != null) envelope[SharedPayloadKeys.VERDICT] = verdict.wireValue
+    return JsonCodec.mapToJsonString(envelope)
+  }
+
+  private fun PhaseRuntimeFinalizationContext.complete(
+    run: PhaseRun,
+    iteration: Int,
+    outputText: String,
+  ): PhaseOutcome {
+    val normalizedOutput =
+      runCatching { NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId) }
+        .getOrElse { error ->
+          return block(
+            run,
+            iteration,
+            "Runtime-owned monitor settlement did not validate: ${error.message.orEmpty()}",
+          )
+        }
+    if (!persistFinalizationCompleted(run, iteration, outputText, normalizedOutput)) {
+      return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        finalizationCoupledProgress(),
+        coupledRunTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = iteration,
+          reason = "Runtime-owned monitor settlement could not be persisted.",
+          observability = observability,
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+        ),
+      )
+    }
+    observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
+    return PhaseOutcome.completed(
+      FeatureTaskRuntimePhaseOutput(
+        run.phaseId,
+        iteration,
+        normalizedOutput.canonicalJson,
+        normalizedOutput,
+        null,
+      ),
+    )
+  }
+
+  private fun PhaseRuntimeFinalizationContext.block(
+    run: PhaseRun,
+    iteration: Int,
+    reason: String,
+  ): PhaseOutcome =
+    blockAndPersistInPhase(
+      phaseBlockArgs(run, iteration, reason, observability),
+    )
+}
