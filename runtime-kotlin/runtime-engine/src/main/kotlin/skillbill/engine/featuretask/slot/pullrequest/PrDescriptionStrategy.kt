@@ -105,7 +105,7 @@ class PrDescriptionStrategy(
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
   ): PhaseOutcome {
-    state.requireAcceptedStep(run, strategyId)
+    state.requireAcceptedStep(run, state.acceptedOwner.strategyId)
     val context =
       (
         state as? PhasePullRequestStepBinding

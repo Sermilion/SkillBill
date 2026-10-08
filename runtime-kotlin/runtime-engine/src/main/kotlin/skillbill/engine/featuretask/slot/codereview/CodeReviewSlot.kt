@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
-import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
@@ -121,7 +120,6 @@ internal class CodeReviewSlot(
   }
 
   fun runStep(
-    strategy: PhaseStrategy,
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
   ): PhaseOutcome =
@@ -134,20 +132,20 @@ internal class CodeReviewSlot(
           run,
           reviewBinding.reviewExecutionContext(),
           reviewBinding,
-          strategy.promptSource(run.phaseId),
+          state.acceptedOwner.promptSource(run.phaseId),
         )
       }
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> {
         check(state is PhaseVerifyFindingsStepBinding) {
           "Verify findings step requires a finding-verification binding."
         }
-        strategy.runAgentStep(run, state)
+        runAgentStep(run, state)
       }
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> {
         check(state is PhaseImplementFixStepBinding) {
           "Implement fix step requires an implement-fix binding."
         }
-        strategy.runAgentStep(run, state)
+        runAgentStep(run, state)
       }
       else -> throw UnknownPhaseStepError(run.phaseId)
     }

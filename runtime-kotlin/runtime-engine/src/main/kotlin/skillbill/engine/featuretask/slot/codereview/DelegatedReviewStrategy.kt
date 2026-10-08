@@ -71,7 +71,7 @@ class DelegatedReviewStrategy(
   override fun runStep(
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = codeReview.runStep(this, run, state)
+  ): PhaseOutcome = codeReview.runStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
 

@@ -286,7 +286,7 @@ class RequiredPhasePersistenceTest {
         assertFalse(binding is PhaseCommitStepBinding)
         assertFalse(binding is PhasePullRequestStepBinding)
         val foreignRun = run.copy(phaseId = "review")
-        val call = context.runState.strategyFor("audit").stepCall(run, binding)
+        val call = stepCall(run, binding)
         assertFailsWith<IllegalArgumentException> {
           (binding as PhaseAgentExecution).runAcceptedAgentStep(
             foreignRun,

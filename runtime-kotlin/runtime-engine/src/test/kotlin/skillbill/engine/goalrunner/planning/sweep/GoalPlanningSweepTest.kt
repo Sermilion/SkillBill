@@ -3,10 +3,12 @@ package skillbill.engine.goalrunner.planning.sweep
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
+import skillbill.config.model.PhaseModelDirective
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
@@ -46,14 +48,18 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
+import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -100,6 +106,9 @@ import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
+import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -625,6 +634,41 @@ class GoalPlanningSweepPromptTest {
     assertEquals(".feature-specs/SKILL-56-goal/spec_subtask_1.md", record.governedSubSpecPath)
     assertNotNull(JsonCodec.parseObjectOrNull(record.preplanPayload), "preplan payload must be strict JSON")
     assertNotNull(JsonCodec.parseObjectOrNull(record.planPayload), "plan payload must be strict JSON")
+  }
+
+  @Test
+  fun `an Opus 5_5 plan step runs through the selected Opus owner and delivers its directive`() {
+    val fixtures = sharedSweepFixtures()
+    val launcher = SweepPlanningLauncher { phase, _, _ -> validPhaseOutcome(phase) }
+    val sweep =
+      testGoalPlanningSweepPorts(
+        GoalPlanningSweepPortsParams(
+          checkpoint = fixtures.checkpoint,
+          subtaskLauncher = launcher,
+          invariantsSource = fixtures.invariantsSource,
+          manifestFileStore = fixtures.manifestFileStore,
+          contextDiscovery = fakeContextDiscovery,
+          agentRunLauncher = opusClassifyingAgentRunLauncher(),
+        ),
+      )
+    val harness = SweepHarness(fixtures, launcher, sweep)
+    val request =
+      harness.request().copy(
+        modelAssignment =
+          FeatureTaskRuntimeModelAssignment(
+            perPhaseDirectives = mapOf("plan" to PhaseModelDirective(PhaseModelProfileClassifier.ANTHROPIC_OPUS_55)),
+          ),
+      )
+
+    val outcome = harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 1)), request)
+
+    assertIs<GoalPlanningSweepOutcome.PreparedAll>(
+      outcome,
+      (outcome as? GoalPlanningSweepOutcome.Stopped)?.blockedReason,
+    )
+    assertEquals(listOf("preplan", "plan"), harness.launcher.phases)
+    val planPrompt = harness.launcher.requests.last().skillRunRequest.promptOverride.orEmpty()
+    assertContains(planPrompt, "Check delegated unit evidence before treating a wave as settled.")
   }
 
   @Test
@@ -3089,6 +3133,21 @@ private fun assertBlankProsePlanLaunchStop(
     "the settled preplan is not re-produced and the plan edge rejects before launching",
   )
 }
+
+private fun opusClassifyingAgentRunLauncher(): AgentRunLauncher =
+  object : AgentRunLauncher {
+    override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel {
+      val passThrough = passThroughResolvedLaunchModel(request)
+      val namespace = LaunchProviderNamespace.ANTHROPIC_API
+      return passThrough.copy(
+        namespace = namespace,
+        profile = PhaseModelProfileClassifier.classify(namespace, passThrough.effectiveModel),
+      )
+    }
+
+    override fun launch(request: AgentRunLaunchRequest) =
+      error("Planning sweep tests launch through the subtask launcher, not the assignment resolver.")
+  }
 
 private fun sweepHarness(
   config: SweepHarnessConfig = SweepHarnessConfig(),

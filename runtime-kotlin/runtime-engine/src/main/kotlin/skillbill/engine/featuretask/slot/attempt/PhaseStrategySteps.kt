@@ -13,18 +13,20 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 internal fun PhaseStrategy.promptSource(stepId: String): PhaseStepPromptSource =
   PhaseStepPromptSource { inputs -> promptSections(stepId, inputs) }
 
-internal fun PhaseStrategy.stepCall(
+internal fun stepCall(
   run: PhaseRun,
   state: PhaseAcceptedStepExecution,
-): PhaseStepCall =
-  PhaseStepCall(
-    PhaseStepDescription(run.phaseId, promptSource(run.phaseId), policyFor(run.phaseId)),
+): PhaseStepCall {
+  val owner = state.acceptedOwner
+  return PhaseStepCall(
+    PhaseStepDescription(run.phaseId, owner.promptSource(run.phaseId), owner.policyFor(run.phaseId)),
     state,
     run.request,
-    strategyId,
+    owner.strategyId,
   )
+}
 
-internal fun PhaseStrategy.runAgentStep(
+internal fun runAgentStep(
   run: PhaseRun,
   state: PhaseAcceptedStepExecution,
 ): PhaseOutcome = (state as PhaseAgentExecution).runAcceptedAgentStep(run, stepCall(run, state))

@@ -411,6 +411,7 @@ internal data class GoalPlanningSweepPortsParams(
       waitSlice = GoalPlanningBurstSchedule.DEFAULT_WAIT_SLICE,
     ),
   val refreshLiveness: GoalPlanningRefreshLiveness = IDLE_GOAL_PLANNING_REFRESH_LIVENESS,
+  val agentRunLauncher: AgentRunLauncher = testAgentRunLauncher(),
 )
 
 internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): DefaultGoalPlanningSweep {
@@ -464,7 +465,7 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
       GoalPlanningLaunchResolution(
         strategies =
           goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
-        launcher = testAgentRunLauncher(),
+        launcher = params.agentRunLauncher,
       ),
     clock = params.clock,
     diagnostics = NoopRuntimeDiagnostics,

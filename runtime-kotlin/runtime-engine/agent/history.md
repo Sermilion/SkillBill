@@ -1,3 +1,12 @@
+## [2026-10-08] Step calls come from the selected owner
+Areas: runtime-engine featuretask/slot/attempt, slot/state, slot/codereview, slot/pullrequest, runloop/state; goal planning sweep tests
+- `PhaseStepBinding.acceptedOwner` exposes the strategy the execution plan selected for the bound step. `stepCall` and `runAgentStep` build the call's prompt, policy and strategy id from it instead of from the strategy that invoked them.
+- Opus 5.5 wrappers delegate `runStep` to their canonical strategy, so every step they owned stamped the canonical id and failed `requireAcceptedAttempt` ("Attempt does not match the accepted phase, request, strategy, and policy binding."). Goal planning with `claude-opus-5-5` blocked at subtask 1. The calls also used the canonical prompt, so no Opus 5.5 directive reached an agent.
+- `CodeReviewSlot.runStep` takes the review prompt from the accepted owner and no longer takes a strategy argument. `PrDescriptionStrategy` authorizes its step against the accepted owner's id.
+- reusable: `acceptedOwner` replaces `requireNotNull(environment.selectedOwnerOf(run.phaseId))` inside step bindings.
+- `GoalPlanningSweepPortsParams.agentRunLauncher` lets planning tests resolve launch models; a sweep test proves an Opus 5.5 plan step completes and carries its directive.
+Feature flag: N/A
+
 ## [2026-10-08] Standalone review admits prose reports
 Areas: runtime-engine featuretask/slot/standalonereview
 - `StandaloneReviewReportAdmission` now rejects only blank or truncated output, a verdict that is missing, conflicting or not `approved`/`changes_requested` (case-insensitive, anywhere in the report, identical repeats allowed), and incomplete delegated coverage.

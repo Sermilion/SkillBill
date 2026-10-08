@@ -37,6 +37,7 @@ import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
@@ -83,6 +84,12 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
     FeatureTaskRuntimeRunLoopStepLaunchState(environment.acceptedLaunchState, run.phaseId)
 
   override val acceptedPhaseId: String get() = run.phaseId
+
+  override val acceptedOwner: PhaseStrategy
+    get() =
+      checkNotNull(environment.selectedOwnerOf(run.phaseId)) {
+        "Step '${run.phaseId}' has no selected owner in the accepted execution plan."
+      }
 
   override val launchState: PhaseLaunchState get() = stepLaunchState
 
@@ -261,8 +268,7 @@ private class FeatureTaskRuntimeRunLoopFinalizationStepBinding(
 ) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseCommitStepBinding {
   override fun runCommitPush(run: PhaseRun): PhaseOutcome {
-    val owner = requireNotNull(environment.selectedOwnerOf(run.phaseId))
-    requireAcceptedStep(run, owner.strategyId)
+    requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopCommitCycle) {
       environment.runDeclaredCommitPushCycle(run)
     }

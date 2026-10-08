@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -17,6 +18,12 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 internal interface PhaseStepBinding {
   /** The phase id this binding was issued for; attempt authorization rejects other step ids. */
   val acceptedPhaseId: String
+
+  /**
+   * The strategy the execution plan selected for [acceptedPhaseId]. Step calls take their prompt,
+   * policy, and strategy id from it, so a wrapper that delegates execution keeps its own identity.
+   */
+  val acceptedOwner: PhaseStrategy
 
   val launchState: PhaseLaunchState
 
