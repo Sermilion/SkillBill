@@ -20,7 +20,7 @@ class GoalPlanningMigrationAdmission(
   private val diagnostics: RuntimeDiagnostics,
 ) {
   fun admit(identity: GoalPlanningIdentity): RuntimeMigrationReceipt {
-    var sourceVersion = "unknown"
+    var sourceVersion = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
     val receipt =
       runCatching {
         database.transaction {
@@ -33,7 +33,7 @@ class GoalPlanningMigrationAdmission(
               version ->
             version.matches(Regex("[0-9]{1,3}\\.[0-9]{1,3}"))
           }
-            ?: "unknown"
+            ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION
           migration.migrate(it, identity.parentGoalWorkflowId, identity.repositoryIdentity, identity.normalizedIssueKey)
         }
       }.getOrElse { error ->

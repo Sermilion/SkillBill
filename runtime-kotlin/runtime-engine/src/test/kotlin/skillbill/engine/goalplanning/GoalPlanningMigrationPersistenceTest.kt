@@ -13,6 +13,7 @@ import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionMa
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.foundCheckpoint
 import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -164,6 +165,65 @@ class GoalPlanningMigrationPersistenceTest {
     assertEquals(beforeShared, fixture.shared())
     assertEquals(beforePlan, fixture.plan())
     assertEquals(beforeChild, fixture.child())
+  }
+
+  @Test
+  fun `current planning import admits after parent provenance restamp without rewriting the child`() {
+    val fixture = MigrationFixture(historicalPhaseOutput = false)
+    val beforeChild = fixture.child()
+    fixture.restampParentProvenance("d".repeat(64))
+    assertFalse(fixture.migrate(requirePreparation = true))
+    assertEquals(beforeChild, fixture.child())
+    assertEquals("d".repeat(64), fixture.shared().provenance.parentSpecHash)
+  }
+
+  @Test
+  fun `current planning import admits after parent preplan refresh leaves the child launch snapshot`() {
+    val fixture = MigrationFixture(historicalPhaseOutput = false)
+    val beforeChild = fixture.child()
+    val beforePlan = fixture.plan()
+    val beforeShared = fixture.shared()
+    fixture.replaceSharedPreplanValue("preplan-refreshed")
+    assertFalse(fixture.migrate(requirePreparation = true))
+    assertEquals(beforeChild, fixture.child())
+    assertEquals(beforePlan.payloadSha256, fixture.plan().payloadSha256)
+    assertNotEquals(beforeShared.payloadSha256, fixture.shared().payloadSha256)
+  }
+
+  @Test
+  fun `unsafe current import reports the saved planning version instead of unknown`() {
+    val fixture = MigrationFixture(historicalPhaseOutput = false)
+    fixture.sql(
+      "UPDATE feature_task_workflows SET artifacts_json = " +
+        "replace(artifacts_json, 'imported_goal_planning', 'unsafe')",
+    )
+    val warnings = mutableListOf<String>()
+    val execution =
+      ExecutionPlanAdmissionFixture(
+        definition = SkeletonDefinition.GOAL_CHILD,
+        database = fixture.database,
+        diagnostics =
+          object : RuntimeDiagnostics {
+            override fun warning(
+              message: String,
+              error: Throwable?,
+            ) {
+              warnings += message
+            }
+
+            override fun error(
+              message: String,
+              error: Throwable?,
+            ) = Unit
+          },
+      )
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.database.transaction {
+        execution.admission.admit(it, "wftr-migration-child", execution.inputs)
+      }
+    }
+    assertTrue(warnings.any { it.contains("source_version=0.7") && it.contains("unsafe_import") })
+    assertTrue(warnings.none { it.contains("source_version=unknown") })
   }
 }
 
@@ -424,6 +484,37 @@ private class MigrationFixture(
 
   fun sql(statement: String) {
     ensureTestDatabase(path).use { it.createStatement().use { s -> s.execute(statement) } }
+  }
+
+  fun restampParentProvenance(parentSpecHash: String) {
+    val checkpoint = shared()
+    database.selfManagedWrite {
+      it.goalPlanningPreparations.advanceSharedPreplanProvenance(
+        identity,
+        checkpoint.payloadSha256,
+        checkpoint.provenance.copy(parentSpecHash = parentSpecHash),
+      ).appliedOrThrow()
+    }
+  }
+
+  fun replaceSharedPreplanValue(value: String) {
+    val checkpoint = shared()
+    val payload =
+      output(
+        "preplan",
+        "0.7",
+        mapOf(
+          "value" to value,
+          GoalPlanningSweepConstants.SHARED_CONTEXT_FIELD to packet,
+        ),
+      )
+    database.selfManagedWrite {
+      it.goalPlanningPreparations.replaceSharedPreplan(
+        checkpoint.copy(payloadSha256 = sha256HexUtf8(payload), preplanPayload = payload),
+        checkpoint.payloadSha256,
+        emptyList(),
+      ).appliedOrThrow()
+    }
   }
 }
 
