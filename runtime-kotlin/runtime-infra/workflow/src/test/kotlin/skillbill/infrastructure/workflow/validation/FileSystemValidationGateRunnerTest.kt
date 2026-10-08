@@ -5,6 +5,7 @@ import skillbill.infrastructure.host.jvm.GateJvmDisposition
 import skillbill.infrastructure.host.jvm.GateJvmEnvironmentKeys
 import skillbill.infrastructure.host.jvm.GateJvmStartupFailureException
 import skillbill.infrastructure.host.jvm.GateJvmUnresolvedException
+import skillbill.infrastructure.host.jvm.applyTo
 import skillbill.infrastructure.host.jvm.hostPath
 import skillbill.infrastructure.host.jvm.testGateJvmResolver
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
@@ -617,7 +618,7 @@ class FileSystemValidationGateRunnerTest {
         GateJvmEnvironmentKeys.PATH to hostPath(),
       )
 
-    applyResolvedGateJvm(environment, testGateJvmResolver().resolve(environment))
+    testGateJvmResolver().resolve(environment).applyTo(environment)
 
     val resolved = environment[GateJvmEnvironmentKeys.JAVA_HOME]
     assertNotEquals(leaked, resolved)
@@ -628,19 +629,63 @@ class FileSystemValidationGateRunnerTest {
   }
 
   @Test
-  fun `an unresolvable gate JVM raises a typed error instead of reaching finding parsing`() {
-    val environment = mutableMapOf(GateJvmEnvironmentKeys.JAVA_HOME to "/opt/skill-bill/runtime")
-    val failure =
-      assertFailsWith<GateJvmUnresolvedException> {
-        applyResolvedGateJvm(
-          environment,
-          GateJvmDisposition.Unresolved(rejectedCandidate = "/opt/skill-bill/runtime", requiredMajor = "21"),
+  fun `an unresolvable gate JVM still runs a gate that never needs Java`() {
+    val repo = Files.createTempDirectory("gate-unresolved-jvm-npm")
+    try {
+      val script =
+        writeScript(
+          repo,
+          "printf '%s' \"${'$'}{JAVA_HOME:-<unset>}\" > java-home.txt",
+          "printf '%s\\n' '> npm run lint && npm run typecheck && npm run test'",
+          "exit 0",
         )
-      }
 
-    assertEquals("/opt/skill-bill/runtime", failure.rejectedCandidate)
-    assertEquals("21", failure.requiredMajor)
-    assertEquals("/opt/skill-bill/runtime", environment[GateJvmEnvironmentKeys.JAVA_HOME])
+      val result = runWithUnresolvedGateJvm(repo, script)
+
+      assertEquals(ValidationGateRunOutcome.PASSED, result.outcome)
+      assertEquals("<unset>", Files.readString(repo.resolve("java-home.txt")))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `an unresolvable gate JVM leaves a failing non-JVM gate to finding parsing`() {
+    val repo = Files.createTempDirectory("gate-unresolved-jvm-npm-failure")
+    try {
+      val script = writeScript(repo, "printf '%s\\n' 'npm ERR! Lifecycle script `test` failed with error'", "exit 1")
+
+      val result = runWithUnresolvedGateJvm(repo, script)
+
+      assertEquals(ValidationGateRunOutcome.FAILED, result.outcome)
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `an unresolvable gate JVM raises a typed error when the gate fails for a missing or too-old Java`() {
+    val outputs =
+      listOf(
+        "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.",
+        "Gradle requires JVM 17 or later to run. Your build is currently configured to use JVM 11.",
+        "Dependency requires at least JVM runtime version 21. This build uses a Java 17 JVM.",
+        "error: release version 21 not supported",
+        "Unsupported class file major version 65",
+      )
+    outputs.forEach { output ->
+      val repo = Files.createTempDirectory("gate-unresolved-jvm-java-failure")
+      try {
+        val script = writeScript(repo, "printf '%s\\n' \"$output\"", "exit 1")
+
+        val failure = assertFailsWith<GateJvmUnresolvedException>(output) { runWithUnresolvedGateJvm(repo, script) }
+
+        assertEquals("/opt/skill-bill/runtime", failure.rejectedCandidate)
+        assertEquals("21", failure.requiredMajor)
+      } finally {
+        repo.toFile().deleteRecursively()
+      }
+    }
   }
 
   @Test
@@ -678,6 +723,27 @@ class FileSystemValidationGateRunnerTest {
     } finally {
       repo.toFile().deleteRecursively()
     }
+  }
+
+  private fun runWithUnresolvedGateJvm(
+    repo: Path,
+    script: Path,
+  ) = FileSystemValidationGateRunner(JvmSystemClock, testGateJvmResolver()).run(
+    request(repo, argv = listOf("sh", script.toString()), parseMode = ValidationGateFindingParseMode.COLLECT_ALL),
+    mutableMapOf(
+      GateJvmEnvironmentKeys.JAVA_HOME to "/opt/skill-bill/runtime",
+      GateJvmEnvironmentKeys.PATH to hostPath(),
+    ),
+    GateJvmDisposition.Unresolved(rejectedCandidate = "/opt/skill-bill/runtime", requiredMajor = "21"),
+  )
+
+  private fun writeScript(
+    repo: Path,
+    vararg lines: String,
+  ): Path {
+    val script = repo.resolve("gate.sh")
+    Files.writeString(script, (listOf("#!/bin/sh") + lines).joinToString("\n"))
+    return script
   }
 
   private fun fixturePath(name: String): String {

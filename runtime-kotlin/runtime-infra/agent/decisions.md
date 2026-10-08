@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-10-08] An unresolved gate JVM is reported from the gate's own failure
+Context: The runtime-run gate raised GateJvmUnresolvedException before launch whenever no Java 21+ resolved. Gates for npm, go, cargo, PHP and Python never run Java, so every non-JVM pack was blocked on a JDK it does not use. The runner cannot know in advance whether a pack's gate command needs Java.
+Decision: Launch the gate with JAVA_HOME absent and the runtime image pruned. Raise GateJvmUnresolvedException only when the gate exits non-zero, parses no findings, and its output matches a missing-or-too-old-Java marker (wrapper, javac, Gradle toolchain and class-version messages).
+Reason: The gate's own output is the only evidence that it needed Java. Classifying that failure as an environment defect keeps it out of the repair loop, as GateJvmStartupFailureException already does for a JVM that cannot start. A gate failure no marker matches becomes an ordinary gate finding.
+
 ## [2026-10-05] SKILL-401: retry only expected heartbeat renewal failures
 Context: Feature-task and goal heartbeat callbacks renew leases through database transactions. Broad IAE/ISE recovery also intercepted defects.
 Decision: Report and reschedule IOException and SkillBillRuntimeException with DatabaseFailureCode.ACCESS or BUSY. Rethrow unrelated codes and defects; retain fencing-loss outcomes and existing expiry escalation.

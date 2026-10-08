@@ -28,13 +28,20 @@ class FileSystemValidationGateRunner(
   private val gateJvmResolver: GateJvmResolver,
 ) : ValidationGateRunner {
   override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+    val baselineEnvironment = LinkedHashMap(JdkHostPlatformPort.resolveEnvironment())
+    return run(request, baselineEnvironment, gateJvmResolver.resolve(baselineEnvironment))
+  }
+
+  internal fun run(
+    request: ValidationGateRunRequest,
+    baselineEnvironment: MutableMap<String, String>,
+    gateJvm: GateJvmDisposition,
+  ): ValidationGateRunResult {
     val started = System.nanoTime()
     val artifactFloor = clock.instant().truncatedTo(ChronoUnit.SECONDS)
     val outputFile = Files.createTempFile("skillbill-validation-gate", ".out")
     return try {
-      val baselineEnvironment = LinkedHashMap(JdkHostPlatformPort.resolveEnvironment())
-      val gateJvm = gateJvmResolver.resolve(baselineEnvironment)
-      applyResolvedGateJvm(baselineEnvironment, gateJvm)
+      gateJvm.applyTo(baselineEnvironment)
       val processResult =
         BoundedExternalProcessRunner.run(
           BoundedExternalProcessRequest(
@@ -60,7 +67,7 @@ class FileSystemValidationGateRunner(
       val executedCheckIdentities = deriveExecutedCheckIdentities(request, stdout)
       val exitCode = processResult.exitCode
       val parsedFindings = parseFindings(request, stdout, artifactFloor)
-      rejectGateJvmStartupFailure(gateJvm, exitCode, parsedFindings, stdout)
+      rejectGateJvmFailure(gateJvm, exitCode, parsedFindings, stdout)
       val outcome = deriveOutcome(exitCode, parsedFindings)
       ValidationGateRunResult(
         exitCode = exitCode,
@@ -112,16 +119,6 @@ internal class ValidationGateProcessException(message: String, cause: Throwable?
   cause,
 )
 
-internal fun applyResolvedGateJvm(
-  environment: MutableMap<String, String>,
-  disposition: GateJvmDisposition,
-) {
-  if (disposition is GateJvmDisposition.Unresolved) {
-    throw GateJvmUnresolvedException(disposition.rejectedCandidate, disposition.requiredMajor)
-  }
-  disposition.applyTo(environment)
-}
-
 private val JVM_STARTUP_FAILURE_MARKERS =
   listOf(
     "Error occurred during initialization of VM",
@@ -129,16 +126,43 @@ private val JVM_STARTUP_FAILURE_MARKERS =
     "may be missing from runtime image",
   )
 
-internal fun rejectGateJvmStartupFailure(
+private val JAVA_MISSING_OR_TOO_OLD_MARKERS =
+  listOf(
+    "no 'java' command could be found",
+    "JAVA_HOME is not set",
+    "JAVA_HOME is set to an invalid directory",
+    "JAVA_HOME is not defined correctly",
+    "java: command not found",
+    "java: not found",
+    "Unable to locate a Java Runtime",
+    "UnsupportedClassVersionError",
+    "compiled by a more recent version of the Java Runtime",
+    "Unsupported class file major version",
+    "invalid source release",
+    "invalid target release",
+    "error: release version",
+    "requires JVM 17 or later to run",
+    "This build uses a Java",
+    "Cannot find a Java installation on your machine",
+    "No matching toolchains found",
+  )
+
+internal fun rejectGateJvmFailure(
   disposition: GateJvmDisposition,
   exitCode: Int,
   parsedFindings: List<ValidationGateFinding>,
   stdout: String,
 ) {
   if (exitCode == 0 || parsedFindings.isNotEmpty()) return
+  if (disposition is GateJvmDisposition.Unresolved && reportsMissingOrTooOldJava(stdout)) {
+    throw GateJvmUnresolvedException(disposition.rejectedCandidate, disposition.requiredMajor)
+  }
   if (JVM_STARTUP_FAILURE_MARKERS.none { marker -> stdout.contains(marker) }) return
   throw GateJvmStartupFailureException(resolvedGateJvmLabel(disposition), gateStdoutExcerpt(stdout))
 }
+
+private fun reportsMissingOrTooOldJava(stdout: String): Boolean =
+  JAVA_MISSING_OR_TOO_OLD_MARKERS.any { marker -> stdout.contains(marker) }
 
 private fun resolvedGateJvmLabel(disposition: GateJvmDisposition): String =
   when (disposition) {

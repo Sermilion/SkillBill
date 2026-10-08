@@ -1,5 +1,13 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-10-08] An unresolved gate JVM no longer blocks non-JVM gates
+Areas: runtime-infra/workflow validation
+- `FileSystemValidationGateRunner` used to throw `GateJvmUnresolvedException` before launching any gate when no Java 21+ was found. That blocked TypeScript, Python, Go, Rust and PHP gates that never run Java.
+- The gate now runs with `JAVA_HOME` left absent. `rejectGateJvmFailure` raises `GateJvmUnresolvedException` only when the gate exits non-zero, parses no findings, and its output shows a missing or too-old Java: Gradle/Maven wrapper messages, `java: not found`, the macOS stub, Gradle's JVM-floor and toolchain messages, javac release errors, and class-version errors. Otherwise the existing JVM startup-failure check applies.
+- `applyResolvedGateJvm` is gone; the runner calls `GateJvmDisposition.applyTo` like the agent-run launch surface. `run(request)` resolves the gate JVM and delegates to an internal `run(request, environment, disposition)`, which tests drive with an unresolved disposition because any host running Gradle always has a scannable JDK.
+- The SKILL-244 entry below describes the earlier fail-before-launch behavior.
+Feature flag: N/A
+
 ## [2026-10-05] SKILL-401 subtask 5: application and infrastructure adapters
 Areas: runtime-application review admission and legacy control migration; runtime-domain add-on, review-budget and shared-evidence models; runtime-ports rejected-output diagnostics; runtime-infra/host, http, contracts, sqlite and workflow
 - Goal-runner controls, repo-local budgets, rejected-output records and shared-evidence indexes validate input before model construction. Work-list timestamps and stored lifecycle values use nullable parsing with existing typed rejection boundaries.

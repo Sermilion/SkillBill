@@ -33,8 +33,10 @@ these seams:
   (`skill_bill_java_home`, `inherited_java_home`, `path_java`, `scan`, `unresolved`), the
   `JAVA_HOME` handed to the child, and every `JAVA_HOME`, `SKILL_BILL_JAVA_HOME`, or `PATH`
   entry dropped because it pointed inside the runtime image root.
-  `unresolved` is a typed error at the runtime-run gate and a recorded
-  degradation with `JAVA_HOME` left absent at the agent-run launch surface; the `unresolved`
+  `unresolved` is a recorded degradation with `JAVA_HOME` left absent at both the runtime-run
+  gate and the agent-run launch surface, so a gate that never runs Java (npm, go, cargo) still
+  runs; it becomes a typed error at the runtime-run gate only when the gate exits non-zero,
+  parses no findings, and reports a missing or too-old Java; the `unresolved`
   record names the rejected candidate and the required major so the degraded launch carries the
   same attribution as the typed error
 - gate JVM startup failure: a gate command that exits non-zero, parses no findings, and reports a
