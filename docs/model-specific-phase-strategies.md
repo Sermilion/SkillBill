@@ -63,6 +63,9 @@ extend the canonical classes and override `promptSections`. Every variant uses i
 `<canonical-id>-opus-5-5` and appends a directive resource only when the step
 profile is `opus-5-5`. Resources live under
 `runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/<slot>/opus-5-5-<family>.md`.
+Write and review every directive resource against the
+[Opus 5.5 directive guidelines](opus-5-5-directive-guidelines.md). A new slot or
+phase that gets an Opus 5.5 variant follows them too.
 
 Register variants in
 [`RuntimeFeatureTaskSlotProvides.kt`](../runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/featuretask/RuntimeFeatureTaskSlotProvides.kt)
@@ -153,4 +156,7 @@ grow to accommodate a model strategy.
 
 The first model-specific reference is
 [Getting the most out of Opus 5.5](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/).
-It informs directive design. Repository contracts govern execution and authority.
+[Opus 5.5 directive guidelines](opus-5-5-directive-guidelines.md) records how it
+applies to directive design. Repository contracts govern execution and authority.
+A later model whose vendor publishes prompting guidance gets its own guidelines
+file next to this one.
