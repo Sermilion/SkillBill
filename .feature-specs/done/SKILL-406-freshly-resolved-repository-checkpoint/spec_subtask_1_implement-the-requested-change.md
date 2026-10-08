@@ -1,6 +1,6 @@
 # SKILL-406 Subtask 1 - Implement the requested change
 
-Parent spec: [.feature-specs/SKILL-406-freshly-resolved-repository-checkpoint/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-406-freshly-resolved-repository-checkpoint/spec.md](spec.md)
 Issue key: SKILL-406
 
 ## Scope
@@ -63,7 +63,7 @@ Paths and symbols:
 - `FeatureTaskRuntimeRepositoryCheckpoint` is `fingerprint: String`, `baseRef: String? = null`, `headRef: String? = null`, `workingTreeOwnedPaths: List<String> = emptyList()`. Construction fails when `fingerprint` is blank, longer than `MAX_REPOSITORY_FINGERPRINT_LENGTH` (256 in `FeatureTaskRuntimeHandoffSharedValues`), or when any owned path is blank. The blank-fingerprint reason states that an unidentified checkpoint cannot satisfy `must_match` or `refresh_from_repository`.
 - `toEnvelopeMap()` writes `ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT`, then `base_ref`, `head_ref`, and `working_tree_owned_paths` when present.
 - `FeatureTaskRuntimeHandoffProjectionInputs` carries `resolvedCheckpoint` and `expectedCheckpoint`, both nullable and defaulting to null. The validator and envelope wire read `resolvedCheckpoint`. `expectedCheckpoint` stays unused on that path.
-- `runtime-kotlin/ARCHITECTURE.md` records the same rule: both checkpoint-aware policies require and carry a freshly resolved checkpoint. `must_match` stays a legacy wire value. Both `must_match` and `refresh_from_repository` accept repository movement and re-derive consumer scope. The domain stays git-agnostic.
+- `../../../runtime-kotlin/ARCHITECTURE.md` records the same rule: both checkpoint-aware policies require and carry a freshly resolved checkpoint. `must_match` stays a legacy wire value. Both `must_match` and `refresh_from_repository` accept repository movement and re-derive consumer scope. The domain stays git-agnostic.
 
 Tests to add: none. `test_obligations`: empty. The four tests below already lock this contract. A new test would re-cover the same branches.
 
