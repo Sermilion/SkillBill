@@ -143,6 +143,8 @@ $defs:
           - write_history
           - commit_push
           - pr
+          - monitor
+          - monitor_fix
       steps:
         type: array
         items:
@@ -167,6 +169,8 @@ $defs:
                     - write_history
                     - commit_push
                     - pr
+                    - monitor
+                    - monitor_fix
     required:
       - workflow_name
       - mode

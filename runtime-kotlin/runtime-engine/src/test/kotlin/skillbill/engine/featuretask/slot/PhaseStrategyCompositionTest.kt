@@ -27,6 +27,8 @@ import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunne
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
@@ -73,6 +75,8 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
@@ -136,6 +140,12 @@ class PhaseStrategyCompositionTest {
       LocalPullRequestTemplateFiles,
     )
 
+  private val monitorStrategy =
+    MonitorStrategy(
+      OpenPullRequestIdentityLookup,
+      PassingPullRequestChecksLookup,
+    )
+
   private val strategies =
     listOf(
       AgentPreplanStrategy(),
@@ -161,6 +171,8 @@ class PhaseStrategyCompositionTest {
       RuntimeCommitStrategy(),
       prDescriptionStrategy,
       PrDescriptionOpus55Strategy(prDescriptionStrategy),
+      monitorStrategy,
+      MonitorOpus55Strategy(monitorStrategy),
     )
 
   @Test
@@ -522,6 +534,8 @@ class PhaseStrategyCompositionTest {
         PHASE_WRITE_HISTORY to policy(FILE_MUTATING).extendingInventory(),
         PHASE_COMMIT_PUSH to policy(FILE_MUTATING),
         PHASE_PR to policy(FILE_MUTATING),
+        PHASE_MONITOR to policy(),
+        PHASE_MONITOR_FIX to policy(MUTATING, FILE_MUTATING).extendingInventory(),
       )
 
     fun policy(vararg traits: PolicyTrait): PhaseStepPolicy {

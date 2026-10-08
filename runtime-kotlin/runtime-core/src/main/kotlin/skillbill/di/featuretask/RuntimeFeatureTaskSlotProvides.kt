@@ -17,6 +17,8 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
@@ -44,6 +46,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -83,11 +86,18 @@ internal interface RuntimeFeatureTaskSlotProvides {
     PrDescriptionOpus55Strategy(prDescription)
 
   @Provides
+  fun monitorStrategy(
+    pullRequestIdentityLookup: PullRequestIdentityLookup,
+    pullRequestChecksLookup: PullRequestChecksLookup,
+  ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
+
+  @Provides
   fun phaseStrategyRegistry(
     runner: () -> PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
     goalPlanFanOut: GoalPlanFanOutStrategy,
     prDescription: PrDescriptionStrategy,
+    monitor: MonitorStrategy,
   ): PhaseStrategyRegistry {
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
@@ -143,6 +153,8 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
         PhaseStrategyRegistration(prDescription, runner()),
         PhaseStrategyRegistration(PrDescriptionOpus55Strategy(prDescription), runner()),
+        PhaseStrategyRegistration(monitor, runner()),
+        PhaseStrategyRegistration(MonitorOpus55Strategy(monitor), runner()),
       ),
     )
   }

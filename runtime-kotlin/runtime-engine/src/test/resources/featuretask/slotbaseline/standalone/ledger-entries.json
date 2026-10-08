@@ -223,5 +223,32 @@
         "resolved_agent_id": "agent-pr",
         "sequence_number": 24,
         "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "start",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "monitor",
+        "resolved_agent_id": "claude-code",
+        "sequence_number": 25,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "complete",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "monitor",
+        "resolved_agent_id": "claude-code",
+        "sequence_number": 26,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
+    },
+    {
+        "action": "complete",
+        "attempt_count": 1,
+        "execution_origin": "agent-executed",
+        "phase_id": "monitor",
+        "resolved_agent_id": "claude-code",
+        "sequence_number": 27,
+        "timestamp": "__NORMALIZED_TIMESTAMP__"
     }
 ]

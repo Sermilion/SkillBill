@@ -104,6 +104,8 @@ internal fun promptComposerBriefingFor(
             recordedPromptComposerOutput("validate", validJsonOutput("validate")),
             recordedPromptComposerOutput("write_history", validJsonOutput("write_history")),
             recordedPromptComposerOutput("commit_push", FINALISED_COMMIT_PUSH_OUTPUT),
+            recordedPromptComposerOutput("pr", validJsonOutput("pr")),
+            recordedPromptComposerOutput("monitor", validJsonOutput("monitor")),
           ),
         repositoryCheckpoint = checkpoint,
         expectedRepositoryCheckpoint = checkpoint,

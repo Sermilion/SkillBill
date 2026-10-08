@@ -168,6 +168,16 @@ class GoalPlanningMigrationPersistenceTest {
   }
 
   @Test
+  fun `current planning import admits after parent sub-spec hash restamp without rewriting the child`() {
+    val fixture = MigrationFixture(historicalPhaseOutput = false)
+    val beforeChild = fixture.child()
+    fixture.sql("UPDATE goal_subtask_plans SET sub_spec_hash = '${"e".repeat(64)}'")
+    assertFalse(fixture.migrate(requirePreparation = true))
+    assertEquals(beforeChild, fixture.child())
+    assertEquals("e".repeat(64), fixture.plan().subSpecHash)
+  }
+
+  @Test
   fun `current planning import admits after parent provenance restamp without rewriting the child`() {
     val fixture = MigrationFixture(historicalPhaseOutput = false)
     val beforeChild = fixture.child()

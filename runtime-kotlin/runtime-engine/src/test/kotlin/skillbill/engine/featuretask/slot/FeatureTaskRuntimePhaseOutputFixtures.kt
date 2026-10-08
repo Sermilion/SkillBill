@@ -199,6 +199,7 @@ private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
     "audit" to """{"value": "[]"}""",
     "verify_findings" to """{"finding_dispositions": []}""",
     "pr" to """{"value": "Opened the pull request for the branch."}""",
+    "monitor" to """{"value": "Pull request CI failed: build (https://ci.example/build)."}""",
   )
 
 private const val VALIDATE_PRODUCED_OUTPUTS =

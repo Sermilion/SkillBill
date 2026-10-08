@@ -2742,7 +2742,7 @@ class WorkflowGoalRunnerReconciliationTest {
       WorkflowFamily.TASK_RUNTIME.loopOnlyStepIds,
     )
     assertEquals(
-      setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build"),
+      setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build", "monitor_fix"),
       WorkflowFamily.TASK_RUNTIME.loopOnlyStepIds,
     )
   }

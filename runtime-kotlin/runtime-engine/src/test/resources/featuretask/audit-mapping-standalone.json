@@ -37,6 +37,18 @@
     },
     {
       "semantic_revision": 1,
+      "slot": "monitor",
+      "step": "monitor",
+      "strategy_id": "monitor-ci"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "monitor",
+      "step": "monitor_fix",
+      "strategy_id": "monitor-ci"
+    },
+    {
+      "semantic_revision": 1,
       "slot": "plan",
       "step": "plan",
       "strategy_id": "agent-plan"
@@ -158,6 +170,16 @@
       "step": "implement_fix"
     },
     {
+      "identity": "monitor-ci/1:monitor",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "monitor"
+    },
+    {
+      "identity": "monitor-ci/1:monitor_fix",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "monitor_fix"
+    },
+    {
       "identity": "agent-plan/1:plan",
       "semantic_digest": "__NORMALIZED_SHA64__",
       "step": "plan"
@@ -241,6 +263,16 @@
       "strategy_id": "implement-then-simplify"
     },
     {
+      "entry_step": "monitor",
+      "selected_steps": [
+        "monitor",
+        "monitor_fix"
+      ],
+      "semantic_revision": 1,
+      "slot": "monitor",
+      "strategy_id": "monitor-ci"
+    },
+    {
       "entry_step": "plan",
       "selected_steps": [
         "plan"
@@ -315,6 +347,16 @@
     {
       "identity": "step-policy-v2:__NORMALIZED_SHA64__",
       "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "monitor"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "monitor_fix"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
       "step": "plan"
     },
     {
@@ -378,6 +420,26 @@
       {
         "cap_exhaustion_behavior": "BLOCK",
         "cap_scope": "PER_SUBTASK",
+        "destination_step": "monitor_fix",
+        "from_step": "monitor",
+        "loop_id": "monitor_fix",
+        "per_edge_cap": 3,
+        "verdict": "ci_failed",
+        "warn_after_iterations": null
+      },
+      {
+        "cap_exhaustion_behavior": "BLOCK",
+        "cap_scope": "PER_SUBTASK",
+        "destination_step": "commit_push",
+        "from_step": "monitor_fix",
+        "loop_id": "monitor_fix_commit",
+        "per_edge_cap": null,
+        "verdict": "advance",
+        "warn_after_iterations": null
+      },
+      {
+        "cap_exhaustion_behavior": "BLOCK",
+        "cap_scope": "PER_SUBTASK",
         "destination_step": "validate",
         "from_step": "write_history",
         "loop_id": "regenerate_validation_receipt",
@@ -411,11 +473,14 @@
       "validate",
       "write_history",
       "commit_push",
-      "pr"
+      "pr",
+      "monitor",
+      "monitor_fix"
     ],
     "loop_only_steps": [
       "audit_implement_fix",
-      "implement_fix"
+      "implement_fix",
+      "monitor_fix"
     ],
     "loop_only_successors": []
   }

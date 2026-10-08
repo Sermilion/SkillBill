@@ -161,7 +161,7 @@ class FeatureTaskPhaseSettlementService(
     val KIND_COMPLETE: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Complete
     val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
     private const val SETTLEABLE_PHASE_REQUIREMENT: String =
-      "phase_id must be an agent-run feature-task phase step (every workflow step except commit_push)."
+      "phase_id must be an agent-run feature-task phase step (every workflow step except commit_push and monitor)."
     private const val NO_CHANGE_PHASE_REQUIREMENT: String =
       "no_change is accepted only for implement and audit_implement_fix."
     private const val SUMMARY_MAX_CHARS: Int = 240

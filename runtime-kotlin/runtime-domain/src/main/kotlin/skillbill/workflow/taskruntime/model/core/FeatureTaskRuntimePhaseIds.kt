@@ -16,6 +16,8 @@ internal object FeatureTaskRuntimePhaseIds {
   const val WRITE_HISTORY: String = "write_history"
   const val COMMIT_PUSH: String = "commit_push"
   const val PR: String = "pr"
+  const val MONITOR: String = "monitor"
+  const val MONITOR_FIX: String = "monitor_fix"
   const val PRESENT_FINDINGS: String = "present_findings"
 
   val all: List<String> =
@@ -35,6 +37,8 @@ internal object FeatureTaskRuntimePhaseIds {
       WRITE_HISTORY,
       COMMIT_PUSH,
       PR,
+      MONITOR,
+      MONITOR_FIX,
       PRESENT_FINDINGS,
     )
 }

@@ -12,7 +12,6 @@ import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -277,7 +276,6 @@ class AgentRunLauncherLivenessTest {
 
   @Test
   fun `wall clock cap restarts when the workflow step changes`() {
-    val startedNanos = System.nanoTime()
     var probeCount = 0
     val result =
       JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
@@ -288,12 +286,10 @@ class AgentRunLauncherLivenessTest {
           timeout = 1.seconds
           progressProbe =
             object : AgentRunProgressProbe {
-              override fun progressToken(): String {
-                probeCount++
-                return "${workflowStep(startedNanos)}-$probeCount"
-              }
+              override fun progressToken(): String = "step-${++probeCount}"
 
-              override fun progressLabel(): String = "subtask 8 workflow wfl-child step ${workflowStep(startedNanos)}"
+              override fun progressLabel(): String =
+                "subtask 8 workflow wfl-child step ${if (probeCount <= 2) "implement" else "validate"}"
             }
         },
       )
@@ -325,10 +321,3 @@ class AgentRunLauncherLivenessTest {
     assertContains(result.stderr, "wall-clock cap")
   }
 }
-
-private fun workflowStep(startedNanos: Long): String =
-  if (TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos) < 400L) {
-    "implement"
-  } else {
-    "validate"
-  }

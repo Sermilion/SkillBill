@@ -53,6 +53,20 @@
         "started_at": "__NORMALIZED_TIMESTAMP__",
         "status": "completed"
     },
+    "monitor": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"monitor\",\"status\":\"completed\",\"summary\":\"CI passed for the pull request.\",\"produced_outputs\":{\"value\":\"CI passed on branch 'feat/SKILL-380-phase-slot-strategies': every check on the pull request passed or was skipped.\"}}",
+        "phase_id": "monitor",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "claude-code",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
     "plan": {
         "attempt_count": 1,
         "contract_version": "0.2",

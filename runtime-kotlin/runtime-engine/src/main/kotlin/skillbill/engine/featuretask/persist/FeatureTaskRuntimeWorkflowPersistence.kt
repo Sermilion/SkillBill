@@ -35,6 +35,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHA
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
@@ -232,10 +233,18 @@ fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
   when {
     request.status.workflowStepStatus() == WorkflowStepStatus.PAUSED -> "paused"
     request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED -> "blocked"
-    request.finished && request.phaseId in PhaseSlot.PULL_REQUEST.steps ->
+    request.finished && request.phaseId in PhaseSlot.MONITOR.steps && !request.reentersWorkflow() ->
       "completed"
     else -> "running"
   }
+
+private fun FeatureTaskRuntimePhaseStateRequest.reentersWorkflow(): Boolean {
+  val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
+  return phaseId in transitions.loopOnlyPhaseIds ||
+    transitions.backwardEdges.any { edge ->
+      edge.fromPhaseId == phaseId && edge.triggeringVerdict.wireValue == normalizedOutput?.verdict
+    }
+}
 
 fun attemptStatusFor(request: FeatureTaskRuntimePhaseStateRequest): FeatureTaskRuntimeImplementationAttemptStatus =
   when (request.status.workflowStepStatus()) {

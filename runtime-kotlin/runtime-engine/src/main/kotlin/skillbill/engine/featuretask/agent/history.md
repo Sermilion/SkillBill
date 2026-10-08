@@ -11,6 +11,16 @@ Areas: runtime-domain taskruntime audit model, runtime-domain goalrunner and ver
 Feature flag: N/A
 Acceptance criteria: 3/11 implemented (AC1, AC7, AC11); AC4, AC8, AC10 partial; AC2, AC3, AC5, AC6, AC9 open (self-reported, unverified)
 
+## [2026-10-08] SKILL-407 subtask 1 - Final monitor phase with a bounded CI fix loop
+Areas: runtime-engine featuretask (slot/monitor, slot/state, runloop, skeleton, DI); runtime-domain taskruntime (phase ids, slots, transitions, skeleton); runtime-ports goalrunner checks port; runtime-infra workflow GitHub checks lookup; runtime-contracts workflow-state, phase-output and telemetry schemas; runtime-mcp tools golden
+- Adds `monitor` as the last forward step after `pr`. The runtime settles it without an agent: it polls the PR's checks every 30 s for up to 30 min, and treats "no checks" as pending for a 3 min grace period. A failing check routes to `monitor_fix`, an agent-settled loop-only repair phase that returns to `commit_push`. reusable
+- The fix loop allows three `monitor_fix` runs. The fourth CI failure blocks with the cap reason. Unavailable GitHub lookups (no gh, no auth, no PR, unknown json flag) block `monitor` with their reason instead of guessing. reusable
+- `MonitorStrategy` and `MonitorOpus55Strategy` share one slot that also binds `monitor_fix`. The slot is in standalone and PR skeletons and excluded from goal children.
+- Standalone runs complete when a monitor-slot step finishes without a backward edge. A `pr` finish no longer ends the workflow.
+- Limits: the installed MCP phase enum lacks `monitor_fix` until the runtime is reinstalled. Slot baselines for standalone and phase/pr were regenerated; goal-child execution plans are unchanged.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented
+
 ## [2026-10-06] commit_push stages feature specs only when they are not gitignored
 Areas: runtime-engine featuretask, runtime-infra workflow git staging
 - Feature-spec paths that match gitignore are left out of `git add`, including paths that are already tracked. Other tracked ignored paths are still staged.

@@ -26,6 +26,8 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
@@ -57,6 +59,8 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
           PHASE_WRITE_HISTORY to PhaseResumeRules.None,
           PHASE_COMMIT_PUSH to PhaseResumeRules.None,
           PHASE_PR to PhaseResumeRules.None,
+          PHASE_MONITOR to PhaseResumeRules.None,
+          PHASE_MONITOR_FIX to PhaseResumeRules.None,
         )
     }
 
@@ -66,9 +70,9 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
 
   fun loopOnlyStepIds(gate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
     if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-      setOf(PHASE_AUDIT_PLAN_FIX, PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX)
+      setOf(PHASE_AUDIT_PLAN_FIX, PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX, PHASE_MONITOR_FIX)
     } else {
-      setOf(PHASE_AUDIT_PLAN_FIX, PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX, PHASE_BUILD)
+      setOf(PHASE_AUDIT_PLAN_FIX, PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX, PHASE_BUILD, PHASE_MONITOR_FIX)
     }
 
   fun gateReportedBy(stepId: String?): PhaseReportedGate? =

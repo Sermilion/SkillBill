@@ -11,6 +11,8 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
@@ -37,8 +39,12 @@ import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
+import skillbill.ports.goalrunner.runner.model.CheckBucket
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -64,6 +70,8 @@ fun testPhaseStrategies(
   pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort = AbsentReadinessEvidence,
   delegatedReviewRunner: ParallelCodeReviewRunner? = null,
+  monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
@@ -74,6 +82,8 @@ fun testPhaseStrategies(
       LocalPullRequestTemplateFiles,
     )
   val prOpus = PrDescriptionOpus55Strategy(prCanonical)
+  val monitorCanonical = MonitorStrategy(monitoredPullRequestLookup, pullRequestChecksLookup)
+  val monitorOpus = MonitorOpus55Strategy(monitorCanonical)
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
@@ -116,6 +126,8 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
         PhaseStrategyRegistration(prCanonical, runner()),
         PhaseStrategyRegistration(prOpus, runner()),
+        PhaseStrategyRegistration(monitorCanonical, runner()),
+        PhaseStrategyRegistration(monitorOpus, runner()),
       ),
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
@@ -168,6 +180,21 @@ object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
     repoRoot: Path,
     branch: String,
   ): PullRequestIdentity = PullRequestIdentity.Unavailable("test runs do not reach GitHub")
+}
+
+object OpenPullRequestIdentityLookup : PullRequestIdentityLookup {
+  override fun lookup(
+    repoRoot: Path,
+    branch: String,
+  ): PullRequestIdentity = PullRequestIdentity.Found(url = "https://github.com/example/repo/pull/1", number = 1)
+}
+
+object PassingPullRequestChecksLookup : PullRequestChecksLookup {
+  override fun lookup(
+    repoRoot: Path,
+    prNumber: Int,
+  ): PullRequestChecks =
+    PullRequestChecks.Reported(listOf(PullRequestCheck("build", CheckBucket.PASS, "https://ci.example/build")))
 }
 
 object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
@@ -230,6 +257,7 @@ fun testPhaseStrategyBindings(
           PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
         PhaseSlot.PULL_REQUEST to
           PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
+        PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
       ),
     SkeletonDefinition.GOAL_CHILD to
       shared +
@@ -255,6 +283,7 @@ fun testPhaseStrategyBindings(
     SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
     SkeletonDefinition.PLAN to shared.filterKeys { slot -> slot == PhaseSlot.PREPLAN || slot == PhaseSlot.PLAN },
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
+    SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
   )
 }
 

@@ -60,7 +60,7 @@ class PhasePullRequestRunTest {
     val result = entry().run(prRequest())
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf("commit_push", PR), result.completedStepIds)
+    assertEquals(listOf("commit_push", PR, "monitor"), result.completedStepIds)
     assertEquals(listOf(PR), launchedPhaseIds())
     val prompt = requireNotNull(launcher.requests.single().skillRunRequest.promptOverride)
     assertTrue("for issue SKILL-903." in prompt, "the pr prompt must carry the branch's issue key")

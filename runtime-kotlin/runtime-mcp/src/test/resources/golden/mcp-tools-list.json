@@ -90,7 +90,8 @@
               "audit_implement_fix",
               "validate",
               "write_history",
-              "pr"
+              "pr",
+              "monitor_fix"
             ]
           },
           "attempt": {
@@ -151,7 +152,8 @@
               "audit_implement_fix",
               "validate",
               "write_history",
-              "pr"
+              "pr",
+              "monitor_fix"
             ]
           },
           "attempt": {

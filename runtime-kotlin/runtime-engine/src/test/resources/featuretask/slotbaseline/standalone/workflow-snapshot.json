@@ -1132,6 +1132,18 @@
                 },
                 {
                     "semantic_revision": 1,
+                    "slot": "monitor",
+                    "step": "monitor",
+                    "strategy_id": "monitor-ci"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "monitor",
+                    "step": "monitor_fix",
+                    "strategy_id": "monitor-ci"
+                },
+                {
+                    "semantic_revision": 1,
                     "slot": "plan",
                     "step": "plan",
                     "strategy_id": "agent-plan"
@@ -1258,6 +1270,16 @@
                     "step": "implement_fix"
                 },
                 {
+                    "identity": "monitor-ci/1:monitor",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "monitor"
+                },
+                {
+                    "identity": "monitor-ci/1:monitor_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "monitor_fix"
+                },
+                {
                     "identity": "agent-plan/1:plan",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "plan"
@@ -1342,6 +1364,16 @@
                     "strategy_id": "implement-then-simplify"
                 },
                 {
+                    "entry_step": "monitor",
+                    "selected_steps": [
+                        "monitor",
+                        "monitor_fix"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "monitor",
+                    "strategy_id": "monitor-ci"
+                },
+                {
                     "entry_step": "plan",
                     "selected_steps": [
                         "plan"
@@ -1422,6 +1454,16 @@
                 {
                     "identity": "step-policy-v2:__NORMALIZED_SHA64__",
                     "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "monitor"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "monitor_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "plan"
                 },
                 {
@@ -1485,6 +1527,26 @@
                     {
                         "cap_exhaustion_behavior": "BLOCK",
                         "cap_scope": "PER_SUBTASK",
+                        "destination_step": "monitor_fix",
+                        "from_step": "monitor",
+                        "loop_id": "monitor_fix",
+                        "per_edge_cap": 3,
+                        "verdict": "ci_failed",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "destination_step": "commit_push",
+                        "from_step": "monitor_fix",
+                        "loop_id": "monitor_fix_commit",
+                        "per_edge_cap": null,
+                        "verdict": "advance",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
                         "destination_step": "validate",
                         "from_step": "write_history",
                         "loop_id": "regenerate_validation_receipt",
@@ -1519,12 +1581,15 @@
                     "validate",
                     "write_history",
                     "commit_push",
-                    "pr"
+                    "pr",
+                    "monitor",
+                    "monitor_fix"
                 ],
                 "loop_only_steps": [
                     "audit_implement_fix",
                     "audit_plan_fix",
-                    "implement_fix"
+                    "implement_fix",
+                    "monitor_fix"
                 ],
                 "loop_only_successors": [
                     {
@@ -2814,6 +2879,33 @@
                 "resolved_agent_id": "agent-pr",
                 "sequence_number": 24,
                 "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "monitor",
+                "resolved_agent_id": "claude-code",
+                "sequence_number": 25,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "monitor",
+                "resolved_agent_id": "claude-code",
+                "sequence_number": 26,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "monitor",
+                "resolved_agent_id": "claude-code",
+                "sequence_number": 27,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
             }
         ],
         "feature_task_runtime_phase_records": {
@@ -2868,6 +2960,20 @@
                 "phase_id": "implement",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-implement",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "monitor": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"monitor\",\"status\":\"completed\",\"summary\":\"CI passed for the pull request.\",\"produced_outputs\":{\"value\":\"CI passed on branch 'feat/SKILL-380-phase-slot-strategies': every check on the pull request passed or was skipped.\"}}",
+                "phase_id": "monitor",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "claude-code",
                 "started_at": "__NORMALIZED_TIMESTAMP__",
                 "status": "completed"
             },
@@ -3064,7 +3170,7 @@
         }
     },
     "contract_version": "0.3",
-    "current_step_id": "pr",
+    "current_step_id": "monitor",
     "mode": "runtime",
     "session_id": "__NORMALIZED_SESSION_ID__",
     "steps_json": [
@@ -3142,6 +3248,16 @@
             "attempt_count": 1,
             "status": "completed",
             "step_id": "pr"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "monitor"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "monitor_fix"
         }
     ],
     "workflow_id": "wftr-20260602-test-0001",

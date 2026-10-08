@@ -184,6 +184,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
               edgeIteration = iteration,
               verdict = it.triggeringVerdict,
               unresolvedFindings = emptyList<FeatureTaskRuntimeReviewFinding>(),
+              progress = state,
             ),
           )
         }

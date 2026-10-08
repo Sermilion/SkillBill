@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
+import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
@@ -45,10 +46,12 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
 import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
@@ -314,6 +317,24 @@ private class FeatureTaskRuntimeRunLoopFinalizationStepBinding(
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopCommitCycle) {
       environment.runDeclaredCommitPushCycle(run)
+    }
+  }
+}
+
+private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseMonitorStepBinding {
+  override fun runMonitor(
+    run: PhaseRun,
+    observation: PhaseCiObservation,
+  ): PhaseOutcome {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
+      environment.runDeclaredMonitorCycle(run, observation)
     }
   }
 }
@@ -851,48 +872,21 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
     val owner = launchEnvironment.selectedOwnerOf(run.phaseId)
     return when {
       owner?.slot == PhaseSlot.CODE_REVIEW || owner?.slot == PhaseSlot.STANDALONE_REVIEW ->
-        when (owner.executionBindingKind(run.phaseId)) {
-          PhaseExecutionBindingKind.REVIEW -> {
-            val remediationEnvironment = launchEnvironment
-            FeatureTaskRuntimeRunLoopReviewStepBinding(
-              remediationEnvironment,
-              run,
-              fanOutUnitId,
-              bindingCoordinator,
-            )
-          }
-          PhaseExecutionBindingKind.FINDING_VERIFICATION -> {
-            val remediationEnvironment = launchEnvironment
-            FeatureTaskRuntimeRunLoopVerifyFindingsStepBinding(
-              remediationEnvironment,
-              run,
-              fanOutUnitId,
-              bindingCoordinator,
-            )
-          }
-          PhaseExecutionBindingKind.REPAIR_RECEIPT -> {
-            val remediationEnvironment = launchEnvironment
-            FeatureTaskRuntimeRunLoopImplementFixStepBinding(
-              remediationEnvironment,
-              run,
-              fanOutUnitId,
-              bindingCoordinator,
-            )
-          }
-          else ->
-            FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
-              launchEnvironment,
-              run,
-              fanOutUnitId,
-              bindingCoordinator,
-            )
-        }
+        reviewStepBinding(
+          owner.executionBindingKind(run.phaseId),
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
       owner?.qualityGateOperation != null ->
         FeatureTaskRuntimeRunLoopQualityGateStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.slot == PhaseSlot.PULL_REQUEST ->
         FeatureTaskRuntimeRunLoopPullRequestStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.slot == PhaseSlot.COMMIT_PUSH ->
         FeatureTaskRuntimeRunLoopFinalizationStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.CI_MONITOR ->
+        FeatureTaskRuntimeRunLoopMonitorStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.plansInFanOut == true && fanOutUnitId == null ->
         FeatureTaskRuntimeRunLoopPlanningStepBinding(
           launchEnvironment,
@@ -911,4 +905,22 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
         )
     }
   }
+
+  private fun reviewStepBinding(
+    bindingKind: PhaseExecutionBindingKind,
+    launchEnvironment: PhaseAttemptLaunchCollaborationScope,
+    run: PhaseRun,
+    fanOutUnitId: Int?,
+    bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+  ): PhaseAcceptedStepExecution =
+    when (bindingKind) {
+      PhaseExecutionBindingKind.REVIEW ->
+        FeatureTaskRuntimeRunLoopReviewStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      PhaseExecutionBindingKind.FINDING_VERIFICATION ->
+        FeatureTaskRuntimeRunLoopVerifyFindingsStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      PhaseExecutionBindingKind.REPAIR_RECEIPT ->
+        FeatureTaskRuntimeRunLoopImplementFixStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      else ->
+        FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+    }
 }
