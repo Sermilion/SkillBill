@@ -47,6 +47,7 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
+private val SAVED_CONTRACT_VERSION = Regex("[0-9]{1,3}\\.[0-9]{1,3}")
 
 @Inject
 class FeatureTaskRuntimeExecutionAdmission(
@@ -92,7 +93,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         states.getFeatureTaskExecutionIdentity(workflowId)
           ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing immutable execution identity")
       FeatureTaskExecutionIdentityPolicy.validate(identity)
-      val goalMigration = migrateGoalImport(states, session, identity)
+      val goalMigration = migrateGoalImport(states, session, identity, request)
       val row =
         states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
           ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing workflow")
@@ -230,6 +231,7 @@ class FeatureTaskRuntimeExecutionAdmission(
     states: WorkflowStateRepository,
     session: GoalRunnerPersistenceSession?,
     identity: FeatureTaskExecutionIdentity,
+    request: AdmissionRequest,
   ): RuntimeMigrationReceipt {
     val before = states.getFeatureTaskWorkflowAsMode(identity.workflowId, FeatureTaskWorkflowMode.RUNTIME)
     val imported =
@@ -237,27 +239,47 @@ class FeatureTaskRuntimeExecutionAdmission(
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(it) as? Map<*, *>
       }
     return if (imported != null) {
+      val storedVersion = savedPlanningContractVersion(imported)
       val parentId =
         imported[GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID] as? String
           ?: refuseImport(
             "Goal import has no parent ownership. Restore the original import before resuming.",
           )
-      planningMigration.migrate(
-        session ?: refuseImport(
-          "Coupled planning migration requires the owning persistence session. Resume the parent goal.",
-        ),
-        parentId,
-        identity.repositoryIdentity,
-        identity.normalizedIssueKey,
-        requirePreparation = true,
-      )
+      try {
+        planningMigration.migrate(
+          session ?: refuseImport(
+            "Coupled planning migration requires the owning persistence session. Resume the parent goal.",
+          ),
+          parentId,
+          identity.repositoryIdentity,
+          identity.normalizedIssueKey,
+          requirePreparation = true,
+        )
+      } catch (error: SkillBillRuntimeException) {
+        if (request.failureFacts == null) {
+          request.failureFacts =
+            MigrationFailureFacts(
+              storedVersion,
+              FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+              (error.code as? Enum<*>)?.name?.lowercase() ?: "unsafe_import",
+            )
+        }
+        throw error
+      }
     } else {
       RuntimeMigrationReceipt(
-        "unknown",
+        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
         FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
         RuntimeMigrationReceipt.Result.CURRENT,
       )
     }
+  }
+
+  private fun savedPlanningContractVersion(imported: Map<*, *>): String {
+    val stored = imported[GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION] as? String
+    return stored?.takeIf { it.matches(SAVED_CONTRACT_VERSION) }
+      ?: stored?.takeIf { it.isNotBlank() }
+      ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION
   }
 
   private fun refuseImport(reason: String): Nothing =

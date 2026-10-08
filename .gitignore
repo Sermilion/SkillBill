@@ -75,3 +75,8 @@ vscode-extension/*.vsix
 
 __pycache__/
 *.pyc
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/SkillBill.iml
+/.idea/vcs.xml

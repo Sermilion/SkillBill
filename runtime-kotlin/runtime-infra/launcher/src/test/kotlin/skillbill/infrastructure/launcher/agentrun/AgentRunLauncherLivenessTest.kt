@@ -273,4 +273,62 @@ class AgentRunLauncherLivenessTest {
     assertContains(result.stderr, "without durable workflow progress")
     assertContains(result.stderr, "file-activity grace window was exhausted")
   }
+
+  @Test
+  fun `wall clock cap restarts when the workflow step changes`() {
+    val startedNanos = System.nanoTime()
+    var probeCount = 0
+    val result =
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        testAgentRunProcessRequest(
+          listOf("sh", "-c", "sleep 1.2"),
+          Path.of(".").toAbsolutePath().normalize(),
+        ) {
+          timeout = 1.seconds
+          progressProbe =
+            object : AgentRunProgressProbe {
+              override fun progressToken(): String {
+                probeCount++
+                return "${workflowStep(startedNanos)}-$probeCount"
+              }
+
+              override fun progressLabel(): String =
+                "subtask 8 workflow wfl-child step ${workflowStep(startedNanos)}"
+            }
+        },
+      )
+
+    assertFalse(result.timedOut, "a phase transition must restart the wall-clock cap")
+    assertEquals(0, result.exitStatus)
+  }
+
+  @Test
+  fun `wall clock cap still fires when the workflow step stays put`() {
+    var probeCount = 0
+    val result =
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        testAgentRunProcessRequest(
+          listOf("sh", "-c", "sleep 1.2"),
+          Path.of(".").toAbsolutePath().normalize(),
+        ) {
+          timeout = 1.seconds
+          progressProbe =
+            object : AgentRunProgressProbe {
+              override fun progressToken(): String = "implement-${++probeCount}"
+
+              override fun progressLabel(): String = "subtask 8 workflow wfl-child step implement"
+            }
+        },
+      )
+
+    assertTrue(result.timedOut)
+    assertContains(result.stderr, "wall-clock cap")
+  }
 }
+
+private fun workflowStep(startedNanos: Long): String =
+  if (java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos) < 400L) {
+    "implement"
+  } else {
+    "validate"
+  }

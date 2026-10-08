@@ -147,9 +147,9 @@ class GoalRunCommand(
     "--max-wall-clock-minutes",
     "--timeout-minutes",
     help =
-      "Per-subtask wall-clock cap in minutes (default " +
-        "$DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES). Hard ceiling even when a child process is still " +
-        "alive (progress-idle spares active work). Pass 0 to disable.",
+      "Per-phase wall-clock cap in minutes (default " +
+        "$DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES). Restarts at each phase transition. Hard ceiling even " +
+        "when a child process is still alive (progress-idle spares active work). Pass 0 to disable.",
   ).int().default(DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES)
   private val progressIdleTimeoutMinutes by option(
     "--progress-idle-timeout-minutes",

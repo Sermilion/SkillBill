@@ -8,7 +8,13 @@ import skillbill.infrastructure.launcher.process.launch.PROGRESS_POLL_INTERVAL_M
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
-internal fun ProcessWaitLoop.elapsedMillis(): Long = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos)
+internal fun ProcessWaitLoop.elapsedMillis(): Long =
+  TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - wallClockOriginNanos)
+
+internal fun ProcessWaitLoop.resetWallClock(nowNanos: Long) {
+  wallClockOriginNanos = nowNanos
+  declaredTracker.restartOperationClock(nowNanos)
+}
 
 internal fun ProcessWaitLoop.waitMillisBeforeNextPoll(): Long? {
   val configuredTimeoutMillis = timeoutMillis ?: return PROGRESS_POLL_INTERVAL_MILLIS
@@ -39,7 +45,10 @@ internal fun ProcessWaitLoop.pollDeclaredProgress(nowNanos: Long) {
   if (read.failed) return
   val snapshot = read.value ?: return
   val previousSequence = declaredTracker.latestEvent?.sequenceNumber
-  declaredTracker.observe(snapshot, nowNanos)
+  val phaseTransitioned = declaredTracker.observe(snapshot, nowNanos)
+  if (phaseTransitioned) {
+    resetWallClock(nowNanos)
+  }
   val latest = declaredTracker.latestEvent
   if (latest != null && latest.sequenceNumber != previousSequence) {
     request.probes.activityStampSink.safeStamp(AgentActivityLabel.TOOL_STREAM)

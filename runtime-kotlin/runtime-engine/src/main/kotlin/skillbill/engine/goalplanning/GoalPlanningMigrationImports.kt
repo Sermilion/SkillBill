@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
@@ -22,6 +23,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -137,8 +139,8 @@ class GoalPlanningMigrationImports(
         error,
       )
     }
-    val imported = requireMatchingImport(child, sourceShared, source)
-    val replaced = migrateRecords(child, shared, plan, migrating)
+    val imported = requireMatchingImport(child, sourceShared, source, migrating)
+    val replaced = migrateRecords(child, shared, plan, imported, migrating)
     requireImportLedger(child)
     if (!migrating) return null
     val targetVersion = target.provenance.phaseOutputContractVersion
@@ -177,6 +179,7 @@ class GoalPlanningMigrationImports(
     child: WorkflowStateSnapshot,
     shared: Pair<SharedGoalPreplanCheckpoint, SharedGoalPreplanCheckpoint>,
     plan: Pair<GoalSubtaskPlanCheckpoint, GoalSubtaskPlanCheckpoint>,
+    imported: Map<String, Any?>,
     migrating: Boolean,
   ): MutableMap<String, Any?>? {
     val sourceShared = shared.first
@@ -189,26 +192,27 @@ class GoalPlanningMigrationImports(
       )
     val replaced = if (migrating) records.toMutableMap() else null
     listOf(
-      GoalPlanningSweepConstants.PHASE_PREPLAN to sourceShared.preplanPayload,
-      GoalPlanningSweepConstants.PHASE_PLAN to source.planPayload,
-    ).forEach { (phase, payload) ->
-      val record = artifactMap(records[phase])
-      if (record[SharedPayloadKeys.PHASE_ID] != phase ||
-        record[SharedPayloadKeys.STATUS] != WorkflowStepStatus.COMPLETED.wireValue ||
-        record[SharedPayloadKeys.OUTPUT_ARTIFACT] != payload
-      ) {
-        migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
-      }
-      if (
-        record[FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN] !=
-        FeatureTaskRuntimePhaseExecutionOrigin.GOAL_PLANNING_HYDRATED.wireValue ||
-        child.steps.singleOrNull { it.stepId == phase }?.status != WorkflowStepStatus.COMPLETED
-      ) {
-        migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
-      }
-      val parentRepairEvidence =
-        if (phase == GoalPlanningSweepConstants.PHASE_PREPLAN) sourceShared.repairEvidence else source.repairEvidence
-      if (
+      GoalPlanningSweepConstants.PHASE_PREPLAN to
+        Triple(
+          sourceShared.preplanPayload,
+          sourceShared.repairEvidence,
+          imported[GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD_SHA256],
+        ),
+      GoalPlanningSweepConstants.PHASE_PLAN to
+        Triple(
+          source.planPayload,
+          source.repairEvidence,
+          imported[GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD_SHA256],
+        ),
+    ).forEach { (phase, expected) ->
+      val (payload, parentRepairEvidence, importedDigest) = expected
+      val record =
+        artifactMap(records[phase]).requireHydratedPlanningRecord(
+          child,
+          phase,
+          PlanningRecordExpectation(payload, importedDigest, migrating),
+        )
+      if (migrating &&
         parentRepairEvidence?.asWorkflowArtifactEntry() !=
         record[FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE]
       ) {
@@ -226,6 +230,37 @@ class GoalPlanningMigrationImports(
     }
     if (migrating) migrateIndependentRecords(records, requireNotNull(replaced))
     return replaced
+  }
+
+  private fun Map<String, Any?>.requireHydratedPlanningRecord(
+    child: WorkflowStateSnapshot,
+    phase: String,
+    expected: PlanningRecordExpectation,
+  ): Map<String, Any?> {
+    val record = this
+    val output = record[SharedPayloadKeys.OUTPUT_ARTIFACT] as? String
+    val payloadMatches =
+      if (expected.migrating) {
+        output == expected.payload
+      } else {
+        expected.importedDigest is String &&
+          output != null &&
+          sha256HexUtf8(output) == expected.importedDigest
+      }
+    if (record[SharedPayloadKeys.PHASE_ID] != phase ||
+      record[SharedPayloadKeys.STATUS] != WorkflowStepStatus.COMPLETED.wireValue ||
+      !payloadMatches
+    ) {
+      migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
+    }
+    if (
+      record[FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN] !=
+      FeatureTaskRuntimePhaseExecutionOrigin.GOAL_PLANNING_HYDRATED.wireValue ||
+      child.steps.singleOrNull { it.stepId == phase }?.status != WorkflowStepStatus.COMPLETED
+    ) {
+      migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
+    }
+    return record
   }
 
   private fun migrateIndependentRecords(
@@ -273,32 +308,49 @@ class GoalPlanningMigrationImports(
     child: WorkflowStateSnapshot,
     sourceShared: SharedGoalPreplanCheckpoint,
     source: GoalSubtaskPlanCheckpoint,
+    migrating: Boolean,
   ): Map<String, Any?> {
     val imported =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(child.artifacts)
         ?.let(::artifactMap) ?: migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
     val provenance = source.provenance
-    val expected =
+    val identity =
       linkedMapOf(
         GoalPlanningPreparationPayloadKeys.SOURCE_KIND to "imported_goal_planning",
         GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID to source.identity.parentGoalWorkflowId,
         GoalPlanningPreparationPayloadKeys.NORMALIZED_ISSUE_KEY to source.identity.normalizedIssueKey,
         GoalPlanningPreparationPayloadKeys.REPOSITORY_IDENTITY to source.identity.repositoryIdentity,
-        GoalPlanningPreparationPayloadKeys.PARENT_SPEC_HASH to provenance.parentSpecHash,
-        GoalPlanningPreparationPayloadKeys.DECOMPOSITION_MANIFEST_HASH to provenance.decompositionManifestHash,
-        GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_ID to provenance.planningContractId,
-        GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION to provenance.planningContractVersion,
-        GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID to provenance.phaseOutputContractId,
-        GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION to provenance.phaseOutputContractVersion,
         SharedPayloadKeys.SUBTASK_ID to source.subtaskId,
         GoalPlanningPreparationPayloadKeys.MANIFEST_ORDER to source.manifestOrder,
         GoalPlanningPreparationPayloadKeys.GOVERNED_SUB_SPEC_PATH to source.governedSubSpecPath,
-        GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to source.subSpecHash,
-        GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD_SHA256 to sourceShared.payloadSha256,
-        GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD_SHA256 to source.payloadSha256,
       )
-    if (expected.any { (key, value) -> imported[key] != value }) {
+    if (identity.any { (key, value) -> imported[key] != value }) {
       migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
+    }
+    val savedVersion = imported[GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION] as? String
+    if (savedVersion.isNullOrBlank() || !savedVersion.matches(SAVED_CONTRACT_VERSION)) {
+      migrationFailure(FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT)
+    }
+    if (!migrating && savedVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION) {
+      migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
+    }
+    if (migrating) {
+      val expected =
+        identity +
+          linkedMapOf(
+            GoalPlanningPreparationPayloadKeys.PARENT_SPEC_HASH to provenance.parentSpecHash,
+            GoalPlanningPreparationPayloadKeys.DECOMPOSITION_MANIFEST_HASH to provenance.decompositionManifestHash,
+            GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_ID to provenance.planningContractId,
+            GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION to provenance.planningContractVersion,
+            GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID to provenance.phaseOutputContractId,
+            GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION to provenance.phaseOutputContractVersion,
+            GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to source.subSpecHash,
+            GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD_SHA256 to sourceShared.payloadSha256,
+            GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD_SHA256 to source.payloadSha256,
+          )
+      if (expected.any { (key, value) -> imported[key] != value }) {
+        migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
+      }
     }
     return imported
   }
@@ -366,6 +418,14 @@ internal data class PlanningImportMigration(
   val records: Map<String, Any?>,
   val imported: Map<String, Any?>,
 )
+
+private data class PlanningRecordExpectation(
+  val payload: String,
+  val importedDigest: Any?,
+  val migrating: Boolean,
+)
+
+private val SAVED_CONTRACT_VERSION = Regex("[0-9]{1,3}\\.[0-9]{1,3}")
 
 private fun artifactMap(value: Any?): Map<String, Any?> =
   (value as? Map<*, *>)?.entries

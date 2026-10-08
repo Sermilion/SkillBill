@@ -53,7 +53,7 @@ class GoalPlanningMigration(
     val shared =
       findAdmittedShared(session, identity, requirePreparation)
         ?: return RuntimeMigrationReceipt(
-          "unknown",
+          FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
           FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
           RuntimeMigrationReceipt.Result.CURRENT,
         )
@@ -241,12 +241,9 @@ class GoalPlanningMigration(
     validateTopology(shared, plans, manifest)
     imports.validateCurrent(session, parent, shared, plans)
     val sourceVersion =
-      (
-        listOf(shared.provenance.phaseOutputContractVersion) +
-          plans.map {
-            it.provenance.phaseOutputContractVersion
-          }
-      ).distinct().singleOrNull()?.takeIf { it.matches(Regex("[0-9]{1,3}\\.[0-9]{1,3}")) } ?: "unknown"
+      shared.provenance.phaseOutputContractVersion
+        .takeIf { it.matches(Regex("[0-9]{1,3}\\.[0-9]{1,3}")) }
+        ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION
     return RuntimeMigrationReceipt(
       sourceVersion,
       FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
