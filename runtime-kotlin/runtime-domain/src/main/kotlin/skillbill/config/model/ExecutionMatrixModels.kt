@@ -34,6 +34,7 @@ internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
     FeatureTaskRuntimePhaseIds.WRITE_HISTORY to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.COMMIT_PUSH to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PR to ExecutionTier.IMPLEMENTATION,
+    FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS to ExecutionTier.REASONING,
   )
 
 data class PhaseModelDirective(

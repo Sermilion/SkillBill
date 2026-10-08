@@ -1,5 +1,12 @@
 # Boundary History — runtime-domain
 
+## [2026-10-08] Standalone review step gets a default execution tier
+Areas: runtime-domain/config
+- `DEFAULT_PHASE_TIERS` had no entry for `present_findings`, the standalone review step. With an `execution_matrix` agent configured, `ExecutionMatrix.tierOf` threw `NoSuchElementException` and `skill-bill phase review` crashed before reviewing.
+- `present_findings` now defaults to the reasoning tier, like `review` and `verify_findings`.
+- The tier-coverage test now asserts the defaults cover `FeatureTaskRuntimePhaseIds.all` instead of the full-run step list, which never contained the standalone review step.
+Feature flag: N/A
+
 ## [2026-10-05] SKILL-401 subtask 1 domain goalrunner and review decoders
 Areas: runtime-domain/goalrunner, runtime-domain/review, runtime-domain/workflow/model/goalobservability, runtime-domain/workflow/model/goalreview, runtime-application/review/verification, runtime-infra/workflow/goalplanning
 - Goal-progress, continuation, lane-accounting and durable goal-review decoders now validate before construction and emit their existing schema failures with the same messages and precedence.

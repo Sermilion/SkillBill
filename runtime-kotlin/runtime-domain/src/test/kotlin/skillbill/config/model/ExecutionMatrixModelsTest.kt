@@ -1,7 +1,7 @@
 package skillbill.config.model
 
 import skillbill.install.model.SupportedAgent
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -183,7 +183,8 @@ class ExecutionMatrixModelsTest {
   fun `tier defaults cover every runtime phase`() {
     val matrix = ExecutionMatrix()
 
-    FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.forEach { phaseId ->
+    assertEquals(FeatureTaskRuntimePhaseIds.all.sorted(), DEFAULT_PHASE_TIERS.keys.sorted())
+    FeatureTaskRuntimePhaseIds.all.forEach { phaseId ->
       assertEquals(DEFAULT_PHASE_TIERS.getValue(phaseId), matrix.tierOf(phaseId))
     }
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("plan"))
@@ -191,12 +192,23 @@ class ExecutionMatrixModelsTest {
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("verify_findings"))
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("audit"))
     assertEquals(ExecutionTier.REASONING, matrix.tierOf("validate"))
+    assertEquals(ExecutionTier.REASONING, matrix.tierOf("present_findings"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("preplan"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("implement"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("implement_fix"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("write_history"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("commit_push"))
     assertEquals(ExecutionTier.IMPLEMENTATION, matrix.tierOf("pr"))
+  }
+
+  @Test
+  fun `a configured agent resolves a directive for the standalone review step`() {
+    val matrix =
+      ExecutionMatrix(
+        agents = mapOf(SupportedAgent.CLAUDE to mapOf(ExecutionTier.REASONING to PhaseModelDirective("opus"))),
+      )
+
+    assertEquals(PhaseModelDirective("opus"), matrix.directiveFor("claude", "present_findings"))
   }
 
   @Test
