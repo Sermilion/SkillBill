@@ -75,6 +75,8 @@ internal class ProcessWaitLoop(
       ?.toLong(DurationUnit.NANOSECONDS)
       ?.coerceAtLeast(MIN_TIMEOUT_NANOS)
   internal val startNanos = System.nanoTime()
+  internal var wallClockOriginNanos = startNanos
+  internal var lastObservedWorkflowStep: String? = null
   internal var lastWorkflowProgressNanos = startNanos
   internal var lastStatusHeartbeatNanos = startNanos
   internal var lastLiveHeartbeatNanos = startNanos
@@ -209,15 +211,17 @@ internal class DeclaredProgressTracker(startNanos: Long) {
   fun observe(
     snapshot: AgentRunDeclaredProgressSnapshot,
     nowNanos: Long,
-  ) {
+  ): Boolean {
     val event = snapshot.latestEvent
     processAlive = snapshot.processAlive
     if (event.sequenceNumber <= lastSequenceNumber && latestEvent != null) {
-      return
+      return false
     }
+    val previous = latestEvent
     lastSequenceNumber = event.sequenceNumber
     latestEvent = event
     lastAdvanceNanos = nowNanos
+    val phaseTransitioned = previous.phaseTransitionedTo(event)
     when (event.eventKind) {
       GoalProgressEventKind.OPERATION_STARTED, GoalProgressEventKind.OPERATION_HEARTBEAT -> {
         val wasActive = operationActive
@@ -238,6 +242,14 @@ internal class DeclaredProgressTracker(startNanos: Long) {
       }
       GoalProgressEventKind.PHASE_STARTED, GoalProgressEventKind.PHASE_COMPLETED -> Unit
     }
+    if (phaseTransitioned) {
+      restartOperationClock(nowNanos)
+    }
+    return phaseTransitioned
+  }
+
+  fun restartOperationClock(nowNanos: Long) {
+    operationStartedNanos = nowNanos
   }
 
   fun classify(
@@ -264,6 +276,17 @@ internal class DeclaredProgressTracker(startNanos: Long) {
       ),
     )
   }
+}
+
+private fun GoalProgressEvent?.phaseTransitionedTo(next: GoalProgressEvent): Boolean {
+  if (this == null) {
+    return next.eventKind == GoalProgressEventKind.PHASE_STARTED ||
+      next.eventKind == GoalProgressEventKind.PHASE_COMPLETED
+  }
+  return next.eventKind == GoalProgressEventKind.PHASE_STARTED ||
+    next.eventKind == GoalProgressEventKind.PHASE_COMPLETED ||
+    workflowPhase != next.workflowPhase ||
+    stepId != next.stepId
 }
 
 internal class ProcessLifecycleEmitter(

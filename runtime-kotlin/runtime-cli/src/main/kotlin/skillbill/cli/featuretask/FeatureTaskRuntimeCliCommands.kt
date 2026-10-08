@@ -25,8 +25,8 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     "--timeout-minutes",
     help =
       "Per-phase wall-clock cap in minutes (default " +
-        "$DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES). Hard ceiling even when a child process is still " +
-        "alive. Pass 0 to disable.",
+        "$DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES). Restarts at each phase transition. Hard ceiling even " +
+        "when a child process is still alive. Pass 0 to disable.",
   ).int().default(DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES)
   internal val monitor by option(
     "--monitor",

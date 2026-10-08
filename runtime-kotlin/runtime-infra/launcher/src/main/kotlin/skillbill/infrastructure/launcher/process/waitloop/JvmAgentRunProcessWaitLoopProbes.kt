@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.waitloop
 
 import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.infrastructure.launcher.process.launch.parseWorkflowIdAndStep
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
@@ -19,7 +20,7 @@ internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
     lastWorkflowProgressNanos = nowNanos
     lastProgressInstant = clock.instant()
     fileActivityWindowStartNanos = null
-    writeProgressLabel()
+    writeProgressLabel(nowNanos)
     request.probes.activityStampSink.safeStamp(AgentActivityLabel.DURABLE_PROGRESS)
   }
 }
@@ -62,6 +63,7 @@ internal fun ProcessWaitLoop.pollStatusHeartbeat(nowNanos: Long) {
   lifecycleEmitter.emitHeartbeat(alive)
   request.probes.progressProbe.readProgressLabel(degradation).value?.takeIf(String::isNotBlank)?.let { label ->
     lastProgressLabel = label
+    observeWorkflowStepLabel(label, nowNanos)
   }
   val workflowLabel = lastProgressLabel?.takeIf(String::isNotBlank)
   val activityLabel = lastActivityLabel?.takeIf(String::isNotBlank)
@@ -79,14 +81,26 @@ internal fun ProcessWaitLoop.pollStatusHeartbeat(nowNanos: Long) {
   )
 }
 
-internal fun ProcessWaitLoop.writeProgressLabel() {
+internal fun ProcessWaitLoop.writeProgressLabel(nowNanos: Long) {
   request.probes.progressProbe.readProgressLabel(degradation).value
     ?.takeIf(String::isNotBlank)
     ?.let { label ->
       lastProgressLabel = label
       lastSnapshotInstant = clock.instant()
+      observeWorkflowStepLabel(label, nowNanos)
       request.launch.outputSink.write(AgentRunOutputStream.STDERR, "skill-bill: workflow progress: $label\n")
     }
+}
+
+internal fun ProcessWaitLoop.observeWorkflowStepLabel(
+  label: String,
+  nowNanos: Long,
+) {
+  val step = parseWorkflowIdAndStep(label).second ?: return
+  if (lastObservedWorkflowStep != null && lastObservedWorkflowStep != step) {
+    resetWallClock(nowNanos)
+  }
+  lastObservedWorkflowStep = step
 }
 
 internal fun ProcessWaitLoop.writeActivityLabel() {
