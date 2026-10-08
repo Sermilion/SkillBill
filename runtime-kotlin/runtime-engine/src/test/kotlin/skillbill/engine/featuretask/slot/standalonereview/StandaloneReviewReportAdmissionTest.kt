@@ -17,28 +17,89 @@ import kotlin.test.assertTrue
 
 class StandaloneReviewReportAdmissionTest {
   @Test
-  fun `an incomplete review warning cannot be discarded to approve a report`() {
-    val result =
-      ParallelCodeReviewResult(
-        mergeResult = ParallelReviewMergeResult(emptyList(), ""),
-        lane1 = ParallelReviewLaneStatus("codex", true),
-      )
+  fun `an incomplete review warning stays in the presented register`() {
     val warning = "Review incomplete: could not inspect the diff"
-    val invalidOutputs =
+    val outputs =
       listOf(
         "NO_FINDINGS\nverdict: approved\n$warning",
         "$warning\nNO_FINDINGS\nverdict: approved",
         "NO_FINDINGS\n$warning\nverdict: approved",
-        "verdict: approved\nNO_FINDINGS",
       )
 
-    invalidOutputs.forEach { rawOutput ->
-      val report = StandaloneReviewReportAdmission.admit(rawOutput, result, false)
+    outputs.forEach { rawOutput ->
+      val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
+
+      assertTrue(report.admitted, report.rejectionReasons.joinToString())
+      assertTrue(warning in report.registerOutput, report.registerOutput)
+      assertTrue(report.registerOutput.endsWith("verdict: approved"), report.registerOutput)
+    }
+  }
+
+  @Test
+  fun `a prose report is admitted and presented as written`() {
+    val prose =
+      "I reviewed the six modified files against HEAD.\n\n" +
+        "- `src/Gate.kt:124` [medium, correctness]: the marker list misses too-old Java output.\n" +
+        "- `docs/policy.md:36` [low, docs-accuracy]: the doc overstates the check."
+    val rawOutput = "$prose\n\nverdict: changes_requested"
+
+    val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertEquals("$prose\nverdict: changes_requested", report.registerOutput)
+  }
+
+  @Test
+  fun `a verdict line need not be last and repeated identical verdicts are one verdict`() {
+    val outputs =
+      listOf(
+        "verdict: approved\nNO_FINDINGS",
+        "NO_FINDINGS\nVerdict: Approved\nverdict: approved",
+      )
+
+    outputs.forEach { rawOutput ->
+      val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
+
+      assertTrue(report.admitted, rawOutput)
+      assertEquals("approved", report.verdict)
+    }
+  }
+
+  @Test
+  fun `a report without one canonical verdict is rejected`() {
+    val outputs =
+      listOf(
+        "",
+        "Looks fine to me.",
+        "verdict: approved\nverdict: changes_requested",
+        "verdict: lgtm",
+      )
+
+    outputs.forEach { rawOutput ->
+      val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
 
       assertFalse(report.admitted, rawOutput)
-      assertTrue(report.rejectionReasons.isNotEmpty(), rawOutput)
-      assertEquals(rawOutput, report.rawOutput)
+      assertEquals(null, report.verdict)
     }
+  }
+
+  @Test
+  fun `a truncated report is rejected`() {
+    val report = StandaloneReviewReportAdmission.admit("NO_FINDINGS\nverdict: approved", emptyResult(), true)
+
+    assertFalse(report.admitted)
+    assertTrue(report.rejectionReasons.any { "truncated" in it })
+  }
+
+  @Test
+  fun `an approved report with a parsed Major finding presents changes requested`() {
+    val rawOutput = "- [F-001] Major | High | src/Auth.kt:1 | broken authorization\nverdict: approved"
+
+    val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
+
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
   }
 
   @Test
@@ -126,18 +187,15 @@ class StandaloneReviewReportAdmissionTest {
   }
 
   @Test
-  fun `a malformed finding identifier cannot become an empty approval`() {
-    val rawOutput = "- [F-ABC] Major | High | src/Auth.kt:1 | broken authorization\nNO_FINDINGS\nverdict: approved"
-    val result =
-      ParallelCodeReviewResult(
-        mergeResult = ParallelReviewMergeResult(emptyList(), ""),
-        lane1 = ParallelReviewLaneStatus("codex", true),
-      )
+  fun `a malformed finding identifier stays visible and cannot present as approved`() {
+    val malformed = "- [F-ABC] Major | High | src/Auth.kt:1 | broken authorization"
+    val rawOutput = "$malformed\nNO_FINDINGS\nverdict: approved"
 
-    val report = StandaloneReviewReportAdmission.admit(rawOutput, result, false)
+    val report = StandaloneReviewReportAdmission.admit(rawOutput, emptyResult(), false)
 
-    assertFalse(report.admitted)
-    assertTrue(report.rejectionReasons.any { "malformed finding identifier" in it })
+    assertTrue(report.admitted, report.rejectionReasons.joinToString())
+    assertEquals("changes_requested", report.verdict)
+    assertTrue(malformed in report.registerOutput, report.registerOutput)
     assertEquals(rawOutput, report.rawOutput)
   }
 
@@ -172,4 +230,10 @@ class StandaloneReviewReportAdmissionTest {
       assertEquals(integrationOutput, incomplete.integration?.rawOutput)
     }
   }
+
+  private fun emptyResult(): ParallelCodeReviewResult =
+    ParallelCodeReviewResult(
+      mergeResult = ParallelReviewMergeResult(emptyList(), ""),
+      lane1 = ParallelReviewLaneStatus("codex", true),
+    )
 }

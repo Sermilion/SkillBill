@@ -4,7 +4,6 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.ports.review.model.ReviewIntegrationPassOutcome
 import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.model.ParallelReviewMergedFinding
-import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
@@ -30,32 +29,21 @@ internal object StandaloneReviewReportAdmission {
     requireDelegatedCoverage: Boolean = false,
   ): StandaloneReviewReport {
     val parsed = ParallelReviewFindingParser.parse(rawOutput)
-    val verdictLines = rawOutput.lineSequence().map(String::trim).filter { it.startsWith("verdict:") }.toList()
-    val canonicalVerdictLines =
-      setOf(
-        "verdict: ${FeatureTaskRuntimeVerdict.APPROVED.wireValue}",
-        "verdict: ${FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue}",
-      )
-    val token = verdictLines.singleOrNull()?.takeIf { it in canonicalVerdictLines }?.substringAfter(": ")
+    val token = declaredVerdict(rawOutput)
     val reasons =
       buildList {
-        addAll(reportShapeRejections(rawOutput, parsed, result, truncated))
-        if (token == null) add("report verdict is missing or noncanonical")
-        addAll(emptyRegisterRejections(rawOutput, parsed, token))
+        if (rawOutput.isBlank()) add("report output is blank")
+        if (truncated) add("report output was truncated")
+        if (token == null) add("report must declare one verdict: approved or verdict: changes_requested")
         if (requireDelegatedCoverage) addAll(delegatedRejections(result))
-        val severe =
-          parsed.findings.map { it.severity }
-            .any { it == ParallelReviewSeverity.BLOCKER || it == ParallelReviewSeverity.MAJOR }
-        if (severe && token != FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue) {
-          add("Blocker or Major findings require changes_requested")
-        }
       }
-    val mergedSevere =
-      result.mergeResult.findings.any {
-        it.severity == ParallelReviewSeverity.BLOCKER || it.severity == ParallelReviewSeverity.MAJOR
-      }
+    val severe =
+      (parsed.findings.map { it.severity } + result.mergeResult.findings.map { it.severity })
+        .any { it == ParallelReviewSeverity.BLOCKER || it == ParallelReviewSeverity.MAJOR }
+    val unparsedCandidates =
+      parsed.rejections.isNotEmpty() || hasMalformedFindingIdentifier(rawOutput) || result.rejectedCandidateCount > 0
     val finalVerdict =
-      if (requireDelegatedCoverage && mergedSevere) {
+      if (token != null && (severe || unparsedCandidates)) {
         FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue
       } else {
         token
@@ -64,8 +52,7 @@ internal object StandaloneReviewReportAdmission {
       rawOutput = rawOutput,
       registerOutput =
         buildString {
-          val mergedRegister = ParallelReviewMerger.formattedOutput(result.mergeResult.findings)
-          append(if (mergedRegister.isBlank()) "NO_FINDINGS" else mergedRegister)
+          append(registerBody(rawOutput, result, requireDelegatedCoverage))
           if (finalVerdict != null) {
             appendLine()
             append("verdict: $finalVerdict")
@@ -81,32 +68,27 @@ internal object StandaloneReviewReportAdmission {
     )
   }
 
-  private fun reportShapeRejections(
+  private fun declaredVerdict(rawOutput: String): String? =
+    rawOutput.lineSequence()
+      .map { it.trim().lowercase() }
+      .filter { it.startsWith(VERDICT_PREFIX) }
+      .map { it.removePrefix(VERDICT_PREFIX).trim() }
+      .toSet()
+      .singleOrNull()
+      ?.takeIf { it in CANONICAL_VERDICTS }
+
+  private fun registerBody(
     rawOutput: String,
-    parsed: ParallelReviewParseResult,
     result: ParallelCodeReviewResult,
-    truncated: Boolean,
-  ): List<String> =
-    buildList {
-      if (rawOutput.isBlank()) add("report output is blank")
-      if (truncated) add("report output was truncated")
-      if (parsed.rejections.isNotEmpty()) add("report contains rejected finding candidates")
-      if (hasMalformedFindingIdentifier(rawOutput)) add("report contains a malformed finding identifier")
-      if (result.rejectedCandidateCount > 0) add("review contains rejected finding candidates")
-      if (rawOutput.lineSequence().count { it.trim().startsWith("verdict:") } != 1) {
-        add("report must contain exactly one verdict line")
-      }
-      if (rawOutput.lineSequence().lastOrNull { it.isNotBlank() }?.trim()?.startsWith("verdict:") != true) {
-        add("report verdict must be the last nonblank line")
-      }
-      if (
-        rawOutput.lineSequence().map(String::trim)
-          .filter { it.isNotEmpty() && it != "NO_FINDINGS" && !it.startsWith("verdict:") }
-          .any { !ParallelReviewFindingParser.parallelFindingPattern.matches(it) }
-      ) {
-        add("report contains unexpected content outside finding entries")
-      }
-    }
+    requireDelegatedCoverage: Boolean,
+  ): String {
+    val reportLines = rawOutput.lines().filterNot { it.trim().lowercase().startsWith(VERDICT_PREFIX) }
+    val hasProse =
+      reportLines.map(String::trim)
+        .any { it.isNotEmpty() && it != NO_FINDINGS && !ParallelReviewFindingParser.parallelFindingPattern.matches(it) }
+    if (!requireDelegatedCoverage && hasProse) return reportLines.joinToString("\n").trim()
+    return ParallelReviewMerger.formattedOutput(result.mergeResult.findings).ifBlank { NO_FINDINGS }
+  }
 
   private fun integrationRejections(outcome: ReviewIntegrationPassOutcome): List<String> =
     buildList {
@@ -124,21 +106,6 @@ internal object StandaloneReviewReportAdmission {
     output.lineSequence().any { line ->
       val candidate = line.trimStart().removePrefix("-").trimStart()
       candidate.startsWith("[F-") && !ParallelReviewFindingParser.findingCandidatePattern.containsMatchIn(candidate)
-    }
-
-  private fun emptyRegisterRejections(
-    rawOutput: String,
-    parsed: ParallelReviewParseResult,
-    token: String?,
-  ): List<String> =
-    buildList {
-      val noFindingsCount = rawOutput.lineSequence().count { it.trim() == "NO_FINDINGS" }
-      if (noFindingsCount > 1) add("report repeats NO_FINDINGS")
-      if (noFindingsCount > 0 && parsed.findings.isNotEmpty()) add("NO_FINDINGS conflicts with finding entries")
-      if (parsed.findings.isEmpty() && noFindingsCount != 1) add("empty report must declare NO_FINDINGS exactly once")
-      if (parsed.findings.isEmpty() && noFindingsCount == 1 && token != FeatureTaskRuntimeVerdict.APPROVED.wireValue) {
-        add("an empty report must use verdict: approved")
-      }
     }
 
   private fun delegatedRejections(result: ParallelCodeReviewResult): List<String> =
@@ -168,5 +135,9 @@ internal object StandaloneReviewReportAdmission {
     }
 }
 
+private const val VERDICT_PREFIX = "verdict:"
+private const val NO_FINDINGS = "NO_FINDINGS"
+private val CANONICAL_VERDICTS =
+  setOf(FeatureTaskRuntimeVerdict.APPROVED.wireValue, FeatureTaskRuntimeVerdict.CHANGES_REQUESTED.wireValue)
 private const val MAX_REPORT_DIAGNOSTICS = 20
 private const val MAX_DIAGNOSTIC_CHARS = 200

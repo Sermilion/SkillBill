@@ -196,14 +196,11 @@ abstract class StandaloneReviewStrategy(
         reviewRunner != null,
       )
     val failure = output.failureReason
-    val rejection =
-      listOfNotNull(
-        failure,
-        report.rejectionReasons.takeIf { it.isNotEmpty() }?.joinToString("; "),
-        report.diagnostics.takeIf {
-          it.isNotEmpty()
-        }?.take(MAX_FAILURE_DIAGNOSTICS)?.joinToString("; ") { it.take(MAX_FAILURE_DIAGNOSTIC_CHARS) },
-      ).joinToString("; ")
+    val blockers =
+      listOfNotNull(failure, report.rejectionReasons.takeIf { it.isNotEmpty() }?.joinToString("; "))
+    val diagnostics =
+      report.diagnostics.take(MAX_FAILURE_DIAGNOSTICS).map { it.take(MAX_FAILURE_DIAGNOSTIC_CHARS) }
+    val rejection = if (blockers.isEmpty()) "" else (blockers + diagnostics).joinToString("; ")
     val recordedResult =
       if (rejection.isBlank()) {
         retainedResult.copy(

@@ -1,3 +1,8 @@
+## [2026-10-08] Standalone review admits prose reports
+Context: SKILL-402 rejected any standalone review report with a line outside the `[F-NNN]` register grammar, a misplaced or extra NO_FINDINGS, or a verdict that was not the last line, and blocked on parser diagnostics. A complete prose review with `verdict: changes_requested` exited 1, so the operator lost a valid report-only review to formatting.
+Decision: Reject only blank or truncated output, a missing, conflicting or unknown verdict, and incomplete delegated coverage. When an inline report carries prose, present the report as written (verdict lines removed) instead of the merged register. A Blocker or Major finding, or a finding candidate the parser rejected, presents the verdict as changes_requested instead of rejecting the report. Parser diagnostics annotate a block but never cause one.
+Reason: The standalone review is report-only; the operator reads the text and no repair consumes the register. Showing the report as written keeps warnings and unparsed findings visible, and the verdict upgrade still prevents a false approval, which was the point of SKILL-402's strictness. Full-run code_review admission is unchanged.
+
 ## [2026-10-05] Return run-invariants rejection across the port
 Context: SKILL-401 subtask 3 removes defect-exception handling from phase intake and goal planning, which need different responses to an unreadable or unauthorized spec.
 Decision: The run-invariants port returns Read or Rejected with the existing reason. The filesystem adapter owns refusal; intake keeps its fallback and goal planning retains its stop policy.
