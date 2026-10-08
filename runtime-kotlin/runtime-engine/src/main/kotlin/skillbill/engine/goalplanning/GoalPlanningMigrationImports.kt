@@ -323,7 +323,6 @@ class GoalPlanningMigrationImports(
         SharedPayloadKeys.SUBTASK_ID to source.subtaskId,
         GoalPlanningPreparationPayloadKeys.MANIFEST_ORDER to source.manifestOrder,
         GoalPlanningPreparationPayloadKeys.GOVERNED_SUB_SPEC_PATH to source.governedSubSpecPath,
-        GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to source.subSpecHash,
       )
     if (identity.any { (key, value) -> imported[key] != value }) {
       migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
@@ -345,6 +344,7 @@ class GoalPlanningMigrationImports(
             GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION to provenance.planningContractVersion,
             GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID to provenance.phaseOutputContractId,
             GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION to provenance.phaseOutputContractVersion,
+            GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to source.subSpecHash,
             GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD_SHA256 to sourceShared.payloadSha256,
             GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD_SHA256 to source.payloadSha256,
           )
