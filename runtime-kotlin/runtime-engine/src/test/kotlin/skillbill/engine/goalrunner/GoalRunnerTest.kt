@@ -2,6 +2,8 @@ package skillbill.engine.goalrunner
 
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.RecordingSpecScratchStore
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.baseBranch
@@ -9,6 +11,7 @@ import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testHarnessClock
+import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.ownership
@@ -22,6 +25,7 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.SubtaskLaunchRequestArgs
+import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
@@ -176,6 +180,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
@@ -188,6 +193,9 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeCriterion
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeReason
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Files
@@ -315,6 +323,65 @@ class GoalRunnerTest {
     assertEquals(listOf("sha-1", "sha-2"), store.manifest.subtasks.map { it.commitSha })
     assertEquals(listOf(1, 2), store.newChildWorkflowSetups.map { it.subtaskId })
     assertTrue(store.newChildWorkflowSetups.all { it.reviewBaseline.reviewBaseSha == "0".repeat(40) })
+  }
+
+  @Test
+  fun `an accepted no-change pause closes its child without a PR and keeps the pause readable`() {
+    val database = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
+    val recorder = testPhaseRecorder(database, testWorkflowSnapshotValidator)
+    recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
+    recorder.persistNoChangePause("wfl-1", noChangePause(operatorDecision = "accept_and_advance"))
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 1)
+            .withSubtaskStatus(1, DecompositionStatus.IN_PROGRESS.wireValue, "wfl-1"),
+      )
+    val launcher = RecordingSubtaskLauncher { launchFacts() }
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, RecordingOutcomeStore(), pr)
+          .copy(phaseRecorder = recorder, childWorkflowDatabase = database),
+      )
+
+    val report = runner.run(runRequest())
+
+    val noChange = assertIs<GoalRunnerRunReport.CompletedNoChange>(report)
+    assertEquals(
+      WorkflowStatus.COMPLETED,
+      database.read { it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, "wfl-1") }?.workflowStatus,
+    )
+    assertEquals("already_satisfied", noChange.noChangeReason)
+    assertEquals(listOf(1), noChange.subtaskIds)
+    assertEquals(emptyList(), launcher.requests)
+    assertEquals(emptyList(), pr.requests)
+    assertEquals("accept_and_advance", recorder.loadNoChangePause("wfl-1")?.operatorDecision)
+  }
+
+  @Test
+  fun `a goal with a no-change subtask and a committed subtask still opens its pr`() {
+    val recorder = goalRunnerDefaultPhaseRecorder()
+    recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
+    recorder.persistNoChangePause("wfl-1", noChangePause(operatorDecision = "accept_and_advance"))
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 2)
+            .withCompletedSubtask(2, workflowId = "wfl-2", commitSha = "sha-2")
+            .withSubtaskStatus(1, DecompositionStatus.COMPLETED_NO_CHANGE.wireValue, "wfl-1"),
+      )
+    val pr = RecordingPullRequestPort()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, TestNoopGoalRunnerSubtaskLauncher, RecordingOutcomeStore(), pr)
+          .copy(phaseRecorder = recorder),
+      )
+
+    val report = runner.run(runRequest())
+
+    assertIs<GoalRunnerRunReport.Completed>(report)
+    assertEquals(1, pr.requests.size)
   }
 
   @Test
@@ -5167,6 +5234,25 @@ internal fun launchFacts(
     stderr = stderr,
   )
 
+internal fun noChangePause(operatorDecision: String? = null): FeatureTaskRuntimeNoChangePause =
+  FeatureTaskRuntimeNoChangePause(
+    reason = FeatureTaskRuntimeNoChangeReason.ALREADY_SATISFIED,
+    criteria =
+      listOf(
+        FeatureTaskRuntimeNoChangeCriterion(
+          criterionId = "AC-001",
+          verdict = FeatureTaskRuntimeNoChangeReason.ALREADY_SATISFIED,
+          evidence = "The guard is already present on the write path.",
+        ),
+      ),
+    citations = listOf("Guard.kt:10"),
+    boundaryTrace = "The guard runs before the write.",
+    owningSystem = null,
+    suggestedHandoff = "No code change is needed.",
+    auditSummary = "The audit confirmed the behavior already exists.",
+    operatorDecision = operatorDecision,
+  )
+
 internal fun DecompositionManifest.withWorkflowId(
   subtaskId: Int,
   workflowId: String,
@@ -5215,6 +5301,22 @@ private fun DecompositionManifest.withCompletedSubtask(
             commitSha = commitSha,
             lastResumableStep = "commit_push",
           )
+        } else {
+          subtask
+        }
+      },
+  )
+
+private fun DecompositionManifest.withSubtaskStatus(
+  subtaskId: Int,
+  status: String,
+  workflowId: String,
+): DecompositionManifest =
+  copy(
+    subtasks =
+      subtasks.map { subtask ->
+        if (subtask.id == subtaskId) {
+          subtask.copy(status = status, workflowId = workflowId)
         } else {
           subtask
         }

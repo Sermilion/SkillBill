@@ -37,6 +37,9 @@ object GoalRunnerQualityGateSelectionResolver {
   }
 }
 
+private val SETTLED_SUBTASK_STATUSES: Set<DecompositionStatus> =
+  setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
+
 object GoalRunnerPlanner {
   fun selectNext(manifest: DecompositionManifest): GoalRunnerSelection {
     val intended =
@@ -45,7 +48,7 @@ object GoalRunnerPlanner {
         ?.let { id -> manifest.subtasks.firstOrNull { it.id == id } }
     val candidate =
       intended?.takeUnless {
-        it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+        it.status.decompositionStatus() in SETTLED_SUBTASK_STATUSES
       }
         ?: manifest.subtasks.firstOrNull {
           it.status.decompositionStatus() == DecompositionStatus.IN_PROGRESS
@@ -97,8 +100,7 @@ object GoalRunnerPlanner {
     val subtasksById = manifest.subtasks.associateBy(DecompositionSubtask::id)
     return subtask.dependencies.all { dependency ->
       val dependencySubtask = subtasksById[dependency.subtaskId] ?: return@all false
-      dependencySubtask.status.decompositionStatus() == DecompositionStatus.COMPLETE ||
-        dependencySubtask.status.decompositionStatus() == DecompositionStatus.SKIPPED ||
+      dependencySubtask.status.decompositionStatus() in SETTLED_SUBTASK_STATUSES ||
         dependency.optional && dependency.skipped
     }
   }
@@ -260,6 +262,15 @@ object GoalRunnerOutcomeReconciler {
           liveness = liveness,
         )
 
+      GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE ->
+        stop(
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason =
+            "Subtask $subtaskId stored a completed_no_change outcome that only the operator decision path settles.",
+          storedOutcome = storedOutcome,
+          liveness = liveness,
+        )
+
       GoalRunnerTerminalStatus.RECONCILABLE ->
         stop(
           reason = GoalRunnerStopReason.RECONCILED_RESUMABLE,
@@ -272,31 +283,37 @@ object GoalRunnerOutcomeReconciler {
           liveness = liveness,
         )
 
-      GoalRunnerTerminalStatus.PAUSED -> {
-        val noChangePause = storedOutcome.noChangePause
-        if (noChangePause != null) {
-          stop(
-            reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
-            blockedReason = noChangePause.stopDetail(subtaskId),
-            storedOutcome = storedOutcome,
-            liveness = liveness,
-            noChangeReason = noChangePause.reason.wireValue,
-          )
-        } else {
-          stop(
-            reason = GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
-            blockedReason =
-              storedOutcome.blockedReason.orEmpty().ifBlank {
-                "Subtask $subtaskId paused with an unresolved Blocker or Major after remediation; " +
-                  "choose retry_fix, accept_and_advance, or abandon_subtask, then resume the goal. " +
-                  "Location-bearing evidence: skill-bill goal findings --issue-key <KEY>."
-              },
-            storedOutcome = storedOutcome,
-            liveness = liveness,
-          )
-        }
-      }
+      GoalRunnerTerminalStatus.PAUSED -> pausedOutcome(subtaskId, storedOutcome, liveness)
     }
+
+  private fun pausedOutcome(
+    subtaskId: Int,
+    storedOutcome: GoalRunnerStoredOutcome,
+    liveness: GoalRunnerLivenessSnapshot?,
+  ): GoalRunnerReconciledOutcome {
+    val noChangePause = storedOutcome.noChangePause
+    return if (noChangePause != null) {
+      stop(
+        reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
+        blockedReason = noChangePause.stopDetail(subtaskId),
+        storedOutcome = storedOutcome,
+        liveness = liveness,
+        noChangeReason = noChangePause.reason.wireValue,
+      )
+    } else {
+      stop(
+        reason = GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+        blockedReason =
+          storedOutcome.blockedReason.orEmpty().ifBlank {
+            "Subtask $subtaskId paused with an unresolved Blocker or Major after remediation; " +
+              "choose retry_fix, accept_and_advance, or abandon_subtask, then resume the goal. " +
+              "Location-bearing evidence: skill-bill goal findings --issue-key <KEY>."
+          },
+        storedOutcome = storedOutcome,
+        liveness = liveness,
+      )
+    }
+  }
 
   private fun completeOutcome(
     subtaskId: Int,

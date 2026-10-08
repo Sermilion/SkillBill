@@ -66,4 +66,5 @@ fun GoalIssueFinishedRequest.toRecord(): GoalIssueFinishedRecord =
     subtasksSkipped = subtasksSkipped,
     finishedAt = finishedAt,
     mode = mode,
+    noChangeReason = noChangeReason,
   )

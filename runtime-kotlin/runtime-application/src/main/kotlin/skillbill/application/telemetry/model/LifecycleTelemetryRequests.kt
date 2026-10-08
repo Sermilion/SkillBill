@@ -157,4 +157,5 @@ data class GoalIssueFinishedRequest(
   val subtasksSkipped: Int,
   val finishedAt: String,
   val mode: String,
+  val noChangeReason: String? = null,
 )

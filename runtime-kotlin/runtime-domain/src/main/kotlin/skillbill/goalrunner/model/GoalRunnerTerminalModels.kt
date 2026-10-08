@@ -14,6 +14,8 @@ enum class GoalRunnerTerminalStatus(val wireValue: String) {
 
   PAUSED("paused"),
 
+  COMPLETED_NO_CHANGE("completed_no_change"),
+
   ;
 
   companion object {
@@ -57,7 +59,6 @@ data class GoalRunnerStoredOutcome(
   val blockedReason: String? = null,
   val lastResumableStep: String? = null,
   val suppressPr: Boolean,
-  /** The child's no-change pause when no operator decision has settled it yet. */
   val noChangePause: FeatureTaskRuntimeNoChangePause? = null,
 )
 
@@ -134,6 +135,16 @@ sealed interface GoalRunnerRunReport {
     val unaddressedFindingCount: Int? = 0,
     val unaddressedSeverityBreakdown: Map<String, Int> = emptyMap(),
     val featureName: String? = null,
+    override val parentWorkflowId: String? = null,
+  ) : GoalRunnerRunReport
+
+  /** The goal finished with no subtask commit: every subtask was accepted as no-change, so there is no PR. */
+  data class CompletedNoChange(
+    override val issueKey: String,
+    override val attemptedSubtasks: List<Int>,
+    /** Null when the accepted pause cannot be read back; telemetry then omits the reason instead of inventing one. */
+    val noChangeReason: String?,
+    val subtaskIds: List<Int>,
     override val parentWorkflowId: String? = null,
   ) : GoalRunnerRunReport
 

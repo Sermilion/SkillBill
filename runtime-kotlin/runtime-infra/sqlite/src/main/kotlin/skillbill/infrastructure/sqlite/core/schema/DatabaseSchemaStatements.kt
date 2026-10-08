@@ -429,6 +429,7 @@ CREATE TABLE IF NOT EXISTS producer_output_evidence (
       subtasks_skipped INTEGER,
       mode TEXT NOT NULL DEFAULT 'runtime',
       finished_event_emitted_at TEXT,
+      no_change_reason TEXT,
       PRIMARY KEY (parent_workflow_id, issue_key)
     )
     """.trimIndent(),

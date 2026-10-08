@@ -77,17 +77,7 @@ data class FeatureTaskRuntimeNoChangePause(
       )
 
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeNoChangePause {
-      if (raw.keys != EXPECTED_FIELDS) {
-        throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime no-change pause artifact must carry exactly the fields " +
-            "${EXPECTED_FIELDS.sorted().joinToString()}.",
-        )
-      }
-      if (raw["record_kind"] != RECORD_KIND) {
-        throw invalidWorkflowStateSchemaError(
-          "Feature-task-runtime no-change pause artifact must have kind '$RECORD_KIND'.",
-        )
-      }
+      requireArtifactShape(raw)
       val reader = durableArtifactMapReader(raw)
       val reason =
         FeatureTaskRuntimeNoChangeReason.fromWireOrNull(reader.requiredString("reason"))
@@ -111,6 +101,20 @@ data class FeatureTaskRuntimeNoChangePause(
       )
     }
 
+    private fun requireArtifactShape(raw: Map<String, Any?>) {
+      if (raw.keys != EXPECTED_FIELDS) {
+        throw invalidWorkflowStateSchemaError(
+          "Feature-task-runtime no-change pause artifact must carry exactly the fields " +
+            "${EXPECTED_FIELDS.sorted().joinToString()}.",
+        )
+      }
+      if (raw["record_kind"] != RECORD_KIND) {
+        throw invalidWorkflowStateSchemaError(
+          "Feature-task-runtime no-change pause artifact must have kind '$RECORD_KIND'.",
+        )
+      }
+    }
+
     private fun decodeCriteria(entries: List<*>): List<FeatureTaskRuntimeNoChangeCriterion> =
       entries.map { entry ->
         val map =
@@ -122,13 +126,15 @@ data class FeatureTaskRuntimeNoChangePause(
             "Feature-task-runtime no-change pause criterion has an unknown verdict.",
           )
         FeatureTaskRuntimeNoChangeCriterion(
-          criterionId = map["criterion_id"] as? String ?: throw invalidWorkflowStateSchemaError(
-            "Feature-task-runtime no-change pause criterion is missing criterion_id.",
-          ),
+          criterionId =
+            map["criterion_id"] as? String ?: throw invalidWorkflowStateSchemaError(
+              "Feature-task-runtime no-change pause criterion is missing criterion_id.",
+            ),
           verdict = verdict,
-          evidence = map["evidence"] as? String ?: throw invalidWorkflowStateSchemaError(
-            "Feature-task-runtime no-change pause criterion is missing evidence.",
-          ),
+          evidence =
+            map["evidence"] as? String ?: throw invalidWorkflowStateSchemaError(
+              "Feature-task-runtime no-change pause criterion is missing evidence.",
+            ),
         )
       }
   }

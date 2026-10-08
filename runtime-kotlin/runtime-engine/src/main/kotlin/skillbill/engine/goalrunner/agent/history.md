@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-08] SKILL-408 subtask 2 — Operator no-change decision and completed_no_change outcome
+Areas: runtime-engine goalrunner (execution/core, persist, status, telemetry, manifest), runtime-engine featuretask slot/audit and runloop, runtime-domain goalrunner and workflow/taskruntime, runtime-cli goal, runtime-infra sqlite telemetry and schema, orchestration/contracts, skills/skill-bill
+- goal operator-decision routes decisions for a subtask whose child has an undecided no_change_pause before the review-remediation rejection; every other subtask keeps the existing rejection. --instructions is required for retry_fix and rejected with other decisions; it is recorded on the pause artifact.
+- accept_and_advance closes the child as COMPLETED with the pause artifact kept, saves the subtask as completed_no_change and advances. A goal with no commit_sha and at least one completed_no_change subtask finalizes as CompletedNoChange with no commit, push or PR; mixed goals finalize as before.
+- Settled-status sets (GoalRunnerPolicy, manifest transitions, reconcile, loader, acceptance dependency check) treat completed_no_change as settled so an accepted subtask is not reverted.
+- Telemetry and status: goal_finished and goal_issue_finished send completed_no_change with no_change_reason; the CLI presenter prints both in text and JSON. Schema const 1.12.0 is unchanged; the decomposition schema content hash was re-pinned.
+- Reusable: many set-based settled checks still treat only complete and skipped as settled (stop reports, telemetry counts, preflight lookup, continuation selector, reset and replan coordinators, spec-drift recovery, manifest restart, planning remedies). Review them before adding any new settled status. reusable
+- Pattern: NO_CHANGE_PAUSE_REASON lives in slot.attempt so shared runloop code never imports slot.audit; the no-change pause port is delegated with `by` to keep record classes under detekt TooManyFunctions. reusable
+- Limitation: retry_fix and abandon_subtask are not resumable yet; a recorded decision of either stops BLOCKED. GoalRunnerRunEvent.Completed is not emitted for CompletedNoChange. The accept-path GoalRunnerTest shares one child-workflow database between the phase recorder and the closer and asserts child COMPLETED.
+Feature flag: N/A
+Acceptance criteria: 8/10 implemented (AC6 retry_fix resume and AC7 abandon_subtask open)
+
 ## [2026-10-04] SKILL-399 subtask 4, goal-planning preparation results
 Areas: runtime-engine/goalrunner, runtime-engine/goalplanning, runtime-ports/goalrunner, runtime-contracts/error/shellcontent, runtime-infra/sqlite, runtime-infra/contracts, runtime-core/architecture and goal tests
 - Replaced preparation schema and recovery exception classes with InstallFailureCode failures and removed their custom-throwable baseline entries.

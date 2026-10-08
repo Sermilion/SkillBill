@@ -62,6 +62,7 @@ $defs:
       - blocked
       - complete
       - skipped
+      - completed_no_change
   dependency:
     type: object
     additionalProperties: false

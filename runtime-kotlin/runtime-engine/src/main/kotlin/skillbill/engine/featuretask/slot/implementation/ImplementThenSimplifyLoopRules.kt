@@ -13,7 +13,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-/** Settles simplify without a launch when the implement step returned a no-change claim, so there is nothing to clean up. */
 internal object ImplementThenSimplifyLoopRules : PhaseLoopRules {
   private const val IMPLEMENT = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
   private const val SIMPLIFY = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY

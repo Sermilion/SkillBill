@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-408"
 feature_name: "no-change-goal-outcome-with-evidence"
 parent_spec_path: ".feature-specs/SKILL-408-no-change-goal-outcome-with-evidence/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-408-no-change-goal-outcome-with-evidence"
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Operator decision and completed_no_change outcome"
   spec_path: ".feature-specs/SKILL-408-no-change-goal-outcome-with-evidence/spec_subtask_2_operator_no_change_decision.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261008-190138-lbbd"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

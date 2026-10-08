@@ -9,6 +9,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCheckpointRefs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.execution.support.MAX_REPORTED_FINALIZE_DIRTY_PATHS
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.parseGitPorcelainPaths
@@ -42,7 +43,10 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -56,6 +60,7 @@ class GoalRunnerFinalization(
   private val diagnostics: RuntimeDiagnostics,
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val progressReader: GoalRunnerProgressReader,
+  private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
 ) {
   fun finalizeGoal(
     state: GoalRunnerManifestState,
@@ -73,6 +78,7 @@ class GoalRunnerFinalization(
     request: GoalRunnerRunRequest,
     attempted: List<Int>,
   ): GoalRunnerRunReport {
+    noChangeFinalization(finalState.manifest, request, attempted)?.let { return it }
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
       return stopped(
         StoppedReportArgs(
@@ -124,6 +130,35 @@ class GoalRunnerFinalization(
           ),
         )
     }
+  }
+
+  private fun noChangeFinalization(
+    manifest: DecompositionManifest,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): GoalRunnerRunReport? {
+    val noChangeSubtasks =
+      manifest.subtasks.filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETED_NO_CHANGE }
+    if (noChangeSubtasks.isEmpty() || manifest.subtasks.any { !it.commitSha.isNullOrBlank() }) return null
+    deleteGoalSpecScratchOnSuccess(manifest, request)
+    val firstSubtask = noChangeSubtasks.first()
+    val pause =
+      firstSubtask.workflowId
+        ?.takeIf(String::isNotBlank)
+        ?.let(noChangePauses::loadNoChangePause)
+    if (pause == null) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Goal ${manifest.issueKey} finished no-change, but the pause for subtask ${firstSubtask.id} could not be " +
+          "read; no_change_reason is omitted from telemetry.",
+      )
+    }
+    return GoalRunnerRunReport.CompletedNoChange(
+      issueKey = manifest.issueKey,
+      attemptedSubtasks = attempted,
+      noChangeReason = pause?.reason?.wireValue,
+      subtaskIds = noChangeSubtasks.map(DecompositionSubtask::id),
+    )
   }
 
   fun deleteCompletedSubtaskSpecScratch(

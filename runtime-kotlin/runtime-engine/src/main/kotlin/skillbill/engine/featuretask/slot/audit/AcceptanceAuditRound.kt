@@ -77,7 +77,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     val auditContext =
       context as? PhaseAuditOutputContext
         ?: error("Audit settlement requires the accepted audit output context.")
-    // A claim round judges cited evidence rather than the remaining-criteria prose, so the progress check skips it.
     val progressRejection =
       if (NoChangeClaimResolution.activeClaimMap(auditContext.progress) == null) {
         progressRejection(auditContext, capture, outputMap)
@@ -93,7 +92,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     )
   }
 
-  /** The pause a completed, confirmed, structurally valid claim settles to, or null when the round does not pause. */
   private fun noChangePauseFor(
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -106,7 +104,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     return FeatureTaskRuntimeNoChangePause.fromClaim(valid.claim, auditSummary = auditProseValue(outputMap).orEmpty())
   }
 
-  /** A claim round answers a no-change word; a structurally invalid claim is settled by [acceptedOutput]. */
   private fun noChangeRoundRejection(
     context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -199,10 +196,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     return if (complete) stampVerdict(attested, FeatureTaskRuntimeVerdict.SATISFIED) else attested
   }
 
-  /**
-   * A structurally invalid claim settles as a rejected round whose prose names every reason, so it repairs through the
-   * same edge as any unmet round. A valid claim keeps the auditor's own no-change word.
-   */
   private fun noChangeAcceptedOutput(
     context: PhaseStepOutputContext,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,

@@ -2,10 +2,6 @@ package skillbill.goalrunner
 
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 
-/**
- * The operator-facing detail of a no-change pause: the reason, every criterion's verdict and evidence, the citations,
- * the boundary trace, the owning system when known, the suggested handoff, and the three operator choices.
- */
 fun FeatureTaskRuntimeNoChangePause.stopDetail(subtaskId: Int): String =
   buildString {
     appendLine("Subtask $subtaskId paused on a confirmed no-change claim (reason: ${reason.wireValue}).")

@@ -84,6 +84,7 @@ fun nonCompleteStoredOutcomeIsCorroborated(
     GoalRunnerTerminalStatus.COMPLETE,
     GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME,
     GoalRunnerTerminalStatus.RECONCILABLE,
+    GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE,
     -> false
   }
 
@@ -140,7 +141,6 @@ fun blockedReasonFrom(
       .takeIf { status == GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME }
 }
 
-/** The child's no-change pause when no operator decision has settled it yet, or null. */
 fun pendingNoChangePause(artifacts: Any): FeatureTaskRuntimeNoChangePause? {
   val wire = artifacts.asGoalWorkflowArtifactMap("goal no-change pause artifacts")
   val pause = JsonCodec.anyToStringAnyMap(wire[FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE_ARTIFACT_KEY]) ?: return null

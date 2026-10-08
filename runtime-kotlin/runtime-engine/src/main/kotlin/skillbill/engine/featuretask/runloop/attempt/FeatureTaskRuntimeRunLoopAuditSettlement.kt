@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.runloop.core.PauseAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.slot.attempt.NO_CHANGE_PAUSE_REASON
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.workflow.model.WorkflowStepStatus
@@ -30,10 +31,6 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
     return progressRejection?.let { blockAuditNoProgress(context, capture, attested, it) }
   }
 
-  /**
-   * Persists the confirmed no-change pause and pauses the child run before any repair iteration is read or
-   * incremented, so the repair-retry count is unchanged by the confirmation.
-   */
   fun settleNoChangePause(
     settlement: PhaseOutputSettlementContext,
     capture: ValidatedOutputCapture,
@@ -54,9 +51,6 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
       },
     )
   }
-
-  private const val NO_CHANGE_PAUSE_REASON =
-    "Audit confirmed the no-change claim; awaiting an operator decision on the no-change pause."
 
   private fun blockAuditNoProgress(
     context: PhaseCheckpointRemediationContext,

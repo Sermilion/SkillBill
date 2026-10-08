@@ -254,7 +254,7 @@ internal fun saveGoalIssueFinished(
     """
     UPDATE goal_issue_progress SET
       status = ?, subtasks_complete = ?, subtasks_blocked = ?, subtasks_skipped = ?,
-      finished_at = ?, mode = ?,
+      finished_at = ?, mode = ?, no_change_reason = ?,
       state_entered_at = CASE
         WHEN COALESCE(status, '') != ? THEN ${nextGoalStateEnteredAtSql("?")}
         ELSE state_entered_at
@@ -273,6 +273,7 @@ internal fun saveGoalIssueFinished(
       record.subtasksSkipped,
       record.finishedAt,
       record.mode,
+      record.noChangeReason,
       record.status,
       record.finishedAt,
       record.finishedAt,

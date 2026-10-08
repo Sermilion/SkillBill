@@ -22,7 +22,6 @@ internal object AuditImplementFixStep : PhaseStepHooks {
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
       return null
     }
-    // A claim means the gaps are already satisfied; audit checks its structure, so only presence is checked here.
     if (NoChangeClaimResolution.claimOf(outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS]) != null) return null
     val value = auditProseValue(outputMap).orEmpty()
     return if (AuditImplementFixPromptSections.endsWithCompletionMarker(value)) {

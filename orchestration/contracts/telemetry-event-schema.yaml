@@ -244,6 +244,7 @@ $defs:
     type: string
     enum:
       - completed
+      - completed_no_change
       - paused
       - blocked
       - abandoned

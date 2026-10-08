@@ -7,6 +7,8 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.application.testDecompositionManifestValidator
+import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -29,6 +31,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
@@ -50,6 +53,7 @@ import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEE
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -89,6 +93,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -127,6 +132,8 @@ internal data class GoalRunnerTestWiring(
   val executionCoordinator: GoalRunnerExecutionCoordinator,
   val phaseQuery: FeatureTaskRuntimePhaseQuery?,
   val diagnostics: RuntimeDiagnostics,
+  val phaseRecorder: FeatureTaskRuntimePhaseRecorder,
+  val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 )
 
 internal data class GoalRunnerTestWiringParams(
@@ -153,6 +160,7 @@ internal fun testGoalRunnerWiring(params: GoalRunnerTestWiringParams): GoalRunne
     executionCoordinator = DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR,
     phaseQuery = params.phaseRecorder.phaseQuery,
     diagnostics = NoopRuntimeDiagnostics,
+    phaseRecorder = params.phaseRecorder,
   )
 }
 
@@ -169,6 +177,7 @@ internal data class GoalRunnerTestInputs(
   val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService? = null,
   val executionCoordinator: GoalRunnerExecutionCoordinator = DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR,
   val phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
+  val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
     GoalRunnerTestWiring(
@@ -185,6 +194,8 @@ internal data class GoalRunnerTestInputs(
       executionCoordinator = executionCoordinator,
       phaseQuery = phaseRecorder.phaseQuery,
       diagnostics = NoopRuntimeDiagnostics,
+      phaseRecorder = phaseRecorder,
+      childWorkflowDatabase = childWorkflowDatabase,
     )
 }
 
@@ -233,6 +244,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       wiring.diagnostics,
       wiring.unaddressedFindingsLedgerService,
       progressReader,
+      wiring.phaseRecorder,
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
   val perRunLoopAssembler =
@@ -328,6 +340,8 @@ private fun testGoalRunnerLoopAssembler(
       iterationOutcome = iterationOutcome,
       pauseBoundary = pauseBoundary,
       launchPrepare = launchPrepare,
+      noChangePauses = wiring.phaseRecorder,
+      noChangeChildCloser = testNoChangeChildCloser(wiring.childWorkflowDatabase, wiring.clock),
       clock = wiring.clock,
     )
   return GoalRunnerPerRunLoopAssembler(
@@ -339,6 +353,27 @@ private fun testGoalRunnerLoopAssembler(
     progressReader = progressReader,
   )
 }
+
+private fun testNoChangeChildCloser(
+  database: DatabaseSessionFactory,
+  clock: Clock,
+): GoalRunnerNoChangeChildCloser =
+  GoalRunnerNoChangeChildCloser(
+    database,
+    clock,
+    WorkflowService(
+      database = database,
+      gitOperations = NoopWorkflowGitOperations,
+      decompositionManifestStore = UnavailableDecompositionManifestStore,
+      workflowSnapshotValidator = testWorkflowSnapshotValidator,
+      decompositionManifestValidator = testDecompositionManifestValidator,
+      decompositionManifestWriter = DecompositionManifestWriter(),
+      repositoryRoot = RepositoryRoot(Path.of("/tmp/skillbill-goal-runner")),
+      goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
+      runtimeDiagnostics = NoopRuntimeDiagnostics,
+      clock = clock,
+    ),
+  )
 
 internal fun testGoalRunner(
   manifestStore: GoalRunnerManifestStore,

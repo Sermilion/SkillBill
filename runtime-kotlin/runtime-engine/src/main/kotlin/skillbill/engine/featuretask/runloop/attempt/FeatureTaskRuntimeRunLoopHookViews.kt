@@ -254,5 +254,10 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   }
 
   internal fun PhaseCheckpointRemediationContext.phaseLoopContext(): PhaseLoopContext =
-    PhaseLoopContext(request, gitOperations.repositoryObservations())
+    PhaseLoopContext(
+      request = request,
+      gitOperations = gitOperations.repositoryObservations(),
+      noChangePause = { recorder.loadNoChangePause(request.workflowId) },
+      phaseRecord = { stepId -> progress.phase(stepId).record },
+    )
 }

@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparati
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -38,7 +39,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -58,7 +58,8 @@ internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-) : PhaseRunRecords {
+) : PhaseRunRecords,
+  FeatureTaskRuntimeNoChangePausePort by recorder {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
     producerGeneration: Int,
@@ -177,14 +178,6 @@ internal class DurablePhaseRunRecords(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) = recorder.persistBuildGateProgress(workflowId, progress)
-
-  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
-    recorder.loadNoChangePause(workflowId)
-
-  override fun persistNoChangePause(
-    workflowId: String,
-    pause: FeatureTaskRuntimeNoChangePause,
-  ) = recorder.persistNoChangePause(workflowId, pause)
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
     recorder.appendLedgerEntry(request)

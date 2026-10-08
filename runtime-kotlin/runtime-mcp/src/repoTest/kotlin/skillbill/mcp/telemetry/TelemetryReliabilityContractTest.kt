@@ -91,7 +91,7 @@ class TelemetryReliabilityContractTest {
     val stopReasons = schemaEnum("goalRunnerStopReasonEnum")
 
     assertEquals(setOf("complete", "blocked", "skipped"), subtaskStatuses)
-    assertEquals(setOf("completed", "paused", "blocked", "abandoned"), goalStatuses)
+    assertEquals(setOf("completed", "completed_no_change", "paused", "blocked", "abandoned"), goalStatuses)
     assertEquals(GoalRunnerStopReason.entries.map { it.name }.toSet(), stopReasons)
 
     val blockedSubtask =

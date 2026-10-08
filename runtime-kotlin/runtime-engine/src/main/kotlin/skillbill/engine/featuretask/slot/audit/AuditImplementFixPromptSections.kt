@@ -57,7 +57,9 @@ internal object AuditImplementFixPromptSections {
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
       "when a concrete missing input or external action prevents further repair, and identify the required " +
       "action. Use non_retryable_policy_conflict only for an irreconcilable governing constraint. " +
-      "Retryable failures remain subject to the existing retry budgets; never claim completion to avoid them."
+      "Retryable failures remain subject to the existing retry budgets; never claim completion to avoid them. " +
+      "When the latest audit output begins with `Operator instructions:`, the operator rejected an audit-confirmed " +
+      "no-change claim; treat those instructions as part of this step's fix input and the governing repair scope."
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
     PhaseStepPromptSections(

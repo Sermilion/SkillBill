@@ -67,5 +67,6 @@ internal object DatabaseColumnMigrationsConditional {
       "last_blocked_segment_workflow_id",
       "TEXT",
     )
+    DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_issue_progress", "no_change_reason", "TEXT")
   }
 }

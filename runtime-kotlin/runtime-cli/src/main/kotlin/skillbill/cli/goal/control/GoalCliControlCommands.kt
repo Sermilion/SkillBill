@@ -308,6 +308,10 @@ class GoalOperatorDecisionCommand(
     help = "Operator decision: ${GoalSubtaskOperatorDecision.entries.joinToString { it.wireValue }}.",
   ).required()
   private val repoRoot by option("--repo-root", help = "Repository root for the goal.")
+  private val instructions by option(
+    "--instructions",
+    help = "Operator instructions for a no-change pause. Required for retry_fix; rejected with other decisions.",
+  )
 
   override fun run() {
     if (subtaskId <= 0) {
@@ -326,6 +330,7 @@ class GoalOperatorDecisionCommand(
           subtaskId = subtaskId,
           decision = parsed,
           repoRoot = resolveCliRepositoryRoot(repoRoot, inputs),
+          instructions = instructions,
         ),
       )
     val payload = result.toGoalOperatorDecisionCliMap()

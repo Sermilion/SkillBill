@@ -274,6 +274,7 @@ class DatabaseSchemaTest {
         "subtasks_skipped",
         "mode",
         "finished_event_emitted_at",
+        "no_change_reason",
       ),
       goalIssueColumns.map { it.name },
     )

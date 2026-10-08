@@ -6,6 +6,7 @@ enum class DecompositionStatus(val wireValue: String) {
   COMPLETE("complete"),
   SKIPPED("skipped"),
   BLOCKED("blocked"),
+  COMPLETED_NO_CHANGE("completed_no_change"),
   ;
 
   companion object {

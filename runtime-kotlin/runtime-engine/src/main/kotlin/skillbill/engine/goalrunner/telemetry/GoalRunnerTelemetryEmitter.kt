@@ -128,15 +128,23 @@ class GoalRunnerTelemetryEmitter(
           },
         mode = "runtime",
         stopReason = stopReason,
-        noChangeReason = (report as? GoalRunnerRunReport.Stopped)?.stop?.noChangeReason,
+        noChangeReason = noChangeReasonOf(report),
         parentWorkflowId = state.parentWorkflowId,
       ),
     )
   }
 
+  private fun noChangeReasonOf(report: GoalRunnerRunReport): String? =
+    when (report) {
+      is GoalRunnerRunReport.CompletedNoChange -> report.noChangeReason
+      is GoalRunnerRunReport.Stopped -> report.stop.noChangeReason
+      else -> null
+    }
+
   private fun goalFinishedStatus(report: GoalRunnerRunReport): String =
     when {
       report is GoalRunnerRunReport.Completed -> "completed"
+      report is GoalRunnerRunReport.CompletedNoChange -> "completed_no_change"
       (report as? GoalRunnerRunReport.Stopped)?.stop?.reason == GoalRunnerStopReason.PAUSED -> "paused"
       (report as? GoalRunnerRunReport.Stopped)?.stop?.reason == GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION ->
         "paused"
@@ -145,24 +153,32 @@ class GoalRunnerTelemetryEmitter(
 
   fun goalIssueFinished(
     manifest: DecompositionManifest,
-    report: GoalRunnerRunReport.Completed,
+    report: GoalRunnerRunReport,
   ) {
+    require(report is GoalRunnerRunReport.Completed || report is GoalRunnerRunReport.CompletedNoChange) {
+      "goalIssueFinished requires a completed or completed-no-change report, got ${report::class.simpleName}"
+    }
     telemetry.goalIssueFinished(
       GoalIssueFinishedRequest(
         issueKey = manifest.issueKey,
         parentWorkflowId = state.parentWorkflowId,
-        status = "completed",
+        status = if (report is GoalRunnerRunReport.CompletedNoChange) "completed_no_change" else "completed",
         subtasksComplete =
           manifest.subtasks.count {
             it.status.decompositionStatus() == DecompositionStatus.COMPLETE
           },
-        subtasksBlocked = report.subtasksBlocked,
+        subtasksBlocked =
+          (report as? GoalRunnerRunReport.Completed)?.subtasksBlocked
+            ?: manifest.subtasks.count {
+              it.status.decompositionStatus() == DecompositionStatus.BLOCKED
+            },
         subtasksSkipped =
           manifest.subtasks.count {
             it.status.decompositionStatus() == DecompositionStatus.SKIPPED
           },
         finishedAt = clock.instant().toString(),
         mode = "runtime",
+        noChangeReason = noChangeReasonOf(report),
       ),
     )
   }

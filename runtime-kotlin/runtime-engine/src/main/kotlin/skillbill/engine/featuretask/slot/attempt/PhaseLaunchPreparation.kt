@@ -428,10 +428,7 @@ object PhaseLaunchPreparation {
             progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
               .output?.normalizedOutput?.envelopeWireMap(),
           ),
-        noChangeClaim =
-          NoChangeClaimResolution.activeClaimMap(progress)
-            ?.takeIf { run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
-            ?.let(NoChangeClaimResolution::renderForAudit),
+        noChangeClaim = auditNoChangeClaim(run),
         operatorBlockRetry =
           session.operatorBlockRetry
             ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },
@@ -453,6 +450,11 @@ object PhaseLaunchPreparation {
       )
     }
   }
+
+  private fun PhaseAttemptLaunchPreparationContext.auditNoChangeClaim(run: PhaseRun): String? =
+    NoChangeClaimResolution.activeClaimMap(progress)
+      ?.takeIf { run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
+      ?.let(NoChangeClaimResolution::renderForAudit)
 
   private fun PhaseAttemptLaunchPreparationContext.packCommand(
     run: PhaseRun,

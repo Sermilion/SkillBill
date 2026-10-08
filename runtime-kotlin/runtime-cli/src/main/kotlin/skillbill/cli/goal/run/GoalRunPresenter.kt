@@ -71,6 +71,14 @@ internal fun GoalRunnerRunReport.toGoalRunCliMap(): Map<String, Any?> =
         "pull_request_status" to pullRequestStatus.wireValue,
         "pull_request_url" to pullRequestUrl,
       )
+    is GoalRunnerRunReport.CompletedNoChange ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to "completed_no_change",
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "attempted_subtasks" to attemptedSubtasks,
+        "no_change_reason" to noChangeReason,
+        "subtask_ids" to subtaskIds,
+      )
     is GoalRunnerRunReport.Stopped ->
       linkedMapOf(
         SharedPayloadKeys.STATUS to "stopped",
@@ -159,6 +167,11 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
         }
         appendLine()
       }
+    is GoalRunnerRunReport.CompletedNoChange ->
+      buildString {
+        appendLine("goal ${report.issueKey}: completed_no_change")
+        appendLine("no_change_reason: ${singleLineBounded(report.noChangeReason ?: "unknown")}")
+      }
     is GoalRunnerRunReport.Stopped ->
       if (report.stop.reason == GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION) {
         noChangeDecisionText(report.stop)
@@ -167,7 +180,6 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
       }
   }
 
-/** The full no-change pause detail is operator-facing, so it is not bounded to a single terminal line. */
 private fun noChangeDecisionText(stop: GoalRunnerStopReport): String =
   buildString {
     appendLine("goal ${stop.issueKey}: paused at subtask ${stop.subtaskId}")

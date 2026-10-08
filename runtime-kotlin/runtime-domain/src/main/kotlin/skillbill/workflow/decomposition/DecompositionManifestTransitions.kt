@@ -16,7 +16,7 @@ fun intentFor(
   when (status.decompositionStatus()) {
     DecompositionStatus.BLOCKED ->
       CurrentSubtaskIntent(subtaskId = subtaskId, action = DecompositionSubtaskAction.BLOCKED.wireValue)
-    DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED ->
+    DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE ->
       CurrentSubtaskIntent(subtaskId = 0, action = DecompositionSubtaskAction.COMPLETE.wireValue)
     DecompositionStatus.IN_PROGRESS ->
       CurrentSubtaskIntent(subtaskId = subtaskId, action = DecompositionSubtaskAction.RESUME.wireValue)
@@ -27,7 +27,8 @@ fun DecompositionManifest.withParentStatus(): DecompositionManifest {
   val parentStatus =
     when {
       subtasks.all {
-        it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+        it.status.decompositionStatus() in
+          setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
       } -> DecompositionStatus.COMPLETE.wireValue
       subtasks.any { it.status.decompositionStatus() == DecompositionStatus.BLOCKED } ->
         DecompositionStatus.BLOCKED.wireValue

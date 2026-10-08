@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
@@ -18,14 +19,24 @@ import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
+import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerSelection
+import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.goalrunner.stopDetail
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import skillbill.workflow.decomposition.intentFor
+import skillbill.workflow.decomposition.withBlockedSubtask
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 private sealed interface SubtaskLaunchResult {
@@ -37,6 +48,12 @@ private sealed interface SubtaskLaunchResult {
   data object Denied : SubtaskLaunchResult
 }
 
+private sealed interface NoChangePauseGate {
+  data class Stopped(val result: GoalRunnerIterationResult) : NoChangePauseGate
+
+  data class Proceed(val state: GoalRunnerManifestState) : NoChangePauseGate
+}
+
 @Inject
 class GoalRunnerSelectedSubtaskLoop(
   private val manifestStore: GoalRunnerManifestStore,
@@ -46,14 +63,20 @@ class GoalRunnerSelectedSubtaskLoop(
   private val iterationOutcome: GoalRunnerIterationOutcome,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val launchPrepare: GoalRunnerSubtaskLaunchPrepare,
+  private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
+  private val noChangeChildCloser: GoalRunnerNoChangeChildCloser,
   private val clock: Clock,
 ) {
   internal fun runSelectedSubtask(
     args: RunSelectedSubtaskArgs,
     pendingState: GoalRunnerIterationPendingState,
   ): GoalRunnerIterationResult {
+    val state =
+      when (val gate = noChangePauseGate(args)) {
+        is NoChangePauseGate.Stopped -> return gate.result
+        is NoChangePauseGate.Proceed -> gate.state
+      }
     val validationQualityState = pendingState.validationQualityState
-    val state = args.state
     val selection = args.selection
     val request = args.request
     val observability = args.observability
@@ -110,6 +133,147 @@ class GoalRunnerSelectedSubtaskLoop(
         attemptStartMillis = launch.attemptStartMillis,
       ),
       pendingState,
+    )
+  }
+
+  private fun noChangePauseGate(args: RunSelectedSubtaskArgs): NoChangePauseGate {
+    val subtask = args.selection.decision.subtask
+    val workflowId = subtask.workflowId?.takeIf(String::isNotBlank) ?: return NoChangePauseGate.Proceed(args.state)
+    val pause = noChangePauses.loadNoChangePause(workflowId) ?: return NoChangePauseGate.Proceed(args.state)
+    val attempted = args.attemptedSnapshot()
+    val lastResumableStep =
+      iterationOutcome.safeProgress(workflowId)?.currentStepId
+        ?: subtask.lastResumableStep?.takeIf(String::isNotBlank)
+        ?: "audit"
+    return when (pause.operatorDecision?.let { GoalSubtaskOperatorDecision.fromWire(it) }) {
+      null -> NoChangePauseGate.Stopped(awaitingNoChangeDecision(args, workflowId, pause, lastResumableStep, attempted))
+      GoalSubtaskOperatorDecision.ACCEPT_AND_ADVANCE ->
+        NoChangePauseGate.Stopped(acceptNoChangeAndAdvance(args, workflowId, attempted))
+      GoalSubtaskOperatorDecision.RETRY_FIX ->
+        if (lastResumableStep == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) {
+          NoChangePauseGate.Proceed(resumeAtPausedAudit(args.state, subtask.id))
+        } else {
+          NoChangePauseGate.Proceed(args.state)
+        }
+      GoalSubtaskOperatorDecision.ABANDON_SUBTASK ->
+        NoChangePauseGate.Stopped(abandonNoChangeSubtask(args, workflowId, pause, lastResumableStep, attempted))
+    }
+  }
+
+  private fun awaitingNoChangeDecision(
+    args: RunSelectedSubtaskArgs,
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+    lastResumableStep: String,
+    attempted: List<Int>,
+  ): GoalRunnerIterationResult {
+    val subtask = args.selection.decision.subtask
+    return GoalRunnerIterationResult(
+      state = args.state,
+      report =
+        stopped(
+          StoppedReportArgs(
+            issueKey = args.state.manifest.issueKey,
+            attempted = attempted,
+            subtaskId = subtask.id,
+            reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
+            blockedReason = pause.stopDetail(subtask.id),
+            workflowId = workflowId,
+            lastResumableStep = lastResumableStep,
+            noChangeReason = pause.reason.wireValue,
+          ),
+        ),
+      attempted = attempted,
+    )
+  }
+
+  private fun acceptNoChangeAndAdvance(
+    args: RunSelectedSubtaskArgs,
+    workflowId: String,
+    attempted: List<Int>,
+  ): GoalRunnerIterationResult {
+    noChangeChildCloser.closeAccepted(workflowId)
+    val subtask = args.selection.decision.subtask
+    val manifest = args.state.manifest
+    val settled =
+      manifest.copy(
+        subtasks =
+          manifest.subtasks.map { candidate ->
+            if (candidate.id == subtask.id) {
+              candidate.copy(
+                status = DecompositionStatus.COMPLETED_NO_CHANGE.wireValue,
+                blockedReason = null,
+                lastResumableStep = null,
+              )
+            } else {
+              candidate
+            }
+          },
+        currentSubtaskIntent = intentFor(subtask.id, DecompositionStatus.COMPLETED_NO_CHANGE.wireValue),
+      )
+    return GoalRunnerIterationResult(
+      state = manifestStore.save(args.state.copy(manifest = settled)),
+      attempted = attempted,
+    )
+  }
+
+  private fun resumeAtPausedAudit(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+  ): GoalRunnerManifestState {
+    val manifest = state.manifest
+    val resumed =
+      manifest.copy(
+        subtasks =
+          manifest.subtasks.map { candidate ->
+            if (candidate.id == subtaskId) {
+              candidate.copy(lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+            } else {
+              candidate
+            }
+          },
+      )
+    return manifestStore.save(state.copy(manifest = resumed))
+  }
+
+  private fun abandonNoChangeSubtask(
+    args: RunSelectedSubtaskArgs,
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+    lastResumableStep: String,
+    attempted: List<Int>,
+  ): GoalRunnerIterationResult {
+    val subtask = args.selection.decision.subtask
+    val reason =
+      "Operator chose abandon_subtask on subtask ${subtask.id}'s no-change pause (${pause.reason.wireValue}); " +
+        "child workflow $workflowId is abandoned. Suggested handoff: ${pause.suggestedHandoff}"
+    val abandonError = noChangeChildCloser.abandon(workflowId, reason)
+    val blockedReason =
+      abandonError?.let { error -> "Could not abandon child workflow $workflowId for subtask ${subtask.id}: $error" }
+        ?: reason
+    val settled =
+      if (abandonError == null) {
+        manifestStore.save(
+          args.state.copy(manifest = args.state.manifest.withBlockedSubtask(subtask.id, reason, lastResumableStep)),
+        )
+      } else {
+        args.state
+      }
+    return GoalRunnerIterationResult(
+      state = settled,
+      report =
+        stopped(
+          StoppedReportArgs(
+            issueKey = args.state.manifest.issueKey,
+            attempted = attempted,
+            subtaskId = subtask.id,
+            reason = GoalRunnerStopReason.BLOCKED,
+            blockedReason = blockedReason,
+            workflowId = workflowId,
+            lastResumableStep = lastResumableStep,
+          ),
+        ),
+      attempted = attempted,
     )
   }
 

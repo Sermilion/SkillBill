@@ -117,7 +117,9 @@ class FeatureTaskRuntimeLaunchOutcomes(
               ),
             workflowStatus =
               when (terminal.status) {
-                GoalRunnerTerminalStatus.COMPLETE -> "completed"
+                GoalRunnerTerminalStatus.COMPLETE,
+                GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE,
+                -> "completed"
                 GoalRunnerTerminalStatus.PAUSED -> FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
                 GoalRunnerTerminalStatus.FAILED,
                 GoalRunnerTerminalStatus.BLOCKED,

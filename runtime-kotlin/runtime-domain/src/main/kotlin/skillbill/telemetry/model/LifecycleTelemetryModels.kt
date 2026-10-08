@@ -140,4 +140,5 @@ data class GoalIssueFinishedRecord(
   val subtasksSkipped: Int,
   val finishedAt: String,
   val mode: String,
+  val noChangeReason: String? = null,
 )

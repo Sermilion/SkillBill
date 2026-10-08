@@ -247,6 +247,22 @@ output verbatim, adding nothing. Do not poll, sleep, tail logs, re-read status,
 launch an observer, or compose monitoring, completion, summary, or progress
 output. Run goal status only for the targeted intake lookup above or when the user explicitly asks.
 
+The exception is a goal run that exits with `awaiting_no_change_decision` (its
+last line reads `awaiting_no_change_decision: subtask:<N> reason:<reason>`). The
+subtask's implementer claimed that no code change is needed and an audit confirmed
+the claim, so the run is paused for the operator. Show the reported reason, the
+verdict and evidence for each criterion, the citations, the boundary trace, the
+owning system, and the suggested handoff, taken from the pause detail printed
+above that line. Ask the operator once whether to accept the no-change result
+(`accept_and_advance`), retry the fix with instructions (`retry_fix`), or abandon
+the subtask (`abandon_subtask`). On the answer, run
+`skill-bill goal operator-decision <ISSUE-KEY> --subtask <N> --decision <choice>`,
+adding `--instructions "<text>"` only for `retry_fix` and passing the operator's
+instructions verbatim. Then resume the goal with `skill-bill goal <ISSUE-KEY>` and
+relay its output verbatim. Never run `operator-decision` without the operator's
+answer, never choose a decision for the operator, and never ask again once the
+operator has answered.
+
 ## Phase Forms
 
 Run a `phase:` form only at the operator's explicit request for that standalone

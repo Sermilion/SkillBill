@@ -28,7 +28,9 @@ class FeatureTaskPhaseSettlementService(
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
     require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
-    require(request.noChange == null || request.phaseId in NO_CHANGE_CLAIM_PHASE_IDS) { NO_CHANGE_PHASE_REQUIREMENT }
+    require(
+      request.noChange == null || request.phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.noChangeClaimPhaseIds,
+    ) { NO_CHANGE_PHASE_REQUIREMENT }
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
@@ -164,11 +166,6 @@ class FeatureTaskPhaseSettlementService(
       "no_change is accepted only for implement and audit_implement_fix."
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
-    private val NO_CHANGE_CLAIM_PHASE_IDS: Set<String> =
-      setOf(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
-      )
 
     fun isSettleablePhase(phaseId: String): Boolean =
       phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds

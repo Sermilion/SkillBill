@@ -25,10 +25,22 @@ interface FeatureTaskRuntimeReadinessEvidencePort {
   )
 }
 
+interface FeatureTaskRuntimeNoChangePausePort {
+  /** The no-change pause a confirmed no-change claim left on [workflowId], if any. */
+  fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause?
+
+  /** Persists the no-change pause of a confirmed no-change claim. */
+  fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  )
+}
+
 class FeatureTaskRuntimeGateProgressRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-) : FeatureTaskRuntimeReadinessEvidencePort {
+) : FeatureTaskRuntimeReadinessEvidencePort,
+  FeatureTaskRuntimeNoChangePausePort {
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
@@ -104,7 +116,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
     }
   }
 
-  fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
+  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
     database.read { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
       decodeNoChangePauseFromArtifact(
@@ -112,7 +124,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
       )
     }
 
-  fun persistNoChangePause(
+  override fun persistNoChangePause(
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
   ) {

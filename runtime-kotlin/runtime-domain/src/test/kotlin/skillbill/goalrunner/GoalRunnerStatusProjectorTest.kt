@@ -1,5 +1,7 @@
 package skillbill.goalrunner
 
+import skillbill.goalrunner.model.GoalNoChangeState
+import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs
 import skillbill.goalrunner.model.GoalRunnerStatusProjector
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -123,6 +125,27 @@ class GoalRunnerStatusProjectorTest {
       )
 
     assertEquals("liveness=block phase=review role=goal_runner_supervisor", projection.latestLivenessSignal)
+  }
+
+  @Test
+  fun `a completed no-change subtask counts as complete and projects its no-change reason`() {
+    val projection =
+      GoalRunnerStatusProjector.project(
+        manifest = manifest(currentSubtaskStatus = "completed_no_change"),
+        extras =
+          GoalRunnerStatusProjectionRuntimeInputs(
+            noChangeStatus =
+              GoalRunnerNoChangeStatus(
+                state = GoalNoChangeState.COMPLETED_NO_CHANGE,
+                reason = "already_satisfied",
+              ),
+          ),
+      )
+
+    assertEquals(1, projection.completeCount)
+    assertEquals(0, projection.pendingCount)
+    assertEquals(GoalNoChangeState.COMPLETED_NO_CHANGE, projection.noChangeStatus?.state)
+    assertEquals("already_satisfied", projection.noChangeStatus?.reason)
   }
 
   private fun observabilityEvent(
