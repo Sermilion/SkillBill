@@ -15,7 +15,9 @@ internal object AuditPlanFixPromptSections {
       "by a criterion is production work even under a test source set; its regression cases remain " +
       "with validation. Do not substitute an intent statement or the original feature plan for a " +
       "repair plan. Explain how each change closes its specific gap. If a concrete missing input " +
-      "prevents a repair plan, report blocked with its failure disposition and required action."
+      "prevents a repair plan, report blocked with its failure disposition and required action. " +
+      "When the latest audit output begins with `Operator instructions:`, the operator rejected an audit-confirmed " +
+      "no-change claim; treat those instructions as part of this step's fix input and the governing repair scope."
 
   fun sections(): PhaseStepPromptSections =
     PhaseStepPromptSections(

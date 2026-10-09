@@ -7,8 +7,10 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeReadinessEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
@@ -23,10 +25,22 @@ interface FeatureTaskRuntimeReadinessEvidencePort {
   )
 }
 
+interface FeatureTaskRuntimeNoChangePausePort {
+  /** The no-change pause a confirmed no-change claim left on [workflowId], if any. */
+  fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause?
+
+  /** Persists the no-change pause of a confirmed no-change claim. */
+  fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  )
+}
+
 class FeatureTaskRuntimeGateProgressRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-) : FeatureTaskRuntimeReadinessEvidencePort {
+) : FeatureTaskRuntimeReadinessEvidencePort,
+  FeatureTaskRuntimeNoChangePausePort {
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
       val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
@@ -97,6 +111,34 @@ class FeatureTaskRuntimeGateProgressRecorder(
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE.entry(
             evidence.asWorkflowArtifactEntry(),
           ),
+        ),
+      )
+    }
+  }
+
+  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
+    database.read { unitOfWork ->
+      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      decodeNoChangePauseFromArtifact(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.value(record.artifacts),
+      )
+    }
+
+  override fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ) {
+    database.transaction { unitOfWork ->
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+          ?: throw invalidWorkflowStateSchemaError(
+            "Cannot persist no-change pause: workflow '$workflowId' is missing.",
+          )
+      workflowPersistence.persistArtifactsPatch(
+        unitOfWork.workflowStates,
+        record,
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.entry(pause.asWorkflowArtifactEntry()),
         ),
       )
     }

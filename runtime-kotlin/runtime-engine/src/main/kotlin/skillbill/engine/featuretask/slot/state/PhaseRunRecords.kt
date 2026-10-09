@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionReje
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -32,7 +33,11 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
  * The phase records, ledger, evidence, briefing, review-checkpoint, and gate-progress reads and writes one run makes.
  * Every operation is keyed by the run's workflow id, so an implementation decides where the records live.
  */
-internal interface PhaseRunRecords : PhaseStepRecords, PhaseReviewRecords, PhaseLaunchRecords {
+internal interface PhaseRunRecords :
+  PhaseStepRecords,
+  PhaseReviewRecords,
+  PhaseLaunchRecords,
+  FeatureTaskRuntimeNoChangePausePort {
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
 

@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.appendWhenOpus
 import skillbill.engine.featuretask.slot.opus55Directive
@@ -20,6 +21,7 @@ class ImplementThenSimplifyOpus55Strategy : PhaseStrategy() {
   override val strategyId: String = ID
   override val steps: List<String> = canonical.steps
   override val entryStep: String = canonical.entryStep
+  override val loopRules: PhaseLoopRules? = canonical.loopRules
 
   override fun policyFor(stepId: String): PhaseStepPolicy = canonical.policyFor(stepId)
 

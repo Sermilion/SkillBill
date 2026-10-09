@@ -217,6 +217,290 @@ workflow files.
 - Where the step's changed-file set comes from: reuse the set the run loop already records
   (checkpoint path reconciliation at `FeatureTaskRuntimeRunLoopOutputVerification.kt:360-369`).
 
+## Implementation Details
+
+The preplan digest is the only repository knowledge behind this plan. Each "Confirm first" note
+marks a fact the digest did not establish. Implement reads that site before editing. If the site
+contradicts the plan, follow the "If not" branch, which keeps the acceptance criteria intact.
+
+### Constraints for every task
+
+- Keep every uncommitted SKILL-407 edit in `FeatureTaskRuntimeVerdict.kt`,
+  `FeatureTaskRuntimePhaseWorkflowGraph.kt`, `FeatureTaskRuntimePhaseWorkflowTransitions.kt`,
+  `FeatureTaskRuntimeRunLoopBackwardEdge.kt`, `feature-task-runtime-phase-output-schema.yaml`,
+  `telemetry-event-schema.yaml` and `workflow-state-schema.yaml`. Add only this feature's lines.
+  If subtask 2 has already added a Shared Contract element (`no_change_reason`,
+  `AWAITING_NO_CHANGE_DECISION`, `FeatureTaskRuntimeNoChangePause`), keep it and reuse it.
+- Shared Contract names and wire values are exact: `no_change`, `out_of_repo`,
+  `already_satisfied`, `not_reproducible`, `no_change_confirmed`, `no_change_rejected`,
+  `no_change_pause`, `awaiting_no_change_decision`, `no_change_reason`.
+- Do not change the phase-output `"0.7"` const or the telemetry `"1.12.0"` const.
+- Domain code stays pure: no `java.nio`, no ports imports, and no `skillbill.text` imports from
+  model packages. Expected outcomes are returned as sealed results, not thrown. Use
+  `require`/`check` only for programming defects.
+- Follow the existing artifact pattern of `FeatureTaskRuntimeAuditGapPause`, including where its
+  map writer lives, so the raw-map architecture guard stays green. If a package goes over the
+  `PackageSiblingCountArchitectureTest` limit, put the new files in a subpackage instead.
+- Mocks use `relaxUnitFun = true`, never `relaxed = true`.
+- Implement does not run builds, tests or `check`. The validate phase owns them.
+
+### Ordered tasks
+
+**Task 1: claim model, lenient parser and structural validator (AC 1).**
+- New DOM files in `workflow/taskruntime/model/audit/`, next to
+  `FeatureTaskRuntimeAuditGapPersistenceModels.kt`:
+  - `FeatureTaskRuntimeNoChangeClaim.kt`:
+    - `enum class FeatureTaskRuntimeNoChangeReason(val wireValue: String)` with `OUT_OF_REPO`,
+      `ALREADY_SATISFIED` and `NOT_REPRODUCIBLE`, plus a lenient `fromWireOrNull` that lowercases
+      and maps `-` and spaces to `_`, so `Out-Of-Repo` reads as `out_of_repo`.
+    - `data class FeatureTaskRuntimeNoChangeCriterion(criterionId, verdict, evidence)`.
+    - `data class FeatureTaskRuntimeNoChangeClaim(reason, criteria, citations, boundaryTrace,
+      owningSystem: String?, suggestedHandoff: String)`. `suggestedHandoff` is always resolved
+      once validation has run.
+  - `FeatureTaskRuntimeNoChangeClaimValidator.kt`: an object with
+    `validate(raw: Map<String, Any?>, catalogCriterionIds: List<String>, changedFiles: Collection<String>): NoChangeClaimValidation`.
+    `NoChangeClaimValidation` is a sealed type with `Valid(claim)` and `Rejected(reasons: List<String>)`.
+    The validator collects every failure rather than stopping at the first. Each failure gets its
+    own fixed message prefix, so tests and the fix step can name it:
+    - `reason` is missing or not one of the three words;
+    - a catalog criterion id has no entry, or the entry's verdict or evidence is blank, or its
+      verdict is not one of the three words (one message per criterion id);
+    - no citation matches `^\S+:\d+(-\d+)?$`;
+    - `boundary_trace` is blank;
+    - `changedFiles` is non-empty. The message lists the files, per Decision 7;
+    - the map has a key outside the Shared Contract field set (strict field presence).
+  - Derive the handoff when `suggested_handoff` is absent or blank:
+    - `out_of_repo`: `"Hand off to <owning_system>"`, or `"Hand off to the owning system (not identified)"`
+      when there is no owning system;
+    - `already_satisfied`: `"Close the issue as already satisfied"`;
+    - `not_reproducible`: `"Return the issue to the reporter for reproduction steps"`.
+  - Add `FeatureTaskRuntimeNoChangeClaim.Companion.KEY = "no_change"` as the single
+    `produced_outputs` key constant.
+- Tests: add `FeatureTaskRuntimeNoChangeClaimValidatorTest` under the matching runtime-domain
+  `src/test` package. It is one table-driven test:
+  - one row per rejection rule (missing reason, unknown reason, missing criterion entry, blank
+    evidence, no valid citation, blank trace, changed files, unknown field);
+  - one valid row with a mixed-case reason;
+  - one assertion of the derived handoff for each reason, including `out_of_repo` with and
+    without an owning system.
+
+  Realistic bug caught: a claim missing a criterion verdict is accepted, or a non-empty changed
+  file set is silently accepted.
+
+**Task 2: pause artifact model (AC 7).**
+- New DOM `FeatureTaskRuntimeNoChangePause.kt`, in the package of `FeatureTaskRuntimeAuditGapPause`.
+  - Fields: `reason`, `criteria`, `citations`, `boundaryTrace`, `owningSystem: String?`,
+    `suggestedHandoff`, `auditSummary`, `operatorDecision: GoalSubtaskOperatorDecision?` and
+    `operatorInstructions: String?`.
+  - The writer emits `record_kind: "no_change_pause"` plus exactly those ten keys in snake case.
+    `operator_decision` and `operator_instructions` are null on creation.
+  - A strict `fromArtifactMap` requires the exact key set and the record kind. It parses
+    `operator_decision` through the existing `GoalSubtaskOperatorDecision` wire values. On an
+    unknown or missing key it fails the same way `FeatureTaskRuntimeAuditGapPause.fromArtifactMap`
+    does.
+  - Add a `fromClaim(claim, auditSummary)` factory.
+- Confirm first: the AuditGapPause artifact-map pattern and the store API, starting from
+  `FeatureTaskRuntimeWorkflowArtifactMap` in `workflow/taskruntime/model/core/`. Also confirm
+  that domain may import `GoalSubtaskOperatorDecision` (`workflow/model/goalreview/`). If it
+  cannot, store `operatorDecision` as a validated wire string with the same four permitted
+  values.
+- Tests: add `FeatureTaskRuntimeNoChangePauseTest` with two tests:
+  - a round trip, writer to `fromArtifactMap`, on a pause with an owning system and one without;
+  - rejection of a writer map with one extra key.
+
+  Realistic bug caught: writer and reader field drift that breaks resume in subtask 2.
+
+**Task 3: verdict words (AC 4).**
+- Confirm first that `FeatureTaskRuntimeVerdict.kt` holds the audit verdict vocabulary. Add
+  `NO_CHANGE_CONFIRMED("no_change_confirmed")` and `NO_CHANGE_REJECTED("no_change_rejected")`
+  there, next to the SKILL-407 edits. If the vocabulary lives elsewhere, add the words there.
+- ENG `featuretask/slot/audit/AcceptanceAuditVerdictRule.kt`: read `removedVerdictRejection`
+  first. Make sure both new words are accepted, not rejected as removed or unknown, and only
+  when the latest implementation output carries a claim. A no-change word on a round without a
+  claim is rejected with a specific message.
+- `AcceptanceAuditRound.completionRejection` (lines 25–53): both words skip the
+  `AcceptanceAuditProgress.declaresComplete` requirement, so `no_change_confirmed` is not rejected
+  as satisfied-with-remaining-criteria. `no_change_rejected` must carry non-blank prose reasons,
+  or it is rejected like an empty unmet round.
+- Tests: none of their own. The Task 6 run-loop tests exercise both words through the real rule.
+
+**Task 4: mutating-phase verification accepts a claim with zero changed files (AC 3).**
+- ENG `featuretask/runloop/output/FeatureTaskRuntimeRunLoopOutputVerification.kt`, lines 78
+  and 223: when the phase is `implement` or `audit_implement_fix`, `produced_outputs` contains
+  `no_change`, and the reconciled changed-file set (lines 360–369) is empty, the zero-change
+  rejection does not fire.
+- The runtime does not judge the claim's structure here. Task 6 does that, so a malformed claim
+  still reaches audit and gets a specific reason instead of a generic verification failure.
+- If a claim arrives with changed files, verification keeps today's behavior. The validator then
+  rejects the claim in audit under Decision 7.
+- Confirm first: search `FeatureTaskRuntimeRunLoopTransitions.kt:119`, `slot/PhaseStepHooks.kt`,
+  `slot/attempt/PhaseAttemptOnce.kt` and `slot/attempt/PhaseAttemptContinuations.kt` for a
+  zero-diff or `reconciled_state` reject. Apply the same claim exemption at every site found. If
+  none exists, record that in the implement output.
+- Outputs without a claim follow the same code path as before.
+- Tests: covered by the Task 6 confirmed-path test, which drives an implement with zero changed
+  files through verification. The existing verification tests guard the no-claim path.
+
+**Task 5: skip simplify on a claim (AC 3).**
+- Where the run loop picks the phase after `implement` (`FeatureTaskRuntimeRunLoopTransitions.kt`
+  around line 119): if the implement output carries `no_change`, the next phase is `audit`.
+- Confirm first: whether `FeatureTaskRuntimePhaseWorkflowGraph.kt` already permits an
+  `implement` to `audit` edge. If it does not, add that edge in the graph and in
+  `FeatureTaskRuntimePhaseWorkflowTransitions.kt`, and keep the SKILL-407 edits. If it does,
+  change only the run-loop selection.
+- Tests: assert in the Task 6 confirmed-path test that simplify never ran.
+
+**Task 6: evidence audit routing (AC 2, 4, 5, 6).**
+- ENG `AcceptanceAuditRound.kt` `settleCompletedRound` and `progressRejection` (68–112), and ENG
+  `featuretask/runloop/attempt/FeatureTaskRuntimeRunLoopAuditSettlement.kt`:
+  1. Resolve the latest `implement` or `audit_implement_fix` output. If it carries `no_change`,
+     run `FeatureTaskRuntimeNoChangeClaimValidator.validate`. Pass it the run's
+     `AcceptanceAuditCatalog` criterion ids and the step's reconciled changed-file set. This
+     happens before `AcceptanceAuditRemainingCriteria` parsing.
+  2. On `Rejected`, settle into `audit_implement_fix`. The fix input is the joined validator
+     reasons, prefixed `No-change claim rejected:`. This consumes one repair retry through the
+     normal `AUDIT_REPAIR_LOOP_ID` path. The remaining-criteria parser is not called, so
+     "Unidentified remaining criterion." cannot appear.
+  3. On `Valid`, read the audit agent's verdict:
+     - `no_change_rejected`: settle into `audit_implement_fix`. The fix input is the auditor's
+       prose reasons. This consumes one repair retry like any unmet round.
+     - `no_change_confirmed`: build `FeatureTaskRuntimeNoChangePause.fromClaim(claim,
+       auditSummary = audit prose value)` and persist it as a child-workflow artifact. Settle the
+       round as a terminal no-change pause. This returns before any repair-loop iteration is
+       read or incremented, so the retry count stays the same.
+     - any other verdict: the round is rejected as an invalid verdict for a claim-bearing round.
+- Confirm first: how `AcceptanceAuditStrategy.kt` reaches the latest implementation
+  `produced_outputs`, the catalog, and the changed-file set. If the changed-file set is not
+  reachable at audit time, record it on the implement step at verification time (Task 4) and
+  read it back here.
+- The run loop's terminal outcome for a confirmed pause must end the child run, the same way
+  an existing paused or blocked child outcome does. It is not an in-flight wait.
+- Fix-step prompt: in the `audit_implement_fix` prompt or directive resource, wherever it lives,
+  add two sentences. When the fix input starts `No-change claim rejected:` or comes from a
+  `no_change_rejected` audit, the step either makes the needed changes or returns an improved
+  `no_change` claim. It must not do both.
+- Tests: add them in the audit run-loop tests under `featuretask/runner/`, reusing
+  `FeatureTaskRuntimePhaseOutputFixtures.kt`. Add a claim fixture helper there if none exists.
+  - **Confirmed path (AC 3, 5 to 6).** Implement emits a valid claim with zero changed files,
+    and audit returns `no_change_confirmed`. Assert that:
+    - a `no_change_pause` artifact exists and its `criteria` match the claim;
+    - simplify and `audit_implement_fix` never ran;
+    - the repair-loop iteration equals its value before the audit round;
+    - the child run ended.
+
+    Realistic bug caught: the WE-5006 loop, or the retry counter being incremented on
+    confirmation.
+  - **Rejected paths, one parameterized test (AC 2, 5).** Row A is a claim with no valid citation,
+    which is a structural rejection. Row B is a valid claim with an audit verdict of
+    `no_change_rejected` and the reason "trace contradicts web/report.ts:40". For each row, assert
+    that:
+    - the next phase is `audit_implement_fix`;
+    - its input contains the specific reason;
+    - it does not contain "Unidentified remaining criterion.";
+    - the retry count went up by one.
+
+    Realistic bug caught: a rejection that is treated as a confirmation, or a rejection that
+    loses its reason.
+  - Update a workflow-snapshot JSON under `runtime-engine/src/test/resources/featuretask/` only if
+    a new path changes it.
+
+**Task 7: audit prompt resource (AC 4).**
+- `runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/audit/opus-5-5-acceptance-audit.md`:
+  add a short section for claim-bearing rounds. When the implementation output carries
+  `produced_outputs.no_change`:
+  - the diff is expected to be empty;
+  - read every cited `path:line` and the boundary trace without editing anything;
+  - do not resolve citations outside this worktree;
+  - answer `no_change_confirmed` when the evidence supports every criterion's verdict;
+  - otherwise answer `no_change_rejected`, with the specific reasons in the prose value.
+- Tests: none. This is prompt text that audit inspects.
+
+**Task 8: stop reason and goal-runner stop (AC 6, 8).**
+- DOM `goalrunner/model/GoalRunnerTerminalModels.kt`:
+  - add `AWAITING_NO_CHANGE_DECISION("awaiting_no_change_decision")` to `GoalRunnerStopReason`;
+  - add it to `RESUMABLE_STOP_REASONS` (line 46);
+  - give it the same branch as `AWAITING_OPERATOR_DECISION` in `toLedgerAction` (141–155),
+    `toDiagnosticClass` (157–172) and `nextSafeAction` (174–189). `nextSafeAction` names the
+    `goal operator-decision` command.
+- ENG `goalrunner/status/GoalRunnerStopReports.kt` `supervisionEvent` (126–139): same branch as
+  `AWAITING_OPERATOR_DECISION`.
+- Every other `when` over `GoalRunnerStopReason` that handles `AWAITING_OPERATOR_DECISION` gets
+  the matching branch, so the build stays exhaustive: `runtime-cli/.../goal/core/GoalCliExitCodes.kt`,
+  `runtime-ports/.../idestatus/model/IdeStatusModels.kt`, `runtime-engine/.../work/IdeStatusProjector.kt`
+  and `runtime-domain/.../goalrunner/GoalRunnerPolicy.kt`. Use the same exit code and IDE status
+  as the operator-decision pause.
+- Stop propagation: in `GoalRunnerSelectedSubtaskLoop.kt`, modeled on `GoalRunnerPauseBoundary.kt`.
+  When the child run ends and the child workflow holds a `no_change_pause` artifact whose
+  `operator_decision` is null, return `stopped(StoppedReportArgs(reason = AWAITING_NO_CHANGE_DECISION, ...))`.
+  `driveGoalLoop` (`GoalRunnerGoalLoop.kt` 42–87) then exits on the non-null `terminalReport`.
+  The subtask stays non-terminal in the manifest.
+- Confirm first: where the idle and wall-clock timers are armed. They must be scoped to the
+  runner invocation that just returned. If a timer outlives the stop, exclude this stop reason
+  from it.
+- Tests: covered by Task 9's report test, which builds the stop report from this path, and by
+  compile-time exhaustiveness. A separate enum-mapping test would only mirror the `when`
+  branches, so none is added.
+
+**Task 9: stop report and CLI line (AC 9).**
+- `GoalRunnerStopReports.kt`: when the reason is `AWAITING_NO_CHANGE_DECISION`, load the pause
+  artifact and render, in this order:
+  - the reason word;
+  - one line per criterion: id, verdict and evidence;
+  - the citations;
+  - the boundary trace;
+  - `owning_system`, only when non-null;
+  - the suggested handoff;
+  - the operator choices `accept_and_advance`, `retry_fix --instructions "<text>"` and
+    `abandon_subtask`, each as a `goal operator-decision` invocation.
+
+  Put the payload in whatever detail or field structure `StoppedReportArgs` already offers. Do
+  not add a new report variant (that is subtask 2's `GoalRunnerRunReport` work).
+- CLI: in `runtime-cli/.../goal/run/GoalRunPresenter.kt`, or wherever the goal-run stop line is
+  printed, print `awaiting_no_change_decision: <summary>`. Copy the exact line shape that
+  `OperationCommand.kt:34/181` uses for `awaiting_confirmation`.
+- Tests: add one stop-report rendering test in the `goalrunner/status` test package. Build it
+  from a pause with an owning system, and assert that the reason, each criterion's evidence,
+  one citation, the trace, the owning system, the handoff and all three choices appear. Then
+  assert, in the existing presenter test if there is one (otherwise in the same test), that the
+  CLI line starts `awaiting_no_change_decision:`.
+
+  Realistic bug caught: a report that drops evidence, leaving the operator to decide blind.
+
+**Task 10: telemetry (AC 10).**
+- CON `telemetry-event-schema.yaml`:
+  - add `awaiting_no_change_decision` to `goalRunnerStopReasonEnum`;
+  - add an optional `no_change_reason` property (an enum of the three reason words, nullable if
+    sibling optionals are nullable) to `goal_finished` and to `goal_issue_finished`;
+  - leave `"1.12.0"` unchanged;
+  - if subtask 2 already added any of these, keep its version.
+- ENG `goalrunner/telemetry/GoalRunnerTelemetryEmitter.kt`: `goalFinishedStatus` maps
+  `AWAITING_NO_CHANGE_DECISION` to `paused`. Both events set `no_change_reason` from the pause
+  artifact's reason, and omit it otherwise.
+- Tests: add one emitter test. It emits `goal_finished` for this pause and validates the payload
+  against `telemetry-event-schema.yaml` with the existing schema-validation helper. It asserts
+  `status: paused` and the `no_change_reason` value.
+
+  Realistic bug caught: a payload that the schema rejects, which drops the event downstream.
+
+**Task 11: phase-output contract and implement guidance (AC 11).**
+- Confirm first: read `$defs.phaseProseProducedOutputs` in CON
+  `feature-task-runtime-phase-output-schema.yaml` (lines 1–194).
+  - If it allows non-string values, document `no_change` in the `produced_outputs` description.
+  - If it restricts values to strings, add `no_change` as an optional object property, with the
+    Shared Contract shape, in that def or in the implement `allOf` branch.
+  - Either way, `contract_version` stays `"0.7"` and the SKILL-407 edits stay.
+- Implement prompt or directive resource, wherever the implement-phase prompt lives: add a short
+  section. Declare `produced_outputs.no_change` only when the repository needs no change. List
+  the fields and the three reasons, require one criterion entry per acceptance criterion and at
+  least one `path:line` citation, and leave the diff empty. Settle with status `completed` and a
+  prose value as usual.
+- Tests: none of their own. The validate phase's schema and contract checks cover the YAML.
+
+### Wave note
+
+This plan is one file, so all of it was planned in a single settled pass, and no fan-out wave was
+needed.
+
 ## Validation Strategy
 
 The validate phase runs `./gradlew check`. Implement and audit inspect the tree only.

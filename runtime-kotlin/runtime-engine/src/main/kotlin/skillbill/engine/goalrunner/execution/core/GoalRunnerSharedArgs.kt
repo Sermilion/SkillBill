@@ -135,6 +135,7 @@ internal data class StoppedReportArgs(
   val blockedReason: String,
   val workflowId: String?,
   val lastResumableStep: String,
+  val noChangeReason: String? = null,
 )
 
 internal data class ProduceMissingPlansArgs(

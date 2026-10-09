@@ -152,6 +152,7 @@ class GoalRunnerAcceptanceCoordinator(
           setOf(
             DecompositionStatus.COMPLETE,
             DecompositionStatus.SKIPPED,
+            DecompositionStatus.COMPLETED_NO_CHANGE,
           ) ||
           (dependency.optional && dependency.skipped)
       !satisfied

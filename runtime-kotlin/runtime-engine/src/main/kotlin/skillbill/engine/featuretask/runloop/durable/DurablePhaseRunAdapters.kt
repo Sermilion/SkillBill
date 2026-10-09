@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparati
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -57,7 +58,8 @@ internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-) : PhaseRunRecords {
+) : PhaseRunRecords,
+  FeatureTaskRuntimeNoChangePausePort by recorder {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
     producerGeneration: Int,

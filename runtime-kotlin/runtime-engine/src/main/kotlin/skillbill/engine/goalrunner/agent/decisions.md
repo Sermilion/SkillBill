@@ -1,5 +1,22 @@
 # goalrunner boundary decisions
 
+## [2026-10-08] Apply no-change decisions on resume, not at record time
+Context: An operator decides a no-change pause through a separate command while the goal is stopped, and the process can crash between recording the decision and acting on it.
+Decision: The decision service validates the request and writes the decision to the no_change_pause artifact only. The goal runner applies it at the selected-subtask step on the next resume, and stops again with awaiting_no_change_decision while the decision is still null.
+Reason: A crash after recording leaves a decided artifact that the next resume applies. Applying is idempotent and has a single call site, so the runner never decides on its own.
+Revisit when: retry_fix and abandon_subtask resume are implemented, or the operator-decision command starts driving the goal forward itself.
+
+## [2026-10-08] Route no-change decisions ahead of review-remediation rejection
+Context: Operator decisions share the GoalSubtaskOperatorDecision wire values with review remediation, which rejects them for a subtask with a child workflow.
+Decision: The decision service checks for an undecided no_change_pause on the subtask's child first. Only then does it apply the no-change rules; every other subtask keeps the existing rejection unchanged.
+Reason: Reuses the existing wire values without changing the review-state schema or reopening review remediation.
+Alternatives considered: new no-change wire values, rejected because they would change the review-state schema.
+
+## [2026-10-08] Finalize no-change goals without a pull request
+Context: A goal can end with every subtask skipped for commits, after an operator accepted a no-change pause.
+Decision: When no subtask has a commit_sha and at least one is completed_no_change, the goal finishes as CompletedNoChange with the first pause reason and no commit, push, PR or acceptance evidence. Mixed goals finalize exactly as before.
+Reason: Completed means a PR exists, so an empty PR would misreport the outcome. The pause artifact stays in the child-workflow store as the evidence.
+
 ## [2026-10-04] Return preparation conflicts as data
 Context: SKILL-399 subtask 4 replaces preparation exceptions whose readers used workflow identity, subtask identity and recovery reason to steer execution.
 Decision: Put data-only conflict and result declarations in runtime-ports. Readers branch on returned conflicts; engine-owned toFailure converts them where existing callers must stop by throwing.

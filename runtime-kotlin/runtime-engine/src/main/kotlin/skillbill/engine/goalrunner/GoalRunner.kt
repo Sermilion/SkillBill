@@ -240,7 +240,7 @@ class GoalRunner(
     telemetryEmitter.let { emitter ->
       emitter.emitNewlyTerminalSubtasks(state.manifest, attempted)
       emitter.goalFinished(state.manifest, finalReport)
-      if (finalReport is GoalRunnerRunReport.Completed) {
+      if (finalReport is GoalRunnerRunReport.Completed || finalReport is GoalRunnerRunReport.CompletedNoChange) {
         emitter.goalIssueFinished(state.manifest, finalReport)
       }
     }
@@ -250,5 +250,6 @@ class GoalRunner(
 private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): GoalRunnerRunReport =
   when (this) {
     is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
+    is GoalRunnerRunReport.CompletedNoChange -> copy(parentWorkflowId = parentWorkflowId)
     is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
   }

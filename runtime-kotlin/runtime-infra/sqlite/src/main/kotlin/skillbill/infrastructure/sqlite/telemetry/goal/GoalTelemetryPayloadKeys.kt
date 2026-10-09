@@ -9,6 +9,7 @@ object GoalTelemetryPayloadKeys {
   const val SUBTASKS_BLOCKED: String = "subtasks_blocked"
   const val SUBTASKS_SKIPPED: String = "subtasks_skipped"
   const val STOP_REASON: String = "stop_reason"
+  const val NO_CHANGE_REASON: String = "no_change_reason"
   const val PARENT_WORKFLOW_ID: String = "parent_workflow_id"
   const val TOTAL_INVOCATIONS: String = "total_invocations"
   const val TOTAL_BLOCKS: String = "total_blocks"

@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionReje
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -19,6 +20,7 @@ import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -37,7 +39,8 @@ import java.time.Clock
 internal class InMemoryPhaseRunRecords(
   private val clock: Clock,
   private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
-) : PhaseRunRecords {
+) : PhaseRunRecords,
+  FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses() {
   private val phaseRecords = LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
@@ -243,6 +246,19 @@ internal class InMemoryPhaseRunRecords(
 }
 
 private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())
+
+private class InMemoryNoChangePauses : FeatureTaskRuntimeNoChangePausePort {
+  private val pauses = mutableMapOf<String, FeatureTaskRuntimeNoChangePause>()
+
+  override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? = pauses[workflowId]
+
+  override fun persistNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ) {
+    pauses[workflowId] = pause
+  }
+}
 
 private fun FeatureTaskRuntimePhaseRecord.detached(): FeatureTaskRuntimePhaseRecord =
   copy(

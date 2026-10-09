@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -21,6 +22,7 @@ internal object AuditImplementFixStep : PhaseStepHooks {
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
       return null
     }
+    if (NoChangeClaimResolution.claimOf(outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS]) != null) return null
     val value = auditProseValue(outputMap).orEmpty()
     return if (AuditImplementFixPromptSections.endsWithCompletionMarker(value)) {
       null

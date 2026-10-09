@@ -8,6 +8,7 @@ data class GoalRunnerOperatorDecisionRequest(
   val subtaskId: Int,
   val decision: GoalSubtaskOperatorDecision,
   val repoRoot: Path? = null,
+  val instructions: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

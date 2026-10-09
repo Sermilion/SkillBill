@@ -43,6 +43,10 @@ internal object AuditImplementFixPromptSections {
       "full audit. Do not compile, build, run tests, or run a full repository check, because build and validate " +
       "own those; safe scoped authoring commands under the authoring discipline are allowed. Report evidence " +
       "for each finding and state any unresolved gap explicitly. " +
+      "When the remaining gaps are wrong because the code already satisfies them, pass the claim object as the " +
+      "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of the completion " +
+      "marker. " +
+      "Either change files or return a no-change claim, never both. " +
       "The runtime returns to a fresh audit after this step. " +
       "When every in-scope production finding is addressed, end value with the exact marker " +
       "`audit_repair_complete: true` alone on its final content line. " +
@@ -53,7 +57,9 @@ internal object AuditImplementFixPromptSections {
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
       "when a concrete missing input or external action prevents further repair, and identify the required " +
       "action. Use non_retryable_policy_conflict only for an irreconcilable governing constraint. " +
-      "Retryable failures remain subject to the existing retry budgets; never claim completion to avoid them."
+      "Retryable failures remain subject to the existing retry budgets; never claim completion to avoid them. " +
+      "When the latest audit output begins with `Operator instructions:`, the operator rejected an audit-confirmed " +
+      "no-change claim; treat those instructions as part of this step's fix input and the governing repair scope."
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
     PhaseStepPromptSections(

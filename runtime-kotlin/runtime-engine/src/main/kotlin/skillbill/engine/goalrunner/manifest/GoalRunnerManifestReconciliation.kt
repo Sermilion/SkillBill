@@ -67,6 +67,7 @@ private data class GoalManifestReconciliationContext(
   val outcomeStore: GoalRunnerWorkflowOutcomeStore,
 ) {
   fun reconcile(subtask: DecompositionSubtask): DecompositionSubtask {
+    if (subtask.status.decompositionStatus() == DecompositionStatus.COMPLETED_NO_CHANGE) return subtask
     val workflowId = subtask.workflowId?.takeIf(String::isNotBlank)
     val outcome = workflowId?.let { id -> preferredOutcome(subtask, id) }
 
@@ -153,6 +154,7 @@ private fun GoalRunnerStoredOutcome.toManifestStatus(): String =
     GoalRunnerTerminalStatus.FAILED,
     GoalRunnerTerminalStatus.TIMEOUT,
     GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME,
+    GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE,
     -> DecompositionStatus.BLOCKED.wireValue
   }
 

@@ -11,6 +11,7 @@ internal const val GOAL_EXIT_BLOCKED: Int = 3
 internal fun GoalRunnerRunReport.goalRunExitCode(): Int =
   when (this) {
     is GoalRunnerRunReport.Completed -> GOAL_EXIT_COMPLETE
+    is GoalRunnerRunReport.CompletedNoChange -> GOAL_EXIT_COMPLETE
     is GoalRunnerRunReport.Stopped -> stop.reason.goalExitCode()
   }
 
@@ -28,5 +29,6 @@ private fun GoalRunnerStopReason.goalExitCode(): Int =
     GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     -> GOAL_EXIT_BLOCKED
   }

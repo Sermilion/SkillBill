@@ -1,6 +1,7 @@
 package skillbill.goalrunner.model
 
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 
 enum class GoalRunnerTerminalStatus(val wireValue: String) {
   COMPLETE("complete"),
@@ -12,6 +13,8 @@ enum class GoalRunnerTerminalStatus(val wireValue: String) {
   RECONCILABLE("reconcilable"),
 
   PAUSED("paused"),
+
+  COMPLETED_NO_CHANGE("completed_no_change"),
 
   ;
 
@@ -38,12 +41,14 @@ enum class GoalRunnerStopReason {
   RECONCILED_RESUMABLE,
 
   AWAITING_OPERATOR_DECISION,
+  AWAITING_NO_CHANGE_DECISION,
 
   PAUSED,
   ;
 
   companion object {
-    val RESUMABLE_STOP_REASONS = setOf(RECONCILED_RESUMABLE, AWAITING_OPERATOR_DECISION, PAUSED)
+    val RESUMABLE_STOP_REASONS =
+      setOf(RECONCILED_RESUMABLE, AWAITING_OPERATOR_DECISION, AWAITING_NO_CHANGE_DECISION, PAUSED)
   }
 }
 
@@ -54,6 +59,7 @@ data class GoalRunnerStoredOutcome(
   val blockedReason: String? = null,
   val lastResumableStep: String? = null,
   val suppressPr: Boolean,
+  val noChangePause: FeatureTaskRuntimeNoChangePause? = null,
 )
 
 sealed interface GoalRunnerReconciledOutcome {
@@ -70,6 +76,7 @@ sealed interface GoalRunnerReconciledOutcome {
     val commitSha: String?,
     val lastResumableStep: String,
     val liveness: GoalRunnerLivenessSnapshot? = null,
+    val noChangeReason: String? = null,
   ) : GoalRunnerReconciledOutcome
 }
 
@@ -98,6 +105,7 @@ data class GoalRunnerStopReport(
   val blockedReason: String,
   val workflowId: String?,
   val lastResumableStep: String,
+  val noChangeReason: String? = null,
 )
 
 enum class GoalPullRequestStatus(val wireValue: String) {
@@ -130,6 +138,16 @@ sealed interface GoalRunnerRunReport {
     override val parentWorkflowId: String? = null,
   ) : GoalRunnerRunReport
 
+  /** The goal finished with no subtask commit: every subtask was accepted as no-change, so there is no PR. */
+  data class CompletedNoChange(
+    override val issueKey: String,
+    override val attemptedSubtasks: List<Int>,
+    /** Null when the accepted pause cannot be read back; telemetry then omits the reason instead of inventing one. */
+    val noChangeReason: String?,
+    val subtaskIds: List<Int>,
+    override val parentWorkflowId: String? = null,
+  ) : GoalRunnerRunReport
+
   data class Stopped(
     override val issueKey: String,
     override val attemptedSubtasks: List<Int>,
@@ -150,6 +168,7 @@ fun GoalRunnerStopReason.toLedgerAction(): GoalAttemptLedgerAction =
     GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME
   }
@@ -167,6 +186,7 @@ fun GoalRunnerStopReason.toDiagnosticClass(): String =
     GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> name.lowercase()
   }
@@ -178,6 +198,7 @@ fun GoalRunnerStopReason.nextSafeAction(): String =
     GoalRunnerStopReason.INTERRUPTED,
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
     GoalRunnerStopReason.PAUSED,
     -> "resume_from_last_resumable_step"
     GoalRunnerStopReason.FAILED -> "inspect_child_output_then_resume"

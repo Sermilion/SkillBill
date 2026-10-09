@@ -186,6 +186,7 @@ class GoalRunnerIterationOutcome(
               },
             workflowId = knownWorkflowId,
             lastResumableStep = stoppedOutcome.lastResumableStep,
+            noChangeReason = stoppedOutcome.noChangeReason,
           ),
         ),
     )

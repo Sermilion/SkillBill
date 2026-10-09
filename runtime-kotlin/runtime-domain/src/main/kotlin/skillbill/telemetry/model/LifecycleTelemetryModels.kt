@@ -127,6 +127,7 @@ data class GoalFinishedRecord(
   val subtasksSkipped: Int,
   val mode: String,
   val stopReason: String? = null,
+  val noChangeReason: String? = null,
   val parentWorkflowId: String? = null,
 )
 
@@ -139,4 +140,5 @@ data class GoalIssueFinishedRecord(
   val subtasksSkipped: Int,
   val finishedAt: String,
   val mode: String,
+  val noChangeReason: String? = null,
 )

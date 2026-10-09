@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -14,6 +15,12 @@ import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeRunInvariantsFromArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.toArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+
+fun FeatureTaskRuntimeNoChangePause.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
+
+fun decodeNoChangePauseFromArtifact(raw: Any?): FeatureTaskRuntimeNoChangePause? =
+  JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeNoChangePause::fromArtifactMap)
 
 fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())

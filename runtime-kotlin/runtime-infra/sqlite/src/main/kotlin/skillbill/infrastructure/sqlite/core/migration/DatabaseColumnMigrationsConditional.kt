@@ -41,6 +41,7 @@ internal object DatabaseColumnMigrationsConditional {
       "TEXT NOT NULL DEFAULT 'runtime'",
     )
     DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "stop_reason", "TEXT")
+    DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "no_change_reason", "TEXT")
     DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_run_sessions", "parent_workflow_id", "TEXT")
   }
 
@@ -66,5 +67,6 @@ internal object DatabaseColumnMigrationsConditional {
       "last_blocked_segment_workflow_id",
       "TEXT",
     )
+    DatabaseColumnMigrationsEnsure.ensureColumn(connection, "goal_issue_progress", "no_change_reason", "TEXT")
   }
 }

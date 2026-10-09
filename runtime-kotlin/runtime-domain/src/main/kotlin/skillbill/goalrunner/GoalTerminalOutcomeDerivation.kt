@@ -1,13 +1,16 @@
 package skillbill.goalrunner
 
+import skillbill.contracts.JsonCodec
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 
 fun terminalOutcomeFor(
   snapshot: WorkflowStateSnapshot,
@@ -23,7 +26,13 @@ fun terminalOutcomeFor(
       suppressPr = goalContinuation.suppressPr,
     )
       ?.takeUnless { it.status == GoalRunnerTerminalStatus.COMPLETE && it.commitSha.isNullOrBlank() }
-      ?.copy(workflowId = snapshot.workflowId)
+      ?.let { outcome ->
+        outcome.copy(
+          workflowId = snapshot.workflowId,
+          noChangePause =
+            if (outcome.status == GoalRunnerTerminalStatus.PAUSED) pendingNoChangePause(artifacts) else null,
+        )
+      }
   if (stored != null) {
     if (stored.status == GoalRunnerTerminalStatus.COMPLETE ||
       nonCompleteStoredOutcomeIsCorroborated(
@@ -75,6 +84,7 @@ fun nonCompleteStoredOutcomeIsCorroborated(
     GoalRunnerTerminalStatus.COMPLETE,
     GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME,
     GoalRunnerTerminalStatus.RECONCILABLE,
+    GoalRunnerTerminalStatus.COMPLETED_NO_CHANGE,
     -> false
   }
 
@@ -129,6 +139,12 @@ fun blockedReasonFrom(
     }?.let { step -> "Workflow step '${step.stepId}' is ${step.status}." }
     ?: "Workflow reached a terminal state without a goal-continuation commit SHA."
       .takeIf { status == GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME }
+}
+
+fun pendingNoChangePause(artifacts: Any): FeatureTaskRuntimeNoChangePause? {
+  val wire = artifacts.asGoalWorkflowArtifactMap("goal no-change pause artifacts")
+  val pause = JsonCodec.anyToStringAnyMap(wire[FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE_ARTIFACT_KEY]) ?: return null
+  return FeatureTaskRuntimeNoChangePause.fromArtifactMap(pause).takeIf { it.operatorDecision == null }
 }
 
 fun commitShaFrom(artifacts: Any): String? {

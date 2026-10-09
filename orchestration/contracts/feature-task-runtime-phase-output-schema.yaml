@@ -186,6 +186,17 @@ $defs:
         maxItems: 50
         items: { $ref: "#/$defs/repairPlanEntry" }
   phaseProseProducedOutputs:
+    description: >
+      Prose settlement payload. `value` carries the phase's prose. An `implement` or
+      `audit_implement_fix` step that changed nothing may also carry `no_change`, an object
+      with `reason` (`out_of_repo`, `already_satisfied` or `not_reproducible`), `criteria`
+      (one `{criterion_id, verdict, evidence}` entry per acceptance criterion, where `verdict`
+      takes one of the three reason words), `citations` (a non-empty list of `path:line` or
+      `path:start-end` strings), `boundary_trace` (non-blank prose), and optional
+      `owning_system` and `suggested_handoff`. The claim arrives through the `no_change` argument of
+      `feature_task_phase_complete`. The runtime validates the claim structurally and
+      the audit verifies its evidence. This is a description-only clarification and adds no
+      JSON-Schema constraint.
     type: object
     required: [value]
     properties:

@@ -70,6 +70,17 @@ data class GoalPlanningStatusSnapshot(
   }
 }
 
+enum class GoalNoChangeState(val wireValue: String) {
+  COMPLETED_NO_CHANGE("completed_no_change"),
+  AWAITING_NO_CHANGE_DECISION("awaiting_no_change_decision"),
+}
+
+data class GoalRunnerNoChangeStatus(
+  val state: GoalNoChangeState,
+  val reason: String,
+  val suggestedHandoff: String? = null,
+)
+
 data class GoalRunnerStatusProjection(
   val issueKey: String,
   val completeCount: Int,
@@ -107,6 +118,7 @@ data class GoalRunnerStatusProjection(
   val degradedDurableRead: Boolean = false,
   val latestWorktreeEdit: WorktreeEditSummary? = null,
   val auditAcRetryCount: Int? = null,
+  val noChangeStatus: GoalRunnerNoChangeStatus? = null,
 )
 
 data class GoalRunnerSubtaskValidationEvidence(
@@ -173,6 +185,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val degradedDurableRead: Boolean = false,
   val latestWorktreeEdit: WorktreeEditSummary? = null,
   val auditAcRetryCount: Int? = null,
+  val noChangeStatus: GoalRunnerNoChangeStatus? = null,
 )
 
 object GoalRunnerStatusProjector {

@@ -145,6 +145,16 @@ private fun MutableMap<String, Any?>.putGoalStatusDetails(projection: GoalRunner
   projection.auditAcRetryCount?.let { count ->
     put(WorktreeEditJournalPayloadKeys.AUDIT_AC_RETRY_COUNT, count)
   }
+  projection.noChangeStatus?.let { status ->
+    put(
+      "no_change_status",
+      linkedMapOf(
+        "state" to status.state.wireValue,
+        "reason" to status.reason,
+        "suggested_handoff" to status.suggestedHandoff,
+      ),
+    )
+  }
 }
 
 internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: String): Map<String, Any?> =
@@ -237,6 +247,7 @@ internal fun goalStatusText(
       appendPlanningStatusLines(it)
       appendObservabilityStatusLines(it)
       appendWorktreeEditLines(it)
+      appendNoChangeStatusLines(it)
       appendOperatorSurfaceLines(it)
       appendValidationStatusLines(it)
       appendDiffStatusLines(it)
@@ -285,6 +296,14 @@ private fun StringBuilder.appendObservabilityStatusLines(projection: GoalRunnerS
       "latest_observability: phase=${event.workflowPhase} role=${event.workerRole} " +
         "liveness=${event.livenessClass} sequence=${event.sequenceNumber}",
     )
+  }
+}
+
+private fun StringBuilder.appendNoChangeStatusLines(projection: GoalRunnerStatusProjection) {
+  val status = projection.noChangeStatus ?: return
+  appendLine("no_change_status: ${status.state.wireValue} reason=${singleLineBounded(status.reason)}")
+  status.suggestedHandoff?.let { handoff ->
+    appendLine("no_change_suggested_handoff: ${singleLineBounded(handoff)}")
   }
 }
 

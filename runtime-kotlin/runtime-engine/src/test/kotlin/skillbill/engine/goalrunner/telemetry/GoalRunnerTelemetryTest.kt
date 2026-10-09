@@ -18,6 +18,7 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunner
 import skillbill.engine.goalrunner.launchFacts
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -82,6 +83,34 @@ class GoalRunnerTelemetryTest {
     assertTrue(telemetry.subtaskFinished.isEmpty())
     assertTrue(telemetry.issueFinished.isEmpty())
     assertTrue(launcher.requests.isEmpty())
+  }
+
+  @Test
+  fun `no-change completion emits completed_no_change goal finished with its reason`() {
+    val manifest = manifest(subtaskCount = 1)
+    val telemetry = RecordingGoalLifecycleTelemetryEmitter()
+    val emitter =
+      GoalRunnerTelemetryEmitter(
+        telemetry = telemetry,
+        clock = fixedClock(),
+        state = GoalRunnerManifestState(parentWorkflowId = "wfl-parent", dbPath = "", manifest = manifest),
+      )
+
+    emitter.goalFinished(
+      manifest,
+      GoalRunnerRunReport.CompletedNoChange(
+        issueKey = "SKILL-56",
+        attemptedSubtasks = listOf(1),
+        noChangeReason = "already_satisfied",
+        subtaskIds = listOf(1),
+        parentWorkflowId = "wfl-parent",
+      ),
+    )
+
+    val finished = telemetry.finished.single()
+    assertEquals("completed_no_change", finished.status)
+    assertEquals("already_satisfied", finished.noChangeReason)
+    assertNull(finished.stopReason)
   }
 
   @Test

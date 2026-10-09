@@ -37,7 +37,7 @@ internal object AcceptanceAuditPromptSections {
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
     PhaseStepPromptSections(
-      taskDirective = DIRECTIVE + auditScope(inputs),
+      taskDirective = DIRECTIVE + if (inputs.noChangeClaim == null) auditScope(inputs) else noChangeScope(inputs),
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. " +
           "Inspect the unresolved criteria without " +
@@ -61,6 +61,15 @@ internal object AcceptanceAuditPromptSections {
           "The runtime decides whether another repair is allowed. Reserve blocked status for a missing or " +
           "unreadable criterion list or an external dependency that prevents inspection.",
     )
+
+  private fun noChangeScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
+    val claim = inputs.noChangeClaim ?: return ""
+    return " The implementation step claims that no change is needed (produced_outputs.no_change). Judge every " +
+      "criterion in the claim against the current tree. Read each cited path:line and the boundary trace without " +
+      "editing anything. Set verdict to no_change_confirmed when the evidence supports every criterion's verdict. " +
+      "Otherwise set verdict to no_change_rejected and give the specific per-criterion reasons in the value. " +
+      "Do not return the remaining-criteria list for this round. Claim:\n" + claim
+  }
 
   private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
     val prior = inputs.priorAcceptanceAudit ?: return ""

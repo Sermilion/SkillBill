@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-08] SKILL-408 subtask 1 - No-change claim, evidence audit and operator pause (partial)
+Areas: runtime-domain taskruntime audit model, runtime-domain goalrunner and verdict model, runtime-engine featuretask slot/audit and runloop, runtime-engine goalrunner status and telemetry, runtime-cli goal exit codes, runtime-ports idestatus, runtime-application and runtime-infra telemetry, orchestration/contracts
+- A no-change claim model and structural validator reject a claim with a missing or blank criterion verdict or evidence, a missing path:line citation, a blank boundary trace, changed files or unknown fields. It collects every failure and derives a suggested handoff per reason. reusable
+- A strict no-change pause artifact writes exactly its record kind and nine spec keys and rejects unknown or missing keys on read. reusable
+- Verdict words no_change_confirmed and no_change_rejected and the stop reason AWAITING_NO_CHANGE_DECISION exist in their enums and exhaustive whens. The CLI maps the stop to the blocked exit code; telemetry maps it to paused.
+- Audit and implement prompt resources gain claim-round and declaration rules. Telemetry schema gains the stop enum and an optional no_change_reason; the phase output schema documents produced_outputs.no_change (descriptions only, versions unchanged).
+- Deviation: the telemetry enum uses the uppercase Kotlin stop name, not the lowercase wording in the spec.
+- Limits: nothing was compiled or tested here; validate owns that. Still open: audit routing and a dedicated route to audit_implement_fix, pause persistence, zero-change exemption and skip-simplify, goal-runner propagation and idle timer, stop report renderer, CLI line, no_change_reason emission, audit_implement_fix prompt sentences, run-loop and presenter tests.
+Feature flag: N/A
+Acceptance criteria: 3/11 implemented (AC1, AC7, AC11); AC4, AC8, AC10 partial; AC2, AC3, AC5, AC6, AC9 open (self-reported, unverified)
+
 ## [2026-10-08] SKILL-407 subtask 1 - Final monitor phase with a bounded CI fix loop
 Areas: runtime-engine featuretask (slot/monitor, slot/state, runloop, skeleton, DI); runtime-domain taskruntime (phase ids, slots, transitions, skeleton); runtime-ports goalrunner checks port; runtime-infra workflow GitHub checks lookup; runtime-contracts workflow-state, phase-output and telemetry schemas; runtime-mcp tools golden
 - Adds `monitor` as the last forward step after `pr`. The runtime settles it without an agent: it polls the PR's checks every 30 s for up to 30 min, and treats "no checks" as pending for a 3 min grace period. A failing check routes to `monitor_fix`, an agent-settled loop-only repair phase that returns to `commit_push`. reusable

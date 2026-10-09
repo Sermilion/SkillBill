@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -41,6 +42,9 @@ internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
   fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
 }
 
+internal const val NO_CHANGE_PAUSE_REASON =
+  "Audit confirmed the no-change claim; awaiting an operator decision on the no-change pause."
+
 internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
   val operatorReopened: Boolean
 
@@ -54,11 +58,13 @@ internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
   /** Records that the accepted audit round in [capture] did not shrink its remaining list. */
   fun recordNonShrinkingRound(capture: ValidatedOutputCapture)
 
+  /** Settles the accepted audit round; a confirmed no-change claim passes [noChangePause] and pauses the run. */
   fun settleAuditRound(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
     progressRejection: String?,
+    noChangePause: FeatureTaskRuntimeNoChangePause?,
   ): AttemptResult?
 }
 

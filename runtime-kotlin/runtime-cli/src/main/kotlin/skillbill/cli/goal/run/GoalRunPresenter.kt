@@ -9,6 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.goalrunner.model.GoalRunnerStopReport
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import java.nio.file.Path
@@ -70,6 +71,14 @@ internal fun GoalRunnerRunReport.toGoalRunCliMap(): Map<String, Any?> =
         "pull_request_status" to pullRequestStatus.wireValue,
         "pull_request_url" to pullRequestUrl,
       )
+    is GoalRunnerRunReport.CompletedNoChange ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to "completed_no_change",
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "attempted_subtasks" to attemptedSubtasks,
+        "no_change_reason" to noChangeReason,
+        "subtask_ids" to subtaskIds,
+      )
     is GoalRunnerRunReport.Stopped ->
       linkedMapOf(
         SharedPayloadKeys.STATUS to "stopped",
@@ -80,6 +89,7 @@ internal fun GoalRunnerRunReport.toGoalRunCliMap(): Map<String, Any?> =
         "blocked_reason" to stop.blockedReason,
         SharedPayloadKeys.WORKFLOW_ID to stop.workflowId,
         "last_resumable_step" to stop.lastResumableStep,
+        "no_change_reason" to stop.noChangeReason,
       )
   }
 
@@ -157,26 +167,46 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
         }
         appendLine()
       }
-    is GoalRunnerRunReport.Stopped ->
+    is GoalRunnerRunReport.CompletedNoChange ->
       buildString {
-        val reason = report.stop.reason.name.lowercase()
-        val verb =
-          when {
-            report.stop.reason == GoalRunnerStopReason.PAUSED -> "paused"
-            report.stop.reason in
-              setOf(
-                GoalRunnerStopReason.FAILED,
-                GoalRunnerStopReason.TIMEOUT,
-                GoalRunnerStopReason.PULL_REQUEST_FAILED,
-              ) -> "failed"
-            else -> "blocked"
-          }
-        append("goal ${report.issueKey}: $verb")
-        append(" at subtask ${report.stop.subtaskId}")
-        append(" — ")
-        append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
-        appendLine()
+        appendLine("goal ${report.issueKey}: completed_no_change")
+        appendLine("no_change_reason: ${singleLineBounded(report.noChangeReason ?: "unknown")}")
       }
+    is GoalRunnerRunReport.Stopped ->
+      if (report.stop.reason == GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION) {
+        noChangeDecisionText(report.stop)
+      } else {
+        stoppedText(report)
+      }
+  }
+
+private fun noChangeDecisionText(stop: GoalRunnerStopReport): String =
+  buildString {
+    appendLine("goal ${stop.issueKey}: paused at subtask ${stop.subtaskId}")
+    appendLine(stop.blockedReason.trimEnd())
+    val reason = singleLineBounded(stop.noChangeReason ?: "unknown")
+    appendLine("awaiting_no_change_decision: subtask:${stop.subtaskId} reason:$reason")
+  }
+
+private fun stoppedText(report: GoalRunnerRunReport.Stopped): String =
+  buildString {
+    val reason = report.stop.reason.name.lowercase()
+    val verb =
+      when {
+        report.stop.reason == GoalRunnerStopReason.PAUSED -> "paused"
+        report.stop.reason in
+          setOf(
+            GoalRunnerStopReason.FAILED,
+            GoalRunnerStopReason.TIMEOUT,
+            GoalRunnerStopReason.PULL_REQUEST_FAILED,
+          ) -> "failed"
+        else -> "blocked"
+      }
+    append("goal ${report.issueKey}: $verb")
+    append(" at subtask ${report.stop.subtaskId}")
+    append(" — ")
+    append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
+    appendLine()
   }
 
 internal fun singleLineBounded(

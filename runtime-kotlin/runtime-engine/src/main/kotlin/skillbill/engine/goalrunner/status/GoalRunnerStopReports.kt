@@ -31,6 +31,7 @@ internal fun stopped(args: StoppedReportArgs): GoalRunnerRunReport.Stopped =
         blockedReason = args.blockedReason,
         workflowId = args.workflowId,
         lastResumableStep = args.lastResumableStep,
+        noChangeReason = args.noChangeReason,
       ),
   )
 
@@ -134,6 +135,7 @@ fun supervisionEvent(
         GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
         GoalRunnerStopReason.RECONCILED_RESUMABLE,
         GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+        GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
         GoalRunnerStopReason.PAUSED,
         -> GoalRunnerContinuationMode.NONE
       },

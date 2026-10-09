@@ -186,6 +186,49 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
     requireAcceptedPlanObservationStep(stepId)
     return stepId in environment.progress.phasesRequiringDurableGateInvalidation
   }
+
+  override fun settleRuntimeAuthoredCompletion(
+    stepId: String,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ) {
+    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+    check(stepId == run.phaseId) { "Runtime-authored completion must settle the accepted step '${run.phaseId}'." }
+    if (environment.progress.phase(stepId).completed) return
+    val reentry = environment.session.activeReentry
+    val iteration = environment.progress.phase(stepId).nextIteration
+    val inMemoryOutput =
+      FeatureTaskRuntimePhaseOutput(
+        stepId,
+        iteration,
+        output.canonicalJson,
+        output,
+        null,
+      )
+    val phaseState =
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = workflowId,
+        phaseId = stepId,
+        status = STATUS_COMPLETED,
+        attemptCount = iteration,
+        resolvedAgentId = "runtime",
+        finished = true,
+        outputArtifact = output.canonicalJson,
+        normalizedOutput = output,
+        repairEvidence = null,
+        loopId = reentry?.loopId,
+        edgeIteration = reentry?.edgeIteration,
+      )
+    val persisted =
+      environment.coupledRunTransitions.persistCarriedForwardPhaseCompletion(
+        recorder = environment.recorder,
+        phaseState = phaseState,
+        inMemoryOutput = inMemoryOutput,
+        clearPendingReentry = reentry != null,
+      )
+    if (!persisted) {
+      error("Runtime-authored completion of '$stepId' could not atomically persist its canonical result.")
+    }
+  }
 }
 
 private open class FeatureTaskRuntimeRunLoopLaunchingStepBinding(

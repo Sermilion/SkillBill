@@ -22,7 +22,14 @@ internal class AcceptanceAuditVerdictRule(
       }
       return FeatureTaskRuntimeVerdict.ADVANCE
     }
-    if (wireVerdict == FeatureTaskRuntimeVerdict.SATISFIED) return FeatureTaskRuntimeVerdict.SATISFIED
+    return when (wireVerdict) {
+      FeatureTaskRuntimeVerdict.SATISFIED, FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED -> wireVerdict
+      FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED -> UNKNOWN_WORD_DEFAULT
+      else -> fallbackVerdict(wireVerdict)
+    }
+  }
+
+  private fun fallbackVerdict(wireVerdict: FeatureTaskRuntimeVerdict?): FeatureTaskRuntimeVerdict {
     if (wireVerdict != null && wireVerdict != UNKNOWN_WORD_DEFAULT && recordedFallbacks.add(wireVerdict.wireValue)) {
       diagnostics.warning(
         "Audit verdict '${wireVerdict.wireValue}' conflicts with its remaining criteria; " +

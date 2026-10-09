@@ -40,6 +40,10 @@ data class FeatureTaskRuntimeVerdict(
 
     val NO_PROGRESS: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_progress")
 
+    val NO_CHANGE_CONFIRMED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_change_confirmed")
+
+    val NO_CHANGE_REJECTED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_change_rejected")
+
     val REMOVED_VERDICTS: Set<FeatureTaskRuntimeVerdict> = setOf(REPAIR_PLANNED, ESCALATED, GAPS_FOUND)
 
     fun rejectRemovedVerdict(
@@ -55,7 +59,7 @@ data class FeatureTaskRuntimeVerdict(
       return verdict
     }
 
-    val AUDIT_VERDICTS: Set<FeatureTaskRuntimeVerdict> = setOf(SATISFIED)
+    val AUDIT_VERDICTS: Set<FeatureTaskRuntimeVerdict> = setOf(SATISFIED, NO_CHANGE_CONFIRMED, NO_CHANGE_REJECTED)
 
     fun fromWire(value: String): FeatureTaskRuntimeVerdict =
       value.takeIf(String::isNotBlank)?.let(::FeatureTaskRuntimeVerdict)

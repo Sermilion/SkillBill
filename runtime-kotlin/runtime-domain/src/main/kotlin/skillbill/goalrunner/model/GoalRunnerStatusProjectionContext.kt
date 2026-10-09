@@ -41,15 +41,14 @@ internal fun assembleGoalRunnerStatusProjection(
 ): GoalRunnerStatusProjection {
   val currentSubtask = context.currentSubtask
   val statusOf = context.statusOf
+  val settledStatuses =
+    setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
   return GoalRunnerStatusProjection(
     issueKey = manifest.issueKey,
-    completeCount =
-      manifest.subtasks.count {
-        statusOf(it) in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
-      },
+    completeCount = manifest.subtasks.count { statusOf(it) in settledStatuses },
     pendingCount =
       manifest.subtasks.count {
-        statusOf(it) !in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.BLOCKED)
+        statusOf(it) !in settledStatuses && statusOf(it) != DecompositionStatus.BLOCKED
       },
     blockedCount = manifest.subtasks.count { statusOf(it) == DecompositionStatus.BLOCKED },
     currentSubtaskId = currentSubtask?.id,
@@ -89,6 +88,7 @@ internal fun assembleGoalRunnerStatusProjection(
     degradedDurableRead = extras.degradedDurableRead,
     latestWorktreeEdit = extras.latestWorktreeEdit,
     auditAcRetryCount = extras.auditAcRetryCount,
+    noChangeStatus = extras.noChangeStatus,
   )
 }
 

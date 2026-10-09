@@ -8,6 +8,7 @@ data class FeatureTaskPhaseSettlementCompleteRequest(
   val prompt: String? = null,
   val summary: String? = null,
   val verdict: String? = null,
+  val noChange: Map<String, Any?>? = null,
 )
 
 data class FeatureTaskPhaseSettlementBlockRequest(

@@ -185,6 +185,9 @@ internal class WorkflowGoalRunnerManifestLoader(
       !stored.manifest.isCompleteGoalProjection()
 }
 
+private val SETTLED_OPERATOR_OR_CHILD_STATUSES: Set<DecompositionStatus> =
+  setOf(DecompositionStatus.COMPLETE, DecompositionStatus.COMPLETED_NO_CHANGE)
+
 internal fun mergeConcurrentGoalProgress(
   persisted: DecompositionManifest,
   incoming: DecompositionManifest,
@@ -194,8 +197,8 @@ internal fun mergeConcurrentGoalProgress(
     incoming.subtasks.map { candidate ->
       val current = persistedById[candidate.id]
       if (
-        current?.status.decompositionStatus() == DecompositionStatus.COMPLETE &&
-        candidate.status.decompositionStatus() != DecompositionStatus.COMPLETE
+        current?.status.decompositionStatus() in SETTLED_OPERATOR_OR_CHILD_STATUSES &&
+        candidate.status.decompositionStatus() !in SETTLED_OPERATOR_OR_CHILD_STATUSES
       ) {
         current ?: candidate
       } else {
@@ -219,6 +222,9 @@ private fun DecompositionManifest.isCompleteGoalProjection(): Boolean =
   status.decompositionStatus() == DecompositionStatus.COMPLETE &&
     currentSubtaskIntent.action == "complete" &&
     subtasks.all { subtask ->
-      subtask.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED) &&
-        (subtask.status.decompositionStatus() == DecompositionStatus.SKIPPED || !subtask.commitSha.isNullOrBlank())
+      when (subtask.status.decompositionStatus()) {
+        DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE -> true
+        DecompositionStatus.COMPLETE -> !subtask.commitSha.isNullOrBlank()
+        else -> false
+      }
     }

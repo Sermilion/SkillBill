@@ -67,6 +67,10 @@ class FeatureTaskRuntimePhaseRecorder
     FeatureTaskRuntimeReadinessEvidencePort by FeatureTaskRuntimeGateProgressRecorder(
       database,
       FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
+    ),
+    FeatureTaskRuntimeNoChangePausePort by FeatureTaskRuntimeGateProgressRecorder(
+      database,
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
     ) {
     val phaseQuery = FeatureTaskRuntimePhaseQuery(database)
     private val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
