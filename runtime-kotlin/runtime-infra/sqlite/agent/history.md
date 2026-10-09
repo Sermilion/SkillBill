@@ -1,3 +1,13 @@
+## [2026-10-09] SKILL-412 upgrade existing databases for phase strategy telemetry
+Areas: runtime-kotlin/runtime-infra/sqlite migration registry, core migration area, and migration regression tests
+- Added append-only migration v49 for the two phase-strategy telemetry columns on existing databases.
+- Reused the idempotent nullable-column helper; historical sessions remain unchanged and unmeasured strategy fields stay SQL NULL.
+- Added fresh-schema, version-48 upgrade, finish-telemetry, and repeat-open regression coverage. reusable
+- Followed the append-only migration and name-keyed ledger pattern for schema evolution. reusable
+- Known limitation: corrected runtime installation and startup upgrade of the local review-metrics database remain with the parent/runtime handoff; SKILL-411 is untouched.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented
+
 ## [2026-10-01] SKILL-396 subtask 1 — infra boundary and diagnostics repairs
 Areas: runtime-kotlin/runtime-infra/sqlite, runtime-infra/skills, runtime-infra/contracts, runtime-domain goalrunner model, runtime-core architecture tests and review DI
 - The connection-keyed diagnostics registry and session diagnostics/clock are gone; `RuntimeDiagnostics` is a required parameter through migrations, `DatabaseRuntime`, nested write transactions, stores, telemetry, reconciliation, accounting and the legacy ledger migration. reusable

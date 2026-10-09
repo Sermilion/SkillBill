@@ -1,0 +1,24 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-411"
+feature_name: "standalone-phase-progress-in-vs-code-and-intellij-plugins"
+parent_spec_path: ".feature-specs/SKILL-411-standalone-phase-progress-in-vs-code-and-intellij-plugins/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-411-standalone-phase-progress-in-vs-code-and-intellij-plugins"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Publish standalone phase status and display the latest execution in both IDEs"
+  spec_path: ".feature-specs/SKILL-411-standalone-phase-progress-in-vs-code-and-intellij-plugins/spec_subtask_1_standalone_phase_status.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []

@@ -8,6 +8,7 @@ import skillbill.infrastructure.sqlite.core.migration.addGoalRunnerControls
 import skillbill.infrastructure.sqlite.core.migration.addReviewFindingOutcomeKey
 import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttribution
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
+import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseStrategyTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
@@ -706,5 +707,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 48,
       name = "add-goal-no-change-reason",
       operation = GoalNoChangeReasonMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 49,
+      name = "add-feature-task-phase-strategy-telemetry-columns",
+      operation = FeatureTaskPhaseStrategyTelemetryMigration::apply,
     ),
   )
