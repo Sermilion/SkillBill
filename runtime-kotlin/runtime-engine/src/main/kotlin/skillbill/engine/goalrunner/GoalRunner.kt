@@ -30,7 +30,9 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
+import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerRunReport
+import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Path
@@ -79,6 +81,7 @@ class GoalRunner(
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
+    alreadyCompleteReport(admittedState)?.let { return it }
     runPreparation.admitPlanningMigration(admittedState, request)
     val migratedState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
@@ -102,6 +105,36 @@ class GoalRunner(
       is GoalRunnerOwnedRun.Completed -> owned.value
       is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
+  }
+
+  private fun alreadyCompleteReport(state: GoalRunnerManifestState): GoalRunnerRunReport.AlreadyComplete? {
+    val completedAt = state.controlState.goalCompletedAt ?: return null
+    if (GoalRunnerPlanner.selectNext(state.manifest) !is GoalRunnerSelection.Done) return null
+    return GoalRunnerRunReport.AlreadyComplete(
+      issueKey = state.manifest.issueKey,
+      completedAt = completedAt,
+      pullRequestUrl = state.controlState.goalPullRequestUrl,
+      parentWorkflowId = state.parentWorkflowId,
+    )
+  }
+
+  private fun recordGoalCompletion(
+    parentWorkflowId: String,
+    finalReport: GoalRunnerRunReport,
+  ) {
+    val pullRequestUrl =
+      when (finalReport) {
+        is GoalRunnerRunReport.Completed -> finalReport.pullRequestUrl?.takeIf(String::isNotBlank)
+        is GoalRunnerRunReport.CompletedNoChange -> null
+        else -> return
+      }
+    manifestStore.persistControlState(
+      parentWorkflowId,
+      manifestStore.controlState(parentWorkflowId).copy(
+        goalCompletedAt = clock.instant().toString(),
+        goalPullRequestUrl = pullRequestUrl,
+      ),
+    )
   }
 
   private fun alreadyRunningReport(
@@ -176,6 +209,7 @@ class GoalRunner(
       )
     state = loopResult.state
     val finalReport = requireNotNull(loopResult.report)
+    recordGoalCompletion(state.parentWorkflowId, finalReport)
     closeGoalTelemetrySegment(telemetryEmitter, state, finalReport, loopResult.attempted)
     emitCompletedGoalEvent(effectiveRequest, finalReport)
     return finalReport.withParentWorkflowId(state.parentWorkflowId)
@@ -252,4 +286,5 @@ private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): 
     is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
     is GoalRunnerRunReport.CompletedNoChange -> copy(parentWorkflowId = parentWorkflowId)
     is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
+    is GoalRunnerRunReport.AlreadyComplete -> copy(parentWorkflowId = parentWorkflowId)
   }

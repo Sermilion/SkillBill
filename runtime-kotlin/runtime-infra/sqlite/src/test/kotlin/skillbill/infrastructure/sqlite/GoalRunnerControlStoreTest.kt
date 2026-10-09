@@ -150,6 +150,8 @@ class GoalRunnerControlStoreTest {
           paused = true,
           pauseReason = "operator_request",
           pausedAt = "2026-08-02T09:00:00Z",
+          goalCompletedAt = "2026-08-02T10:00:00Z",
+          goalPullRequestUrl = "https://github.com/example/repo/pull/7",
         )
       store.persistControlState("parent-1", state)
       assertEquals(state, store.controlState("parent-1"))

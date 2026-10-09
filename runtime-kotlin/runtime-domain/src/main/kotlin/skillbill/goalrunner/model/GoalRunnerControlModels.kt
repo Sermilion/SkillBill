@@ -96,8 +96,15 @@ data class GoalRunnerControlState(
   val validationQualityRetriesBySubtask: Map<Int, Int> = emptyMap(),
   val pendingReAttemptCauseBySubtask: Map<Int, String> = emptyMap(),
   val pendingCausingLoopEntryBySubtask: Map<Int, String> = emptyMap(),
+  val goalCompletedAt: String? = null,
+  val goalPullRequestUrl: String? = null,
 ) {
   init {
+    goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }
+    goalPullRequestUrl?.let { require(it.isNotBlank()) { "goalPullRequestUrl must not be blank when provided." } }
+    require(goalPullRequestUrl == null || goalCompletedAt != null) {
+      "goalPullRequestUrl requires goalCompletedAt."
+    }
     stopAfterSubtaskId?.let { require(it > 0) { "stopAfterSubtaskId must be positive when provided." } }
     require(activeDurationMs >= 0) { "activeDurationMs must not be negative." }
     activeDurationAsOf?.let { require(it.isNotBlank()) { "activeDurationAsOf must not be blank when provided." } }

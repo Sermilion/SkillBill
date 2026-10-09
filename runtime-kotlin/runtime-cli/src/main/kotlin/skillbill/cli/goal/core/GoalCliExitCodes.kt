@@ -12,6 +12,7 @@ internal fun GoalRunnerRunReport.goalRunExitCode(): Int =
   when (this) {
     is GoalRunnerRunReport.Completed -> GOAL_EXIT_COMPLETE
     is GoalRunnerRunReport.CompletedNoChange -> GOAL_EXIT_COMPLETE
+    is GoalRunnerRunReport.AlreadyComplete -> GOAL_EXIT_COMPLETE
     is GoalRunnerRunReport.Stopped -> stop.reason.goalExitCode()
   }
 

@@ -91,6 +91,14 @@ internal fun GoalRunnerRunReport.toGoalRunCliMap(): Map<String, Any?> =
         "last_resumable_step" to stop.lastResumableStep,
         "no_change_reason" to stop.noChangeReason,
       )
+    is GoalRunnerRunReport.AlreadyComplete ->
+      linkedMapOf(
+        SharedPayloadKeys.STATUS to "already_complete",
+        SharedPayloadKeys.ISSUE_KEY to issueKey,
+        "attempted_subtasks" to attemptedSubtasks,
+        "completed_at" to completedAt,
+        "pull_request_url" to pullRequestUrl,
+      )
   }
 
 internal fun GoalRunnerPauseResult.toGoalPauseCliMap(): Map<String, Any?> =
@@ -178,6 +186,23 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
       } else {
         stoppedText(report)
       }
+    is GoalRunnerRunReport.AlreadyComplete -> alreadyCompleteText(report)
+  }
+
+private fun alreadyCompleteText(report: GoalRunnerRunReport.AlreadyComplete): String =
+  buildString {
+    append("goal ${report.issueKey}: already complete")
+    append(" — finished at ")
+    append(singleLineBounded(report.completedAt))
+    report.pullRequestUrl?.let { url ->
+      append("; PR ")
+      append(singleLineBounded(url))
+    }
+    appendLine("; nothing to run.")
+    appendLine(
+      "To run it again, reset it first: " +
+        "skill-bill goal reset ${report.issueKey} --hard --confirm-issue-key ${report.issueKey}",
+    )
   }
 
 private fun noChangeDecisionText(stop: GoalRunnerStopReport): String =
