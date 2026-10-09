@@ -13,6 +13,11 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
 abstract class GoalPlanningPreparationRepositoryDefaults : GoalPlanningPreparationRepository {
+  override fun transferPlanningOwnership(
+    source: GoalPlanningIdentity,
+    target: GoalPlanningIdentity,
+  ): GoalPlanningPreparationWriteResult = error("Planning ownership transfer is not configured in this test.")
+
   open override fun migrateSharedPreplan(
     source: SharedGoalPreplanCheckpoint,
     target: SharedGoalPreplanCheckpoint,

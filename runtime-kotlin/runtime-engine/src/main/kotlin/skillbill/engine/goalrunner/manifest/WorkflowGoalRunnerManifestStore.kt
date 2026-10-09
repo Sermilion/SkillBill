@@ -45,7 +45,6 @@ import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.engine.WorkflowEngine
 import java.nio.file.Path
 import java.time.Clock
-import kotlin.random.Random
 
 class WorkflowGoalRunnerManifestStore
   @Inject
@@ -55,7 +54,7 @@ class WorkflowGoalRunnerManifestStore
     private val decompositionManifestValidator: DecompositionManifestValidator,
     private val decompositionManifestStore: DecompositionManifestStore,
     private val clock: Clock,
-    private val random: Random,
+    private val manifestLoader: WorkflowGoalRunnerManifestLoader,
     private val decompositionManifestWriter: DecompositionManifestWriter,
     private val repositoryRoot: RepositoryRoot,
     private val planningHydrator: GoalChildPlanningHydratorPort,
@@ -65,16 +64,6 @@ class WorkflowGoalRunnerManifestStore
     GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort) {
     private val engine: WorkflowEngine = WorkflowEngine()
     private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
-    private val manifestLoader =
-      WorkflowGoalRunnerManifestLoader(
-        database,
-        decompositionManifestValidator,
-        decompositionManifestStore,
-        engine,
-        parentProjection,
-        clock,
-        random,
-      )
     private val projectionPersistence =
       WorkflowGoalRunnerManifestProjectionPersistence(
         database,

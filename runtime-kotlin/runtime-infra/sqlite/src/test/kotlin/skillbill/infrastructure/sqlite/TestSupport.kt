@@ -75,7 +75,7 @@ internal fun DatabaseRuntime.openReadDb(
 internal fun DatabaseMigrations.apply(connection: Connection) = apply(connection, SqliteTestDiagnostics)
 
 internal fun <T> Connection.inNestedWriteTransaction(block: Connection.() -> T): T =
-  inNestedWriteTransaction(SqliteTestDiagnostics, block)
+  inNestedWriteTransaction(SqliteTestDiagnostics, block = block)
 
 internal fun reconcileStaleTelemetrySessions(
   connection: Connection,

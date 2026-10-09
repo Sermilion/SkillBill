@@ -129,7 +129,7 @@ class GoalPlanningSharedPreplanProduction(
     )
   }
 
-  private fun enrichPreplan(
+  internal fun enrichPreplan(
     payload: String,
     packet: Map<String, Any?>,
   ): String {

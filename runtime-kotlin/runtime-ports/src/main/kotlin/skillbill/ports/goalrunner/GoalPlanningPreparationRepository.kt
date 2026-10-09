@@ -111,6 +111,14 @@ interface GoalPlanningPreparationRepository :
   SharedGoalPreplanRepository,
   GoalSubtaskPlanRepository,
   LegacyGoalPlanningPreparationRepository {
+  /**
+   * Transfers the validated planning bundle in the caller's transaction. A conflict must roll that transaction back.
+   */
+  fun transferPlanningOwnership(
+    source: GoalPlanningIdentity,
+    target: GoalPlanningIdentity,
+  ): GoalPlanningPreparationWriteResult
+
   fun migrateSharedPreplan(
     source: SharedGoalPreplanCheckpoint,
     target: SharedGoalPreplanCheckpoint,

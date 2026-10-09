@@ -183,7 +183,7 @@ There are three kinds of form:
 | Form | Purpose | Runs |
 |------|---------|------|
 | `/skill-bill` | Prepare new feature work from an `<intake>`, or resume an existing spec or goal, then run it | `skill-bill goal` |
-| `/skill-bill <intake> phase:plan` | Plan durably: seed the parent spec, author subtask specs and a manifest, then stop. `skill-bill <KEY>` resumes an unfinished plan and runs the goal | `skill-bill phase plan` |
+| `/skill-bill <intake> phase:plan` | Plan durably: seed the parent spec, author implementation-ready subtask specs and a manifest, save all planning checkpoints, then stop. `skill-bill <KEY>` finishes an unfinished plan or starts implementation from the completed plan | `skill-bill phase plan` |
 | `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
 | `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
 | `/skill-bill phase:pr` | Commit pending changes, push the branch, create or update a PR, and monitor its CI | `skill-bill phase pr` |

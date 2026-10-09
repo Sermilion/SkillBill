@@ -41,6 +41,7 @@ internal class GoalSubtaskPlanSql(
   private val connection: Connection,
   private val sharedPreplan: GoalSharedPreplanSql,
   private val diagnostics: RuntimeDiagnostics,
+  private val transactionActive: Boolean = false,
 ) {
   fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
     connection.prepareStatement(
@@ -67,7 +68,7 @@ internal class GoalSubtaskPlanSql(
 
   fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     requireNormalizedSubtaskPlan(checkpoint)
-    return connection.inNestedWriteTransaction(diagnostics) {
+    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       governingConflict(
         checkpoint,
       )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
@@ -84,7 +85,7 @@ internal class GoalSubtaskPlanSql(
 
   fun replaceSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     requireNormalizedSubtaskPlan(checkpoint)
-    return connection.inNestedWriteTransaction(diagnostics) {
+    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       governingConflict(
         checkpoint,
       )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }

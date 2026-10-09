@@ -37,6 +37,7 @@ class CliPhasePlanRuntimeTest {
 
   @Test
   fun `phase plan records one plan workflow and writes a spec bundle that goal preflight accepts`() {
+    installGoalBuildPack(tempDir)
     val launcher = PhasePlanLauncher(tempDir)
 
     val plan =
@@ -60,6 +61,8 @@ class CliPhasePlanRuntimeTest {
     assertContains(plan.stdout, "Manifest: .feature-specs/$ISSUE_KEY-")
     assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
     assertEquals(1, rowCount("feature_task_workflows"))
+    assertEquals(1, rowCount("goal_shared_preplans"))
+    assertEquals(2, rowCount("goal_subtask_plans"))
     val preflight =
       CliRuntime.run(
         listOf(
@@ -88,6 +91,42 @@ class CliPhasePlanRuntimeTest {
     assertEquals("new_work", payload["verdict"], preflight.stdout)
     assertEquals(false, payload["manifest_missing"], preflight.stdout)
     assertEquals(1, rowCount("feature_task_workflows"))
+    assertGoalStartsAtImplementation(launcher)
+  }
+
+  private fun assertGoalStartsAtImplementation(launcher: PhasePlanLauncher) {
+    val implementation = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+    val goal =
+      CliRuntime.run(
+        listOf(
+          "--db",
+          fixture.dbPath.toString(),
+          "goal",
+          ISSUE_KEY,
+          "--agent",
+          "codex",
+          "--repo-root",
+          tempDir.toString(),
+        ),
+        fixture.context(launcher = implementation),
+      )
+    assertEquals(3, goal.exitCode, goal.stdout + goal.stderr)
+    assertEquals(1, implementation.requests.size)
+    assertTrue(implementation.requests.single().skillRunRequest.goalContinuation != null)
+    val workflowId = goal.payload?.get("workflow_id")?.toString().orEmpty()
+    val child = RuntimeWorkflowTestSupport.get(fixture.dbPath, workflowId, fixture.context(launcher = implementation))
+    assertEquals("implement", child["current_step_id"])
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { it.executeUpdate("DELETE FROM goal_subtask_plans WHERE subtask_id = 2") }
+    }
+    val settled =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "--agent", "codex"),
+        fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, settled.exitCode, settled.stdout + settled.stderr)
+    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(2, rowCount("goal_subtask_plans"))
   }
 
   private fun rowCount(table: String): Int =
@@ -145,7 +184,9 @@ class CliPhasePlanRuntimeTest {
     private fun specText(
       title: String,
       criterion: String,
-    ): String = "# $title\n\n## Acceptance Criteria\n\n1. $criterion\n"
+    ): String =
+      "# $title\n\n## Acceptance Criteria\n\n1. $criterion\n" +
+        "\n## Implementation Details\nImplement $criterion in the owning production path.\n"
   }
 
   private companion object {
