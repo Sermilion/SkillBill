@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-10-09] Stage optional code-quality idioms only from review baselines
+Context: The Kotlin idioms sidecar must live beside its code-review baseline, whose content stays unchanged, while authored companions normally require an explicit content link.
+Decision: Exempt only code-quality-idioms.md in a code-review baseline directory from the content-link requirement. Preserve path, symlink, count, reserved-name and collision checks for staging.
+Reason: This resolves the required source location without relaxing companion rules generally, changing baseline content or adding a manifest key. Staging does not grant worker access; the lane uses supplied or authorized guidance and otherwise derives language idioms itself.
+
 ## [2026-10-05] Keep initiating failures primary during cleanup
 Context: Authoring rollback and native-agent staging cleanup selected exception types, while bare finally cleanup could replace the failure that triggered it.
 Decision: Establish cleanup ownership with Closeable.use immediately after acquisition. Authoring and scaffold rollback use a success flag; temporary staging and atomic-write files always receive cleanup.

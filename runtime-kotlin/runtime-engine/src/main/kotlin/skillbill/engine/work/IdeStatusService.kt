@@ -65,7 +65,7 @@ class IdeStatusService(
         unitOfWork.standalonePhaseStatuses.reconcileExpiredLeases(observedAt)
         val candidates =
           scopeToBranch(
-            collectCandidates(unitOfWork, repositoryIdentity, currentBranch, observedAt),
+            collectCandidates(unitOfWork, repositoryIdentity, currentBranch, observedAt, repoRoot),
             currentBranch,
             repoRoot,
           )
@@ -168,6 +168,7 @@ class IdeStatusService(
     repositoryIdentity: String,
     branch: String?,
     observedAt: Instant,
+    repoRoot: Path,
   ): List<IdeStatusCandidate> {
     val work = unitOfWork.workList.list(limit = null)
     val issueKeysWithGoals =
@@ -177,7 +178,11 @@ class IdeStatusService(
         .toSet()
     val workflowCandidates =
       work.mapNotNull { item ->
-        toCandidate(item, issueKeysWithGoals, unitOfWork, repositoryIdentity, branch)
+        if (isExcludedGoalChild(routeScopeFor(item, unitOfWork), item.issueKey, issueKeysWithGoals)) {
+          null
+        } else {
+          toCandidate(item, unitOfWork, repositoryIdentity, branch, repoRoot)
+        }
       }
     val standaloneCandidates =
       branch?.let { branchName ->
@@ -224,10 +229,10 @@ class IdeStatusService(
 
   private fun toCandidate(
     item: WorkItem,
-    issueKeysWithGoals: Set<String>,
     unitOfWork: UnitOfWork,
     repositoryIdentity: String,
     branch: String?,
+    repoRoot: Path,
   ): IdeStatusCandidate? {
     val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
     val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork, repositoryIdentity)
@@ -241,12 +246,12 @@ class IdeStatusService(
         }
       }
     if (family == null || lifecycle == null) return null
-    val routeScope = routeScopeFor(item, unitOfWork)
-    if (isExcludedGoalChild(routeScope, item.issueKey, issueKeysWithGoals)) return null
     val workflowExecution = unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
+    val branchCorrelation =
+      goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repoRoot)
     val execution =
       workflowExecution
-        ?.takeIf { branch == null || it.branchCorrelation == branch || it.branchCorrelation == "HEAD" }
+        ?.takeIf { branch == null || branchCorrelation == branch || branchCorrelation == "HEAD" }
         ?.let { record ->
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.WORKFLOW,
@@ -265,11 +270,32 @@ class IdeStatusService(
       selectionTier = IdeStatusSelectionPolicy.selectionTier(lifecycle),
       updatedAt = livenessAnchors.authoritativeUpdatedAt(item, family) ?: item.stateEnteredAt,
       startedAt = item.startedAt,
-      routeScope = routeScope,
       isGoalAuthoritative = family == IdeStatusWorkflowFamily.FEATURE_GOAL,
       execution = execution,
-      branchCorrelation = workflowExecution?.branchCorrelation,
+      branchCorrelation = branchCorrelation,
     )
+  }
+
+  private fun goalBranchCorrelation(
+    item: WorkItem,
+    family: IdeStatusWorkflowFamily,
+    registeredBranch: String?,
+    currentBranch: String?,
+    repoRoot: Path,
+  ): String? {
+    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL || registeredBranch == null || currentBranch == null) {
+      return registeredBranch
+    }
+    if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
+    val state = item.issueKey?.let { manifestStore.readByIssueKey(it, repoRoot) }
+    val manifest =
+      state?.manifest?.takeIf {
+        state.parentWorkflowId == item.workflowId && it.baseBranch == registeredBranch
+      }
+    val ownsBranch =
+      manifest != null &&
+        (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
+    return if (ownsBranch) currentBranch else registeredBranch
   }
 
   private fun routeScopeFor(

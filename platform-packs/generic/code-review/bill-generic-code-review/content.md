@@ -19,6 +19,7 @@ Review unsupported, ambiguous, and technology-neutral changes without claiming c
 ## Diff-Signal Routing Table
 
 - Module boundaries, dependency declarations, or ownership crossings -> `architecture` specialist.
+- Idiom choices, opaque helpers, scattered state, or redundant structure -> `code-quality` specialist.
 - Hot paths, blocking calls, allocation sites, or resource use -> `performance` specialist.
 - Lifecycle, concurrency, state-machine, or runtime behavior -> `platform-correctness` specialist.
 - Authentication, authorization, untrusted input, secrets, or sensitive data -> `security` specialist.
@@ -43,3 +44,5 @@ Review unsupported, ambiguous, and technology-neutral changes without claiming c
 - Verify each triggering precondition and reachable failure path before reporting a finding.
 - Keep findings attributed to their specialist lane through collection and merge.
 - Deduplicate overlapping findings without losing the strongest evidence, consequence, or ownership attribution.
+- Put code-quality findings after failure findings in a `#### Code Quality (non-blocking)` sub-section at the end of `### 2. Risk Register`. Continue the F-id sequence, retain each finding's `specialist=` attribution, and mark each finding Minor.
+- Code-quality findings never change the Verdict. Put any action items for them after failure action items.

@@ -60,7 +60,7 @@
                             {
                                 "composition_digest": "__NORMALIZED_SHA64__",
                                 "entry_count": 1,
-                                "measured_bytes": 10022,
+                                "measured_bytes": 10547,
                                 "segment_id": "seg-000"
                             }
                         ],
@@ -88,7 +88,7 @@
                             {
                                 "composition_digest": "__NORMALIZED_SHA64__",
                                 "entry_count": 1,
-                                "measured_bytes": 10022,
+                                "measured_bytes": 10547,
                                 "segment_id": "seg-000"
                             }
                         ],
@@ -172,7 +172,7 @@
                 {
                     "composition_digest": "__NORMALIZED_SHA64__",
                     "entry_count": 1,
-                    "measured_bytes": 10022,
+                    "measured_bytes": 10547,
                     "segment_id": "seg-000"
                 }
             ],

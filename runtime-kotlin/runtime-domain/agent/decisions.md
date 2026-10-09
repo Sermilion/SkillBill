@@ -1,3 +1,23 @@
+## [2026-10-09] Isolate non-blocking quality findings before deduplication
+Context: SKILL-413 adds quality suggestions that can share a file and near-identical wording with failure findings. Existing failure output must remain unchanged.
+Decision: Use one domain identity predicate and partition before fuzzy deduplication. Normalize quality findings to Minor before representative selection, order by confidence with emission-order ties, cap at five, and format them after failures with retained attribution.
+Reason: Cross-group deduplication could absorb or alter a failure. Severity normalization prevents an incorrectly emitted Major from winning quality selection or blocking advancement. The plan preserves optional actionable Minor suggestions rather than excluding all quality findings from actionability.
+
+## [2026-10-09] Preserve agent prose while enforcing structured quality findings
+Context: Inline and standalone display paths retain agent-authored prose rather than the merger's formatted output, including after recorded-verdict handling.
+Decision: Keep those forwarding paths. Shared report contracts govern displayed quality placement; the domain merger enforces partitioning, severity and the cap for structured findings.
+Reason: The subtask plan explicitly preserves agent prose and its existing display paths. Rewriting the report would exceed that scope; structured enforcement does not repair prose that violates the rubric.
+
+## [2026-10-09] Add quality classification without changing testing categories
+Context: SKILL-413 needs a distinct code_quality telemetry value while quality and quality-check already identify testing findings.
+Decision: Add the enum value, a first-priority code-quality routed rule and explicit aliases. Preserve explicit and embedded category precedence, existing testing mappings and keyword fallback; keep existing storage and event schemas.
+Reason: Existing TEXT storage and string-based statistics already accept the new value, so no migration is needed. Preserving the testing aliases and finding-specific attribution prevents the additive lane from reclassifying failure findings.
+
+## [2026-10-09] Compose universal review areas through the fallback owner
+Context: Routed packs such as KMP flatten their platform baselines without generic lanes, but SKILL-413 requires an additive code-quality lane.
+Decision: Keep universal areas separate from approved pack coverage. Append selected universal areas from the manifest-declared fallback when the routed graph does not own them, and reconcile shared fallback ownership across roots. Absence is optional; malformed fallback ownership retains its typed failure.
+Reason: Expanding approved areas would require every maintained pack to cover code-quality. Making generic a baseline layer would import its other areas and change existing reviews. Trailing universal lanes preserve existing failure-lane indexes and provenance.
+
 ## [2026-10-05] Share ordered validation between decoders and model invariants
 Context: SKILL-401 subtask 1 removes argument and state exception handling from goalrunner, review and workflow/model input decoding while preserving schema failures and their exact messages.
 Decision: Pure model-owned violation helpers supply ordered reasons to both explicit decoder checks and constructor require assertions. Nullable timestamp and execution-mode parsers report invalid input before construction.

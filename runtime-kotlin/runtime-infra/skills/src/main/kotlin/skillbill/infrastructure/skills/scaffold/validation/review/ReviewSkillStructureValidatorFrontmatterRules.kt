@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.validation.review
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -10,9 +11,11 @@ internal fun declaredAreaForFile(
   val files = manifest["declared_files"] as? Map<*, *> ?: return null
   val areas = files["areas"] as? Map<*, *> ?: return null
   return areas.entries.firstOrNull { (_, path) -> path == relativeFile }?.key as? String
-    ?: APPROVED_CODE_REVIEW_AREAS.sortedByDescending(String::length).firstOrNull { area ->
-      relativeFile.substringBeforeLast("/content.md").endsWith("-$area")
-    }
+    ?: (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS)
+      .sortedByDescending(String::length)
+      .firstOrNull { area ->
+        relativeFile.substringBeforeLast("/content.md").endsWith("-$area")
+      }
 }
 
 internal fun declaredContentFiles(

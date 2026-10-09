@@ -35,6 +35,7 @@ private val bulletCategoryPattern =
 
 private val routedCategoryRules: List<Pair<List<String>, ReviewIssueCategory>> =
   listOf(
+    listOf("code-quality") to ReviewIssueCategory.CODE_QUALITY,
     listOf("persistence") to ReviewIssueCategory.DATA_PERSISTENCE,
     listOf("platform-correctness", "concurrency", "lifecycle") to ReviewIssueCategory.CONCURRENCY_LIFECYCLE,
     listOf("ux-accessibility", "accessibility", "-ui", " ui") to ReviewIssueCategory.UX_ACCESSIBILITY,
@@ -56,7 +57,11 @@ internal fun resolveReviewIssueCategory(
   (
     resolveExplicitCategory(explicitCategory)
       ?: resolveExplicitCategory(extractBulletCategory(finding.findingText))
-      ?: resolveRoutedCategory(routedSkill, specialistReviews)
+      ?: finding.laneSkillName?.let(::categoryFromRoutedLabel)?.takeIf { it == ReviewIssueCategory.CODE_QUALITY }
+      ?: resolveRoutedCategory(
+        routedSkill,
+        specialistReviews.filterNot { categoryFromRoutedLabel(it) == ReviewIssueCategory.CODE_QUALITY },
+      )
       ?: classifyFindingCategory(finding)
       ?: ReviewIssueCategory.OTHER
   ).wireValue

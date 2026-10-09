@@ -2,13 +2,16 @@
 package skillbill.review.parallel
 
 import skillbill.review.model.ParallelReviewLaneResult
+import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
+import skillbill.review.model.ReviewFindingVerdict
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewSeverityAdjustment
 import skillbill.review.model.ReviewSeverityAdjustmentDirection
+import skillbill.review.model.ReviewStage
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -16,6 +19,202 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ParallelReviewMergerTest {
+  @Test
+  fun `code quality findings stay separate from failure dedup and verdict groups`() {
+    val failure =
+      ParallelReviewRawFinding(
+        severity = ParallelReviewSeverity.MAJOR,
+        confidence = "High",
+        location = "Shared.kt:10",
+        description = "Shared contract can lose the committed state during concurrent updates",
+        repositoryPath = "Shared.kt",
+        line = 10,
+      )
+    val specialistQuality =
+      failure.copy(
+        severity = ParallelReviewSeverity.BLOCKER,
+        confidence = "Medium",
+        description = "Shared contract can lose committed state during concurrent updates",
+        specialistSkillName = "bill-generic-code-review-code-quality",
+      )
+    val laneIdentityQuality =
+      ParallelReviewRawFinding(
+        severity = ParallelReviewSeverity.MAJOR,
+        confidence = "Low",
+        location = "Other.kt:20",
+        description = "Prefer a smaller helper for this conversion",
+        repositoryPath = "Other.kt",
+        line = 20,
+      )
+    val qualityLane = ParallelReviewLaneResult("generic-code-quality", listOf(laneIdentityQuality))
+    val failureOnly =
+      ParallelReviewMerger.merge(
+        ParallelReviewLaneResult("failure-lane", listOf(failure)),
+        ParallelReviewLaneResult("specialist-lane", emptyList()),
+      )
+    val merged =
+      ParallelReviewMerger.merge(
+        ParallelReviewLaneResult("failure-lane", listOf(failure)),
+        ParallelReviewLaneResult("specialist-lane", listOf(specialistQuality)),
+        qualityLane,
+      )
+
+    assertEquals(
+      failureOnly.findings,
+      merged.findings.filterNot { finding ->
+        isCodeQualityFinding(finding.agentIds, finding.specialistSkillNames)
+      },
+    )
+    assertEquals(failureOnly.formattedOutput, merged.formattedOutput.substringBefore("\n#### Code Quality"))
+    assertEquals(3, merged.findings.size)
+    assertContains(merged.formattedOutput, "#### Code Quality (non-blocking)")
+    assertContains(merged.formattedOutput, "specialist=bill-generic-code-review-code-quality")
+    assertContains(merged.formattedOutput, "specialist=generic-code-quality")
+    assertEquals(listOf("generic-code-quality"), merged.findings.last().specialistSkillNames)
+    val parsedQuality =
+      ParallelReviewFindingParser.parse(merged.formattedOutput.substringAfter("#### Code Quality (non-blocking)"))
+    assertTrue(parsedQuality.rejections.isEmpty())
+    assertEquals(
+      listOf("bill-generic-code-review-code-quality", "generic-code-quality"),
+      parsedQuality.findings.map { it.specialistSkillName },
+    )
+
+    assertFailureVerdictGroupBeforeCodeQuality(merged)
+  }
+
+  private fun assertFailureVerdictGroupBeforeCodeQuality(merged: ParallelReviewMergeResult) {
+    val withVerdict =
+      ParallelReviewMerger.withRecordedVerdicts(
+        merged,
+        listOf(
+          ReviewFindingVerdict(
+            stage = ReviewStage.VERIFICATION,
+            findingRef = "F-001",
+            claimVerdict = ReviewClaimVerdict.CONFIRMED,
+            recordedAt = "2026-10-09T00:00:00Z",
+          ),
+        ),
+      )
+    assertTrue(
+      withVerdict.formattedOutput.indexOf("#### Code Quality (non-blocking)") >
+        withVerdict.formattedOutput.indexOf("Actionable"),
+    )
+    assertContains(withVerdict.formattedOutput, "specialist=generic-code-quality")
+  }
+
+  @Test
+  fun `code quality findings normalize severity and cap after confidence ordering`() {
+    val failure =
+      ParallelReviewRawFinding(
+        severity = ParallelReviewSeverity.MINOR,
+        confidence = "Low",
+        location = "Failure.kt:1",
+        description = "Failure finding",
+        repositoryPath = "Failure.kt",
+        line = 1,
+      )
+    val quality =
+      (1..7).map { index ->
+        ParallelReviewRawFinding(
+          severity = if (index == 1) ParallelReviewSeverity.MAJOR else ParallelReviewSeverity.NIT,
+          confidence = listOf("Low", "High", "Medium", "High", "Low", "Medium", "High")[index - 1],
+          location = "Quality$index.kt:1",
+          description = "Quality observation $index",
+          specialistSkillName = "bill-generic-code-review-code-quality",
+          repositoryPath = "Quality$index.kt",
+          line = 1,
+        )
+      }
+    val result =
+      ParallelReviewMerger.merge(
+        ParallelReviewLaneResult("failure-lane", listOf(failure)),
+        ParallelReviewLaneResult("generic-code-review-code-quality", quality),
+      )
+    val qualityFindings =
+      result.findings.filter { finding ->
+        isCodeQualityFinding(finding.agentIds, finding.specialistSkillNames)
+      }
+
+    assertEquals(5, qualityFindings.size)
+    assertTrue(qualityFindings.all { it.severity == ParallelReviewSeverity.MINOR })
+    assertEquals(listOf("High", "High", "High", "Medium", "Medium"), qualityFindings.map { it.confidence })
+    assertEquals(
+      listOf("Quality2.kt", "Quality4.kt", "Quality7.kt", "Quality3.kt", "Quality6.kt"),
+      qualityFindings.map { it.repositoryPath },
+    )
+    assertEquals("F-001", result.findings.first().fNumber)
+    assertEquals("F-002", qualityFindings.first().fNumber)
+    assertTrue(
+      result.formattedOutput.indexOf("Failure finding") <
+        result.formattedOutput.indexOf("#### Code Quality (non-blocking)"),
+    )
+    assertTrue(
+      result.formattedOutput.indexOf("#### Code Quality (non-blocking)") <
+        result.formattedOutput.indexOf("Quality2.kt"),
+    )
+  }
+
+  @Test
+  fun `code quality fuzzy dedup uses confidence representative after minor normalization`() {
+    val lowerConfidenceMajor =
+      ParallelReviewRawFinding(
+        severity = ParallelReviewSeverity.MAJOR,
+        confidence = "Low",
+        location = "Quality.kt:1",
+        description = "shared helper allocates duplicate temporary buffers during conversion",
+        specialistSkillName = "bill-generic-code-review-code-quality",
+        repositoryPath = "Quality.kt",
+        line = 1,
+      )
+    val higherConfidenceMinor =
+      lowerConfidenceMajor.copy(
+        severity = ParallelReviewSeverity.MINOR,
+        confidence = "High",
+        description = "shared helper allocates duplicate temporary buffers in conversion",
+      )
+    val result =
+      ParallelReviewMerger.merge(
+        ParallelReviewLaneResult("generic-code-review-code-quality", listOf(lowerConfidenceMajor)),
+        ParallelReviewLaneResult("another-lane", listOf(higherConfidenceMinor)),
+      )
+
+    assertEquals(1, result.findings.size)
+    assertEquals(ParallelReviewSeverity.MINOR, result.findings.single().severity)
+    assertEquals("High", result.findings.single().confidence)
+    assertEquals(higherConfidenceMinor.description, result.findings.single().description)
+    assertEquals(listOf("bill-generic-code-review-code-quality"), result.findings.single().specialistSkillNames)
+  }
+
+  @Test
+  fun `quality cap breaks confidence ties by representative emission order`() {
+    val earlyDuplicate =
+      ParallelReviewRawFinding(
+        severity = ParallelReviewSeverity.MINOR,
+        confidence = "Low",
+        location = "Duplicate.kt:1",
+        description = "shared helper allocates duplicate temporary buffers during conversion",
+        specialistSkillName = "bill-generic-code-review-code-quality",
+      )
+    val distinct =
+      (1..5).map { index ->
+        earlyDuplicate.copy(
+          confidence = "High",
+          location = "Distinct$index.kt:1",
+          description = "Distinct quality observation $index",
+        )
+      }
+    val laterRepresentative = earlyDuplicate.copy(confidence = "High", location = "Duplicate.kt:2")
+
+    val result =
+      ParallelReviewMerger.merge(
+        ParallelReviewLaneResult("first-lane", listOf(earlyDuplicate) + distinct),
+        ParallelReviewLaneResult("second-lane", listOf(laterRepresentative)),
+      )
+
+    assertEquals(distinct.map { it.location }, result.findings.map { it.location })
+    assertEquals(distinct.map { it.description }, result.findings.map { it.description })
+  }
+
   @Test
   fun `case distinct paths never deduplicate`() {
     val lower =

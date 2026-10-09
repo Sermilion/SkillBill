@@ -8,6 +8,7 @@ import skillbill.review.model.ParallelReviewSeverity
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
+import skillbill.review.parallel.isCodeQualityFinding
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 internal data class StandaloneReviewReport(
@@ -38,7 +39,14 @@ internal object StandaloneReviewReportAdmission {
         if (requireDelegatedCoverage) addAll(delegatedRejections(result))
       }
     val severe =
-      (parsed.findings.map { it.severity } + result.mergeResult.findings.map { it.severity })
+      (
+        parsed.findings
+          .filterNot { finding -> isCodeQualityFinding(emptyList(), listOfNotNull(finding.specialistSkillName)) }
+          .map { it.severity } +
+          result.mergeResult.findings
+            .filterNot { finding -> isCodeQualityFinding(finding.agentIds, finding.specialistSkillNames) }
+            .map { it.severity }
+      )
         .any { it == ParallelReviewSeverity.BLOCKER || it == ParallelReviewSeverity.MAJOR }
     val unparsedCandidates =
       parsed.rejections.isNotEmpty() || hasMalformedFindingIdentifier(rawOutput) || result.rejectedCandidateCount > 0

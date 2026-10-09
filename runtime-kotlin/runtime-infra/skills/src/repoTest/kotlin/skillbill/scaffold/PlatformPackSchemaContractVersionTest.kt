@@ -5,6 +5,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaPaths
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import kotlin.test.Test
@@ -34,7 +35,7 @@ class PlatformPackSchemaContractVersionTest {
   }
 
   @Test
-  fun `schema defs codeReviewArea enum equals APPROVED_CODE_REVIEW_AREAS`() {
+  fun `schema defs codeReviewArea enum equals approved and universal areas`() {
     val schemaFile = repoRootFromTest().resolve(PlatformPackSchemaPaths.REPO_RELATIVE_PATH)
     assertTrue(Files.isRegularFile(schemaFile), "Canonical schema file is missing at $schemaFile.")
 
@@ -49,11 +50,11 @@ class PlatformPackSchemaContractVersionTest {
         .map { index -> enumNode.path(index).asText() }
         .toSet()
     assertEquals(
-      APPROVED_CODE_REVIEW_AREAS,
+      APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS,
       schemaAreas,
-      "Schema \$defs.codeReviewArea.enum must equal APPROVED_CODE_REVIEW_AREAS. " +
-        "Schema-only: ${schemaAreas - APPROVED_CODE_REVIEW_AREAS}. " +
-        "Kotlin-only: ${APPROVED_CODE_REVIEW_AREAS - schemaAreas}.",
+      "Schema \$defs.codeReviewArea.enum must equal approved and universal areas. " +
+        "Schema-only: ${schemaAreas - (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS)}. " +
+        "Kotlin-only: ${(APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS) - schemaAreas}.",
     )
   }
 

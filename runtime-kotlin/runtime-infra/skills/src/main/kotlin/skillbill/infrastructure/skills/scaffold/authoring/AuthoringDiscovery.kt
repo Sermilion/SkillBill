@@ -72,9 +72,8 @@ internal fun discoverTargets(
   externalDiscovery: PlatformPackDiscoveryContext? = null,
 ): Map<String, AuthoringTarget> {
   val discovered = linkedMapOf<String, AuthoringTarget>()
-  platformPacksForAuthoring(repoRoot, enforceContractVersion, externalDiscovery).forEach { pack ->
-    recordPackTargets(discovered, pack)
-  }
+  val manifests = platformPacksForAuthoring(repoRoot, enforceContractVersion, externalDiscovery)
+  manifests.forEach { pack -> recordPackTargets(discovered, pack, manifests) }
 
   val skillsRoot = repoRoot.resolve("skills")
   if (!Files.isDirectory(skillsRoot)) {
@@ -120,6 +119,7 @@ private fun restoreFiles(originalBytes: Map<Path, ByteArray>) {
 private fun recordPackTargets(
   discovered: MutableMap<String, AuthoringTarget>,
   pack: PlatformManifest,
+  manifests: List<PlatformManifest>,
 ) {
   val displayName = pack.displayName ?: displayNameFromSlug(pack.slug)
   pack.declaredFiles.baseline?.let { baseline ->
@@ -135,8 +135,9 @@ private fun recordPackTargets(
         baselineContent.resolveSibling("SKILL.md"),
         baselineContent,
         pack.codeReviewComposition,
-        pack.addonUsageFor(baselineContent),
+        addonUsage = pack.addonUsageFor(baselineContent),
         internalFor = parseInternalForFrontmatter(baselineContent),
+        reviewManifests = manifests,
       )
   }
   pack.declaredFiles.areas.forEach { (area, declaredFile) ->

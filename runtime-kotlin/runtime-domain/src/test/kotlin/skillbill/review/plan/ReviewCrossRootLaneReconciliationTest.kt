@@ -19,6 +19,29 @@ import kotlin.test.assertTrue
 
 class ReviewCrossRootLaneReconciliationTest {
   @Test
+  fun `same universal fallback lane from two roots reconciles once at the end`() {
+    val first =
+      root(
+        0,
+        lane("kmp", "architecture", depth = 0),
+        lane("generic", "code-quality", depth = 1),
+      )
+    val second =
+      root(
+        1,
+        lane("kotlin", "security", depth = 0),
+        lane("generic", "code-quality", depth = 1),
+      )
+
+    val reconciled = ReviewCrossRootLaneReconciliation.reconcile(listOf(first, second))
+
+    assertEquals(3, reconciled.size)
+    assertEquals("bill-generic-code-review-code-quality", reconciled.last().lane.skillName)
+    assertEquals(2, reconciled.last().lane.orderIndex)
+    assertEquals(1, reconciled.count { it.lane.area == "code-quality" })
+  }
+
+  @Test
   fun `a composing root owns a shared area over the baseline root routing brought along`() {
     val composing = root(0, lane("kmp", "architecture", depth = 0, ownedPaths = listOf("a.kt")))
     val baseline = root(1, lane("kotlin", "architecture", depth = 0, ownedPaths = listOf("b.kt")))

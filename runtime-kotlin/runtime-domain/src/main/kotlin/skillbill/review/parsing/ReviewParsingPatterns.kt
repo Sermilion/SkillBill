@@ -30,14 +30,15 @@ internal val findingPattern =
     "^\\s*-\\s+\\[(?<findingId>F-\\d{3})]\\s+" +
       "(?<severity>Blocker|Major|Minor)\\s+\\|\\s+" +
       "(?<confidenceLevel>High|Medium|Low)\\s+\\|\\s+" +
+      "(?:specialist=(?<specialistSkillName>[a-z0-9-]+)\\s+\\|\\s+)?" +
       "(?<location>[^|]+?)\\s+\\|\\s+" +
       "(?<description>.+)$",
     RegexOption.MULTILINE,
   )
 
 internal val findingProvenancePattern =
-  Regex("\\s*\\|\\s*(?<provenance>(?:specialists|origins)=[^|]*)$")
-internal val findingSpecialistsProvenancePattern = Regex("specialists=(?<value>[^;]+)")
+  Regex("\\s*\\|\\s*(?<provenance>(?:specialists?|origins)=[^|]*)$")
+internal val findingSpecialistsProvenancePattern = Regex("specialists?=(?<value>[^;]+)")
 
 internal val severityAliases: Map<String, String> =
   mapOf(

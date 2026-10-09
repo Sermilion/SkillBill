@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
@@ -8,6 +10,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -41,6 +44,42 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
     assertEquals(InstallApplyStatus.SUCCESS, second.status)
     assertTrue(Files.isRegularFile(companion.toPath(), LinkOption.NOFOLLOW_LINKS))
     assertEquals("governed review rubric\n", Files.readString(companion.toPath()))
+  }
+
+  @Test
+  fun `code quality baseline idioms sidecar stages without a content link`() {
+    val fixture = setupApplyFixture()
+    val baseline = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review")
+    val idioms = "Use nullableString.orEmpty() for an empty fallback.\n"
+    Files.writeString(baseline.resolve("code-quality-idioms.md"), idioms)
+    val plan =
+      planInstallForTest(
+        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
+      )
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    val parentStaging =
+      result.skills.single { skill -> skill.skillName == PACK_SIDECAR_PARENT_SKILL }.staging.stagingDir
+    val companion = assertNotNull(parentStaging).resolve("code-quality-idioms.md").toPath()
+    assertTrue(Files.isRegularFile(companion, LinkOption.NOFOLLOW_LINKS))
+    assertEquals(idioms, Files.readString(companion))
+  }
+
+  @Test
+  fun `unlinked non idiom companion remains rejected`() {
+    val fixture = setupApplyFixture()
+    val baseline = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review-architecture")
+    Files.writeString(baseline.resolve("unlinked-notes.md"), "unowned notes\n")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        planInstallForTest(
+          fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
+        )
+      }
+
+    assertEquals(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, error.code)
   }
 
   @Test

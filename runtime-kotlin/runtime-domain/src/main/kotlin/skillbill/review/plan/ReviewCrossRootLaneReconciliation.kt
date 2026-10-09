@@ -5,6 +5,7 @@ import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewReconciledLane
 import skillbill.review.plan.model.ReviewRootLanes
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 
 object ReviewCrossRootLaneReconciliation {
   fun compositionDepthOffsets(
@@ -39,6 +40,7 @@ object ReviewCrossRootLaneReconciliation {
       roots.flatMap { root -> root.lanes.map { Candidate(root.depthOffset + it.depth, it) } }
         .sortedWith(
           compareBy<Candidate>(
+            { it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS },
             { it.effectiveDepth },
             { it.lane.packSlug },
             { it.lane.area },
@@ -71,6 +73,7 @@ object ReviewCrossRootLaneReconciliation {
       ) to inputs
     }.sortedWith(
       compareBy<Pair<Candidate, List<ReviewLaunchLane>>>(
+        { it.first.lane.area in UNIVERSAL_CODE_REVIEW_AREAS },
         { it.first.effectiveDepth },
         { it.first.lane.packSlug },
         { it.first.lane.area },

@@ -6,8 +6,12 @@ import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperatio
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentRegenerationRequest
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.ports.scaffold.model.ScaffoldSkillStatus
+import skillbill.review.plan.ReviewLaunchPlanPolicy
+import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.scaffold.model.CodeReviewComposition
 import skillbill.scaffold.model.GovernedAddonSelection
+import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -28,7 +32,17 @@ data class AuthoringTarget(
   val codeReviewComposition: CodeReviewComposition? = null,
   val addonUsage: List<GovernedAddonSelection> = emptyList(),
   val internalFor: String? = null,
-)
+  val reviewManifests: List<PlatformManifest> = emptyList(),
+) {
+  val universalReviewLanes: List<ReviewLaunchLane>
+    get() {
+      if (family != "code-review" || area.isNotBlank() || reviewManifests.isEmpty()) return emptyList()
+      val selectedAreas = ReviewLaunchPlanPolicy.composedAreas(platform, reviewManifests)
+      return ReviewLaunchPlanPolicy.flatten(platform, reviewManifests, selectedAreas).lanes.filter { lane ->
+        lane.area in UNIVERSAL_CODE_REVIEW_AREAS
+      }
+    }
+}
 
 object AuthoringOperations {
   internal fun list(

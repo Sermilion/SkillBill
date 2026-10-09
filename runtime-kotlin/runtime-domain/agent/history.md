@@ -1,5 +1,17 @@
 # Boundary History — runtime-domain
 
+## [2026-10-09] SKILL-413 subtask 2 code-quality report section and telemetry
+Areas: runtime-domain/review, runtime-engine/featuretask/slot/standalonereview, runtime-infra/skills/scaffold, orchestration/review-orchestrator, platform-packs/generic/code-review, docs/review-telemetry
+- Shared report contracts and generic finding discipline require a trailing non-blocking quality section, continuing F-ids, specialist attribution, and quality action items after failure action items.
+- The merger partitions before fuzzy deduplication, normalizes quality severity to Minor, selects and orders by confidence with emission-order ties, and caps the quality tail at five. Failure finding identities, provenance and output retain their existing behavior.
+- One domain identity predicate recognizes the lane or specialist suffix and retains quality identity through merge and verdict overlays. reusable
+- Standalone report admission excludes attributed quality findings from blocking verdict derivation, including incorrectly emitted Major or Blocker suggestions.
+- Added the code_quality telemetry category and explicit aliases. Finding-level lane attribution keeps quality classification separate from existing failure categories; quality and quality-check still resolve to testing_quality_gate.
+- Regression coverage protects cross-group dedup isolation, failure output, attribution, verdict overlays, confidence ordering, severity, the cap and category compatibility. Scaffold rule data follows its existing area owner.
+- Known limitation: agent-authored display prose retains its existing forwarding path; report contracts govern its placement while the merger enforces structured severity and count. No database migration or telemetry event schema change.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-10-08] Standalone review step gets a default execution tier
 Areas: runtime-domain/config
 - `DEFAULT_PHASE_TIERS` had no entry for `present_findings`, the standalone review step. With an `execution_matrix` agent configured, `ExecutionMatrix.tierOf` threw `NoSuchElementException` and `skill-bill phase review` crashed before reviewing.

@@ -7,6 +7,7 @@ import skillbill.error.shellcontent.reviewCompositionCycle
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewLaunchPlan
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 
 internal object ReviewLaunchPlanCompositionFailures {
   fun compositionCycle(cycle: String): Nothing =
@@ -37,6 +38,9 @@ internal fun composeReviewLaunchAreas(
     }
   }
   bySlug[routedSlug]?.let(::visit)
+  ReviewFallbackResolver.resolveOptional(manifests.toList())?.let { fallback ->
+    areas += fallback.declaredCodeReviewAreas.filter { it in UNIVERSAL_CODE_REVIEW_AREAS }
+  }
   return areas
 }
 
@@ -156,8 +160,44 @@ internal fun flattenReviewLaunchPlan(
       )
   val candidates = collectReviewLaunchAreaCandidates(root, bySlug, selectedAreas)
   val winners = resolveReviewLaunchAreaWinners(selectedAreas, candidates)
-  return ReviewLaunchPlan(
-    routedPackSlug = routedSlug,
-    lanes = reviewLaunchLanesFromWinners(winners),
-  )
+  val routedWinners = winners.filter { it.area !in UNIVERSAL_CODE_REVIEW_AREAS }
+  val routedLanes = reviewLaunchLanesFromWinners(routedWinners)
+  val selectedUniversalAreas = selectedAreas intersect UNIVERSAL_CODE_REVIEW_AREAS
+  val graphOwnedUniversalWinners = winners.filter { it.area in UNIVERSAL_CODE_REVIEW_AREAS }
+  val fallback = ReviewFallbackResolver.resolveOptional(manifests.toList())
+  val fallbackLanes =
+    fallback?.let { owner ->
+      val depth = (winners.maxOfOrNull { it.depth } ?: -1) + 1
+      selectedUniversalAreas
+        .filter { area -> graphOwnedUniversalWinners.none { it.area == area } }
+        .filter { area -> area in owner.declaredCodeReviewAreas }
+        .map { area ->
+          val skillName = "bill-${owner.slug}-code-review-$area"
+          val condition = owner.laneConditions[area]
+          ReviewLaunchLane(
+            skillName = skillName,
+            packSlug = owner.slug,
+            area = area,
+            depth = depth,
+            originLayerChain = listOf(routedSlug, owner.slug),
+            originLayerChains = listOf(listOf(routedSlug, owner.slug)),
+            required = true,
+            addOns = ReviewAddonSelectionPolicy.select(owner, skillName).map { it.slug },
+            orderIndex = routedLanes.size,
+            inclusionReason = "universal fallback lane",
+            pathSignals = condition?.path.orEmpty(),
+            contentSignals = condition?.content.orEmpty(),
+          )
+        }
+    }.orEmpty()
+  val graphUniversalLanes =
+    reviewLaunchLanesFromWinners(graphOwnedUniversalWinners).mapIndexed { index, lane ->
+      lane.copy(orderIndex = routedLanes.size + index)
+    }
+  val lanes =
+    routedLanes + graphUniversalLanes +
+      fallbackLanes.mapIndexed { index, lane ->
+        lane.copy(orderIndex = routedLanes.size + graphUniversalLanes.size + index)
+      }
+  return ReviewLaunchPlan(routedPackSlug = routedSlug, lanes = lanes)
 }

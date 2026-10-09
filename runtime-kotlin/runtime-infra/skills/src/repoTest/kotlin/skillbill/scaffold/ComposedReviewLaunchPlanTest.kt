@@ -22,7 +22,9 @@ import kotlin.test.assertTrue
 class ComposedReviewLaunchPlanTest {
   @Test
   fun `composed kmp plan resolves seven kmp lanes and three kotlin baseline lanes`() {
-    val plan = ReviewLaunchPlanPolicy.flatten("kmp", manifests("kmp", "kotlin", "generic"), APPROVED_CODE_REVIEW_AREAS)
+    val manifests = manifests("kmp", "kotlin", "generic")
+    val areas = ReviewLaunchPlanPolicy.composedAreas("kmp", manifests)
+    val plan = ReviewLaunchPlanPolicy.flatten("kmp", manifests, areas)
 
     assertEquals(
       mapOf(
@@ -36,9 +38,20 @@ class ComposedReviewLaunchPlanTest {
         "security" to "bill-kmp-code-review-security",
         "testing" to "bill-kotlin-code-review-testing",
         "api-contracts" to "bill-kotlin-code-review-api-contracts",
+        "code-quality" to "bill-generic-code-review-code-quality",
       ),
       plan.lanes.associate { it.area to it.skillName },
     )
+  }
+
+  @Test
+  fun `kotlin composed plan includes generic code-quality lane`() {
+    val manifests = manifests("kotlin", "generic")
+    val areas = ReviewLaunchPlanPolicy.composedAreas("kotlin", manifests)
+    val plan = ReviewLaunchPlanPolicy.flatten("kotlin", manifests, areas)
+
+    assertEquals("bill-generic-code-review-code-quality", plan.lanes.last().skillName)
+    assertEquals("code-quality", plan.lanes.last().area)
   }
 
   @Test

@@ -9,6 +9,7 @@ private val FRONTMATTER_BLOCK_LEADING = Regex("""(?s)\A---\n.*?\n---\n""")
 
 private val AREA_DESCRIPTION_PHRASES: Map<String, String> =
   mapOf(
+    "code-quality" to "idiomatic constructs, clear helpers, cohesive state, and focused structure",
     "architecture" to "architecture, boundaries, and dependency direction",
     "performance" to "performance risks on hot paths, blocking I/O, and resource usage",
     "platform-correctness" to "lifecycle, concurrency, threading, and logic correctness",

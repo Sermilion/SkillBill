@@ -236,7 +236,11 @@ private fun validateAuthoredCompanion(
   }
   val content = Files.readString(sourceDir.resolve("content.md"))
   val link = Regex("\\]\\((?:\\./)?${Regex.escape(companion.name)}(?:[#?][^)]*)?\\)")
-  if (!link.containsMatchIn(content)) {
+  val baselineSidecar =
+    companion.name == "code-quality-idioms.md" &&
+      sourceDir.parent.fileName.toString() == "code-review" &&
+      Regex("^bill-[a-z0-9-]+-code-review$").matches(sourceDir.fileName.toString())
+  if (!baselineSidecar && !link.containsMatchIn(content)) {
     throw invalidAuthoredSkillSidecar(
       "Internal skill '${sourceDir.fileName}' authored sidecar '${companion.name}' must be explicitly linked " +
         "from content.md as its specialist rubric.",

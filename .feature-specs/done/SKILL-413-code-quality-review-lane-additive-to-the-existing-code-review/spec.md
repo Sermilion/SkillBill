@@ -28,7 +28,7 @@ Add a code-quality review lane that runs in ADDITION to the existing review. It 
      - `CustomFreeTextViewModel`: `textContent` + `isLoaded` form the editor state, and `isSaved`/`isInDatabase`/`savedText`/`createdAt`/`isDeletingOwnEntry` are always written together in `onSavedEntry`/`persist`.
      - `VisitDetailViewModel`: `hasSeenVisit`/`hasCreatedVisit`/`isDeletingVisit`/`isVisitRemoved` describe one lifecycle.
    - Structure: duplication worth extracting, redundant branching, dead or unused code, functions or classes doing too much, and unclear naming.
-5. Project conventions win: the lane reads repository guides when present (for example `docs/code-quality-best-practices.md`, `AGENTS.md`, `CLAUDE.md`, linter/formatter configs) and follows them over generic taste.
+5. Project conventions win: the lane reads repository guides when present (for example `docs/code-quality-best-practices.md`, `../../../AGENTS.md`, `CLAUDE.md`, linter/formatter configs) and follows them over generic taste.
 6. Own finding discipline (the reachable-failure rule does not apply to this lane):
    - Every finding names a concrete smell, its location and a concrete rewrite.
    - Severity is fixed and low, so it never outranks a defect.
@@ -39,7 +39,7 @@ Add a code-quality review lane that runs in ADDITION to the existing review. It 
 
 ## Design Decisions (settled at plan)
 
-- **D1 Lane home.** The lane is a new generic specialist, `bill-generic-code-review-code-quality` (area slug `code-quality`), at `platform-packs/generic/code-review/bill-generic-code-review-code-quality/content.md`. The generic pack declares it with `lane_conditions.code-quality: { required: true }`. No other pack manifest declares it.
+- **D1 Lane home.** The lane is a new generic specialist, `bill-generic-code-review-code-quality` (area slug `code-quality`), at `../../../platform-packs/generic/code-review/bill-generic-code-review-code-quality/content.md`. The generic pack declares it with `lane_conditions.code-quality: { required: true }`. No other pack manifest declares it.
 - **D2 Universal inclusion.** A new domain constant `UNIVERSAL_CODE_REVIEW_AREAS = setOf("code-quality")` lives beside `APPROVED_CODE_REVIEW_AREAS`, and `APPROVED_CODE_REVIEW_AREAS` is NOT extended. If it were, the substance audit (`PlatformPackSubstanceAuditPointerCatalog`) would require every maintained pack to cover the area. Lane composition handles a universal area as follows:
   - If the routed graph does not own the area, composition appends it from the manifest-declared fallback owner (`ReviewFallbackResolver.resolveOptional`).
   - If no fallback is installed, or the fallback does not declare the area, composition appends nothing and does not throw.
@@ -60,7 +60,7 @@ Add a code-quality review lane that runs in ADDITION to the existing review. It 
 5. The lane rubric tells the reviewer to read repository guides and linter/formatter configs, and to follow them over generic taste.
 6. The lane rubric requires smell + location + concrete rewrite for every finding, fixed Minor severity, a cap of 5 per review, no repetition of configured formatter/linter rules, and no auto-fixing. The merger enforces Minor severity and the cap.
 7. Code-quality findings appear in their own `#### Code Quality (non-blocking)` risk-register sub-section after all failure findings, with `specialist=` lane attribution. The shared report structure in `PLAYBOOK.md` and `specialist-contract.md` describes this identically in both files.
-8. `ReviewIssueCategory` has a `code_quality` value that code-quality lane findings resolve to, and `docs/review-telemetry.md` lists it.
+8. `ReviewIssueCategory` has a `code_quality` value that code-quality lane findings resolve to, and `../../../docs/review-telemetry.md` lists it.
 9. Additive only: no existing specialist `content.md`, Ignore list, or existing shared-contract bullet changes, and `APPROVED_CODE_REVIEW_AREAS` is unchanged.
 10. Regression: tests assert two things. Non-code-quality lanes of a composed plan are identical with and without the code-quality lane available. Merged failure findings are identical with and without code-quality findings in the input.
 
