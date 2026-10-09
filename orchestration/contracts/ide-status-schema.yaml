@@ -19,7 +19,7 @@ required:
 properties:
   contract_version:
     type: string
-    const: "0.2"
+    const: "0.3"
     description: >
       Pinned to IDE_STATUS_CONTRACT_VERSION. Bump the schema const and Kotlin
       constant together.
@@ -27,6 +27,11 @@ properties:
     type: string
     minLength: 1
     description: "Canonical repo-root-realpath-v1 identity for the queried repository."
+  branch_correlation:
+    type: string
+    minLength: 1
+    maxLength: 256
+    description: "The checked-out branch correlated with an execution-bearing snapshot."
   issue_key:
     type: string
     minLength: 1
@@ -44,6 +49,35 @@ properties:
       `feature-task-prose` family is quarantined (read-only history, never
       projected live) and is excluded from this enum. Omitted for
       idle/unavailable problem snapshots that carry no work identity.
+  execution_scope:
+    type: string
+    enum:
+      - workflow
+      - standalone_phase
+  execution_id:
+    type: string
+    minLength: 1
+  status_store_id:
+    type: string
+    minLength: 1
+  run_sequence:
+    type: string
+    pattern: "^[1-9][0-9]*$"
+  status_revision:
+    type: string
+    pattern: "^[1-9][0-9]*$"
+  invocation_id:
+    type: string
+    minLength: 1
+  phase_id:
+    type: string
+    minLength: 1
+    maxLength: 64
+  current_activity:
+    type: string
+    minLength: 1
+    maxLength: 160
+    pattern: "^[^\\u0000-\\u001F\\u007F]*$"
   lifecycle_state:
     type: string
     enum:
@@ -354,6 +388,80 @@ properties:
         type: object
         additionalProperties: true
 allOf:
+  - if:
+      required:
+        - execution_scope
+    then:
+      required:
+        - execution_id
+        - status_store_id
+        - run_sequence
+        - status_revision
+  - if:
+      required:
+        - execution_id
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - status_store_id
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - run_sequence
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - status_revision
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - invocation_id
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - phase_id
+    then:
+      required:
+        - execution_scope
+  - if:
+      required:
+        - current_activity
+    then:
+      required:
+        - execution_scope
+  - if:
+      properties:
+        execution_scope:
+          const: standalone_phase
+      required:
+        - execution_scope
+    then:
+      required:
+        - invocation_id
+        - phase_id
+  - if:
+      properties:
+        execution_scope:
+          const: workflow
+      required:
+        - execution_scope
+    then:
+      not:
+        anyOf:
+          - required:
+              - invocation_id
+          - required:
+              - phase_id
   - if:
       required:
         - last_agent_activity_at

@@ -8,6 +8,7 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationProposalRepository
@@ -35,6 +36,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val unaddressedFindings: UnaddressedFindingsRepository
   val agentActivityStamps: AgentActivityStampRepository
   val worktreeEditJournal: WorktreeEditJournalRepository
+  val standalonePhaseStatuses: StandalonePhaseStatusRepository
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
   val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository

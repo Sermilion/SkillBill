@@ -151,7 +151,10 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     iteration: Int,
     branch: String,
   ): PhaseOutcome =
-    if (request.skeletonDefinition?.slots?.contains(PhaseSlot.PULL_REQUEST) != false) {
+    if (
+      request.workflowId.isNotBlank() ||
+      request.skeletonDefinition?.slots?.contains(PhaseSlot.PULL_REQUEST) != false
+    ) {
       block(run, iteration, "No open pull request was found for branch '$branch' to watch.")
     } else {
       complete(

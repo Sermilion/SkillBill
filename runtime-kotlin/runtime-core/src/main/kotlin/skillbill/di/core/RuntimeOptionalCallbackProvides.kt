@@ -29,10 +29,12 @@ internal interface RuntimeOptionalCallbackProvides {
     callbacks.goalPullRequestPort ?: GhGoalPullRequestPort()
 
   @Provides
-  fun pullRequestIdentityLookup(): PullRequestIdentityLookup = GhPullRequestIdentityLookup()
+  fun pullRequestIdentityLookup(callbacks: OptionalCallbacks): PullRequestIdentityLookup =
+    callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup()
 
   @Provides
-  fun pullRequestChecksLookup(): PullRequestChecksLookup = GhPullRequestChecksLookup()
+  fun pullRequestChecksLookup(callbacks: OptionalCallbacks): PullRequestChecksLookup =
+    callbacks.pullRequestChecksLookup ?: GhPullRequestChecksLookup()
 
   @Provides
   fun pullRequestTemplateFiles(): PullRequestTemplateFiles = FileSystemPullRequestTemplateFiles()

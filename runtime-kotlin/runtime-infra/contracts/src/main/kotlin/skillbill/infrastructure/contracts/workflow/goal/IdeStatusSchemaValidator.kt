@@ -7,6 +7,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.IdeStatusPayloadKeys
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
@@ -19,6 +20,7 @@ import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
+import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProblem
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
@@ -129,9 +131,13 @@ private fun ideStatusSchemaWireMap(snapshot: IdeStatusSnapshot): Map<String, Any
   buildMap {
     put(SharedPayloadKeys.CONTRACT_VERSION, snapshot.contractVersion)
     put("repository_identity", snapshot.repositoryIdentity)
+    snapshot.branchCorrelation?.takeIf(String::isNotBlank)?.let {
+      put(IdeStatusPayloadKeys.BRANCH_CORRELATION, it)
+    }
     snapshot.issueKey?.takeIf(String::isNotBlank)?.let { put(SharedPayloadKeys.ISSUE_KEY, it) }
     snapshot.workflowId?.takeIf(String::isNotBlank)?.let { put(SharedPayloadKeys.WORKFLOW_ID, it) }
     snapshot.workflowFamily?.let { put("workflow_family", it.wireValue) }
+    snapshot.execution?.let { execution -> putExecutionFields(execution) }
     put("lifecycle_state", snapshot.lifecycleState.wireValue)
     put("current_step", currentStepWireMap(snapshot))
     snapshot.progress?.let { put("progress", progressWireMap(it.completed, it.total)) }
@@ -147,6 +153,16 @@ private fun ideStatusSchemaWireMap(snapshot: IdeStatusSnapshot): Map<String, Any
     put(SharedPayloadKeys.SUMMARY, snapshot.summary)
     snapshot.problem?.let { put("problem", problemWireMap(it)) }
   }
+
+private fun MutableMap<String, Any?>.putExecutionFields(execution: IdeStatusExecutionIdentity) {
+  put(IdeStatusPayloadKeys.EXECUTION_SCOPE, execution.scope.wireValue)
+  put(IdeStatusPayloadKeys.EXECUTION_ID, execution.executionId)
+  put(IdeStatusPayloadKeys.STATUS_STORE_ID, execution.statusStoreId)
+  put(IdeStatusPayloadKeys.RUN_SEQUENCE, execution.runSequence)
+  put(IdeStatusPayloadKeys.STATUS_REVISION, execution.statusRevision)
+  execution.invocationId?.let { put(IdeStatusPayloadKeys.INVOCATION_ID, it) }
+  execution.phaseId?.let { put(SharedPayloadKeys.PHASE_ID, it) }
+}
 
 private fun currentStepWireMap(snapshot: IdeStatusSnapshot): Map<String, Any?> =
   linkedMapOf(
@@ -201,6 +217,7 @@ private fun MutableMap<String, Any?>.putPauseFields(snapshot: IdeStatusSnapshot)
 }
 
 private fun MutableMap<String, Any?>.putActivityFields(snapshot: IdeStatusSnapshot) {
+  snapshot.currentActivity?.let { put(IdeStatusPayloadKeys.CURRENT_ACTIVITY, it) }
   snapshot.activeDurationMs?.let { put("active_duration_ms", it) }
   snapshot.activeDurationAsOf?.let { put("active_duration_as_of", it.toString()) }
   val at = snapshot.lastAgentActivityAt

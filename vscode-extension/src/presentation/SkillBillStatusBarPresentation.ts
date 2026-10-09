@@ -70,10 +70,11 @@ export const SkillBillStatusBarPresentation = {
     const slotSegment = selectedSlot?.barSegment;
 
     const fullBar = (() => {
+      const prefix = anchored.executionScope === "standalone_phase" ? "Phase" : "Skill Bill";
       switch (anchored.kind) {
         case "active":
           return buildRunBar(
-            "Skill Bill",
+            prefix,
             step ?? (anchored.kind === "active" ? anchored.stepLabel : undefined),
             slotSegment,
             goalText,
@@ -81,15 +82,15 @@ export const SkillBillStatusBarPresentation = {
             progressText,
           );
         case "paused":
-          return buildRunBar("Skill Bill · paused", step, slotSegment, goalText, subtaskText, progressText);
+          return buildRunBar(`${prefix} · paused`, step, slotSegment, goalText, subtaskText, progressText);
         case "stale":
-          return buildRunBar("Skill Bill · stale", step, slotSegment, goalText, subtaskText, progressText);
+          return buildRunBar(`${prefix} · stale`, step, slotSegment, goalText, subtaskText, progressText);
         case "done":
-          return buildRunBar("Skill Bill · done", step, undefined, goalText, subtaskText, progressText);
+          return buildRunBar(`${prefix} · done`, step, undefined, goalText, subtaskText, progressText);
         case "blocked":
-          return "Skill Bill · blocked";
+          return `${prefix} · blocked`;
         case "failed":
-          return "Skill Bill · failed";
+          return `${prefix} · failed`;
         case "unavailable":
           return "Skill Bill · unavailable";
         case "incompatible":
@@ -109,6 +110,9 @@ export const SkillBillStatusBarPresentation = {
     const accessibleName = `Skill Bill status: ${lifecycle}`;
     const accessibleDescription = buildAccessibilityDescription(
       lifecycle,
+      anchored.executionScope,
+      anchored.phaseId,
+      anchored.currentActivity,
       step,
       goalText,
       subtaskText,
@@ -141,6 +145,9 @@ export const SkillBillStatusBarPresentation = {
         problemSummary: stateProblemSummary(anchored) ?? stateDetail(anchored),
         staleNote: isStaleState(anchored) ? STALE_NOTE : undefined,
         pauseReasonText: pauseReasonText(anchored),
+        scopeText: anchored.executionScope === "standalone_phase" ? "Standalone phase" : undefined,
+        phaseId: anchored.phaseId,
+        currentActivity: anchored.currentActivity,
       },
       controls: GoalControlsPresentation.controlsFor(anchored),
     };
@@ -236,6 +243,9 @@ export interface StatusBarDetails {
   problemSummary?: string;
   staleNote?: string;
   pauseReasonText?: string;
+  scopeText?: string;
+  phaseId?: string;
+  currentActivity?: string;
 }
 
 type DisplaySlot =
@@ -330,6 +340,9 @@ function buildTooltip(
   if (workflowId) {
     lines.push(`Workflow: ${workflowId}`);
   }
+  if (state.executionScope === "standalone_phase") {
+    lines.push(`Standalone phase: ${state.phaseId ?? "unknown"}`);
+  }
   if (step) {
     lines.push(`Step: ${step}`);
   }
@@ -341,6 +354,9 @@ function buildTooltip(
   lines.push(`Subtask ${noun}: ${subtaskText}`);
   if (progressText) {
     lines.push(`Progress: ${progressText}`);
+  }
+  if (state.currentActivity) {
+    lines.push(`Activity: ${state.currentActivity}`);
   }
   const lastUpdated = stateLastUpdated(state);
   if (lastUpdated) {
@@ -368,6 +384,9 @@ function buildTooltip(
 
 function buildAccessibilityDescription(
   lifecycle: string,
+  executionScope: SkillBillStatusUiState["executionScope"],
+  phaseId: SkillBillStatusUiState["phaseId"],
+  currentActivity: SkillBillStatusUiState["currentActivity"],
   step: string | undefined,
   goalText: string,
   subtaskText: string,
@@ -380,6 +399,9 @@ function buildAccessibilityDescription(
   if (step) {
     text += ` Step: ${step}.`;
   }
+  if (executionScope === "standalone_phase") {
+    text += ` Standalone phase: ${phaseId ?? "unknown"}.`;
+  }
   if (slotFullLine) {
     text += ` ${slotFullLine}.`;
   }
@@ -389,6 +411,9 @@ function buildAccessibilityDescription(
   }
   if (detail) {
     text += ` ${detail}`;
+  }
+  if (currentActivity) {
+    text += ` Activity: ${currentActivity}.`;
   }
   return text;
 }

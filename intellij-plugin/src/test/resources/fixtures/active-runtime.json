@@ -1,5 +1,5 @@
 {
-  "contract_version": "0.2",
+  "contract_version": "0.3",
   "repository_identity": "repo-root-realpath-v1:/repo",
   "issue_key": "SKILL-148",
   "workflow_id": "wfl-runtime-1",

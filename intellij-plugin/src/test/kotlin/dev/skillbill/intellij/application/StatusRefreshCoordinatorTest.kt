@@ -3,6 +3,7 @@ package dev.skillbill.intellij.application
 import dev.skillbill.intellij.composition.SkillBillStatusCompositionRoot
 import dev.skillbill.intellij.domain.NO_MATCHING_WORK_REASON_CODE
 import dev.skillbill.intellij.domain.POLL_FAILED_REASON_CODE
+import dev.skillbill.intellij.domain.StatusExecutionMetadata
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
 import dev.skillbill.intellij.domain.StatusDiagnostic
 import dev.skillbill.intellij.domain.UnavailableReason
@@ -19,6 +20,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,6 +36,42 @@ class StatusRefreshCoordinatorTest {
     @After
     fun tearDown() {
         scope.cancel()
+    }
+
+    @Test
+    fun `newer active execution replaces the previous terminal execution`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val execution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "run-1", statusStoreId = "store",
+            branchCorrelation = "main", runSequence = "1", statusRevision = "2",
+            invocationId = "invocation-1", phaseId = "review",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Done(
+            observedAt = now, summary = "finished", repositoryIdentity = "repo", issueKey = null,
+            progressCompleted = null, progressTotal = null, startedAt = now, updatedAt = now,
+            execution = execution,
+        )
+        val coordinator = StatusRefreshCoordinator(
+            FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Done } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "running", repositoryIdentity = "repo", issueKey = null,
+                workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+                progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = execution.copy(executionId = "run-2", runSequence = "2", statusRevision = "1"),
+            )
+            coordinator.requestRefresh()
+            val updated = withTimeout(2_000) {
+                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active }
+            } as SkillBillStatusOutcome.Active
+            assertEquals("run-2", updated.execution?.executionId)
+        } finally {
+            coordinator.dispose()
+        }
     }
 
     @Test

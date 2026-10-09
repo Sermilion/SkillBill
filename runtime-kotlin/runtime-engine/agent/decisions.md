@@ -1,3 +1,20 @@
+## [2026-10-09] Share authoritative execution order across status sources
+Context: IDE status must order eligible workflow and standalone-phase executions despite timestamp ties, skew, retention, and durable-plan correlation.
+Decision: Give each root execution a persisted per-repository sequence and keep standalone status in a purpose-built repository with explicit scope and identity.
+Reason: A shared authoritative order lets selection prefer the newest eligible execution without using WorkItem or telemetry as a status proxy.
+Alternatives considered: Timestamp-only ordering and projecting standalone phases through workflow/telemetry rows were rejected because they cannot preserve source identity or deterministic ordering.
+
+## [2026-10-09] Settle standalone terminal status from the authoritative result
+Context: Intermediate phase events, process exit, late events, and expired leases can otherwise publish premature success or regress a terminal result.
+Decision: Fence persisted updates by lease generation and revision, make terminal transitions idempotent and non-regressing, and publish terminal state only from the complete authoritative phase result or reconciliation.
+Reason: The status projection must describe the settled operation, while lost execution remains interrupted/stale and cannot be turned into success by a late event.
+
+## [2026-10-09] Keep current activity bounded and non-authoritative
+Context: Status consumers need useful activity text, but raw agent output can expose secrets, commands, paths, diagnostics, or unbounded content.
+Decision: Emit optional activity only from allowlisted event descriptors after sanitization and control-character removal, capped at 160 Unicode code points; never use it as progress or heartbeat evidence.
+Reason: This preserves truthful availability and bounded UI details while keeping liveness and progress semantics separate from display text.
+Alternatives considered: Publishing raw agent text or fabricating activity when unavailable was rejected because it is unsafe and misleading.
+
 ## [2026-10-09] Run standalone plan through the durable run loop and admit by definition
 Context: SKILL-410 `phase plan` ran in memory, so a plan left no workflow a later full run could resume or link to.
 Decision: Make plan a durable skeleton with an `admittedForRun` set per run kind, route it through `StandalonePlanRun`, and link the completed plan workflow to the goal parent on import.

@@ -9,6 +9,7 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRefusal
@@ -47,6 +48,7 @@ class VerifyOperation(
   delegatedReviewer: VerifyDelegatedReviewer,
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) : SelfConfirmingOperation {
   override val id: String = "verify"
 
@@ -116,6 +118,7 @@ class VerifyOperation(
         mapOf(VerifyWorkflow.INPUT_CONTEXT to inputContext),
       )
     if (started is VerifyWrite.Rejected) return OperationOutcome.Failed(started.error)
+    registerWorkflowStatus(context, workflowId)
     return extractAndPark(context, workflowId, intake, target)
   }
 
@@ -198,12 +201,25 @@ class VerifyOperation(
           "Verify workflow '$workflowId' has no extracted criteria to confirm; rerun operation verify.",
         )
       } else {
+        registerWorkflowStatus(context, workflowId)
         confirmParked(run, attempts)
       }
     }
     refreshStaleCheckpoint(run, snapshot)?.let { failure -> return failure }
     val start = resumeStep(workflowId) { failure -> return failure }
+    registerWorkflowStatus(context, workflowId)
     return sequence.run(run, start, attempts)
+  }
+
+  private fun registerWorkflowStatus(
+    context: OperationContext,
+    workflowId: String,
+  ) {
+    statusPublisherFactory.registerWorkflow(
+      repoRoot = context.repoRoot,
+      issueKey = null,
+      workflowId = workflowId,
+    )
   }
 
   private inline fun confirmableSnapshot(

@@ -17,6 +17,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -44,6 +45,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewMergeResult
@@ -128,6 +130,13 @@ internal class VerifyOperationHarness : AutoCloseable {
         },
         NoopRuntimeDiagnostics,
         clock,
+        StandalonePhaseStatusPublisherFactory(
+          database,
+          TestRepositoryEnclosingRoot,
+          CheckedOutBranchSource { "main" },
+          clock,
+          NoopRuntimeDiagnostics,
+        ),
       )
     val proposals = SqliteOperationProposalRepository(database)
     executor =

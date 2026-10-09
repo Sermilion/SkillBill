@@ -102,6 +102,16 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 - Checkpoint history lives under `refs/skill-bill/checkpoints/<issue-key>/<subtask-id>/<sequence>`. Those refs preserve pre-amend commits the branch no longer names; they are not reachable through `git log` on the branch without an explicit ref argument.
 - Pruning deletes a subtask's checkpoint refs only after that subtask's commit is pushed and its manifest entry records a non-blank `commit_sha`. Pruning is idempotent; a hard manifest reset prunes the refs of the subtasks it reset. Blocked or abandoned subtasks keep their refs for recovery.
 
+## Goal CI monitoring
+
+After all subtasks finish and the goal opens or finds its pull request, parent
+finalization runs the existing monitor and bounded CI repair loop before reporting
+completion. Monitoring belongs to that goal, so it publishes parent progress and
+does not register a standalone phase execution. A missing pull request, wrong
+branch, unavailable checks, or exhausted repair loop stops the goal at the failing
+finalization step. A later goal run reuses completed subtasks and the existing PR
+and monitors again. Accepted no-change goals create no PR and skip monitoring.
+
 ## Edited subtask specs on resume
 
 A full goal launch checks unfinished subtask specs against their saved planning hashes

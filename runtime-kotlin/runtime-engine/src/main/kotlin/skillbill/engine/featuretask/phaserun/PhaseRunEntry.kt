@@ -34,15 +34,46 @@ class PhaseRunEntry(
   private val intakeResolver: PhaseRunIntakeResolver,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val agentRunLauncher: AgentRunLauncher,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
+    val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
+    val publisher = statusPublisherFactory.forPhase(request.repoRoot, request.definitionId, invocationId)
+    val statusRequest = request.copy(eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher))
+    return runCatching { runInternal(statusRequest, invocationId) }
+      .onSuccess(publisher::settle)
+      .onFailure(publisher::settleFailure)
+      .getOrThrow()
+  }
+
+  fun runForGoal(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    expectedBranch: String,
+  ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
+
+  private fun runInternal(
+    request: PhaseRunRequest,
+    invocationId: String,
+    workflowId: String = "",
+    expectedBranch: String? = null,
+  ): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
     }
     val branch = currentBranch(request)
+    if (expectedBranch != null && branch?.branch != expectedBranch) {
+      return PhaseRunResult.Blocked(
+        invocationId,
+        emptyList(),
+        null,
+        definition.id,
+        "Goal monitoring requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
+      )
+    }
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val facts = InMemoryPhaseRunFacts(request, definition, intake)
+    val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId)
     val selection = strategySelectionFacts(facts)
     val executionPlan =
       strategies.executionPlan(
@@ -76,7 +107,7 @@ class PhaseRunEntry(
         progress = progress,
         records = records,
         telemetry = FeatureTaskRuntimeRunObservability(records, facts, diagnostics),
-        invocationId = request.reviewInvocation.reviewSessionId ?: "$INVOCATION_ID_PREFIX${UUID.randomUUID()}",
+        invocationId = invocationId,
         strategies = strategies,
         reviewResultAssembly = reviewResultAssembly,
         lifecycleTelemetry = lifecycleTelemetry,

@@ -4,6 +4,7 @@ import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.workflow.model.WorkflowStatus
 import java.time.Instant
 
@@ -207,6 +208,9 @@ data class IdeStatusSnapshot(
   val lastAgentActivityAt: Instant? = null,
   val lastAgentActivityLabel: AgentActivityLabel? = null,
   val problem: IdeStatusProblem? = null,
+  val execution: IdeStatusExecutionIdentity? = null,
+  val currentActivity: String? = null,
+  val branchCorrelation: String? = null,
   val contractVersion: String = IDE_STATUS_CONTRACT_VERSION,
 ) {
   init {
@@ -214,6 +218,9 @@ data class IdeStatusSnapshot(
     require(summary.isNotBlank()) { "summary must not be blank." }
     require(currentStep.id.isNotBlank() && currentStep.label.isNotBlank()) {
       "currentStep id/label must not be blank."
+    }
+    currentActivity?.let {
+      require(it == boundedIdeStatusActivity(it)) { "currentActivity must be sanitized and bounded." }
     }
   }
 }

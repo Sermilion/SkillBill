@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.ports.agentrun.AgentRunLauncher
@@ -45,6 +46,7 @@ class FeatureTaskRuntimeRunEntry(
   private val strategies: PhaseStrategyLookup,
   private val agentRunLauncher: AgentRunLauncher,
   private val diagnostics: RuntimeDiagnostics,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) {
   fun run(
     input: FeatureTaskRuntimeRunInput,
@@ -53,6 +55,11 @@ class FeatureTaskRuntimeRunEntry(
     val goalContinuation = input.goalContinuation
     val scope = routeScope(goalContinuation != null)
     val workflowId = input.explicitWorkflowId ?: open(input, scope, onOpenFailure)
+    statusPublisherFactory.registerWorkflow(
+      repoRoot = input.repoRoot,
+      issueKey = input.issueKey,
+      workflowId = workflowId,
+    )
     val specPath = Path.of(input.specPath)
     val effectiveInputs =
       executionPlans.resolveInputs(

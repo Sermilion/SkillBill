@@ -4,7 +4,7 @@
     "completed_step_ids": [
         "present_findings"
     ],
-    "invocation_id": "rvs-slot-baseline-dlgt",
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
     "review_result": {
         "accounting_summary": {
             "aggregate_counters": {

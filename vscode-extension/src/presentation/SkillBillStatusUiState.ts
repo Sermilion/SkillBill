@@ -14,7 +14,13 @@ export function formatDurationMs(durationMs: number): string {
   return `${seconds}s`;
 }
 
-export type SkillBillStatusUiState =
+export interface StatusUiExecutionMetadata {
+  executionScope?: "workflow" | "standalone_phase";
+  phaseId?: string;
+  currentActivity?: string;
+}
+
+export type SkillBillStatusUiState = (
   | {
       kind: "idle";
       headline?: string;
@@ -172,7 +178,7 @@ export type SkillBillStatusUiState =
       foundContractVersion?: string;
       lastUpdated?: Date;
       problemSummary?: string;
-    };
+    }) & StatusUiExecutionMetadata;
 
 export function isStaleState(state: SkillBillStatusUiState): boolean {
   if (state.kind === "stale") {

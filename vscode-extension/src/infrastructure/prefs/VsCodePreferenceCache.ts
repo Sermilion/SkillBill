@@ -83,7 +83,18 @@ interface StoredCache {
     subtaskStartedAt?: string;
     updatedAt?: string;
     activeDurationMs?: number;
+    activeDurationAsOf?: string;
     subtaskActiveDurationMs?: number;
+    subtaskActiveDurationAsOf?: string;
+    executionScope?: "workflow" | "standalone_phase";
+    executionId?: string;
+    statusStoreId?: string;
+    branchCorrelation?: string;
+    runSequence?: string;
+    statusRevision?: string;
+    invocationId?: string;
+    phaseId?: string;
+    currentActivity?: string;
   };
 }
 
@@ -104,7 +115,18 @@ function serializeCache(cache: LastKnownDisplayCache): StoredCache {
       subtaskStartedAt: display.subtaskStartedAt?.toISOString(),
       updatedAt: display.updatedAt?.toISOString(),
       activeDurationMs: display.activeDurationMs,
+      activeDurationAsOf: display.activeDurationAsOf?.toISOString(),
       subtaskActiveDurationMs: display.subtaskActiveDurationMs,
+      subtaskActiveDurationAsOf: display.subtaskActiveDurationAsOf?.toISOString(),
+      executionScope: display.executionScope,
+      executionId: display.executionId,
+      statusStoreId: display.statusStoreId,
+      branchCorrelation: display.branchCorrelation,
+      runSequence: display.runSequence,
+      statusRevision: display.statusRevision,
+      invocationId: display.invocationId,
+      phaseId: display.phaseId,
+      currentActivity: display.currentActivity,
     },
   };
 }
@@ -133,7 +155,18 @@ function deserializeCache(raw: StoredCache): LastKnownDisplayCache | undefined {
       subtaskStartedAt: parseOptionalDate(raw.display.subtaskStartedAt),
       updatedAt: parseOptionalDate(raw.display.updatedAt),
       activeDurationMs: raw.display.activeDurationMs,
+      activeDurationAsOf: parseOptionalDate(raw.display.activeDurationAsOf),
       subtaskActiveDurationMs: raw.display.subtaskActiveDurationMs,
+      subtaskActiveDurationAsOf: parseOptionalDate(raw.display.subtaskActiveDurationAsOf),
+      executionScope: raw.display.executionScope,
+      executionId: raw.display.executionId,
+      statusStoreId: raw.display.statusStoreId,
+      branchCorrelation: raw.display.branchCorrelation?.trim().slice(0, 256),
+      runSequence: raw.display.runSequence,
+      statusRevision: raw.display.statusRevision,
+      invocationId: raw.display.invocationId,
+      phaseId: raw.display.phaseId,
+      currentActivity: raw.display.currentActivity,
     },
   };
 }

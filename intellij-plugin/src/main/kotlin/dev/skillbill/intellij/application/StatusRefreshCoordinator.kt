@@ -1,6 +1,8 @@
 package dev.skillbill.intellij.application
 
+import dev.skillbill.intellij.domain.LastKnownDisplayCache
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
+import dev.skillbill.intellij.domain.StatusExecutionMetadata
 import dev.skillbill.intellij.domain.UNCORROBORATED_IDLE_TOLERANCE
 import dev.skillbill.intellij.domain.UnavailableReason
 import dev.skillbill.intellij.domain.isLiveOutcome
@@ -48,6 +50,11 @@ class StatusRefreshCoordinator(
     private var unconfirmedIdleSamples = 0
 
     @Volatile
+    private var refreshGeneration = 0L
+
+    private var acceptedOutcome: SkillBillStatusOutcome? = null
+
+    @Volatile
     private var pollJob: Job? = null
 
     fun addConsumer() {
@@ -73,6 +80,7 @@ class StatusRefreshCoordinator(
 
     fun dispose() {
         if (!disposed.compareAndSet(false, true)) return
+        refreshGeneration += 1
         activeConsumers.set(0)
         stopPolling()
         onCancelProcesses()
@@ -98,13 +106,35 @@ class StatusRefreshCoordinator(
         if (disposed.get()) return
         refreshMutex.withLock {
             if (disposed.get()) return
+            val requestGeneration = refreshGeneration
             val outcome = try {
                 statusRepository.fetchStatus(projectRoot)
             } catch (_: CancellationException) {
                 return
             } catch (_: Exception) {
+                if (disposed.get() || requestGeneration != refreshGeneration) return
                 emit(transportFailureFallback(UnavailableReason.PROCESS_FAILURE) ?: return)
                 return
+            }
+
+            if (disposed.get() || requestGeneration != refreshGeneration) return
+            if (outcome.executionMetadata()?.runSequence != null && outcome.executionMetadata()?.branchCorrelation == null) {
+                currentCorrelationMatchesCache()?.let { emit(it.toStaleOutcome()) }
+                return
+            }
+            if (outcome.isSuccessfulSnapshot() && correlationChanged(outcome)) {
+                refreshGeneration += 1
+                _outcomes.value = null
+                acceptedOutcome = null
+                preferences.setLastKnownDisplayCache(null)
+                unconfirmedIdleSamples = 0
+            }
+            if (isStoreReplacement(orderingOutcome(), outcome)) {
+                refreshGeneration += 1
+                _outcomes.value = null
+                acceptedOutcome = null
+                preferences.setLastKnownDisplayCache(null)
+                unconfirmedIdleSamples = 0
             }
 
 
@@ -120,13 +150,27 @@ class StatusRefreshCoordinator(
             } else {
                 unconfirmedIdleSamples = 0
             }
+
+            if (outcome is SkillBillStatusOutcome.Unavailable && outcome.reasonCode.isPollTransportFailure()) {
+                val fallback = transportFailureFallback(outcome.reasonCode)
+                if (fallback != null) {
+                    emit(fallback)
+                    return
+                }
+            }
+
+            if (!acceptsNewerStatus(orderingOutcome(), outcome)) {
+                if (_outcomes.value == null) preferences.getLastKnownDisplayCache()?.let { emit(it.toStaleOutcome()) }
+                return
+            }
+            if (outcome.isSuccessfulSnapshot()) acceptedOutcome = outcome
             val toEmit = when {
                 outcome is SkillBillStatusOutcome.Unavailable && outcome.reasonCode.isPollTransportFailure() ->
                     transportFailureFallback(outcome.reasonCode) ?: outcome
 
                 outcome is SkillBillStatusOutcome.Unavailable ||
                     outcome is SkillBillStatusOutcome.Incompatible ->
-                    preferences.getLastKnownDisplayCache()?.toStaleOutcome() ?: outcome
+                    currentCorrelationMatchesCache()?.toStaleOutcome() ?: outcome
 
                 else -> {
                     outcome.toCacheSnapshotOrNull()?.let { preferences.setLastKnownDisplayCache(it) }
@@ -137,9 +181,32 @@ class StatusRefreshCoordinator(
         }
     }
 
+    private fun orderingOutcome(): SkillBillStatusOutcome? =
+        acceptedOutcome ?: preferences.getLastKnownDisplayCache()?.toStaleOutcome() ?: _outcomes.value
+
     private fun transportFailureFallback(reason: UnavailableReason): SkillBillStatusOutcome? =
         _outcomes.value?.takeIf { it.isLiveOutcome() }?.withPollFailure(reason)
-            ?: preferences.getLastKnownDisplayCache()?.toStaleOutcome()
+            ?: currentCorrelationMatchesCache()?.toStaleOutcome()
+
+    private fun currentCorrelationMatchesCache() =
+        preferences.getLastKnownDisplayCache()?.takeIf { cache ->
+            val currentOutcome = acceptedOutcome ?: _outcomes.value
+            val current = currentOutcome?.correlation()
+            val cached = cache.correlation()
+            val currentRepository = currentOutcome?.repositoryIdentity()
+            val cachedRepository = cache.display.repositoryIdentity
+            currentRepository == null || cachedRepository == null || currentRepository == cachedRepository &&
+                (current == null || cached == null || current == cached)
+        }
+
+    private fun correlationChanged(incoming: SkillBillStatusOutcome): Boolean {
+        val incomingCorrelation = incoming.correlation() ?: return false
+        val current = (acceptedOutcome ?: _outcomes.value)?.correlation()
+        val cache = preferences.getLastKnownDisplayCache()
+        val cached = cache?.correlation()
+        if (cache != null && cached == null) return true
+        return listOfNotNull(current, cached).any { it != incomingCorrelation }
+    }
 
     private fun emit(outcome: SkillBillStatusOutcome) {
         _outcomes.value = outcome
@@ -149,4 +216,105 @@ class StatusRefreshCoordinator(
 
 sealed class CoordinatorEvent {
     data class Refreshed(val outcome: SkillBillStatusOutcome) : CoordinatorEvent()
+}
+
+private data class StatusCorrelation(
+    val repositoryIdentity: String,
+    val branchCorrelation: String,
+)
+
+private fun acceptsNewerStatus(
+    current: SkillBillStatusOutcome?,
+    incoming: SkillBillStatusOutcome,
+): Boolean {
+    val currentExecution = current?.executionMetadata() ?: return true
+    val incomingExecution = incoming.executionMetadata() ?: return true
+    if (current.repositoryIdentity() != incoming.repositoryIdentity()) return false
+    if (currentExecution.branchCorrelation != incomingExecution.branchCorrelation) return false
+    if (currentExecution.statusStoreId != incomingExecution.statusStoreId) return false
+    val currentSequence = currentExecution.runSequence ?: return false
+    val incomingSequence = incomingExecution.runSequence ?: return false
+    val sequenceOrder = compareDecimalStrings(incomingSequence, currentSequence)
+    if (sequenceOrder < 0) return false
+    if (sequenceOrder > 0) return true
+    if (currentExecution.executionId != incomingExecution.executionId) return false
+    val currentRevision = currentExecution.statusRevision ?: return false
+    val incomingRevision = incomingExecution.statusRevision ?: return false
+    if (compareDecimalStrings(incomingRevision, currentRevision) < 0) return false
+    if (isTerminal(current) && current::class != incoming::class) return false
+    return true
+}
+
+private fun isTerminal(outcome: SkillBillStatusOutcome): Boolean = when (outcome) {
+    is SkillBillStatusOutcome.Done,
+    is SkillBillStatusOutcome.Blocked,
+    is SkillBillStatusOutcome.Failed,
+    -> true
+    else -> false
+}
+
+private fun isStoreReplacement(
+    current: SkillBillStatusOutcome?,
+    incoming: SkillBillStatusOutcome,
+): Boolean {
+    val currentStore = current?.executionMetadata()?.statusStoreId
+    val incomingStore = incoming.executionMetadata()?.statusStoreId
+    return currentStore != null && incomingStore != null && currentStore != incomingStore
+}
+
+private fun SkillBillStatusOutcome.repositoryIdentity(): String? = when (this) {
+    is SkillBillStatusOutcome.Idle -> repositoryIdentity
+    is SkillBillStatusOutcome.Done -> repositoryIdentity
+    is SkillBillStatusOutcome.Active -> repositoryIdentity
+    is SkillBillStatusOutcome.Paused -> repositoryIdentity
+    is SkillBillStatusOutcome.Stale -> repositoryIdentity
+    is SkillBillStatusOutcome.Blocked -> repositoryIdentity
+    is SkillBillStatusOutcome.Failed -> repositoryIdentity
+    is SkillBillStatusOutcome.Unavailable,
+    is SkillBillStatusOutcome.Incompatible,
+    -> null
+}
+
+private fun SkillBillStatusOutcome.executionMetadata(): StatusExecutionMetadata? = when (this) {
+    is SkillBillStatusOutcome.Done -> execution
+    is SkillBillStatusOutcome.Active -> execution
+    is SkillBillStatusOutcome.Paused -> execution
+    is SkillBillStatusOutcome.Stale -> execution
+    is SkillBillStatusOutcome.Blocked -> execution
+    is SkillBillStatusOutcome.Failed -> execution
+    is SkillBillStatusOutcome.Idle,
+    is SkillBillStatusOutcome.Unavailable,
+    is SkillBillStatusOutcome.Incompatible,
+    -> null
+}
+
+private fun SkillBillStatusOutcome.correlation(): StatusCorrelation? {
+    val repositoryIdentity = repositoryIdentity() ?: return null
+    val branchCorrelation = executionMetadata()?.branchCorrelation ?: return null
+    return StatusCorrelation(repositoryIdentity, branchCorrelation)
+}
+
+private fun LastKnownDisplayCache.correlation(): StatusCorrelation? {
+    val repositoryIdentity = display.repositoryIdentity ?: return null
+    val branchCorrelation = display.execution?.branchCorrelation ?: return null
+    return StatusCorrelation(repositoryIdentity, branchCorrelation)
+}
+
+private fun SkillBillStatusOutcome.isSuccessfulSnapshot(): Boolean = when (this) {
+    is SkillBillStatusOutcome.Unavailable,
+    is SkillBillStatusOutcome.Incompatible,
+    -> false
+
+    else -> true
+}
+
+private fun compareDecimalStrings(left: String, right: String): Int {
+    val normalizedLeft = left.trimStart('0').ifEmpty { "0" }
+    val normalizedRight = right.trimStart('0').ifEmpty { "0" }
+    return when {
+        normalizedLeft.length != normalizedRight.length -> normalizedLeft.length.compareTo(normalizedRight.length)
+        normalizedLeft == normalizedRight -> 0
+        normalizedLeft > normalizedRight -> 1
+        else -> -1
+    }
 }

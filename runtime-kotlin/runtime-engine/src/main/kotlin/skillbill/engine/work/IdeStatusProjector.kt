@@ -20,6 +20,8 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
+import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReason
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
@@ -27,6 +29,7 @@ import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -40,6 +43,7 @@ import java.time.Instant
 internal data class IdeStatusProjectionContext(
   val unitOfWork: UnitOfWork,
   val repositoryIdentity: String,
+  val branchCorrelation: String?,
   val observedAt: Instant,
   val repoRoot: Path,
 )
@@ -68,6 +72,7 @@ class IdeStatusProjector(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
   ): IdeStatusSnapshot {
+    candidate.standaloneStatus?.let { return projectStandalonePhase(context, it) }
     return when (candidate.workflowFamily) {
       IdeStatusWorkflowFamily.FEATURE_GOAL -> projectGoal(candidate, context)
       IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME -> projectRuntime(candidate, context)
@@ -75,6 +80,50 @@ class IdeStatusProjector(
         projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY)
     }
   }
+
+  private fun projectStandalonePhase(
+    context: IdeStatusProjectionContext,
+    record: StandalonePhaseStatusRecord,
+  ): IdeStatusSnapshot {
+    val lifecycle = lifecycleFromStandaloneState(record.lifecycleState)
+    val execution =
+      IdeStatusExecutionIdentity(
+        scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+        executionId = record.executionId,
+        statusStoreId = record.statusStoreId,
+        runSequence = record.runSequence,
+        statusRevision = record.statusRevision,
+        invocationId = record.invocationId,
+        phaseId = record.phaseId,
+      )
+    return IdeStatusSnapshot(
+      repositoryIdentity = context.repositoryIdentity,
+      branchCorrelation = record.branchCorrelation,
+      issueKey = record.issueKey,
+      workflowId = record.workflowId,
+      workflowFamily = record.workflowId?.let { IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME },
+      execution = execution,
+      currentActivity = record.currentActivity,
+      lifecycleState = lifecycle,
+      currentStep = IdeStatusStep(record.currentStep, record.currentStep),
+      startedAt = record.startedAt,
+      activeDurationMs = record.activeDurationMs,
+      activeDurationAsOf = record.activeDurationAsOf,
+      updatedAt = record.updatedAt,
+      freshness = IdeStatusFreshnessClassifier.classify(record.updatedAt, context.observedAt),
+      summary = record.terminalResult ?: "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+    )
+  }
+
+  private fun lifecycleFromStandaloneState(state: String): IdeStatusLifecycleState =
+    when (state) {
+      "active", "running" -> IdeStatusLifecycleState.ACTIVE
+      "paused", "runner_interrupted" -> IdeStatusLifecycleState.PAUSED
+      "blocked" -> IdeStatusLifecycleState.BLOCKED
+      "failed" -> IdeStatusLifecycleState.FAILED
+      "terminal", "completed", "success" -> IdeStatusLifecycleState.TERMINAL
+      else -> IdeStatusLifecycleState.FAILED
+    }
 
   private fun projectGoal(
     candidate: IdeStatusCandidate,
@@ -129,9 +178,11 @@ class IdeStatusProjector(
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
+      branchCorrelation = context.branchCorrelation,
       issueKey = issueKey,
       workflowId = candidate.workflowId,
       workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
+      execution = candidate.execution,
       lifecycleState = lifecycle,
       currentStep = step,
       progress = progress,
@@ -273,9 +324,11 @@ class IdeStatusProjector(
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
+      branchCorrelation = context.branchCorrelation,
       issueKey = candidate.issueKey,
       workflowId = candidate.workflowId,
       workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+      execution = candidate.execution,
       lifecycleState = candidate.lifecycleState,
       currentStep = IdeStatusStep(id = stepId, label = stepLabel),
       progress = progress,
@@ -334,9 +387,11 @@ class IdeStatusProjector(
       }
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
+      branchCorrelation = context.branchCorrelation,
       issueKey = candidate.issueKey,
       workflowId = candidate.workflowId,
       workflowFamily = wireFamily,
+      execution = candidate.execution,
       lifecycleState = candidate.lifecycleState,
       currentStep = IdeStatusStep(id = stepId, label = stepLabel),
       progress = progress,

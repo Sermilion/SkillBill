@@ -23,7 +23,10 @@ data class CachedDisplaySnapshot(
     val updatedAt: Instant? = null,
     
     val activeDurationMs: Long? = null,
+    val activeDurationAsOf: Instant? = null,
     val subtaskActiveDurationMs: Long? = null,
+    val subtaskActiveDurationAsOf: Instant? = null,
+    val execution: StatusExecutionMetadata? = null,
 ) {
     init {
         require(summary.isNotBlank()) { "summary must not be blank" }
@@ -52,7 +55,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                     subtaskStartedAt = subtaskStartedAt,
                     updatedAt = updatedAt,
                     activeDurationMs = activeDurationMs,
+                    activeDurationAsOf = activeDurationAsOf,
                     subtaskActiveDurationMs = subtaskActiveDurationMs,
+                    subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                    execution = execution,
                 ),
                 observedAt = observedAt,
             )
@@ -72,7 +78,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                     subtaskStartedAt = subtaskStartedAt,
                     updatedAt = updatedAt,
                     activeDurationMs = activeDurationMs,
+                    activeDurationAsOf = activeDurationAsOf,
                     subtaskActiveDurationMs = subtaskActiveDurationMs,
+                    subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                    execution = execution,
                 ),
                 observedAt = observedAt,
             )
@@ -95,7 +104,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                         subtaskStartedAt = subtaskStartedAt,
                         updatedAt = updatedAt,
                         activeDurationMs = activeDurationMs,
+                        activeDurationAsOf = activeDurationAsOf,
                         subtaskActiveDurationMs = subtaskActiveDurationMs,
+                        subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                        execution = execution,
                     ),
                     observedAt = observedAt,
                 )
@@ -114,7 +126,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                     subtaskStartedAt = subtaskStartedAt,
                     updatedAt = updatedAt,
                     activeDurationMs = activeDurationMs,
+                    activeDurationAsOf = activeDurationAsOf,
                     subtaskActiveDurationMs = subtaskActiveDurationMs,
+                    subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                    execution = execution,
                 ),
                 observedAt = observedAt,
             )
@@ -132,7 +147,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                     subtaskStartedAt = subtaskStartedAt,
                     updatedAt = updatedAt,
                     activeDurationMs = activeDurationMs,
+                    activeDurationAsOf = activeDurationAsOf,
                     subtaskActiveDurationMs = subtaskActiveDurationMs,
+                    subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                    execution = execution,
                 ),
                 observedAt = observedAt,
             )
@@ -148,6 +166,10 @@ fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
                     startedAt = startedAt,
                     updatedAt = updatedAt,
                     activeDurationMs = activeDurationMs,
+                    activeDurationAsOf = activeDurationAsOf,
+                    subtaskActiveDurationMs = subtaskActiveDurationMs,
+                    subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+                    execution = execution,
                 ),
                 observedAt = observedAt,
             )
@@ -173,7 +195,10 @@ fun LastKnownDisplayCache.toStaleOutcome(): SkillBillStatusOutcome.Stale =
         subtaskStartedAt = display.subtaskStartedAt,
         updatedAt = display.updatedAt,
         activeDurationMs = display.activeDurationMs,
+        activeDurationAsOf = display.activeDurationAsOf,
         subtaskActiveDurationMs = display.subtaskActiveDurationMs,
+        subtaskActiveDurationAsOf = display.subtaskActiveDurationAsOf,
         fromCache = true,
         diagnostic = StatusDiagnostic(reasonCode = "cache_fallback"),
+        execution = display.execution,
     )

@@ -18,6 +18,7 @@ import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningStatusAlignRequest
@@ -145,7 +146,13 @@ class GoalRunnerStatusProjectionAssembler(
   ): GoalRunnerStatusProjectionRuntimeInputs {
     val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
     val childWorkflowId = currentSubtask?.workflowId?.takeIf(String::isNotBlank)
-    val progress = childWorkflowId?.let { workflowId -> outcomeStore.progress(workflowId) }
+    val progress =
+      childWorkflowId?.let { workflowId -> outcomeStore.progress(workflowId) }
+        ?: resolveParentExecutionLiveness(loadedState.parentWorkflowId, durableRead)
+          .takeIf { it == ExecutionLiveness.LIVE }
+          ?.let { outcomeStore.progress(loadedState.parentWorkflowId) }
+          ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
+          ?.let { parent -> parent.copy(currentStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()) }
     val ledgerSummary =
       runCatching {
         attemptLedgerStore.readAttemptLedgerSummary(loadedState.manifest.issueKey)

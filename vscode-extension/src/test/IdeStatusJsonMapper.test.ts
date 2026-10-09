@@ -35,6 +35,33 @@ describe("IdeStatusJsonMapper", () => {
     }
   });
 
+  it("preserves large standalone run identity and bounded activity", () => {
+    const outcome = mapIdeStatusJson(JSON.stringify({
+      contract_version: IDE_STATUS_CONTRACT_VERSION,
+      repository_identity: "repo",
+      workflow_id: "workflow-411",
+      execution_scope: "standalone_phase",
+      execution_id: "execution-411",
+      status_store_id: "store-1",
+      run_sequence: "90071992547409931234567890",
+      status_revision: "90071992547409931234567891",
+      invocation_id: "invocation-411",
+      phase_id: "review",
+      lifecycle_state: "active",
+      summary: "review",
+      current_step: { id: "review", label: "Review" },
+      current_activity: "Checking findings",
+      updated_at: "2026-08-06T11:00:00Z",
+    }), observedAt, 0);
+    assert.equal(outcome.kind, "active");
+    if (outcome.kind === "active") {
+      assert.equal(outcome.runSequence, "90071992547409931234567890");
+      assert.equal(outcome.executionScope, "standalone_phase");
+      assert.equal(outcome.phaseId, "review");
+      assert.equal(outcome.currentActivity, "Checking findings");
+    }
+  });
+
   it("degrades malformed optional planning to null without failing the outcome", () => {
     const stdout = JSON.stringify({
       contract_version: IDE_STATUS_CONTRACT_VERSION,

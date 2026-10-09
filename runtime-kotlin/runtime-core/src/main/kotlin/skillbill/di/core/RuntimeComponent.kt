@@ -47,6 +47,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -78,6 +79,7 @@ import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -155,6 +157,16 @@ abstract class RuntimeComponent(
     runtimeVersion: RuntimeVersion,
   ): DatabaseSessionFactory =
     SQLiteDatabaseSessionFactory(context, clock, diagnostics, workflowSnapshotValidator, runtimeVersion.value)
+
+  @Provides
+  fun standalonePhaseStatusPublisherFactory(
+    database: DatabaseSessionFactory,
+    repositories: RepositoryEnclosingRootPort,
+    branchSource: CheckedOutBranchSource,
+    clock: Clock,
+    diagnostics: RuntimeDiagnostics,
+  ): StandalonePhaseStatusPublisherFactory =
+    StandalonePhaseStatusPublisherFactory(database, repositories, branchSource, clock, diagnostics)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort

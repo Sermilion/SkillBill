@@ -2,6 +2,8 @@ package skillbill.engine.work
 
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
+import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
+import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
@@ -80,6 +82,25 @@ class IdeStatusSelectionPolicyTest {
     val tieA = candidate("a", IdeStatusLifecycleState.ACTIVE, "w-a", "2026-08-06T11:00:00Z")
     val tieB = candidate("a", IdeStatusLifecycleState.ACTIVE, "w-b", "2026-08-06T11:00:00Z")
     assertEquals("w-a", IdeStatusSelectionPolicy.select(listOf(tieB, tieA), OBSERVED)?.workflowId)
+  }
+
+  @Test
+  fun `newer persisted standalone sequence wins over an older active workflow despite timestamp tie`() {
+    val workflow = candidate("SKILL-411", IdeStatusLifecycleState.ACTIVE, "workflow", "2026-08-06T12:00:00Z")
+    val phase =
+      candidate("SKILL-411", IdeStatusLifecycleState.TERMINAL, "phase", "2026-08-06T12:00:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+            executionId = "execution",
+            statusStoreId = "store",
+            runSequence = "2",
+            statusRevision = "3",
+            invocationId = "invocation",
+            phaseId = "review",
+          ),
+      )
+    assertEquals("phase", IdeStatusSelectionPolicy.select(listOf(workflow, phase), OBSERVED)?.workflowId)
   }
 
   @Test

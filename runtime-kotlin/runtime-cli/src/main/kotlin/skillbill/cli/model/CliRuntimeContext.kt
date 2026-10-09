@@ -11,6 +11,8 @@ import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
+import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.process.InstallerProcessPort
 import skillbill.ports.process.InstallerScriptFetchPort
 import skillbill.ports.system.HostPlatformPort
@@ -29,6 +31,8 @@ data class CliRuntimeContext(
   val workflowGitOperations: WorkflowGitOperations? = null,
   val agentRunLauncher: AgentRunLauncher? = null,
   val goalPullRequestPort: GoalPullRequestPort? = null,
+  val pullRequestIdentityLookup: PullRequestIdentityLookup? = null,
+  val pullRequestChecksLookup: PullRequestChecksLookup? = null,
   val executableLookup: ExecutableLookup? = null,
   val runtimeTimingPort: RuntimeTimingPort? = null,
   val hostPlatformPort: HostPlatformPort? = null,
@@ -59,6 +63,8 @@ data class CliRuntimeContext(
           agentRunLauncher = agentRunLauncher,
           runtimeDiagnostics = runtimeDiagnostics,
           goalPullRequestPort = goalPullRequestPort,
+          pullRequestIdentityLookup = pullRequestIdentityLookup,
+          pullRequestChecksLookup = pullRequestChecksLookup,
           executableLookup = executableLookup,
           runtimeTimingPort = runtimeTimingPort,
           hostPlatformPort = hostPlatformPort,

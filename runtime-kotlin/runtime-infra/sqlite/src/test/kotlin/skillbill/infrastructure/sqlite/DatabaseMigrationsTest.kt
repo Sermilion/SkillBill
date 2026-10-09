@@ -118,6 +118,7 @@ class DatabaseMigrationsTest {
         47 to "add-operation-proposals",
         48 to "add-goal-no-change-reason",
         49 to "add-feature-task-phase-strategy-telemetry-columns",
+        50 to "add-standalone-phase-status-authority",
       ),
       migrationDefinitions,
     )
@@ -356,10 +357,15 @@ class DatabaseMigrationsTest {
   }
 
   private fun assertPhaseStrategyMigrationRecorded(connection: Connection) {
-    assertEquals(49, scalarInt(connection, "PRAGMA user_version"))
+    assertEquals(DatabaseMigrations.migrations.last().version, scalarInt(connection, "PRAGMA user_version"))
     assertNotNull(
       migrationRows(connection).singleOrNull {
         it.version == 49 && it.name == "add-feature-task-phase-strategy-telemetry-columns"
+      },
+    )
+    assertNotNull(
+      migrationRows(connection).singleOrNull {
+        it.version == 50 && it.name == "add-standalone-phase-status-authority"
       },
     )
   }
@@ -429,6 +435,12 @@ class DatabaseMigrationsTest {
         1,
         migrationRows(connection).count {
           it.version == 49 && it.name == "add-feature-task-phase-strategy-telemetry-columns"
+        },
+      )
+      assertEquals(
+        1,
+        migrationRows(connection).count {
+          it.version == 50 && it.name == "add-standalone-phase-status-authority"
         },
       )
     }

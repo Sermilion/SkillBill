@@ -26,8 +26,8 @@ class IdeStatusSchemaContractVersionTest {
   @Test
   fun `agent activity fields bump contract version to 0_2`() {
     val schema = classpathSchema()
-    assertEquals("0.2", schema.path("properties").path("contract_version").path("const").asText())
-    assertEquals("0.2", IDE_STATUS_CONTRACT_VERSION)
+    assertEquals("0.3", schema.path("properties").path("contract_version").path("const").asText())
+    assertEquals("0.3", IDE_STATUS_CONTRACT_VERSION)
     assertTrue(
       !schema.path("properties").path("last_agent_activity_at").isMissingNode,
       "last_agent_activity_at must be present in the schema this parity test pins.",
