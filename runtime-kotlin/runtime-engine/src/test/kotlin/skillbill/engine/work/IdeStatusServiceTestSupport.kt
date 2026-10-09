@@ -46,6 +46,7 @@ import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.NoopIdeStatusValidator
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
@@ -469,6 +470,7 @@ internal class TrackingDatabase(
   internal val workflows: WorkflowStateRepository,
   internal val exists: Boolean = true,
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
+  internal val statusRepository: StandalonePhaseStatusRepository? = null,
 ) : DatabaseSessionFactory {
   var readCalls: Int = 0
     internal set
@@ -502,6 +504,7 @@ internal class TrackingDatabase(
         object : WorkListRepository {
           override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
         }
+      override val standalonePhaseStatuses = statusRepository ?: super.standalonePhaseStatuses
       override val goalRunnerControls = controls
       override val learnings: LearningRepository
         get() = error("Not exercised by IdeStatusServiceTest.")

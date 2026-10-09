@@ -226,6 +226,11 @@ class IdeStatusProjector(
         projection.completeCount > 0 &&
         projection.executionLiveness != ExecutionLiveness.LIVE
     if (settledComplete) return IdeStatusLifecycleState.TERMINAL
+    if (candidate.lifecycleState == IdeStatusLifecycleState.PAUSED &&
+      projection?.executionLiveness == ExecutionLiveness.LIVE && !projection.paused
+    ) {
+      return IdeStatusLifecycleState.ACTIVE
+    }
     if (candidate.lifecycleState != IdeStatusLifecycleState.ACTIVE) return candidate.lifecycleState
     return when {
       projection?.paused == true -> IdeStatusLifecycleState.PAUSED

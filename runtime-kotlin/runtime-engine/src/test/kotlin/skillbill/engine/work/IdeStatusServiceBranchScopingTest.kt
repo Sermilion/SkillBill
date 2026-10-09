@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.engine.work.model.IdeStatusRequest
@@ -11,10 +12,12 @@ import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
+import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -22,6 +25,8 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -30,6 +35,102 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class IdeStatusServiceBranchScopingTest {
+  @Test
+  fun `base branch registration follows the goal feature branch through live finalization`() {
+    val featureBranch = "feat/SKILL-148-status-fix"
+    val fixture = gitRepoFixture("ide-status-goal-branch-transition", branch = featureBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val initial = completedGoalManifestState(fixture, identity)
+    val state = initial.copy(manifest = initial.manifest.copy(featureBranch = featureBranch))
+    val database = registeredGoalDatabase(identity, "main", goalState = "paused")
+    val parentProgress =
+      GoalRunnerWorkflowProgress(
+        workflowId = "goal-1",
+        workflowStatus = WorkflowStatus.PAUSED,
+        currentStepId = "plan",
+        progressToken = "monitor-heartbeat",
+        latestDeclaredProgressEvent =
+          GoalProgressEvent(
+            eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+            workflowId = "goal-1",
+            workflowPhase = "monitor",
+            processAlive = true,
+            sequenceNumber = 1,
+            timestamp = ideStatusObservedAt,
+            stepId = "monitor",
+            operationName = "monitor",
+            operationKind = GOAL_FINALIZATION_OPERATION_KIND,
+          ),
+      )
+    val result =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            state,
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+        outcomeStore =
+          object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+            override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+              parentProgress.takeIf { workflowId == "goal-1" }
+          },
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertNull(result.snapshot.problem)
+    assertEquals("goal-1", result.snapshot.workflowId)
+    assertEquals(featureBranch, result.snapshot.branchCorrelation)
+    assertEquals("parent-execution", result.snapshot.execution?.executionId)
+    assertEquals("2", result.snapshot.execution?.runSequence)
+    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals("monitor", result.snapshot.currentStep.id)
+    assertEquals(2, result.snapshot.progress?.completed)
+    assertEquals("Goal SKILL-148 is active on monitor.", result.snapshot.summary)
+    assertEquals(0, database.writeCalls)
+  }
+
+  @Test
+  fun `base branch registration does not expose a goal on another branch with the same issue key`() {
+    val fixture = gitRepoFixture("ide-status-goal-unowned-branch", branch = "feat/SKILL-148-other")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val result =
+      ideStatusService(
+        registeredGoalDatabase(identity, "main"),
+        manifestStore = StubGoalManifestStore(goalManifestState(fixture, identity, childWorkflowId = "w-child")),
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
+    assertNull(result.snapshot.workflowId)
+  }
+
+  private fun registeredGoalDatabase(
+    identity: String,
+    registeredBranch: String,
+    goalState: String = "running",
+  ): TrackingDatabase {
+    val database = goalOnlyDatabase(goalState)
+    val statuses =
+      object : StandalonePhaseStatusRepository by database.unitOfWork().standalonePhaseStatuses {
+        override fun latestWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
+          IdeStatusWorkflowExecution(
+            repositoryIdentity = identity,
+            branchCorrelation = registeredBranch,
+            issueKey = "SKILL-148",
+            workflowId = "goal-1",
+            invocationId = "parent-invocation",
+            executionId = "parent-execution",
+            statusStoreId = "status-store",
+            runSequence = "2",
+            statusRevision = "1",
+            lifecycleState = "active",
+            startedAt = ideStatusObservedAt.minusSeconds(600),
+            updatedAt = ideStatusObservedAt,
+          ).takeIf { workflowId == "goal-1" }
+      }
+    return TrackingDatabase(database.work, database.workflows, statusRepository = statuses)
+  }
+
   @Test
   fun `goal preplanning and planning stay visible on a custom base branch before any child launches`() {
     val baseBranch = "base/SKILL-380-phase-slot-strategies"
