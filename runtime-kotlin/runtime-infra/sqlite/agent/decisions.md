@@ -1,5 +1,11 @@
 # SQLite boundary decisions
 
+## [2026-10-09] Use an append-only migration for phase-strategy telemetry columns
+Context: Version 39 was already recorded on existing databases, while later telemetry writes required two columns it had once added.
+Decision: Register a uniquely named v49 migration and reuse the idempotent nullable-column helper for both columns.
+Reason: The name-keyed ledger skips already-applied migrations; a new migration upgrades old files without rewriting ledger history, backfilling measurements, or changing existing rows.
+Alternatives considered: Revising version 39 or fabricating historical strategy values would leave already-applied databases broken or make unmeasured history untruthful.
+
 ## [2026-10-01] Pass RuntimeDiagnostics explicitly instead of a connection registry
 Context: SQLite helpers looked up diagnostics and clock through a registry keyed by connection, hiding who reported degradation and letting call sites silently skip it.
 Decision: Diagnostics is a required parameter on every store, migration, and transaction helper that can degrade; tests use test-side overloads that supply a test diagnostics sink.

@@ -10,15 +10,19 @@ import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.review.stats.loadGoalRows
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
+import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import java.util.concurrent.CountDownLatch
@@ -113,6 +117,7 @@ class DatabaseMigrationsTest {
         46 to "allow-goal-planning-phase-output-0-7",
         47 to "add-operation-proposals",
         48 to "add-goal-no-change-reason",
+        49 to "add-feature-task-phase-strategy-telemetry-columns",
       ),
       migrationDefinitions,
     )
@@ -274,6 +279,158 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v49 upgrades phase strategy telemetry without rewriting history`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v49-phase-strategies").resolve("legacy.db")
+
+    prepareLegacyPhaseStrategyDatabase(dbPath)
+    verifyPhaseStrategyUpgradeAndTelemetry(dbPath)
+    verifyPhaseStrategyUpgradeIsIdempotent(dbPath)
+  }
+
+  private fun prepareLegacyPhaseStrategyDatabase(dbPath: Path) {
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          """
+          INSERT INTO feature_task_runtime_sessions (
+            session_id, feature_size, issue_key, feature_name, completion_status, finished_at
+          ) VALUES ('ftr-history', 'MEDIUM', 'SKILL-412', 'historical run', 'completed', '2026-09-22 10:00:00')
+          """.trimIndent(),
+        )
+        statement.executeUpdate("ALTER TABLE feature_task_runtime_sessions DROP COLUMN phase_strategies")
+        statement.executeUpdate("ALTER TABLE feature_task_runtime_sessions DROP COLUMN phase_strategy_availability")
+        statement.executeUpdate(
+          "DELETE FROM schema_migrations WHERE name = 'add-feature-task-phase-strategy-telemetry-columns'",
+        )
+        statement.executeUpdate("PRAGMA user_version = 48")
+      }
+      assertFalse("phase_strategies" in tableColumns(connection, "feature_task_runtime_sessions"))
+      assertFalse("phase_strategy_availability" in tableColumns(connection, "feature_task_runtime_sessions"))
+      assertEquals(DatabaseMigrations.migrations.size - 1, migrationRows(connection).size)
+    }
+  }
+
+  private fun verifyPhaseStrategyUpgradeAndTelemetry(dbPath: Path) {
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertPhaseStrategyColumnsAndHistory(connection)
+      assertPhaseStrategyMigrationRecorded(connection)
+      persistPhaseStrategyFinishTelemetry(connection)
+    }
+  }
+
+  private fun assertPhaseStrategyColumnsAndHistory(connection: Connection) {
+    assertTrue("phase_strategies" in tableColumns(connection, "feature_task_runtime_sessions"))
+    assertTrue("phase_strategy_availability" in tableColumns(connection, "feature_task_runtime_sessions"))
+    assertEquals(
+      "completed",
+      tableColumnValue(connection, "feature_task_runtime_sessions", "session_id", "ftr-history", "completion_status"),
+    )
+    assertEquals(
+      "2026-09-22 10:00:00",
+      tableColumnValue(connection, "feature_task_runtime_sessions", "session_id", "ftr-history", "finished_at"),
+    )
+    assertEquals(
+      null,
+      nullableTableColumnValue(
+        connection,
+        "feature_task_runtime_sessions",
+        "session_id",
+        "ftr-history",
+        "phase_strategies",
+      ),
+    )
+    assertEquals(
+      null,
+      nullableTableColumnValue(
+        connection,
+        "feature_task_runtime_sessions",
+        "session_id",
+        "ftr-history",
+        "phase_strategy_availability",
+      ),
+    )
+  }
+
+  private fun assertPhaseStrategyMigrationRecorded(connection: Connection) {
+    assertEquals(49, scalarInt(connection, "PRAGMA user_version"))
+    assertNotNull(
+      migrationRows(connection).singleOrNull {
+        it.version == 49 && it.name == "add-feature-task-phase-strategy-telemetry-columns"
+      },
+    )
+  }
+
+  private fun persistPhaseStrategyFinishTelemetry(connection: Connection) {
+    val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
+    store.featureTaskRuntimeStarted(
+      FeatureTaskRuntimeStartedRecord(
+        sessionId = "ftr-upgraded",
+        featureSize = "MEDIUM",
+        issueKey = "SKILL-412",
+        featureName = "phase strategy upgrade",
+      ),
+      "anonymous",
+    )
+    store.featureTaskRuntimeFinished(
+      FeatureTaskRuntimeFinishedRecord(
+        sessionId = "ftr-upgraded",
+        completionStatus = "completed",
+        completedPhaseIds = listOf("implement"),
+        phaseOutcomes = mapOf("implement" to "completed"),
+        lastIncompletePhase = "completed",
+        blockedReason = "",
+        resolvedBranch = "feat/SKILL-412",
+        phaseStrategies = "{\"implement\":{\"strategy_id\":\"runtime\",\"semantic_revision\":1}}",
+        phaseStrategyAvailability = "measured",
+      ),
+      "anonymous",
+    )
+    assertEquals(
+      "{\"implement\":{\"strategy_id\":\"runtime\",\"semantic_revision\":1}}",
+      tableColumnValue(
+        connection,
+        "feature_task_runtime_sessions",
+        "session_id",
+        "ftr-upgraded",
+        "phase_strategies",
+      ),
+    )
+    assertEquals(
+      "measured",
+      tableColumnValue(
+        connection,
+        "feature_task_runtime_sessions",
+        "session_id",
+        "ftr-upgraded",
+        "phase_strategy_availability",
+      ),
+    )
+    assertNotNull(
+      tableColumnValue(connection, "feature_task_runtime_sessions", "session_id", "ftr-upgraded", "finished_at"),
+    )
+    assertEquals(
+      1,
+      scalarInt(
+        connection,
+        "SELECT COUNT(*) FROM telemetry_outbox WHERE event_name = 'skillbill_feature_task_runtime_finished'",
+      ),
+    )
+  }
+
+  private fun verifyPhaseStrategyUpgradeIsIdempotent(dbPath: Path) {
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+      assertEquals(2, rowCount(connection, "feature_task_runtime_sessions"))
+      assertEquals(
+        1,
+        migrationRows(connection).count {
+          it.version == 49 && it.name == "add-feature-task-phase-strategy-telemetry-columns"
+        },
+      )
     }
   }
 
@@ -650,6 +807,8 @@ class DatabaseMigrationsTest {
         DatabaseMigrations.migrations.map { migration -> migration.version to migration.name },
         rows.map { row -> row.version to row.name },
       )
+      assertTrue("phase_strategies" in tableColumns(connection, "feature_task_runtime_sessions"))
+      assertTrue("phase_strategy_availability" in tableColumns(connection, "feature_task_runtime_sessions"))
       rows.forEach { row -> assertTrue(row.appliedAt.isNotBlank()) }
     }
   }

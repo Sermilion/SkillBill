@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-412"
+feature_name: "upgrade-existing-databases-for-phase-strategy-telemetry"
+parent_spec_path: ".feature-specs/SKILL-412-upgrade-existing-databases-for-phase-strategy-telemetry/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-412-upgrade-existing-databases-for-phase-strategy-telemetry"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Implement the requested change"
+  spec_path: "/Users/braian.gapur/IdeaProjects/skill-bill/.feature-specs/SKILL-412-upgrade-existing-databases-for-phase-strategy-telemetry/spec_subtask_1_implement-the-requested-change.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261009-101849-d0tc"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
