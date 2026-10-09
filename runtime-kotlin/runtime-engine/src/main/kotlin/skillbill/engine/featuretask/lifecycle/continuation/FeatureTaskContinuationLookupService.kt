@@ -88,11 +88,8 @@ class FeatureTaskContinuationLookupService(
               )
             },
           )
-        if (plan.definitionId !=
-          SkeletonDefinition.forRun(
-            identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD,
-          ).id
-        ) {
+        val admitted = SkeletonDefinition.admittedForRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
+        if (admitted.none { it.id == plan.definitionId }) {
           throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
         }
         requireCompletedGateOutputEvidence(snapshot.artifacts, plan)
@@ -166,6 +163,21 @@ class FeatureTaskContinuationLookupService(
         repositoryIdentity = repositoryIdentity,
         workflowId = workflowId,
         routeScope = FeatureTaskRouteScope.GOAL_CHILD,
+      ),
+    )
+
+  fun lookupPlan(
+    issueKey: String,
+    repositoryIdentity: String,
+    workflowId: String? = null,
+  ): FeatureTaskContinuationLookupResult =
+    lookup(
+      FeatureTaskContinuationLookupQuery(
+        issueKey = issueKey,
+        repositoryIdentity = repositoryIdentity,
+        workflowId = workflowId,
+        routeScope = FeatureTaskRouteScope.STANDALONE,
+        admittedDefinition = SkeletonDefinition.PLAN,
       ),
     )
 

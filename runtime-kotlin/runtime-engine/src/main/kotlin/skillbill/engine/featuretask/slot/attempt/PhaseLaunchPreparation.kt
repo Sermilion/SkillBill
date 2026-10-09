@@ -413,6 +413,7 @@ object PhaseLaunchPreparation {
         briefing = briefing,
         suppressDecomposition = isGoalContinuationRun(run.request),
         specBundleRequired = run.request.specBundleRequired,
+        specRewritable = run.request.protectedSpecSha256 == null,
         codeReviewMode = launchReviewTier.executedTier,
         reviewPassNumber = launchReviewTier.passNumber,
         goalSubtaskReviewInput = run.goalReviewInput,

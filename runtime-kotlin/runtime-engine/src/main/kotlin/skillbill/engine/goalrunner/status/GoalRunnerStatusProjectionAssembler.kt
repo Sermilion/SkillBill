@@ -121,14 +121,20 @@ class GoalRunnerStatusProjectionAssembler(
     if (parentLiveness == ExecutionLiveness.LIVE || parentLiveness == ExecutionLiveness.UNKNOWN) {
       return parentLiveness
     }
-    childWorkflowIds.forEach { childWorkflowId ->
-      val childLiveness = resolveChildExecutionLiveness(childWorkflowId, durableRead)
-      if (childLiveness == ExecutionLiveness.LIVE || childLiveness == ExecutionLiveness.UNKNOWN) {
-        return childLiveness
-      }
-    }
-    return null
+    return firstBlockingWorkerLiveness(childWorkflowIds, durableRead)
   }
+
+  internal fun resolveWorkerBlockingLiveness(workflowIds: Collection<String>): ExecutionLiveness? =
+    firstBlockingWorkerLiveness(workflowIds.sorted(), GoalRunnerStatusDurableReadTracker(diagnostics))
+
+  private fun firstBlockingWorkerLiveness(
+    workflowIds: Collection<String>,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): ExecutionLiveness? =
+    workflowIds.firstNotNullOfOrNull { workflowId ->
+      resolveChildExecutionLiveness(workflowId, durableRead)
+        .takeIf { it == ExecutionLiveness.LIVE || it == ExecutionLiveness.UNKNOWN }
+    }
 
   private fun statusProjectionRuntimeInputs(
     loadedState: GoalRunnerManifestState,

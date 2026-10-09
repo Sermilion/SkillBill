@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.findMatchingDecompositionManifests
 import skillbill.application.decomposition.repoRelativePath
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -115,7 +116,8 @@ class GoalRunnerPurgeCoordinator(
     val target =
       GoalPurgeTarget(
         parentWorkflowIds = ownership.parentWorkflowIds,
-        workflowIds = ownership.parentWorkflowIds + childrenByParent.values.flatten() + verifiedIds,
+        workflowIds =
+          ownership.parentWorkflowIds + childrenByParent.values.flatten() + verifiedIds + ownership.planWorkflowIds,
       )
     val sourceManifest = manifests.firstOrNull()
     val orphanIds = verifiedIds - childrenByParent.values.flatten().toSet()
@@ -127,7 +129,7 @@ class GoalRunnerPurgeCoordinator(
       refusalReason =
         childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
           refusal(issueKey, parentId, childIds + orphanIds)
-        },
+        } ?: planRefusal(issueKey, ownership.planWorkflowIds),
       unclassifiedLeftovers = ownership.unclassifiedWorkflows,
     )
   }
@@ -146,6 +148,18 @@ class GoalRunnerPurgeCoordinator(
       ExecutionLiveness.LIVE -> "Goal '$issueKey' is live; refuse purge while a parent or child worker is active."
       ExecutionLiveness.UNKNOWN ->
         "Goal '$issueKey' has unknown execution liveness; refuse purge until liveness is known."
+      ExecutionLiveness.IDLE, null -> null
+    }
+
+  private fun planRefusal(
+    issueKey: String,
+    planWorkflowIds: Collection<String>,
+  ): String? =
+    when (projectionAssembler.resolveWorkerBlockingLiveness(planWorkflowIds)) {
+      ExecutionLiveness.LIVE ->
+        "Goal '$issueKey' has a live plan worker; refuse purge while a plan workflow is active."
+      ExecutionLiveness.UNKNOWN ->
+        "Goal '$issueKey' has unknown plan worker liveness; refuse purge until liveness is known."
       ExecutionLiveness.IDLE, null -> null
     }
 
@@ -192,7 +206,8 @@ class GoalRunnerPurgeCoordinator(
   ): Boolean {
     val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     return database.read { unitOfWork ->
-      unitOfWork.workflowStates.findStandaloneFeatureTaskCandidates(issueKey, repositoryIdentity).isNotEmpty()
+      unitOfWork.workflowStates.findStandaloneFeatureTaskCandidates(issueKey, repositoryIdentity)
+        .any { candidate -> !candidate.workflow.isPlanWorkflow() }
     }
   }
 }

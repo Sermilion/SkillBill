@@ -14,7 +14,6 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -74,7 +73,6 @@ internal data class InMemoryPhaseRunFacts(
   override val issueKey: String = intake.issueKey
   override val workflowId: String = ""
   override val runInvariants: FeatureTaskRuntimeRunInvariants = intake.runInvariants
-  override val specBundleRequired: Boolean = definition.slots.last() == PhaseSlot.PLAN
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
   override val modelAssignment: FeatureTaskRuntimeModelAssignment = request.modelAssignment

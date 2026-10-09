@@ -372,6 +372,7 @@ private fun testNoChangeChildCloser(
       goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
       runtimeDiagnostics = NoopRuntimeDiagnostics,
       clock = clock,
+      repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
     ),
   )
 

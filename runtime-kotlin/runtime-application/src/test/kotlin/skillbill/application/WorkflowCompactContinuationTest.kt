@@ -212,6 +212,7 @@ private fun newService(): WorkflowService =
     goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
+    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
   )
 
 private fun newBlockedImplementService(

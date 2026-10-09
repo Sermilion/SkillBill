@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.manifest
 
 import skillbill.application.workflow.decomposition.listDecomposedParentsForPurge
+import skillbill.application.workflow.decomposition.listPlanWorkflowsForPurge
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -42,6 +43,10 @@ internal class WorkflowGoalRunnerPurgePersistence(
             }
           },
         parentWorkflowIds = parents.mapTo(linkedSetOf()) { it.record.workflowId },
+        planWorkflowIds =
+          unitOfWork.workflowStates.listPlanWorkflowsForPurge(issueKey, identity).mapTo(linkedSetOf()) {
+            it.workflowId
+          },
         unclassifiedWorkflows =
           discovered.unclassifiedRows.filterNot { row -> row.workflowId in ownedChildIds }.map { row ->
             "workflow ${row.workflowId} matches $issueKey but its state cannot be decoded (${row.reason}); " +

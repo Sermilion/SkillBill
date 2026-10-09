@@ -1,3 +1,10 @@
+## [2026-10-09] Run standalone plan through the durable run loop and admit by definition
+Context: SKILL-410 `phase plan` ran in memory, so a plan left no workflow a later full run could resume or link to.
+Decision: Make plan a durable skeleton with an `admittedForRun` set per run kind, route it through `StandalonePlanRun`, and link the completed plan workflow to the goal parent on import.
+Reason: A durable workflow gives resume, crash reconciliation and purge for free; a per-kind admitted set keeps goal_child+plan rejected without a second admission path. Keeping `phase plan` out of the dispatcher preserves the rule that the dispatcher never invokes it.
+Alternatives considered: keeping the in-memory entry and copying results into the goal; rejected because a crash or intake change would lose the plan with no resume or hash check.
+Revisit when: another standalone phase needs a durable workflow, or non-CLI callers must chain plan into a goal.
+
 ## [2026-10-09] Purge all matching goals and defer destructive steps after a failed directory delete
 Context: SKILL-409 goal purge left rows and directories behind (WE-5006) because it removed one decodable parent and restored a DB snapshot on failure.
 Decision: Purge every repo-scoped decomposed parent for the issue key, including undecodable ones. If any directory delete fails, skip the DB, checkpoint and spec steps and report the failed paths as leftovers with exit 1. The old snapshot-restore is removed.

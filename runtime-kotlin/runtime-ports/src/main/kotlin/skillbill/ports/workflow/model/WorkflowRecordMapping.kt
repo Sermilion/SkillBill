@@ -75,7 +75,12 @@ private fun decodeStep(
 ): WorkflowStepState {
   val item = JsonCodec.anyToStringAnyMap(entry) ?: invalidStep(index, "must decode to a JSON object.")
   val allowedKeys =
-    setOf(SharedPayloadKeys.STEP_ID, SharedPayloadKeys.STATUS, WorkflowWirePayloadKeys.ATTEMPT_COUNT)
+    setOf(
+      SharedPayloadKeys.STEP_ID,
+      SharedPayloadKeys.STATUS,
+      WorkflowWirePayloadKeys.ATTEMPT_COUNT,
+      WorkflowWirePayloadKeys.PLAN_WORKFLOW_ID,
+    )
   if (item.keys.any { it !in allowedKeys }) {
     invalidStep(index, "contains an unknown field.")
   }
@@ -95,7 +100,14 @@ private fun decodeStep(
     } else {
       0
     }
-  return WorkflowStepState(stepId, status, attempts)
+  val planWorkflowId =
+    if (WorkflowWirePayloadKeys.PLAN_WORKFLOW_ID in item) {
+      (item[WorkflowWirePayloadKeys.PLAN_WORKFLOW_ID] as? String)?.takeIf(String::isNotBlank)
+        ?: invalidStep(index, "plan_workflow_id must decode to a non-blank string.")
+    } else {
+      null
+    }
+  return WorkflowStepState(stepId, status, attempts, planWorkflowId)
 }
 
 private fun invalidStep(
@@ -120,11 +132,13 @@ private fun parseJson(
 private fun encodeSteps(steps: List<WorkflowStepState>): String =
   JsonCodec.valueToJsonString(
     steps.map { step ->
-      linkedMapOf(
+      linkedMapOf<String, Any>(
         SharedPayloadKeys.STEP_ID to step.stepId,
         SharedPayloadKeys.STATUS to step.status.wireValue,
         WorkflowWirePayloadKeys.ATTEMPT_COUNT to step.attemptCount,
-      )
+      ).also { encoded ->
+        step.planWorkflowId?.let { encoded[WorkflowWirePayloadKeys.PLAN_WORKFLOW_ID] = it }
+      }
     },
   )
 

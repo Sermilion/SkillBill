@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.artifact
 import skillbill.contracts.JsonCodec
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -21,6 +22,12 @@ fun FeatureTaskRuntimeNoChangePause.asWorkflowArtifactEntry(): FeatureTaskRuntim
 
 fun decodeNoChangePauseFromArtifact(raw: Any?): FeatureTaskRuntimeNoChangePause? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeNoChangePause::fromArtifactMap)
+
+fun FeatureTaskRuntimePlanSeed.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
+
+fun decodePlanSeedFromArtifact(raw: Any?): FeatureTaskRuntimePlanSeed? =
+  JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimePlanSeed::fromArtifactMap)
 
 fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())

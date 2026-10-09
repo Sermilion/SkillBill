@@ -1,11 +1,13 @@
 package skillbill.engine.goalrunner.manifest
 
 import skillbill.application.decomposition.resolveDecompositionManifest
+import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
+import skillbill.application.workflow.decomposition.importedPlanStepUpdates
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
+import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.db.DatabaseSessionFactory
@@ -19,7 +21,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
@@ -109,6 +110,12 @@ internal class WorkflowGoalRunnerManifestLoader(
           WorkflowFamily.TASK_RUNTIME.definition.defaultSessionPrefix,
           "plan",
         )
+      val planWorkflowId =
+        if (existing == null) {
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(manifest.issueKey, repositoryIdentity)
+        } else {
+          null
+        }
       val imported =
         engine.updateRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -116,26 +123,8 @@ internal class WorkflowGoalRunnerManifestLoader(
           WorkflowUpdateInput(
             workflowStatus = WorkflowStatus.PAUSED,
             currentStepId = "plan",
-            stepUpdates =
-              if (existing != null) {
-                null
-              } else {
-                WorkflowStepUpdates.from(
-                  listOf(
-                    mapOf(
-                      SharedPayloadKeys.STEP_ID to "preplan",
-                      SharedPayloadKeys.STATUS to "completed",
-                      "attempt_count" to 1,
-                    ),
-                    mapOf(
-                      SharedPayloadKeys.STEP_ID to "plan",
-                      SharedPayloadKeys.STATUS to "completed",
-                      "attempt_count" to 1,
-                    ),
-                  ),
-                )
-              },
-            artifactsPatch = parentProjection.artifacts(manifest, base.artifacts),
+            stepUpdates = if (existing != null) null else importedPlanStepUpdates(planWorkflowId),
+            artifactsPatch = parentProjection.artifacts(manifest, base.artifacts).withImportedPlan(planWorkflowId),
             sessionId = base.sessionId.orEmpty(),
             replaceArtifacts = true,
           ),

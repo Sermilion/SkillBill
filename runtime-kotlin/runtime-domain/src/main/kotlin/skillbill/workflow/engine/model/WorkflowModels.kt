@@ -10,6 +10,7 @@ data class WorkflowStepState(
   val stepId: String,
   val status: WorkflowStepStatus,
   val attemptCount: Int,
+  val planWorkflowId: String? = null,
 )
 
 data class WorkflowUpdateInput(

@@ -18,7 +18,7 @@ Harness sources live in
 | `goal-planning/` | `SlotBaselineGoalPlanningCapture.encodedFiles()` | `DefaultGoalPlanningSweep` preplan and plan over a two-subtask manifest, then `GoalPlanningLogService.log` |
 | `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
 | `mcp-lifecycle/` | `SlotBaselineMcpLifecycleCapture.encodedFiles()` | `LifecycleTelemetryService`, the service the MCP tools call |
-| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, `skill-bill phase validation` over a gate that fails once and then passes, and `skill-bill phase plan`, `implement` and `pr` over the fixture agent outputs |
+| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, `skill-bill phase validation` over a gate that fails once and then passes, and `skill-bill phase pr` over the fixture agent outputs |
 
 Full-run bundles run through `telemetryRunnerHarness` against real SQLite.
 The phase launcher is `satisfiedAuditLauncher()`. The review step runs
@@ -58,12 +58,8 @@ re-review approves. Delegated mode runs `scriptedDelegatedReviewRunner`.
 
 - `review-inline-output.json`, `review-delegated-output.json` and `validation-output.json`: the phase-run result fields the CLI prints, including the invocation id
 - `review-inline-telemetry.json`, `review-delegated-telemetry.json` and `validation-telemetry.json`: `telemetry_outbox` rows
-- `plan/`, `implement/` and `pr/`: for each phase, `output.json` (the printed result fields), `telemetry.json`
-  (`telemetry_outbox` rows) and `prompts/<step>.txt`. The plan agent returns a decomposition package, so
-  `plan/output.json` carries `spec_bundle` and `plan/spec-bundle.json` holds every bundle file by repo-relative
-  path. The implement run reads a governed spec written under `.feature-specs/SKILL-380-phase-implement/`.
-  These captures use the existing normaliser tokens; the manifest's absolute paths fall under
-  `__NORMALIZED_REPO_ROOT__`.
+- `pr/`: `output.json` (the printed result fields), `telemetry.json` (`telemetry_outbox` rows) and
+  `prompts/<step>.txt`. This capture uses the existing normaliser tokens.
 
 ## Pinned ids and clock
 
@@ -192,3 +188,6 @@ ledger expects must be regenerated in the subtask that the ledger names.
   stuffed digest, and plan authors its bundle on disk. Phase records, handoff projections and
   workflow snapshots carry the prose value and summary. The `phase/plan/` capture runs in a repo
   without the seeded SKILL-380 spec, because plan blocks rather than overwrite an existing parent spec.
+- SKILL-410 (durable standalone plan): `skill-bill phase plan` runs the `plan` definition over durable
+  workflow state, and `PhaseRunEntry` drives only in-memory definitions, so `phase/plan/` and its capture
+  are removed. Every other file is unchanged.

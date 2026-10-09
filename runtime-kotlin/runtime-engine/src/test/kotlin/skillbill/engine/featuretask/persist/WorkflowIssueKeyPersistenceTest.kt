@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.persist
 
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testRepositoryRoot
@@ -45,6 +46,7 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     val firstRuntime =
@@ -96,6 +98,7 @@ class WorkflowIssueKeyPersistenceTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     assertFailsWith<SkillBillRuntimeException> {

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
 import skillbill.application.workflow.decomposition.goalContinuationFor
+import skillbill.application.workflow.decomposition.isPlanWorkflow
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupQuery
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
@@ -11,6 +12,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 fun executeFeatureTaskContinuationLookup(
   query: FeatureTaskContinuationLookupQuery,
@@ -27,6 +29,7 @@ fun executeFeatureTaskContinuationLookup(
       query.issueKey,
       query.repositoryIdentity,
     )
+  val planDefinition = query.admittedDefinition == SkeletonDefinition.PLAN
   val candidates =
     when (query.routeScope) {
       FeatureTaskRouteScope.STANDALONE ->
@@ -39,7 +42,7 @@ fun executeFeatureTaskContinuationLookup(
           normalizedIssueKey,
           query.repositoryIdentity,
         )
-    }
+    }.filter { candidate -> candidate.workflow.isPlanWorkflow() == planDefinition }
   val selected =
     query.workflowId?.let { selector ->
       listOf(
@@ -68,10 +71,9 @@ fun executeFeatureTaskContinuationLookup(
       )
     }
   val classified = classify(validated)
-  if (classified != FeatureTaskContinuationLookupResult.NoMatch ||
-    query.workflowId != null ||
-    query.routeScope != FeatureTaskRouteScope.STANDALONE
-  ) {
+  val unselectedFeatureTaskLookup =
+    query.workflowId == null && query.routeScope == FeatureTaskRouteScope.STANDALONE && !planDefinition
+  if (classified != FeatureTaskContinuationLookupResult.NoMatch || !unselectedFeatureTaskLookup) {
     return classified
   }
   return unitOfWork.workflowStates.goalContinuationFor(

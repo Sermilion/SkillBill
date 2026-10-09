@@ -18,6 +18,7 @@ import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import java.nio.file.Path
 
 @Inject
@@ -32,6 +33,8 @@ class GoalIntakePreparation(
     intake: String,
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
+
+  fun issueKeyOf(intake: String): String = GoalIntake.parse(intake).issueKey
 
   internal fun missingNewWorkInput(
     intake: GoalIntake,
@@ -94,6 +97,33 @@ class GoalIntakePreparation(
       existingParentSpecPath = specPath,
     )
     return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+  }
+
+  fun seedPlanSpec(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+  ): PlanSpecSeed {
+    val supplied = intake?.takeIf(String::isNotBlank) ?: issueKey
+    existingSpecPath(supplied, issueKey, repoRoot)?.let {
+      return PlanSpecSeed(it, FeatureTaskRuntimePlanSpecOrigin.OPERATOR)
+    }
+    val featureName = newWorkFeatureName(GoalIntake.parse(supplied))
+    val specPath =
+      specWriter.writeParentSpecOnly(
+        repoRoot,
+        FeatureSpecPreparationDecision(
+          issueKey,
+          supplied,
+          acceptanceCriteria(supplied),
+          listOf(TRACKER_RESOLUTION),
+          emptyList(),
+          FeatureSpecPreparationMode.DECOMPOSED,
+        ),
+        featureName,
+        VALIDATION,
+      )
+    return PlanSpecSeed(specPath, FeatureTaskRuntimePlanSpecOrigin.SEEDED)
   }
 
   private fun newWorkFeatureName(intake: GoalIntake): String {

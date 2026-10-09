@@ -15,6 +15,7 @@ data class GoalPurgeOwnership(
   val manifests: List<GoalRunnerManifestState>,
   val parentWorkflowIds: Set<String>,
   val unclassifiedWorkflows: List<String> = emptyList(),
+  val planWorkflowIds: Set<String> = emptySet(),
 )
 
 enum class GoalRunnerPurgeSpecActionKind { DELETED, RESET, RESTORED }

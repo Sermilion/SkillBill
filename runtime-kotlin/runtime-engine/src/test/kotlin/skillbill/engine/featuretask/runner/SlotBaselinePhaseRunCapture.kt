@@ -38,22 +38,13 @@ internal object SlotBaselinePhaseRunCapture {
     ).entries.associate { (fileName, value) ->
       "${SlotBaselinePaths.PHASE}/$fileName" to SlotBaselineJson.encode(value)
     } +
-      captureAgentPhase(SkeletonDefinition.PLAN.id, PLAN_INTAKE).encodedFiles(SlotBaselinePaths.PHASE_PLAN) +
-      captureAgentPhase(SkeletonDefinition.PR.id, intake = null).encodedFiles(SlotBaselinePaths.PHASE_PR)
+      captureAgentPhase(SkeletonDefinition.PR.id).encodedFiles(SlotBaselinePaths.PHASE_PR)
   }
 
-  private fun captureAgentPhase(
-    definitionId: String,
-    intake: String?,
-  ): AgentPhaseRunCapture =
-    SlotBaselinePhaseRunHarness.use(seedSpecIntent = definitionId != SkeletonDefinition.PLAN.id) { harness ->
-      val launcher =
-        RuntimeRecordingLauncher { request ->
-          val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-          facts(if (phaseId == PHASE_PLAN) harness.authorPlanBundle() else defaultPhaseOutput(request))
-        }
-      val result =
-        harness.agentEntry(launcher).run(harness.request(definitionId, mode = null).copy(intake = intake))
+  private fun captureAgentPhase(definitionId: String): AgentPhaseRunCapture =
+    SlotBaselinePhaseRunHarness.use { harness ->
+      val launcher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) }
+      val result = harness.agentEntry(launcher).run(harness.request(definitionId, mode = null))
       AgentPhaseRunCapture(
         capture = PhaseRunCapture(result.printedFields(), harness.outboxRows()),
         prompts =
@@ -61,30 +52,23 @@ internal object SlotBaselinePhaseRunCapture {
             .map { request -> requireNotNull(request.skillRunRequest.promptOverride) }
             .groupBy(::phaseIdFromPrompt)
             .mapValues { (_, prompts) -> prompts.joinToString(PROMPT_ATTEMPT_SEPARATOR) },
-        specBundle = (result as? PhaseRunResult.Completed)?.specBundle?.let(harness::specBundleFiles),
       )
     }
 
   private data class AgentPhaseRunCapture(
     val capture: PhaseRunCapture,
     val prompts: Map<String, String>,
-    val specBundle: Map<String, String>?,
   ) {
     fun encodedFiles(resourcePrefix: String): Map<String, String> =
       buildMap {
         put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_OUTPUT}", SlotBaselineJson.encode(capture.output))
         put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_TELEMETRY}", SlotBaselineJson.encode(capture.telemetry))
-        specBundle?.let { files ->
-          put("$resourcePrefix/${SlotBaselinePaths.PHASE_PLAN_SPEC_BUNDLE}", SlotBaselineJson.encode(files))
-        }
         prompts.forEach { (stepId, prompt) ->
           put("$resourcePrefix/${SlotBaselinePaths.PROMPTS_DIR}/$stepId.txt", SlotBaselineJson.encode(prompt))
         }
       }
   }
 
-  private const val PHASE_PLAN = "plan"
-  private const val PLAN_INTAKE = "SKILL-380 slot baseline phase plan"
   private const val PROMPT_ATTEMPT_SEPARATOR = "\n---\n"
 
   private fun captureReview(mode: CodeReviewExecutionMode): PhaseRunCapture =
@@ -205,15 +189,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
       ),
     )
 
-  fun authorPlanBundle(): String {
-    writePlanBundle(repoRoot, PLAN_ISSUE_KEY)
-    return PLAN_BUNDLE_PROSE
-  }
-
-  fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
-    (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
-      .associateWith { path -> Files.readString(repoRoot.resolve(path)) }
-
   fun outboxRows(): List<Map<String, Any?>> = SlotBaselineSqlite.rows(database.resolveDbPath(), "telemetry_outbox")
 
   private fun entryFor(config: RuntimeHarnessConfig): PhaseRunEntry {
@@ -254,19 +229,14 @@ internal class SlotBaselinePhaseRunHarness private constructor(
 
   companion object {
     const val REVIEW_AGENT = "claude"
-    const val PLAN_ISSUE_KEY = "SKILL-380"
     const val LEAKY_SOURCE = "val connection = open()\n"
     const val FIXED_SOURCE = "open().use { connection -> connection }\n"
     const val BLOCKER_REVIEW =
       "- [F-001] Blocker | High | $DELEGATED_REVIEWED_PATH:1 | $REVIEW_BLOCKER_MESSAGE\nverdict: changes_requested"
     const val APPROVED_REVIEW = "verdict: approved"
 
-    fun <T> use(
-      seedSpecIntent: Boolean = true,
-      block: (SlotBaselinePhaseRunHarness) -> T,
-    ): T {
-      val repoRoot =
-        if (seedSpecIntent) SlotBaselineFullRunCapture.seededRepoRoot() else SlotBaselineNormalizer.newRepoRoot()
+    fun <T> use(block: (SlotBaselinePhaseRunHarness) -> T): T {
+      val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()
       val home = SlotBaselineNormalizer.newTempHome()
       try {
         return block(SlotBaselinePhaseRunHarness(repoRoot, home))

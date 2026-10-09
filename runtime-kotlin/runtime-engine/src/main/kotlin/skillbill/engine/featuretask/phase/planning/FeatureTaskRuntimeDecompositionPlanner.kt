@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.planning
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
@@ -55,6 +56,16 @@ class FeatureTaskRuntimeDecompositionPlanner(
   }
 
   fun bundleTree(directory: Path): List<Path> = preparationWriter.listTree(directory)
+
+  fun specText(specPath: Path): String = preparationWriter.readText(specPath)
+
+  fun existingManifest(
+    repoRoot: Path,
+    issueKey: String,
+  ): Path? =
+    existingParentSpec(repoRoot, issueKey)
+      ?.resolveSibling(DECOMPOSITION_MANIFEST_FILENAME)
+      ?.takeIf(preparationWriter::isRegularFile)
 
   companion object {
     const val AUTHORED_BUNDLE_REASON = "Plan authored a governed spec bundle."

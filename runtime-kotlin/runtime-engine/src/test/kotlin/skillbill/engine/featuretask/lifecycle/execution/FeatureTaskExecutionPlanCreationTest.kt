@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -636,6 +637,7 @@ class FeatureTaskExecutionPlanCreationTest {
       database, NoopWorkflowGitOperations, UnavailableDecompositionManifestStore, testWorkflowSnapshotValidator,
       testDecompositionManifestValidator, testDecompositionManifestWriter, testRepositoryRoot,
       AcceptingFeatureTaskRuntimeWireArtifactValidator, NoopRuntimeDiagnostics, testHarnessClock,
+      TestRepositoryEnclosingRoot,
     )
 
   private fun openArgs(descriptor: ValidatedFeatureTaskRuntimeExecutionPlan?) =

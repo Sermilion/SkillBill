@@ -36,7 +36,7 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
-  fun `phase plan writes a spec bundle that goal preflight accepts with no workflow or session rows`() {
+  fun `phase plan records one plan workflow and writes a spec bundle that goal preflight accepts`() {
     val launcher = PhasePlanLauncher(tempDir)
 
     val plan =
@@ -59,6 +59,7 @@ class CliPhasePlanRuntimeTest {
     assertEquals(0, plan.exitCode, plan.stdout)
     assertContains(plan.stdout, "Manifest: .feature-specs/$ISSUE_KEY-")
     assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(1, rowCount("feature_task_workflows"))
     val preflight =
       CliRuntime.run(
         listOf(
@@ -86,8 +87,7 @@ class CliPhasePlanRuntimeTest {
     assertEquals(ISSUE_KEY, payload["issue_key"])
     assertEquals("new_work", payload["verdict"], preflight.stdout)
     assertEquals(false, payload["manifest_missing"], preflight.stdout)
-    assertEquals(0, rowCount("feature_task_workflows"))
-    assertEquals(0, rowCount("feature_task_runtime_sessions"))
+    assertEquals(1, rowCount("feature_task_workflows"))
   }
 
   private fun rowCount(table: String): Int =
@@ -125,15 +125,22 @@ class CliPhasePlanRuntimeTest {
     }
 
     private fun authorBundle(): String {
-      val bundle = repoRoot.resolve(BUNDLE_DIRECTORY)
-      Files.createDirectories(bundle)
+      val bundle = seededBundle()
       Files.writeString(bundle.resolve("spec.md"), specText("Parent", "The split work completes."))
       SUBTASK_FILES.forEach { (id, fileName) ->
         Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works."))
       }
-      Files.writeString(bundle.resolve("decomposition-manifest.yaml"), MANIFEST_YAML)
+      Files.writeString(
+        bundle.resolve("decomposition-manifest.yaml"),
+        manifestYaml(repoRoot.relativize(bundle).toString(), bundle.fileName.toString().removePrefix("$ISSUE_KEY-")),
+      )
       return "Split the work into two ordered subtasks."
     }
+
+    private fun seededBundle(): Path =
+      Files.list(repoRoot.resolve(".feature-specs")).use { directories ->
+        directories.toList().single { directory -> directory.fileName.toString().startsWith("$ISSUE_KEY-") }
+      }
 
     private fun specText(
       title: String,
@@ -144,19 +151,22 @@ class CliPhasePlanRuntimeTest {
   private companion object {
     const val ISSUE_KEY = "SKILL-904"
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
-    const val BUNDLE_DIRECTORY = ".feature-specs/$ISSUE_KEY-phase-plan"
     val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
-    val MANIFEST_YAML =
+
+    fun manifestYaml(
+      bundleDirectory: String,
+      featureName: String,
+    ): String =
       """
       ---
       contract_version: "$DECOMPOSITION_MANIFEST_CONTRACT_VERSION"
       issue_key: "$ISSUE_KEY"
-      feature_name: "phase-plan"
-      parent_spec_path: "$BUNDLE_DIRECTORY/spec.md"
+      feature_name: "$featureName"
+      parent_spec_path: "$bundleDirectory/spec.md"
       status: "pending"
       execution_model: "same_branch_commit_per_subtask"
       base_branch: "main"
-      feature_branch: "feat/$ISSUE_KEY-phase-plan"
+      feature_branch: "feat/$ISSUE_KEY-$featureName"
       stack_branches: []
       current_subtask_intent:
         subtask_id: 1
@@ -164,7 +174,7 @@ class CliPhasePlanRuntimeTest {
       subtasks:
       - id: 1
         name: "first part"
-        spec_path: "$BUNDLE_DIRECTORY/spec_subtask_1_first-part.md"
+        spec_path: "$bundleDirectory/spec_subtask_1_first-part.md"
         status: "pending"
         branch: null
         commit_sha: null
@@ -177,7 +187,7 @@ class CliPhasePlanRuntimeTest {
         dependencies: []
       - id: 2
         name: "second part"
-        spec_path: "$BUNDLE_DIRECTORY/spec_subtask_2_second-part.md"
+        spec_path: "$bundleDirectory/spec_subtask_2_second-part.md"
         status: "pending"
         branch: null
         commit_sha: null

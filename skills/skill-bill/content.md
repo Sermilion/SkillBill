@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Dispatcher for the full governed feature run, single in-memory phases, and runtime operations."
+description: "Dispatcher for the full governed feature run, single standalone phases, and runtime operations."
 ---
 
 # Skill Bill Dispatcher
@@ -70,6 +70,12 @@ after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
+
+`phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
+plan workflow, stops after the verified spec bundle, and prints the bundle
+paths, the plan workflow id, and `skill-bill <KEY>`. Running the full run for
+that key later finishes an incomplete plan and then executes the goal. The
+dispatcher never invokes `phase plan` itself.
 
 If `phase:plan` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. If

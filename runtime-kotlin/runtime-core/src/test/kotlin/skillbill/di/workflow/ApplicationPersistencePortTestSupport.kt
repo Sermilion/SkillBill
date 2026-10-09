@@ -1,5 +1,6 @@
 package skillbill.di.workflow
 
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.executionModel
@@ -1194,6 +1195,7 @@ internal fun testWorkflowService(
     goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
     runtimeDiagnostics = NoopRuntimeDiagnostics,
     clock = Clock.systemUTC(),
+    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
   )
 
 internal fun loadTestDecompositionManifest(path: Path) =

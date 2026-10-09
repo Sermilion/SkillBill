@@ -706,6 +706,7 @@ object PrincipleEnforcementInventory {
       "scaffoldCatalogGateway",
       "scaffoldGateway",
       "skillRemove",
+      "standalonePlanRun",
       "systemService",
       "skillBillUpdateService",
       "skillBillUninstallService",

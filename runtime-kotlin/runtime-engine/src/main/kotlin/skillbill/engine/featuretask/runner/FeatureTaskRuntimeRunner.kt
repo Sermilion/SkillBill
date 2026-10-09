@@ -9,6 +9,7 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 @Inject
 class FeatureTaskRuntimeRunner(
@@ -37,7 +38,9 @@ class FeatureTaskRuntimeRunner(
     ) {
       throw invalidFeatureTaskExecutionIdentitySchema(request.workflowId, "admission does not match run request")
     }
-    if (request.transitionsOverride != null && request.transitionsOverride != admitted.plan.traversal) {
+    val expectedDefinition = request.skeletonDefinition ?: SkeletonDefinition.forRun(request.goalContinuation != null)
+    val overrideMatches = request.transitionsOverride == null || request.transitionsOverride == admitted.plan.traversal
+    if (!overrideMatches || admitted.plan.definitionId != expectedDefinition.id) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
   }

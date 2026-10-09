@@ -5,6 +5,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.service.TelemetryService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.drainTelemetryOnCompletion
+import skillbill.cli.kernel.cli.runtimeRunEventSink
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry

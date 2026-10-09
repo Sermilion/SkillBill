@@ -101,7 +101,7 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
               record.artifacts +
                 DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
                   JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)),
-                ),
+                ) + args.initialArtifacts,
             ),
         )
       } ?: record
@@ -304,6 +304,7 @@ fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): W
       governedSpecPath = args.governedSpecPath,
       routeScope = args.routeScope,
       executionPlan = args.executionPlan,
+      initialArtifacts = args.initialArtifacts,
     ),
   )
 }

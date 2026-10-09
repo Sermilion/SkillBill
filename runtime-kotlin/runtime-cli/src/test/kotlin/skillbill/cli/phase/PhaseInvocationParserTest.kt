@@ -95,6 +95,15 @@ class PhaseInvocationParserTest {
   }
 
   @Test
+  fun `phase names are the standalone-invocable definitions, including the durable plan`() {
+    assertEquals(listOf("review", "validation", "plan", "pr", "monitor"), PhaseInvocationParser.phaseNames())
+    assertEquals(
+      PhaseInvocation("plan", "SKILL-9 add a tab", null, null),
+      PhaseInvocationParser.parse("plan", listOf("SKILL-9", "add", "a", "tab")),
+    )
+  }
+
+  @Test
   fun `plan requires an intake while pr runs without one`() {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("plan", listOf("mode:inline")) }
 

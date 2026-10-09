@@ -23,6 +23,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -61,6 +62,7 @@ class DecompositionWorkflowContinuation(
   private val manifestWriter: DecompositionManifestWriter,
   private val clock: Clock,
   private val workflowIdRandom: Random,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
   private fun repositoryCheckpointIdentity(): String {
     val resolved = gitOperations.repositoryFingerprint(repoRoot)
@@ -131,6 +133,15 @@ class DecompositionWorkflowContinuation(
         "plan",
       )
     existing?.let { migrateLegacyGoalRunnerControls(unitOfWork, it) }
+    val planWorkflowId =
+      if (existing == null) {
+        unitOfWork.workflowStates.findCompletedPlanWorkflowId(
+          manifest.issueKey,
+          repositoryEnclosingRootPort.repositoryIdentity(repoRoot),
+        )
+      } else {
+        null
+      }
     val imported =
       engine.updateRecord(
         WorkflowFamily.TASK_RUNTIME.definition,
@@ -138,26 +149,9 @@ class DecompositionWorkflowContinuation(
         WorkflowUpdateInput(
           workflowStatus = WorkflowStatus.PAUSED,
           currentStepId = "plan",
-          stepUpdates =
-            if (existing != null) {
-              null
-            } else {
-              WorkflowStepUpdates.from(
-                listOf(
-                  mapOf(
-                    SharedPayloadKeys.STEP_ID to "preplan",
-                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
-                    "attempt_count" to 1,
-                  ),
-                  mapOf(
-                    SharedPayloadKeys.STEP_ID to "plan",
-                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
-                    "attempt_count" to 1,
-                  ),
-                ),
-              )
-            },
-          artifactsPatch = parentProjectionArtifacts(manifest, validator, base.artifacts),
+          stepUpdates = if (existing != null) null else importedPlanStepUpdates(planWorkflowId),
+          artifactsPatch =
+            parentProjectionArtifacts(manifest, validator, base.artifacts).withImportedPlan(planWorkflowId),
           sessionId = base.sessionId.orEmpty(),
           replaceArtifacts = true,
         ),
