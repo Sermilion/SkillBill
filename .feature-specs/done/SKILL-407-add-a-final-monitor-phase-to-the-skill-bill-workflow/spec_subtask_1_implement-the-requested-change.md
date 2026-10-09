@@ -1,6 +1,6 @@
 # SKILL-407 Subtask 1 - Implement the requested change
 
-Parent spec: [.feature-specs/SKILL-407-add-a-final-monitor-phase-to-the-skill-bill-workflow/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-407-add-a-final-monitor-phase-to-the-skill-bill-workflow/spec.md](spec.md)
 Issue key: SKILL-407
 
 ## Scope
@@ -104,7 +104,7 @@ These settle the open questions from preplan. Each one marked *assumption* rests
    - Exclude `PHASE_MONITOR` from `agentSettledPhaseIds`, following decision 1.
    - Add the backward edge `monitor -> monitor_fix` (cap 3, `PER_SUBTASK`, BLOCK on exhaustion).
    - Add `monitor_fix` to `loopOnlyPhaseIds`, and add `loopOnlySuccessors[monitor_fix] = commit_push`.
-6. **CI port** (`runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/goalrunner/runner/PullRequestChecksLookup.kt`)
+6. **CI port** (`../../../runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/goalrunner/runner/PullRequestChecksLookup.kt`)
    - Add `fun interface PullRequestChecksLookup { fun lookup(root, prNumber: Int): PullRequestChecks }`. Match the parameter types of `PullRequestIdentityLookup`.
    - Result: `sealed interface PullRequestChecks` with these cases:
      - `Reported(checks: List<PullRequestCheck>)`
@@ -113,12 +113,12 @@ These settle the open questions from preplan. Each one marked *assumption* rests
    - `PullRequestCheck(name, bucket: CheckBucket, link)`, where `CheckBucket` is `PASS, SKIPPING, FAIL, CANCEL, PENDING`.
    - Use typed values, not raw maps, because of the raw-map guard.
    - Keep it beside `PullRequestIdentityLookup`, so `RuntimeEngineBoundaryArchitectureTest` keeps passing without edits.
-7. **gh adapter** (`runtime-kotlin/runtime-infra/workflow/src/main/kotlin/skillbill/infrastructure/workflow/github/GhPullRequestChecksLookup.kt`)
+7. **gh adapter** (`../../../runtime-kotlin/runtime-infra/workflow/src/main/kotlin/skillbill/infrastructure/workflow/github/GhPullRequestChecksLookup.kt`)
    - Takes a `GhCommandRunner` and runs `gh.run(root, listOf("pr", "checks", "<n>", "--json", "name,state,bucket,link"))`.
    - Parse JSON with Jackson `ObjectMapper`, as `GhPullRequestIdentityLookup` does.
    - Map outputs following decision 6. An empty array, or the "no checks reported" stderr, maps to `NoChecks`.
    - Wire it in DI where `GhPullRequestIdentityLookup` is provided.
-   - Every `Unavailable` mapping is a degradation, so it must emit a record per `docs/observability-policy.md`, following the identity lookup's precedent.
+   - Every `Unavailable` mapping is a degradation, so it must emit a record per `../../../docs/observability-policy.md`, following the identity lookup's precedent.
 8. **Watcher and monitor strategy** (new package `runtime-engine/.../slot/monitor/`)
    - `PullRequestCiWatcher` uses `PullRequestIdentityLookup` (PR number from the branch), `PullRequestChecksLookup`, the clock, the sleep function, and the interval, timeout, and grace parameters. It returns one of these outcomes:
      - `Passed`
@@ -136,11 +136,11 @@ These settle the open questions from preplan. Each one marked *assumption* rests
    - Do not add it to `GOAL_CHILD`.
    - Register the new strategies wherever the PR strategies are registered. Implement locates this through the existing strategy registration.
 10. **Contracts**
-    - `orchestration/contracts/workflow-state-schema.yaml`: add `monitor` to both `current_step_id` and `steps[].step_id`. Add `monitor_fix` too, if `implement_fix` appears there.
-    - `orchestration/contracts/feature-task-runtime-phase-output-schema.yaml`: add `monitor_fix` to the `uniformSettlement` `phase_id` enum (line 209). Do not add `monitor`, because it is runtime-settled like `commit_push`, which is absent from that enum.
-11. **Docs.** Add `monitor` (with its fix loop, 3-attempt cap, and block behaviour) after `pr` in the phase lists in `orchestration/workflow-contract/PLAYBOOK.md` and `runtime-kotlin/ARCHITECTURE.md`.
+    - `../../../orchestration/contracts/workflow-state-schema.yaml`: add `monitor` to both `current_step_id` and `steps[].step_id`. Add `monitor_fix` too, if `implement_fix` appears there.
+    - `../../../orchestration/contracts/feature-task-runtime-phase-output-schema.yaml`: add `monitor_fix` to the `uniformSettlement` `phase_id` enum (line 209). Do not add `monitor`, because it is runtime-settled like `commit_push`, which is absent from that enum.
+11. **Docs.** Add `monitor` (with its fix loop, 3-attempt cap, and block behaviour) after `pr` in the phase lists in `../../../orchestration/workflow-contract/PLAYBOOK.md` and `runtime-kotlin/ARCHITECTURE.md`.
     - Edit only those lists and any adjacent loop table. Make no skill-source changes.
-    - If skill text turns out to enumerate phases, update it in `skills/skill-bill/content.md`. Leave install refresh to the operator: no `./install.sh` in this goal child.
+    - If skill text turns out to enumerate phases, update it in `../../../skills/skill-bill/content.md`. Leave install refresh to the operator: no `./install.sh` in this goal child.
 12. **Existing pinned tests and fixtures.** Update them to the new phase set without weakening assertions:
     - Domain: `SkeletonDefinitionTest`, `FeatureTaskRuntimePhaseWorkflowDefinitionTest`, `FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest`, and `FeatureTaskRuntimePhaseWorkflowDefinitionTestSupport`.
     - Engine: `PhaseStrategyCompositionTest`, `PhaseModelProfileSelectionTest`, `FeatureTaskRuntimeExecutionPlanResolverTest`, `FeatureTaskExecutionPlanCreationTest`, and `PhasePullRequestRunTest`.

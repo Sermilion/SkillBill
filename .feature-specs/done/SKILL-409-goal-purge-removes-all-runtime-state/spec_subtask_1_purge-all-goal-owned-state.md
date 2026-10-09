@@ -1,6 +1,6 @@
 # SKILL-409 Subtask 1: Purge all goal-owned state
 
-Parent spec: `.feature-specs/SKILL-409-goal-purge-removes-all-runtime-state/spec.md`. Read its
+Parent spec: `spec.md`. Read its
 Root-cause findings and Decisions sections first. This subtask implements all of them.
 
 ## Scope
@@ -94,7 +94,7 @@ Owned paths (from preplan; elided segments are `...`):
 
 ## Implementation Details
 
-Paths are under `runtime-kotlin/`. Implement the steps in this order. Steps 1 to 7 each leave the
+Paths are under `../../../runtime-kotlin`. Implement the steps in this order. Steps 1 to 7 each leave the
 tree compiling only together, so they all land in one commit.
 
 ### Settled decisions (from the preplan digest)
@@ -308,7 +308,7 @@ tree compiling only together, so they all land in one commit.
    - **Telemetry sentence.** Use one constant: "`telemetry_outbox` rows are retained as anonymised
      history and do not affect relaunch." Put it in the `GoalPurgeCommand` `DocumentedCliCommand`
      description (AC 8) and in the text and payload.
-   - **Docs.** Update `docs/runtime-command-guidance.md` and any other doc that describes `goal
+   - **Docs.** Update `../../../docs/runtime-command-guidance.md` and any other doc that describes `goal
      purge` or its missing-goal refusal. Search for "restore the feature-spec tree to an unlaunched
      shape".
 7. **Fixtures and call sites.**

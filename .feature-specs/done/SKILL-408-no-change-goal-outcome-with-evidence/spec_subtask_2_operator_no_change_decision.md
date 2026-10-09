@@ -1,6 +1,6 @@
 # SKILL-408 Subtask 2: Operator decision and completed_no_change outcome
 
-Parent: `.feature-specs/SKILL-408-no-change-goal-outcome-with-evidence/spec.md`. Use the parent's
+Parent: `spec.md`. Use the parent's
 Shared Contract names exactly.
 
 ## Scope
@@ -10,7 +10,7 @@ as `completed_no_change` with no commit, push or PR. `retry_fix` resumes with op
 instructions, and `abandon_subtask` abandons the subtask. It also reports the outcome in
 `goal status` and telemetry, and makes the `/skill-bill` dispatcher ask once.
 
-Path prefixes: DOM = `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/`,
+Path prefixes: DOM = `../../../runtime-kotlin/runtime-domain/src/main/kotlin/skillbill`,
 ENG = `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/`,
 CLI = `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/`, CON = `orchestration/contracts/`.
 
@@ -29,7 +29,7 @@ CLI = `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/`, CON = `orches
 - DOM `FeatureTaskRuntimeNoChangePause`, used to read and record the decision. Subtask 1 creates
   it; if it is absent, create it per the parent Shared Contract.
 - CON `telemetry-event-schema.yaml` (already has uncommitted edits).
-- `skills/skill-bill/content.md` and
+- `../../../skills/skill-bill/content.md` and
   `runtime-kotlin/runtime-infra/skills/src/repoTest/kotlin/skillbill/install/DispatcherSkillInstallRepoTest.kt`.
 - Tests: ENG `src/test/.../featuretask/lifecycle/core/FeatureTaskRuntimeOperatorDecisionEntryPointTest.kt`
   and the finalization, status and telemetry tests next to the changed code.
@@ -87,7 +87,7 @@ CLI = `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/`, CON = `orches
    - The `"1.12.0"` const is unchanged.
 
    (AC 8, 9)
-7. **Dispatcher.** In `skills/skill-bill/content.md`:
+7. **Dispatcher.** In `../../../skills/skill-bill/content.md`:
    - Add an exception to the goal Relay section (lines 243-248) for the
      `awaiting_no_change_decision` line.
    - Add a block modeled on the awaiting_confirmation handling (lines 378-386). It shows the
@@ -128,7 +128,7 @@ CLI = `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/`, CON = `orches
 9. `telemetry-event-schema.yaml` lists `completed_no_change` in `goalFinishedStatusEnum` and keeps
    the `"1.12.0"` const. The emitter sends `completed_no_change` and `no_change_reason` on
    `goal_finished` and `goal_issue_finished` for a no-change completion.
-10. `skills/skill-bill/content.md` makes the `awaiting_no_change_decision` line an exception to the
+10. `../../../skills/skill-bill/content.md` makes the `awaiting_no_change_decision` line an exception to the
     goal Relay rule. It contains a block that shows the report, asks the user once, and runs
     `skill-bill goal operator-decision` with the chosen decision (and the instructions for
     `retry_fix`), and it never decides without the user's answer.

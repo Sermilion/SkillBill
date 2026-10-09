@@ -134,7 +134,7 @@ with an explicit pause.
 
 - Mocks use `relaxUnitFun = true`, never `relaxed = true`.
 - Base state: the working tree has uncommitted SKILL-407 edits to
-  `orchestration/contracts/feature-task-runtime-phase-output-schema.yaml`,
+  `../../../orchestration/contracts/feature-task-runtime-phase-output-schema.yaml`,
   `orchestration/contracts/telemetry-event-schema.yaml`,
   `orchestration/contracts/workflow-state-schema.yaml`,
   `FeatureTaskRuntimeVerdict.kt`, `FeatureTaskRuntimePhaseWorkflowGraph.kt`,

@@ -1,6 +1,6 @@
 # SKILL-408 Subtask 1: No-change claim, evidence audit and operator pause
 
-Parent: `.feature-specs/SKILL-408-no-change-goal-outcome-with-evidence/spec.md`. Use the parent's
+Parent: `spec.md`. Use the parent's
 Shared Contract names exactly.
 
 ## Scope
@@ -11,7 +11,7 @@ stop reason `awaiting_no_change_decision`, and it shows a report. A missing or r
 goes through the normal repair loop and carries its reason with it. This subtask does not cover
 operator decisions on the pause, which belong to subtask 2.
 
-Path prefixes: DOM = `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/`,
+Path prefixes: DOM = `../../../runtime-kotlin/runtime-domain/src/main/kotlin/skillbill`,
 ENG = `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/`,
 CON = `orchestration/contracts/`.
 
@@ -33,7 +33,7 @@ CON = `orchestration/contracts/`.
   and ENG `featuretask/runloop/output/FeatureTaskRuntimeRunLoopOutputVerification.kt`.
 - ENG `goalrunner/status/GoalRunnerStopReports.kt` and
   `goalrunner/telemetry/GoalRunnerTelemetryEmitter.kt`.
-- `runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/audit/opus-5-5-acceptance-audit.md`,
+- `../../../runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/audit/opus-5-5-acceptance-audit.md`,
   plus the implement-phase prompt or directive resource, wherever it lives.
 - CON `feature-task-runtime-phase-output-schema.yaml` and `telemetry-event-schema.yaml` (both
   already have uncommitted edits). CON `workflow-state-schema.yaml` only if child artifacts list
@@ -41,7 +41,7 @@ CON = `orchestration/contracts/`.
 - The CLI goal-run output path that prints the stop line, matching the format of the
   `awaiting_confirmation` line at `OperationCommand.kt:34/181`.
 - Tests under the matching `src/test` trees, including
-  `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slot/FeatureTaskRuntimePhaseOutputFixtures.kt`
+  `../../../runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slot/FeatureTaskRuntimePhaseOutputFixtures.kt`
   and the audit tests in `featuretask/runner/`.
 
 ## Implementation Steps
