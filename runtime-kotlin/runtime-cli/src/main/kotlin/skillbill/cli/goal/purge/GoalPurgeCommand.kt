@@ -19,7 +19,8 @@ class GoalPurgeCommand(
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "purge",
-    "Delete decomposed goal runtime state and restore the feature-spec tree to an unlaunched shape.",
+    "Delete all runtime state a decomposed goal owns, keep the parent spec, and reset the feature-spec bundle " +
+      "to an unlaunched shape. Exits 1 when anything is left behind. $GOAL_PURGE_RETAINED_NOTE",
   ) {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val force by option("--force", "--yes", help = "Bypass purge confirmation gate.")

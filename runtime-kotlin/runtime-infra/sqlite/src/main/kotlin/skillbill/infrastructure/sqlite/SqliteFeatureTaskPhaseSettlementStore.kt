@@ -75,15 +75,4 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
       return statement.executeUpdate() > 0
     }
   }
-
-  fun deleteByWorkflowIds(workflowIds: List<String>) {
-    if (workflowIds.isEmpty()) return
-    val placeholders = workflowIds.joinToString(", ") { "?" }
-    connection.prepareStatement(
-      "DELETE FROM feature_task_phase_settlements WHERE workflow_id IN ($placeholders)",
-    ).use { statement ->
-      statement.bindAll(workflowIds)
-      statement.executeUpdate()
-    }
-  }
 }

@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -15,6 +16,8 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
 import java.time.Instant
@@ -170,9 +173,26 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> = emptyList()
 
-  override fun purgeDecomposedGoal(parentWorkflowId: String) {
+  override fun discoverPurgeOwnership(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalPurgeOwnership {
+    val state = loadDurableByIssueKey(issueKey, repoRoot) ?: return GoalPurgeOwnership(emptyList(), emptySet())
+    return GoalPurgeOwnership(listOf(state), setOf(state.parentWorkflowId))
+  }
+
+  override fun verifyOwnedWorkflowIds(
+    candidateIds: Set<String>,
+    parentWorkflowIds: Set<String>,
+    issueKey: String,
+    repoRoot: Path,
+  ): Set<String> = emptySet()
+
+  override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
     error("Goal runner manifest store must atomically purge a decomposed goal.")
   }
+
+  override fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 
   override fun reviewMode(parentWorkflowId: String): CodeReviewExecutionMode? = null
 

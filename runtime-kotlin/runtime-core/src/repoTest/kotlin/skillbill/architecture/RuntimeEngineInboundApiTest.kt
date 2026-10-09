@@ -140,6 +140,8 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.goalrunner.model.GoalRunnerPauseStatus",
         "skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerPurgeResult",
+        "skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecAction",
+        "skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecActionKind",
         "skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair",
         "skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis",
         "skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding",

@@ -1,3 +1,15 @@
+## [2026-10-09] SKILL-409 subtask 1: goal purge removes all goal-owned state
+Areas: runtime-engine goalrunner reset, manifest and model; runtime-ports persistence and workflow goalstate; runtime-infra sqlite and workflow filesystem; runtime-application workflow decomposition; runtime-cli goal purge; runtime-core architecture guards
+- `goal purge` now discovers every decomposed parent for the issue key in the repository (terminal and undecodable included; standalone rows, goal children and other issue keys excluded) and purges all of them, so a retired goal leaves no rows or directories behind.
+- Order: discover, per-parent liveness refusal, delete tracking and run-evidence directories, DB purge, checkpoint-ref prune, spec-bundle reset, survivor census. The parent spec.md is never touched; a missing goal is an idempotent "nothing to remove" success.
+- `UnitOfWork.purgeDecomposedGoal` takes a `GoalPurgeTarget` and returns `GoalPurgeTableCounts`; `countDecomposedGoalState` is the read-only census. Leases, execution identities, evidence tables, settlements and runtime sessions no surviving workflow references are deleted explicitly, not via FK cascade.
+- Tracked manifests are reset to pending and missing tracked subtask specs restored from HEAD; untracked bundles lose subtask specs, then the manifest last. Results report actions (DELETED, RESET, RESTORED).
+- reusable: `GoalRuntimeStateFileStore` port (directory exists and delete tree, Deleted/Absent/Failed) with filesystem impl and test doubles; `WorkflowGoalRunnerPurgePersistence` holds the purge commands the manifest store delegates to.
+- Result and CLI status is ok, incomplete or refused; exit 1 on refusal or any leftover. Output always notes that telemetry_outbox rows are retained.
+- Known limits: runtime sessions are not recounted in the survivor census; no snapshot-restore on DB failure; a failed directory delete defers the DB, checkpoint and spec steps and reports leftovers.
+Feature flag: N/A
+Acceptance criteria: 13/13 implemented
+
 ## [2026-10-08] Step calls come from the selected owner
 Areas: runtime-engine featuretask/slot/attempt, slot/state, slot/codereview, slot/pullrequest, runloop/state; goal planning sweep tests
 - `PhaseStepBinding.acceptedOwner` exposes the strategy the execution plan selected for the bound step. `stepCall` and `runAgentStep` build the call's prompt, policy and strategy id from it instead of from the strategy that invoked them.

@@ -11,6 +11,8 @@ import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.operation.OperationProposalRepository
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -38,5 +40,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
   val operationProposals: OperationProposalRepository
 
-  fun purgeDecomposedGoal(parentWorkflowId: String)
+  fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
+
+  fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts
 }

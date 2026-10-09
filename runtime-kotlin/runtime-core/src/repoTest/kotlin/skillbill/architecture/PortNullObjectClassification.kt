@@ -13,6 +13,7 @@ object PortNullObjectClassification {
       "UnavailableUnaddressedFindingsRepository" to PortNullObjectKind.TOTAL_REFUSAL,
       "UnavailableGoalRunnerControlRepository" to PortNullObjectKind.TOTAL_REFUSAL,
       "UnavailableSpecScratchStore" to PortNullObjectKind.TOTAL_REFUSAL,
+      "UnavailableGoalRuntimeStateFileStore" to PortNullObjectKind.TOTAL_REFUSAL,
       "UnavailableDecompositionManifestStore" to PortNullObjectKind.TOTAL_REFUSAL,
       "UnavailableReviewRunLaneCompletenessRepository" to PortNullObjectKind.TOTAL_REFUSAL,
       "UnavailableReviewRunStageCompletenessRepository" to PortNullObjectKind.TOTAL_REFUSAL,

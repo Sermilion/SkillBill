@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -14,6 +15,8 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
 
@@ -186,7 +189,26 @@ interface GoalRunnerManifestStateWrites {
 interface GoalRunnerManifestPurgeCommands {
   fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String>
 
-  fun purgeDecomposedGoal(parentWorkflowId: String)
+  /** Finds every decomposed parent for [issueKey] under the repository identity of [repoRoot]. */
+  fun discoverPurgeOwnership(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalPurgeOwnership
+
+  /**
+   * Keeps the manifest-recorded [candidateIds] that provably belong to this goal: same issue key and repository
+   * identity, or a goal child of one of [parentWorkflowIds]. Unverifiable ids are not owned and are dropped.
+   */
+  fun verifyOwnedWorkflowIds(
+    candidateIds: Set<String>,
+    parentWorkflowIds: Set<String>,
+    issueKey: String,
+    repoRoot: Path,
+  ): Set<String>
+
+  fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts
+
+  fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts
 }
 
 interface GoalRunnerManifestStore :

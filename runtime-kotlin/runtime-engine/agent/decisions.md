@@ -1,3 +1,9 @@
+## [2026-10-09] Purge all matching goals and defer destructive steps after a failed directory delete
+Context: SKILL-409 goal purge left rows and directories behind (WE-5006) because it removed one decodable parent and restored a DB snapshot on failure.
+Decision: Purge every repo-scoped decomposed parent for the issue key, including undecodable ones. If any directory delete fails, skip the DB, checkpoint and spec steps and report the failed paths as leftovers with exit 1. The old snapshot-restore is removed.
+Reason: Reporting a leftover for extra parents kept the stale state the command exists to clear. Deleting rows while directories remain would orphan the on-disk evidence and make a rerun unable to find it; deferring keeps a rerun idempotent.
+Revisit when: a purge needs to be atomic across the filesystem and database.
+
 ## [2026-10-08] Build step calls from the selected owner, not the caller
 Context: SKILL-403 wrappers (`*Opus55Strategy`) delegate `runStep` to a canonical strategy. `stepCall` used its receiver, so the call carried the canonical strategy id and prompt while the accepted binding's owner was the wrapper. Attempt authorization rejected every wrapper-owned step, and the wrapper's Opus directive never reached the prompt.
 Decision: The step binding exposes its accepted owner, and step calls take prompt, policy and strategy id from that owner. `acceptsAttemptStrategy` keeps exact-id matching.

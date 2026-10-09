@@ -1,5 +1,8 @@
 package skillbill.application.workflow.decomposition
 
+import skillbill.application.workflow.decomposition.model.DecomposedParentForPurge
+import skillbill.application.workflow.decomposition.model.DecomposedParentsForPurge
+import skillbill.application.workflow.decomposition.model.UnclassifiedPurgeRow
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -96,6 +99,31 @@ private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(
     byId.putIfAbsent(row.workflowId, row)
   }
   return byId.values.toList()
+}
+
+fun WorkflowStateRepository.listDecomposedParentsForPurge(
+  issueKey: String,
+  repositoryIdentity: String,
+): DecomposedParentsForPurge {
+  val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
+  val unclassified = mutableListOf<UnclassifiedPurgeRow>()
+  val parents =
+    listFeatureTaskWorkflowsForParentDiscovery(normalizedIssueKey, repositoryIdentity).mapNotNull { row ->
+      val snapshot =
+        try {
+          row.toSnapshot()
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+          unclassified += UnclassifiedPurgeRow(row.workflowId, error.message.orEmpty())
+          return@mapNotNull null
+        }
+      val carriesDecomposition =
+        snapshot.hasDecompositionPlan() || snapshot.artifacts.hasDecompositionRuntimeArtifact()
+      if (snapshot.isGoalContinuationChildWorkflow() || !carriesDecomposition) return@mapNotNull null
+      val manifest = row.decompositionRuntimeOrNull()
+      if (manifest != null && manifest.issueKey != normalizedIssueKey) null else DecomposedParentForPurge(row, manifest)
+    }
+  return DecomposedParentsForPurge(parents, unclassified)
 }
 
 fun WorkflowStateRepository.findDecomposedParentWorkflow(

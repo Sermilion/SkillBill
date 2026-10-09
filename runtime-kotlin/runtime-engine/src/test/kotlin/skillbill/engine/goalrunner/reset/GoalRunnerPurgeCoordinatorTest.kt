@@ -17,11 +17,16 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalPurgeOwnership
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
+import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecActionKind
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
@@ -30,15 +35,17 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalstate.LocalGoalRuntimeStateFileStore
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -64,13 +71,17 @@ class GoalRunnerPurgeCoordinatorTest {
     var purgeCalled = false
     val guardedStore =
       object : GoalRunnerManifestStore by store {
-        override fun loadDurableByIssueKey(
+        override fun discoverPurgeOwnership(
           issueKey: String,
-          repoRoot: Path?,
-        ) = store.loadDurableByIssueKey(issueKey)?.copy(parentWorkflowId = "wf-parent")
+          repoRoot: Path,
+        ): GoalPurgeOwnership {
+          val state = checkNotNull(store.loadDurableByIssueKey(issueKey)).copy(parentWorkflowId = "wf-parent")
+          return GoalPurgeOwnership(listOf(state), setOf("wf-parent"))
+        }
 
-        override fun purgeDecomposedGoal(parentWorkflowId: String) {
+        override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
           purgeCalled = true
+          return GoalPurgeTableCounts()
         }
       }
     val service =
@@ -79,6 +90,7 @@ class GoalRunnerPurgeCoordinatorTest {
         outcomeStore = RecordingOutcomeStore(),
         ports = GoalRunnerStatusTestPorts(workerSupervisor = LiveInspectWorkerSupervisor),
         database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        decompositionManifestStore = TestDecompositionManifestStore,
       )
     val root = Files.createTempDirectory("goal-purge-live-parent")
     val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
@@ -123,8 +135,9 @@ class GoalRunnerPurgeCoordinatorTest {
       object : GoalRunnerManifestStore by store {
         override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> = listOf("wf-child")
 
-        override fun purgeDecomposedGoal(parentWorkflowId: String) {
+        override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
           purgeCalled = true
+          return GoalPurgeTableCounts()
         }
       }
     val service =
@@ -151,25 +164,25 @@ class GoalRunnerPurgeCoordinatorTest {
   @Test
   fun `purge restores missing tracked specs and keeps existing spec bodies`() {
     val fixture = restoreFixture()
-    var purgeCalled = false
-    val guardedStore =
-      object : GoalRunnerManifestStore by fixture.store {
-        override fun purgeDecomposedGoal(parentWorkflowId: String) {
-          purgeCalled = true
-        }
-      }
+    val guardedStore = PurgeTrackingStore(fixture.store, verifiedIds = setOf("wf-child-1"))
+    val database = idleRuntimeWorkflowDatabase("wf-child-1")
     val service =
       testGoalRunnerStatusService(
         manifestStore = guardedStore,
         outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = testPhaseRecorder(database, testWorkflowSnapshotValidator),
         ports =
           GoalRunnerStatusTestPorts(
             gitOperations =
               TrackedSpecGitOperations(
-                mapOf(fixture.firstSubtask.toRepoRelative(fixture.root) to "restored first subtask body"),
+                mapOf(
+                  fixture.manifestPath.toRepoRelative(fixture.root) to "tracked manifest at HEAD",
+                  fixture.firstSubtask.toRepoRelative(fixture.root) to "restored first subtask body",
+                ),
               ),
+            goalStateFiles = LocalGoalRuntimeStateFileStore(),
           ),
-        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        database = database,
         decompositionManifestStore = TestDecompositionManifestStore,
       )
     val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", fixture.root))
@@ -180,16 +193,28 @@ class GoalRunnerPurgeCoordinatorTest {
         testDecompositionManifestValidator,
       )
 
-    assertTrue(purgeCalled)
-    assertTrue(result.specRestored)
+    assertNull(result.refusalReason)
+    assertEquals(emptyList(), result.leftovers)
+    assertEquals(1, guardedStore.purgedTargets.size)
+    val purgedIds = guardedStore.purgedTargets.single().workflowIds
+    assertContains(purgedIds, "wf-child-1")
+    assertFalse("wf-child-2" in purgedIds)
+    assertEquals(
+      mapOf(
+        fixture.manifestPath.toRepoRelative(fixture.root) to GoalRunnerPurgeSpecActionKind.RESET,
+        fixture.firstSubtask.toRepoRelative(fixture.root) to GoalRunnerPurgeSpecActionKind.RESTORED,
+      ),
+      result.specBundleActions.associate { action -> action.path to action.kind },
+    )
     assertEquals("existing parent body", Files.readString(fixture.parentSpec))
     assertEquals("existing second subtask body", Files.readString(fixture.secondSubtask))
     assertEquals("restored first subtask body", Files.readString(fixture.firstSubtask))
     assertUnlaunched(restored)
+    assertUnlaunchedYaml(Files.readString(fixture.manifestPath))
   }
 
   @Test
-  fun `missing untracked spec refuses before database purge`() {
+  fun `untracked manifest and specs are deleted and the parent spec is kept`() {
     val root = Files.createTempDirectory("goal-purge-untracked")
     val specDir = root.resolve(".feature-specs/SKILL-245-goal")
     Files.createDirectories(specDir)
@@ -213,31 +238,132 @@ class GoalRunnerPurgeCoordinatorTest {
       ),
     )
     Files.writeString(specDir.resolve("spec.md"), "parent")
-    val store = InMemoryGoalManifestStore(manifest)
+    Files.writeString(specDir.resolve("spec_subtask_1.md"), "generated subtask body")
+    val guardedStore = PurgeTrackingStore(InMemoryGoalManifestStore(manifest))
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = guardedStore,
+        outcomeStore = RecordingOutcomeStore(),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = TrackedSpecGitOperations(emptyMap()),
+            goalStateFiles = LocalGoalRuntimeStateFileStore(),
+          ),
+        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+        decompositionManifestStore = TestDecompositionManifestStore,
+      )
+
+    val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
+
+    assertEquals(1, guardedStore.purgedTargets.size)
+    assertNull(result.refusalReason)
+    assertEquals(emptyList(), result.leftovers)
+    assertEquals(
+      listOf(
+        ".feature-specs/SKILL-245-goal/spec_subtask_1.md" to GoalRunnerPurgeSpecActionKind.DELETED,
+        ".feature-specs/SKILL-245-goal/decomposition-manifest.yaml" to GoalRunnerPurgeSpecActionKind.DELETED,
+      ),
+      result.specBundleActions.map { action -> action.path to action.kind },
+    )
+    assertEquals("parent", Files.readString(specDir.resolve("spec.md")))
+    assertFalse(Files.exists(manifestPath))
+    assertFalse(Files.exists(specDir.resolve("spec_subtask_1.md")))
+  }
+
+  @Test
+  fun `failed directory delete reports leftovers and skips the database and spec steps`() {
+    val root = Files.createTempDirectory("goal-purge-leftover")
+    val evidenceDir = root.resolve(FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot("wf-parent")).normalize()
+    Files.createDirectories(evidenceDir)
+    Files.writeString(evidenceDir.resolve("evidence.json"), "{}")
     var purgeCalled = false
     val guardedStore =
-      object : GoalRunnerManifestStore by store {
-        override fun purgeDecomposedGoal(parentWorkflowId: String) {
+      object : GoalRunnerManifestStore by InMemoryGoalManifestStore(manifest(subtaskCount = 1)) {
+        override fun discoverPurgeOwnership(
+          issueKey: String,
+          repoRoot: Path,
+        ): GoalPurgeOwnership = GoalPurgeOwnership(emptyList(), setOf("wf-parent"))
+
+        override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
           purgeCalled = true
+          return GoalPurgeTableCounts()
         }
       }
     val service =
       testGoalRunnerStatusService(
         manifestStore = guardedStore,
         outcomeStore = RecordingOutcomeStore(),
-        ports = GoalRunnerStatusTestPorts(gitOperations = TrackedSpecGitOperations(emptyMap())),
+        ports =
+          GoalRunnerStatusTestPorts(
+            gitOperations = TrackedSpecGitOperations(emptyMap()),
+            goalStateFiles = LocalGoalRuntimeStateFileStore(failingPaths = setOf(evidenceDir)),
+          ),
         database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
         decompositionManifestStore = TestDecompositionManifestStore,
       )
-    val beforeManifest = Files.readString(manifestPath)
 
-    assertFailsWith<IllegalStateException> {
-      service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
-    }
+    val result = service.purge(GoalRunnerPurgeRequest("SKILL-245", root))
+
+    assertNull(result.refusalReason)
     assertFalse(purgeCalled)
-    assertEquals(beforeManifest, Files.readString(manifestPath))
-    assertFalse(Files.exists(specDir.resolve("spec_subtask_1.md")))
+    assertTrue(result.leftovers.any { leftover -> leftover.startsWith(".skill-bill/run-evidence/wf-parent") })
+    assertTrue(Files.exists(evidenceDir.resolve("evidence.json")))
   }
+}
+
+private class PurgeTrackingStore(
+  private val delegate: InMemoryGoalManifestStore,
+  private val verifiedIds: Set<String> = emptySet(),
+) : GoalRunnerManifestStore by delegate {
+  val purgedTargets = mutableListOf<GoalPurgeTarget>()
+
+  override fun verifyOwnedWorkflowIds(
+    candidateIds: Set<String>,
+    parentWorkflowIds: Set<String>,
+    issueKey: String,
+    repoRoot: Path,
+  ): Set<String> = candidateIds.intersect(verifiedIds)
+
+  override fun discoverPurgeOwnership(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalPurgeOwnership =
+    if (purgedTargets.isEmpty()) {
+      delegate.discoverPurgeOwnership(issueKey, repoRoot)
+    } else {
+      GoalPurgeOwnership(emptyList(), emptySet())
+    }
+
+  override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
+    purgedTargets += target
+    return GoalPurgeTableCounts(mapOf("feature_task_workflows" to 1))
+  }
+}
+
+private fun idleRuntimeWorkflowDatabase(workflowId: String): DatabaseSessionFactory {
+  val dbPath = Files.createTempDirectory("goal-purge-idle-workflow").resolve("metrics.db")
+  ensureTestDatabase(dbPath).use { connection ->
+    connection.prepareStatement(
+      """
+      INSERT INTO feature_task_workflows (workflow_id, mode, contract_version, artifacts_json)
+      VALUES (?, 'runtime', '0.1', '{}')
+      """.trimIndent(),
+    ).use { statement ->
+      statement.setString(1, workflowId)
+      statement.executeUpdate()
+    }
+  }
+  return sqliteDatabaseSessionFactory(
+    userHome = dbPath.parent,
+    dbPathOverride = dbPath.toString(),
+    environment = mapOf("SKILL_BILL_TEST" to "1"),
+  )
+}
+
+private fun assertUnlaunchedYaml(yaml: String) {
+  val lines = yaml.lines()
+  assertTrue(lines.none { line -> line.startsWith("workflow_id:") || line.startsWith("last_resumable_step:") })
+  assertTrue(lines.filter { line -> line.trimStart().startsWith("status:") }.all { line -> "pending" in line })
 }
 
 private fun assertUnlaunched(manifest: DecompositionManifest) {
@@ -312,6 +438,11 @@ private data class PurgeRestoreFixture(
 private class TrackedSpecGitOperations(
   private val trackedFiles: Map<String, String>,
 ) : WorkflowGitOperations by NoopWorkflowGitOperations {
+  override fun listCheckpointRefs(
+    repoRoot: Path,
+    namespacePrefix: String,
+  ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(emptyList())
+
   override fun readHeadTrackedFile(
     repoRoot: Path,
     repoRelativePath: String,

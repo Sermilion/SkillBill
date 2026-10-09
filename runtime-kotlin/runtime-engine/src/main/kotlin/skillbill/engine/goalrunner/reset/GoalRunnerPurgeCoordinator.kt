@@ -1,27 +1,29 @@
 package skillbill.engine.goalrunner.reset
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
+import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.findMatchingDecompositionManifests
-import skillbill.application.decomposition.parentSpecPath
-import skillbill.engine.decomposition.encodeDecompositionManifestYaml
+import skillbill.application.decomposition.repoRelativePath
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
+import skillbill.engine.goalrunner.model.GoalRunnerPurgeSpecAction
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.taskruntime.model.implementationChecklistDirectory
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
+import skillbill.ports.workflow.goalstate.model.GoalRuntimeDirectoryDeletion
 import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.decomposition.model.requireAccepted
-import skillbill.workflow.decomposition.resetManifest
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddress
 import java.nio.file.Path
 
 @Inject
@@ -33,117 +35,156 @@ class GoalRunnerPurgeCoordinator(
   private val manifestValidator: DecompositionManifestValidator,
   private val database: DatabaseSessionFactory,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val goalStateFiles: GoalRuntimeStateFileStore,
 ) {
+  private val specBundleReset = GoalRunnerPurgeSpecBundleReset(gitOperations, manifestFileStore, manifestValidator)
+
   fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult {
-    val state =
-      loadPurgeState(request)
-        ?: return missingPurgeResult(FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey))
-    state.refusal?.let { return it }
-    val unlaunched = requireNotNull(state.sourceManifest).resetManifest(hard = true)
-    val bundle = buildPurgeSpecBundle(state.repoRoot, unlaunched, requireNotNull(state.manifestPath))
-    val specRestored = writePurgeSpecBundle(bundle)
-    state.parentWorkflowId?.let { parentWorkflowId ->
-      purgeDatabaseAndRestoreOnFailure(parentWorkflowId, bundle)
+    val repoRoot = request.repoRoot ?: error("repoRoot is required to purge goal '${request.issueKey}'.")
+    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
+    val plan = discover(repoRoot, issueKey)
+    if (plan.refusalReason != null) return plan.toResult()
+    val directories = ownedDirectories(repoRoot, plan.target)
+    val removedPaths = mutableListOf<String>()
+    val failedDirectories = mutableListOf<String>()
+    directories.forEach { directory ->
+      when (val deletion = goalStateFiles.deleteDirectoryTree(directory)) {
+        GoalRuntimeDirectoryDeletion.Deleted -> removedPaths += repoRelativePath(repoRoot, directory)
+        GoalRuntimeDirectoryDeletion.Absent -> Unit
+        is GoalRuntimeDirectoryDeletion.Failed ->
+          failedDirectories += "${repoRelativePath(repoRoot, directory)}: ${deletion.reason}"
+      }
     }
-    pruneGoalPurgeCheckpointRefs(
-      gitOperations = gitOperations,
-      repoRoot = state.repoRoot,
-      issueKey = state.issueKey,
-      skipStandaloneNamespace = hasStandaloneSibling(state.issueKey, state.repoRoot),
-      record = {},
-    )
-    return GoalRunnerPurgeResult(
-      issueKey = state.issueKey,
-      parentWorkflowId = state.parentWorkflowId,
-      deletedChildWorkflowIds = state.childWorkflowIds,
-      specRestored = specRestored,
+    if (failedDirectories.isNotEmpty()) {
+      return plan.toResult(
+        removedPaths = removedPaths,
+        leftovers = failedDirectories + "database and spec-bundle steps deferred until the directories can be removed",
+      )
+    }
+    val leftovers = mutableListOf<String>()
+    val removedRowCounts =
+      if (plan.target.isEmpty) {
+        emptyMap()
+      } else {
+        manifestStore.purgeDecomposedGoal(
+          plan.target,
+        ).byTable
+      }
+    val checkpointRefsPruned =
+      pruneGoalPurgeCheckpointRefs(
+        gitOperations = gitOperations,
+        repoRoot = repoRoot,
+        issueKey = issueKey,
+        skipStandaloneNamespace = hasStandaloneSibling(issueKey, repoRoot),
+        record = { diagnostic -> leftovers += diagnostic },
+      )
+    val specActions =
+      plan.sourceManifest?.let { source -> specBundleReset.reset(repoRoot, source, requireNotNull(plan.manifestPath)) }
+        .orEmpty()
+    leftovers += survivors(repoRoot, issueKey, plan, directories)
+    return plan.toResult(
+      removedRowCounts = removedRowCounts,
+      removedPaths = removedPaths,
+      specBundleActions = specActions,
+      checkpointRefsPruned = checkpointRefsPruned,
+      leftovers = leftovers,
     )
   }
 
-  private fun loadPurgeState(request: GoalRunnerPurgeRequest): PurgeState? {
-    val repoRoot = request.repoRoot ?: error("repoRoot is required to purge goal '${request.issueKey}'.")
-    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
-    val loaded = manifestStore.loadDurableByIssueKey(issueKey)
-    val parentWorkflowId = loaded?.parentWorkflowId
-    val childWorkflowIds = parentWorkflowId?.let(manifestStore::listOwnedGoalChildWorkflowIds).orEmpty()
-    if (parentWorkflowId != null) {
-      refuseIfLive(parentWorkflowId, childWorkflowIds, issueKey)?.let {
-        return PurgeState(repoRoot, issueKey, parentWorkflowId, childWorkflowIds, null, null, it)
-      }
-    }
-    val diskCandidates =
+  private fun discover(
+    repoRoot: Path,
+    issueKey: String,
+  ): PurgePlan {
+    val ownership = manifestStore.discoverPurgeOwnership(issueKey, repoRoot)
+    val diskCandidate =
       findMatchingDecompositionManifests(
         repoRoot = repoRoot,
         issueKey = issueKey,
         fileStore = manifestFileStore,
         validator = manifestValidator,
         recoverPending = false,
+      ).firstOrNull()
+    val childrenByParent = ownership.parentWorkflowIds.associateWith(manifestStore::listOwnedGoalChildWorkflowIds)
+    val manifests = listOfNotNull(diskCandidate?.manifest) + ownership.manifests.map { it.manifest }
+    val manifestRecordedIds =
+      manifests.flatMapTo(linkedSetOf()) { manifest ->
+        manifest.subtasks.mapNotNull { subtask -> subtask.workflowId?.takeIf(String::isNotBlank) }
+      }
+    val verifiedIds =
+      manifestStore.verifyOwnedWorkflowIds(manifestRecordedIds, ownership.parentWorkflowIds, issueKey, repoRoot)
+    val target =
+      GoalPurgeTarget(
+        parentWorkflowIds = ownership.parentWorkflowIds,
+        workflowIds = ownership.parentWorkflowIds + childrenByParent.values.flatten() + verifiedIds,
       )
-    if (parentWorkflowId == null && diskCandidates.isEmpty()) return null
-    return PurgeState(
-      repoRoot = repoRoot,
+    val sourceManifest = manifests.firstOrNull()
+    val orphanIds = verifiedIds - childrenByParent.values.flatten().toSet()
+    return PurgePlan(
       issueKey = issueKey,
-      parentWorkflowId = parentWorkflowId,
-      childWorkflowIds = childWorkflowIds,
-      sourceManifest = loaded?.manifest ?: diskCandidates.first().manifest,
-      manifestPath =
-        diskCandidates.firstOrNull()?.path
-          ?: error("A decomposition manifest path is required to restore goal '$issueKey'."),
-      refusal = null,
+      target = target,
+      sourceManifest = sourceManifest,
+      manifestPath = diskCandidate?.path ?: sourceManifest?.let { derivedManifestPath(repoRoot, it) },
+      refusalReason =
+        childrenByParent.firstNotNullOfOrNull { (parentId, childIds) ->
+          refusal(issueKey, parentId, childIds + orphanIds)
+        },
+      unclassifiedLeftovers = ownership.unclassifiedWorkflows,
     )
   }
 
-  private fun missingPurgeResult(issueKey: String) =
-    GoalRunnerPurgeResult(
-      issueKey = issueKey,
-      parentWorkflowId = null,
-      deletedChildWorkflowIds = emptyList(),
-      specRestored = false,
-      refusalReason = "No decomposed goal or feature-spec directory exists for '$issueKey'.",
-    )
+  private fun derivedManifestPath(
+    repoRoot: Path,
+    manifest: DecompositionManifest,
+  ): Path = decompositionManifestPath(repoRoot, Path.of(manifest.parentSpecPath), manifest.subtasks.map { it.specPath })
 
-  private fun purgeDatabaseAndRestoreOnFailure(
+  private fun refusal(
+    issueKey: String,
     parentWorkflowId: String,
-    bundle: PurgeSpecBundle,
-  ) {
-    runCatching {
-      manifestStore.purgeDecomposedGoal(parentWorkflowId)
-    }.onFailure { failure ->
-      restorePurgeSpecBundle(bundle.snapshots)
-      throw failure
+    childWorkflowIds: List<String>,
+  ): String? =
+    when (projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)) {
+      ExecutionLiveness.LIVE -> "Goal '$issueKey' is live; refuse purge while a parent or child worker is active."
+      ExecutionLiveness.UNKNOWN ->
+        "Goal '$issueKey' has unknown execution liveness; refuse purge until liveness is known."
+      ExecutionLiveness.IDLE, null -> null
+    }
+
+  private fun ownedDirectories(
+    repoRoot: Path,
+    target: GoalPurgeTarget,
+  ): List<Path> {
+    val root = repoRoot.normalize()
+    return target.workflowIds.sorted().flatMap { workflowId ->
+      listOf(
+        implementationChecklistDirectory(workflowId),
+        FeatureTaskRuntimeRunEvidenceAddress.workflowStoreRoot(workflowId),
+      ).map { relative ->
+        repoRoot.resolve(relative).normalize().also { resolved ->
+          require(resolved.startsWith(root)) { "Owned runtime directory '$relative' escapes the repository root." }
+        }
+      }
     }
   }
 
-  private fun refuseIfLive(
-    parentWorkflowId: String,
-    childWorkflowIds: List<String>,
+  private fun survivors(
+    repoRoot: Path,
     issueKey: String,
-  ): GoalRunnerPurgeResult? {
-    val blockingLiveness = projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)
-    return blockingLiveness?.let { liveness -> refused(issueKey, parentWorkflowId, childWorkflowIds, liveness) }
-  }
-
-  private fun refused(
-    issueKey: String,
-    parentWorkflowId: String,
-    childWorkflowIds: List<String>,
-    liveness: ExecutionLiveness,
-  ): GoalRunnerPurgeResult {
-    val reason =
-      when (liveness) {
-        ExecutionLiveness.LIVE -> "Goal '$issueKey' is live; refuse purge while a parent or child worker is active."
-        ExecutionLiveness.UNKNOWN ->
-          "Goal '$issueKey' has unknown execution liveness; refuse purge until liveness is known."
-        ExecutionLiveness.IDLE -> "Goal '$issueKey' is idle."
+    plan: PurgePlan,
+    directories: List<Path>,
+  ): List<String> =
+    buildList {
+      if (!plan.target.isEmpty) {
+        manifestStore.countDecomposedGoalState(plan.target).byTable
+          .filterValues { count -> count > 0 }
+          .forEach { (table, count) -> add("$table: $count rows") }
       }
-    return GoalRunnerPurgeResult(
-      issueKey = issueKey,
-      parentWorkflowId = parentWorkflowId,
-      deletedChildWorkflowIds = childWorkflowIds,
-      specRestored = false,
-      refusalReason = reason,
-    )
-  }
+      directories.filter(goalStateFiles::directoryExists).forEach { add(repoRelativePath(repoRoot, it)) }
+      manifestStore.discoverPurgeOwnership(issueKey, repoRoot).parentWorkflowIds
+        .forEach { parentId -> add("parent workflow $parentId still present") }
+      plan.sourceManifest?.let { source ->
+        addAll(specBundleReset.survivors(repoRoot, source, requireNotNull(plan.manifestPath)))
+      }
+    }
 
   private fun hasStandaloneSibling(
     issueKey: String,
@@ -154,92 +195,32 @@ class GoalRunnerPurgeCoordinator(
       unitOfWork.workflowStates.findStandaloneFeatureTaskCandidates(issueKey, repositoryIdentity).isNotEmpty()
     }
   }
-
-  private fun buildPurgeSpecBundle(
-    repoRoot: Path,
-    unlaunched: DecompositionManifest,
-    manifestPath: Path,
-  ): PurgeSpecBundle {
-    val manifestYaml =
-      encodeDecompositionManifestYaml(
-        unlaunched,
-        manifestValidator,
-        manifestFileStore,
-        sourceLabel = manifestPath.toString(),
-      )
-    val writes = mutableListOf<Pair<Path, String>>()
-    writes += manifestPath to manifestYaml
-    (listOf(unlaunched.parentSpecPath) + unlaunched.subtasks.map { it.specPath }).forEach { relativeSpecPath ->
-      val specPath = repoRoot.resolve(relativeSpecPath).normalize()
-      if (!manifestFileStore.isRegularFile(specPath)) {
-        val relative = repoRoot.relativize(specPath).toString().replace('\\', '/')
-        val restored = gitOperations.readHeadTrackedFile(repoRoot, relative)
-        val content =
-          when (restored) {
-            is WorkflowGitOperationResult.Ok -> restored.value.orEmpty()
-            is WorkflowGitOperationResult.Failed ->
-              error("Missing spec '$relative' is not tracked at HEAD: ${restored.error}")
-          }
-        if (content.isBlank()) {
-          error("Tracked spec '$relative' is empty at HEAD.")
-        }
-        writes += specPath to content
-      }
-    }
-    val distinctWrites = writes.distinctBy { it.first }
-    val snapshots =
-      distinctWrites.map { (path, _) ->
-        val existed = manifestFileStore.isRegularFile(path)
-        PurgeSpecSnapshot(
-          path = path,
-          existed = existed,
-          content = if (existed) manifestFileStore.readText(path) else null,
-        )
-      }
-    return PurgeSpecBundle(distinctWrites, snapshots)
-  }
-
-  private fun writePurgeSpecBundle(bundle: PurgeSpecBundle): Boolean {
-    if (bundle.writes.isEmpty()) return false
-    manifestFileStore.writeBundleAtomically(bundle.writes) {
-      val manifestWrite =
-        bundle.writes.single { (path, _) ->
-          path.fileName.toString() == DECOMPOSITION_MANIFEST_FILENAME
-        }
-      manifestValidator.validateYamlTextResult(manifestWrite.second, manifestWrite.first.toString())
-        .requireAccepted(manifestWrite.first.toString())
-    }
-    return true
-  }
-
-  private fun restorePurgeSpecBundle(snapshots: List<PurgeSpecSnapshot>) {
-    snapshots.asReversed().forEach { snapshot ->
-      if (snapshot.existed) {
-        manifestFileStore.writeTextAtomically(snapshot.path, requireNotNull(snapshot.content))
-      } else {
-        manifestFileStore.deleteIfExists(snapshot.path)
-      }
-    }
-  }
 }
 
-private data class PurgeSpecSnapshot(
-  val path: Path,
-  val existed: Boolean,
-  val content: String?,
-)
-
-private data class PurgeSpecBundle(
-  val writes: List<Pair<Path, String>>,
-  val snapshots: List<PurgeSpecSnapshot>,
-)
-
-private data class PurgeState(
-  val repoRoot: Path,
+private data class PurgePlan(
   val issueKey: String,
-  val parentWorkflowId: String?,
-  val childWorkflowIds: List<String>,
+  val target: GoalPurgeTarget,
   val sourceManifest: DecompositionManifest?,
   val manifestPath: Path?,
-  val refusal: GoalRunnerPurgeResult?,
-)
+  val refusalReason: String?,
+  val unclassifiedLeftovers: List<String>,
+) {
+  fun toResult(
+    removedRowCounts: Map<String, Int> = emptyMap(),
+    removedPaths: List<String> = emptyList(),
+    specBundleActions: List<GoalRunnerPurgeSpecAction> = emptyList(),
+    checkpointRefsPruned: Int = 0,
+    leftovers: List<String> = emptyList(),
+  ): GoalRunnerPurgeResult =
+    GoalRunnerPurgeResult(
+      issueKey = issueKey,
+      parentWorkflowIds = target.parentWorkflowIds.sorted(),
+      deletedChildWorkflowIds = (target.workflowIds - target.parentWorkflowIds).sorted(),
+      removedRowCounts = removedRowCounts,
+      removedPaths = removedPaths,
+      specBundleActions = specBundleActions,
+      checkpointRefsPruned = checkpointRefsPruned,
+      leftovers = unclassifiedLeftovers + leftovers,
+      refusalReason = refusalReason,
+    )
+}
