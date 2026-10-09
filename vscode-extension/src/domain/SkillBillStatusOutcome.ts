@@ -36,6 +36,18 @@ export interface PauseReason {
   label?: string;
 }
 
+export interface StatusExecutionMetadata {
+  executionScope?: "workflow" | "standalone_phase";
+  executionId?: string;
+  statusStoreId?: string;
+  branchCorrelation?: string;
+  runSequence?: string;
+  statusRevision?: string;
+  invocationId?: string;
+  phaseId?: string;
+  currentActivity?: string;
+}
+
 export enum UnavailableReason {
   MISSING_EXECUTABLE = "MISSING_EXECUTABLE",
   MISCONFIGURED = "MISCONFIGURED",
@@ -49,7 +61,7 @@ export enum UnavailableReason {
   MALFORMED_OUTPUT = "MALFORMED_OUTPUT",
 }
 
-export type SkillBillStatusOutcome =
+export type SkillBillStatusOutcome = (
   | {
       kind: "idle";
       observedAt: Date;
@@ -216,7 +228,7 @@ export type SkillBillStatusOutcome =
       foundContractVersion?: string;
       expectedContractVersion?: string;
       diagnostic?: StatusDiagnostic;
-    };
+    }) & StatusExecutionMetadata;
 
 export function isUncorroboratedIdle(outcome: SkillBillStatusOutcome): boolean {
   return outcome.kind === "idle" && outcome.diagnostic?.reasonCode === NO_MATCHING_WORK_REASON_CODE;
@@ -258,7 +270,7 @@ export function withPollFailure(
     case "blocked":
     case "failed":
     case "stale":
-      return { ...outcome, diagnostic: marker };
+      return { ...outcome, kind: "stale", diagnostic: marker };
     default:
       return outcome;
   }

@@ -139,6 +139,20 @@ class IdeStatusJsonMapperTest {
     }
 
     @Test
+    fun `maps standalone phase identity without losing decimal precision`() {
+        val outcome = IdeStatusJsonMapper.map(
+            """{"contract_version":"$IDE_STATUS_CONTRACT_VERSION","repository_identity":"repo","workflow_id":"workflow-411","execution_scope":"standalone_phase","execution_id":"execution-411","status_store_id":"store-1","run_sequence":"90071992547409931234567890","status_revision":"90071992547409931234567891","invocation_id":"invocation-411","phase_id":"review","lifecycle_state":"active","current_step":{"id":"review","label":"Review"},"current_activity":"Checking findings","updated_at":"2026-08-06T11:00:00Z","freshness":"fresh","summary":"review"}""",
+            now,
+            0,
+        )
+        assertTrue(outcome is SkillBillStatusOutcome.Active)
+        outcome as SkillBillStatusOutcome.Active
+        assertEquals("standalone_phase", outcome.execution?.executionScope)
+        assertEquals("90071992547409931234567890", outcome.execution?.runSequence)
+        assertEquals("Checking findings", outcome.execution?.currentActivity)
+    }
+
+    @Test
     fun `incompatible contract version`() {
         val json = """{"contract_version":"9.9","repository_identity":"r","lifecycle_state":"idle","current_step":{"id":"none","label":"n"},"updated_at":"2026-08-06T10:00:00Z","freshness":"unknown","summary":"x"}"""
         val outcome = IdeStatusJsonMapper.map(json, now, 0)

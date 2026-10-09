@@ -17,6 +17,12 @@ export function showStatusDetails(presentation: MappedPresentation, callbacks: S
   if (details.workflowId) {
     lines.push(`Workflow: ${details.workflowId}`);
   }
+  if (details.scopeText) {
+    lines.push(`Scope: ${details.scopeText}`);
+  }
+  if (details.phaseId) {
+    lines.push(`Phase: ${details.phaseId}`);
+  }
   if (details.stepLabel) {
     lines.push(`Step: ${details.stepLabel}`);
   }
@@ -30,6 +36,9 @@ export function showStatusDetails(presentation: MappedPresentation, callbacks: S
   lines.push(`Subtask ${details.elapsedNoun}: ${details.subtaskElapsedText}`);
   if (details.progressText) {
     lines.push(`Progress: ${details.progressText}`);
+  }
+  if (details.currentActivity) {
+    lines.push(`Current activity: ${details.currentActivity}`);
   }
   if (details.lastUpdateText) {
     lines.push(`Last update: ${details.lastUpdateText}`);

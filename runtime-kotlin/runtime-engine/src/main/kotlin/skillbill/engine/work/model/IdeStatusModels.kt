@@ -1,8 +1,10 @@
 package skillbill.engine.work.model
 
+import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.workflow.model.FeatureTaskRouteScope
 import java.nio.file.Path
 import java.time.Instant
@@ -30,6 +32,9 @@ data class IdeStatusCandidate(
   val startedAt: Instant?,
   val routeScope: FeatureTaskRouteScope? = null,
   val isGoalAuthoritative: Boolean = workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL,
+  val execution: IdeStatusExecutionIdentity? = null,
+  val branchCorrelation: String? = null,
+  val standaloneStatus: StandalonePhaseStatusRecord? = null,
 )
 
 sealed class IdeStatusRepositoryResolution {

@@ -5,6 +5,31 @@ import kotlin.test.Test
 
 class IdeStatusGoldenFixturesTest {
   @Test
+  fun `standalone phase with workflow correlation preserves decimal execution identity`() {
+    IdeStatusSchemaValidator.validate(
+      linkedMapOf(
+        "contract_version" to IDE_STATUS_CONTRACT_VERSION,
+        "repository_identity" to "repo-root-realpath-v1:/repo",
+        "workflow_id" to "workflow-411",
+        "execution_scope" to "standalone_phase",
+        "execution_id" to "execution-411",
+        "status_store_id" to "store-1",
+        "run_sequence" to "90071992547409931234567890",
+        "status_revision" to "90071992547409931234567891",
+        "invocation_id" to "invocation-411",
+        "phase_id" to "review",
+        "lifecycle_state" to "active",
+        "current_step" to linkedMapOf("id" to "review", "label" to "Review"),
+        "current_activity" to "Checking findings",
+        "updated_at" to "2026-08-06T10:00:00Z",
+        "freshness" to "fresh",
+        "summary" to "Standalone review is active.",
+      ),
+      "golden-standalone-phase",
+    )
+  }
+
+  @Test
   fun `feature-task-runtime golden validates`() {
     IdeStatusSchemaValidator.validate(
       linkedMapOf(

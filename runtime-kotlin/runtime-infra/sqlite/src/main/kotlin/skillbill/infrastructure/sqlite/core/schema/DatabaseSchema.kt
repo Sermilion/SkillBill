@@ -24,6 +24,9 @@ internal object DatabaseSchema {
       "feature_task_execution_identities",
       "feature_task_runtime_worker_leases",
       "feature_verify_workflows",
+      "ide_status_execution_registry",
+      "standalone_phase_status",
+      "ide_status_workflow_execution",
       "goal_run_sessions",
       "goal_subtask_events",
       "goal_issue_progress",
@@ -72,6 +75,9 @@ internal object DatabaseSchema {
       "idx_review_runs_routed_skill_canonical",
       "idx_findings_lane",
       "idx_worktree_edit_journal_workflow_recorded",
+      "idx_standalone_phase_status_correlation",
+      "idx_standalone_phase_status_retention",
+      "idx_ide_status_workflow_execution_lookup",
     )
 
   fun createBaseSchema(connection: Connection) {

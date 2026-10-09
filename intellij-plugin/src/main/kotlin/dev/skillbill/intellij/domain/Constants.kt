@@ -1,7 +1,18 @@
 package dev.skillbill.intellij.domain
 
 
-const val IDE_STATUS_CONTRACT_VERSION: String = "0.2"
+const val IDE_STATUS_CONTRACT_VERSION: String = "0.3"
+
+const val EXECUTION_SCOPE_WIRE_KEY: String = "execution_scope"
+const val EXECUTION_ID_WIRE_KEY: String = "execution_id"
+const val STATUS_STORE_ID_WIRE_KEY: String = "status_store_id"
+const val BRANCH_CORRELATION_WIRE_KEY: String = "branch_correlation"
+const val RUN_SEQUENCE_WIRE_KEY: String = "run_sequence"
+const val STATUS_REVISION_WIRE_KEY: String = "status_revision"
+const val INVOCATION_ID_WIRE_KEY: String = "invocation_id"
+const val PHASE_ID_WIRE_KEY: String = "phase_id"
+const val CURRENT_ACTIVITY_WIRE_KEY: String = "current_activity"
+const val CURRENT_ACTIVITY_MAX_CODE_POINTS: Int = 160
 
 
 const val NO_MATCHING_WORK_REASON_CODE: String = "no_matching_work"

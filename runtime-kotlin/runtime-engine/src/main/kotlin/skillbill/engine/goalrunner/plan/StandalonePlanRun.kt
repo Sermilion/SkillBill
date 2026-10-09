@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -25,6 +27,7 @@ import skillbill.workflow.taskruntime.artifact.decomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 /** How a standalone plan run ended. */
@@ -62,6 +65,7 @@ class StandalonePlanRun(
   private val fileStore: DecompositionManifestStore,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val preparation: StandalonePlanPreparation,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) {
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
@@ -85,6 +89,27 @@ class StandalonePlanRun(
     repoRoot: Path,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val publisher =
+      statusPublisherFactory.forPlan(
+        repoRoot = repoRoot,
+        issueKey = issueKey,
+        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+      )
+    return runCatching {
+      runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->
+        val input = inputFor(specPath)
+        input.copy(eventSink = statusPublisherFactory.compose(input.eventSink::emit, publisher))
+      }
+    }.onFailure(publisher::settleFailure).getOrThrow()
+  }
+
+  private fun runInternal(
+    issueKey: String,
+    suppliedIntake: String?,
+    repoRoot: Path,
+    statusPublisher: StandalonePhaseStatusEventSink,
+    inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
+  ): StandalonePlanResult {
     if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
       val completed =
         database.read { unitOfWork ->
@@ -98,39 +123,45 @@ class StandalonePlanRun(
         val (id, terminal) = completed
         if (terminal != null) {
           preparation.capture(id, issueKey, repoRoot)
-          return StandalonePlanResult.Completed(
-            id,
-            terminal.parentSpecPath,
-            terminal.decompositionManifestPath,
-            terminal.subtaskSpecPaths,
-          )
+          val result =
+            StandalonePlanResult.Completed(
+              id,
+              terminal.parentSpecPath,
+              terminal.decompositionManifestPath,
+              terminal.subtaskSpecPaths,
+            )
+          statusPublisher.settlePlan("completed", result.workflowId)
+          return result
         }
       }
-      return StandalonePlanResult.Refused(
+      return refused(
+        statusPublisher,
         "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
           "Run `skill-bill $issueKey` to execute it.",
       )
     }
     val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
-    val intakeSha256 = intake?.let(::sha256HexUtf8)
     val identity = repositories.repositoryIdentity(repoRoot)
     return when (val found = lookupPlanAfterCrashRecovery(issueKey, identity)) {
-      is FeatureTaskContinuationLookupResult.Resumable -> resume(found.candidate, intakeSha256, repoRoot, inputFor)
+      is FeatureTaskContinuationLookupResult.Resumable ->
+        resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
-        StandalonePlanResult.Refused(
+        refused(
+          statusPublisher,
           "Plan workflow '${found.candidate.workflowId}' for $issueKey is already running.",
           found.candidate.workflowId,
         )
       is FeatureTaskContinuationLookupResult.Ambiguous ->
-        StandalonePlanResult.Refused(
+        refused(
+          statusPublisher,
           "Several plan workflows exist for $issueKey: ${found.candidates.joinToString { it.workflowId }}.",
         )
       is FeatureTaskContinuationLookupResult.NeedsIdentityRepair ->
-        StandalonePlanResult.Refused(found.summary, found.workflowId)
+        refused(statusPublisher, found.summary, found.workflowId)
       is FeatureTaskContinuationLookupResult.TerminalOnly,
       is FeatureTaskContinuationLookupResult.GoalContinuation,
       FeatureTaskContinuationLookupResult.NoMatch,
-      -> open(issueKey, intake, intakeSha256, repoRoot, inputFor)
+      -> open(issueKey, intake, repoRoot, inputFor, statusPublisher)
     }
   }
 
@@ -147,19 +178,20 @@ class StandalonePlanRun(
   private fun open(
     issueKey: String,
     intake: String?,
-    intakeSha256: String?,
     repoRoot: Path,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
+    statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
     val spec = intakePreparation.seedPlanSpec(issueKey, intake, repoRoot)
     val operatorAuthored = spec.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR
     if (operatorAuthored && !isKeyResolvedSpec(issueKey, spec.specPath, repoRoot)) {
-      return StandalonePlanResult.Refused(
+      return refused(
+        statusPublisher,
         "The supplied spec ${spec.specPath} is not the governed spec for $issueKey; settlement guards the spec " +
           "found under .feature-specs/$issueKey-*/. Move it there and plan again.",
       )
     }
-    val seed = FeatureTaskRuntimePlanSeed(intakeSha256, spec.specOrigin, specHash(spec.specPath))
+    val seed = FeatureTaskRuntimePlanSeed(intake?.let(::sha256HexUtf8), spec.specOrigin, specHash(spec.specPath))
     val input =
       inputFor(spec.specPath.toString()).copy(
         definition = SkeletonDefinition.PLAN,
@@ -171,7 +203,7 @@ class StandalonePlanRun(
             ),
           ),
       )
-    return settle(entry.run(input) { error("Could not open a plan workflow: ${it.error}") }, repoRoot)
+    return runEntry(input, repoRoot, statusPublisher)
   }
 
   private fun resume(
@@ -179,11 +211,13 @@ class StandalonePlanRun(
     intakeSha256: String?,
     repoRoot: Path,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
+    statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
     val specPath = repoRoot.resolve(candidate.governedSpecPath)
     val seed = recordedSeed(candidate.workflowId)
     if (intakeSha256 != null && intakeSha256 != seed?.intakeSha256) {
-      return StandalonePlanResult.Refused(
+      return refused(
+        statusPublisher,
         "Plan workflow '${candidate.workflowId}' was opened with a different intake; resume it without an intake.",
         candidate.workflowId,
       )
@@ -195,33 +229,60 @@ class StandalonePlanRun(
         definition = SkeletonDefinition.PLAN,
         protectedSpecSha256 = (seed?.specSha256 ?: specHash(specPath)).takeIf { operatorAuthored },
       )
-    return settle(
-      entry.run(input) {
-        error("Could not resume plan workflow '${candidate.workflowId}': ${it.error}")
-      },
-      repoRoot,
-    )
+    return runEntry(input, repoRoot, statusPublisher)
+  }
+
+  private fun runEntry(
+    input: FeatureTaskRuntimeRunInput,
+    repoRoot: Path,
+    statusPublisher: StandalonePhaseStatusEventSink?,
+  ): StandalonePlanResult {
+    val report =
+      runCatching {
+        entry.run(input) { error("Could not run plan workflow: ${it.error}") }
+      }.onFailure { error ->
+        statusPublisher?.settleFailure(error, input.explicitWorkflowId)
+      }.getOrThrow()
+    return settle(statusPublisher, report, repoRoot)
+  }
+
+  private fun refused(
+    statusPublisher: StandalonePhaseStatusEventSink?,
+    reason: String,
+    workflowId: String? = null,
+  ): StandalonePlanResult.Refused {
+    statusPublisher?.settleBlocked(reason, workflowId)
+    return StandalonePlanResult.Refused(reason, workflowId)
   }
 
   private fun settle(
+    statusSink: StandalonePhaseStatusEventSink?,
     report: FeatureTaskRuntimeRunReport,
     repoRoot: Path,
-  ): StandalonePlanResult =
-    when (report) {
-      is FeatureTaskRuntimeRunReport.Decomposed -> {
-        preparation.capture(report.workflowId, report.issueKey, repoRoot)
-        StandalonePlanResult.Completed(
-          report.workflowId,
-          report.parentSpecPath,
-          report.decompositionManifestPath,
-          report.subtaskSpecPaths,
-        )
+  ): StandalonePlanResult {
+    val result =
+      when (report) {
+        is FeatureTaskRuntimeRunReport.Decomposed -> {
+          preparation.capture(report.workflowId, report.issueKey, repoRoot)
+          StandalonePlanResult.Completed(
+            report.workflowId,
+            report.parentSpecPath,
+            report.decompositionManifestPath,
+            report.subtaskSpecPaths,
+          )
+        }
+        is FeatureTaskRuntimeRunReport.Blocked -> StandalonePlanResult.Blocked(report.workflowId, report.blockedReason)
+        is FeatureTaskRuntimeRunReport.Paused -> StandalonePlanResult.Blocked(report.workflowId, report.pauseReason)
+        is FeatureTaskRuntimeRunReport.Completed ->
+          StandalonePlanResult.Blocked(report.workflowId, "The plan finished without authoring a spec bundle.")
       }
-      is FeatureTaskRuntimeRunReport.Blocked -> StandalonePlanResult.Blocked(report.workflowId, report.blockedReason)
-      is FeatureTaskRuntimeRunReport.Paused -> StandalonePlanResult.Blocked(report.workflowId, report.pauseReason)
-      is FeatureTaskRuntimeRunReport.Completed ->
-        StandalonePlanResult.Blocked(report.workflowId, "The plan finished without authoring a spec bundle.")
+    when (result) {
+      is StandalonePlanResult.Completed -> statusSink?.settlePlan("completed", result.workflowId)
+      is StandalonePlanResult.Blocked -> statusSink?.settleBlocked(result.reason, result.workflowId)
+      is StandalonePlanResult.Refused -> statusSink?.settleBlocked(result.reason, result.workflowId)
     }
+    return result
+  }
 
   private fun recordedSeed(workflowId: String): FeatureTaskRuntimePlanSeed? =
     database.read { unitOfWork ->

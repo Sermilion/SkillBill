@@ -34,6 +34,9 @@ export const StatusUiMapper = {
           startedAt: outcome.startedAt,
           lastUpdated: outcome.updatedAt ?? outcome.observedAt,
           stale: outcome.stale,
+          executionScope: outcome.executionScope,
+          phaseId: outcome.phaseId,
+          currentActivity: outcome.currentActivity,
         };
       case "active":
         return mapRunState("active", outcome, now);
@@ -75,6 +78,9 @@ export const StatusUiMapper = {
           currentPhaseExecution: outcome.currentPhaseExecution,
           lastAgentActivityAt: outcome.lastAgentActivityAt,
           lastAgentActivityLabel: outcome.lastAgentActivityLabel,
+          executionScope: outcome.executionScope,
+          phaseId: outcome.phaseId,
+          currentActivity: outcome.currentActivity,
         };
       case "blocked":
         return mapSettledRun("blocked", outcome, now);
@@ -224,6 +230,9 @@ function mapRunState(
     subtaskActiveDurationAsOf: outcome.subtaskActiveDurationAsOf,
     lastAgentActivityAt: outcome.lastAgentActivityAt,
     lastAgentActivityLabel: outcome.lastAgentActivityLabel,
+    executionScope: outcome.executionScope,
+    phaseId: outcome.phaseId,
+    currentActivity: outcome.currentActivity,
   };
   if (kind === "paused" && outcome.kind === "paused") {
     return { kind: "paused", ...base, pauseReason: outcome.pauseReason };
@@ -264,6 +273,9 @@ function mapSettledRun(
     stale: outcome.stale,
     currentModel: outcome.currentModel,
     currentPhaseExecution: outcome.currentPhaseExecution,
+    executionScope: outcome.executionScope,
+    phaseId: outcome.phaseId,
+    currentActivity: outcome.currentActivity,
   };
   return { kind, ...base };
 }

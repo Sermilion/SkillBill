@@ -29,6 +29,7 @@ object SkillBillStatusBarPresentation {
         val goalText = elapsedLabel(anchored.goalElapsed)
         val subtaskText = elapsedLabel(anchored.subtaskElapsed)
         val selectedSlot = selectDisplaySlot(anchored.planning, anchored.currentPhaseExecution)
+        val scopePrefix = if (anchored.executionScope == "standalone_phase") "Phase" else "Skill Bill"
         val progress = when {
             selectedSlot is DisplaySlot.Planning ->
                 selectedSlot.planned to selectedSlot.total
@@ -63,19 +64,19 @@ object SkillBillStatusBarPresentation {
 
         val fullBar = when (anchored) {
             is SkillBillStatusUiState.Active ->
-                buildRunBar("Skill Bill", step ?: anchored.stepLabel, slotSegment, goalText, subtaskText, progressText)
+                buildRunBar(scopePrefix, step ?: anchored.stepLabel, slotSegment, goalText, subtaskText, progressText)
 
             is SkillBillStatusUiState.Paused ->
-                buildRunBar("Skill Bill · paused", step, slotSegment, goalText, subtaskText, progressText)
+                buildRunBar("$scopePrefix · paused", step, slotSegment, goalText, subtaskText, progressText)
 
             is SkillBillStatusUiState.Stale ->
-                buildRunBar("Skill Bill · stale", step, slotSegment, goalText, subtaskText, progressText)
+                buildRunBar("$scopePrefix · stale", step, slotSegment, goalText, subtaskText, progressText)
 
             is SkillBillStatusUiState.Done ->
-                buildRunBar("Skill Bill · done", step, null, goalText, subtaskText, progressText)
+                buildRunBar("$scopePrefix · done", step, null, goalText, subtaskText, progressText)
 
-            is SkillBillStatusUiState.Blocked -> "Skill Bill · blocked"
-            is SkillBillStatusUiState.Failed -> "Skill Bill · failed"
+            is SkillBillStatusUiState.Blocked -> "$scopePrefix · blocked"
+            is SkillBillStatusUiState.Failed -> "$scopePrefix · failed"
             is SkillBillStatusUiState.Unavailable -> "Skill Bill · unavailable"
             is SkillBillStatusUiState.Incompatible -> "Skill Bill · incompatible"
             is SkillBillStatusUiState.Idle -> "Skill Bill · idle"
@@ -95,6 +96,9 @@ object SkillBillStatusBarPresentation {
         val accessibleName = "Skill Bill status: $lifecycle"
         val accessibleDescription = buildAccessibilityDescription(
             lifecycle = lifecycle,
+            executionScope = anchored.executionScope,
+            phaseId = anchored.phaseId,
+            currentActivity = anchored.currentActivity,
             step = step,
             goalText = goalText,
             subtaskText = subtaskText,
@@ -129,6 +133,9 @@ object SkillBillStatusBarPresentation {
                 staleNote = STALE_NOTE.takeIf { anchored.stale },
                 pauseReasonText = pauseReasonText(anchored),
                 pauseActionText = pauseActionText(anchored),
+                scopeText = "Standalone phase".takeIf { anchored.executionScope == "standalone_phase" },
+                phaseId = anchored.phaseId,
+                currentActivity = anchored.currentActivity,
             ),
             controls = GoalControlsPresentation.controlsFor(anchored),
         )
@@ -270,12 +277,16 @@ object SkillBillStatusBarPresentation {
             append("Skill Bill — ").append(lifecycle)
             state.issueKey?.let { append("\nIssue: ").append(it) }
             state.workflowId?.let { append("\nWorkflow: ").append(it) }
+            if (state.executionScope == "standalone_phase") {
+                append("\nStandalone phase: ").append(state.phaseId ?: "unknown")
+            }
             step?.let { append("\nStep: ").append(it) }
             slotFullLine?.let { append('\n').append(it) }
             val elapsedNoun = elapsedNoun(state)
             append("\nGoal ").append(elapsedNoun).append(": ").append(goalText)
             append("\nSubtask ").append(elapsedNoun).append(": ").append(subtaskText)
             progressText?.let { append("\nProgress: ").append(it) }
+            state.currentActivity?.let { append("\nActivity: ").append(it) }
             state.lastUpdated?.let { append("\nLast update: ").append(lastUpdateFormatter.format(it)) }
             val problem = state.problemSummary ?: state.detail
             if (!problem.isNullOrBlank()) {
@@ -296,6 +307,9 @@ object SkillBillStatusBarPresentation {
 
     private fun buildAccessibilityDescription(
         lifecycle: String,
+        executionScope: String?,
+        phaseId: String?,
+        currentActivity: String?,
         step: String?,
         goalText: String,
         subtaskText: String,
@@ -307,8 +321,12 @@ object SkillBillStatusBarPresentation {
         buildString {
             append("Skill Bill. State: ").append(lifecycle).append('.')
             step?.let { append(" Step: ").append(it).append('.') }
+            if (executionScope == "standalone_phase") {
+                append(" Standalone phase: ").append(phaseId ?: "unknown").append('.')
+            }
             slotFullLine?.let { append(' ').append(it).append('.') }
             append(" Goal ").append(elapsedNoun).append(": ").append(goalText).append('.')
+            currentActivity?.let { append(" Activity: ").append(it).append('.') }
             append(" Subtask ").append(elapsedNoun).append(": ").append(subtaskText).append('.')
             progressText?.let { append(" Progress: ").append(it).append('.') }
             detail?.let { append(' ').append(it) }
@@ -374,6 +392,9 @@ object SkillBillStatusBarPresentation {
         val staleNote: String?,
         val pauseReasonText: String? = null,
         val pauseActionText: String? = null,
+        val scopeText: String? = null,
+        val phaseId: String? = null,
+        val currentActivity: String? = null,
     )
 
     

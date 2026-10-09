@@ -3,7 +3,7 @@ import { describe, it } from "mocha";
 import { PreferenceCachePort } from "../application/PreferenceCachePort";
 import { StatusRefreshCoordinator } from "../application/StatusRefreshCoordinator";
 import { StatusRepository } from "../application/StatusRepository";
-import { SkillBillStatusOutcome } from "../domain/SkillBillStatusOutcome";
+import { SkillBillStatusOutcome, UnavailableReason } from "../domain/SkillBillStatusOutcome";
 
 class FakePreferences implements PreferenceCachePort {
   constructor(public refreshIntervalSeconds = 60) {}
@@ -64,6 +64,48 @@ function delay(ms: number): Promise<void> {
 }
 
 describe("StatusRefreshCoordinator", () => {
+  it("accepts the next run after a terminal result and rejects resurrection after a failed poll", async () => {
+    const metadata = {
+      repositoryIdentity: "repo",
+      branchCorrelation: "main",
+      executionScope: "standalone_phase" as const,
+      statusStoreId: "store",
+      executionId: "run-1",
+      runSequence: "1",
+      statusRevision: "2",
+      invocationId: "invocation-1",
+      phaseId: "review",
+    };
+    const observedAt = new Date("2026-10-09T10:00:00Z");
+    const active: SkillBillStatusOutcome = {
+      ...metadata, kind: "active", summary: "running", observedAt,
+      currentStepId: "review", currentStepLabel: "Review", updatedAt: observedAt,
+    };
+    const responses: SkillBillStatusOutcome[] = [
+      { ...metadata, kind: "done", summary: "finished", observedAt },
+      { kind: "unavailable", summary: "poll failed", observedAt, reasonCode: UnavailableReason.PROCESS_FAILURE },
+      active,
+      { ...active, executionId: "run-2", runSequence: "2", statusRevision: "1", invocationId: "invocation-2" },
+    ];
+    const repo = new FakeStatusRepository(() => responses.shift()!);
+    const coordinator = new StatusRefreshCoordinator(repo, new FakePreferences(), "/tmp/a");
+    const seen: SkillBillStatusOutcome[] = [];
+    const completed = new Promise<void>((resolve) => {
+      coordinator.subscribe((outcome) => {
+        seen.push(outcome);
+        if (outcome.executionId === "run-2") resolve();
+      });
+    });
+    try {
+      for (let index = 0; index < 4; index += 1) coordinator.requestRefresh();
+      await completed;
+      assert.equal(seen.some((outcome) => outcome.kind === "active" && outcome.executionId === "run-1"), false);
+      assert.equal(seen.at(-1)?.kind, "active");
+    } finally {
+      coordinator.dispose();
+    }
+  });
+
   it("coalesces overlapping refresh requests", async () => {
     const repo = new FakeStatusRepository(() => idle());
     repo.armGate();

@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
@@ -77,6 +78,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
@@ -267,6 +269,13 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         GoalPlanningMigrationAdmission(
           TestGoalActivityStampDatabase,
           planningMigrationForTest(),
+          wiring.diagnostics,
+        ),
+        StandalonePhaseStatusPublisherFactory(
+          TestGoalActivityStampDatabase,
+          TestRepositoryEnclosingRoot,
+          CheckedOutBranchSource { "main" },
+          wiring.clock,
           wiring.diagnostics,
         ),
       ),

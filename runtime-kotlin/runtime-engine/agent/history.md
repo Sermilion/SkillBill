@@ -1,3 +1,12 @@
+## [2026-10-09] SKILL-411 standalone phase progress in VS Code and IntelliJ
+Areas: runtime-engine status and phase lifecycle; runtime-contracts, runtime-ports, runtime-infra/sqlite; runtime-cli; orchestration contracts; VS Code and IntelliJ extensions
+- Added versioned IDE-status execution scope and identity for workflows and standalone phases, including decimal-string ordering, revisions, bounded activity, and typed incompatible diagnostics.
+- Added standalone-phase persistence, fenced lifecycle updates, retention/interruption handling, and status selection across workflow and standalone candidates.
+- Extended VS Code and IntelliJ caches, refresh acceptance, stale fallback, status presentation, details, accessibility, and terminal timing for standalone phases.
+- Reused shared status contract, repository correlation, authoritative terminal settlement, and bounded UI presentation patterns across producers and consumers.
+- Known limits: deeper migration/interruption coverage and complete standalone launch composition remain follow-up work; no feature flag.
+Acceptance criteria: 8/8 implemented
+
 ## [2026-10-09] SKILL-410 subtask 1: durable standalone plan that a full run resumes
 Areas: runtime-engine goalrunner plan/intake/manifest/reset/status, featuretask lifecycle/runner/runloop/slot; runtime-domain workflow engine and taskruntime skeleton; runtime-application workflow decomposition; runtime-cli phase and goal; runtime-core guards; docs
 - `phase plan` is now a DURABLE skeleton: it persists a plan workflow, seeds the spec bundle and settles through the normal run loop instead of the in-memory phase entry. Invocable standalone phases: review, validation, plan, pr, monitor.

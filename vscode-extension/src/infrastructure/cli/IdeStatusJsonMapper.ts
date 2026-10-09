@@ -3,11 +3,17 @@ import {
   ACTIVE_DURATION_AS_OF_WIRE_KEY,
   ACTIVE_DURATION_MS_WIRE_KEY,
   AGENT_ACTIVITY_LABELS,
+  BRANCH_CORRELATION_WIRE_KEY,
   CURRENT_MODEL_WIRE_KEY,
+  CURRENT_ACTIVITY_MAX_CODE_POINTS,
+  CURRENT_ACTIVITY_WIRE_KEY,
   CURRENT_PHASE_EXECUTION_KINDS,
   CURRENT_PHASE_EXECUTION_WIRE_KEY,
   EFFORT_MAX_LENGTH,
+  EXECUTION_ID_WIRE_KEY,
+  EXECUTION_SCOPE_WIRE_KEY,
   IDE_STATUS_CONTRACT_VERSION,
+  INVOCATION_ID_WIRE_KEY,
   LAST_AGENT_ACTIVITY_AT_WIRE_KEY,
   LAST_AGENT_ACTIVITY_LABEL_WIRE_KEY,
   MODEL_MAX_LENGTH,
@@ -18,6 +24,10 @@ import {
   PAUSE_REASON_WIRE_KEY,
   PAUSE_REQUESTED_WIRE_KEY,
   PHASE_ID_MAX_LENGTH,
+  PHASE_ID_WIRE_KEY,
+  RUN_SEQUENCE_WIRE_KEY,
+  STATUS_REVISION_WIRE_KEY,
+  STATUS_STORE_ID_WIRE_KEY,
 } from "../../domain/Constants";
 import {
   CurrentPhaseExecution,
@@ -25,6 +35,7 @@ import {
   GoalPlanningInfo,
   PauseReason,
   SkillBillStatusOutcome,
+  StatusExecutionMetadata,
   UnavailableReason,
 } from "../../domain/SkillBillStatusOutcome";
 
@@ -71,6 +82,18 @@ export function mapIdeStatusJson(
         foundContractVersion: contractVersion,
         reasonCode: "contract_version_mismatch",
       },
+    };
+  }
+
+  const execution = parseExecution(root);
+  if (execution === "invalid") {
+    return {
+      kind: "incompatible",
+      observedAt,
+      summary: "IDE status execution identity is malformed",
+      foundContractVersion: contractVersion,
+      expectedContractVersion: IDE_STATUS_CONTRACT_VERSION,
+      diagnostic: { reasonCode: "invalid_execution_identity" },
     };
   }
 
@@ -164,6 +187,7 @@ export function mapIdeStatusJson(
       subtaskActiveDurationAsOf,
       currentModel,
       currentPhaseExecution,
+      ...execution,
       lastAgentActivityAt: agentActivity?.at,
       lastAgentActivityLabel: agentActivity?.label,
     };
@@ -199,6 +223,7 @@ export function mapIdeStatusJson(
         subtaskActiveDurationAsOf,
         currentModel,
         currentPhaseExecution,
+        ...execution,
         lastAgentActivityAt: agentActivity?.at,
         lastAgentActivityLabel: agentActivity?.label,
       };
@@ -227,6 +252,7 @@ export function mapIdeStatusJson(
         subtaskActiveDurationAsOf,
         currentModel,
         currentPhaseExecution,
+        ...execution,
       };
     case "failed":
       return {
@@ -248,6 +274,7 @@ export function mapIdeStatusJson(
         subtaskActiveDurationAsOf,
         currentModel,
         currentPhaseExecution,
+        ...execution,
       };
     case "idle":
       return {
@@ -271,6 +298,7 @@ export function mapIdeStatusJson(
         stale: isStale,
         activeDurationMs,
         activeDurationAsOf,
+        ...execution,
       };
     default:
       return {
@@ -433,6 +461,70 @@ function parseAgentActivity(root: JsonObject): { at: Date; label: string } | und
     return undefined;
   }
   return { at, label };
+}
+
+function parseExecution(root: JsonObject): StatusExecutionMetadata | "invalid" | undefined {
+  const keys = [
+    EXECUTION_SCOPE_WIRE_KEY,
+    EXECUTION_ID_WIRE_KEY,
+    STATUS_STORE_ID_WIRE_KEY,
+    RUN_SEQUENCE_WIRE_KEY,
+    STATUS_REVISION_WIRE_KEY,
+    INVOCATION_ID_WIRE_KEY,
+    PHASE_ID_WIRE_KEY,
+  ];
+  if (!keys.some((key) => key in root) && !(CURRENT_ACTIVITY_WIRE_KEY in root)) {
+    return undefined;
+  }
+  const executionScope = getString(root, EXECUTION_SCOPE_WIRE_KEY);
+  const executionId = getString(root, EXECUTION_ID_WIRE_KEY);
+  const statusStoreId = getString(root, STATUS_STORE_ID_WIRE_KEY);
+  const branchCorrelation = getString(root, BRANCH_CORRELATION_WIRE_KEY);
+  const runSequence = getString(root, RUN_SEQUENCE_WIRE_KEY);
+  const statusRevision = getString(root, STATUS_REVISION_WIRE_KEY);
+  const invocationId = getString(root, INVOCATION_ID_WIRE_KEY);
+  const phaseId = boundedString(root, PHASE_ID_WIRE_KEY, PHASE_ID_MAX_LENGTH);
+  const invocationFieldValid = !(INVOCATION_ID_WIRE_KEY in root) || invocationId !== undefined;
+  const phaseFieldValid = !(PHASE_ID_WIRE_KEY in root) || phaseId !== undefined;
+  if (
+    (executionScope !== "workflow" && executionScope !== "standalone_phase") ||
+    !executionId ||
+    !statusStoreId ||
+    !runSequence ||
+    !statusRevision ||
+    !/^[1-9][0-9]*$/.test(runSequence) ||
+    !/^[1-9][0-9]*$/.test(statusRevision) ||
+    !invocationFieldValid ||
+    !phaseFieldValid ||
+    (executionScope === "workflow" && (invocationId !== undefined || phaseId !== undefined)) ||
+    (executionScope === "standalone_phase" && (!invocationId || !phaseId))
+  ) {
+    return "invalid";
+  }
+  const currentActivity = boundedCodePointString(root, CURRENT_ACTIVITY_WIRE_KEY);
+  if (CURRENT_ACTIVITY_WIRE_KEY in root && !currentActivity) {
+    return "invalid";
+  }
+  return {
+    executionScope,
+    executionId,
+    statusStoreId,
+    branchCorrelation,
+    runSequence,
+    statusRevision,
+    invocationId,
+    phaseId,
+    currentActivity,
+  };
+}
+
+function boundedCodePointString(root: JsonObject, key: string): string | undefined {
+  const value = getString(root, key)?.trim();
+  if (!value || [...value].some((character) => /[\u0000-\u001F\u007F]/.test(character))) {
+    return undefined;
+  }
+  const codePoints = [...value];
+  return codePoints.length <= CURRENT_ACTIVITY_MAX_CODE_POINTS ? value : undefined;
 }
 
 function boundedString(obj: JsonObject, key: string, maxLength: number): string | undefined {

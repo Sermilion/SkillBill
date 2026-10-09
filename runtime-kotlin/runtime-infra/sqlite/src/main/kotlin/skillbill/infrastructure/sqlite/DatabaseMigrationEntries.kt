@@ -16,6 +16,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -712,5 +713,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 49,
       name = "add-feature-task-phase-strategy-telemetry-columns",
       operation = FeatureTaskPhaseStrategyTelemetryMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 50,
+      name = "add-standalone-phase-status-authority",
+      operation = StandalonePhaseStatusMigration::apply,
     ),
   )

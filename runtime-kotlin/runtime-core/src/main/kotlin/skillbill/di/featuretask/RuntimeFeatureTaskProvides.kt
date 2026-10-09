@@ -41,7 +41,7 @@ internal interface RuntimeFeatureTaskProvides {
   ): FeatureTaskRuntimeSpecStatusWriter = adapter
 
   @Provides
-  fun checkedOutBranchSource(source: FileSystemCheckedOutBranchSource): CheckedOutBranchSource = source
+  fun checkedOutBranchSource(): CheckedOutBranchSource = FileSystemCheckedOutBranchSource()
 
   @Provides
   fun featureTaskRuntimeReadinessEvidencePort(

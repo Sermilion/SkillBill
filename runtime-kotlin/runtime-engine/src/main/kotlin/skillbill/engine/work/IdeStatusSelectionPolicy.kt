@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import java.time.Duration
@@ -24,6 +25,17 @@ object IdeStatusSelectionPolicy {
   ): IdeStatusCandidate? {
     val retained = candidates.filter { retainedAt(it, observedAt) }
     if (retained.isEmpty()) return null
+    retained
+      .filter { it.execution != null }
+      .groupBy { it.execution?.statusStoreId to it.execution?.runSequence }
+      .values
+      .firstOrNull { group -> group.mapNotNull { it.execution?.executionId }.distinct().size > 1 }
+      ?.let { conflict ->
+        throw invalidWorkflowStateSchemaError(
+          "IDE status execution sequence conflict: sequence=${conflict.first().execution?.runSequence}; " +
+            "execution_ids=${conflict.joinToString { it.execution?.executionId.orEmpty() }}",
+        )
+      }
     return retained.sortedWith(comparator(observedAt)).first()
   }
 
@@ -52,11 +64,30 @@ object IdeStatusSelectionPolicy {
   }
 
   private fun comparator(observedAt: Instant): Comparator<IdeStatusCandidate> =
-    compareBy<IdeStatusCandidate> { freshnessKey(it, observedAt) }
+    compareBy<IdeStatusCandidate> { it.execution?.runSequence == null }
+      .thenComparator { left, right -> compareRunSequence(right, left) }
+      .thenBy { freshnessKey(it, observedAt) }
       .thenBy { it.selectionTier.rank }
       .thenBy { if (it.isGoalAuthoritative) 0 else 1 }
       .thenByDescending { it.updatedAt }
       .thenBy { it.workflowId }
+
+  private fun compareRunSequence(
+    left: IdeStatusCandidate,
+    right: IdeStatusCandidate,
+  ): Int {
+    val leftSequence = left.execution?.runSequence
+    val rightSequence = right.execution?.runSequence
+    if (leftSequence == null && rightSequence == null) return 0
+    if (leftSequence == null) return -1
+    if (rightSequence == null) return 1
+    return when {
+      leftSequence.length != rightSequence.length -> leftSequence.length.compareTo(rightSequence.length)
+      leftSequence == rightSequence -> 0
+      leftSequence > rightSequence -> 1
+      else -> -1
+    }
+  }
 
   fun selectionTier(lifecycle: IdeStatusLifecycleState): IdeStatusSelectionTier =
     when (lifecycle) {

@@ -1,4 +1,15 @@
-export const IDE_STATUS_CONTRACT_VERSION = "0.2";
+export const IDE_STATUS_CONTRACT_VERSION = "0.3";
+
+export const EXECUTION_SCOPE_WIRE_KEY = "execution_scope";
+export const EXECUTION_ID_WIRE_KEY = "execution_id";
+export const STATUS_STORE_ID_WIRE_KEY = "status_store_id";
+export const BRANCH_CORRELATION_WIRE_KEY = "branch_correlation";
+export const RUN_SEQUENCE_WIRE_KEY = "run_sequence";
+export const STATUS_REVISION_WIRE_KEY = "status_revision";
+export const INVOCATION_ID_WIRE_KEY = "invocation_id";
+export const PHASE_ID_WIRE_KEY = "phase_id";
+export const CURRENT_ACTIVITY_WIRE_KEY = "current_activity";
+export const CURRENT_ACTIVITY_MAX_CODE_POINTS = 160;
 
 export const NO_MATCHING_WORK_REASON_CODE = "no_matching_work";
 

@@ -19,6 +19,7 @@ import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
 import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.WorktreeEditJournalStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.AgentActivityStampStore
+import skillbill.infrastructure.sqlite.workflow.featuretask.StandalonePhaseStatusStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerControlStore
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
@@ -36,6 +37,7 @@ import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.idestatus.AgentActivityStampRepository
+import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
@@ -103,6 +105,8 @@ internal class SQLiteUnitOfWork(
     AgentActivityStampStore(connection)
   override val worktreeEditJournal: WorktreeEditJournalRepository =
     WorktreeEditJournalStore(connection)
+  override val standalonePhaseStatuses: StandalonePhaseStatusRepository =
+    StandalonePhaseStatusStore(connection, clock, diagnostics, transactionActive)
   override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     SqliteRejectedOutputDiagnosticRepository(connection)
   override val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions =

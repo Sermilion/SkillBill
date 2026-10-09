@@ -6,29 +6,40 @@ import com.google.gson.JsonParser
 import com.google.gson.JsonSyntaxException
 import dev.skillbill.intellij.domain.ACTIVE_DURATION_AS_OF_WIRE_KEY
 import dev.skillbill.intellij.domain.AGENT_ACTIVITY_LABELS
+import dev.skillbill.intellij.domain.BRANCH_CORRELATION_WIRE_KEY
 import dev.skillbill.intellij.domain.LAST_AGENT_ACTIVITY_AT_WIRE_KEY
 import dev.skillbill.intellij.domain.LAST_AGENT_ACTIVITY_LABEL_WIRE_KEY
 import dev.skillbill.intellij.domain.ACTIVE_DURATION_MS_WIRE_KEY
+import dev.skillbill.intellij.domain.CURRENT_ACTIVITY_MAX_CODE_POINTS
+import dev.skillbill.intellij.domain.CURRENT_ACTIVITY_WIRE_KEY
 import dev.skillbill.intellij.domain.CURRENT_MODEL_WIRE_KEY
 import dev.skillbill.intellij.domain.CURRENT_PHASE_EXECUTION_KINDS
 import dev.skillbill.intellij.domain.CURRENT_PHASE_EXECUTION_WIRE_KEY
 import dev.skillbill.intellij.domain.CurrentPhaseExecution
 import dev.skillbill.intellij.domain.CurrentPhaseModel
 import dev.skillbill.intellij.domain.EFFORT_MAX_LENGTH
+import dev.skillbill.intellij.domain.EXECUTION_ID_WIRE_KEY
+import dev.skillbill.intellij.domain.EXECUTION_SCOPE_WIRE_KEY
 import dev.skillbill.intellij.domain.MODEL_MAX_LENGTH
 import dev.skillbill.intellij.domain.PHASE_ID_MAX_LENGTH
+import dev.skillbill.intellij.domain.PHASE_ID_WIRE_KEY
 import dev.skillbill.intellij.domain.GoalPlanningInfo
 import dev.skillbill.intellij.domain.IDE_STATUS_CONTRACT_VERSION
+import dev.skillbill.intellij.domain.INVOCATION_ID_WIRE_KEY
 import dev.skillbill.intellij.domain.NO_MATCHING_WORK_REASON_CODE
 import dev.skillbill.intellij.domain.PAUSED_AT_WIRE_KEY
 import dev.skillbill.intellij.domain.PAUSE_REASON_CODES
 import dev.skillbill.intellij.domain.PAUSE_REASON_LABEL_MAX_LENGTH
 import dev.skillbill.intellij.domain.PAUSE_REASON_WIRE_KEY
 import dev.skillbill.intellij.domain.PauseReason
+import dev.skillbill.intellij.domain.StatusExecutionMetadata
 import dev.skillbill.intellij.domain.PAUSE_REQUESTED_WIRE_KEY
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
 import dev.skillbill.intellij.domain.StatusDiagnostic
 import dev.skillbill.intellij.domain.UnavailableReason
+import dev.skillbill.intellij.domain.RUN_SEQUENCE_WIRE_KEY
+import dev.skillbill.intellij.domain.STATUS_REVISION_WIRE_KEY
+import dev.skillbill.intellij.domain.STATUS_STORE_ID_WIRE_KEY
 import dev.skillbill.intellij.infrastructure.AbsolutePathGuard
 import java.time.Instant
 
@@ -73,6 +84,16 @@ object IdeStatusJsonMapper {
                     foundContractVersion = contractVersion,
                     reasonCode = "contract_version_mismatch",
                 ),
+            )
+        }
+
+        val execution = parseExecution(root)
+        if (execution.invalid) {
+            return SkillBillStatusOutcome.Incompatible(
+                observedAt = observedAt,
+                summary = "IDE status execution identity is malformed",
+                foundContractVersion = contractVersion,
+                diagnostic = StatusDiagnostic(reasonCode = "invalid_execution_identity"),
             )
         }
 
@@ -179,6 +200,7 @@ object IdeStatusJsonMapper {
                 currentPhaseExecution = currentPhaseExecution,
                 lastAgentActivityAt = agentActivity?.first,
                 lastAgentActivityLabel = agentActivity?.second,
+                execution = execution.metadata,
             )
         }
 
@@ -214,6 +236,7 @@ object IdeStatusJsonMapper {
                         pauseReason = pauseReason,
                         lastAgentActivityAt = agentActivity?.first,
                         lastAgentActivityLabel = agentActivity?.second,
+                        execution = execution.metadata,
                     )
                 } else {
                     SkillBillStatusOutcome.Active(
@@ -242,6 +265,7 @@ object IdeStatusJsonMapper {
                         currentPhaseExecution = currentPhaseExecution,
                         lastAgentActivityAt = agentActivity?.first,
                         lastAgentActivityLabel = agentActivity?.second,
+                        execution = execution.metadata,
                     )
                 }
             }
@@ -265,6 +289,7 @@ object IdeStatusJsonMapper {
                 currentModel = currentModel,
                 currentPhaseExecution = currentPhaseExecution,
                 pauseReason = pauseReason,
+                execution = execution.metadata,
             )
 
             "failed" -> SkillBillStatusOutcome.Failed(
@@ -285,6 +310,7 @@ object IdeStatusJsonMapper {
                 subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
                 currentModel = currentModel,
                 currentPhaseExecution = currentPhaseExecution,
+                execution = execution.metadata,
             )
 
             "idle" -> SkillBillStatusOutcome.Idle(
@@ -306,6 +332,7 @@ object IdeStatusJsonMapper {
                 stale = isStale,
                 activeDurationMs = activeDurationMs,
                 activeDurationAsOf = activeDurationAsOf,
+                execution = execution.metadata,
             )
 
             else -> SkillBillStatusOutcome.Unavailable(
@@ -455,4 +482,65 @@ object IdeStatusJsonMapper {
         }
         return at to label
     }
+
+    private fun parseExecution(root: JsonObject): ParsedExecution {
+        val keys = listOf(
+            EXECUTION_SCOPE_WIRE_KEY,
+            EXECUTION_ID_WIRE_KEY,
+            STATUS_STORE_ID_WIRE_KEY,
+            RUN_SEQUENCE_WIRE_KEY,
+            STATUS_REVISION_WIRE_KEY,
+            INVOCATION_ID_WIRE_KEY,
+            PHASE_ID_WIRE_KEY,
+        )
+        if (keys.none { root.has(it) } && !root.has(CURRENT_ACTIVITY_WIRE_KEY)) return ParsedExecution(null, false)
+        val scope = root.getAsStringPrimitive(EXECUTION_SCOPE_WIRE_KEY)
+        val executionId = root.getAsStringPrimitive(EXECUTION_ID_WIRE_KEY)
+        val storeId = root.getAsStringPrimitive(STATUS_STORE_ID_WIRE_KEY)
+        val branchCorrelation = root.getAsStringPrimitive(BRANCH_CORRELATION_WIRE_KEY)
+        val sequence = root.getAsStringPrimitive(RUN_SEQUENCE_WIRE_KEY)
+        val revision = root.getAsStringPrimitive(STATUS_REVISION_WIRE_KEY)
+        val invocationId = root.getAsStringPrimitive(INVOCATION_ID_WIRE_KEY)
+        val phaseId = root.boundedString(PHASE_ID_WIRE_KEY, PHASE_ID_MAX_LENGTH)
+        val invocationFieldValid = !root.has(INVOCATION_ID_WIRE_KEY) || invocationId != null
+        val phaseFieldValid = !root.has(PHASE_ID_WIRE_KEY) || phaseId != null
+        val validScope = scope == "workflow" || scope == "standalone_phase"
+        val validNumbers = sequence?.matches(Regex("[1-9][0-9]*")) == true &&
+            revision?.matches(Regex("[1-9][0-9]*")) == true
+        val validScopeIdentity = when (scope) {
+            "workflow" -> invocationId == null && phaseId == null
+            "standalone_phase" -> !invocationId.isNullOrBlank() && !phaseId.isNullOrBlank()
+            else -> false
+        }
+        val activity = root.getAsStringPrimitive(CURRENT_ACTIVITY_WIRE_KEY)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it.codePointCount(0, it.length) <= CURRENT_ACTIVITY_MAX_CODE_POINTS }
+            ?.takeIf { value -> value.none(Char::isISOControl) }
+        val activityValid = !root.has(CURRENT_ACTIVITY_WIRE_KEY) || activity != null
+        if (!validScope || executionId.isNullOrBlank() || storeId.isNullOrBlank() || !validNumbers ||
+            !invocationFieldValid || !phaseFieldValid ||
+            !validScopeIdentity || !activityValid
+        ) {
+            return ParsedExecution(null, true)
+        }
+        return ParsedExecution(
+            metadata = StatusExecutionMetadata(
+                executionScope = scope,
+                executionId = executionId,
+                statusStoreId = storeId,
+                branchCorrelation = branchCorrelation,
+                runSequence = sequence,
+                statusRevision = revision,
+                invocationId = invocationId,
+                phaseId = phaseId,
+                currentActivity = activity,
+            ),
+            invalid = false,
+        )
+    }
+
+    private data class ParsedExecution(
+        val metadata: StatusExecutionMetadata?,
+        val invalid: Boolean,
+    )
 }

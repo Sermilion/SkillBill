@@ -13,7 +13,18 @@ export interface CachedDisplaySnapshot {
   subtaskStartedAt?: Date;
   updatedAt?: Date;
   activeDurationMs?: number;
+  activeDurationAsOf?: Date;
   subtaskActiveDurationMs?: number;
+  subtaskActiveDurationAsOf?: Date;
+  executionScope?: "workflow" | "standalone_phase";
+  executionId?: string;
+  statusStoreId?: string;
+  branchCorrelation?: string;
+  runSequence?: string;
+  statusRevision?: string;
+  invocationId?: string;
+  phaseId?: string;
+  currentActivity?: string;
 }
 
 export const MAX_SUMMARY_CHARS = 512;
@@ -60,6 +71,18 @@ export function toCacheSnapshotOrNull(outcome: SkillBillStatusOutcome): LastKnow
           startedAt: outcome.startedAt,
           updatedAt: outcome.updatedAt,
           activeDurationMs: outcome.activeDurationMs,
+          activeDurationAsOf: outcome.activeDurationAsOf,
+          subtaskActiveDurationMs: outcome.subtaskActiveDurationMs,
+          subtaskActiveDurationAsOf: outcome.subtaskActiveDurationAsOf,
+          executionScope: outcome.executionScope,
+          executionId: outcome.executionId,
+          statusStoreId: outcome.statusStoreId,
+          branchCorrelation: outcome.branchCorrelation,
+          runSequence: outcome.runSequence,
+          statusRevision: outcome.statusRevision,
+          invocationId: outcome.invocationId,
+          phaseId: outcome.phaseId,
+          currentActivity: outcome.currentActivity,
         },
         observedAt: outcome.observedAt,
       };
@@ -84,7 +107,18 @@ function liveSnapshot(
     subtaskStartedAt: outcome.subtaskStartedAt,
     updatedAt: outcome.updatedAt,
     activeDurationMs: outcome.activeDurationMs,
+    activeDurationAsOf: outcome.activeDurationAsOf,
     subtaskActiveDurationMs: outcome.subtaskActiveDurationMs,
+    subtaskActiveDurationAsOf: outcome.subtaskActiveDurationAsOf,
+    executionScope: outcome.executionScope,
+    executionId: outcome.executionId,
+    statusStoreId: outcome.statusStoreId,
+    branchCorrelation: outcome.branchCorrelation,
+    runSequence: outcome.runSequence,
+    statusRevision: outcome.statusRevision,
+    invocationId: outcome.invocationId,
+    phaseId: outcome.phaseId,
+    currentActivity: outcome.currentActivity,
   };
 }
 
@@ -102,7 +136,18 @@ function staleSnapshot(outcome: Extract<SkillBillStatusOutcome, { kind: "stale" 
     subtaskStartedAt: outcome.subtaskStartedAt,
     updatedAt: outcome.updatedAt,
     activeDurationMs: outcome.activeDurationMs,
+    activeDurationAsOf: outcome.activeDurationAsOf,
     subtaskActiveDurationMs: outcome.subtaskActiveDurationMs,
+    subtaskActiveDurationAsOf: outcome.subtaskActiveDurationAsOf,
+    executionScope: outcome.executionScope,
+    executionId: outcome.executionId,
+    statusStoreId: outcome.statusStoreId,
+    branchCorrelation: outcome.branchCorrelation,
+    runSequence: outcome.runSequence,
+    statusRevision: outcome.statusRevision,
+    invocationId: outcome.invocationId,
+    phaseId: outcome.phaseId,
+    currentActivity: outcome.currentActivity,
   };
 }
 
@@ -120,7 +165,18 @@ function blockedFailedSnapshot(
     subtaskStartedAt: outcome.subtaskStartedAt,
     updatedAt: outcome.updatedAt,
     activeDurationMs: outcome.activeDurationMs,
+    activeDurationAsOf: outcome.activeDurationAsOf,
     subtaskActiveDurationMs: outcome.subtaskActiveDurationMs,
+    subtaskActiveDurationAsOf: outcome.subtaskActiveDurationAsOf,
+    executionScope: outcome.executionScope,
+    executionId: outcome.executionId,
+    statusStoreId: outcome.statusStoreId,
+    branchCorrelation: outcome.branchCorrelation,
+    runSequence: outcome.runSequence,
+    statusRevision: outcome.statusRevision,
+    invocationId: outcome.invocationId,
+    phaseId: outcome.phaseId,
+    currentActivity: outcome.currentActivity,
   };
 }
 
@@ -141,7 +197,18 @@ export function toStaleOutcome(cache: LastKnownDisplayCache): SkillBillStatusOut
     subtaskStartedAt: display.subtaskStartedAt,
     updatedAt: display.updatedAt,
     activeDurationMs: display.activeDurationMs,
+    activeDurationAsOf: display.activeDurationAsOf,
     subtaskActiveDurationMs: display.subtaskActiveDurationMs,
+    subtaskActiveDurationAsOf: display.subtaskActiveDurationAsOf,
+    executionScope: display.executionScope,
+    executionId: display.executionId,
+    statusStoreId: display.statusStoreId,
+    branchCorrelation: display.branchCorrelation,
+    runSequence: display.runSequence,
+    statusRevision: display.statusRevision,
+    invocationId: display.invocationId,
+    phaseId: display.phaseId,
+    currentActivity: display.currentActivity,
     fromCache: true,
     diagnostic: { reasonCode: "cache_fallback" } satisfies StatusDiagnostic,
   };

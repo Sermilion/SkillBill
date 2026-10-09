@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -33,6 +34,7 @@ class GoalRunnerRunPreparation(
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
   private val migrationAdmission: GoalPlanningMigrationAdmission,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) {
   internal fun admitPlanningMigration(
     state: GoalRunnerManifestState,
@@ -57,6 +59,7 @@ class GoalRunnerRunPreparation(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunPreparation {
+    statusPublisherFactory.registerWorkflow(request.repoRoot, request.issueKey, state.parentWorkflowId)
     val persistedControl =
       manifestStore.bindRepositoryIdentity(
         state.parentWorkflowId,

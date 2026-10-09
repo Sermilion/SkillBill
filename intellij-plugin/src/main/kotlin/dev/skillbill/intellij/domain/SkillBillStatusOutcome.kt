@@ -34,6 +34,7 @@ sealed class SkillBillStatusOutcome {
         val activeDurationAsOf: Instant? = null,
         val subtaskActiveDurationMs: Long? = null,
         val subtaskActiveDurationAsOf: Instant? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     data class Active(
@@ -70,6 +71,7 @@ sealed class SkillBillStatusOutcome {
         val currentPhaseExecution: CurrentPhaseExecution? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     
@@ -104,6 +106,7 @@ sealed class SkillBillStatusOutcome {
         val pauseReason: PauseReason? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     data class Stale(
@@ -131,6 +134,7 @@ sealed class SkillBillStatusOutcome {
         val currentPhaseExecution: CurrentPhaseExecution? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     data class Blocked(
@@ -155,6 +159,7 @@ sealed class SkillBillStatusOutcome {
         val currentModel: CurrentPhaseModel? = null,
         val currentPhaseExecution: CurrentPhaseExecution? = null,
         val pauseReason: PauseReason? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     data class Failed(
@@ -178,6 +183,7 @@ sealed class SkillBillStatusOutcome {
         val subtaskActiveDurationAsOf: Instant? = null,
         val currentModel: CurrentPhaseModel? = null,
         val currentPhaseExecution: CurrentPhaseExecution? = null,
+        val execution: StatusExecutionMetadata? = null,
     ) : SkillBillStatusOutcome()
 
     data class Unavailable(
@@ -241,8 +247,50 @@ fun SkillBillStatusOutcome.withPollFailure(reason: UnavailableReason): SkillBill
     return when (this) {
         is SkillBillStatusOutcome.Active -> copy(diagnostic = marker)
         is SkillBillStatusOutcome.Paused -> copy(diagnostic = marker)
-        is SkillBillStatusOutcome.Blocked -> copy(diagnostic = marker)
-        is SkillBillStatusOutcome.Failed -> copy(diagnostic = marker)
+        is SkillBillStatusOutcome.Blocked -> SkillBillStatusOutcome.Stale(
+            observedAt = observedAt,
+            summary = summary,
+            repositoryIdentity = repositoryIdentity,
+            issueKey = issueKey,
+            currentStepId = currentStepId,
+            currentStepLabel = currentStepLabel,
+            progressCompleted = null,
+            progressTotal = null,
+            startedAt = startedAt,
+            currentSubtaskId = currentSubtaskId,
+            subtaskStartedAt = subtaskStartedAt,
+            updatedAt = updatedAt,
+            diagnostic = marker,
+            activeDurationMs = activeDurationMs,
+            activeDurationAsOf = activeDurationAsOf,
+            subtaskActiveDurationMs = subtaskActiveDurationMs,
+            subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+            currentModel = currentModel,
+            currentPhaseExecution = currentPhaseExecution,
+            execution = execution,
+        )
+        is SkillBillStatusOutcome.Failed -> SkillBillStatusOutcome.Stale(
+            observedAt = observedAt,
+            summary = summary,
+            repositoryIdentity = repositoryIdentity,
+            issueKey = issueKey,
+            currentStepId = currentStepId,
+            currentStepLabel = currentStepLabel,
+            progressCompleted = null,
+            progressTotal = null,
+            startedAt = startedAt,
+            currentSubtaskId = currentSubtaskId,
+            subtaskStartedAt = subtaskStartedAt,
+            updatedAt = updatedAt,
+            diagnostic = marker,
+            activeDurationMs = activeDurationMs,
+            activeDurationAsOf = activeDurationAsOf,
+            subtaskActiveDurationMs = subtaskActiveDurationMs,
+            subtaskActiveDurationAsOf = subtaskActiveDurationAsOf,
+            currentModel = currentModel,
+            currentPhaseExecution = currentPhaseExecution,
+            execution = execution,
+        )
         is SkillBillStatusOutcome.Stale -> copy(diagnostic = marker)
 
         is SkillBillStatusOutcome.Idle,

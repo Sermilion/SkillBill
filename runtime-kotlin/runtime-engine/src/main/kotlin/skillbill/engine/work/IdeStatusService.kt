@@ -15,6 +15,8 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.IdeStatusValidator
+import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
+import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
@@ -29,6 +31,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 
 @Inject
 class IdeStatusService(
@@ -59,10 +62,18 @@ class IdeStatusService(
     val currentBranch = branchSource.checkedOutBranch(repoRoot)
     return try {
       database.read { unitOfWork ->
-        val candidates = scopeToBranch(collectCandidates(unitOfWork, repositoryIdentity), currentBranch, repoRoot)
+        unitOfWork.standalonePhaseStatuses.reconcileExpiredLeases(observedAt)
+        val candidates =
+          scopeToBranch(
+            collectCandidates(unitOfWork, repositoryIdentity, currentBranch, observedAt),
+            currentBranch,
+            repoRoot,
+          )
         val selected =
           IdeStatusSelectionPolicy.select(candidates, observedAt)
-            ?: return@read emit(IdeStatusProblemSnapshots.noMatchingWork(repositoryIdentity, observedAt, currentBranch))
+            ?: return@read emit(
+              IdeStatusProblemSnapshots.noMatchingWork(repositoryIdentity, observedAt, currentBranch),
+            )
         val snapshot =
           projector.project(
             candidate = selected,
@@ -70,6 +81,7 @@ class IdeStatusService(
               IdeStatusProjectionContext(
                 unitOfWork = unitOfWork,
                 repositoryIdentity = repositoryIdentity,
+                branchCorrelation = currentBranch,
                 observedAt = observedAt,
                 repoRoot = repoRoot,
               ),
@@ -108,11 +120,24 @@ class IdeStatusService(
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
     if (protectedBranchName(branch) != null) return candidates
-    return candidates.filter { candidate ->
-      candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
-        isPlanningOnBaseBranch(candidate, branch, repoRoot)
-    }
+    return candidates.filter { candidate -> matchesBranch(candidate, branch, repoRoot) }
   }
+
+  private fun matchesBranch(
+    candidate: IdeStatusCandidate,
+    branch: String,
+    repoRoot: Path,
+  ): Boolean =
+    (
+      candidate.branchCorrelation == null ||
+        candidate.branchCorrelation == "HEAD" ||
+        candidate.branchCorrelation == branch
+    ) &&
+      (
+        candidate.standaloneStatus != null ||
+          candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
+          isPlanningOnBaseBranch(candidate, branch, repoRoot)
+      )
 
   private fun isPlanningOnBaseBranch(
     candidate: IdeStatusCandidate,
@@ -141,6 +166,8 @@ class IdeStatusService(
   private fun collectCandidates(
     unitOfWork: UnitOfWork,
     repositoryIdentity: String,
+    branch: String?,
+    observedAt: Instant,
   ): List<IdeStatusCandidate> {
     val work = unitOfWork.workList.list(limit = null)
     val issueKeysWithGoals =
@@ -148,21 +175,62 @@ class IdeStatusService(
         .filter { it.workflowKind == WorkItemKind.FEATURE_GOAL }
         .mapNotNull { it.issueKey?.uppercase() }
         .toSet()
-    val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
-    val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork, repositoryIdentity)
-
-    return work.mapNotNull { item ->
-      toCandidate(item, issueKeysWithGoals, repositoryCorrelation, livenessAnchors, unitOfWork)
-    }
+    val workflowCandidates =
+      work.mapNotNull { item ->
+        toCandidate(item, issueKeysWithGoals, unitOfWork, repositoryIdentity, branch)
+      }
+    val standaloneCandidates =
+      branch?.let { branchName ->
+        unitOfWork.standalonePhaseStatuses.readEligible(repositoryIdentity, branchName, observedAt).map { record ->
+          val lifecycle = standaloneLifecycle(record.lifecycleState)
+          IdeStatusCandidate(
+            workflowId = record.workflowId ?: "standalone:${record.executionId}",
+            workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+            issueKey = record.issueKey,
+            currentState = record.lifecycleState,
+            lifecycleState = lifecycle,
+            selectionTier = IdeStatusSelectionPolicy.selectionTier(lifecycle),
+            updatedAt = record.updatedAt,
+            startedAt = record.startedAt,
+            isGoalAuthoritative = false,
+            execution =
+              IdeStatusExecutionIdentity(
+                scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+                executionId = record.executionId,
+                statusStoreId = record.statusStoreId,
+                runSequence = record.runSequence,
+                statusRevision = record.statusRevision,
+                invocationId = record.invocationId,
+                phaseId = record.phaseId,
+              ),
+            branchCorrelation = record.branchCorrelation,
+            standaloneStatus = record,
+          )
+        }
+      }.orEmpty()
+    val standaloneWorkflowIds = standaloneCandidates.mapNotNull { it.standaloneStatus?.workflowId }.toSet()
+    return workflowCandidates.filterNot { it.workflowId in standaloneWorkflowIds } + standaloneCandidates
   }
+
+  private fun standaloneLifecycle(state: String): IdeStatusLifecycleState =
+    when (state) {
+      "active", "running" -> IdeStatusLifecycleState.ACTIVE
+      "paused", "runner_interrupted" -> IdeStatusLifecycleState.PAUSED
+      "blocked" -> IdeStatusLifecycleState.BLOCKED
+      "failed" -> IdeStatusLifecycleState.FAILED
+      "terminal", "completed", "success" -> IdeStatusLifecycleState.TERMINAL
+      else -> IdeStatusLifecycleState.FAILED
+    }
 
   private fun toCandidate(
     item: WorkItem,
     issueKeysWithGoals: Set<String>,
-    repositoryCorrelation: IdeStatusRepositoryCorrelation,
-    livenessAnchors: IdeStatusLivenessAnchors,
     unitOfWork: UnitOfWork,
+    repositoryIdentity: String,
+    branch: String?,
   ): IdeStatusCandidate? {
+    val repositoryCorrelation = IdeStatusRepositoryCorrelation(unitOfWork, repositoryIdentity)
+    val livenessAnchors = IdeStatusLivenessAnchors(unitOfWork, repositoryIdentity)
     val family = item.workflowKind.toIdeFamily()
     val lifecycle =
       family?.let { candidateFamily ->
@@ -175,6 +243,19 @@ class IdeStatusService(
     if (family == null || lifecycle == null) return null
     val routeScope = routeScopeFor(item, unitOfWork)
     if (isExcludedGoalChild(routeScope, item.issueKey, issueKeysWithGoals)) return null
+    val workflowExecution = unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
+    val execution =
+      workflowExecution
+        ?.takeIf { branch == null || it.branchCorrelation == branch || it.branchCorrelation == "HEAD" }
+        ?.let { record ->
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = record.executionId,
+            statusStoreId = record.statusStoreId,
+            runSequence = record.runSequence,
+            statusRevision = record.statusRevision,
+          )
+        }
     return IdeStatusCandidate(
       workflowId = item.workflowId,
       workflowFamily = family,
@@ -186,6 +267,8 @@ class IdeStatusService(
       startedAt = item.startedAt,
       routeScope = routeScope,
       isGoalAuthoritative = family == IdeStatusWorkflowFamily.FEATURE_GOAL,
+      execution = execution,
+      branchCorrelation = workflowExecution?.branchCorrelation,
     )
   }
 

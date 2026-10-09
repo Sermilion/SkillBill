@@ -1,6 +1,6 @@
 import { PreferenceCachePort } from "./PreferenceCachePort";
 import { StatusRepository } from "./StatusRepository";
-import { toCacheSnapshotOrNull, toStaleOutcome } from "../domain/LastKnownDisplayCache";
+import { LastKnownDisplayCache, toCacheSnapshotOrNull, toStaleOutcome } from "../domain/LastKnownDisplayCache";
 import { UNCORROBORATED_IDLE_TOLERANCE } from "../domain/Constants";
 import {
   isLiveOutcome,
@@ -19,6 +19,8 @@ export class StatusRefreshCoordinator {
   private refreshChain: Promise<void> = Promise.resolve();
   private unconfirmedIdleSamples = 0;
   private currentOutcome: SkillBillStatusOutcome | undefined;
+  private refreshGeneration = 0;
+  private acceptedOutcome: SkillBillStatusOutcome | undefined;
   private pollTimer: ReturnType<typeof setInterval> | undefined;
   private readonly listeners = new Set<OutcomeListener>();
 
@@ -66,6 +68,7 @@ export class StatusRefreshCoordinator {
       return;
     }
     this.disposed = true;
+    this.refreshGeneration += 1;
     this.activeConsumers = 0;
     this.stopPolling();
     this.onCancelProcesses();
@@ -107,15 +110,45 @@ export class StatusRefreshCoordinator {
     if (this.disposed) {
       return;
     }
+    const requestGeneration = this.refreshGeneration;
     let outcome: SkillBillStatusOutcome;
     try {
       outcome = await this.statusRepository.fetchStatus(this.projectRoot);
     } catch {
+      if (this.disposed || requestGeneration !== this.refreshGeneration) {
+        return;
+      }
       const fallback = this.transportFailureFallback(UnavailableReason.PROCESS_FAILURE);
       if (fallback) {
         this.emit(fallback);
       }
       return;
+    }
+
+    if (this.disposed || requestGeneration !== this.refreshGeneration) {
+      return;
+    }
+
+    if (hasLegacyExecutionCorrelation(outcome)) {
+      const legacy = this.currentCorrelationMatchesCache(this.preferences.getLastKnownDisplayCache());
+      if (legacy) this.emit(toStaleOutcome(legacy));
+      return;
+    }
+
+    if (isSuccessfulSnapshot(outcome) && this.correlationChanged(outcome)) {
+      this.refreshGeneration += 1;
+      this.currentOutcome = undefined;
+      this.acceptedOutcome = undefined;
+      this.preferences.setLastKnownDisplayCache(undefined);
+      this.unconfirmedIdleSamples = 0;
+    }
+
+    if (isStoreReplacement(this.orderingOutcome(), outcome)) {
+      this.refreshGeneration += 1;
+      this.currentOutcome = undefined;
+      this.acceptedOutcome = undefined;
+      this.preferences.setLastKnownDisplayCache(undefined);
+      this.unconfirmedIdleSamples = 0;
     }
 
     if (isUncorroboratedIdle(outcome)) {
@@ -131,11 +164,29 @@ export class StatusRefreshCoordinator {
       this.unconfirmedIdleSamples = 0;
     }
 
+    if (outcome.kind === "unavailable" && isPollTransportFailure(outcome.reasonCode)) {
+      const fallback = this.transportFailureFallback(outcome.reasonCode);
+      if (fallback) {
+        this.emit(fallback);
+        return;
+      }
+    }
+
+    if (!acceptsNewerStatus(this.orderingOutcome(), outcome)) {
+      const cache = this.preferences.getLastKnownDisplayCache();
+      if (!this.currentOutcome && cache) this.emit(toStaleOutcome(cache));
+      return;
+    }
+
+    if (isSuccessfulSnapshot(outcome)) {
+      this.acceptedOutcome = outcome;
+    }
+
     let toEmit: SkillBillStatusOutcome;
     if (outcome.kind === "unavailable" && isPollTransportFailure(outcome.reasonCode)) {
       toEmit = this.transportFailureFallback(outcome.reasonCode) ?? outcome;
     } else if (outcome.kind === "unavailable" || outcome.kind === "incompatible") {
-      const cache = this.preferences.getLastKnownDisplayCache();
+      const cache = this.currentCorrelationMatchesCache(this.preferences.getLastKnownDisplayCache());
       toEmit = cache ? toStaleOutcome(cache) : outcome;
     } else {
       const snapshot = toCacheSnapshotOrNull(outcome);
@@ -147,13 +198,49 @@ export class StatusRefreshCoordinator {
     this.emit(toEmit);
   }
 
+  private orderingOutcome(): SkillBillStatusOutcome | undefined {
+    if (this.acceptedOutcome) return this.acceptedOutcome;
+    const cache = this.preferences.getLastKnownDisplayCache();
+    return cache ? toStaleOutcome(cache) : this.currentOutcome;
+  }
+
   private transportFailureFallback(reason: UnavailableReason): SkillBillStatusOutcome | undefined {
     const held = this.currentOutcome;
     if (held && isLiveOutcome(held)) {
       return withPollFailure(held, reason);
     }
-    const cache = this.preferences.getLastKnownDisplayCache();
+    const cache = this.currentCorrelationMatchesCache(this.preferences.getLastKnownDisplayCache());
     return cache ? toStaleOutcome(cache) : undefined;
+  }
+
+  private currentCorrelationMatchesCache(
+    cache: LastKnownDisplayCache | undefined,
+  ): LastKnownDisplayCache | undefined {
+    if (!cache) {
+      return cache;
+    }
+    if (!this.currentOutcome) {
+      return cache;
+    }
+    const current = correlationOfOutcome(this.acceptedOutcome ?? this.currentOutcome);
+    const cached = correlationOfCache(cache);
+    return current && cached && sameCorrelation(current, cached) ? cache : undefined;
+  }
+
+  private correlationChanged(incoming: SkillBillStatusOutcome): boolean {
+    const incomingCorrelation = correlationOfOutcome(incoming);
+    if (!incomingCorrelation) {
+      return false;
+    }
+    const current = correlationOfOutcome(this.acceptedOutcome ?? this.currentOutcome);
+    const cache = this.preferences.getLastKnownDisplayCache();
+    const cached = correlationOfCache(cache);
+    if (cache && !cached) {
+      return true;
+    }
+    return [current, cached]
+      .filter((correlation): correlation is StatusCorrelation => correlation !== undefined)
+      .some((correlation) => !sameCorrelation(correlation, incomingCorrelation));
   }
 
   private emit(outcome: SkillBillStatusOutcome): void {
@@ -162,4 +249,105 @@ export class StatusRefreshCoordinator {
       listener(outcome);
     }
   }
+}
+
+interface StatusCorrelation {
+  repositoryIdentity: string;
+  branchCorrelation: string;
+}
+
+function correlationOfOutcome(outcome: SkillBillStatusOutcome | undefined): StatusCorrelation | undefined {
+  if (!outcome || !("repositoryIdentity" in outcome) || !outcome.repositoryIdentity || !outcome.branchCorrelation) {
+    return undefined;
+  }
+  return {
+    repositoryIdentity: outcome.repositoryIdentity,
+    branchCorrelation: outcome.branchCorrelation,
+  };
+}
+
+function correlationOfCache(cache: LastKnownDisplayCache | undefined): StatusCorrelation | undefined {
+  if (!cache?.display.repositoryIdentity || !cache.display.branchCorrelation) {
+    return undefined;
+  }
+  return {
+    repositoryIdentity: cache.display.repositoryIdentity,
+    branchCorrelation: cache.display.branchCorrelation,
+  };
+}
+
+function sameCorrelation(left: StatusCorrelation, right: StatusCorrelation): boolean {
+  return left.repositoryIdentity === right.repositoryIdentity && left.branchCorrelation === right.branchCorrelation;
+}
+
+function isSuccessfulSnapshot(outcome: SkillBillStatusOutcome): boolean {
+  return outcome.kind !== "unavailable" && outcome.kind !== "incompatible";
+}
+
+function acceptsNewerStatus(
+  current: SkillBillStatusOutcome | undefined,
+  incoming: SkillBillStatusOutcome,
+): boolean {
+  if (!current || !current.runSequence || !incoming.runSequence) {
+    return true;
+  }
+  if (correlationOfOutcome(current)?.repositoryIdentity !== correlationOfOutcome(incoming)?.repositoryIdentity ||
+      current.branchCorrelation !== incoming.branchCorrelation) {
+    return false;
+  }
+  if (current.statusStoreId !== incoming.statusStoreId) {
+    return false;
+  }
+  const sequenceOrder = compareDecimalStrings(incoming.runSequence, current.runSequence);
+  if (sequenceOrder < 0) {
+    return false;
+  }
+  if (sequenceOrder > 0) {
+    return true;
+  }
+  if (current.executionId !== incoming.executionId) {
+    return false;
+  }
+  if (current.statusRevision && incoming.statusRevision &&
+      compareDecimalStrings(incoming.statusRevision, current.statusRevision) < 0) {
+    return false;
+  }
+  if (isTerminal(current.kind) && current.kind !== incoming.kind) {
+    return false;
+  }
+  if (isTerminal(current.kind) && !isTerminal(incoming.kind)) {
+    return false;
+  }
+  return true;
+}
+
+function isTerminal(kind: SkillBillStatusOutcome["kind"]): boolean {
+  return kind === "done" || kind === "failed" || kind === "blocked";
+}
+
+function isStoreReplacement(
+  current: SkillBillStatusOutcome | undefined,
+  incoming: SkillBillStatusOutcome,
+): boolean {
+  return Boolean(
+    current?.statusStoreId &&
+      incoming.statusStoreId &&
+      current.statusStoreId !== incoming.statusStoreId,
+  );
+}
+
+function hasLegacyExecutionCorrelation(outcome: SkillBillStatusOutcome): boolean {
+  return Boolean(outcome.runSequence && !outcome.branchCorrelation);
+}
+
+function compareDecimalStrings(left: string, right: string): number {
+  const normalizedLeft = left.replace(/^0+(?=\d)/, "");
+  const normalizedRight = right.replace(/^0+(?=\d)/, "");
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return normalizedLeft.length > normalizedRight.length ? 1 : -1;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return 0;
+  }
+  return normalizedLeft > normalizedRight ? 1 : -1;
 }

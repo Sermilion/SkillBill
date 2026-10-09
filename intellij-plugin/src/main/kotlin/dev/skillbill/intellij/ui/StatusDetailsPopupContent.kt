@@ -29,6 +29,8 @@ object StatusDetailsPopupContent {
             add("State" to details.lifecycleState)
             details.issueKey?.let { add("Issue" to it) }
             details.workflowId?.let { add("Workflow" to it) }
+            details.scopeText?.let { add("Scope" to it) }
+            details.phaseId?.let { add("Phase" to it) }
             details.stepLabel?.let { add("Step" to it) }
             details.modelText?.let { add("Model" to it) }
             val slotLabel = details.selectedSlotLabel
@@ -40,6 +42,7 @@ object StatusDetailsPopupContent {
             add("Goal ${details.elapsedNoun}" to details.goalElapsedText)
             add("Subtask ${details.elapsedNoun}" to details.subtaskElapsedText)
             details.agentActivityText?.let { add("Agent activity" to it) }
+            details.currentActivity?.let { add("Current activity" to it) }
             details.lastUpdateText?.let { add("Last update" to it) }
             details.pauseReasonText?.let { reason ->
                 val label = if (details.lifecycleState == "blocked") "Blocked reason" else "Pause reason"

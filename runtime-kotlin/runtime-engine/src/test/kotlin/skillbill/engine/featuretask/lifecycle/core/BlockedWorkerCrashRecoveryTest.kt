@@ -4,6 +4,7 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
@@ -18,6 +19,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
@@ -63,6 +65,13 @@ class BlockedWorkerCrashRecoveryTest {
           reconciler,
           testSpecDriftRecovery(TestNoopGoalPlanningManifestStore, RecordingOutcomeStore()),
           GoalPlanningMigrationAdmission(database, planningMigrationForTest(), NoopRuntimeDiagnostics),
+          StandalonePhaseStatusPublisherFactory(
+            database,
+            TestRepositoryEnclosingRoot,
+            CheckedOutBranchSource { "main" },
+            testHarnessClock,
+            NoopRuntimeDiagnostics,
+          ),
         )
       val manifest =
         DecompositionManifest(
@@ -93,11 +102,7 @@ class BlockedWorkerCrashRecoveryTest {
         assertEquals(otherLease, unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(OTHER_WORKFLOW_ID))
       }
 
-      assertEquals(1, reconciler.reconcile().reconciledCount)
-      assertEquals(
-        WorkflowStatus.BLOCKED.wireValue,
-        database.read { it.workflowStates.getFeatureTaskWorkflow(OTHER_WORKFLOW_ID)?.workflowStatus },
-      )
+      assertOtherWorkflowRemainsBlocked(reconciler, database)
       val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), testHarnessClock)
       assertTrue(
         database.transaction { unit ->
@@ -110,14 +115,7 @@ class BlockedWorkerCrashRecoveryTest {
           )
         },
       )
-      database.read { unit ->
-        val resumed = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID)).toSnapshot()
-        assertEquals(WorkflowStatus.RUNNING, resumed.workflowStatus)
-        assertEquals(
-          WorkflowStepStatus.PENDING,
-          phaseRecordsFromWorkflowArtifacts(resumed.artifacts).getValue(PHASE_ID).status,
-        )
-      }
+      assertWorkflowResumed(database)
     }
 
   @Test
@@ -148,6 +146,28 @@ class BlockedWorkerCrashRecoveryTest {
       )
       assertEquals(reserved, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) })
     }
+
+  private fun assertOtherWorkflowRemainsBlocked(
+    reconciler: FeatureTaskRuntimeCrashReconciler,
+    database: DatabaseSessionFactory,
+  ) {
+    assertEquals(1, reconciler.reconcile().reconciledCount)
+    assertEquals(
+      WorkflowStatus.BLOCKED.wireValue,
+      database.read { it.workflowStates.getFeatureTaskWorkflow(OTHER_WORKFLOW_ID)?.workflowStatus },
+    )
+  }
+
+  private fun assertWorkflowResumed(database: DatabaseSessionFactory) {
+    database.read { unit ->
+      val resumed = requireNotNull(unit.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID)).toSnapshot()
+      assertEquals(WorkflowStatus.RUNNING, resumed.workflowStatus)
+      assertEquals(
+        WorkflowStepStatus.PENDING,
+        phaseRecordsFromWorkflowArtifacts(resumed.artifacts).getValue(PHASE_ID).status,
+      )
+    }
+  }
 
   private fun seedBlockedChild(
     database: DatabaseSessionFactory,

@@ -34,8 +34,22 @@ class PhaseRunEntry(
   private val intakeResolver: PhaseRunIntakeResolver,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val agentRunLauncher: AgentRunLauncher,
+  private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
+    val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
+    val publisher = statusPublisherFactory.forPhase(request.repoRoot, request.definitionId, invocationId)
+    val statusRequest = request.copy(eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher))
+    return runCatching { runInternal(statusRequest, invocationId) }
+      .onSuccess(publisher::settle)
+      .onFailure(publisher::settleFailure)
+      .getOrThrow()
+  }
+
+  private fun runInternal(
+    request: PhaseRunRequest,
+    invocationId: String,
+  ): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
@@ -76,7 +90,7 @@ class PhaseRunEntry(
         progress = progress,
         records = records,
         telemetry = FeatureTaskRuntimeRunObservability(records, facts, diagnostics),
-        invocationId = request.reviewInvocation.reviewSessionId ?: "$INVOCATION_ID_PREFIX${UUID.randomUUID()}",
+        invocationId = invocationId,
         strategies = strategies,
         reviewResultAssembly = reviewResultAssembly,
         lifecycleTelemetry = lifecycleTelemetry,

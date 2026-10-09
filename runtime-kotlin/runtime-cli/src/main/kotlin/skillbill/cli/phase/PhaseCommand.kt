@@ -17,6 +17,7 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.standaloneReportText
 import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.kernel.plan.StandalonePlanLauncher
+import skillbill.cli.kernel.plan.StandalonePlanOptions
 import skillbill.cli.kernel.plan.planReportText
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
@@ -76,6 +77,10 @@ class PhaseCommand(
       runDurablePlan(invocation, repoRoot, invokedAgentId)
       return
     }
+    val stdoutSink =
+      FeatureTaskRuntimeRunEventSink { event ->
+        event.phaseProgressLine()?.let(inputs.liveStdout)
+      }
     val result =
       runPhase(state) {
         val specBacked = SkeletonDefinition.byId(invocation.definitionId).intake != PhaseIntakeRequirement.OPTIONAL
@@ -96,10 +101,7 @@ class PhaseCommand(
             specSource = specSource ?: SpecSource.LOCAL,
             modelAssignment =
               FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
-            eventSink =
-              FeatureTaskRuntimeRunEventSink { event ->
-                event.phaseProgressLine()?.let(inputs.liveStdout)
-              },
+            eventSink = stdoutSink,
           ),
         )
       } ?: return
@@ -114,7 +116,21 @@ class PhaseCommand(
     val intake = requireNotNull(invocation.intake) { "Durable phases require an intake." }
     try {
       val issueKey = planLauncher.issueKeyOf(intake)
-      val result = planLauncher.run(issueKey, intake, repoRoot, invokedAgentId)
+      val stdoutSink =
+        FeatureTaskRuntimeRunEventSink { event ->
+          event.phaseProgressLine()?.let(inputs.liveStdout)
+        }
+      val result =
+        planLauncher.run(
+          issueKey,
+          intake,
+          repoRoot,
+          invokedAgentId,
+          options =
+            StandalonePlanOptions(
+              eventSink = stdoutSink,
+            ),
+        )
       state.completeText(
         result.planReportText(issueKey),
         emptyMap(),

@@ -39,6 +39,9 @@ object StatusUiMapper {
                     startedAt = outcome.startedAt,
                     lastUpdated = outcome.updatedAt ?: outcome.observedAt,
                     stale = outcome.stale,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Active ->
@@ -84,6 +87,9 @@ object StatusUiMapper {
                     subtaskActiveDurationAsOf = outcome.subtaskActiveDurationAsOf,
                     lastAgentActivityAt = outcome.lastAgentActivityAt,
                     lastAgentActivityLabel = outcome.lastAgentActivityLabel,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Paused ->
@@ -126,6 +132,9 @@ object StatusUiMapper {
                     problemSummary = problemSummaryWith(null, outcome.diagnostic),
                     lastAgentActivityAt = outcome.lastAgentActivityAt,
                     lastAgentActivityLabel = outcome.lastAgentActivityLabel,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Stale ->
@@ -172,6 +181,9 @@ object StatusUiMapper {
                     currentPhaseExecution = outcome.currentPhaseExecution,
                     lastAgentActivityAt = outcome.lastAgentActivityAt,
                     lastAgentActivityLabel = outcome.lastAgentActivityLabel,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Blocked ->
@@ -204,6 +216,9 @@ object StatusUiMapper {
                     currentModel = outcome.currentModel,
                     currentPhaseExecution = outcome.currentPhaseExecution,
                     pauseReason = outcome.pauseReason,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Failed ->
@@ -235,6 +250,9 @@ object StatusUiMapper {
                     stale = outcome.stale,
                     currentModel = outcome.currentModel,
                     currentPhaseExecution = outcome.currentPhaseExecution,
+                    executionScope = outcome.execution?.executionScope,
+                    phaseId = outcome.execution?.phaseId,
+                    currentActivity = outcome.execution?.currentActivity,
                 )
 
             is SkillBillStatusOutcome.Unavailable ->

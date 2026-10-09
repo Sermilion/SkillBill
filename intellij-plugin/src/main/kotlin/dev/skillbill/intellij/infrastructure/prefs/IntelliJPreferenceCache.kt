@@ -9,6 +9,7 @@ import dev.skillbill.intellij.application.PreferenceCachePort
 import dev.skillbill.intellij.domain.CachedDisplaySnapshot
 import dev.skillbill.intellij.domain.DEFAULT_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.domain.LastKnownDisplayCache
+import dev.skillbill.intellij.domain.StatusExecutionMetadata
 import dev.skillbill.intellij.domain.MAX_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.domain.MIN_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.infrastructure.AbsolutePathGuard
@@ -70,7 +71,18 @@ class SkillBillProjectDisplayCache : PersistentStateComponent<SkillBillProjectDi
         var updatedAt: String? = null,
         var observedAt: String? = null,
         var activeDurationMs: Long? = null,
+        var activeDurationAsOf: String? = null,
         var subtaskActiveDurationMs: Long? = null,
+        var subtaskActiveDurationAsOf: String? = null,
+        var executionScope: String? = null,
+        var executionId: String? = null,
+        var statusStoreId: String? = null,
+        var branchCorrelation: String? = null,
+        var runSequence: String? = null,
+        var statusRevision: String? = null,
+        var invocationId: String? = null,
+        var phaseId: String? = null,
+        var currentActivity: String? = null,
     )
 
     private var state = State()
@@ -99,7 +111,22 @@ class SkillBillProjectDisplayCache : PersistentStateComponent<SkillBillProjectDi
                 subtaskStartedAt = state.subtaskStartedAt?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 updatedAt = state.updatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 activeDurationMs = state.activeDurationMs?.takeIf { it >= 0L },
+                activeDurationAsOf =
+                    state.activeDurationAsOf?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 subtaskActiveDurationMs = state.subtaskActiveDurationMs?.takeIf { it >= 0L },
+                subtaskActiveDurationAsOf =
+                    state.subtaskActiveDurationAsOf?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                execution = StatusExecutionMetadata(
+                    executionScope = state.executionScope,
+                    executionId = state.executionId,
+                    statusStoreId = state.statusStoreId,
+                    branchCorrelation = state.branchCorrelation,
+                    runSequence = state.runSequence,
+                    statusRevision = state.statusRevision,
+                    invocationId = state.invocationId,
+                    phaseId = state.phaseId,
+                    currentActivity = state.currentActivity,
+                ).takeIf { it.executionScope != null },
             ),
             observedAt = observedAt,
         )
@@ -128,7 +155,18 @@ class SkillBillProjectDisplayCache : PersistentStateComponent<SkillBillProjectDi
             updatedAt = sanitized.display.updatedAt?.toString(),
             observedAt = sanitized.observedAt.toString(),
             activeDurationMs = sanitized.display.activeDurationMs,
+            activeDurationAsOf = sanitized.display.activeDurationAsOf?.toString(),
             subtaskActiveDurationMs = sanitized.display.subtaskActiveDurationMs,
+            subtaskActiveDurationAsOf = sanitized.display.subtaskActiveDurationAsOf?.toString(),
+            executionScope = sanitized.display.execution?.executionScope,
+            executionId = sanitized.display.execution?.executionId,
+            statusStoreId = sanitized.display.execution?.statusStoreId,
+            branchCorrelation = sanitized.display.execution?.branchCorrelation,
+            runSequence = sanitized.display.execution?.runSequence,
+            statusRevision = sanitized.display.execution?.statusRevision,
+            invocationId = sanitized.display.execution?.invocationId,
+            phaseId = sanitized.display.execution?.phaseId,
+            currentActivity = sanitized.display.execution?.currentActivity,
         )
     }
 }
@@ -211,6 +249,7 @@ object PreferenceSanitizer {
         return state.copy(
             summary = state.summary?.take(CachedDisplaySnapshot.MAX_SUMMARY_CHARS),
             repositoryIdentity = sanitizeRepositoryIdentity(state.repositoryIdentity),
+            branchCorrelation = state.branchCorrelation?.trim()?.take(256),
         )
     }
 

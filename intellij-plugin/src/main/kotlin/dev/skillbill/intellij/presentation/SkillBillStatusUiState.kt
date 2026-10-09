@@ -40,6 +40,9 @@ sealed class SkillBillStatusUiState {
 
     
     open val currentPhaseExecution: CurrentPhaseExecution? get() = null
+    open val executionScope: String? get() = null
+    open val phaseId: String? get() = null
+    open val currentActivity: String? get() = null
 
     
     open val stale: Boolean get() = this is Stale
@@ -52,6 +55,9 @@ sealed class SkillBillStatusUiState {
         override val progressCompleted: Int? = null,
         override val progressTotal: Int? = null,
         override val lastUpdated: Instant? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
         override val stale: Boolean = false,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = headline
@@ -67,6 +73,9 @@ sealed class SkillBillStatusUiState {
         override val issueKey: String? = null,
         override val startedAt: Instant? = null,
         override val lastUpdated: Instant? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
         override val stale: Boolean = false,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = "$headline (done)"
@@ -98,6 +107,9 @@ sealed class SkillBillStatusUiState {
         val subtaskActiveDurationAsOf: Instant? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String =
             buildString {
@@ -129,6 +141,9 @@ sealed class SkillBillStatusUiState {
         override val problemSummary: String? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = "$headline (paused)"
     }
@@ -152,6 +167,9 @@ sealed class SkillBillStatusUiState {
         override val currentPhaseExecution: CurrentPhaseExecution? = null,
         val lastAgentActivityAt: Instant? = null,
         val lastAgentActivityLabel: String? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = "$headline (stale)"
     }
@@ -174,6 +192,9 @@ sealed class SkillBillStatusUiState {
         override val currentModel: CurrentPhaseModel? = null,
         override val currentPhaseExecution: CurrentPhaseExecution? = null,
         override val pauseReason: PauseReason? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = "$headline (blocked)"
     }
@@ -195,6 +216,9 @@ sealed class SkillBillStatusUiState {
         override val stale: Boolean = false,
         override val currentModel: CurrentPhaseModel? = null,
         override val currentPhaseExecution: CurrentPhaseExecution? = null,
+        override val executionScope: String? = null,
+        override val phaseId: String? = null,
+        override val currentActivity: String? = null,
     ) : SkillBillStatusUiState() {
         override val accessibilityText: String = "$headline (failed)"
     }
