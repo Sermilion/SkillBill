@@ -34,6 +34,8 @@ val ORCHESTRATOR_KINDS_FOR_SUBAGENTS: Set<String> =
 
 val SUBAGENT_NAME_PATTERN: Regex = Regex("^[a-z][a-z0-9-]*$")
 
+val UNIVERSAL_CODE_REVIEW_AREAS: Set<String> = setOf("code-quality")
+
 val APPROVED_CODE_REVIEW_AREAS: Set<String> =
   setOf(
     "architecture",

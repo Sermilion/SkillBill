@@ -74,12 +74,12 @@ private fun renderAddonSelection(addon: GovernedAddonSelection): String {
 
 internal fun renderReviewCompositionSection(target: AuthoringTarget): String {
   val baselineLayers = target.codeReviewComposition?.baselineLayers.orEmpty()
-  return if (baselineLayers.isEmpty()) {
-    ""
-  } else {
-    buildString {
-      appendLine("## Review Composition")
-      appendLine()
+  val universalLanes = target.universalReviewLanes
+  if (baselineLayers.isEmpty() && universalLanes.isEmpty()) return ""
+  return buildString {
+    appendLine("## Review Composition")
+    appendLine()
+    if (baselineLayers.isNotEmpty()) {
       appendLine(
         "This platform pack declares code-review composition in `platform.yaml`. The runtime MUST recursively " +
           "flatten required baseline layers into direct specialist lanes before any worker starts. It MUST NOT " +
@@ -97,8 +97,19 @@ internal fun renderReviewCompositionSection(target: AuthoringTarget): String {
       appendLine()
       appendLine("### Required Baseline Layers")
       appendLine()
-      baselineLayers.forEach { layer ->
-        appendLine("- ${renderBaselineLayerLabel(layer)}")
+      baselineLayers.forEach { layer -> appendLine("- ${renderBaselineLayerLabel(layer)}") }
+    }
+    if (universalLanes.isNotEmpty()) {
+      if (baselineLayers.isEmpty()) {
+        appendLine("Append manifest-declared universal lanes after the routed lanes when their area is selected.")
+        appendLine()
+      } else {
+        appendLine()
+      }
+      appendLine("### Universal Review Lanes")
+      appendLine()
+      universalLanes.forEach { lane ->
+        appendLine("- `${lane.area}` -> `${lane.skillName}`; required `${lane.required}`, order `${lane.orderIndex}`.")
       }
     }
   }

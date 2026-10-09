@@ -147,10 +147,20 @@ private fun areaStarterRule(
 }
 
 internal fun canonicalSeverityCloser(area: String): String =
-  "- For Blocker or Major findings, describe the concrete ${reviewAreaRule(area).consequenceScenario} scenario."
+  if (area == "code-quality") {
+    "- Report every code-quality finding as Minor; never Blocker or Major."
+  } else {
+    "- For Blocker or Major findings, describe the concrete ${reviewAreaRule(area).consequenceScenario} scenario."
+  }
 
 private fun reviewAreaRule(area: String): ReviewAreaRule =
   when (area) {
+    "code-quality" ->
+      ReviewAreaRule(
+        "language idioms and state models",
+        "a behavior-preserving rewrite changes a documented invariant",
+        "code-quality finding",
+      )
     "architecture" ->
       ReviewAreaRule(
         "module and dependency APIs",

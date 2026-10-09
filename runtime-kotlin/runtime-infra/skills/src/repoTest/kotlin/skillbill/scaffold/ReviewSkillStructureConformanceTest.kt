@@ -45,6 +45,60 @@ class ReviewSkillStructureConformanceTest {
   }
 
   @Test
+  fun `code-quality specialist rejects the blocker major closer`() {
+    val root = Files.createTempDirectory("review-code-quality-closer-")
+    val pack = root.resolve("platform-packs/fixture")
+    writeConformingFixture(pack)
+    val quality = pack.resolve("code-review/bill-fixture-code-review-code-quality")
+    Files.createDirectories(quality)
+    val qualityFocus = "Fixture quality conventions for .fixture sources"
+    val manifest =
+      fixtureManifest
+        .replace("declared_code_review_areas: [security]", "declared_code_review_areas: [code-quality]")
+        .replace(
+          "security: code-review/bill-fixture-code-review-security/content.md",
+          "code-quality: code-review/bill-fixture-code-review-code-quality/content.md",
+        )
+        .replace(
+          "    security:\n      focus: Fixture security boundaries for .fixture sources",
+          "    code-quality:\n      focus: $qualityFocus",
+        )
+        .replace("code-review/bill-fixture-code-review-security:", "code-review/bill-fixture-code-review-code-quality:")
+    Files.writeString(pack.resolve("platform.yaml"), manifest)
+    Files.delete(pack.resolve("code-review/bill-fixture-code-review-security/content.md"))
+    Files.writeString(
+      pack.resolve("code-review/bill-fixture-code-review/content.md"),
+      fixtureBaseline.replace("`security` specialist", "`code-quality` specialist"),
+    )
+    Files.writeString(
+      pack.resolve("code-review/bill-fixture-code-review/native-agents/agents.yaml"),
+      fixtureAgents
+        .replace("bill-fixture-code-review-security", "bill-fixture-code-review-code-quality")
+        .replace(
+          "Fixture security specialist — Fixture security boundaries for .fixture sources.",
+          "Fixture code quality specialist — $qualityFocus.",
+        ),
+    )
+    val oldCloser =
+      "- For Blocker or Major findings, describe the concrete authorization-bypass or data-exposure scenario."
+    Files.writeString(
+      quality.resolve("content.md"),
+      fixtureSpecialist
+        .replace("bill-fixture-code-review-security", "bill-fixture-code-review-code-quality")
+        .replace("Fixture security review.", "Fixture code quality review.")
+        .replace(canonicalSeverityCloser("security"), oldCloser),
+    )
+
+    val violations = structureViolations(pack)
+    assertTrue(
+      violations.any {
+        it.rule == "missing canonical severity closer" && it.path == quality.resolve("content.md")
+      },
+      violations.joinToString("\n"),
+    )
+  }
+
+  @Test
   fun `specialist defining own severity vocabulary is rejected with named violation`() {
     val root = Files.createTempDirectory("review-own-vocab-")
     val pack = root.resolve("platform-packs/fixture")

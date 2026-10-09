@@ -3,24 +3,27 @@ contract_version: "0.5"
 issue_key: "SKILL-413"
 feature_name: "code-quality-review-lane-additive-to-the-existing-code-review"
 parent_spec_path: ".feature-specs/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Code-quality lane and universal composition"
   spec_path: ".feature-specs/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review/spec_subtask_1_code_quality_lane_and_composition.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261009-163600-4i7q"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Code-quality report section and telemetry category"
@@ -31,4 +34,7 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []

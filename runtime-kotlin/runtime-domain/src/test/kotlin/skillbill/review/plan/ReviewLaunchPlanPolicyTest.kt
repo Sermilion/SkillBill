@@ -33,6 +33,64 @@ class ReviewLaunchPlanPolicyTest {
   }
 
   @Test
+  fun `universal fallback lane is appended without changing routed lanes`() {
+    val kotlin = pack("kotlin", KOTLIN_AREAS)
+    val kmp = pack("kmp", KMP_AREAS, layers = listOf(layer("kotlin")))
+    val generic =
+      pack(
+        "generic",
+        listOf("code-quality"),
+        laneConditions =
+          mapOf(
+            "code-quality" to
+              ReviewLaneCondition(required = true, path = listOf("quality/"), content = listOf("idiom")),
+          ),
+      ).copy(fallbackCapabilities = setOf("code-review"))
+    val genericWithoutArea = pack("generic", emptyList()).copy(fallbackCapabilities = setOf("code-review"))
+    val selected = (KOTLIN_AREAS + KMP_AREAS + "code-quality").toSet()
+
+    val plan = ReviewLaunchPlanPolicy.flatten("kmp", listOf(kmp, kotlin, generic), selected)
+    val baselinePlan = ReviewLaunchPlanPolicy.flatten("kmp", listOf(kmp, kotlin, genericWithoutArea), selected)
+    val lane = plan.lanes.last()
+
+    assertEquals(baselinePlan.lanes, plan.lanes.dropLast(1))
+    assertEquals("bill-generic-code-review-code-quality", lane.skillName)
+    assertEquals("generic", lane.packSlug)
+    assertEquals("code-quality", lane.area)
+    assertTrue(lane.required)
+    assertEquals(listOf("kmp", "generic"), lane.originLayerChain)
+    assertEquals(listOf(listOf("kmp", "generic")), lane.originLayerChains)
+    assertEquals(plan.lanes.size - 1, lane.orderIndex)
+    assertEquals((baselinePlan.lanes.maxOf { it.depth }) + 1, lane.depth)
+    assertEquals("universal fallback lane", lane.inclusionReason)
+    assertEquals(listOf("quality/"), lane.pathSignals)
+    assertEquals(listOf("idiom"), lane.contentSignals)
+    assertEquals(ReviewAddonSelectionPolicy.select(generic, lane.skillName).map { it.slug }, lane.addOns)
+  }
+
+  @Test
+  fun `generic root owns one quality lane and missing fallback is optional`() {
+    val generic =
+      pack(
+        "generic",
+        listOf("security", "code-quality"),
+        laneConditions = mapOf("code-quality" to ReviewLaneCondition(required = true)),
+      ).copy(fallbackCapabilities = setOf("code-review"))
+    val genericPlan = ReviewLaunchPlanPolicy.flatten("generic", listOf(generic), setOf("security", "code-quality"))
+    assertEquals(1, genericPlan.lanes.count { it.area == "code-quality" })
+    assertEquals("code-quality", genericPlan.lanes.last().area)
+    assertEquals("bill-generic-code-review-code-quality", genericPlan.lanes.last().skillName)
+
+    val routed = pack("kotlin", listOf("security"))
+    val absent = ReviewLaunchPlanPolicy.flatten("kotlin", listOf(routed), setOf("security", "code-quality"))
+    val undeclaredFallback = pack("generic", emptyList()).copy(fallbackCapabilities = setOf("code-review"))
+    val undeclared =
+      ReviewLaunchPlanPolicy.flatten("kotlin", listOf(routed, undeclaredFallback), setOf("security", "code-quality"))
+    assertTrue(absent.lanes.none { it.area == "code-quality" })
+    assertTrue(undeclared.lanes.none { it.area == "code-quality" })
+  }
+
+  @Test
   fun `a required baseline layer does not force a signal-gated composed area to be required`() {
     val kotlin =
       pack(

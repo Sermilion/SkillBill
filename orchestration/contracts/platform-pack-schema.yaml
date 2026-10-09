@@ -12,6 +12,7 @@ type: object
 additionalProperties: true
 $defs:
   codeReviewArea:
+    description: Areas accepted in pack declarations. Coverage requirements remain limited to the approved area set.
     type: string
     enum:
       - architecture
@@ -24,6 +25,7 @@ $defs:
       - reliability
       - ui
       - ux-accessibility
+      - code-quality
   pointerFileName:
     type: string
     minLength: 1

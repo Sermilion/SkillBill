@@ -1,3 +1,14 @@
+## [2026-10-09] SKILL-413 subtask 1 code-quality lane and universal composition
+Areas: orchestration/review-orchestrator, orchestration/contracts, runtime-kotlin/runtime-domain/review/plan, runtime-kotlin/runtime-domain/scaffold/policy, runtime-kotlin/runtime-infra/skills, platform-packs/generic, platform-packs/kotlin
+- Added the generic code-quality specialist with language-derived idioms, cohesive state and structure guidance, project-convention precedence, concrete rewrites, Minor-only severity, a five-finding cap and no auto-fixing.
+- Composition appends selected universal fallback lanes after routed lanes and reconciles shared fallback ownership across roots. Existing failure lanes retain their ordering, ownership and provenance. reusable
+- Universal areas share one domain vocabulary with manifest loading and structure validation, while approved-area pack coverage and scaffolding remain separate. reusable
+- Shared review contracts and structure validation recognize the quality-only severity closer. Authoring renders expose the composed lane, including Kotlin and KMP render expectations.
+- Shipped optional Kotlin idioms guidance with an exact-filename baseline staging exception. Other authored companions still require explicit content links.
+- Limits: the horizontal no-pack review path is unchanged; launches do not automatically supply sidecar bodies. Installed agents need parent-owned synchronization. Merger enforcement, report partitioning and telemetry belong to subtask 2.
+Feature flag: N/A
+Acceptance criteria: 14/14 implemented
+
 ## [2026-08-03] SKILL-159 subtask 3 governed content, docs, and packs for the restructured review modes
 Areas: orchestration/review-orchestrator, orchestration/review-delegation, orchestration/skill-classes, orchestration/telemetry-contract, skills/bill-code-review, platform-packs (generic, go, ios, kotlin, php, python, rust, typescript), docs, runtime-kotlin/runtime-infra-fs
 - Every installable governed surface now describes exactly three review modes: `delegated` as the default specialist fan-out, `inline` as a single-prompt review over the child-owned delta, and `auto` as first-pass-delegated with follow-up-inline.

@@ -46,42 +46,94 @@ This subtask authors the generic code-quality specialist and makes lane planning
 13. `platform-packs/kotlin/code-review/bill-kotlin-code-review/code-quality-idioms.md` exists with concrete Kotlin idiom examples: `orEmpty()` vs `?: ""`, `emptyList()`, `let`/`run`/`also`/`apply` guidance, and data-class/sealed state. The Kotlin baseline `content.md` and the Kotlin specialist files are unchanged. The generic lane rubric states that it reads `code-quality-idioms.md` from the routed pack's or a baseline layer's code-review baseline directory when present, and works without it.
 14. No existing specialist `content.md` under `platform-packs/` changes.
 
-## Implementation Steps
+## Implementation Details
 
-1. **Constants.** Add `UNIVERSAL_CODE_REVIEW_AREAS` in `runtime-domain/.../scaffold/policy/ScaffoldPolicyConstants.kt`.
-   - Assumption to confirm: `review/plan` may import `scaffold/policy`. If a package rule forbids it, define the constant in the `review/plan` (or shared review model) package and reference it from scaffold policy instead. Do not duplicate the literal.
-2. **Manifest acceptance and validator exceptions.** Edit these:
-   - the schema enum
-   - `ShellContentLoaderManifestFieldParsing.kt` (~line 93)
-   - `ReviewSkillStructureValidatorFrontmatterRules.kt` (~line 13, longest-suffix derivation over approved ∪ universal)
-   - `ScaffoldContentStarters.kt`: the `reviewAreaRule` `when` (~line 152), `canonicalSeverityCloser` (~line 149) and the starter text at ~:89/:208, but only where a `when` must be exhaustive
-   - `ScaffoldTemplateRendering.kt` (~line 21, label "code quality")
+This ordered plan replaces the provisional Implementation Steps and Test Obligations with decisions from the upstream preplan digest. AC references below refer to this sub-spec's numbered acceptance criteria. Paths are repository-relative. Implement produces the authored files, Kotlin changes, test cases and snapshot expectations. Validate owns test execution, snapshot verification, formatting, static analysis and the full repository gate. This plan phase executes none of them.
 
-   Keep every other `APPROVED_CODE_REVIEW_AREAS` call site unchanged.
-   - Assumption to confirm: if the substance audit, `ReviewSkillStructureValidatorContent`, install planning or any other validator rejects a declared area outside the approved set, extend only that check to accept universal areas. Do not loosen checks on approved areas.
-3. **Lane rubric.** Author the `content.md` per criteria 1-4. Read `PlatformPackSubstanceAuditPolicy`/`PolicyCatalog` thresholds and meet them for the generic pack. Rule ids and exact wording are implement's choice, and rule groups can follow the four focus families plus Conventions and Finding Discipline. Calibrate the state-modelling rule with the PR #3110 examples. Wire the generic `platform.yaml`, `agents.yaml` and baseline routing line, appending `code-quality` last in `declared_code_review_areas` so existing generic lanes keep their order indexes.
-4. **Shared contract and standard.** Add the carve-out bullet at the end of "Shared Contract For Every Specialist", identically in `specialist-contract.md` and `PLAYBOOK.md`. Then add the Code-Quality Lane subsection to `review-skill-structure-standard.md`.
-5. **Composition.** Implement criterion 10 in `ReviewLaunchPlanComposition.kt`.
-   - Keep the early return on empty `selectedAreas`.
-   - Assumption to confirm: every caller (`ParallelCodeReviewRunnerRubricPlanning.resolveWithRoutedManifests`, `FileSystemReviewAttribution`, `ShellContentLoaderComposition`, `FileSystemNativeAgentPlannedWorkerValidation`, and the `ReviewLaunchPlanPolicy` wrappers) derives `selectedAreas` from `composedAreas`, so the lane appears without further caller edits. If a caller narrows areas intentionally, such as an explicit area selection or a rerun, keep that narrowing; the lane only joins when `code-quality` is selected. Record any caller that cannot include it.
-   - Confirm `ReviewPerAreaFallbackExclusion` and `ReviewCrossRootLaneReconciliation` keep the appended lane: there is no native code-quality lane, and the same owner across roots is not a tie.
-   - Assumption to confirm: install planning always installs the generic pack alongside other packs (`InstallPlanBuilder`/`InstallPlatformPackDiscoverySnapshots`). If not, the append is simply skipped.
-6. **Sidecar.** Add `code-quality-idioms.md` to the Kotlin baseline directory.
-   - Assumption to confirm: validators and install accept an extra `.md` in a baseline skill directory (`authoredSidecarViolations` skips baseline dirs), and the reviewer can read the installed file. If a validator rejects it, move the file to a location validators accept and update the rubric's lookup sentence. If the launch cannot surface the file to the reviewer, keep the file and convention and note the limitation in the rubric; the lane must work without it either way.
-7. **Tests and snapshots.**
-   - Add the `ReviewLaunchPlanPolicyTest` cases (criterion 11).
-   - Update the `ComposedReviewLaunchPlanTest` expectations, and refresh the two `AuthoringRender` snapshots plus any other render or install snapshot that lists generic or composed lanes.
-   - Add the loader acceptance/rejection test (criterion 6) and the closer rejection test (criterion 7).
-   - Update `ReviewSkillStructureConformanceTest`, `PlatformPackSubstanceAuditRepoTest`, `ScaffoldReviewStructureAcceptanceTest`, `ScaffoldServiceParityTest`, `InstallPlanBuilderTest`, `FileSystemReviewAttributionTest`, `ParallelCodeReviewRunnerTest` and `ParallelReviewLaneDispositionTest` only where they enumerate generic areas or lane sets. Those updates are additive expectation changes, not new tests.
+### 1. Accept universal areas without expanding required pack coverage
 
-## Test Obligations
+Serves AC-006 and establishes the vocabulary needed by AC-007 and AC-010.
 
-- `ReviewLaunchPlanPolicyTest`, KMP + generic: catches the lane missing from KMP reviews and any change to existing lanes (regression criterion).
-- `ReviewLaunchPlanPolicyTest`, generic routed: catches a duplicate `(packSlug, area)` that would violate the plan uniqueness invariant.
-- `ReviewLaunchPlanPolicyTest`, no fallback: catches a throw or an orphan lane when generic is not installed.
-- `ReviewLaunchPlanPolicyTest`, two roots: catches an `ambiguousLaneOwnership`/cross-root tie on the shared generic lane.
-- Manifest loader test: catches the area check being loosened to accept any area.
-- Closer rejection test: catches the code-quality exception skipping the severity-closer check entirely.
+- Add `UNIVERSAL_CODE_REVIEW_AREAS = setOf("code-quality")` beside the unchanged approved set in `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/scaffold/policy/ScaffoldPolicyConstants.kt`. Use that owner from composition and validation rather than duplicating the vocabulary or introducing a forwarding constant.
+- Add `code-quality` to `$defs.codeReviewArea` in `orchestration/contracts/platform-pack-schema.yaml`. Keep contract version `1.8` and every existing enum value. Update the description to distinguish accepted declared areas from the approved coverage set.
+- In `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/scaffold/platformpack/loader/ShellContentLoaderManifestFieldParsing.kt`, change only the membership check in `parseDeclaredAreas` to accept approved plus universal areas. Preserve declaration/file/metadata/lane-condition coherence and typed `INVALID_MANIFEST_SCHEMA` failures for unknown areas.
+- Keep `PlatformPackSubstanceAuditPointerCatalog`, `ScaffoldPayloadMapPlatformPackPolicy`, `ScaffoldServicePlanning`, `ScaffoldCatalog` and `ScaffoldContract` on the approved set alone. Universal acceptance does not require or scaffold a new specialist in non-generic packs.
+- Update enum parity in `PlatformPackSchemaContractVersionTest` to approved plus universal, retaining its pinned-version assertion. Add one conforming code-quality declaration case in `PlatformPackSchemaViolationsTest`; retain the existing unknown `laravel` rejection and failure-code assertion. The realistic bugs are a valid declaration failing at the loader boundary and a widened check silently accepting arbitrary areas. These are governed contract tests and remain required.
+
+### 2. Add the quality-specific structure rule and shared exception
+
+Serves AC-001, AC-004, AC-007, AC-008, AC-009 and AC-014.
+
+- In `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/scaffold/validation/review/ReviewSkillStructureValidatorFrontmatterRules.kt`, extend only the longest-suffix area derivation in `declaredAreaForFile` to approved plus universal areas. Preserve declared-file mapping precedence.
+- In `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/scaffold/rendering/ScaffoldContentStarters.kt`, add the code-quality `reviewAreaRule` and make `canonicalSeverityCloser` return the exact quality closer. Add its phrase to `AREA_DESCRIPTION_PHRASES` in sibling `ScaffoldTemplateRendering.kt`. Existing area rules and closers remain unchanged.
+- Keep the existing H2/H3, backticked-id, obligation-verb, failure-wording and final-rule checks in `ReviewSkillStructureValidatorContent` and `ReviewSkillStructureSeverityRules`. Do not add a severity legend or bypass validation for the new lane. The quality closer is exactly `- Report every code-quality finding as Minor; never Blocker or Major.`
+- Add the Code-Quality Lane subsection to `orchestration/review-orchestrator/review-skill-structure-standard.md`. State fixed Minor severity, the cap of five, exemption from reachable-failure requirements and the exact closer.
+- Append this one bullet, byte-identically, to `Shared Contract For Every Specialist` in `orchestration/review-orchestrator/specialist-contract.md` and `orchestration/review-orchestrator/PLAYBOOK.md`: `- The code-quality lane is the only exception to the meaningful-issue, style-nit and Minor-tie rules; report its findings as Minor only, with at most 5 per review.` Preserve every pre-existing bullet and leave `Shared Report Structure` to subtask 2.
+- In `ReviewSkillStructureConformanceTest`, add a conforming quality fixture and reject the same area with the old Blocker/Major final closer. The realistic bug is recognizing the area while silently allowing the failure-lane severity contract. Validate also runs `SpecialistContractParityTest` and the existing `ScaffoldReviewStructureAcceptanceTest`; do not broaden scaffolder coverage to universal areas.
+
+### 3. Author and wire the generic specialist
+
+Serves AC-001 through AC-005 and AC-014.
+
+- Create `platform-packs/generic/code-review/bill-generic-code-review-code-quality/content.md` with frontmatter `name`, `description` and `internal-for: skill-bill`. Use the required H2 order, Focus, Ignore, Applicability, Project-Specific Rules. Put backticked rule ids in H3 rule groups and end the rules with the exact quality closer from step 2.
+- Cover language/stdlib idioms, scope/helper functions, unified state and lifecycle modelling, and structure. Include `orEmpty()`, `emptyList()` and context-sensitive `let`, `run`, `also` and `apply` examples. Derive recommendations from the detected language and standard library without requiring a selected platform pack.
+- Include the supplied PR #3110 calibration verbatim in its relevant identifiers. `CustomFreeTextViewModel` has editor fields `textContent` and `isLoaded`, and the jointly written fields `isSaved`, `isInDatabase`, `savedText`, `createdAt` and `isDeletingOwnEntry` in `onSavedEntry` and `persist`. `VisitDetailViewModel` has lifecycle fields `hasSeenVisit`, `hasCreatedVisit`, `isDeletingVisit` and `isVisitRemoved`. Use these to explain unified state types and sealed types or enums, not to report findings against unchanged code.
+- Require concrete smell, `file:line` and concrete rewrite for every finding, Minor only, at most five findings, and no auto-fixing. Exempt only this lane from reachable-failure proof. Exclude unchanged code, formatting, configured ktfmt/detekt/eslint/prettier/swiftformat rules and behavioural defects belonging to other lanes. Read available repository guides and tooling configuration, including `docs/code-quality-best-practices.md`, `AGENTS.md` and `CLAUDE.md`; project conventions win over generic preferences.
+- Meet the existing substance audit, at least ten substantive rules and three clusters, with the shared-shingle and corresponding-rubric limits unchanged at 35 and 65 percent. Use recognized H3 rule/check/requirement/failure/correctness headings and concrete state/lifecycle, contract/data and resource/toolchain evidence. Obligation and consequence wording must cover real constraints such as preserving behaviour during a suggested rewrite and avoiding duplicate tooling findings. It must not impose reachable behavioural failure as a condition for a quality finding.
+- In `platform-packs/generic/platform.yaml`, append `code-quality` to declared areas; add its declared file, bespoke focus metadata, required lane condition and specialist-contract pointer. Add one routing-table line in `platform-packs/generic/code-review/bill-generic-code-review/content.md`. Preserve all its existing lines.
+- Add `bill-generic-code-review-code-quality` to `platform-packs/generic/code-review/bill-generic-code-review/native-agents/agents.yaml`. Match the required description pattern and manifest focus exactly, retaining contract version `0.1`, `compose: governed-content` and the existing review-evidence tool pair. Generated pointers and provider-agent outputs are not authored or committed.
+- Narrowly adjust generic physical-area expectations in `PlatformPackSubstanceAuditRepoTest` to approved plus universal areas while retaining coverage and substance assertions. Validate uses existing substance, structure and agent-config checks; do not add prose-string tests that duplicate these governed checks.
+
+### 4. Ship the optional Kotlin sidecar through the existing adapter
+
+Serves AC-003 and AC-013, while preserving AC-014.
+
+- Create `platform-packs/kotlin/code-review/bill-kotlin-code-review/code-quality-idioms.md` with concrete `orEmpty()` versus `?: ""`, `emptyList()`, scope-function clarity guidance and data-class/sealed-state examples. Do not edit the Kotlin baseline or any existing specialist.
+- The generic rubric describes lookup in the routed pack's code-review baseline directory or a baseline layer's baseline directory. It uses the sidecar when supplied or accessible through the authorized launch, and derives idioms itself when the file is unavailable. Explicitly document that current launch-provided rubrics do not append optional sidecar bodies and workers cannot perform unrestricted filesystem discovery. Do not add a manifest key, required-companion declaration or broader worker evidence access.
+- Resolve the known installation conflict in `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/install/staging/InternalSidecarTarget.kt`. Allow the exact optional filename `code-quality-idioms.md` to omit an explicit owning-content link only in code-review baseline directories. Keep explicit links mandatory for every other companion. Preserve all existing path, symlink, count, reserved-name and collision checks, including collisions caused by flattening companions from multiple packs into the parent directory.
+- Document this narrow source exception in `orchestration/review-orchestrator/review-skill-structure-standard.md` and `docs/skill-source-generation.md`. Do not relocate the file, relax companion rules generally or change the baseline content to link it.
+- Extend `runtime-kotlin/runtime-infra/skills/src/test/kotlin/skillbill/infrastructure/skills/install/InternalSkillCompanionInstallApplyTest.kt` with a baseline fixture that stages this sidecar without a content link and a rejection case for an unrelated unlinked companion. The realistic bugs are losing the optional guidance during staging and accepting arbitrary unlinked Markdown. Retain existing deletion-restoration and parent-name collision coverage. These are fixture tests for validate, not an operational installation step.
+
+### 5. Compose universal lanes after the existing routed lanes
+
+Serves AC-010 and AC-011.
+
+- In `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/review/plan/ReviewLaunchPlanComposition.kt`, use `ReviewFallbackResolver.resolveOptional` to find the manifest-declared fallback owner. `composeReviewLaunchAreas` adds only universal areas that this owner declares. Do not hard-code generic or add generic as a baseline layer.
+- Preserve `flattenReviewLaunchPlan`'s empty-selection return and intentional explicit-area narrowing. Build existing routed graph lanes through the current candidate, cycle, compatibility and nearest-owner rules. Resolve universal lanes as a trailing group so alphabetic `code-quality` ordering cannot shift existing lanes, including when generic itself is routed.
+- For a selected universal area not owned by the routed graph, append exactly one fallback lane with the declared skill, required status, origin chain `[routedSlug, fallbackSlug]`, depth one beyond the existing maximum, next contiguous index, add-ons from `ReviewAddonSelectionPolicy.select`, preserved path/content signals and an explicit inclusion reason. A graph-owned quality lane keeps its owner, required status and provenance and appears once.
+- No fallback, or a fallback without the declaration, is optional absence and produces no appended lane. Preserve the resolver's typed failures for malformed multiple ownership or a fallback lacking its baseline. Do not swallow those failures.
+- In `ReviewCrossRootLaneReconciliation.reconcile`, use a trailing universal group only where needed to prevent its depth/pack/area sort from shifting failure-lane indexes. Keep existing non-universal ordering, scope and provenance reconciliation. `ReviewPerAreaFallbackExclusion.partition` continues removing only areas with native ownership; same fallback ownership across two roots must reconcile without a tie.
+- The digest confirms that composition consumers already use composed selection and that installation planning already includes the declared fallback. No forwarding-wrapper or installation-policy changes are planned. Keep `ParallelCodeReviewRunnerRubricPlanning`, `FileSystemReviewAttribution`, `ShellContentLoaderComposition` and `FileSystemNativeAgentPlannedWorkerValidation` behaviour, including intentionally narrowed selections.
+
+### 6. Prove composition boundaries with a small regression set
+
+Serves AC-010, AC-011 and AC-012.
+
+- Extend `runtime-kotlin/runtime-domain/src/test/kotlin/skillbill/review/plan/ReviewLaunchPlanPolicyTest.kt`; explicitly set fallback capability in its manifest fixtures. Compare complete non-quality lanes with quality availability removed, including skill, pack, area, order index, required flag, depth, signals, add-ons and origin chains.
+- Cover KMP with its Kotlin layer and generic, and Kotlin with generic. The realistic bug is a missing required universal lane or any alteration to existing failure lanes. Assert the appended lane is last and has all required fields.
+- Cover generic as root with one trailing quality lane and unchanged failure lanes. This catches duplicate ownership and alphabetic index drift.
+- Cover optional absence with no fallback and with a fallback lacking the declaration, using one parameterized boundary case where appropriate. Assert no quality lane and no exception. Preserve existing malformed-fallback failure coverage and empty-selection coverage; add a focused case only if these branches lack coverage. Explicit selection excluding quality must continue omitting it.
+- Cover two roots with the same generic fallback, asserting one reconciled quality lane, no ownership tie and unchanged failure lanes. This catches cross-root duplicate ownership and index drift without testing internal call order.
+- In `runtime-kotlin/runtime-infra/skills/src/repoTest/kotlin/skillbill/scaffold/ComposedReviewLaunchPlanTest.kt`, use composed selection for the KMP and Kotlin maps and expect `code-quality` to resolve to `bill-generic-code-review-code-quality`. Keep deliberately approved-only selections as coverage that the universal lane is omitted when not selected.
+- Update expected authored renders in `runtime-kotlin/runtime-infra/skills/src/test/resources/snapshots/scaffold/bill-kmp-code-review.render.txt` and `bill-kotlin-code-review.render.txt` to include the appended lane. Validate executes deterministic render verification through `AuthoringRenderSnapshotTest`; snapshot changes belong with composition changes.
+- Adjust existing enumerated-lane expectations only when required by the additive lane. Do not invent new glue tests or weaken assertions to make them pass. Preserve governed parity and validator-backed tests.
+
+### 7. Check end states and hand validation evidence to its owning phase
+
+Serves all acceptance criteria, especially AC-006, AC-009 and AC-014.
+
+- Implement keeps changes confined to this subtask's authored guidance, declared manifest/native-agent wiring, narrow structure/schema/companion acceptance, pure domain composition and necessary regression fixtures/snapshots. Shared report layout, merger normalization/capping and telemetry remain subtask 2's work. No new module, port, manifest key, contract version, database migration or telemetry event is needed.
+- Preserve existing specialist files, Kotlin/KMP baseline content, non-generic manifests, approved-area coverage, existing shared-contract bullets and failure-lane values. Required review and validation repairs may change relevant production wiring, test setup, formatting or lint while preserving these explicit operator constraints. If a repair conflicts with a preserved file or contract, report that concrete conflict rather than weakening the constraint.
+- Apply architecture rules A1, A2, A5, A6, A7, A10, A11 and A12 from the digest. Keep composition pure in domain and filesystem exceptions in the adapter. Use narrow helpers and imported simple Kotlin names, with no authored line/block comments, no guard exemptions and no increase in baseline debt. Preserve package and file limits.
+- Validate owns the existing full gate stated in Validation Strategy, including unit/repo tests, spotless, detekt, schema parity, specialist parity, structure/substance checks, deterministic snapshots and native-agent configuration. Preserve the local-clone spotless requirement and configuration-cache retry guidance. This phase and implement do not run compilation or tests for proof; buildability proof belongs only to an authorized build phase.
+- Audit inspects every criterion against repository end states. History, commit, push, PR, monitoring and installed-runtime synchronization remain with their owning phases or parent runtime. No such operation is part of this child plan.
+
+### Settled assumptions and delivery limits
+
+- Tracker comments are unavailable. The supplied specs and preplan digest are sufficient authority, including the PR #3110 field names; implement must not invent extra calibration facts.
+- The sidecar location remains exactly the required Kotlin baseline path. Its narrow companion exception resolves source staging, but it does not make the body automatically available to workers. The rubric documents authorized-launch availability and language-derived fallback; delivery integration is not silently assumed.
+- For a graph with no existing selected lanes, use depth zero as the first appended lane's depth, equivalent to an empty maximum of minus one. The digest does not state the current empty-depth convention. Implement confirms this against the existing lane model without changing the empty-selection return or other lane depths.
+- Native workers need the newly authored generic agent in the installed runtime before they can execute the new lane. Synchronization is parent-owned and is not a prerequisite for finishing this plan or for authoring the repository end state.
 
 ## Non-Goals
 

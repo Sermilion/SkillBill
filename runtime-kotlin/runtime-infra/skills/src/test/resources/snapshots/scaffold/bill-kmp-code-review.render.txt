@@ -22,6 +22,10 @@ Keep baseline-layer findings attributed to that layer before merging and dedupli
 
 - `kotlin/bill-kotlin-code-review` with scope `same-review-scope`, mode `kmp-baseline`, required `true`.
 
+### Universal Review Lanes
+
+- `code-quality` -> `bill-generic-code-review-code-quality`; required `true`, order `10`.
+
 ## Governed Add-Ons
 
 This platform pack declares add-on usage for this skill in `platform.yaml`. Runtime agents MUST resolve these add-ons only after stack routing has selected `kmp`.

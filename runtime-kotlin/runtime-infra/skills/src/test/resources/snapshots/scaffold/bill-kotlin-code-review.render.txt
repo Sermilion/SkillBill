@@ -11,6 +11,14 @@ Family: `code-review`
 Platform pack: `kotlin` (Kotlin)
 Description: Use when reviewing Kotlin changes across code-review specialists.
 
+## Review Composition
+
+Append manifest-declared universal lanes after the routed lanes when their area is selected.
+
+### Universal Review Lanes
+
+- `code-quality` -> `bill-generic-code-review-code-quality`; required `true`, order `10`.
+
 ## Execution
 
 Review Kotlin libraries, CLIs, backend services, and the shared Kotlin baseline used by manifest-declared KMP composition.

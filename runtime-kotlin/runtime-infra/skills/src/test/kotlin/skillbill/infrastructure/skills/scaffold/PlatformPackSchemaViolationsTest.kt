@@ -190,6 +190,31 @@ class PlatformPackSchemaViolationsTest {
   }
 
   @Test
+  fun `declared code-quality area is accepted`() {
+    val manifest =
+      """
+      platform: scenarioslug
+      contract_version: "1.8"
+      routing_signals:
+        strong: ["manifest-declared code-review fallback"]
+      declared_code_review_areas: [code-quality]
+      declared_files:
+        baseline: code-review/bill-scenarioslug-code-review/content.md
+        areas:
+          code-quality: code-review/bill-scenarioslug-code-review-code-quality/content.md
+      area_metadata:
+        code-quality:
+          focus: "Language idioms and cohesive state"
+      lane_conditions:
+        code-quality:
+          required: true
+      fallback_capabilities: [code-review]
+      """.trimIndent()
+
+    loadPackFromInMemory("scenarioslug", manifest)
+  }
+
+  @Test
   fun `declared_code_review_areas with unapproved enum value`() {
     val manifest =
       """

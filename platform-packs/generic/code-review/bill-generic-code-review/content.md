@@ -19,6 +19,7 @@ Review unsupported, ambiguous, and technology-neutral changes without claiming c
 ## Diff-Signal Routing Table
 
 - Module boundaries, dependency declarations, or ownership crossings -> `architecture` specialist.
+- Idiom choices, opaque helpers, scattered state, or redundant structure -> `code-quality` specialist.
 - Hot paths, blocking calls, allocation sites, or resource use -> `performance` specialist.
 - Lifecycle, concurrency, state-machine, or runtime behavior -> `platform-correctness` specialist.
 - Authentication, authorization, untrusted input, secrets, or sensitive data -> `security` specialist.

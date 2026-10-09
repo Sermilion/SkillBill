@@ -21,6 +21,7 @@ declared_code_review_areas:
   - reliability
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-generic-code-review/content.md
@@ -35,6 +36,7 @@ declared_files:
     reliability: code-review/bill-generic-code-review-reliability/content.md
     ui: code-review/bill-generic-code-review-ui/content.md
     ux-accessibility: code-review/bill-generic-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-generic-code-review-code-quality/content.md
 
 area_metadata:
   architecture: { focus: "Boundary ownership, dependency direction, state lifetime, and change isolation" }
@@ -47,6 +49,7 @@ area_metadata:
   reliability: { focus: "Retries, timeouts, cancellation, recovery, observability, and partial failure" }
   ui: { focus: "State ownership, rendering identity, navigation, feedback, and interaction correctness" }
   ux-accessibility: { focus: "Task completion, semantics, keyboard use, focus, localization, and inclusive interaction" }
+  code-quality: { focus: "Language idioms, clear helpers, cohesive state, and focused code structure" }
 
 lane_conditions:
   architecture: { required: true }
@@ -59,6 +62,7 @@ lane_conditions:
   reliability: { content: ["retry", "timeout", "recovery", "failure"] }
   ui: { content: ["screen", "view", "render", "navigation"] }
   ux-accessibility: { content: ["accessibility", "focus", "keyboard", "localization"] }
+  code-quality: { required: true }
 
 pointers:
   code-review/bill-generic-code-review:
@@ -86,6 +90,8 @@ pointers:
   code-review/bill-generic-code-review-reliability:
     - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }
   code-review/bill-generic-code-review-ui:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }
+  code-review/bill-generic-code-review-code-quality:
     - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }
   code-review/bill-generic-code-review-ux-accessibility:
     - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

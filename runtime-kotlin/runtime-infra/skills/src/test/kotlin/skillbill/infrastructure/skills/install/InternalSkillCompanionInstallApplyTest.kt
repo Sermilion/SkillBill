@@ -44,6 +44,42 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
   }
 
   @Test
+  fun `code quality baseline idioms sidecar stages without a content link`() {
+    val fixture = setupApplyFixture()
+    val baseline = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review")
+    val idioms = "Use nullableString.orEmpty() for an empty fallback.\n"
+    Files.writeString(baseline.resolve("code-quality-idioms.md"), idioms)
+    val plan =
+      planInstallForTest(
+        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
+      )
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+    val parentStaging =
+      result.skills.single { skill -> skill.skillName == PACK_SIDECAR_PARENT_SKILL }.staging.stagingDir
+    val companion = assertNotNull(parentStaging).resolve("code-quality-idioms.md").toPath()
+    assertTrue(Files.isRegularFile(companion, LinkOption.NOFOLLOW_LINKS))
+    assertEquals(idioms, Files.readString(companion))
+  }
+
+  @Test
+  fun `unlinked non idiom companion remains rejected`() {
+    val fixture = setupApplyFixture()
+    val baseline = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review-architecture")
+    Files.writeString(baseline.resolve("unlinked-notes.md"), "unowned notes\n")
+    val plan =
+      planInstallForTest(
+        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
+      )
+
+    val result = applyInstallForTest(plan)
+
+    assertEquals(InstallApplyStatus.FAILURE, result.status)
+  }
+
+  @Test
   fun `reapply rejects a new parent collision before reusing companion staging`() {
     val fixture = setupApplyFixture()
     val internalSkillDir = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review")

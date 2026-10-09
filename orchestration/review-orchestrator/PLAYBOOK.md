@@ -52,6 +52,7 @@ Do not reference this repo-relative path directly from installable skills — us
 - Absent, thin, or incomplete test coverage is capped at `Minor`, never `Blocker` or `Major`, and is still subject to the reporting threshold above. A test that exists but asserts the wrong behavior, is tautological, or masks a production defect is a defect in the changed code and keeps normal severity calibration.
 - Confidence: `High | Medium | Low`
 - Keep each specialist review pass to at most 7 findings
+- The code-quality lane is the only exception to the meaningful-issue, style-nit and Minor-tie rules; report its findings as Minor only, with at most 5 per review.
 - Include a minimal concrete fix for each finding
 - In standalone phase review, concrete fixes are recommendations. Do not apply them, stage, commit, amend, or reset files.
 

@@ -49,6 +49,10 @@ through commits as separate review steps, or restart from a whole-PR or
 aggregate diff. Cross-commit behavior belongs to the single integration pass
 described in `specialist-contract.md`, not to any specialist skeleton.
 
+### Code-Quality Lane
+
+The code-quality lane reports every finding as `Minor`, with no `Blocker` or `Major` ratings, and reports at most five findings per review. It is exempt from the reachable-failure rule that applies to other lanes. Its final rule is exactly `- Report every code-quality finding as Minor; never Blocker or Major.`
+
 ### Lane-Specific Consequence Examples
 
 The lanes with the widest observed Major-to-Blocker spread benefit from

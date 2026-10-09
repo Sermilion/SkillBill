@@ -11,6 +11,7 @@ import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.ReviewLaneCondition
 import skillbill.scaffold.model.RoutingSignals
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import java.nio.file.Path
 
 internal fun parseRoutingSignals(
@@ -90,10 +91,10 @@ internal fun parseDeclaredAreas(
         ?: invalidManifestSchema(
           "Platform pack '$slug': every entry in 'declared_code_review_areas' must be a string.",
         )
-    if (area !in APPROVED_CODE_REVIEW_AREAS) {
+    if (area !in APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS) {
       invalidManifestSchema(
-        "Platform pack '$slug': declared area '$area' is not approved; " +
-          "must be one of ${APPROVED_CODE_REVIEW_AREAS.sorted()}.",
+        "Platform pack '$slug': declared area '$area' is not accepted; " +
+          "must be one of ${(APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).sorted()}.",
       )
     }
     area
