@@ -99,11 +99,12 @@ class PhaseRunEntry(
           completedStepIds = report.completedPhaseIds,
           reviewResult = state.reviewResult,
           value = report.completedPhaseIds.lastOrNull()?.let { id -> records.loadPhaseRecords("")[id]?.outputArtifact },
+          completedOutputs = completedOutputs(report.completedPhaseIds, records),
         )
       is FeatureTaskRuntimeRunReport.Blocked ->
-        blocked(state, report.completedPhaseIds, report.lastIncompletePhase, report.blockedReason)
+        blocked(state, report.completedPhaseIds, report.lastIncompletePhase, report.blockedReason, records)
       is FeatureTaskRuntimeRunReport.Paused ->
-        blocked(state, report.completedPhaseIds, report.pausedPhase, report.pauseReason)
+        blocked(state, report.completedPhaseIds, report.pausedPhase, report.pauseReason, records)
       is FeatureTaskRuntimeRunReport.Decomposed ->
         PhaseRunResult.Completed(
           invocationId = state.invocationId,
@@ -131,8 +132,24 @@ class PhaseRunEntry(
     completedStepIds: List<String>,
     stepId: String,
     reason: String,
+    records: InMemoryPhaseRunRecords,
   ): PhaseRunResult.Blocked =
-    PhaseRunResult.Blocked(state.invocationId, completedStepIds, state.reviewResult, stepId, reason)
+    PhaseRunResult.Blocked(
+      state.invocationId,
+      completedStepIds,
+      state.reviewResult,
+      stepId,
+      reason,
+      completedOutputs(completedStepIds, records),
+    )
+
+  private fun completedOutputs(
+    stepIds: List<String>,
+    records: InMemoryPhaseRunRecords,
+  ): List<String> {
+    val outputs = records.loadPhaseRecords("")
+    return stepIds.mapNotNull { id -> outputs[id]?.outputArtifact?.takeIf(String::isNotBlank) }
+  }
 }
 
 private const val INVOCATION_ID_PREFIX = "phr-"

@@ -1,10 +1,14 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.error.featuretask.PullRequestBranchRefusedError
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
@@ -99,6 +103,31 @@ class PhasePullRequestRunTest {
   }
 
   @Test
+  fun `pr exposes transitions while running and retains the pr result after green CI`() {
+    initRepoWithOrigin()
+    git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
+    val events = mutableListOf<FeatureTaskRuntimeRunEvent>()
+    val phaseEntry = entry(identity = OpenPullRequestIdentityLookup)
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        phaseEntry.run(prRequest().copy(eventSink = FeatureTaskRuntimeRunEventSink { events += it })),
+      )
+
+    val completed = events.filterIsInstance<FeatureTaskRuntimeRunEvent.PhaseCompleted>()
+    assertEquals(listOf("commit_push", PR, "monitor"), completed.map { it.phaseId })
+    val prCompleted = events.indexOfFirst { it is FeatureTaskRuntimeRunEvent.PhaseCompleted && it.phaseId == PR }
+    val monitorStarted =
+      events.indexOfFirst {
+        it is FeatureTaskRuntimeRunEvent.PhaseStarted && it.phaseId == "monitor"
+      }
+    assertTrue(prCompleted >= 0 && monitorStarted > prCompleted)
+    val output = result.completedOutputs.joinToString("\n")
+    assertTrue(output.contains("CI passed on branch '$FEATURE_BRANCH'"), output)
+    assertTrue(output.contains(PULL_REQUEST_URL), output)
+    assertTrue(output.indexOf(PULL_REQUEST_URL) < output.indexOf("CI passed"))
+  }
+
+  @Test
   fun `failed push blocks before pr and retry publishes the existing commit`() {
     initRepoWithOrigin()
     git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
@@ -160,13 +189,16 @@ class PhasePullRequestRunTest {
   private fun launchedPhaseIds(): List<String> =
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
-  private fun entry(): PhaseRunEntry {
+  private fun entry(
+    identity: PullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+  ): PhaseRunEntry {
     val config =
       RuntimeHarnessConfig(
         seedDurableWorkflow = false,
         repoRoot = repoRoot,
         launcher = launcher,
-        pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+        pullRequestIdentityLookup = identity,
+        pullRequestChecksLookup = PassingPullRequestChecksLookup,
         gitOperationsOverride = GitWorkflowGitOperations(),
       )
     val harness =
@@ -182,5 +214,6 @@ class PhasePullRequestRunTest {
     const val PR = "pr"
     const val FEATURE_BRANCH = "feat/SKILL-903-phase-pr"
     const val DIRTY_FILE = "scratch.txt"
+    const val PULL_REQUEST_URL = "https://github.com/example/repo/pull/1"
   }
 }

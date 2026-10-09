@@ -31,6 +31,7 @@ data class PhaseRunRequest(
   val timeout: Duration? = null,
   val specSource: SpecSource = SpecSource.LOCAL,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -49,6 +50,7 @@ sealed interface PhaseRunResult {
     override val reviewResult: ParallelCodeReviewResult?,
     val value: String?,
     val specBundle: PhaseRunSpecBundle? = null,
+    val completedOutputs: List<String> = emptyList(),
   ) : PhaseRunResult
 
   data class Blocked(
@@ -57,6 +59,7 @@ sealed interface PhaseRunResult {
     override val reviewResult: ParallelCodeReviewResult?,
     val stepId: String,
     val reason: String,
+    val completedOutputs: List<String> = emptyList(),
   ) : PhaseRunResult
 }
 
@@ -85,7 +88,7 @@ internal data class InMemoryPhaseRunFacts(
   override val requestedCodeReviewMode: CodeReviewExecutionMode? = request.codeReviewMode
   override val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null
   override val agentAddonSelection: HydratedAgentAddonSelection = request.agentAddonSelection
-  override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE
+  override val eventSink: FeatureTaskRuntimeRunEventSink = request.eventSink
   override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null
   override val skeletonDefinition: SkeletonDefinition = definition
   override val reviewInvocation: ReviewInvocation = request.reviewInvocation
