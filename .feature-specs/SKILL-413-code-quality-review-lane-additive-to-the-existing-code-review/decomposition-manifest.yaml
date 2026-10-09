@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-413"
 feature_name: "code-quality-review-lane-additive-to-the-existing-code-review"
 parent_spec_path: ".feature-specs/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review"
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Code-quality report section and telemetry category"
   spec_path: ".feature-specs/SKILL-413-code-quality-review-lane-additive-to-the-existing-code-review/spec_subtask_2_code_quality_report_section_and_telemetry.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261009-165734-t228"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

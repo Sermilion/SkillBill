@@ -110,6 +110,7 @@ Do NOT use markdown tables, numbered lists, or any other format for findings. Th
 - Confidence must be one of: `High`, `Medium`, `Low`
 - Finding ids must be unique within the current review run and stable enough for follow-up feedback or fix requests in the same workflow
 - Assign finding ids sequentially in risk-register order using `F-001`, `F-002`, `F-003`, and so on
+- Put code-quality findings after all failure findings in a `#### Code Quality (non-blocking)` sub-section at the end of `### 2. Risk Register`. Continue the F-id sequence, retain each finding's `specialist=` attribution, and mark each finding Minor. Code-quality findings never change the Verdict. Put any action items for them after failure action items.
 - A worker with no findings must return exactly `NO_FINDINGS`; an empty response is an incomplete result.
 
 ## Lane-Specific Consequence Examples

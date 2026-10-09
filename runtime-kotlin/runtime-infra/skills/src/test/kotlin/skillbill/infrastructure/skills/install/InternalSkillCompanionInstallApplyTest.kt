@@ -1,5 +1,7 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
@@ -8,6 +10,7 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -69,14 +72,14 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
     val fixture = setupApplyFixture()
     val baseline = fixture.repoRoot.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review-architecture")
     Files.writeString(baseline.resolve("unlinked-notes.md"), "unowned notes\n")
-    val plan =
-      planInstallForTest(
-        fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
-      )
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        planInstallForTest(
+          fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
+        )
+      }
 
-    val result = applyInstallForTest(plan)
-
-    assertEquals(InstallApplyStatus.FAILURE, result.status)
+    assertEquals(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, error.code)
   }
 
   @Test

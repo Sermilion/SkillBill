@@ -306,7 +306,7 @@ The telemetry model emits a single event per review lifecycle:
 
 The finished event carries: total/accepted/rejected/unresolved finding counts, accepted/rejected rates, accepted/rejected finding details, a nested `learnings` object, normalized routed skill, normalized `review_platform`/`detected_stack`/`platform_slug`, optional `detected_stack_detail`, normalized `scope_type`, execution mode, specialist reviews, fallback metadata, and a distinct canonical `review_session_id` field so related telemetry can be grouped together in PostHog. Finding details always include `issue_category`, `severity`, `confidence`, and `outcome_type`; file locations, descriptions, and rejection notes are included only at `full` level. `unresolved_findings` is the count of findings whose latest outcome is not terminal yet; the finished event is emitted only once that count reaches zero. If a later import materially changes the review and reopens unresolved findings, Skill Bill clears the finish marker and emits a fresh event the next time the review becomes fully resolved.
 
-The review issue category taxonomy is: `behavior_correctness`, `data_persistence`, `concurrency_lifecycle`, `ux_accessibility`, `testing_quality_gate`, `security_privacy`, `docs_contract`, and `other`.
+The review issue category taxonomy is: `behavior_correctness`, `data_persistence`, `concurrency_lifecycle`, `ux_accessibility`, `testing_quality_gate`, `code_quality`, `security_privacy`, `docs_contract`, and `other`.
 
 When `learnings resolve` is called with `--review-session-id`, the resolved learnings are cached locally and included in the matching `skillbill_review_finished` event when it fires.
 

@@ -194,8 +194,10 @@ internal fun flattenReviewLaunchPlan(
     reviewLaunchLanesFromWinners(graphOwnedUniversalWinners).mapIndexed { index, lane ->
       lane.copy(orderIndex = routedLanes.size + index)
     }
-  val lanes = routedLanes + graphUniversalLanes + fallbackLanes.mapIndexed { index, lane ->
-    lane.copy(orderIndex = routedLanes.size + graphUniversalLanes.size + index)
-  }
+  val lanes =
+    routedLanes + graphUniversalLanes +
+      fallbackLanes.mapIndexed { index, lane ->
+        lane.copy(orderIndex = routedLanes.size + graphUniversalLanes.size + index)
+      }
   return ReviewLaunchPlan(routedPackSlug = routedSlug, lanes = lanes)
 }

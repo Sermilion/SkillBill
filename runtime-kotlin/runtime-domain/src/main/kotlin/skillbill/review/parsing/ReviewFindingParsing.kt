@@ -31,7 +31,7 @@ internal fun parseBulletFindings(text: String): List<ImportedFinding> {
       location = match.groups["location"]?.value.orEmpty().trim(),
       description = provenance?.let { rawDescription.removeRange(it.range).trim() } ?: rawDescription,
       findingText = match.value.trim(),
-      laneSkillName = provenance?.let(::parseProvenanceLane),
+      laneSkillName = match.groups["specialistSkillName"]?.value ?: provenance?.let(::parseProvenanceLane),
     )
   }.toList()
 }

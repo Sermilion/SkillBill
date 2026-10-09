@@ -21,17 +21,23 @@ object ParallelReviewMerger {
     lane2: ParallelReviewLaneResult,
     integration: ParallelReviewLaneResult? = null,
   ): ParallelReviewMergeResult {
-    val candidates = mergeCandidates(lane1, lane2, integration)
+    val (failureCandidates, codeQualityCandidates) = mergeCandidates(lane1, lane2, integration)
 
     val sorted =
-      candidates.sortedWith(
+      failureCandidates.sortedWith(
         compareBy<MergedCandidate> { it.severity.ordinal }
           .thenBy { if (it.isCoalesced) 0 else 1 }
           .thenBy { it.firstAppearance },
       )
+    val orderedCodeQuality =
+      codeQualityCandidates
+        .sortedWith(
+          compareByDescending<MergedCandidate> { confidenceRank(it.confidence) }.thenBy { it.firstAppearance },
+        )
+        .take(CODE_QUALITY_FINDING_CAP)
 
     val mergedFindings =
-      sorted.mapIndexed { index, candidate ->
+      (sorted + orderedCodeQuality).mapIndexed { index, candidate ->
         ParallelReviewMergedFinding(
           fNumber = "F-%03d".format(index + 1),
           agentIds = candidate.agentIds,
@@ -81,32 +87,43 @@ object ParallelReviewMerger {
   }
 
   fun formattedOutput(findings: List<ParallelReviewMergedFinding>): String {
-    if (findings.none(ParallelReviewMergedFinding::hasRecordedVerdict)) {
-      return findings.joinToString("\n", transform = ::formatFinding)
-    }
-    val grouped =
-      findings.groupBy { finding ->
-        ReviewFindingActionability.registerOutcome(finding.claimVerdict, finding.scopeDisposition)
+    val (codeQualityFindings, failureFindings) =
+      findings.partition { finding ->
+        isCodeQualityFinding(finding.agentIds, finding.specialistSkillNames)
       }
-    return buildString {
-      var first = true
-      ReviewFindingRegisterOutcome.entries.forEach { outcome ->
-        val items = grouped[outcome].orEmpty()
-        if (items.isEmpty()) return@forEach
-        if (!first) append('\n')
-        first = false
-        append(outcome.header)
-        append('\n')
-        append(items.joinToString("\n", transform = ::formatFinding))
+    val failureOutput =
+      if (failureFindings.none(ParallelReviewMergedFinding::hasRecordedVerdict)) {
+        failureFindings.joinToString("\n") { finding -> formatFinding(finding) }
+      } else {
+        val grouped =
+          failureFindings.groupBy { finding ->
+            ReviewFindingActionability.registerOutcome(finding.claimVerdict, finding.scopeDisposition)
+          }
+        buildString {
+          var first = true
+          ReviewFindingRegisterOutcome.entries.forEach { outcome ->
+            val items = grouped[outcome].orEmpty()
+            if (items.isEmpty()) return@forEach
+            if (!first) append('\n')
+            first = false
+            append(outcome.header)
+            append('\n')
+            append(items.joinToString("\n") { finding -> formatFinding(finding) })
+          }
+        }
       }
-    }
+    if (codeQualityFindings.isEmpty()) return failureOutput
+    val codeQualityOutput = codeQualityFindings.joinToString("\n") { formatFinding(it, codeQuality = true) }
+    return listOf(failureOutput, CODE_QUALITY_HEADING, codeQualityOutput)
+      .filter(String::isNotEmpty)
+      .joinToString("\n")
   }
 
   private fun mergeCandidates(
     lane1: ParallelReviewLaneResult,
     lane2: ParallelReviewLaneResult,
     integration: ParallelReviewLaneResult?,
-  ): List<MergedCandidate> {
+  ): Pair<List<MergedCandidate>, List<MergedCandidate>> {
     val allEntries = mutableListOf<FindingEntry>()
     var appearanceOrder = 0
     lane1.findings.forEach { f -> allEntries += FindingEntry(f, lane1.agentId, appearanceOrder++) }
@@ -114,8 +131,27 @@ object ParallelReviewMerger {
 
     integration?.findings?.forEach { f -> allEntries += FindingEntry(f, integration.agentId, appearanceOrder++) }
 
+    val (codeQualityEntries, failureEntries) =
+      allEntries.partition { entry ->
+        isCodeQualityFinding(listOf(entry.agentId), listOfNotNull(entry.finding.specialistSkillName))
+      }
+    val failureCandidates = mergeEntryGroup(failureEntries, codeQuality = false)
+    val codeQualityCandidates =
+      mergeEntryGroup(
+        codeQualityEntries.map { entry ->
+          entry.copy(finding = entry.finding.copy(severity = ParallelReviewSeverity.MINOR))
+        },
+        codeQuality = true,
+      )
+    return failureCandidates to codeQualityCandidates
+  }
+
+  private fun mergeEntryGroup(
+    entries: List<FindingEntry>,
+    codeQuality: Boolean,
+  ): List<MergedCandidate> {
     val clusters = mutableListOf<ClusterHead>()
-    allEntries.forEach { entry ->
+    entries.forEach { entry ->
       val entryFilePath = entry.finding.repositoryPath ?: filePathOf(entry.finding.location)
       val entryTokens = tokens(entry.finding.description)
       val cluster =
@@ -130,11 +166,15 @@ object ParallelReviewMerger {
       }
     }
 
-    return clusters.map(::toCandidate)
+    return clusters.map { cluster -> toCandidate(cluster, codeQuality) }
   }
 
-  private fun formatFinding(finding: ParallelReviewMergedFinding): String {
+  private fun formatFinding(
+    finding: ParallelReviewMergedFinding,
+    codeQuality: Boolean = false,
+  ): String {
     val agentLabel = finding.agentIds.joinToString(", ")
+    val specialistAttribution = if (codeQuality) codeQualityAttribution(finding) else ""
     val provenance =
       buildList {
         if (finding.specialistSkillNames.isNotEmpty()) {
@@ -157,20 +197,32 @@ object ParallelReviewMerger {
         ""
       }
     val claimLine =
-      "- [${finding.fNumber}] [$agentLabel] ${finding.severity.displayName} | ${finding.confidence} | " +
-        "$commitAttribution$structuredLocation | ${finding.description}$provenance"
-    val structuredFields =
-      buildList {
-        finding.claimVerdict?.let { add("claim_verdict=${it.wireValue}") }
-        finding.scopeDisposition?.let { add("scope_disposition=${it.wireValue}") }
-        if (finding.citations.isNotEmpty()) {
-          add("citations=${finding.citations.joinToString(",") { "${it.path}:${it.line}" }}")
-        }
-        finding.severityAdjustment?.let { adjustment ->
-          add("severity_adjustment=${adjustment.direction.wireValue}: ${adjustment.justification}")
-        }
-      }
+      "- [${finding.fNumber}] " +
+        (if (codeQuality) "" else "[$agentLabel] ") +
+        "${finding.severity.displayName} | ${finding.confidence} | " +
+        "$specialistAttribution$commitAttribution$structuredLocation | ${finding.description}$provenance"
+    val structuredFields = verdictFields(finding)
     return if (structuredFields.isEmpty()) claimLine else "$claimLine | ${structuredFields.joinToString(" | ")}"
+  }
+
+  private fun verdictFields(finding: ParallelReviewMergedFinding): List<String> =
+    buildList {
+      finding.claimVerdict?.let { add("claim_verdict=${it.wireValue}") }
+      finding.scopeDisposition?.let { add("scope_disposition=${it.wireValue}") }
+      if (finding.citations.isNotEmpty()) {
+        add("citations=${finding.citations.joinToString(",") { "${it.path}:${it.line}" }}")
+      }
+      finding.severityAdjustment?.let { adjustment ->
+        add("severity_adjustment=${adjustment.direction.wireValue}: ${adjustment.justification}")
+      }
+    }
+
+  private fun codeQualityAttribution(finding: ParallelReviewMergedFinding): String {
+    val specialist =
+      finding.specialistSkillNames.firstOrNull { skillName ->
+        isCodeQualityFinding(emptyList(), listOf(skillName))
+      } ?: finding.agentIds.first { agentId -> isCodeQualityFinding(listOf(agentId), emptyList()) }
+    return "specialist=$specialist | "
   }
 
   private fun ParallelReviewRawFinding.lacksVerdictOverlay(): Boolean =
@@ -179,15 +231,24 @@ object ParallelReviewMerger {
       severityAdjustment == null &&
       citations.isEmpty()
 
-  private fun toCandidate(head: ClusterHead): MergedCandidate {
+  private fun toCandidate(
+    head: ClusterHead,
+    codeQuality: Boolean,
+  ): MergedCandidate {
     val entries = head.entries
     val coalesced = entries.map { it.agentId }.distinct().size > 1
 
     val primary =
-      entries.minWith(
-        compareBy({ it.finding.severity.ordinal }, { it.appearanceOrder }),
-      )
+      if (codeQuality) {
+        entries.minWith(
+          compareByDescending<FindingEntry> { confidenceRank(it.finding.confidence) }
+            .thenBy { it.appearanceOrder },
+        )
+      } else {
+        entries.minWith(compareBy({ it.finding.severity.ordinal }, { it.appearanceOrder }))
+      }
     val firstEntry = entries.minByOrNull { it.appearanceOrder }!!
+    val displayEntry = if (codeQuality) primary else firstEntry
     val sourceVerdicts =
       entries.mapNotNull { entry ->
         val finding = entry.finding
@@ -215,14 +276,22 @@ object ParallelReviewMerger {
       agentIds = entries.map { it.agentId }.distinct(),
       severity = primary.finding.severity,
       confidence = primary.finding.confidence,
-      location = firstEntry.finding.location,
-      description = firstEntry.finding.description,
+      location = displayEntry.finding.location,
+      description = displayEntry.finding.description,
       isCoalesced = coalesced,
-      firstAppearance = firstEntry.appearanceOrder,
-      specialistSkillNames = entries.mapNotNull { it.finding.specialistSkillName }.distinct(),
+      firstAppearance = displayEntry.appearanceOrder,
+      specialistSkillNames =
+        entries.flatMap { entry ->
+          val specialist = entry.finding.specialistSkillName
+          if (codeQuality && !isCodeQualityFinding(emptyList(), listOfNotNull(specialist))) {
+            listOfNotNull(entry.agentId, specialist)
+          } else {
+            listOfNotNull(specialist)
+          }
+        }.distinct(),
       originLayerChains = entries.flatMap { it.finding.originLayerChains }.distinct(),
-      repositoryPath = firstEntry.finding.repositoryPath,
-      line = firstEntry.finding.line,
+      repositoryPath = displayEntry.finding.repositoryPath,
+      line = displayEntry.finding.line,
       commitShas = entries.sortedBy { it.appearanceOrder }.flatMap { it.finding.commitShas }.distinct(),
       claimVerdict = claimVerdict,
       scopeDisposition = scopeDisposition,
@@ -234,6 +303,17 @@ object ParallelReviewMerger {
   }
 
   private const val FUZZY_DEDUP_THRESHOLD = 0.6
+  private const val CODE_QUALITY_FINDING_CAP = 5
+  private const val CODE_QUALITY_HEADING = "#### Code Quality (non-blocking)"
+  private const val HIGH_CONFIDENCE_RANK = 3
+
+  private fun confidenceRank(confidence: String): Int =
+    when (confidence) {
+      "High" -> HIGH_CONFIDENCE_RANK
+      "Medium" -> 2
+      "Low" -> 1
+      else -> 0
+    }
 
   private fun filePathOf(location: String): String = location.substringBeforeLast(":").trim()
 
