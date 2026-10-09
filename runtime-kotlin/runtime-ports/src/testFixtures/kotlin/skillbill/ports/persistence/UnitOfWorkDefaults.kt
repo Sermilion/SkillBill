@@ -14,6 +14,8 @@ import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.UnavailableOperationProposalRepository
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
@@ -27,5 +29,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableFeatureTaskPhaseSettlementRepository
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
 
-  override fun purgeDecomposedGoal(parentWorkflowId: String) = Unit
+  override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
+
+  override fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()
 }

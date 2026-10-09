@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-409"
+feature_name: "goal-purge-removes-all-runtime-state"
+parent_spec_path: ".feature-specs/SKILL-409-goal-purge-removes-all-runtime-state/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-409-goal-purge-removes-all-runtime-state"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Purge all goal-owned state"
+  spec_path: ".feature-specs/SKILL-409-goal-purge-removes-all-runtime-state/spec_subtask_1_purge-all-goal-owned-state.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261009-060117-lksr"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

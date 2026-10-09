@@ -61,7 +61,8 @@ class WorkflowGoalRunnerManifestStore
     private val planningHydrator: GoalChildPlanningHydratorPort,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
     private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
-  ) : GoalRunnerManifestStore {
+  ) : GoalRunnerManifestStore,
+    GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort) {
     private val engine: WorkflowEngine = WorkflowEngine()
     private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
     private val manifestLoader =
@@ -377,13 +378,6 @@ class WorkflowGoalRunnerManifestStore
           GoalRunnerChildWorkflowSaveResult.Saved(saved.saved.state)
         }
       }
-    }
-
-    override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> =
-      database.read { it.workflowStates.listGoalChildWorkflowIdsByParent(parentWorkflowId) }
-
-    override fun purgeDecomposedGoal(parentWorkflowId: String) {
-      database.transaction { unitOfWork -> unitOfWork.purgeDecomposedGoal(parentWorkflowId) }
     }
 
     override fun reviewMode(parentWorkflowId: String): CodeReviewExecutionMode? =

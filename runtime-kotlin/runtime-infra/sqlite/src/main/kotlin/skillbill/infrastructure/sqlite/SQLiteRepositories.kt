@@ -41,6 +41,8 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.persistence.model.GoalPurgeTableCounts
+import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
 import skillbill.ports.review.repository.ReviewRepository
@@ -75,9 +77,8 @@ internal class SQLiteUnitOfWork(
   private val runtimeVersion: String,
   transactionActive: Boolean = false,
 ) : UnitOfWork {
-  private val phaseSettlementStore = SqliteFeatureTaskPhaseSettlementStore(connection)
-
-  override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository = phaseSettlementStore
+  override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
+    SqliteFeatureTaskPhaseSettlementStore(connection)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
@@ -107,52 +108,185 @@ internal class SQLiteUnitOfWork(
   override val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions =
     FileRejectedOutputDiagnosticPermissions(dbPath, diagnostics)
 
-  override fun purgeDecomposedGoal(parentWorkflowId: String) {
-    val childIds = workflowStates.listGoalChildWorkflowIdsByParent(parentWorkflowId)
+  override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts {
+    val scope = purgeScope(target)
+    val counts = linkedMapOf<String, Int>()
+    PURGE_WORKFLOW_KEYED_TABLES.forEach { table ->
+      counts[table] = deleteWhereIn(table, "workflow_id", scope.workflowIds)
+    }
+    counts[GOAL_RUN_SESSIONS_TABLE] = deleteMatching(GOAL_RUN_SESSIONS_TABLE, goalRunSessionsFilter(scope))
+    counts[GOAL_PLANNING_STORE] =
+      scope.parentIds.sumOf { parentId -> goalPlanningPreparations.deleteByGoal(parentId) }
+    PURGE_PARENT_KEYED_TABLES.forEach { table ->
+      counts[table] = deleteWhereIn(table, "parent_workflow_id", scope.parentIds)
+    }
+    counts[WORKFLOWS_TABLE] = deleteWhereIn(WORKFLOWS_TABLE, "workflow_id", scope.workflowIds)
+    counts[RUNTIME_SESSIONS_TABLE] = deleteMatching(RUNTIME_SESSIONS_TABLE, runtimeSessionsFilter(scope))
+    return GoalPurgeTableCounts(counts)
+  }
+
+  override fun countDecomposedGoalState(target: GoalPurgeTarget): GoalPurgeTableCounts {
+    val scope = purgeScope(target)
+    val counts = linkedMapOf<String, Int>()
+    PURGE_WORKFLOW_KEYED_TABLES.forEach { table ->
+      counts[table] = countWhereIn(table, "workflow_id", scope.workflowIds)
+    }
+    counts[GOAL_RUN_SESSIONS_TABLE] = countMatching(GOAL_RUN_SESSIONS_TABLE, goalRunSessionsFilter(scope))
+    counts[GOAL_PLANNING_STORE] =
+      GOAL_PLANNING_TABLES.sumOf { table -> countWhereIn(table, "parent_goal_workflow_id", scope.parentIds) }
+    PURGE_PARENT_KEYED_TABLES.forEach { table ->
+      counts[table] = countWhereIn(table, "parent_workflow_id", scope.parentIds)
+    }
+    counts[WORKFLOWS_TABLE] = countWhereIn(WORKFLOWS_TABLE, "workflow_id", scope.workflowIds)
+    counts[RUNTIME_SESSIONS_TABLE] = countMatching(RUNTIME_SESSIONS_TABLE, runtimeSessionsFilter(scope))
+    return GoalPurgeTableCounts(counts)
+  }
+
+  private fun purgeScope(target: GoalPurgeTarget): GoalPurgeScope {
     val workflowIds =
-      buildList {
-        add(parentWorkflowId)
-        addAll(childIds)
+      (
+        target.workflowIds + target.parentWorkflowIds +
+          target.parentWorkflowIds.flatMap { parentId -> workflowStates.listGoalChildWorkflowIdsByParent(parentId) }
+      ).toList()
+    return GoalPurgeScope(target.parentWorkflowIds.toList(), workflowIds, sessionIdsOf(workflowIds))
+  }
+
+  private fun sessionIdsOf(workflowIds: List<String>): List<String> {
+    if (workflowIds.isEmpty()) return emptyList()
+    return connection.prepareStatement(
+      "SELECT DISTINCT session_id FROM $WORKFLOWS_TABLE " +
+        "WHERE session_id != '' AND workflow_id IN (${placeholders(workflowIds)})",
+    ).use { statement ->
+      statement.bindAll(workflowIds)
+      statement.executeQuery().use { rows ->
+        buildList { while (rows.next()) add(rows.getString("session_id")) }
       }
-    goalPlanningPreparations.deleteByGoal(parentWorkflowId)
-    connection.prepareStatement(
-      "DELETE FROM goal_runner_controls WHERE parent_workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(parentWorkflowId)
-      statement.executeUpdate()
     }
-    deleteByWorkflowIds("goal_run_sessions", workflowIds)
-    deleteByWorkflowIds("goal_subtask_events", workflowIds)
-    phaseSettlementStore.deleteByWorkflowIds(workflowIds)
-    connection.prepareStatement(
-      "DELETE FROM goal_issue_progress WHERE parent_workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(parentWorkflowId)
-      statement.executeUpdate()
+  }
+
+  private fun goalRunSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
+    val segmentClauses =
+      scope.parentIds.map { parentId ->
+        SqlFilter("substr(workflow_id, 1, length(?) + 5) = ? || ':seg:'", listOf(parentId, parentId))
+      }
+    val clauses =
+      listOfNotNull(
+        inFilter("workflow_id", scope.workflowIds),
+        inFilter("parent_workflow_id", scope.parentIds),
+      ) + segmentClauses
+    return anyOf(clauses)
+  }
+
+  private fun runtimeSessionsFilter(scope: GoalPurgeScope): SqlFilter? {
+    val owned =
+      anyOf(
+        listOfNotNull(
+          inFilter("session_id", scope.sessionIds),
+          inFilter("workflow_id", scope.workflowIds),
+          inFilter("goal_parent_workflow_id", scope.parentIds),
+        ),
+      ) ?: return null
+    val survivingReference =
+      "NOT EXISTS (SELECT 1 FROM $WORKFLOWS_TABLE w " +
+        "WHERE (w.session_id = $RUNTIME_SESSIONS_TABLE.session_id " +
+        "OR w.workflow_id = $RUNTIME_SESSIONS_TABLE.workflow_id) " +
+        "AND w.workflow_id NOT IN (${placeholders(scope.workflowIds)}))"
+    return SqlFilter("(${owned.clause}) AND $survivingReference", owned.args + scope.workflowIds)
+  }
+
+  private fun inFilter(
+    column: String,
+    ids: List<String>,
+  ): SqlFilter? = if (ids.isEmpty()) null else SqlFilter("$column IN (${placeholders(ids)})", ids)
+
+  private fun anyOf(filters: List<SqlFilter>): SqlFilter? =
+    if (filters.isEmpty()) {
+      null
+    } else {
+      SqlFilter(filters.joinToString(" OR ") { "(${it.clause})" }, filters.flatMap(SqlFilter::args))
     }
-    workflowStates.deleteGoalChildWorkflowsByParent(parentWorkflowId)
-    connection.prepareStatement(
-      "DELETE FROM feature_task_workflows WHERE workflow_id = ?",
-    ).use { statement ->
-      statement.bindAll(parentWorkflowId)
+
+  private fun deleteMatching(
+    table: String,
+    filter: SqlFilter?,
+  ): Int {
+    if (filter == null) return 0
+    return connection.prepareStatement("DELETE FROM $table WHERE ${filter.clause}").use { statement ->
+      statement.bindAll(filter.args)
       statement.executeUpdate()
     }
   }
 
-  private fun deleteByWorkflowIds(
+  private fun countMatching(
     table: String,
-    workflowIds: List<String>,
-  ) {
-    if (workflowIds.isEmpty()) return
-    val placeholders = workflowIds.joinToString(", ") { "?" }
-    connection.prepareStatement(
-      "DELETE FROM $table WHERE workflow_id IN ($placeholders)",
-    ).use { statement ->
-      statement.bindAll(workflowIds)
+    filter: SqlFilter?,
+  ): Int {
+    if (filter == null) return 0
+    return connection.prepareStatement("SELECT COUNT(*) FROM $table WHERE ${filter.clause}").use { statement ->
+      statement.bindAll(filter.args)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else 0 }
+    }
+  }
+
+  private fun deleteWhereIn(
+    table: String,
+    column: String,
+    ids: List<String>,
+  ): Int {
+    if (ids.isEmpty()) return 0
+    return connection.prepareStatement("DELETE FROM $table WHERE $column IN (${placeholders(ids)})").use { statement ->
+      statement.bindAll(ids)
       statement.executeUpdate()
     }
   }
+
+  private fun countWhereIn(
+    table: String,
+    column: String,
+    ids: List<String>,
+  ): Int {
+    if (ids.isEmpty()) return 0
+    return connection.prepareStatement("SELECT COUNT(*) FROM $table WHERE $column IN (${placeholders(ids)})")
+      .use { statement ->
+        statement.bindAll(ids)
+        statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else 0 }
+      }
+  }
+
+  private fun placeholders(values: List<String>): String = values.joinToString(", ") { "?" }
 }
+
+private const val WORKFLOWS_TABLE = "feature_task_workflows"
+private const val RUNTIME_SESSIONS_TABLE = "feature_task_runtime_sessions"
+private const val GOAL_RUN_SESSIONS_TABLE = "goal_run_sessions"
+private const val GOAL_PLANNING_STORE = "goal_planning"
+
+private data class GoalPurgeScope(
+  val parentIds: List<String>,
+  val workflowIds: List<String>,
+  val sessionIds: List<String>,
+)
+
+private data class SqlFilter(
+  val clause: String,
+  val args: List<String>,
+)
+
+private val GOAL_PLANNING_TABLES = listOf("goal_planning_preparations", "goal_shared_preplans", "goal_subtask_plans")
+
+private val PURGE_WORKFLOW_KEYED_TABLES =
+  listOf(
+    "worktree_edit_journal",
+    "producer_output_evidence",
+    "rejected_output_diagnostics",
+    "agent_activity_stamps",
+    "feature_task_runtime_worker_leases",
+    "feature_task_execution_identities",
+    "goal_subtask_events",
+    "feature_task_phase_settlements",
+  )
+
+private val PURGE_PARENT_KEYED_TABLES = listOf("goal_runner_controls", "goal_issue_progress")
 
 internal class SQLiteUnaddressedFindingsRepository(connection: Connection) : UnaddressedFindingsRepository {
   private val runtime = UnaddressedFindingsRuntime(connection)

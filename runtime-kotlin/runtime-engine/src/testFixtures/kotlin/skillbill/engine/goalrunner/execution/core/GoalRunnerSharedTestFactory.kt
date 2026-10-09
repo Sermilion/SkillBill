@@ -48,6 +48,8 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
+import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
 
@@ -63,6 +65,7 @@ data class GoalRunnerStatusTestPorts(
   val childRepairStore: GoalRunnerChildRepairStore = NoopGoalRunnerChildRepairStore,
   val attemptLedgerStore: GoalRunnerAttemptLedgerStore = NoopGoalRunnerAttemptLedgerStore,
   val diagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  val goalStateFiles: GoalRuntimeStateFileStore = UnavailableGoalRuntimeStateFileStore,
   val runtimeStatusService: FeatureTaskRuntimeStatusService? = null,
   val validationGatePlatformManifests: List<PlatformManifest> = emptyList(),
   val repoLocalConfig: RepoLocalConfigPort =
@@ -131,6 +134,7 @@ fun testGoalRunnerStatusService(
         manifestValidator = testDecompositionManifestValidator,
         database = database,
         repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+        goalStateFiles = ports.goalStateFiles,
       ),
   )
 }

@@ -4,8 +4,11 @@ import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddr
 
 const val IMPLEMENTATION_CHECKLIST_STORE_ROOT: String = ".skill-bill/feature-task-tracking"
 
+fun implementationChecklistDirectory(workflowId: String): String =
+  "$IMPLEMENTATION_CHECKLIST_STORE_ROOT/${FeatureTaskRuntimeRunEvidenceAddress.pathSegment(workflowId)}"
+
 fun implementationChecklistRelativePath(workflowId: String): String =
-  "$IMPLEMENTATION_CHECKLIST_STORE_ROOT/${FeatureTaskRuntimeRunEvidenceAddress.pathSegment(workflowId)}/checklist.md"
+  "${implementationChecklistDirectory(workflowId)}/checklist.md"
 
 data class ImplementationChecklistTask(
   val key: String,
