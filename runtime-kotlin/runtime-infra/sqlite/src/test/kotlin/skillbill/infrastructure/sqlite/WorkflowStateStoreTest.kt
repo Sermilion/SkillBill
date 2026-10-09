@@ -11,8 +11,10 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
@@ -555,9 +557,45 @@ class WorkflowStateStoreTest {
 
       val saved = assertNotNull(verifyWorkflowStore(connection).getWorkflow("wfv-001"))
       assertEquals("bill-feature-verify", saved.workflowName)
-      assertEquals("0.1", saved.contractVersion)
+      assertEquals(WORKFLOW_STATE_CONTRACT_VERSION, saved.contractVersion)
       assertEquals("code_review", saved.currentStepId)
       assertEquals("""{"review_result":{"verdict":"approve"}}""", saved.artifactsJson)
+    }
+  }
+
+  @Test
+  fun `older readable verify contract version can be abandoned and is restamped current`() {
+    val dbPath = Files.createTempDirectory("workflow-state-readable-upgrade").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val opened =
+        WorkflowEngine().openRecord(
+          FeatureVerifyWorkflowDefinition.definition,
+          "wfv-upgrade",
+          "fvr-upgrade",
+          FeatureVerifyWorkflowDefinition.definition.defaultInitialStepId,
+        )
+      store.save(WorkflowFamily.VERIFY, opened)
+      connection.prepareStatement(
+        "UPDATE feature_verify_workflows SET contract_version = '0.1' WHERE workflow_id = ?",
+      ).use { update ->
+        update.setString(1, "wfv-upgrade")
+        check(update.executeUpdate() == 1)
+      }
+
+      val planted = assertNotNull(store.get(WorkflowFamily.VERIFY, "wfv-upgrade"))
+      assertEquals("0.1", planted.contractVersion)
+      store.save(
+        WorkflowFamily.VERIFY,
+        planted.copy(
+          workflowStatus = WorkflowStatus.ABANDONED,
+          finishedAt = Instant.parse("2026-10-09T00:00:00Z"),
+        ),
+      )
+
+      val written = assertNotNull(store.get(WorkflowFamily.VERIFY, "wfv-upgrade"))
+      assertEquals(WORKFLOW_STATE_CONTRACT_VERSION, written.contractVersion)
+      assertEquals(WorkflowStatus.ABANDONED, written.workflowStatus)
     }
   }
 

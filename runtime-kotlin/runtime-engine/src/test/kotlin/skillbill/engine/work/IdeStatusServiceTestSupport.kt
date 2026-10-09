@@ -92,6 +92,14 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
+internal val acceptingIdeStatusSnapshotValidator: WorkflowSnapshotValidator =
+  object : WorkflowSnapshotValidator {
+    override fun validate(
+      snapshot: WorkflowStateSnapshot,
+      slug: String,
+    ) = Unit
+  }
+
 internal val ideStatusObservedAt: Instant = Instant.parse("2026-08-06T12:00:00Z")
 internal val ideStatusClock: Clock = Clock.fixed(ideStatusObservedAt, ZoneOffset.UTC)
 private val FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY =
@@ -231,14 +239,8 @@ internal fun ideStatusService(
   database: TrackingDatabase,
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
+  snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,
 ): IdeStatusService {
-  val snapshotValidator =
-    object : WorkflowSnapshotValidator {
-      override fun validate(
-        snapshot: WorkflowStateSnapshot,
-        slug: String,
-      ) = Unit
-    }
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
       database,

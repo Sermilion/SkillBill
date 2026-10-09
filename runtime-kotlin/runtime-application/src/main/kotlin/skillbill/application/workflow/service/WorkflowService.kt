@@ -58,6 +58,7 @@ import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProje
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.engine.model.WorkflowSummaryView
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
@@ -382,32 +383,46 @@ class WorkflowService(
   ): WorkflowListResult =
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
-      val rows = unitOfWork.workflowStates.list(family, limit)
+      val summaries = readableSummaries(family, unitOfWork.workflowStates.list(family, limit))
       WorkflowListResult(
         dbPath = unitOfWork.dbPath.toString(),
-        workflowCount = rows.size,
-        workflows =
-          rows.map {
-            workflowSnapshotValidator.validate(it, family.definition.workflowName)
-            engine.summaryView(family.definition, it)
-          },
+        workflowCount = summaries.size,
+        workflows = summaries,
       )
     }
 
   fun latest(kind: WorkflowFamilyKind): WorkflowLatestResult =
     database.read { unitOfWork ->
       val family = kind.workflowFamily()
-      val record =
-        unitOfWork.workflowStates.latest(family)
+      val summary =
+        readableSummaries(family, unitOfWork.workflowStates.list(family, DEFAULT_LIST_LIMIT)).firstOrNull()
           ?: return@read WorkflowLatestResult.Error(
             dbPath = unitOfWork.dbPath.toString(),
             error = "No ${family.humanName} workflows found.",
           )
-      workflowSnapshotValidator.validate(record, family.definition.workflowName)
       WorkflowLatestResult.Ok(
         dbPath = unitOfWork.dbPath.toString(),
-        summary = engine.summaryView(family.definition, record),
+        summary = summary,
       )
+    }
+
+  private fun readableSummaries(
+    family: WorkflowFamily,
+    rows: List<WorkflowStateSnapshot>,
+  ): List<WorkflowSummaryView> =
+    rows.mapNotNull { row ->
+      try {
+        workflowSnapshotValidator.validate(row, family.definition.workflowName)
+        engine.summaryView(family.definition, row)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+        runtimeDiagnostics.warning(
+          "seam=workflow_list value_expected=readable_workflow_row value_used=skipped " +
+            "workflow_id=${row.workflowId} error=${error.message.orEmpty()}",
+          error,
+        )
+        null
+      }
     }
 
   fun resume(

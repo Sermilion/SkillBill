@@ -4,8 +4,12 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.work.model.WorkListItem
 import skillbill.application.work.model.WorkListItemKind
 import skillbill.application.work.model.WorkListResult
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.invalidWorkListRowError
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
@@ -17,6 +21,7 @@ import skillbill.workflow.engine.WorkflowEngine
 class WorkListService(
   private val database: DatabaseSessionFactory,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val runtimeDiagnostics: RuntimeDiagnostics,
 ) {
   private val workflowEngine = WorkflowEngine()
 
@@ -24,29 +29,43 @@ class WorkListService(
     require(limit == null || limit > 0) { "--limit must be a positive integer." }
     return database.read { unitOfWork ->
       val persistedWork = unitOfWork.workList.list(limit)
-      validateWorkflowSnapshots(unitOfWork, persistedWork)
+      val readable = retainReadableWork(unitOfWork, persistedWork)
       WorkListResult(
         dbPath = unitOfWork.dbPath.toString(),
-        work = persistedWork.map(WorkItem::toApplicationItem),
+        work = readable.map(WorkItem::toApplicationItem),
       )
     }
   }
 
-  private fun validateWorkflowSnapshots(
+  private fun retainReadableWork(
     unitOfWork: UnitOfWork,
     work: List<WorkItem>,
-  ) {
-    work.groupBy(::workflowFamily).forEach { (family, items) ->
-      family ?: return@forEach
-      val snapshots = unitOfWork.workflowStates.getAll(family, items.mapTo(linkedSetOf(), WorkItem::workflowId))
-      items.forEach { item ->
-        val snapshot =
-          snapshots[item.workflowId]
-            ?: throw invalidWorkListRowError(
-              "Work-list row '${item.workflowId}' has no matching ${item.workflowKind.wireValue} workflow snapshot.",
-            )
-        workflowEngine.summaryView(family.definition, snapshot)
+  ): List<WorkItem> {
+    val snapshotsByFamily =
+      work.groupBy(::workflowFamily).mapNotNull { (family, items) ->
+        family?.let {
+          it to unitOfWork.workflowStates.getAll(it, items.mapTo(linkedSetOf(), WorkItem::workflowId))
+        }
+      }.toMap()
+    return work.mapNotNull { item ->
+      val family = workflowFamily(item) ?: return@mapNotNull item
+      val snapshot =
+        snapshotsByFamily.getValue(family)[item.workflowId]
+          ?: throw invalidWorkListRowError(
+            "Work-list row '${item.workflowId}' has no matching ${item.workflowKind.wireValue} workflow snapshot.",
+          )
+      try {
         workflowSnapshotValidator.validate(snapshot, family.definition.workflowName)
+        workflowEngine.summaryView(family.definition, snapshot)
+        item
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+        runtimeDiagnostics.warning(
+          "seam=work_list value_expected=readable_workflow_row value_used=skipped " +
+            "workflow_id=${item.workflowId} error=${error.message.orEmpty()}",
+          error,
+        )
+        null
       }
     }
   }

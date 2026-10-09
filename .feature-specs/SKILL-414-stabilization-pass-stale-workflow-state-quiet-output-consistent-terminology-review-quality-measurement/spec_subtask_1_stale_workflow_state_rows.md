@@ -34,6 +34,104 @@ Paths below are under `runtime-kotlin/` unless marked repo-relative.
 - The plan assumes `feature_task_workflows.contract_version` holds the workflow-state version for phase-workflow (`mode runtime`) rows, because `FeatureTaskRuntimePhaseWorkflowGraph` uses `WORKFLOW_STATE_CONTRACT_VERSION`. If the column also stores feature-task runtime contract versions for other rows, apply the re-stamp and terminalize rules only to rows the workflow-state validator checks.
 - Skipped rows are not surfaced in list payloads. Skip plus a diagnostic keeps CLI and MCP JSON goldens stable. No new payload field is added.
 
+## Implementation Details
+
+Implement this subtask only. Do not bump `WORKFLOW_STATE_CONTRACT_VERSION`. Do not change schema shape. Do not add list-payload fields. Do not touch `SkillBillCommand.kt`. Do not run install, compile, tests, or `./gradlew check`. Mocks use `relaxUnitFun = true`. Recheck the last `DatabaseMigrationEntries.kt` version immediately before adding a migration.
+
+Settled from the preplan digest (implement confirms in `census_subtask_1.md`, it does not reopen the product choice):
+
+- **Readable vs terminalize.** Default `0.1` and `0.2` into `WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS`. Digest evidence: `WorkflowStateStoreTest` already stores `contractVersion = "0.1"` on verify rows; the named YAML difference is `properties.contract_version.const` `"0.3"`; historical `CHECK (contract_version = '0.1')` then `'0.2'` were table-creation constraints. If schema git history shows a row shape that still fails after version-string normalization, that version stays out of the set and is terminalized instead. If every pre-current version is readable, add no migration.
+- **IDE collapse.** `IdeStatusProjector.project` is one candidate, not a loop. `projectWorkflowFamily` (VERIFY) validates; `projectRuntime` (TASK_RUNTIME) does not. `IdeStatusService` selects via `IdeStatusSelectionPolicy.select` then calls `projector.project`. Surrounding `database.read` maps any `isInvalidWorkflowStateFailure()` during candidate assembly or the selected VERIFY validate to one `incompatibleRecord` for the whole status call. Wrap unreadable candidates before select so a readable sibling can still project. When the selected VERIFY row fails validate, report it with existing `incompatible(candidate, context, reason)` instead of throwing out of `database.read`. Record whether `collectCandidates` validates snapshots, and which wrap landed, in the census.
+- **`feature_task_workflows.contract_version`.** `FeatureTaskRuntimePhaseWorkflowGraph` sets `contractVersion = WORKFLOW_STATE_CONTRACT_VERSION` for phase-workflow (`mode runtime`) rows. Re-stamp and terminalize only rows the workflow-state validator checks. Leave a value from a different contract family unchanged.
+- **`isInvalidWorkflowStateFailure()`.** Keep the existing predicate (`INVALID_WORKFLOW_STATE_SCHEMA` or `INVALID_CHECKPOINT_IDENTITY_VERSION`). Skipping checkpoint-identity failures on list is accepted; do not narrow it.
+
+### Task 1 — Census of pre-current versions (AC-001, AC-004, AC-007)
+
+Write `.feature-specs/SKILL-414-stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement/census_subtask_1.md`.
+
+Read schema git history for `orchestration/contracts/workflow-state-schema.yaml` (`WorkflowStateSchemaPaths.REPO_RELATIVE_PATH`; classpath `skillbill/infrastructure/contracts/workflow-state-schema.yaml`; schema id `https://skill-bill.dev/contracts/workflow-state-schema.yaml`). List every pre-current workflow-state contract version with path (readable or terminalized) and evidence. Record what `feature_task_workflows.contract_version` holds for non-runtime rows. Record the IDE loop/collection decision from Task 7.
+
+Constraint: census is evidence, not a second product decision. Identity pins stay: schema const `"0.3"`, Kotlin const `"0.3"`, `WorkflowStateSchemaContractVersionTest` in `runtime-kotlin/runtime-infra/skills/src/repoTest/kotlin/skillbill/scaffold/`.
+
+test_obligations: none (documentation).
+
+### Task 2 — Readable-set constant (AC-001)
+
+In `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/workflow/WorkflowStateContractVersions.kt`, add `WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS` as a `Set<String>` mirroring `FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS` in `FeatureTaskRuntimeContractVersions.kt`. The set always contains `WORKFLOW_STATE_CONTRACT_VERSION` (still `"0.3"`) plus each pre-current version Task 1 lists as readable. Default membership is `"0.3"`, `"0.1"`, `"0.2"`.
+
+test_obligations: none. Existing schema-identity tests already pin the current const; a new constant-membership test would only mirror the set literal.
+
+### Task 3 — Validator normalizes readable versions (AC-002)
+
+In `runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/workflow/WorkflowStateSchemaValidator.kt`, change the map overload of `validate(parsedYaml, slug)`: copy the map; if `contract_version` is in the readable set, replace it with `WORKFLOW_STATE_CONTRACT_VERSION` before `ClasspathContractSchemaLoader.validate`. Keep `invalidWorkflowStateSchemaError(...)` for any other version. Change `buildWorkflowStateSchemaDriftLog` from `Level.WARNING` to `Level.FINE`. The snapshot overload still forwards to the map overload.
+
+Callers already tolerate per-row throws through `Throwable.isInvalidWorkflowStateFailure()` in `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ShellContentContractFailures.kt`.
+
+test_obligations: none here. No FINE-log test. Observable upgrade and reject behavior is covered by Tasks 5, 6, 8, and 10.
+
+### Task 4 — Persist current version on readable writes (AC-003, AC-011)
+
+In `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/WorkflowStateWrites.kt`, `PreparedStatement.bindWorkflowRow(row, defaultContractVersion, insertionTimestamp)` and `bindFeatureTaskWorkflowRow(row, mode, implementationSkill, defaultContractVersion, insertionTimestamp)` currently bind `row.contractVersion.ifBlank { defaultContractVersion }`. Persist `WORKFLOW_STATE_CONTRACT_VERSION` when the stored version is an older member of the readable workflow-state set. Leave a value from a different contract family unchanged. `FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION` in the same file stays `"0.3"` and must remain equal to `WORKFLOW_STATE_CONTRACT_VERSION` (`WorkflowStateStoreTest` already requires that). Follow `Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: WorkflowStateRecord)` for any terminalize SQL (UPDATE status/artifacts/step/`finished_at`/`state_entered_at`, WHERE `workflow_id`, `executeUpdate` must be 1).
+
+test_obligations: one sqlite store test (Task 10) — a row stored with an older readable `contract_version` can be read, written to a terminal status, and the write persists `WORKFLOW_STATE_CONTRACT_VERSION`. Realistic bug: bind keeps `"0.1"`, so abandon re-validates the stale version and fails schema.
+
+### Task 5 — Conditional terminalize migration (AC-004, AC-011)
+
+Last known migration in `DatabaseMigrationEntries.kt` is version 50, `add-standalone-phase-status-authority`. Recheck immediately before writing.
+
+If Task 1 lists any terminalized version, add the next free version (51 unless another session already took it), named like `terminalize-unreadable-workflow-state-rows`. Idempotent. Mark non-terminal rows in `feature_verify_workflows` and workflow-state-validated rows of `feature_task_workflows` whose `contract_version` is outside the readable set as abandoned and terminal, with `finished_at` and `state_entered_at` set. Leave `contract_version` unchanged. If every pre-current version is readable, add no migration.
+
+test_obligations: only if the migration exists — one migration test that terminalizes an out-of-set non-terminal row, leaves current rows untouched, and is idempotent. Realistic bug: a second apply double-writes status, or a current `"0.3"` row is abandoned.
+
+### Task 6 — Per-row list and latest (AC-005, AC-010)
+
+In `runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/service/WorkflowService.kt`, `list(kind, limit)` currently does `rows.map { workflowSnapshotValidator.validate(...); engine.summaryView(...) }` and sets `workflowCount = rows.size`. Catch per row with the existing `catch (error: SkillBillRuntimeException) { error.rethrowUnless(error.isInvalidWorkflowStateFailure()); ... }` pattern already on `open`/`update`. Skip the failing row, record one diagnostic line with the workflow id, return readable summaries, set `workflowCount` to the returned count. Skipped rows stay out of list payloads.
+
+`latest(kind)` currently validates only `workflowStates.latest` and fails if that newest row is unreadable. Walk newest-first (list ordering is updated timestamp then rowid, per `WorkflowStateStoreTest`) and return the first readable row.
+
+`get`, `resume`, and `continueWorkflow` stay loud-fail.
+
+If `WorkflowService` has no diagnostics collaborator, inject `RuntimeDiagnostics` and record through `RuntimeDiagnosticsBestEffortWarning.record` as `VerifyOperation.skipUnreadable` does.
+
+MCP `feature_verify_workflow_list` / `latest` delegate to `WorkflowService` and get this tolerance; add no MCP-side skip.
+
+test_obligations: `WorkflowServiceTest` (`runtime-engine/.../persist/WorkflowServiceTest.kt`) — one list case and one latest case with an unreadable sibling. `McpVerifyWorkflowToolsTest` — one readable-plus-unreadable list case for `feature_verify_workflow_list`. Realistic bug: `rows.map` validation throws on the first stale row and the whole list (or MCP list) is lost; `latest` fails on a stale newest row and hides a readable older one.
+
+### Task 7 — Work list and IDE status (AC-006, AC-007, AC-010)
+
+`WorkListService.validateWorkflowSnapshots`: inject `RuntimeDiagnostics` (none today). Skip an unreadable `TASK_RUNTIME` or `VERIFY` item with one diagnostic and keep the rest. `FEATURE_GOAL` and `FEATURE_TASK_PROSE` already skip validation (`workflowFamily` returns null). Missing-snapshot `invalidWorkListRowError` stays.
+
+`IdeStatusService` / `IdeStatusProjector`: wrap unreadable candidates before `IdeStatusSelectionPolicy.select` so one unreadable row during candidate assembly cannot replace every other candidate with a single `incompatibleRecord`. In `projectWorkflowFamily`, when the selected VERIFY validate fails, use `incompatible(candidate, context, reason)` so the failure stays on that candidate. Record the wrap (or why the loop could not propagate the failure) in `census_subtask_1.md`.
+
+test_obligations: `WorkListServiceTest` — one test that drops an unreadable task-runtime or verify row and returns the remaining items. Realistic bug: one stale snapshot throws in `validateWorkflowSnapshots` and the whole work list is empty. IDE projector test only if the wrap landed — one test that another candidate still projects. Realistic bug: one unreadable candidate collapses status to a single incompatible snapshot.
+
+### Task 8 — Verify supersede and failExtraction (AC-008, AC-009)
+
+In `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/operation/verify/VerifyOperation.kt`: `supersedeParked` currently assigns `skipUnreadable(workflowId) { workflows.list(...).workflows } ?: return`, so one unreadable list throws away the pass. After Task 6, remove that outer wrapper and keep the per-row `skipUnreadable(row.workflowId) { ... }`. On `VerifyWrite.Rejected` from `store.write(...)` inside that loop, record a one-line diagnostic with workflow id and continue. Supersede stays best effort.
+
+`failExtraction(workflowId, reason)` calls `store.write(...)` and always returns `OperationOutcome.Failed("Verify criteria extraction failed: $reason\nVerify workflow: $workflowId")`. When that write is `VerifyWrite.Rejected`, include the rejection in the Failed message.
+
+test_obligations: `VerifyOperationTest` — unreadable sibling verify row (`contract_version` outside the readable set) beside an older parked same-repo row; assert the older row ends abandoned with `superseded_by` equal to the new workflow id. Realistic bug: outer `skipUnreadable` on the whole list returns early and parked rows stay pending (incident 2026-10-09). No extra test for the failExtraction message beyond exercising the Rejected branch if the existing test seam already writes FAILED; if it does not, fold the rejection text into this same incident test rather than adding a sibling.
+
+### Task 9 — Constraints for later phases
+
+Implement writes production code, tests, and `census_subtask_1.md`. Audit reads the census and the tree against each AC. Validate runs `./gradlew check` (spotless, detekt, architecture repo tests, render snapshots, agent-config validation, new unit tests). If spotless reports a stale configuration cache, validate reruns with `--no-configuration-cache`. This subtask does not edit rendered skills.
+
+### Task 10 — Tests to add (AC-009, AC-010, AC-011)
+
+Add only the tests named in Tasks 4–8. Empty test_obligations on Tasks 1–3 are intentional. Do not add a FINE-log test. Do not add an IDE test unless Task 7’s wrap landed. Do not run the tests in implement.
+
+| Test | Bug it catches |
+| --- | --- |
+| `WorkflowServiceTest` list + unreadable sibling | `list` still `rows.map`s validation and drops the whole result |
+| `WorkflowServiceTest` latest + unreadable newest | `latest` fails on the newest row instead of walking to the next readable |
+| `WorkListServiceTest` drops unreadable TASK_RUNTIME or VERIFY | one stale snapshot empties the work list |
+| `McpVerifyWorkflowToolsTest` readable + unreadable list | MCP list inherits the whole-list throw |
+| `VerifyOperationTest` unreadable sibling + parked same-repo row | supersede pass cancelled; parked row stays pending |
+| sqlite store: older readable version → terminal write stamps current | bind keeps the stale version so abandon fails schema |
+| migration test, only if version 51 exists | out-of-set row not terminalized, current row mutated, or second apply is not a no-op |
+| IDE projector test, only if wrap landed | one unreadable candidate collapses the other candidates |
+
 ## Acceptance Criteria
 
 1. `WorkflowStateContractVersions.kt` declares `WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS`, containing `WORKFLOW_STATE_CONTRACT_VERSION` (still `"0.3"`) and each pre-current version that `census_subtask_1.md` lists as readable.

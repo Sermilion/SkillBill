@@ -157,13 +157,23 @@ class VerifyOperation(
     workflowId: String,
     reason: String,
   ): OperationOutcome {
-    store.write(
-      workflowId,
-      WorkflowStatus.FAILED,
-      VerifyWorkflow.EXTRACT_CRITERIA,
-      listOf(stepEntry(VerifyWorkflow.EXTRACT_CRITERIA, WorkflowStepStatus.FAILED, 1)),
+    val written =
+      store.write(
+        workflowId,
+        WorkflowStatus.FAILED,
+        VerifyWorkflow.EXTRACT_CRITERIA,
+        listOf(stepEntry(VerifyWorkflow.EXTRACT_CRITERIA, WorkflowStepStatus.FAILED, 1)),
+      )
+    val rejection = (written as? VerifyWrite.Rejected)?.error
+    return OperationOutcome.Failed(
+      buildString {
+        append("Verify criteria extraction failed: $reason")
+        append("\nVerify workflow: $workflowId")
+        if (!rejection.isNullOrBlank()) {
+          append("\nFailed write rejected: $rejection")
+        }
+      },
     )
-    return OperationOutcome.Failed("Verify criteria extraction failed: $reason\nVerify workflow: $workflowId")
   }
 
   private fun confirm(
@@ -329,9 +339,7 @@ class VerifyOperation(
     workflowId: String,
   ) {
     val repoRoot = repoRootOf(context)
-    val rows =
-      skipUnreadable(workflowId) { workflows.list(WorkflowFamilyKind.VERIFY, SUPERSEDE_SCAN_LIMIT).workflows }
-        ?: return
+    val rows = workflows.list(WorkflowFamilyKind.VERIFY, SUPERSEDE_SCAN_LIMIT).workflows
     rows
       .filter { row ->
         row.workflowId != workflowId && row.currentStepId in PARKED_STEPS && row.workflowStatus !in CLOSED_STATUSES
@@ -342,13 +350,21 @@ class VerifyOperation(
           val inputContext = snapshot?.artifacts?.get(VerifyWorkflow.INPUT_CONTEXT)
           val rowRoot = VerifyWorkflow.string(inputContext, VerifyWorkflow.REPO_ROOT)
           if (rowRoot == repoRoot) {
-            store.write(
-              row.workflowId,
-              WorkflowStatus.ABANDONED,
-              row.currentStepId,
-              emptyList(),
-              mapOf(VerifyWorkflow.SESSION_NOTES to mapOf(VerifyWorkflow.SUPERSEDED_BY to workflowId)),
-            )
+            val written =
+              store.write(
+                row.workflowId,
+                WorkflowStatus.ABANDONED,
+                row.currentStepId,
+                emptyList(),
+                mapOf(VerifyWorkflow.SESSION_NOTES to mapOf(VerifyWorkflow.SUPERSEDED_BY to workflowId)),
+              )
+            if (written is VerifyWrite.Rejected) {
+              RuntimeDiagnosticsBestEffortWarning.record(
+                diagnostics,
+                "seam=verify_supersede value_expected=supersede_write value_used=rejected " +
+                  "workflow_id=${row.workflowId} error=${written.error}",
+              )
+            }
           }
         }
       }

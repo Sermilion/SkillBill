@@ -1,3 +1,13 @@
+## [2026-10-09] SKILL-414 subtask 1 — stale workflow-state rows must not break the runtime
+Areas: runtime-contracts/workflow, runtime-infra/contracts/workflow, runtime-infra/sqlite/workflow, runtime-application/workflow and work, runtime-engine/verify and work
+- Added WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS (0.1, 0.2, current 0.3). The validator replaces a readable contract_version with the current const before schema validate and logs drift at FINE. Writes re-stamp older readable workflow-state versions to current.
+- Followed the FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS pattern. No schema bump and no migration: census listed 0.1 and 0.2 as readable, so DatabaseMigrationEntries stays at version 50.
+- List, latest, work-list, MCP verify list, and verify supersede skip one unreadable sibling with a diagnostic. get, resume, and continue stay loud-fail. IDE filters unreadable FEATURE_VERIFY candidates before select and reports incompatible instead of collapsing status.
+- Reusable: readable-set plus per-row isInvalidWorkflowStateFailure skip. Re-stamp applies only to mode=runtime feature-task rows; prose FEATURE_IMPLEMENT 0.1 is a different family and is left unchanged.
+- Limits: skipped rows stay out of list payloads, with no new field. Old-shape 0.1 rows still fail after version-string normalization and are skipped per row. No FINE-log test. Unrelated SKILL-414 spec/manifest dirt and the SKILL-415 spec.md path were left untouched.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-10-07] SKILL-406 freshly resolved repository checkpoint
 Areas: runtime-engine featuretask run loop and phase attempt; runtime-domain handoff checkpoint policy; runtime-core planning-projection allow-list; slot-baseline fixtures
 - `refresh_from_repository` and `must_match` require a non-null freshly resolved repository checkpoint. `not_required` leaves the checkpoint fields unchanged. A resolved checkpoint satisfies both policies when its fingerprint differs from the expected checkpoint.

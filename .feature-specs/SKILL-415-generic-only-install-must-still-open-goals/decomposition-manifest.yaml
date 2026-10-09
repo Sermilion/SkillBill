@@ -1,0 +1,24 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-415"
+feature_name: "generic-only-install-must-still-open-goals"
+parent_spec_path: ".feature-specs/SKILL-415-generic-only-install-must-still-open-goals/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-415-generic-only-install-must-still-open-goals"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Treat review-fallback-only catalogs as unrouted for build"
+  spec_path: ".feature-specs/SKILL-415-generic-only-install-must-still-open-goals/spec_subtask_1_unrouted_fallback_build_agent_validate.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []

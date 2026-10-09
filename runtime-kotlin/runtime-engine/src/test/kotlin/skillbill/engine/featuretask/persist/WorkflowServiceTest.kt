@@ -19,6 +19,7 @@ import skillbill.application.workflow.model.RepairFeatureTaskRuntimeIdentityArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowGetResult
+import skillbill.application.workflow.model.WorkflowLatestResult
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
@@ -28,6 +29,7 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.application.workflow.service.workflowFamily
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
@@ -561,6 +563,21 @@ class WorkflowServiceTest {
   }
 
   @Test
+  fun `list returns readable rows when an unreadable sibling contract version is present`() {
+    val (service, readableId) = serviceWithUnreadableSibling()
+    val result = service.list(WorkflowFamilyKind.TASK_RUNTIME)
+    assertEquals(1, result.workflowCount)
+    assertEquals(listOf(readableId), result.workflows.map { it.workflowId })
+  }
+
+  @Test
+  fun `latest returns the newest readable row when the newest contract version is unreadable`() {
+    val (service, readableId) = serviceWithUnreadableSibling()
+    val result = assertIs<WorkflowLatestResult.Ok>(service.latest(WorkflowFamilyKind.TASK_RUNTIME))
+    assertEquals(readableId, result.summary.workflowId)
+  }
+
+  @Test
   fun `get returns Ok for known workflow`() {
     val service = newService()
     val opened = assertIs<WorkflowOpenResult.Ok>(service.openTestRuntime("ftr-001"))
@@ -822,11 +839,39 @@ class WorkflowServiceTest {
   }
 
   private fun newService(workflows: InMemoryWorkflowStates = InMemoryWorkflowStates()): WorkflowService {
-    return WorkflowService(
+    return serviceFor(workflows, testWorkflowSnapshotValidator)
+  }
+
+  private fun serviceWithUnreadableSibling(): Pair<WorkflowService, String> {
+    val workflows = InMemoryWorkflowStates()
+    val readable =
+      testWorkflowEngine.openRecord(
+        FeatureTaskRuntimePhaseWorkflowDefinition.definition,
+        "wftr-readable",
+        "ftr-readable",
+        "preplan",
+      ).toRecord()
+    val unreadable =
+      testWorkflowEngine.openRecord(
+        FeatureTaskRuntimePhaseWorkflowDefinition.definition,
+        "wftr-unreadable",
+        "ftr-unreadable",
+        "preplan",
+      ).toRecord().copy(contractVersion = "9.9")
+    workflows.saveFeatureTaskWorkflow(readable, RUNTIME)
+    workflows.saveFeatureTaskWorkflow(unreadable, RUNTIME)
+    return serviceFor(workflows, rejectingUnreadableContractVersions()) to readable.workflowId
+  }
+
+  private fun serviceFor(
+    workflows: InMemoryWorkflowStates,
+    validator: WorkflowSnapshotValidator,
+  ): WorkflowService =
+    WorkflowService(
       database = FakeDatabaseSessionFactory(workflows),
       gitOperations = NoopWorkflowGitOperations,
       decompositionManifestStore = UnavailableDecompositionManifestStore,
-      workflowSnapshotValidator = testWorkflowSnapshotValidator,
+      workflowSnapshotValidator = validator,
       decompositionManifestValidator = testDecompositionManifestValidator,
       decompositionManifestWriter = testDecompositionManifestWriter,
       repositoryRoot = testRepositoryRoot,
@@ -835,7 +880,6 @@ class WorkflowServiceTest {
       clock = Clock.systemUTC(),
       repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
     )
-  }
 }
 
 private fun encodeDecompositionManifestYaml(
@@ -3517,6 +3561,20 @@ private fun assertPersistedProgressEventArtifacts(
   assertEquals(1, history.size)
   assertTrue(persisted.snapshot.artifacts.containsKey("progress_event"))
 }
+
+private fun rejectingUnreadableContractVersions(): WorkflowSnapshotValidator =
+  object : WorkflowSnapshotValidator {
+    override fun validate(
+      snapshot: WorkflowStateSnapshot,
+      slug: String,
+    ) {
+      if (snapshot.contractVersion !in WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS) {
+        throw invalidWorkflowStateSchemaError(
+          "Workflow '${snapshot.workflowId}' contract_version '${snapshot.contractVersion}' is unreadable.",
+        )
+      }
+    }
+  }
 
 private val testWorkflowEngine: WorkflowEngine = WorkflowEngine()
 

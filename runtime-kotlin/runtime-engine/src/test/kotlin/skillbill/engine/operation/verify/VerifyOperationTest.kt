@@ -216,6 +216,21 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `an unreadable sibling does not cancel supersede of an older parked same-repo row`() {
+    VerifyOperationHarness().use { harness ->
+      val parked = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+      val sibling = harness.seedSkillWorkflowAtCodeReview()
+      harness.setContractVersion(sibling, "9.9")
+
+      val next = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+
+      assertEquals("abandoned", harness.workflowStatus(parked))
+      val notes = harness.snapshot(parked).artifacts.getValue(VerifyWorkflow.SESSION_NOTES) as Map<*, *>
+      assertEquals(next, notes[VerifyWorkflow.SUPERSEDED_BY])
+    }
+  }
+
+  @Test
   fun `an adjusted re-invocation supersedes the parked row and its token then names the new one`() {
     VerifyOperationHarness().use { harness ->
       val first = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token

@@ -69,24 +69,22 @@ class IdeStatusService(
             currentBranch,
             repoRoot,
           )
+        val context =
+          IdeStatusProjectionContext(
+            unitOfWork = unitOfWork,
+            repositoryIdentity = repositoryIdentity,
+            branchCorrelation = currentBranch,
+            observedAt = observedAt,
+            repoRoot = repoRoot,
+          )
+        val selectable = candidates.filter { projector.readableForSelection(it, context) }
         val selected =
-          IdeStatusSelectionPolicy.select(candidates, observedAt)
+          IdeStatusSelectionPolicy.select(selectable, observedAt)
+            ?: IdeStatusSelectionPolicy.select(candidates, observedAt)
             ?: return@read emit(
               IdeStatusProblemSnapshots.noMatchingWork(repositoryIdentity, observedAt, currentBranch),
             )
-        val snapshot =
-          projector.project(
-            candidate = selected,
-            context =
-              IdeStatusProjectionContext(
-                unitOfWork = unitOfWork,
-                repositoryIdentity = repositoryIdentity,
-                branchCorrelation = currentBranch,
-                observedAt = observedAt,
-                repoRoot = repoRoot,
-              ),
-          )
-        emit(snapshot)
+        emit(projector.project(candidate = selected, context = context))
       }
     } catch (error: SkillBillRuntimeException) {
       when {

@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusState
@@ -78,6 +79,28 @@ class IdeStatusProjector(
       IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME -> projectRuntime(candidate, context)
       IdeStatusWorkflowFamily.FEATURE_VERIFY ->
         projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY)
+    }
+  }
+
+  internal fun readableForSelection(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+  ): Boolean {
+    if (candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY) return true
+    val snapshot =
+      context.unitOfWork.workflowStates.get(WorkflowFamily.VERIFY, candidate.workflowId) ?: return true
+    return try {
+      workflowSnapshotValidator.validate(snapshot, WorkflowFamily.VERIFY.definition.workflowName)
+      true
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=ide_status value_expected=readable_workflow_row value_used=skipped " +
+          "workflow_id=${candidate.workflowId} error=${error.message.orEmpty()}",
+        error,
+      )
+      false
     }
   }
 
@@ -370,7 +393,12 @@ class IdeStatusProjector(
           context,
           "${family.humanName} workflow snapshot is missing.",
         )
-    workflowSnapshotValidator.validate(snapshot, family.definition.workflowName)
+    try {
+      workflowSnapshotValidator.validate(snapshot, family.definition.workflowName)
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+      return incompatible(candidate, context, error.message ?: "Incompatible workflow record.")
+    }
     val view = workflowEngine.snapshotView(family.definition, snapshot)
     val stepId = view.currentStepId.takeIf(String::isNotBlank) ?: "unknown"
     val stepLabel =

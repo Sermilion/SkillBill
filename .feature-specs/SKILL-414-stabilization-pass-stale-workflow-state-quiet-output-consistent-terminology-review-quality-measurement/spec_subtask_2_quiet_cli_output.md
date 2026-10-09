@@ -47,6 +47,96 @@ Paths are under `runtime-kotlin/`.
 
 Independent of subtasks 1, 3 and 4. Subtask 3 also edits `routeIntake` in `SkillBillCommand.kt`. Apply this subtask's hunk to the file as found, and keep any goal guard or root options already present.
 
+## Implementation Details
+
+Ordered tasks for implement. Do not run `./gradlew check`, compile, or install. Validate owns `./gradlew check`. Audit reads `Main.kt` for AC 1. This subtask does not write a census file.
+
+Shared-file rule: `SkillBillCommand.kt` is also edited by subtask 3. Apply the `--verbose` flag and skip-list hunk to the file as found. Keep every root option already in `routeIntake`'s skip list. Do not add `completionOption()` to that list. Do not revert a goal-guard predicate if subtask 3 landed first.
+
+Mocks use `relaxUnitFun = true`. Tests that build an environment map pass a non-empty map.
+
+### Task 1. Configure JUL in both process mains before run
+
+Serves AC-001, AC-002.
+
+Paths and symbols:
+- `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/core/Main.kt` (`fun main`, then `CliRuntime.run`)
+- `runtime-kotlin/runtime-mcp/src/main/kotlin/skillbill/mcp/core/Main.kt` (`fun main`, then MCP stdio or the governed-review bridge)
+- Pure `resolveVerboseLogging(args, environment): Boolean`
+
+Verbose is true when `--verbose` is among the leading root options, using the same scan `routeIntake` uses (before the first non-option token), or when `SKILL_BILL_VERBOSE` is `1` or `true`, case-insensitive. Any other env value is not verbose unless the flag is present. `--verbose` is a flag (advance 1). `--db` and `--home` take a value (advance 2), including their `=` forms.
+
+Call configuration from both mains before those runs, not from `runtime-application` or domain. `RuntimeLayerBoundaryArchitectureTest` bans `java.util.logging` in `runtime-application` main. Domain purity in `RuntimeArchitectureTestSupport` also lists it. `runtime-cli` and `runtime-infra/host` already use JUL.
+
+Default: reset `LogManager`, set the root logger to `OFF`, leave no console handler. Verbose: exactly one stderr `ConsoleHandler` at `Level.ALL` with a single-line formatter (level, source class, message). Assumption: when verbose, set the root logger to `ALL` so that handler receives records; a root left `OFF` after reset would swallow them. Implement confirms that pairing.
+
+Assumption: a small JUL configure helper may live in `runtime-infra/host` because that module already uses JUL and both mains can call it. Keep `resolveVerboseLogging` beside CLI `Main.kt` (same package as `routeIntake`'s scan). If `runtime-mcp` cannot depend on `runtime-cli`, duplicate the resolver and configure call in MCP `Main.kt`. MCP uses the same flag scan and the same env var.
+
+test_obligations: none. Do not assert the root logger's level or handler list as structure. Audit AC 1 by reading both `Main.kt` files.
+
+### Task 2. Declare `--verbose` and skip it in `routeIntake`
+
+Serves AC-003.
+
+Path: `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/core/SkillBillCommand.kt`.
+
+Root options today are `--db` (value, skip +2), `--home` (value, skip +2), and `completionOption()`. The `routeIntake` skip list is only `--db` / `--home` and their `=` forms. Declare `--verbose` as a Clikt flag. Skip `token == "--verbose"` with +1. Keep `--db` and `--home`. Do not add completion to the skip list. Leave `aliases()` unchanged (`feature-verify-stats` -> `verify-stats`, `feature-task-runtime-stats` -> `runtime-stats`).
+
+test_obligations: none in this task. The routing assertion lives in Task 5.
+
+### Task 3. Caller source and one-line handled diagnostics
+
+Serves AC-004, AC-005, AC-007.
+
+Paths and symbols:
+- `JdkRuntimeDiagnostics` in `runtime-infra/host` (today `Logger.getLogger(JdkRuntimeDiagnostics::class.java.name)` and `log.log(level, message, error)`)
+- `RuntimeDiagnosticsBestEffortWarning` at `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/diagnostics/RuntimeDiagnosticsBestEffortWarning.kt` (`record(diagnostics, message, cause)`)
+- `RuntimeDiagnostics` in `runtime-ports` (`info` is an empty default; the JDK adapter already overrides it). Do not change the interface.
+
+Settled from the digest: skip `JdkRuntimeDiagnostics` and `RuntimeDiagnosticsBestEffortWarning` when walking `StackWalker`. Take the first remaining frame. Emit with `Logger.logp(level, callerClass, callerMethod, message)`. Logger identity may stay `JdkRuntimeDiagnostics`.
+
+`warning` and `info` append `ExceptionClass: exceptionMessage` when an error is supplied and attach no Throwable. `error` keeps the Throwable at SEVERE.
+
+test_obligations:
+- New test in `runtime-infra/host/src/test`. Realistic bug: every record still shows source `JdkRuntimeDiagnostics` because the adapter logged through `log()` instead of `logp` with a caller frame. Attach a capturing handler to the diagnostics logger, emit a record from a named caller, assert the record's source class and method are that caller.
+- Same test (or the same capturing handler). Realistic bug: `warning(message, error)` still attaches the Throwable, so JUL prints a stack trace for a handled condition. Assert `thrown` is null and the message contains the one-line exception summary.
+
+### Task 4. Routine gate-JVM decisions at info
+
+Serves AC-006, AC-008.
+
+Path: `GateJvmResolver.recordDecision` in `runtime-infra/host` (`.../host/jvm/GateJvmResolver.kt`). `branchOf` and `unresolvedDetailOf` already distinguish the cases.
+
+Today `recordDecision` always calls `diagnostics.warning`. Use `diagnostics.info` for routine `Export` and `LeaveUnset`. Keep `warning` for `GateJvmDisposition.Unresolved` or when `dropped` is non-empty.
+
+test_obligations: extend `GateJvmResolverTest` (disposition-only today, no log assertions). Use a recording `RuntimeDiagnostics` collaborator, or a mock with `relaxUnitFun = true` that stores emitted level and message as data. Do not assert call order.
+- Realistic bug: a successful resolve still lands at WARNING and leaks to stderr on every agent launch. Assert a routine resolution is recorded at info, not warning.
+- Realistic bug: an unresolved disposition is recorded at info and operators never see the failure. Assert unresolved is recorded at warning.
+- Realistic bug: dropped image candidates stay at info because disposition is still `Export`. Assert a resolve with non-empty `dropped` is recorded at warning. Tied to AC-006.
+
+### Task 5. CLI verbose resolution and `routeIntake` with the flag
+
+Serves AC-009.
+
+Cover `resolveVerboseLogging` in a runtime-cli test:
+- `--verbose` among leading root options is true
+- non-empty env with `SKILL_BILL_VERBOSE` true (use `1` or `true`; one env case is enough, pick a mixed-case value if covering case-insensitivity in that same case)
+- neither flag nor env is false
+
+Drive `routeIntake` through `CliRuntime.run`, same harness as `CliRuntimeShellCommandsTest`. Assert `--verbose APP-1 Add CSV export` routes to goal and keeps `--verbose` as a root option. Realistic bug: `--verbose` is omitted from the skip list, so that argv never reaches goal.
+
+test_obligations: those two tests. No extra sibling literals for the same branch. No test that `--verbose` after a non-option is ignored; implement still scans only leading root options.
+
+### Constraints
+
+- No JUL configuration in `runtime-application` or domain.
+- No per-call-site logging edits beyond `JdkRuntimeDiagnostics` and `GateJvmResolver`.
+- No change to stdout payloads, CLI JSON, or `CliRuntime` stderr written outside JUL.
+- No change to `WorkflowStateSchemaValidator` logging (subtask 1).
+- No `WORKFLOW_STATE_CONTRACT_VERSION` bump.
+- No installer, uninstall, or install-sync commands.
+- No census file for this subtask.
+
 ## Validation Strategy
 
 The validate phase runs `./gradlew check`: unit tests, CLI goldens (which capture stderr through `CliRuntime`, not JUL), detekt and architecture repo tests. Implement and audit run nothing.

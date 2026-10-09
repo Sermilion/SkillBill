@@ -1,10 +1,9 @@
 package skillbill.application
 
 import skillbill.application.work.WorkListService
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.learning.LearningRepository
@@ -28,34 +27,26 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class WorkListServiceTest {
   @Test
-  fun `work list invokes the workflow snapshot validation read seam before returning a workflow row`() {
+  fun `work list drops an unreadable task-runtime row and returns the remaining items`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(
-      WorkflowStateRecord(
-        workflowId = "wftr-invalid-snapshot",
-        sessionId = "ftr-117",
-        workflowName = "bill-feature-task",
-        contractVersion = "0.1",
-        workflowStatus = WorkflowStatus.RUNNING.wireValue,
-        currentStepId = "preplan",
-        stepsJson = "[]",
-        artifactsJson = "{}",
-        startedAt = "2026-05-01T12:00:00Z",
-        updatedAt = "2026-05-01T12:00:00Z",
-        finishedAt = null,
-      ),
+      workListRuntimeRecord("wftr-invalid-snapshot").copy(workflowName = "bill-feature-implement"),
       FeatureTaskWorkflowMode.RUNTIME,
     )
+    workflows.saveFeatureTaskWorkflow(workListRuntimeRecord("wftr-readable"), FeatureTaskWorkflowMode.RUNTIME)
     val validator =
       object : WorkflowSnapshotValidator {
         override fun validate(
           snapshot: WorkflowStateSnapshot,
           slug: String,
-        ): Unit = throw invalidWorkflowStateSchemaError("Workflow '$slug' fails snapshot validation.")
+        ) {
+          if (snapshot.workflowId == "wftr-invalid-snapshot") {
+            throw invalidWorkflowStateSchemaError("Workflow '$slug' fails snapshot validation.")
+          }
+        }
       }
     val service =
       WorkListService(
@@ -64,25 +55,17 @@ class WorkListServiceTest {
             workflows = workflows,
             work =
               listOf(
-                WorkItem(
-                  issueKey = "SKILL-117",
-                  workflowKind = WorkItemKind.FEATURE_TASK_RUNTIME,
-                  workflowId = "wftr-invalid-snapshot",
-                  startedAt = Instant.parse("2026-05-01T12:00:00Z"),
-                  currentState = "running",
-                  stateEnteredAt = Instant.parse("2026-05-01T12:00:00Z"),
-                  stateEnteredAtEstimated = false,
-                ),
+                workListItem("wftr-invalid-snapshot"),
+                workListItem("wftr-readable"),
               ),
           ),
         workflowSnapshotValidator = validator,
+        runtimeDiagnostics = NoopRuntimeDiagnostics,
       )
 
-    assertFailsWith<SkillBillRuntimeException> {
-      service.list()
-    }.also {
-      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
-    }
+    val result = service.list()
+
+    assertEquals(listOf("wftr-readable"), result.work.map { it.workflowId })
   }
 
   @Test
@@ -126,6 +109,7 @@ class WorkListServiceTest {
       WorkListService(
         database = WorkListDatabase(workflows = workflows, work = work),
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
+        runtimeDiagnostics = NoopRuntimeDiagnostics,
       )
 
     val result = service.list()
@@ -134,6 +118,32 @@ class WorkListServiceTest {
     assertEquals(listOf(901), workflows.snapshotLookupSizes)
   }
 }
+
+private fun workListRuntimeRecord(workflowId: String): WorkflowStateRecord =
+  WorkflowStateRecord(
+    workflowId = workflowId,
+    sessionId = "ftr-117",
+    workflowName = "bill-feature-task",
+    contractVersion = "0.1",
+    workflowStatus = WorkflowStatus.RUNNING.wireValue,
+    currentStepId = "preplan",
+    stepsJson = "[]",
+    artifactsJson = "{}",
+    startedAt = "2026-05-01T12:00:00Z",
+    updatedAt = "2026-05-01T12:00:00Z",
+    finishedAt = null,
+  )
+
+private fun workListItem(workflowId: String): WorkItem =
+  WorkItem(
+    issueKey = "SKILL-117",
+    workflowKind = WorkItemKind.FEATURE_TASK_RUNTIME,
+    workflowId = workflowId,
+    startedAt = Instant.parse("2026-05-01T12:00:00Z"),
+    currentState = "running",
+    stateEnteredAt = Instant.parse("2026-05-01T12:00:00Z"),
+    stateEnteredAtEstimated = false,
+  )
 
 private class WorkListDatabase(
   private val workflows: WorkflowStateRepository,
