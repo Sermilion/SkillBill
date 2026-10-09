@@ -9,11 +9,13 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -36,6 +38,8 @@ data class FeatureTaskRuntimeRunRequest(
   override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
+  override val skeletonDefinition: SkeletonDefinition? = null,
+  override val protectedSpecSha256: String? = null,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
@@ -62,6 +66,9 @@ data class FeatureTaskRuntimeRunInput(
   val operatorDecision: GoalSubtaskOperatorDecision?,
   val agentAddonSelection: HydratedAgentAddonSelection,
   val eventSink: FeatureTaskRuntimeRunEventSink,
+  val definition: SkeletonDefinition? = null,
+  val protectedSpecSha256: String? = null,
+  val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(

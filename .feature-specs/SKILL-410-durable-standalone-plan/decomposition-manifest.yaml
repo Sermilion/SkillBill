@@ -3,24 +3,24 @@ contract_version: "0.5"
 issue_key: "SKILL-410"
 feature_name: "durable-standalone-plan"
 parent_spec_path: ".feature-specs/SKILL-410-durable-standalone-plan/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-410-durable-standalone-plan"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Durable standalone plan that a full run resumes"
   spec_path: ".feature-specs/SKILL-410-durable-standalone-plan/spec_subtask_1_durable-standalone-plan.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261009-083740-qzfr"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

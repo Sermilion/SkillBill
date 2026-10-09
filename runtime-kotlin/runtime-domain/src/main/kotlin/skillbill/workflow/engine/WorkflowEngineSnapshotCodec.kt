@@ -65,7 +65,10 @@ internal fun mergeStepUpdates(
       update[WorkflowWirePayloadKeys.ATTEMPT_COUNT].asExactIntOrNull()
         ?: invalidWorkflowStep("step_updates.attempt_count must be an integer >= 0.")
     if (attempts < 0) invalidWorkflowStep("step_updates.attempt_count must be an integer >= 0.")
-    byStepId[stepId] = WorkflowStepState(stepId, status, attempts)
+    val planWorkflowId =
+      (update[WorkflowWirePayloadKeys.PLAN_WORKFLOW_ID] as? String)?.takeIf(String::isNotBlank)
+        ?: byStepId[stepId]?.planWorkflowId
+    byStepId[stepId] = WorkflowStepState(stepId, status, attempts, planWorkflowId)
   }
   return definition.stepIds.mapNotNull(byStepId::get)
 }

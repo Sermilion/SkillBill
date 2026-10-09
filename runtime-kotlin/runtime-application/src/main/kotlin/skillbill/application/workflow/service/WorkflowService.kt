@@ -44,6 +44,7 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -76,6 +77,7 @@ class WorkflowService(
   private val goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val runtimeDiagnostics: RuntimeDiagnostics,
   private val clock: Clock,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) {
   private val workflowIdRandom = Random.Default
   private val engine = WorkflowEngine()
@@ -136,6 +138,7 @@ class WorkflowService(
           issueKey = args.issueKey,
           executionIdentity = executionIdentity,
           executionPlan = args.executionPlan,
+          initialArtifacts = args.initialArtifacts,
           engine = engine,
           workflowSnapshotValidator = workflowSnapshotValidator,
           repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
@@ -449,6 +452,7 @@ class WorkflowService(
               decompositionManifestWriter,
               clock,
               workflowIdRandom,
+              repositoryEnclosingRootPort,
             ).continueDecomposedParentByIssueKey(workflowId, unitOfWork, subtaskId)
           pendingProjection = mergePendingProjection(pendingProjection, resolved)
           return@transaction resolved.result

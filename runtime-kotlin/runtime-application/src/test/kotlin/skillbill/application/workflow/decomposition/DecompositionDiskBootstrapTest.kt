@@ -3,6 +3,7 @@ package skillbill.application.workflow.decomposition
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
 import skillbill.application.decomposition.executionModel
@@ -145,6 +146,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     assertFailsWith<IllegalArgumentException> {
@@ -197,6 +199,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     val result =
@@ -254,6 +257,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     val result =
@@ -306,6 +310,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     db.transaction { unitOfWork ->
@@ -395,6 +400,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
   }
 
@@ -439,6 +445,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     db.transaction { unitOfWork ->
@@ -515,6 +522,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     db.transaction { unitOfWork ->
@@ -583,6 +591,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     db.transaction { unitOfWork ->
@@ -607,6 +616,7 @@ class DecompositionDiskBootstrapTest {
         manifestWriter = testDecompositionManifestWriter,
         clock = Clock.systemUTC(),
         workflowIdRandom = Random.Default,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
 
     val result =

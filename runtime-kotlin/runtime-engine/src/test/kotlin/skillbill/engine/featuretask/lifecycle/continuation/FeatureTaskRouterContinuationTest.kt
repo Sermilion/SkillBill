@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.continuation
 
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testRepositoryRoot
@@ -52,6 +53,7 @@ class FeatureTaskRouterContinuationTest {
         goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
     val lookup =
       FeatureTaskContinuationLookupService(

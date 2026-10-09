@@ -129,16 +129,14 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     specSource: SpecSource,
     executionPlan: ResolvedPhaseExecutionPlan,
   ): FeatureTaskRuntimeRunReport {
-    val commitStepId =
-      executionPlan.selectedStrategies
-        .first { strategy -> strategy.slot == PhaseSlot.COMMIT_PUSH }
-        .entryStep
     val terminalReport =
-      launchOutcomes.persistGoalContinuationOutcome(
-        runRequest,
-        report,
-        commitStepId,
-      )
+      runRequest.goalContinuation?.let {
+        val commitStepId =
+          executionPlan.selectedStrategies
+            .first { strategy -> strategy.slot == PhaseSlot.COMMIT_PUSH }
+            .entryStep
+        launchOutcomes.persistGoalContinuationOutcome(runRequest, report, commitStepId)
+      } ?: report
     specGate.finalizeSingleSpecOnTerminal(
       runRequest,
       terminalReport,

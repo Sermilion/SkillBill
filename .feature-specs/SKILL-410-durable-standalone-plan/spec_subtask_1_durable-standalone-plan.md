@@ -127,6 +127,287 @@ Owned paths (elided segments are `...`):
 
 ## Implementation Details
 
+Paths below are relative to `runtime-kotlin/` unless they start with `docs/`, `README.md` or
+`skills/`. Anchors come from the SKILL-410 preplan digest; apply each step where the named
+behaviour now lives.
+
+### Settled decisions
+
+- **D1. Seed and spec-origin facts.** Add one `DurableWorkflowArtifactFamily` entry, `plan_seed`,
+  with a codec beside the existing families such as `FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT`.
+  It holds `intake_sha256` (SHA-256 of the trimmed intake text, or null for a bare key),
+  `spec_origin` (`seeded` or `operator`) and `spec_sha256` (the spec's hash at open). The
+  workflow writes it once, at open. Run invariants are not overloaded with these facts.
+- **D2. Where the plan caller lives.** Put a new `@Inject` class `StandalonePlanRun` in a new
+  package `skillbill.engine.goalrunner.plan`. It must not go under `featuretask/`: seeding needs
+  `GoalIntake` and `GoalIntakePreparation.acceptanceCriteria`, `goalrunner` already depends on
+  `featuretask`, and the reverse edge would create a package cycle. It must not go under
+  `featuretask/phaserun` either, because `FeatureTaskPhaseRunDefinitionScan` forbids naming
+  definitions there. `PhaseCommand` and `GoalRunCommand` both call this one class.
+- **D3. Plan-then-goal chain.** Do it in `GoalRunCommand.run`, before `goalRunner.run`, because
+  a blocked `GoalRunnerRunReport` exits 3 and AC-006 needs exit 1 with the plan's block reason.
+  `GoalRunner.run` still guards on its own: before `intakePreparation.prepare`, if an incomplete
+  plan workflow exists for the key, it returns a stopped report naming that workflow and
+  `skill-bill <KEY>` and writes no manifest. This covers callers that skip `GoalRunCommand`.
+- **D4. Linking on import.** Both stub-step writers call one shared helper. On each of the two
+  stub step entries (`preplan` and `plan`) the helper adds an optional `plan_workflow_id`
+  field. It also adds a parent artifact `plan_workflow` holding `workflow_id`. The field is
+  deliberately not named `workflow_id`, so it cannot be read as the step's own id.
+- **D5. Admitted definitions.** Add `SkeletonDefinition.admittedForRun(goalContinuation:
+  Boolean): Set<SkeletonDefinition>`, mirroring `forRun`: `{STANDALONE, PLAN}` for false and
+  `{GOAL_CHILD}` for true. It lives in `runtime-domain`, keyed on a boolean, so domain gains no
+  route-scope import.
+- **D6. Operator-spec guard input.** The runloop decodes no `plan_seed` artifact. Instead,
+  `FeatureTaskRuntimeRunInput` and `FeatureTaskRuntimeRunRequest` carry a nullable
+  `protectedSpecSha256`. It is set only when `spec_origin = operator`. `StandalonePlanRun`
+  fills it from its open-time hash, and on resume it fills it from the stored `plan_seed`
+  artifact.
+- **D7. Execution-plan definition accessor.** Add a read-only accessor next to the artifact
+  family, so `runtime-application` can read `definition.id` from the
+  `FEATURE_TASK_RUNTIME_EXECUTION_PLAN` artifact without importing the engine
+  `FeatureTaskRuntimeExecutionPlanCodec`. Example: `ExecutionPlanArtifactView.definitionId(
+  artifacts): String?`. It returns null when the artifact is missing or does not decode. It
+  must not expose a public `toPayload` map, because the raw-map guard forbids that.
+- **D8. Continuation lookup filter.** `FeatureTaskContinuationLookupService.lookup` gains an
+  `admittedDefinition: SkeletonDefinition` filter on the recorded definition id.
+  - `feature-task` lookups pass `STANDALONE`, so they never resume a plan row.
+  - The plan lookup passes `PLAN`.
+  - The explicit `workflowId` resume path in `FeatureTaskRuntimeRunEntry.run` uses
+    `require`/coded refusal to check that the caller's definition equals the recorded
+    definition.
+
+### Ordered tasks
+
+1. **Definition properties** (AC-001, AC-009). Touches `runtime-domain/.../taskruntime/model/skeleton/SkeletonDefinition.kt`.
+   - Set `PLAN` to `SkeletonRunStateKind.DURABLE` and keep `intake = ISSUE_KEY`.
+   - Add a constructor property `standaloneInvocable: Boolean = false`. Set it to true on
+     `REVIEW`, `VALIDATION`, `PLAN`, `PR` and `MONITOR`.
+   - Add `fun requiresSpecBundle(goalContinuation: Boolean) = slots.last() == PhaseSlot.PLAN &&
+     !goalContinuation`.
+   - Add `admittedForRun` (D5).
+   - No `skillbill.text`, `java.nio` or ports imports.
+2. **Phase listing** (AC-001). Touches `runtime-cli/.../cli/phase/PhaseCommand.kt`.
+   - `PhaseInvocationParser.phaseNames()` filters on `standaloneInvocable`.
+   - `definitionId()` keeps the "runs over durable workflow state" text for definitions that
+     are not invocable.
+   - `PhaseRunEntry.run` keeps `InMemorySkeletonDefinitionRequiredError` unchanged.
+3. **One `specBundleRequired` rule** (AC-002).
+   - `InMemoryPhaseRunFacts.specBundleRequired` (`featuretask/phaserun/PhaseRunModels.kt`) calls
+     `definition.requiresSpecBundle(false)`.
+   - Add a nullable `skeletonDefinition` to `FeatureTaskRuntimeRunRequest`.
+   - The default `FeatureTaskRuntimeRunFacts.specBundleRequired` (`featuretask/model/core/FeatureTaskRuntimeRunFacts.kt`)
+     becomes `skeletonDefinition?.requiresSpecBundle(isGoalContinuationRun) ?: false`.
+   - `skeletonDefinitionFor(request)` (`runner/FeatureTaskRuntimeRunnerPolicies.kt`) prefers the
+     request's definition before falling back to `forRun`.
+4. **Admission sites** (AC-009). Replace the `forRun(scope).id` equality with "recorded
+   definition id ∈ `admittedForRun(scope == GOAL_CHILD).map { it.id }`" in three places:
+   - `lifecycle/execution/FeatureTaskRuntimeExecutionAdmission.requireMatchingPlan`
+   - `lifecycle/core/FeatureTaskRuntimeCrashReconciler.readCandidateAdmission`
+   - `lifecycle/continuation/FeatureTaskContinuationLookupService.claim`
+
+   Any other mismatch still throws `IncompatibleFeatureTaskRuntimeExecutionPlanError`.
+
+   *Confirm:* `executionPlanCompatibility.requireSupportedComposition` and
+   `requireSupportedRecovery` accept a recorded `plan` descriptor. If they hard-code
+   feature-run compositions, extend them keyed on the recorded definition id.
+5. **Run input and entry** (AC-002, AC-005). Touches `runner/FeatureTaskRuntimeRunEntry.kt` and
+   `FeatureTaskRuntimeRunInput`.
+   - Add a nullable `definition` and a nullable `protectedSpecSha256` (D6) to the input.
+   - `open()` and `warnIfResumeAssignmentDiffers` use `input.definition ?: forRun(...)`.
+   - `routeScope` stays `STANDALONE` for `PLAN`.
+   - Thread both fields into `FeatureTaskRuntimeRunRequest`.
+   - Apply the explicit-resume definition check (D8).
+   - The CLI `FeatureTaskRuntimeRunExecution` passes null, so feature-task behaviour is
+     unchanged.
+
+   *Confirm two things:*
+   - The run loop does no branch setup, checkpoint ref or commit before the implement slot.
+     If branch setup runs at loop entry, gate it on the definition containing a code-editing
+     slot.
+   - `FeatureTaskRuntimeExecutionPlanResolver.resolveCreation` tolerates a repo with an
+     `Absent` gate. If `requireBuildGate` would fail a plan-only run, skip it for definitions
+     whose slots contain no implement or validate slot.
+6. **Continuation lookup filter** (AC-005, collision risk).
+   - Add the `admittedDefinition` filter from D8 to `FeatureTaskContinuationLookupService.lookup`.
+   - Make `findStandaloneFeatureTaskCandidates` callers that mean "feature-task standalone" pass
+     or apply the `STANDALONE` filter.
+   - Update the `testFixtures` port defaults whose signatures change.
+7. **`plan_seed` artifact and accessor** (AC-003, AC-005, AC-008). Add the artifact family and
+   codec (D1) and the execution-plan definition accessor (D7).
+8. **Parent-spec seeding** (AC-002). Touches `featuretask/prepare/FeatureSpecPreparationWriter.kt`.
+   - Add `writeParentSpecOnly(repoRoot, issueKey, featureName, requirements,
+     acceptanceCriteria): Path`. It writes `.feature-specs/<KEY>-<normalized slug>/spec.md`
+     through the existing private `renderParentSpec` and `normalizeFeatureName`, and writes no
+     manifest and no subtask specs. Do not call `write`.
+   - In `goalrunner/intake/`, add an internal `PlanSpecSeed` helper. It derives the feature name
+     from `GoalIntake.parse(text).featureName` and the criteria from
+     `GoalIntakePreparation.acceptanceCriteria`, so the seeded spec carries a parseable
+     acceptance list.
+
+   *Confirm:* the run-invariants reader parses that list into `Read`. If not, adjust the
+   rendered list so it does.
+9. **Prompt and pre-launch refusal** (AC-003, AC-004).
+   - `PlanningLaunchView.existingBundleReason` (`runloop/attempt/FeatureTaskRuntimeRunLoopHookViews.kt`)
+     refuses only when a decomposition manifest exists for the key. Use
+     `findMatchingDecompositionManifests` or `resolveDecompositionManifest` in
+     `skillbill.application.decomposition`.
+   - The reason names `skill-bill <KEY>`.
+   - Add `specRewritable: Boolean` to `FeatureTaskRuntimePhasePromptComposeInputs`. Set it at
+     `slot/attempt/PhaseLaunchPreparation.kt` to `protectedSpecSha256 == null`.
+   - Rewrite `AgentPlanStrategy.BUNDLE_DIRECTIVE` and `SPEC_BUNDLE_REQUIREMENT` (`slot/plan/AgentPlanStrategy.kt`):
+     - the governed spec's directory and `spec.md` already exist
+     - write the subtask specs and `decomposition-manifest.yaml` into that directory
+     - a new slug directory fails verification
+     - when `specRewritable` is false, leave `spec.md` byte-for-byte unchanged; when it is
+       true, `spec.md` may be rewritten into the full parent spec
+
+   PLAN is now the only bundle-requiring definition, so the old "must not exist yet" wording
+   goes away entirely.
+10. **Settlement guard** (AC-003). In `runloop/planning/PlanDecompositionStop.authoredBundleRejection`,
+    before `PlanBundleAuthorization.violation` and `verifyAuthoredBundle`, add one check. When
+    `request.protectedSpecSha256` is non-null and the governed `spec.md` hashes differently,
+    return a not-ready reason. The reason names the spec and says operator-authored specs must
+    stay unchanged. This happens before `FeatureTaskRuntimePlanningStopper` persists the
+    decompose terminal, so no `COMPLETED` row results.
+11. **`StandalonePlanRun`** (AC-002 to AC-005). Location per D2. Input: intake text, repo root,
+    invoked agent, override, timeout, event sink and model assignment. It returns a sealed
+    result: `Completed(bundle, workflowId)`, `Blocked(reason, workflowId)` or
+    `Refused(reason)`. Steps, in order:
+    1. Resolve the key and invariants with `PhaseRunIntakeResolver.resolve(PLAN, …)`.
+    2. Refuse with `Refused` if a decomposition manifest exists for the key. Name
+       `skill-bill <KEY>` and open nothing.
+    3. Look up an incomplete plan workflow (D8 lookup with `PLAN`, statuses `RUNNING`,
+       `BLOCKED`, `PAUSED`).
+       - If one is found, check the intake before resuming:
+         - A bare key always resumes.
+         - A spec-path intake must equal the governed spec path.
+         - Free text must hash to the stored `intake_sha256`.
+       - On a mismatch, refuse and name the workflow id.
+       - Otherwise resume with `explicitWorkflowId`, reading `protectedSpecSha256` from
+         `plan_seed`. Recorded invariants and per-step assignment are reused, so the accepted
+         `preplan` is not relaunched.
+       - `AlreadyRunning` and other ownership outcomes surface the existing ownership reason
+         as `Refused`.
+    4. When no plan workflow is found, settle the spec:
+       - a spec-path intake, or a bare key with an existing `spec.md`, uses that spec as
+         `operator`
+       - free text with no spec seeds one (task 8) as `seeded`
+       - a bare key with no spec is refused with the existing "supply the requirements"
+         message
+    5. Open through `FeatureTaskRuntimeRunEntry.run` with `definition = PLAN` and the
+       governed path. Write `plan_seed` on the new workflow.
+    6. Map the decompose terminal to the `PhaseRunSpecBundle` paths.
+12. **`PhaseCommand` routing and output** (AC-002, AC-004, AC-005). In `runtime-cli/.../cli/phase/PhaseCommand.kt`,
+    route definitions with `runStateKind == DURABLE` to `StandalonePlanRun`, and route the
+    others to `PhaseRunEntry` unchanged.
+    - `Completed` prints:
+      - the `Parent spec:`, `Manifest:` and `Subtask spec:` lines
+      - `Workflow ID: <id>`
+      - `Next: skill-bill <KEY>`
+      - exit 0
+    - `Blocked` prints:
+      - the reason
+      - `Workflow ID:`
+      - `Resume: skill-bill phase plan <KEY>` (or `skill-bill <KEY>`)
+      - exit 1
+    - `Refused` prints the reason and exits 1.
+    - Update the command help and argument help (task 16).
+13. **Goal resume** (AC-006).
+    - `GoalRunCommand.run` (`runtime-cli/.../cli/goal/core/GoalCliCommands.kt`), after
+      `admitIntake` and before `goalRunner.run`, checks for an incomplete plan workflow for the
+      key.
+      - If one exists, it calls `StandalonePlanRun` with the resolved agent, override, model
+        assignment, timeout and presenter sink.
+      - `Completed` continues into `goalRunner.run` in the same invocation.
+      - `Blocked` and `Refused` print the reason and the workflow id and exit 1.
+    - `GoalRunner.admitIntake` admits a bare key with an incomplete plan workflow.
+    - `GoalRunner.run` gets the D3 guard ahead of `intakePreparation.prepare`.
+14. **Discovery and import linkage** (AC-007, AC-008).
+    - In `runtime-application/.../decomposition/WorkflowStateRepositoryParentDiscovery.parentDiscoveryCandidate`,
+      return null when the D7 accessor yields `plan`. This check comes before the `Corrupt`
+      branch. A row that does not decode keeps today's classification.
+    - Add `listPlanWorkflowsForPurge(issueKey, repositoryIdentity)` and
+      `findCompletedPlanWorkflow(issueKey, repositoryIdentity, manifestPath)`, both filtered on
+      the D7 accessor.
+    - `findCompletedPlanWorkflow` returns the most recent completed plan row whose decompose
+      terminal names the imported manifest path. If the terminal artifact carries no manifest
+      path, it falls back to key and identity only; implement must confirm which applies.
+    - `WorkflowGoalRunnerManifestLoader.importFromManifestProjection` and
+      `DecompositionWorkflowContinuation.bootstrapParentWorkflowFromManifest` use the shared
+      D4 helper only when opening a new parent.
+      - With no plan row, the stubs stay byte-identical to today.
+      - An existing parent is not changed.
+
+    *Confirm:* `WorkflowStepUpdates` and the strict workflow decoder accept the optional
+    `plan_workflow_id`. Extend them if not.
+15. **Purge** (AC-010). Touches `goalrunner/reset/GoalRunnerPurgeCoordinator.kt`,
+    `goalrunner/manifest/WorkflowGoalRunnerPurgePersistence.kt` and `model/GoalRunnerPurgeModels.kt`.
+    - `discoverPurgeOwnership` adds `planWorkflowIds` from `listPlanWorkflowsForPurge`.
+    - `discover` adds them to `GoalPurgeTarget.workflowIds`, never to `parentWorkflowIds`.
+      Directory deletion, the DB purge and the census then cover them.
+    - `refusal()` also refuses when a plan id has a live worker. Call
+      `resolvePurgeBlockingLiveness(planId, emptyList())`, or a workflow-ids variant if that
+      call does not check the id's own lease.
+    - `hasStandaloneSibling` excludes plan rows.
+    - The deferral on a failed directory delete is unchanged, and `spec.md` is never touched.
+    - Output counts plan workflows with the other workflows.
+
+    *Confirm:* `purgeDecomposedGoal` deletes sessions, leases, identities, phase records and
+    ledger rows for non-parent `workflowIds`. Extend the SQLite purge if any table is keyed
+    only through parents.
+16. **Docs and help** (AC-011). Describe `phase plan` as a durable, resumable workflow with
+    phase records and run invariants. It stops at the verified bundle and `skill-bill <KEY>`
+    continues it; the other phases stay in-memory. Keep the line that the dispatcher never
+    invokes `phase plan` itself. Files:
+    - `docs/runtime-command-guidance.md` (Phases paragraph, ~line 71)
+    - `README.md` (~lines 180-203: phase bullet, `phase:plan` row and example)
+    - `runtime-kotlin/ARCHITECTURE.md` (~lines 1290-1371: run-state kind, in-memory phase run,
+      `specBundleRequired` and the plan result bundle)
+    - the `PhaseCommand` help
+    - `skills/skill-bill/content.md` (frontmatter description, the `phase:plan` row ~line 60,
+      ~line 168)
+
+### Tests
+
+Each test below is tied to an AC or to a realistic bug, and covers one rule.
+
+- `PhaseInvocationParserTest`: the listing is exactly the five names, and `standalone` keeps
+  its error (AC-001).
+- `PhasePlanRunTest` (moved to the durable path, beside `StandalonePlanRun`). A fake-agent run
+  on a clean key creates:
+  - the seeded spec
+  - one `standalone`/`plan` row
+  - `preplan` and `plan` records, ledger entries and invariants
+  - a `COMPLETED` decompose terminal
+
+  The branch and refs are unchanged (AC-002).
+- The same suite also covers:
+  - a manifest-present key is refused with no row (AC-004)
+  - a plan blocked once and resumed with a bare key keeps the `preplan` attempt count at 1
+    (AC-005)
+  - different intake text is refused and names the id (AC-005)
+- `PlanDecompositionStop` settlement:
+  - a changed operator spec is rejected and no terminal is recorded
+  - a changed seeded spec is accepted (AC-003)
+- Admission and crash tests (`FeatureTaskContinuationAdmissionTest` and the crash-reconciler
+  test): `standalone` admits `plan`, and `goal_child` with `plan` raises (AC-009).
+- Continuation lookup: a `feature-task` lookup never returns a plan row. This catches a full
+  run resuming a plan row under the standalone traversal.
+- Parent discovery: neither a complete nor an incomplete plan row is returned, including as
+  the corrupt fallback (AC-008).
+- Goal: an incomplete plan plus a seeded spec resumes and continues in one call, and no
+  single-spec manifest is written. A plan that blocks again exits 1 with the reason and id
+  (AC-006).
+- Goal import: a subtask added after planning appears on the parent, along with the
+  `plan_workflow` artifact and the step references (AC-007).
+- Purge: a plan-only, incomplete key loses its rows and directories while `spec.md` bytes
+  stay the same, and a live plan worker refuses (AC-010).
+- Update pinned values without adding new tests. The `runStateKind` trace for plan becomes
+  `durable` in `FeatureTaskExecutionPlanCreationTest`, `PhaseStrategyCompositionTest` and the
+  slot baselines (`SlotBaselinePhaseRunCapture`). Move the plan cases of
+  `PhaseRunIntakeResolverTest` to the durable path.
+- No dedicated tests for docs, help text or prompt wording.
+
 ### Constraints
 
 - One generic runner: no plan-only run loop, run state, record store or settlement path. The
@@ -143,6 +424,14 @@ Owned paths (elided segments are `...`):
   `PackageSiblingCountArchitectureTest` ceilings, the raw-map guard, the kotlin-inject accessor
   census, the custom-exception baseline, and `RuntimeEngineBoundaryArchitectureTest`'s planning
   step rules.
+- The Scope line "run `./install.sh` after editing" `content.md` is not executed in this goal
+  child, because goal children never run installers. The operator or the parent runtime
+  refreshes the install after merge.
+- Refusals for an existing manifest, an intake mismatch, a changed operator spec or ownership
+  are returned results or not-ready reasons. None of them adds an exception class.
+- kotlin-inject: `StandalonePlanRun` and `PlanSpecSeed` are `@Inject` and are reached through
+  the existing components. Check the accessor census before adding a `RuntimeComponent`
+  accessor.
 
 ## Acceptance Criteria
 

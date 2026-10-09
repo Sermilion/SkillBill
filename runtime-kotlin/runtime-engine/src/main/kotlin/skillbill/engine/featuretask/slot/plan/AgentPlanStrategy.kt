@@ -66,7 +66,8 @@ class AgentPlanStrategy : PhaseStrategy() {
       stepContext =
         when {
           inputs.suppressDecomposition -> "$GOAL_CONTINUATION_CONSTRAINT\n\n$PHASE_FEASIBILITY_CONSTRAINT"
-          inputs.specBundleRequired -> "$featureSpecDirective\n\n$SPEC_BUNDLE_REQUIREMENT"
+          inputs.specBundleRequired ->
+            "$featureSpecDirective\n\n${specBundleRequirement(inputs.specRewritable)}\n\n$MANIFEST_TEMPLATE"
           else -> featureSpecDirective
         },
     )
@@ -152,8 +153,9 @@ class AgentPlanStrategy : PhaseStrategy() {
 
     private const val BUNDLE_DIRECTIVE: String =
       "Author a governed spec bundle that satisfies every acceptance criterion from the upstream preplan " +
-        "digest. Write files only inside a new .feature-specs/<issue key>-<slug>/ directory and modify no " +
-        "other repository file. When the bundle is complete, finish with a short prose summary of the plan. " +
+        "digest. Write files only inside the .feature-specs/<issue key>-<slug>/ directory that already " +
+        "holds the parent spec.md and modify no other repository file. When the bundle is complete, finish " +
+        "with a short prose summary of the plan. " +
         PREPLAN_DIGEST_AUTHORITY + " Do not read existing .feature-specs bundles either; the manifest template " +
         "below is the format."
 
@@ -191,18 +193,29 @@ class AgentPlanStrategy : PhaseStrategy() {
       that prevents an implementable plan from being produced.
       """.trimIndent()
 
-    private val SPEC_BUNDLE_REQUIREMENT: String =
-      """
-      ## Spec bundle planning requirement
-      No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
-      disk. Create the new directory .feature-specs/<issue key>-<slug>/ (it must not exist yet) holding the
-      parent spec.md, one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency
-      order), and decomposition-manifest.yaml whose parent spec path names that spec.md and whose subtasks
-      list those files in order, each depending only on earlier subtasks. The parent and every subtask spec
-      need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
-      directory, never write through a symlink, and never overwrite an existing spec. A bundle that fails
-      these checks blocks the plan.
+    private fun specBundleRequirement(specRewritable: Boolean): String {
+      val parentSpecRule =
+        if (specRewritable) {
+          "The runtime seeded that spec.md from the intake; rewrite it as the full parent spec when the plan " +
+            "needs more than the seed."
+        } else {
+          "The operator authored that spec.md; never modify it, the runtime blocks the plan when its bytes change."
+        }
+      return """
+        ## Spec bundle planning requirement
+        No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
+        disk. The directory .feature-specs/<issue key>-<slug>/ already holds the parent spec.md. $parentSpecRule
+        Add one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency order) and
+        decomposition-manifest.yaml (it must not exist yet) whose parent spec path names that spec.md and whose
+        subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
+        spec need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
+        directory, never write through a symlink, and never overwrite an existing subtask spec. A bundle that
+        fails these checks blocks the plan.
+        """.trimIndent()
+    }
 
+    private val MANIFEST_TEMPLATE: String =
+      """
       Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
       field shown is required; dependencies lists only earlier subtask ids:
 

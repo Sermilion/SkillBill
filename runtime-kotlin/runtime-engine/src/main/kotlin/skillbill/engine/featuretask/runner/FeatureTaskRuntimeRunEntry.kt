@@ -100,6 +100,8 @@ class FeatureTaskRuntimeRunEntry(
           operatorDecision = input.operatorDecision,
           agentAddonSelection = input.agentAddonSelection,
           eventSink = input.eventSink,
+          skeletonDefinition = input.definition,
+          protectedSpecSha256 = input.protectedSpecSha256,
         ),
       )
     }
@@ -112,7 +114,7 @@ class FeatureTaskRuntimeRunEntry(
   ): String {
     val goalContinuation = input.goalContinuation
     val specPath = Path.of(input.specPath)
-    val definition = SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
     val reviewMode =
       goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
         ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
@@ -128,6 +130,7 @@ class FeatureTaskRuntimeRunEntry(
           repositoryIdentity = repositories.repositoryIdentity(input.repoRoot),
           governedSpecPath = repositories.governedFeatureTaskSpecPath("unassigned", input.repoRoot, specPath),
           routeScope = scope,
+          initialArtifacts = input.openArtifacts,
           executionPlan =
             executionPlans.resolveCreation(
               FeatureTaskRuntimeExecutionPlanCreationRequest(
@@ -164,7 +167,7 @@ class FeatureTaskRuntimeRunEntry(
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
   ) {
     val goalContinuation = input.goalContinuation
-    val definition = SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
     val qualityGate = goalContinuation?.qualityGateSelection
     val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))

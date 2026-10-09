@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -38,10 +39,10 @@ internal object PlanDecompositionStop {
 
   fun existingBundleReason(
     issueKey: String,
-    existingParentSpec: Path,
+    existingManifest: Path,
   ): String =
-    "Plan must author a new .feature-specs/$issueKey-<slug>/ bundle but '$existingParentSpec' already exists; " +
-      "the runtime never overwrites a parent spec."
+    "A decomposition manifest '$existingManifest' already exists for $issueKey; the runtime never overwrites " +
+      "a plan. Run `skill-bill $issueKey` to execute it."
 
   fun withAuthoredParentSpecPath(
     context: PhaseOutputSettlementContext,
@@ -73,6 +74,7 @@ internal object PlanDecompositionStop {
     capture: ValidatedOutputCapture,
   ): String? {
     val request = context.request
+    protectedSpecRejection(context)?.let { return it }
     PlanBundleAuthorization
       .violation(
         request.repoRoot,
@@ -92,6 +94,26 @@ internal object PlanDecompositionStop {
       notReadyReason(error.message)
     } catch (error: IOException) {
       notReadyReason(error.message)
+    }
+  }
+
+  private fun protectedSpecRejection(context: PhaseOutputSettlementContext): String? {
+    val request = context.request
+    val expected = request.protectedSpecSha256 ?: return null
+    val parentSpec = context.decompositionPlanner.existingParentSpec(request.repoRoot, request.issueKey)
+    val current =
+      try {
+        parentSpec?.let { sha256HexUtf8(context.decompositionPlanner.specText(it)) }
+      } catch (error: IOException) {
+        return notReadyReason(error.message)
+      }
+    return if (current == expected) {
+      null
+    } else {
+      notReadyReason(
+        "The operator-authored spec.md changed during planning; the plan must leave it byte-identical " +
+          "and author only the manifest and subtask specs.",
+      )
     }
   }
 

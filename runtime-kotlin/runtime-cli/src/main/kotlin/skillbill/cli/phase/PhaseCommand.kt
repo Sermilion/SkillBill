@@ -16,6 +16,8 @@ import skillbill.cli.kernel.cli.namedStandaloneScope
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.cli.standaloneReportText
 import skillbill.cli.kernel.cli.usageError
+import skillbill.cli.kernel.plan.StandalonePlanLauncher
+import skillbill.cli.kernel.plan.planReportText
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -23,6 +25,7 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
@@ -31,17 +34,20 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import java.nio.file.Path
 
 @Inject
 class PhaseCommand(
   private val entry: PhaseRunEntry,
+  private val planLauncher: StandalonePlanLauncher,
   private val configResolution: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "phase",
-    "Run one in-memory phase (${PhaseInvocationParser.phaseNames().joinToString(", ")}) over the working tree, " +
-      "with no workflow state.",
+    "Run one standalone phase (${PhaseInvocationParser.phaseNames().joinToString(", ")}) over the working tree. " +
+      "Review, validation, pr and monitor keep no workflow state; plan is a durable, resumable workflow that " +
+      "stops after the spec bundle.",
   ) {
   private val name by argument(
     name = "name",
@@ -64,6 +70,10 @@ class PhaseCommand(
     val invocation = PhaseInvocationParser.parse(name, rest)
     val repoRoot = resolveCliRepositoryRoot(null, inputs)
     val invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent")
+    if (SkeletonDefinition.byId(invocation.definitionId).runStateKind == SkeletonRunStateKind.DURABLE) {
+      runDurablePlan(invocation, repoRoot, invokedAgentId)
+      return
+    }
     val result =
       runPhase(state) {
         val specBacked = SkeletonDefinition.byId(invocation.definitionId).intake != PhaseIntakeRequirement.OPTIONAL
@@ -88,6 +98,26 @@ class PhaseCommand(
         )
       } ?: return
     writePhaseResult(state, invocation.definitionId, result)
+  }
+
+  private fun runDurablePlan(
+    invocation: PhaseInvocation,
+    repoRoot: Path,
+    invokedAgentId: String,
+  ) {
+    val intake = requireNotNull(invocation.intake) { "Durable phases require an intake." }
+    try {
+      val issueKey = planLauncher.issueKeyOf(intake)
+      val result = planLauncher.run(issueKey, intake, repoRoot, invokedAgentId)
+      state.completeText(
+        result.planReportText(issueKey),
+        emptyMap(),
+        exitCode = if (result is StandalonePlanResult.Completed) 0 else 1,
+      )
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
+      state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
+    }
   }
 }
 
@@ -127,7 +157,7 @@ object PhaseInvocationParser {
   private val KEYS = setOf(PhaseCommandKeys.MODE, PhaseCommandKeys.TARGET)
 
   fun phaseNames(): List<String> =
-    SkeletonDefinition.entries.filter { it.runStateKind == SkeletonRunStateKind.IN_MEMORY }.map(SkeletonDefinition::id)
+    SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id)
 
   fun parse(
     name: String,

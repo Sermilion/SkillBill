@@ -54,7 +54,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     PhasePlanningLaunchContext {
     override fun existingBundleReason(): String? =
       context.decompositionPlanner
-        .existingParentSpec(request.repoRoot, request.issueKey)
+        .existingManifest(request.repoRoot, request.issueKey)
         ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
   }
 

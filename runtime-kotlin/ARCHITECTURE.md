@@ -1292,9 +1292,17 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   that list. `forRun(goalContinuation)` picks one. The declaration derived from a
   definition equals the phase workflow's, and a reorder raises a typed error.
   `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
-  `PLAN` (`preplan` and `plan`), `IMPLEMENT` (the `implementation` slot) and
+  `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
-  `IN_MEMORY`) that a phase run drives on its own. Each carries a
+  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`preplan` and `plan`)
+  is durable: `skill-bill phase plan` runs it as a standalone workflow
+  (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
+  `phase` command lists: review, validation, plan, pr and monitor.
+  `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
+  carry: `{GOAL_CHILD}` for a goal child, `{STANDALONE, PLAN}` otherwise, so
+  admission and crash reconciliation still raise
+  `IncompatibleFeatureTaskRuntimeExecutionPlanError` for any other pairing.
+  Each carries a
   `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
   existing governed spec, and the rest take an optional intake.
   `GOAL_PLANNING` (`preplan` and `plan`) is the goal planning sweep's
@@ -1354,13 +1362,27 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   definition id, so a `phase pr` title names the real issue. An issue URL in the
   intake supplies its key from the first path segment that is one. A missing
   issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
-  usage error. `skill-bill phase plan <KEY> [description]` sets
-  `specBundleRequired`: the plan prompt asks for a decomposition package, the
-  planning stopper writes the parent spec, subtask specs and decomposition
-  manifest through `FeatureSpecPreparationWriter` (spec type from
-  `ConfigResolutionService`), and a direct plan blocks. The result carries a
-  `PhaseRunSpecBundle` whose paths the CLI prints, so `skill-bill goal` can
-  run the bundle. Implementation and simplification run inside workflows and
+  usage error. `skill-bill phase plan <KEY> [description]` is a durable
+  standalone run, not a phase run. `StandalonePlanRun`
+  (`skillbill.engine.goalrunner.plan`) seeds the parent `spec.md`
+  (`GoalIntakePreparation.seedPlanSpec`: an existing spec is operator-authored,
+  new work is seeded from the intake), opens a `standalone` workflow whose
+  execution plan names the `plan` definition, and writes a `plan_seed` artifact
+  (intake hash, spec origin, spec hash). The run requires a spec bundle
+  (`requiresSpecBundle`): the plan prompt asks for subtask specs and a manifest
+  inside the existing bundle, the planning stopper verifies them through
+  `FeatureSpecPreparationWriter`, and the run records a completed decompose
+  terminal and stops. For an operator-authored spec the stopper rejects any change
+  to it (`protectedSpecSha256`); a seeded spec may be rewritten. A manifest
+  already present refuses the plan. Lookup with `admittedDefinition = PLAN`
+  resumes an incomplete plan at `plan`, never relaunching `preplan`; the
+  standalone lookup and goal parent discovery never return a plan workflow.
+  `skill-bill goal` (`skill-bill <KEY>`) finishes an incomplete plan first. A
+  goal parent imported from a completed plan's manifest records the plan
+  workflow id in a `plan_workflow` artifact and on its `preplan` and `plan`
+  step records (`WorkflowStepState.planWorkflowId`). Goal purge removes plan
+  workflows with the goal and never touches `spec.md`. A plan creates no
+  branch, ref, commit, or goal. Implementation and simplification run inside workflows and
   consume their plan output. `skill-bill phase pr` refuses a detached, protected, or
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
   has unpushed commits, and runs the pull-request readiness gate only when the

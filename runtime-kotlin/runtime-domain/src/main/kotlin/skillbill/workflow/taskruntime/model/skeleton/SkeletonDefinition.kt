@@ -22,6 +22,7 @@ data class SkeletonDefinition(
   val intake: PhaseIntakeRequirement = PhaseIntakeRequirement.OPTIONAL,
   val semanticRevision: Int = 1,
   val stepIds: List<String> = slots.flatMap(PhaseSlot::steps),
+  val standaloneInvocable: Boolean = false,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -34,6 +35,8 @@ data class SkeletonDefinition(
       throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
     }
   }
+
+  fun requiresSpecBundle(goalContinuation: Boolean): Boolean = slots.last() == PhaseSlot.PLAN && !goalContinuation
 
   companion object {
     val FEATURE_RUN_SLOTS: List<PhaseSlot> =
@@ -58,27 +61,40 @@ data class SkeletonDefinition(
         semanticRevision = 2,
       )
     val REVIEW: SkeletonDefinition =
-      SkeletonDefinition("review", listOf(PhaseSlot.STANDALONE_REVIEW), SkeletonRunStateKind.IN_MEMORY)
+      SkeletonDefinition(
+        "review",
+        listOf(PhaseSlot.STANDALONE_REVIEW),
+        SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = true,
+      )
     val VALIDATION: SkeletonDefinition =
-      SkeletonDefinition("validation", listOf(PhaseSlot.QUALITY_GATE), SkeletonRunStateKind.IN_MEMORY)
+      SkeletonDefinition(
+        "validation",
+        listOf(PhaseSlot.QUALITY_GATE),
+        SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = true,
+      )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
         listOf(PhaseSlot.PREPLAN, PhaseSlot.PLAN),
-        SkeletonRunStateKind.IN_MEMORY,
+        SkeletonRunStateKind.DURABLE,
         PhaseIntakeRequirement.ISSUE_KEY,
+        standaloneInvocable = true,
       )
     val PR: SkeletonDefinition =
       SkeletonDefinition(
         "pr",
         listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.PULL_REQUEST, PhaseSlot.MONITOR),
         SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = true,
       )
     val MONITOR: SkeletonDefinition =
       SkeletonDefinition(
         "monitor",
         listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.MONITOR),
         SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = true,
       )
     val GOAL_PLANNING: SkeletonDefinition =
       SkeletonDefinition(
@@ -91,6 +107,9 @@ data class SkeletonDefinition(
       get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR, GOAL_PLANNING)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
+
+    fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
+      if (goalContinuation) setOf(GOAL_CHILD) else setOf(STANDALONE, PLAN)
 
     fun byId(id: String): SkeletonDefinition =
       entries.firstOrNull { it.id == id }

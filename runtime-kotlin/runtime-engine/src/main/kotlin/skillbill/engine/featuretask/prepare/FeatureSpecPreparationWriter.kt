@@ -18,6 +18,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
+import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
 import skillbill.featurespec.model.FeatureSpecWriteRequest
@@ -60,6 +61,34 @@ class FeatureSpecPreparationWriter(
     )
   }
 
+  fun writeParentSpecOnly(
+    repoRoot: Path,
+    decision: FeatureSpecPreparationDecision,
+    featureName: String,
+    validationStrategy: String,
+  ): Path {
+    val issueKey = decision.issueKey.trim()
+    val normalizedFeatureName = normalizeFeatureName(featureName)
+    val parentSpecPath = repoRoot.resolve(".feature-specs/$issueKey-$normalizedFeatureName/spec.md")
+    fileStore.writeTextAtomically(
+      parentSpecPath,
+      renderParentSpec(
+        ParentSpecRenderInput(
+          issueKey = issueKey,
+          featureName = normalizedFeatureName,
+          mode = decision.mode,
+          intendedOutcome = decision.intendedOutcome,
+          acceptanceCriteria = decision.acceptanceCriteria,
+          constraints = decision.constraints,
+          nonGoals = decision.nonGoals,
+          overview = decision.intendedOutcome,
+          validationStrategy = validationStrategy,
+        ),
+      ),
+    )
+    return parentSpecPath
+  }
+
   fun verifyAuthored(
     repoRoot: Path,
     parentSpecPath: Path,
@@ -92,6 +121,10 @@ class FeatureSpecPreparationWriter(
   }
 
   fun listTree(directory: Path): List<Path> = fileStore.listTree(directory)
+
+  fun readText(path: Path): String = fileStore.readText(path)
+
+  fun isRegularFile(path: Path): Boolean = fileStore.isRegularFile(path)
 
   private fun authoredLines(
     fieldPath: String,

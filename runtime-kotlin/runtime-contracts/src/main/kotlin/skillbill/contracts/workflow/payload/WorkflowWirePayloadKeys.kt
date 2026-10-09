@@ -44,6 +44,7 @@ object WorkflowWirePayloadKeys {
   const val PRODUCER_ITERATION: String = "producer_iteration"
   const val UTF8_BYTES: String = "utf8_bytes"
   const val ATTEMPT_COUNT: String = "attempt_count"
+  const val PLAN_WORKFLOW_ID: String = "plan_workflow_id"
   const val KEY: String = "key"
   const val PRESENT: String = "present"
   const val INLINE: String = "inline"

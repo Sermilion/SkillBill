@@ -16,9 +16,11 @@ import skillbill.workflow.decomposition.runtime.hasDecompositionPlan
 import skillbill.workflow.decomposition.runtime.hasDecompositionRuntimeArtifact
 import skillbill.workflow.decomposition.runtime.isActiveGoalRuntime
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
+import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 fun WorkflowStateRepository.findDecomposedParentOrCorruptFallback(
   issueKey: String,
@@ -88,6 +90,14 @@ private fun WorkflowStateRecord.decompositionRuntimeOrNull(): DecompositionManif
 private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(
   normalizedIssueKey: String,
   repositoryIdentity: String?,
+): List<WorkflowStateRecord> =
+  listFeatureTaskWorkflowsForIssue(normalizedIssueKey, repositoryIdentity).filterNot {
+    it.isPlanWorkflow()
+  }
+
+private fun WorkflowStateRepository.listFeatureTaskWorkflowsForIssue(
+  normalizedIssueKey: String,
+  repositoryIdentity: String?,
 ): List<WorkflowStateRecord> {
   val byId = LinkedHashMap<String, WorkflowStateRecord>()
   findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.RUNTIME, normalizedIssueKey, repositoryIdentity).forEach {
@@ -100,6 +110,31 @@ private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(
   }
   return byId.values.toList()
 }
+
+fun WorkflowStateRecord.isPlanWorkflow(): Boolean =
+  try {
+    ExecutionPlanArtifactView.definitionId(toSnapshot().artifacts) == SkeletonDefinition.PLAN.id
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+    false
+  }
+
+fun WorkflowStateRepository.listPlanWorkflowsForPurge(
+  issueKey: String,
+  repositoryIdentity: String,
+): List<WorkflowStateRecord> =
+  listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(issueKey), repositoryIdentity).filter {
+    it.isPlanWorkflow()
+  }
+
+fun WorkflowStateRepository.findCompletedPlanWorkflowId(
+  issueKey: String,
+  repositoryIdentity: String?,
+): String? =
+  listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(issueKey), repositoryIdentity)
+    .filter { it.workflowStatus.workflowStatus() == WorkflowStatus.COMPLETED && it.isPlanWorkflow() }
+    .maxByOrNull { it.updatedAt.orEmpty() }
+    ?.workflowId
 
 fun WorkflowStateRepository.listDecomposedParentsForPurge(
   issueKey: String,
@@ -197,7 +232,8 @@ fun WorkflowStateRepository.findDecomposedParentWorkflowForRuntime(
   ).firstOrNull {
       row ->
     val snapshot = row.toSnapshot()
-    !snapshot.isGoalContinuationChildWorkflow() &&
+    !row.isPlanWorkflow() &&
+      !snapshot.isGoalContinuationChildWorkflow() &&
       (snapshot.hasDecompositionPlan() || row.issueKey?.trim() == manifest.issueKey) &&
       snapshot.artifacts.decompositionRuntime()?.sameRuntimeIdentity(manifest) == true
   }

@@ -145,8 +145,8 @@ class FeatureTaskRuntimeCrashReconciler(
         )
       val effectiveInputs = executionPlanResolver.resolveRecordedInputs(Path.of(repositoryPath), recordedPlan)
       val admittedPlan = executionPlanCompatibility.requireSupportedRecovery(encoded, effectiveInputs)
-      val expectedDefinition = SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
-      if (admittedPlan.definitionId != expectedDefinition.id) {
+      val goalChild = identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD
+      if (SkeletonDefinition.admittedForRun(goalChild).none { it.id == admittedPlan.definitionId }) {
         throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
       }
       CrashCandidateAdmission(identity, encoded)

@@ -1,5 +1,6 @@
 package skillbill.engine.operation.verify
 
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
@@ -108,6 +109,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         goalObservabilityEventValidator = realPlanningProjectionValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = clock,
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
     val verify =
       VerifyOperation(

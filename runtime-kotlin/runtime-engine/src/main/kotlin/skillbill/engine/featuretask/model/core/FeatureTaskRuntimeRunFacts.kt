@@ -75,7 +75,10 @@ interface FeatureTaskRuntimeRunFacts {
   val phaseInstructions: PhaseInstructions? get() = null
 
   /** Whether the plan must persist as a governed spec bundle because no later step consumes it. */
-  val specBundleRequired: Boolean get() = false
+  val specBundleRequired: Boolean get() = skeletonDefinition?.requiresSpecBundle(goalContinuation != null) ?: false
+
+  /** The hash of an operator-authored `spec.md` the plan must leave untouched; null when the plan may rewrite it. */
+  val protectedSpecSha256: String? get() = null
 }
 
 data class PhaseInstructions(

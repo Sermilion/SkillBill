@@ -177,13 +177,13 @@ The phase uses the same agent strategy as goal validate. It picks the platform g
 There are three kinds of form:
 
 - The full run (`/skill-bill <intake>`) runs all nine slots with durable state, so it can pause and resume.
-- A phase (`phase:<name>`) runs a few slots in memory. It writes no workflow row, branch, or checkpoint commit, and it cannot be resumed. `commit_push` is not available as a standalone phase.
+- A phase (`phase:<name>`) runs a few slots in memory. It writes no workflow row, branch, or checkpoint commit, and it cannot be resumed. `phase:plan` is the exception: it is a durable, resumable plan workflow that stops after the spec bundle, creates no branch or commit, and is finished by `skill-bill <KEY>`. `commit_push` is not available as a standalone phase.
 - An operation (`operation:<name>`) is a standalone job outside the feature workflow. Operations that edit files, tag a release, or push stop at `awaiting_confirmation` and act only after you confirm.
 
 | Form | Purpose | Runs |
 |------|---------|------|
 | `/skill-bill` | Prepare new feature work from an `<intake>`, or resume an existing spec or goal, then run it | `skill-bill goal` |
-| `/skill-bill <intake> phase:plan` | Prepare a parent spec, executable subtask specs, and a manifest without implementing | `skill-bill phase plan` |
+| `/skill-bill <intake> phase:plan` | Plan durably: seed the parent spec, author subtask specs and a manifest, then stop. `skill-bill <KEY>` resumes an unfinished plan and runs the goal | `skill-bill phase plan` |
 | `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
 | `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
 | `/skill-bill phase:pr` | Commit pending changes, push the branch, create or update a PR, and monitor its CI | `skill-bill phase pr` |

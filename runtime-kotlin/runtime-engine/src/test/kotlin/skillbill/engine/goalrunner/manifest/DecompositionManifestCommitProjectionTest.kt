@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.manifest
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
@@ -594,6 +595,7 @@ class DecompositionManifestCommitProjectionTest {
         goalObservabilityEventValidator = NoopGoalPlanningPreparationEnvelopeValidator,
         runtimeDiagnostics = NoopRuntimeDiagnostics,
         clock = Clock.systemUTC(),
+        repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(

@@ -46,6 +46,10 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.drainTelemetryOnCompletion
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.runtimeRunEventSink
+import skillbill.cli.kernel.plan.StandalonePlanLauncher
+import skillbill.cli.kernel.plan.StandalonePlanOptions
+import skillbill.cli.kernel.plan.planReportText
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
@@ -54,9 +58,11 @@ import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
 @Inject
@@ -104,6 +110,7 @@ class GoalRunSubcommands(
 @Inject
 class GoalRunCommand(
   private val goalRunner: GoalRunner,
+  private val planLauncher: StandalonePlanLauncher,
   private val runtimeProvenanceService: RuntimeProvenanceService,
   private val inputPreparation: GoalRunInputPreparation,
   private val telemetryService: TelemetryService,
@@ -224,6 +231,9 @@ class GoalRunCommand(
           effectiveRepoRoot = effectiveRepoRoot,
         ),
       )
+    if (!finishIncompletePlan(runIssueKey, intake, effectiveRepoRoot, invokedAgentId, hydratedSelection)) {
+      return
+    }
     val presenter =
       GoalRunPresenter(
         issueKey = runIssueKey,
@@ -248,6 +258,41 @@ class GoalRunCommand(
     state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())
     drainTelemetryOnCompletion(telemetryService, diagnostics)
   }
+
+  private fun finishIncompletePlan(
+    runIssueKey: String,
+    intake: String,
+    effectiveRepoRoot: Path,
+    invokedAgentId: String,
+    hydratedSelection: HydratedAgentAddonSelection,
+  ): Boolean {
+    if (planLauncher.incompletePlanWorkflowId(runIssueKey, effectiveRepoRoot) == null) {
+      return true
+    }
+    val planned =
+      planLauncher.run(
+        runIssueKey,
+        intake,
+        effectiveRepoRoot,
+        invokedAgentId,
+        StandalonePlanOptions(
+          timeout = resumedPlanTimeout(),
+          agentAddonSelection = hydratedSelection,
+          eventSink = runtimeRunEventSink(inputs, monitor = !noLiveOutput),
+        ),
+      )
+    if (planned is StandalonePlanResult.Completed) {
+      return true
+    }
+    state.completeText(planned.planReportText(runIssueKey), emptyMap(), exitCode = 1)
+    return false
+  }
+
+  private fun resumedPlanTimeout(): Duration? =
+    listOfNotNull(
+      maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+      planningBudgetMinutes.takeIf { it > 0 }?.minutes,
+    ).minOrNull()
 
   private fun runRequest(
     runIssueKey: String,

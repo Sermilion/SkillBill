@@ -1,3 +1,14 @@
+## [2026-10-09] SKILL-410 subtask 1: durable standalone plan that a full run resumes
+Areas: runtime-engine goalrunner plan/intake/manifest/reset/status, featuretask lifecycle/runner/runloop/slot; runtime-domain workflow engine and taskruntime skeleton; runtime-application workflow decomposition; runtime-cli phase and goal; runtime-core guards; docs
+- `phase plan` is now a DURABLE skeleton: it persists a plan workflow, seeds the spec bundle and settles through the normal run loop instead of the in-memory phase entry. Invocable standalone phases: review, validation, plan, pr, monitor.
+- `SkeletonDefinition.admittedForRun` replaces the single admitted definition: goal child admits only itself, other runs admit standalone and plan. Other pairings (goal child with plan) still raise the incompatible-plan error.
+- reusable: `StandalonePlanRun` (engine) returns Completed, Blocked or Refused; it refuses when a manifest exists, resumes an incomplete plan, and refuses an intake whose hash differs from the recorded one, naming the workflow id. CLI `StandalonePlanLauncher` lives in `cli/kernel/plan`, reached through a `RuntimeComponent.standalonePlanRun` accessor.
+- `skill-bill <KEY>` finishes an incomplete plan first, then continues into the goal. Goal import of a new parent links the completed plan workflow id onto the preplan and plan step records and a `plan_workflow` artifact; standalone lookup and parent discovery filter plan workflows out; lookup has a plan-only path.
+- Plan settlement rejects operator-authored spec changes, while a seeded spec may be rewritten; purge discovers plan workflows, refuses on a live plan worker and never touches spec.md.
+- Known limits: no engine-level tests for StandalonePlanRun, plan lookup, goal chain or purge; only the in-memory-refuses and durable CLI cases are covered. No GoalRunner.run guard for non-CLI callers. The `phase/plan` slot-baseline capture was removed.
+Feature flag: N/A
+Acceptance criteria: partially covered; most spec test obligations (AC-002 to AC-008, AC-010) have no durable PhasePlanRunTest cases yet
+
 ## [2026-10-09] SKILL-409 subtask 1: goal purge removes all goal-owned state
 Areas: runtime-engine goalrunner reset, manifest and model; runtime-ports persistence and workflow goalstate; runtime-infra sqlite and workflow filesystem; runtime-application workflow decomposition; runtime-cli goal purge; runtime-core architecture guards
 - `goal purge` now discovers every decomposed parent for the issue key in the repository (terminal and undecodable included; standalone rows, goal children and other issue keys excluded) and purges all of them, so a retired goal leaves no rows or directories behind.

@@ -191,7 +191,8 @@ class FeatureTaskRuntimeExecutionAdmission(
     if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
-    if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
+    val admitted = SkeletonDefinition.admittedForRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
+    if (admitted.none { it.id == plan.definitionId }) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
   }

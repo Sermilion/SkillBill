@@ -167,6 +167,21 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `standalone plan is durable, invocable on its own, and admitted only as a standalone run`() {
+    assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
+    assertEquals(
+      listOf("review", "validation", "plan", "pr", "monitor"),
+      SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
+    )
+    assertEquals(
+      setOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.PLAN),
+      SkeletonDefinition.admittedForRun(goalContinuation = false),
+    )
+    assertEquals(setOf(SkeletonDefinition.GOAL_CHILD), SkeletonDefinition.admittedForRun(goalContinuation = true))
+    assertEquals(true, SkeletonDefinition.PLAN.requiresSpecBundle(goalContinuation = false))
+  }
+
+  @Test
   fun `lookup knows the short definitions and rejects commit_push and unknown ids`() {
     assertEquals(SkeletonDefinition.VALIDATION, SkeletonDefinition.byId("validation"))
     listOf("commit_push", "bogus").forEach { id ->
