@@ -85,22 +85,49 @@ class IdeStatusSelectionPolicyTest {
   }
 
   @Test
-  fun `newer persisted standalone sequence wins over an older active workflow despite timestamp tie`() {
-    val workflow = candidate("SKILL-411", IdeStatusLifecycleState.ACTIVE, "workflow", "2026-08-06T12:00:00Z")
+  fun `active workflow outranks a later terminal standalone with a higher sequence despite timestamp tie`() {
+    val workflow = candidate("SKILL-414", IdeStatusLifecycleState.ACTIVE, "workflow", "2026-08-06T12:00:00Z")
     val phase =
-      candidate("SKILL-411", IdeStatusLifecycleState.TERMINAL, "phase", "2026-08-06T12:00:00Z").copy(
+      candidate("SKILL-415", IdeStatusLifecycleState.TERMINAL, "phase", "2026-08-06T12:00:00Z").copy(
         execution =
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.STANDALONE_PHASE,
             executionId = "execution",
             statusStoreId = "store",
-            runSequence = "2",
+            runSequence = "11",
             statusRevision = "3",
             invocationId = "invocation",
             phaseId = "review",
           ),
       )
-    assertEquals("phase", IdeStatusSelectionPolicy.select(listOf(workflow, phase), OBSERVED)?.workflowId)
+    assertEquals("workflow", IdeStatusSelectionPolicy.select(listOf(workflow, phase), OBSERVED)?.workflowId)
+  }
+
+  @Test
+  fun `higher execution runSequence wins among active candidates with the same timestamp`() {
+    val low =
+      candidate("SKILL-416", IdeStatusLifecycleState.ACTIVE, "seq-low", "2026-08-06T12:00:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "execution-low",
+            statusStoreId = "store-low",
+            runSequence = "2",
+            statusRevision = "1",
+          ),
+      )
+    val high =
+      candidate("SKILL-416", IdeStatusLifecycleState.ACTIVE, "seq-high", "2026-08-06T12:00:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "execution-high",
+            statusStoreId = "store-high",
+            runSequence = "11",
+            statusRevision = "1",
+          ),
+      )
+    assertEquals("seq-high", IdeStatusSelectionPolicy.select(listOf(low, high), OBSERVED)?.workflowId)
   }
 
   @Test

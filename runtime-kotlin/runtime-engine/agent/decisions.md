@@ -1,3 +1,15 @@
+## [2026-10-10] Select live retained IDE status before sequence ranking
+Context: Repo-global run_sequence let a later completed standalone on the same branch outrank a live goal (2026-10-09 SKILL-414 vs SKILL-415 plan).
+Decision: After retainedAt, if any ACTIVE, PAUSED, or BLOCKED row remains, rank only that live cohort. Rank FAILED, RECENTLY_TERMINAL, and IDLE only when live is empty. Keep the existing comparator inside the chosen cohort.
+Reason: Putting tier before sequence in one comparator would also hide the incident but would change among-live ranking, including stale ACTIVE losing to fresh BLOCKED. Per-issue sequences would need a registry change this task forbids. Policy-only change covers both IdeStatusService select calls without a third ranking path.
+Alternatives considered: Reorder comparator keys; add a service-level live filter; change ide_status_execution_registry high-water. All rejected.
+Revisit when: a named live-vs-live incident requires reordering freshness and tier, or sequences become per-issue.
+
+## [2026-10-10] Scan IDE status sequence conflicts only on the selected cohort
+Context: Equal-sequence different-executionId used to throw across all retained rows.
+Decision: Run that scan on the selected live or remaining cohort only.
+Reason: A live row and a terminal row that share statusStoreId and runSequence with different executionIds must not fail status after the live partition. The throw stays required inside the cohort ranking uses.
+
 ## [2026-10-09] Share authoritative execution order across status sources
 Context: IDE status must order eligible workflow and standalone-phase executions despite timestamp ties, skew, retention, and durable-plan correlation.
 Decision: Give each root execution a persisted per-repository sequence and keep standalone status in a purpose-built repository with explicit scope and identity.
