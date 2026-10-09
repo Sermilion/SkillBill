@@ -19,6 +19,8 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.Test
@@ -210,6 +212,7 @@ class AgentRunLauncherActivityTest {
   @Test
   fun `process lifecycle emits cancelled completion when parent thread is interrupted`() {
     val emissions = Collections.synchronizedList(mutableListOf<AgentRunProgressEmission>())
+    val waitStarted = CountDownLatch(1)
     val runner = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver())
     val worker =
       thread(start = true) {
@@ -219,14 +222,23 @@ class AgentRunLauncherActivityTest {
             Path.of(".").toAbsolutePath().normalize(),
           ) {
             timeout = 30.seconds
-            progressEmitter = AgentRunProgressEmitter { emissions += it }
+            progressEmitter =
+              AgentRunProgressEmitter { emission ->
+                emissions += emission
+                if (emission.eventKind == GoalProgressEventKind.OPERATION_STARTED) {
+                  waitStarted.countDown()
+                }
+              }
           },
         )
       }
 
-    Thread.sleep(150)
-    worker.interrupt()
-    worker.join(5_000)
+    try {
+      assertTrue(waitStarted.await(10, TimeUnit.SECONDS))
+    } finally {
+      worker.interrupt()
+      worker.join(10_000)
+    }
 
     assertFalse(worker.isAlive)
     val completed = emissions.last()

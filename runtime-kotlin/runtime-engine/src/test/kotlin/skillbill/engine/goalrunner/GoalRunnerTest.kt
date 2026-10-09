@@ -1415,8 +1415,8 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
-  fun `same-branch finalize blocks leftover implementation paths instead of goal-level commit`() {
-    val repoRoot = Files.createTempDirectory("goal-same-branch-finalize-block")
+  fun `same-branch finalize commits and pushes leftover implementation paths before opening the PR`() {
+    val repoRoot = Files.createTempDirectory("goal-same-branch-finalize-commit")
     val git =
       CommitAllRecordingGitOperations(
         dirtyPorcelain = " M src/Extra.kt",
@@ -1442,11 +1442,45 @@ class GoalRunnerLinearScratchFinalizeTest {
         ),
       )
 
-    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(linearRunRequest(repoRoot)))
-    assertEquals(GoalRunnerStopReason.PULL_REQUEST_FAILED, stopped.stop.reason)
-    assertContains(stopped.stop.blockedReason, "same-branch mode refuses to commit leftover implementation paths")
-    assertTrue(git.commitMessages.isEmpty())
-    assertEquals(0, pullRequests.openCount)
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
+    assertEquals(listOf(listOf("src/Extra.kt")), git.stagePathsCalls)
+    assertEquals(
+      listOf("chore(SKILL-56): goal finalization commit-all on 'feat/SKILL-56-goal'"),
+      git.commitMessages,
+    )
+    assertEquals(listOf("feat/SKILL-56-goal"), git.pushedBranches)
+    assertEquals(1, pullRequests.openCount)
+  }
+
+  @Test
+  fun `rerunning a finalized goal reports already complete without committing or opening a PR`() {
+    val repoRoot = Files.createTempDirectory("goal-already-complete")
+    val git = CommitAllRecordingGitOperations(dirtyPorcelain = " M .gitignore", currentBranch = "feat/SKILL-56-goal")
+    val pullRequests = RecordingPullRequestPort()
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(
+          specScratchStore = RecordingSpecScratchStore(),
+          gitOperations = git,
+        ),
+      )
+
+    val first = assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
+    val commitsAfterFirstRun = git.commitMessages.toList()
+
+    val second = assertIs<GoalRunnerRunReport.AlreadyComplete>(runner.run(linearRunRequest(repoRoot)))
+    assertEquals(first.pullRequestUrl, second.pullRequestUrl)
+    assertEquals(commitsAfterFirstRun, git.commitMessages)
+    assertEquals(1, pullRequests.openCount)
   }
 
   @Test
@@ -3865,6 +3899,7 @@ internal class InMemoryGoalManifestStore(
       parentWorkflowId = "wfl-parent",
       dbPath = "/tmp/skillbill-goal-runner/metrics.db",
       manifest = manifest,
+      controlState = controlState,
     ).takeIf { manifest.issueKey == issueKey }
 
   override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState {

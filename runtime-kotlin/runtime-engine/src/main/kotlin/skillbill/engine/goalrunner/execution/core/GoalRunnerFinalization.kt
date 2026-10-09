@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.decomposition.specSource
@@ -43,7 +42,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.specscratch.SpecScratchStore
-import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
@@ -304,17 +302,6 @@ class GoalRunnerFinalization(
     featureBranch: String,
     implementationPaths: List<String>,
   ): String? {
-    if (manifest.executionModel == DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK) {
-      val sample = implementationPaths.take(MAX_REPORTED_FINALIZE_DIRTY_PATHS).joinToString(", ")
-      val suffix =
-        if (implementationPaths.size > MAX_REPORTED_FINALIZE_DIRTY_PATHS) {
-          " (+${implementationPaths.size - MAX_REPORTED_FINALIZE_DIRTY_PATHS} more)"
-        } else {
-          ""
-        }
-      return "Goal finalization in same-branch mode refuses to commit leftover implementation paths " +
-        "($sample$suffix); route each through subtask commit_push finalization."
-    }
     if (featureBranch.isBlank()) {
       return "Goal finalization commit-all requires a feature branch."
     }

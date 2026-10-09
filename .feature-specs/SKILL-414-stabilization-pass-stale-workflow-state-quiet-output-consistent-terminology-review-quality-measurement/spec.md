@@ -6,7 +6,7 @@ decomposed
 
 ## Intended Outcome
 
-A stabilization pass before further features (SKILL-413, the code-quality review lane, builds on it). Stale workflow-state rows no longer break listing, supersede or status. Normal CLI runs are quiet. One terminology is used across README, docs, the dispatcher and CLI help, and CLI routing rejects typos instead of treating them as goal intakes. Review quality becomes measurable: findings carry their own category, and a small evaluation set scores review output. No new user-facing features.
+A stabilization pass before further features (SKILL-413, the code-quality review lane, builds on it). Stale workflow-state rows no longer break listing, supersede or status. Normal CLI runs are quiet. One terminology is used across README, docs, the dispatcher and CLI help, and CLI routing rejects typos instead of treating them as goal intakes. Review quality becomes measurable through a small evaluation set that scores existing prose output on demand. Uninterpretable prose goes to curation without blocking reviews. No new user-facing features.
 
 ## Context
 
@@ -49,7 +49,7 @@ Four independent subtasks, one per area. Each touches a different part of the tr
 | 1 | Stale workflow-state rows | Persistence, contracts and engine tolerance; reviewed by persistence and reliability. |
 | 2 | Quiet CLI output | Process logging configuration and diagnostics adapter; unrelated to the rest. |
 | 3 | Terminology, docs, help, routing | Docs and dispatcher text plus CLI help and routing; reviewed as user-facing wording. |
-| 4 | Review quality measurement | Finding-format contract, parser, and a new evaluation set. |
+| 4 | Review quality measurement | An on-demand evaluation set and scorer for existing prose output. |
 
 Shared files: subtasks 2 and 3 both edit `SkillBillCommand.kt`. Subtask 2 adds a `--verbose` root option and adds it to the `routeIntake` option-skip list. Subtask 3 changes the `routeIntake` goal guard and root help. Each subtask keeps every root option it finds in the skip list.
 
@@ -60,12 +60,13 @@ Shared files: subtasks 2 and 3 both edit `SkillBillCommand.kt`. Subtask 2 adds a
 3. A default CLI run emits no java.util.logging output. `--verbose` or `SKILL_BILL_VERBOSE` re-enables it. Routine gate-JVM decisions are not WARNING. Diagnostics records carry the caller's class. Handled conditions log one line without a stack trace.
 4. README carries a glossary of goal, workflow, subtask, phase, slot, step, operation, pack, lane and add-on. README, docs, the dispatcher and CLI help use those terms consistently, and the listed inaccuracies are fixed.
 5. The dispatcher has one rule per decision. CLI routing sends only issue-key, URL or spec-path intakes to goal. `phase verify` and `phase:verify` point to `operation verify`.
-6. The review finding format carries a per-finding category, the parser reads it, and a review evaluation set with a scorer reports precision and recall per lane. Its first case is capmo-android PR #3110.
+6. Reviews remain prose, with no new finding template, schema, production parser change, or review validation. An on-demand evaluation set reports precision and recall per lane where existing output can be interpreted, and lists the rest for curation with explicitly partial scores. Its first case is capmo-android PR #3110.
 
 ## Non-Goals
 
 - No new user-facing features. SKILL-413 (code-quality review lane) is separate and follows this.
 - No change to review finding rules or lane scopes.
+- No required structured review output, strict schema parsing, production parser changes, new review validation, or new review blocking conditions. Evaluation scores do not gate completion or validation.
 - No telemetry privacy change: `anonymous` stays the default level.
 - No bump of `WORKFLOW_STATE_CONTRACT_VERSION`.
 

@@ -1,5 +1,14 @@
 # goalrunner boundary decisions
 
+## [2026-10-09] Stop reruns of a finalized goal
+Context: The manifest reports complete as soon as every subtask is terminal, before the commit, push and PR. Rerunning a finished goal therefore finalized it again against whatever worktree and branch were current.
+Decision: After a Completed or CompletedNoChange report, the runner records goal_completed_at and the PR URL in the goal control state. A later run returns AlreadyComplete before migration, planning or finalization while that marker exists and every subtask is still terminal.
+Reason: Only successful finalization proves that the goal finished. Hard reset clears control state, and a scoped replan reopens a subtask, so both start real work again without a separate unmark step.
+
+## [2026-10-09] Commit leftover paths at goal finalization in every execution model
+Context: Same-branch goals stopped at finalization when the worktree had changes outside a subtask commit, which left the operator with no way through.
+Decision: Same-branch finalization uses the same commit-all, push and clean-worktree verification as stacked branches. The protected-branch and feature-branch checkout checks still apply.
+
 ## [2026-10-08] Apply no-change decisions on resume, not at record time
 Context: An operator decides a no-change pause through a separate command while the goal is stopped, and the process can crash between recording the decision and acting on it.
 Decision: The decision service validates the request and writes the decision to the no_change_pause artifact only. The goal runner applies it at the selected-subtask step on the next resume, and stops again with awaiting_no_change_decision while the decision is still null.

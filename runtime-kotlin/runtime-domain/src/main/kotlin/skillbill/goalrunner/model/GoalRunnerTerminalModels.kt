@@ -154,6 +154,17 @@ sealed interface GoalRunnerRunReport {
     val stop: GoalRunnerStopReport,
     override val parentWorkflowId: String? = null,
   ) : GoalRunnerRunReport
+
+  /** A previous run already finalized this goal, so the runner stopped without planning, committing or opening a PR. */
+  data class AlreadyComplete(
+    override val issueKey: String,
+    val completedAt: String,
+    val pullRequestUrl: String?,
+    override val parentWorkflowId: String? = null,
+  ) : GoalRunnerRunReport {
+    override val attemptedSubtasks: List<Int>
+      get() = emptyList()
+  }
 }
 
 fun GoalRunnerStopReason.toLedgerAction(): GoalAttemptLedgerAction =
