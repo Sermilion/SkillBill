@@ -20,6 +20,8 @@ import skillbill.cli.kernel.plan.StandalonePlanLauncher
 import skillbill.cli.kernel.plan.planReportText
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
@@ -94,6 +96,10 @@ class PhaseCommand(
             specSource = specSource ?: SpecSource.LOCAL,
             modelAssignment =
               FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
+            eventSink =
+              FeatureTaskRuntimeRunEventSink { event ->
+                event.phaseProgressLine()?.let(inputs.liveStdout)
+              },
           ),
         )
       } ?: return
@@ -218,7 +224,7 @@ object PhaseInvocationParser {
   }
 }
 
-private fun writePhaseResult(
+internal fun writePhaseResult(
   state: CliRunState,
   definitionId: String,
   result: PhaseRunResult,
@@ -233,7 +239,7 @@ private fun writePhaseResult(
     is PhaseRunResult.Completed ->
       state.completeText(
         listOfNotNull(
-          register ?: result.value,
+          register ?: result.completedOutputs.takeIf { it.isNotEmpty() }?.joinToString("\n") ?: result.value,
           result.specBundle?.let { bundle ->
             (
               listOf("Parent spec: ${bundle.parentSpecPath}", "Manifest: ${bundle.decompositionManifestPath}") +
@@ -248,6 +254,7 @@ private fun writePhaseResult(
     is PhaseRunResult.Blocked ->
       state.completeText(
         listOfNotNull(
+          result.completedOutputs.takeIf { it.isNotEmpty() }?.joinToString("\n"),
           register?.let { "Unaccepted report output:\n$it" },
           review?.output?.takeIf { it.isNotBlank() && it != register }?.let { "Retained findings:\n$it" },
           "Phase '$definitionId' blocked at '${result.stepId}': ${result.reason}",
@@ -275,3 +282,12 @@ private fun blockedReviewDetails(review: ParallelCodeReviewResult): String =
   ).joinToString("\n")
 
 private const val MAX_CITATION_DIAGNOSTICS = 5
+
+internal fun FeatureTaskRuntimeRunEvent.phaseProgressLine(): String? =
+  when (this) {
+    is FeatureTaskRuntimeRunEvent.PhaseStarted -> "Phase '$phaseId' ${if (resumed) "resumed" else "started"}.\n"
+    is FeatureTaskRuntimeRunEvent.PhaseCompleted -> "Phase '$phaseId' completed.\n"
+    is FeatureTaskRuntimeRunEvent.PhaseBlocked -> "Phase '$phaseId' blocked: $blockedReason\n"
+    is FeatureTaskRuntimeRunEvent.PhasePaused -> "Phase '$phaseId' paused: $pauseReason\n"
+    else -> null
+  }
