@@ -154,6 +154,29 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `oversized criteria and receipts are stored whole and reach the verdict whole`() {
+    VerifyOperationHarness().use { harness ->
+      val criteria = (1..60).map { index -> "$index. Criterion $index ${"c".repeat(120)}" }
+      val audit = (1..60).map { index -> "[PASS] #$index: ${"evidence ".repeat(70)}File$index.kt:$index" }
+      harness.runner.replies[VerifyPromptSections.EXTRACT_CRITERIA_STEP] =
+        "## Acceptance criteria\n${criteria.joinToString("\n")}\n\n## Non-goals\nNone.\n"
+      harness.runner.replies[VerifyPromptSections.COMPLETENESS_AUDIT_STEP] = audit.joinToString("\n")
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      val artifacts = harness.snapshot(token).artifacts
+      assertEquals(
+        criteria.joinToString("\n"),
+        VerifyWorkflow.string(artifacts["criteria_summary"], "acceptance_criteria"),
+      )
+      assertEquals(audit, VerifyWorkflow.strings(artifacts["completeness_audit_receipt"], VerifyWorkflow.FINDINGS))
+      val verdictInput = harness.runner.input(VerifyPromptSections.VERDICT_STEP).priorValues
+      assertTrue(audit.last() in verdictInput.getValue("completeness_audit_receipt"))
+    }
+  }
+
+  @Test
   fun `an interrupted run resumes at its current step without rerunning the settled ones`() {
     VerifyOperationHarness().use { harness ->
       val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token

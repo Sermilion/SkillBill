@@ -325,6 +325,7 @@ internal class VerifyOperationHarness : AutoCloseable {
 internal class VerifyScriptedRunner : PhaseRunner {
   val inputs = mutableListOf<PhaseStepInput>()
   val sideEffects = mutableMapOf<String, () -> Unit>()
+  val replies = REPLIES.toMutableMap()
   var failAt: String? = null
 
   override fun run(
@@ -337,7 +338,7 @@ internal class VerifyScriptedRunner : PhaseRunner {
       failAt = null
       error("interrupted at ${input.stepName}")
     }
-    return settled(REPLIES.getValue(input.stepName))
+    return settled(replies.getValue(input.stepName))
   }
 
   override fun run(

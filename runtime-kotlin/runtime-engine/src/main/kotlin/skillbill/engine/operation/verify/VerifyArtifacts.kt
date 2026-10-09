@@ -1,8 +1,5 @@
 package skillbill.engine.operation.verify
 
-import skillbill.contracts.JsonCodec
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-
 internal object VerifyWorkflow {
   const val COLLECT_INPUTS = "collect_inputs"
   const val EXTRACT_CRITERIA = "extract_criteria"
@@ -90,17 +87,6 @@ internal data class VerifyCriteria(
       TECHNICAL_CONSTRAINTS to technicalConstraints,
     )
 
-  fun bounded(
-    budget: VerifyBudget,
-    workflowId: String,
-  ): VerifyCriteria =
-    VerifyCriteria(
-      budget.text(acceptanceCriteria, VerifyWorkflow.CRITERIA_SUMMARY, workflowId),
-      budget.text(nonGoals, VerifyWorkflow.CRITERIA_SUMMARY, workflowId),
-      budget.text(rolloutExpectation, VerifyWorkflow.CRITERIA_SUMMARY, workflowId),
-      budget.text(technicalConstraints, VerifyWorkflow.CRITERIA_SUMMARY, workflowId),
-    )
-
   fun summary(): String =
     listOf(
       "## Acceptance criteria" to acceptanceCriteria,
@@ -171,65 +157,5 @@ internal data class VerifyCriteria(
       }
       return null
     }
-  }
-}
-
-internal class VerifyBudget(
-  private val diagnostics: RuntimeDiagnostics,
-) {
-  fun text(
-    value: String,
-    artifact: String,
-    workflowId: String,
-  ): String {
-    val trimmed = value.trim()
-    val bytes = trimmed.encodeToByteArray()
-    if (bytes.size <= SECTION_BYTES) return trimmed
-    truncated(artifact, workflowId)
-    return bytes.copyOf(SECTION_BYTES).decodeToString().trimEnd('�')
-  }
-
-  fun lines(
-    lines: List<String>,
-    artifact: String,
-    workflowId: String,
-    maxItems: Int = RECEIPT_ITEMS,
-    maxBytes: Int = RECEIPT_BYTES,
-  ): List<String> {
-    val kept = mutableListOf<String>()
-    var bytes = 0
-    for (line in lines.map(String::trim).filter(String::isNotEmpty)) {
-      val bounded = line.take(LINE_CHARS)
-      val size = JsonCodec.valueToJsonString(bounded).encodeToByteArray().size
-      if (kept.size == maxItems || bytes + size > maxBytes) {
-        truncated(artifact, workflowId)
-        break
-      }
-      kept += bounded
-      bytes += size
-    }
-    return kept
-  }
-
-  fun paths(
-    paths: List<String>,
-    workflowId: String,
-  ): List<String> = lines(paths, VerifyWorkflow.DIFF_PROJECTION, workflowId, CHANGED_FILES_ITEMS, CHANGED_FILES_BYTES)
-
-  private fun truncated(
-    artifact: String,
-    workflowId: String,
-  ) = diagnostics.warning(
-    "seam=verify_projection_budget value_expected=within_budget value_used=truncated artifact=$artifact " +
-      "workflow_id=$workflowId",
-  )
-
-  private companion object {
-    const val SECTION_BYTES = 4 * 1024
-    const val RECEIPT_BYTES = 6 * 1024
-    const val RECEIPT_ITEMS = 32
-    const val CHANGED_FILES_ITEMS = 200
-    const val CHANGED_FILES_BYTES = 16 * 1024
-    const val LINE_CHARS = 400
   }
 }

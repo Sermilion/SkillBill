@@ -51,9 +51,8 @@ class VerifyOperation(
   override val id: String = "verify"
 
   private val store = VerifyWorkflowStore(workflows)
-  private val budget = VerifyBudget(diagnostics)
   private val sequence =
-    VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), budget, clock)
+    VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), clock)
 
   override fun pre(context: OperationContext): OperationRefusal? {
     val arguments = context.arguments
@@ -133,7 +132,7 @@ class VerifyOperation(
         is OperationStepResult.Refused -> return step.refusal
         is OperationStepResult.Settled -> step.value
       }
-    val criteria = VerifyCriteria.parse(extracted).bounded(budget, workflowId)
+    val criteria = VerifyCriteria.parse(extracted)
     val parked =
       store.write(
         workflowId,
@@ -267,7 +266,7 @@ class VerifyOperation(
       return null
     }
     val projection =
-      when (val refreshed = sequence.diffProjection(run.context, run.target, run.workflowId)) {
+      when (val refreshed = sequence.diffProjection(run.context, run.target)) {
         is VerifyDiffProjection.Ready -> refreshed.artifact
         is VerifyDiffProjection.Unavailable -> return OperationOutcome.Failed(refreshed.reason)
       }
