@@ -112,6 +112,7 @@ class DatabaseMigrationsTest {
         45 to "skill-378-drop-experiment-tables",
         46 to "allow-goal-planning-phase-output-0-7",
         47 to "add-operation-proposals",
+        48 to "add-goal-no-change-reason",
       ),
       migrationDefinitions,
     )
@@ -238,6 +239,36 @@ class DatabaseMigrationsTest {
         migrationRows(connection).singleOrNull { row ->
           row.version == 45 && row.name == "skill-378-drop-experiment-tables"
         },
+      )
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v48 adds no change reason to goal tables of a database that already applied v39`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v48-no-change-reason").resolve("legacy.db")
+    val goalTables = listOf("goal_run_sessions", "goal_issue_progress")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        goalTables.forEach { table -> statement.executeUpdate("ALTER TABLE $table DROP COLUMN no_change_reason") }
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'add-goal-no-change-reason'")
+        statement.executeUpdate(goalRunSessionInsert("wfl-kept"))
+      }
+      goalTables.forEach { table -> assertFalse("no_change_reason" in columnNames(connection, table), table) }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      goalTables.forEach { table -> assertTrue("no_change_reason" in columnNames(connection, table), table) }
+      assertEquals(
+        listOf("wfl-kept"),
+        loadGoalRows(connection, "goal_run_sessions").map { row -> row["workflow_id"] },
+      )
+      assertNotNull(
+        migrationRows(connection).singleOrNull { row -> row.version == 48 && row.name == "add-goal-no-change-reason" },
       )
     }
 

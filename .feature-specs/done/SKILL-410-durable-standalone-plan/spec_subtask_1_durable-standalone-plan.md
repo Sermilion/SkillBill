@@ -1,6 +1,6 @@
 # SKILL-410 Subtask 1: Durable standalone plan that a full run resumes
 
-Parent spec: `.feature-specs/SKILL-410-durable-standalone-plan/spec.md`. Read its "Current state"
+Parent spec: `spec.md`. Read its "Current state"
 and "Decisions" sections first. This subtask implements all of them.
 
 ## Scope
@@ -43,7 +43,7 @@ Owned paths (elided segments are `...`):
 - `runtime-engine/.../goalrunner/reset/GoalRunnerPurgeCoordinator.kt` and the SQLite purge
   (`SQLiteUnitOfWork.purgeDecomposedGoal` or its current replacement): removing plan workflows.
 - Port defaults in `testFixtures` whose interfaces change.
-- Docs: `docs/runtime-command-guidance.md` (Phases paragraph), `README.md` (phase bullet near
+- Docs: `../../../docs/runtime-command-guidance.md` (Phases paragraph), `README.md` (phase bullet near
   line 180 and the `phase:plan` table row), `runtime-kotlin/ARCHITECTURE.md` (the run-state
   kind and phase-run paragraphs near lines 1290-1365), and `skills/skill-bill/content.md`
   (frontmatter description; run `./install.sh` after editing it).
@@ -127,7 +127,7 @@ Owned paths (elided segments are `...`):
 
 ## Implementation Details
 
-Paths below are relative to `runtime-kotlin/` unless they start with `docs/`, `README.md` or
+Paths below are relative to `../../../runtime-kotlin` unless they start with `docs/`, `README.md` or
 `skills/`. Anchors come from the SKILL-410 preplan digest; apply each step where the named
 behaviour now lives.
 
@@ -359,12 +359,12 @@ behaviour now lives.
     phase records and run invariants. It stops at the verified bundle and `skill-bill <KEY>`
     continues it; the other phases stay in-memory. Keep the line that the dispatcher never
     invokes `phase plan` itself. Files:
-    - `docs/runtime-command-guidance.md` (Phases paragraph, ~line 71)
-    - `README.md` (~lines 180-203: phase bullet, `phase:plan` row and example)
-    - `runtime-kotlin/ARCHITECTURE.md` (~lines 1290-1371: run-state kind, in-memory phase run,
+    - `../../../docs/runtime-command-guidance.md` (Phases paragraph, ~line 71)
+    - `../../../README.md` (~lines 180-203: phase bullet, `phase:plan` row and example)
+    - `../../../runtime-kotlin/ARCHITECTURE.md` (~lines 1290-1371: run-state kind, in-memory phase run,
       `specBundleRequired` and the plan result bundle)
     - the `PhaseCommand` help
-    - `skills/skill-bill/content.md` (frontmatter description, the `phase:plan` row ~line 60,
+    - `../../../skills/skill-bill/content.md` (frontmatter description, the `phase:plan` row ~line 60,
       ~line 168)
 
 ### Tests
@@ -466,7 +466,7 @@ Each test below is tied to an AC or to a realistic bug, and covers one rule.
    such as a `goal_child` row recorded with `plan`.
 10. Goal purge removes every plan workflow for the key and repository identity, with its owned
     rows and repo-local directories, and leaves `spec.md` byte-for-byte unchanged.
-11. The docs, the `phase` help text and the `skills/skill-bill/content.md` description match the
+11. The docs, the `phase` help text and the `../../../skills/skill-bill/content.md` description match the
     new behaviour, and none still says `phase plan` writes no workflow row or cannot be resumed.
 
 ## Test Obligations

@@ -9,6 +9,7 @@ import skillbill.infrastructure.sqlite.core.migration.addReviewFindingOutcomeKey
 import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttribution
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
+import skillbill.infrastructure.sqlite.core.migration.area.GoalNoChangeReasonMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
 import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
@@ -700,5 +701,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 47,
       name = "add-operation-proposals",
       operation = OperationProposalsMigration::apply,
+    ),
+    DatabaseMigration(
+      version = 48,
+      name = "add-goal-no-change-reason",
+      operation = GoalNoChangeReasonMigration::apply,
     ),
   )

@@ -39,7 +39,7 @@ The operator wants to plan now and execute later:
   parent spec for the key already exists.
 - The durable feature-task route is spec-path driven. `FeatureTaskRuntimeRunEntry.open`
   (`runner/FeatureTaskRuntimeRunEntry.kt`) needs a governed spec path. The execution identity
-  contract (`orchestration/contracts/feature-task-execution-identity-schema.yaml`, `0.1`)
+  contract (`../../../orchestration/contracts/feature-task-execution-identity-schema.yaml`, `0.1`)
   requires `governed_spec_path` matching `^\.feature-specs/...\.md$` and
   `route_scope ∈ {standalone, goal_child}`.
 - Admission and crash recovery accept only `SkeletonDefinition.forRun(routeScope)`:
@@ -83,7 +83,7 @@ The operator wants to plan now and execute later:
   derivation and the writer are the ones goal intake preparation already uses; this step writes
   the parent spec only, with no manifest and no subtask specs. The seeded spec is the
   workflow's governed spec path and claims the key on disk, so local key allocation (which
-  reads `.feature-specs/`) cannot hand out the key again. The workflow records that the runtime
+  reads `../..`) cannot hand out the key again. The workflow records that the runtime
   seeded the spec and the seed's SHA-256.
 - **Existing parent spec.** The plan's pre-launch refusal changes from "a parent spec exists" to
   "a decomposition manifest exists for the key". A spec-path intake (an existing `spec.md`
@@ -151,7 +151,7 @@ The operator wants to plan now and execute later:
    rows and directories. It leaves `spec.md` unchanged.
 9. `phase` still lists exactly `review`, `validation`, `plan`, `pr` and `monitor`. The other
    phases stay in-memory with unchanged behaviour.
-10. `docs/runtime-command-guidance.md`, `README.md`, `runtime-kotlin/ARCHITECTURE.md`, the
+10. `../../../docs/runtime-command-guidance.md`, `README.md`, `runtime-kotlin/ARCHITECTURE.md`, the
     `phase` command help and the `skills/skill-bill/content.md` description describe `phase
     plan` as a durable, resumable run that a full run continues.
 
