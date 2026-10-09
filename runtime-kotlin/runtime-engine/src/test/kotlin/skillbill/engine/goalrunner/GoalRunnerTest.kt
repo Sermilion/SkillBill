@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.lifecycle.core.ownership
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
@@ -62,6 +63,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
@@ -1473,6 +1475,95 @@ class GoalRunnerLinearScratchFinalizeTest {
     assertEquals(0, git.stageAllCalls)
     assertTrue(git.commitMessages.isEmpty())
     assertTrue(git.pushedBranches.isEmpty())
+  }
+
+  @Test
+  fun `goal completion waits for monitoring after the pull request exists`() {
+    val repoRoot = Files.createTempDirectory("goal-monitor-completion")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val pullRequests = RecordingPullRequestPort()
+    val events = mutableListOf<GoalRunnerRunEvent>()
+    var monitored = false
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(
+          ciMonitor =
+            GoalRunnerCiMonitor { state, request ->
+              assertEquals(1, pullRequests.openCount)
+              assertEquals("SKILL-56", request.issueKey)
+              assertEquals(
+                requireNotNull(store.loadByIssueKey("SKILL-56", repoRoot)).parentWorkflowId,
+                state.parentWorkflowId,
+              )
+              assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
+              monitored = true
+              PhaseRunResult.Completed("goal-monitor", listOf("monitor"), null, "CI passed")
+            },
+        ),
+      )
+
+    val result = runner.run(linearRunRequest(repoRoot).copy(eventSink = GoalRunnerEventSink(events::add)))
+
+    assertIs<GoalRunnerRunReport.Completed>(result)
+    assertTrue(monitored)
+    assertEquals(1, events.filterIsInstance<GoalRunnerRunEvent.Completed>().size)
+  }
+
+  @Test
+  fun `failed monitoring resumes without replaying completed subtasks`() {
+    val repoRoot = Files.createTempDirectory("goal-monitor-resume")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val events = mutableListOf<GoalRunnerRunEvent>()
+    var monitorAttempts = 0
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort =
+            GoalPullRequestPort {
+              GoalPullRequestResult.Existing("https://github.com/example/repo/pull/1")
+            },
+        ).copy(
+          ciMonitor =
+            GoalRunnerCiMonitor { _, _ ->
+              monitorAttempts += 1
+              if (monitorAttempts == 1) {
+                PhaseRunResult.Blocked(
+                  "goal-monitor",
+                  emptyList(),
+                  null,
+                  "monitor",
+                  "CI still fails after three repairs",
+                )
+              } else {
+                PhaseRunResult.Completed("goal-monitor", listOf("monitor"), null, "CI passed")
+              }
+            },
+        ),
+      )
+    val request = linearRunRequest(repoRoot).copy(eventSink = GoalRunnerEventSink(events::add))
+
+    val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(request))
+    assertEquals(GoalRunnerStopReason.BLOCKED, stopped.stop.reason)
+    assertEquals("monitor", stopped.stop.lastResumableStep)
+    assertEquals(requireNotNull(store.loadByIssueKey("SKILL-56", repoRoot)).parentWorkflowId, stopped.stop.workflowId)
+    assertContains(stopped.stop.blockedReason, "CI still fails")
+    assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
+    assertEquals(2, monitorAttempts)
   }
 
   @Test

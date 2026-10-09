@@ -46,17 +46,34 @@ class PhaseRunEntry(
       .getOrThrow()
   }
 
+  fun runForGoal(
+    request: PhaseRunRequest,
+    parentWorkflowId: String,
+    expectedBranch: String,
+  ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
+
   private fun runInternal(
     request: PhaseRunRequest,
     invocationId: String,
+    workflowId: String = "",
+    expectedBranch: String? = null,
   ): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
     }
     val branch = currentBranch(request)
+    if (expectedBranch != null && branch?.branch != expectedBranch) {
+      return PhaseRunResult.Blocked(
+        invocationId,
+        emptyList(),
+        null,
+        definition.id,
+        "Goal monitoring requires branch '$expectedBranch'; current branch is '${branch?.branch.orEmpty()}'.",
+      )
+    }
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val facts = InMemoryPhaseRunFacts(request, definition, intake)
+    val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId)
     val selection = strategySelectionFacts(facts)
     val executionPlan =
       strategies.executionPlan(

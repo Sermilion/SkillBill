@@ -5,6 +5,8 @@ import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
+import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
@@ -365,6 +367,8 @@ internal data class GoalCliFixture(
       workflowGitOperations = workflowGitOperations,
       agentRunLauncher = launcher,
       goalPullRequestPort = pullRequests,
+      pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+      pullRequestChecksLookup = PassingPullRequestChecksLookup,
       liveStdout = liveStdout,
       liveStderr = liveStderr,
       executableLookup = ExecutableLookup { true },
@@ -726,8 +730,11 @@ internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
 }
 
 internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() {
-  override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
+  override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult =
     WorkflowGitNameListResult.Listed(listOf("Main.kt"))
+
+  override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
+    WorkflowGitNameListResult.Listed(emptyList())
 
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "test-repository-fingerprint")
@@ -774,7 +781,8 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
     branch: String,
   ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
 
-  override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
+  override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "feat/SKILL-901-goal")
 
   override fun captureGoalSubtaskReviewBaseline(
     repoRoot: Path,
@@ -822,6 +830,11 @@ internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() 
     branch: String,
     expectedBaseBranch: String,
   ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = expectedBaseBranch)
+
+  override fun pushBranch(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok()
 
   override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 

@@ -2,12 +2,18 @@ package skillbill.engine.featuretask.phaserun
 
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.DefaultGoalRunnerCiMonitor
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -89,6 +95,62 @@ class PhaseMonitorRunTest {
     assertTrue(blocked.reason.contains("after 3 fix attempt(s)"), blocked.reason)
     assertTrue(blocked.reason.contains("validate"), blocked.reason)
     assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+  }
+
+  @Test
+  fun `goal monitor reuses CI repair and does not publish a separate standalone execution`() {
+    initFeatureBranch()
+    var observations = 0
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        observations += 1
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "validate",
+              if (observations == 1) CheckBucket.FAIL else CheckBucket.PASS,
+              "https://ci.example/run",
+            ),
+          ),
+        )
+      }
+    val outcomes = RecordingOutcomeStore()
+    val monitor = DefaultGoalRunnerCiMonitor(entry(checks = checks), outcomes, clock)
+    val result =
+      monitor.monitor(
+        GoalRunnerManifestState(
+          "goal-parent",
+          database.resolveDbPath().toString(),
+          manifest(1).copy(featureBranch = FEATURE_BRANCH),
+        ),
+        GoalRunnerRunRequest("SKILL-56", repoRoot, "claude"),
+      )
+
+    assertIs<PhaseRunResult.Completed>(result)
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+    assertEquals(2, observations)
+    assertTrue(outcomes.progressEvents.isNotEmpty())
+    assertTrue(outcomes.progressEvents.all { it.workflowId == "goal-parent" })
+    assertTrue(outcomes.progressEvents.any { it.stepId == MONITOR_FIX })
+    assertEquals(emptyList(), SlotBaselineSqlite.rows(database.resolveDbPath(), "standalone_phase_status"))
+  }
+
+  @Test
+  fun `goal monitor cannot succeed without its published pull request or on another branch`() {
+    initFeatureBranch()
+    val missing =
+      entry(identity = { _, _ -> PullRequestIdentity.Absent }).runForGoal(
+        monitorRequest("SKILL-904"),
+        "goal-parent",
+        FEATURE_BRANCH,
+      )
+    assertIs<PhaseRunResult.Blocked>(missing)
+    assertTrue(missing.reason.contains("No open pull request"))
+
+    val wrongBranch = entry().runForGoal(monitorRequest("SKILL-904"), "goal-parent", "feat/other")
+    assertIs<PhaseRunResult.Blocked>(wrongBranch)
+    assertTrue(wrongBranch.reason.contains("requires branch"))
+    assertEquals(emptyList(), launcher.requests)
   }
 
   private fun initFeatureBranch() {

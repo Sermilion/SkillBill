@@ -72,9 +72,9 @@ internal data class InMemoryPhaseRunFacts(
   val request: PhaseRunRequest,
   val definition: SkeletonDefinition,
   val intake: PhaseRunIntake,
+  override val workflowId: String = "",
 ) : FeatureTaskRuntimeRunFacts {
   override val issueKey: String = intake.issueKey
-  override val workflowId: String = ""
   override val runInvariants: FeatureTaskRuntimeRunInvariants = intake.runInvariants
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()

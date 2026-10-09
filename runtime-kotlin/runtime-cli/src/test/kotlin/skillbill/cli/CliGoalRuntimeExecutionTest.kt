@@ -4,7 +4,11 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.SkillBillVersion
+import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
+import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -212,6 +216,30 @@ class CliGoalRuntimeExecutionTest {
   }
 
   @Test
+  fun `goal CLI blocks when CI checks cannot be read`() {
+    val fixture = goalFixture(subtaskCount = 1)
+    val launcher = GoalFixtureAgentRunLauncher(fixture)
+    val context = fixture.context(launcher = launcher)
+    val unavailable =
+      context.copy(
+        pullRequestChecksLookup =
+          PullRequestChecksLookup {
+              _,
+              _,
+            ->
+            PullRequestChecks.Unavailable("CI lookup unavailable")
+          },
+      )
+
+    val blocked = CliRuntime.run(fixture.goalCommand(), unavailable)
+
+    assertEquals(3, blocked.exitCode, blocked.stdout)
+    assertContains(blocked.stdout, "CI lookup unavailable")
+    assertFalse(blocked.stdout.contains("goal SKILL-901: finished"))
+    assertEquals(listOf(1), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
+  }
+
+  @Test
   fun `goal run does not relay progress or transition events`() {
     val fixture = goalFixture(subtaskCount = 1)
     val liveStdout = StringBuilder()
@@ -260,6 +288,8 @@ class CliGoalRuntimeExecutionTest {
           workflowGitOperations = GoalTestWorkflowGitOperations,
           agentRunLauncher = launcher,
           goalPullRequestPort = fixture.pullRequests,
+          pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+          pullRequestChecksLookup = PassingPullRequestChecksLookup,
           environment = mapOf("CLAUDECODE" to "1"),
           executableLookup = ExecutableLookup { true },
         ),
@@ -282,6 +312,8 @@ class CliGoalRuntimeExecutionTest {
           workflowGitOperations = GoalTestWorkflowGitOperations,
           agentRunLauncher = launcher,
           goalPullRequestPort = fixture.pullRequests,
+          pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+          pullRequestChecksLookup = PassingPullRequestChecksLookup,
           environment = mapOf("CLAUDECODE" to "1", "SKILL_BILL_AGENT" to "junie"),
           executableLookup = ExecutableLookup { true },
         ),

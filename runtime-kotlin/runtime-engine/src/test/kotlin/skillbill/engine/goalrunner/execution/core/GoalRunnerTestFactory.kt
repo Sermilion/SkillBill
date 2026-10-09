@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
@@ -32,6 +33,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
+import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.planningMigrationForTest
@@ -135,6 +137,10 @@ internal data class GoalRunnerTestWiring(
   val phaseQuery: FeatureTaskRuntimePhaseQuery?,
   val diagnostics: RuntimeDiagnostics,
   val phaseRecorder: FeatureTaskRuntimePhaseRecorder,
+  val ciMonitor: GoalRunnerCiMonitor =
+    GoalRunnerCiMonitor { _, _ ->
+      PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
+    },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 )
 
@@ -179,6 +185,10 @@ internal data class GoalRunnerTestInputs(
   val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService? = null,
   val executionCoordinator: GoalRunnerExecutionCoordinator = DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR,
   val phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
+  val ciMonitor: GoalRunnerCiMonitor =
+    GoalRunnerCiMonitor { _, _ ->
+      PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
+    },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
@@ -198,6 +208,7 @@ internal data class GoalRunnerTestInputs(
       diagnostics = NoopRuntimeDiagnostics,
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
+      ciMonitor = ciMonitor,
     )
 }
 
@@ -247,6 +258,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       wiring.unaddressedFindingsLedgerService,
       progressReader,
       wiring.phaseRecorder,
+      wiring.ciMonitor,
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
   val perRunLoopAssembler =

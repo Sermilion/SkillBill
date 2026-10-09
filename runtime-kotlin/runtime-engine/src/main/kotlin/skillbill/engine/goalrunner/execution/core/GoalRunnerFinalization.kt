@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCheckpointRefs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.goalrunner.execution.support.MAX_REPORTED_FINALIZE_DIRTY_PATHS
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.parseGitPorcelainPaths
@@ -21,6 +22,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -61,6 +63,7 @@ class GoalRunnerFinalization(
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val progressReader: GoalRunnerProgressReader,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
+  private val ciMonitor: GoalRunnerCiMonitor,
 ) {
   fun finalizeGoal(
     state: GoalRunnerManifestState,
@@ -92,29 +95,18 @@ class GoalRunnerFinalization(
         ),
       )
     }
-    val findingsLedger = resolveFindingsLedger(finalState.manifest.issueKey)
     val result = pullRequestPort.open(finalState.manifest.toPullRequestRequest(request.repoRoot))
     return when (result) {
-      is GoalPullRequestResult.Opened -> {
-        deleteGoalSpecScratchOnSuccess(finalState.manifest, request)
-        completed(
-          finalState.manifest,
+      is GoalPullRequestResult.Opened ->
+        completeMonitoredGoal(finalState, request, attempted, result.url, GoalPullRequestStatus.OPENED)
+      is GoalPullRequestResult.Existing ->
+        completeMonitoredGoal(
+          finalState,
+          request,
           attempted,
-          pullRequestUrl = result.url,
-          pullRequestStatus = GoalPullRequestStatus.OPENED,
-          findingsLedger,
+          result.url,
+          GoalPullRequestStatus.EXISTING,
         )
-      }
-      is GoalPullRequestResult.Existing -> {
-        deleteGoalSpecScratchOnSuccess(finalState.manifest, request)
-        completed(
-          finalState.manifest,
-          attempted,
-          pullRequestUrl = result.url,
-          pullRequestStatus = GoalPullRequestStatus.EXISTING,
-          findingsLedger,
-        )
-      }
       is GoalPullRequestResult.Failed ->
         stopped(
           StoppedReportArgs(
@@ -131,6 +123,45 @@ class GoalRunnerFinalization(
         )
     }
   }
+
+  private fun completeMonitoredGoal(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+    pullRequestUrl: String,
+    pullRequestStatus: GoalPullRequestStatus,
+  ): GoalRunnerRunReport =
+    monitorBeforeCompletion(state, request, attempted) ?: run {
+      deleteGoalSpecScratchOnSuccess(state.manifest, request)
+      completed(
+        state.manifest,
+        attempted,
+        pullRequestUrl,
+        pullRequestStatus,
+        resolveFindingsLedger(state.manifest.issueKey),
+      )
+    }
+
+  private fun monitorBeforeCompletion(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): GoalRunnerRunReport.Stopped? =
+    when (val result = ciMonitor.monitor(state, request)) {
+      is PhaseRunResult.Completed -> null
+      is PhaseRunResult.Blocked ->
+        stopped(
+          StoppedReportArgs(
+            issueKey = state.manifest.issueKey,
+            attempted = attempted,
+            subtaskId = 0,
+            reason = GoalRunnerStopReason.BLOCKED,
+            blockedReason = result.reason,
+            workflowId = state.parentWorkflowId,
+            lastResumableStep = result.stepId,
+          ),
+        )
+    }
 
   private fun noChangeFinalization(
     manifest: DecompositionManifest,
