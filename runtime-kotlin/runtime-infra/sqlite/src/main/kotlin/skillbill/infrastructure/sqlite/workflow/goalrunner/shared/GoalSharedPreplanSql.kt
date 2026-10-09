@@ -40,10 +40,11 @@ internal val INVALIDATED_SHARED_PREPLAN_PAYLOAD_SHA256: String =
 internal class GoalSharedPreplanSql(
   private val connection: Connection,
   private val diagnostics: RuntimeDiagnostics,
+  private val transactionActive: Boolean = false,
 ) {
   fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult {
     requireNormalizedSharedPreplan(checkpoint)
-    return connection.inNestedWriteTransaction(diagnostics) {
+    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       val inserted = connection.insertSharedPreplanRow(checkpoint)
       if (!inserted) {
         when (val stored = findSharedPreplan(checkpoint.identity)) {
@@ -76,7 +77,7 @@ internal class GoalSharedPreplanSql(
   ): GoalPlanningPreparationWriteResult {
     requireNormalizedSharedPreplan(checkpoint)
     require(expectedPayloadSha256.isNotBlank()) { "expectedPayloadSha256 is required." }
-    return connection.inNestedWriteTransaction(diagnostics) {
+    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       val updated =
         connection.prepareStatement(
           """UPDATE goal_shared_preplans SET normalized_issue_key = ?, repository_identity = ?,
@@ -129,7 +130,7 @@ internal class GoalSharedPreplanSql(
   ): GoalPlanningPreparationWriteResult {
     require(expectedPayloadSha256.isNotBlank()) { "expectedPayloadSha256 is required." }
     normalizedIdentityFailure(identity)?.let { throwNormalizedIdentityFailure(identity.parentGoalWorkflowId, it) }
-    return connection.inNestedWriteTransaction(diagnostics) {
+    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       val updated =
         connection.prepareStatement(
           """UPDATE goal_shared_preplans SET parent_spec_hash = ?, decomposition_manifest_hash = ?,

@@ -8,7 +8,9 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.plan.StandalonePlanCheckpointImport
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
@@ -86,7 +88,15 @@ fun engineWorkflowGoalRunnerManifestStore(
     decompositionManifestValidator = decompositionManifestValidator,
     decompositionManifestStore = decompositionManifestStore,
     clock = clock,
-    random = Random.Default,
+    manifestLoader =
+      WorkflowGoalRunnerManifestLoader(
+        database,
+        decompositionManifestValidator,
+        decompositionManifestStore,
+        clock,
+        Random.Default,
+        StandalonePlanCheckpointImport(AcceptingFeatureTaskRuntimeWireArtifactValidator),
+      ),
     decompositionManifestWriter = decompositionManifestWriter,
     repositoryRoot = repositoryRoot,
     planningHydrator = planningHydrator,

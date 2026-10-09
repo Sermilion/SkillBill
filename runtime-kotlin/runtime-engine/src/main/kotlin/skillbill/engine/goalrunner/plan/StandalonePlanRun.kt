@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
@@ -20,6 +21,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePlanSeedFromArtifact
+import skillbill.workflow.taskruntime.artifact.decomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -59,6 +61,7 @@ class StandalonePlanRun(
   private val repositories: RepositoryEnclosingRootPort,
   private val fileStore: DecompositionManifestStore,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
+  private val preparation: StandalonePlanPreparation,
 ) {
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
@@ -83,6 +86,26 @@ class StandalonePlanRun(
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
     if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
+      val completed =
+        database.read { unitOfWork ->
+          unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, repositories.repositoryIdentity(repoRoot))
+            ?.let { id ->
+              unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
+                ?.let { id to it.artifacts.decomposeTerminal() }
+            }
+        }
+      if (completed != null && (suppliedIntake == null || suppliedIntake.trim().equals(issueKey, ignoreCase = true))) {
+        val (id, terminal) = completed
+        if (terminal != null) {
+          preparation.capture(id, issueKey, repoRoot)
+          return StandalonePlanResult.Completed(
+            id,
+            terminal.parentSpecPath,
+            terminal.decompositionManifestPath,
+            terminal.subtaskSpecPaths,
+          )
+        }
+      }
       return StandalonePlanResult.Refused(
         "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
           "Run `skill-bill $issueKey` to execute it.",
@@ -148,7 +171,7 @@ class StandalonePlanRun(
             ),
           ),
       )
-    return settle(entry.run(input) { error("Could not open a plan workflow: ${it.error}") })
+    return settle(entry.run(input) { error("Could not open a plan workflow: ${it.error}") }, repoRoot)
   }
 
   private fun resume(
@@ -172,18 +195,28 @@ class StandalonePlanRun(
         definition = SkeletonDefinition.PLAN,
         protectedSpecSha256 = (seed?.specSha256 ?: specHash(specPath)).takeIf { operatorAuthored },
       )
-    return settle(entry.run(input) { error("Could not resume plan workflow '${candidate.workflowId}': ${it.error}") })
+    return settle(
+      entry.run(input) {
+        error("Could not resume plan workflow '${candidate.workflowId}': ${it.error}")
+      },
+      repoRoot,
+    )
   }
 
-  private fun settle(report: FeatureTaskRuntimeRunReport): StandalonePlanResult =
+  private fun settle(
+    report: FeatureTaskRuntimeRunReport,
+    repoRoot: Path,
+  ): StandalonePlanResult =
     when (report) {
-      is FeatureTaskRuntimeRunReport.Decomposed ->
+      is FeatureTaskRuntimeRunReport.Decomposed -> {
+        preparation.capture(report.workflowId, report.issueKey, repoRoot)
         StandalonePlanResult.Completed(
           report.workflowId,
           report.parentSpecPath,
           report.decompositionManifestPath,
           report.subtaskSpecPaths,
         )
+      }
       is FeatureTaskRuntimeRunReport.Blocked -> StandalonePlanResult.Blocked(report.workflowId, report.blockedReason)
       is FeatureTaskRuntimeRunReport.Paused -> StandalonePlanResult.Blocked(report.workflowId, report.pauseReason)
       is FeatureTaskRuntimeRunReport.Completed ->

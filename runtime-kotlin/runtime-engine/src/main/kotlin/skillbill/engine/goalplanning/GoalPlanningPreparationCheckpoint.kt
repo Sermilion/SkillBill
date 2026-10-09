@@ -57,6 +57,19 @@ class GoalPlanningPreparationCheckpoint(
     preparationValidator.validate(record)
   }
 
+  internal fun checkpointBundle(
+    shared: SharedGoalPreplanCheckpoint,
+    plans: List<GoalSubtaskPlanCheckpoint>,
+  ) {
+    gate.validateSharedPreplan(shared)
+    plans.forEach(gate::validateSubtaskPlan)
+    require(plans.all { it.identity == shared.identity && it.provenance == shared.provenance })
+    database.transaction { unitOfWork ->
+      unitOfWork.goalPlanningPreparations.checkpointSharedPreplan(shared).appliedOrThrow()
+      plans.forEach { unitOfWork.goalPlanningPreparations.checkpointSubtaskPlan(it).appliedOrThrow() }
+    }
+  }
+
   fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
     gate.validateSharedPreplan(checkpoint)
     database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(checkpoint).appliedOrThrow() }

@@ -28,15 +28,48 @@ internal class GoalPlanningPreparationStore(
 ) : GoalPlanningPreparationRepository,
   SharedGoalPreplanRepository by SharedGoalPreplanStore(
     GoalPlanningStatusProjectionSql(connection),
-    GoalSharedPreplanSql(connection, diagnostics),
+    GoalSharedPreplanSql(connection, diagnostics, transactionActive),
   ),
   GoalSubtaskPlanRepository by GoalSubtaskPlanStore(
     GoalPlanningStatusProjectionSql(connection),
-    GoalSubtaskPlanSql(connection, GoalSharedPreplanSql(connection, diagnostics), diagnostics),
+    GoalSubtaskPlanSql(
+      connection,
+      GoalSharedPreplanSql(connection, diagnostics, transactionActive),
+      diagnostics,
+      transactionActive,
+    ),
   ) {
-  private val sharedPreplan = GoalSharedPreplanSql(connection, diagnostics)
-  private val subtaskPlan = GoalSubtaskPlanSql(connection, sharedPreplan, diagnostics)
+  private val sharedPreplan = GoalSharedPreplanSql(connection, diagnostics, transactionActive)
+  private val subtaskPlan = GoalSubtaskPlanSql(connection, sharedPreplan, diagnostics, transactionActive)
   internal val preparationRecord = GoalPlanningPreparationRecordSql(connection, diagnostics)
+
+  override fun transferPlanningOwnership(
+    source: GoalPlanningIdentity,
+    target: GoalPlanningIdentity,
+  ): GoalPlanningPreparationWriteResult {
+    check(transactionActive) { "Planning ownership transfer requires the caller's transaction." }
+    require(
+      source.normalizedIssueKey == target.normalizedIssueKey && source.repositoryIdentity == target.repositoryIdentity,
+    )
+    return translateSqlFailure(source.parentGoalWorkflowId, 0) {
+      val shared =
+        when (val read = sharedPreplan.findSharedPreplan(source)) {
+          is SharedGoalPreplanLookupResult.Found -> requireNotNull(read.checkpoint)
+          is SharedGoalPreplanLookupResult.Conflicted ->
+            return@translateSqlFailure GoalPlanningPreparationWriteResult.Conflicted(read.conflict)
+        }
+      val plans = subtaskPlan.listSubtaskPlansForMigration(source)
+      subtaskPlan.deleteAllByGoal(source.parentGoalWorkflowId)
+      sharedPreplan.deleteAllByGoal(source.parentGoalWorkflowId)
+      val sharedWrite = sharedPreplan.checkpointSharedPreplan(shared.copy(identity = target))
+      if (sharedWrite is GoalPlanningPreparationWriteResult.Conflicted) return@translateSqlFailure sharedWrite
+      plans.forEach { plan ->
+        val write = subtaskPlan.checkpointSubtaskPlan(plan.copy(identity = target))
+        if (write is GoalPlanningPreparationWriteResult.Conflicted) return@translateSqlFailure write
+      }
+      GoalPlanningPreparationWriteResult.Applied
+    }
+  }
 
   override fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
     subtaskPlan.listSubtaskPlansForMigration(identity)

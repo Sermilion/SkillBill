@@ -120,18 +120,23 @@ private fun boundedTransactionFailureDetail(failure: Throwable): String {
 
 internal inline fun <T> Connection.inNestedWriteTransaction(
   diagnostics: RuntimeDiagnostics,
+  transactionActive: Boolean = false,
   block: Connection.() -> T,
 ): T =
-  inDatabaseTransaction(
-    DatabaseTransactionSpec(
-      dbPath = this.databasePath(),
-      beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
-      operation = DatabaseAccessOperation.WRITE,
-      diagnostics = diagnostics,
-      mapSqlExceptions = false,
-    ),
-    block = block,
-  )
+  if (transactionActive) {
+    block()
+  } else {
+    inDatabaseTransaction(
+      DatabaseTransactionSpec(
+        dbPath = this.databasePath(),
+        beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
+        operation = DatabaseAccessOperation.WRITE,
+        diagnostics = diagnostics,
+        mapSqlExceptions = false,
+      ),
+      block = block,
+    )
+  }
 
 internal fun PreparedStatement.bindAll(values: Iterable<*>) {
   values.forEachIndexed { index, value -> bindParameter(index + 1, value) }

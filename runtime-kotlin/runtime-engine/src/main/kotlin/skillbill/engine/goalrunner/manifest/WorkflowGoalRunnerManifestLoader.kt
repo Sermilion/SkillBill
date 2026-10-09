@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.manifest
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
@@ -10,7 +11,9 @@ import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.plan.StandalonePlanCheckpointImport
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -29,16 +32,19 @@ import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
 
-internal class WorkflowGoalRunnerManifestLoader(
+@Inject
+class WorkflowGoalRunnerManifestLoader(
   private val database: DatabaseSessionFactory,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val decompositionManifestStore: DecompositionManifestStore,
-  private val engine: WorkflowEngine,
-  private val parentProjection: GoalParentProjectionWriter,
   private val clock: Clock,
   private val random: Random,
+  private val planCheckpointImport: StandalonePlanCheckpointImport,
 ) {
-  fun findProjectedManifest(
+  private val engine = WorkflowEngine()
+  private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
+
+  internal fun findProjectedManifest(
     repoRoot: Path,
     issueKey: String,
     recoverPending: Boolean = true,
@@ -50,7 +56,7 @@ internal class WorkflowGoalRunnerManifestLoader(
     recoverPending = recoverPending,
   )
 
-  fun loadFromWorkflowStore(
+  internal fun loadFromWorkflowStore(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
     repositoryIdentity: String? = null,
@@ -59,7 +65,7 @@ internal class WorkflowGoalRunnerManifestLoader(
       loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
-  fun loadFromWorkflowStoreIfPresent(
+  internal fun loadFromWorkflowStoreIfPresent(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
     repositoryIdentity: String? = null,
@@ -68,7 +74,7 @@ internal class WorkflowGoalRunnerManifestLoader(
       loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
-  fun loadFromWorkflowUnitOfWork(
+  internal fun loadFromWorkflowUnitOfWork(
     unitOfWork: UnitOfWork,
     issueKey: String,
     currentProjectedManifest: DecompositionManifest?,
@@ -90,7 +96,7 @@ internal class WorkflowGoalRunnerManifestLoader(
     )
   }
 
-  fun importFromManifestProjection(
+  internal fun importFromManifestProjection(
     manifest: DecompositionManifest,
     repositoryIdentity: String? = null,
   ): GoalRunnerManifestState? =
@@ -129,6 +135,18 @@ internal class WorkflowGoalRunnerManifestLoader(
             replaceArtifacts = true,
           ),
         )
+      if (existing == null && planWorkflowId != null) {
+        planCheckpointImport.import(
+          unitOfWork,
+          planWorkflowId,
+          GoalPlanningIdentity(
+            imported.workflowId,
+            normalizeRequiredIssueKey(manifest.issueKey),
+            requireNotNull(repositoryIdentity),
+          ),
+          manifest,
+        )
+      }
       unitOfWork.workflowStates.saveRecord(
         WorkflowFamily.TASK_RUNTIME,
         imported.toRecord().copy(issueKey = normalizeRequiredIssueKey(manifest.issueKey)),
@@ -142,7 +160,7 @@ internal class WorkflowGoalRunnerManifestLoader(
       )
     }
 
-  fun readProjection(
+  internal fun readProjection(
     stored: GoalRunnerManifestState?,
     projected: DecompositionManifest?,
     repoRoot: Path?,
@@ -164,7 +182,7 @@ internal class WorkflowGoalRunnerManifestLoader(
       else -> null
     }
 
-  fun shouldRefreshFromCompleteProjection(
+  internal fun shouldRefreshFromCompleteProjection(
     stored: GoalRunnerManifestState?,
     projected: DecompositionManifest?,
   ): Boolean =
