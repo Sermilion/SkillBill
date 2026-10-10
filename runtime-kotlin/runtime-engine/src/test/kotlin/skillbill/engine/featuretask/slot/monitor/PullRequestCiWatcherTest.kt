@@ -48,27 +48,76 @@ class PullRequestCiWatcherTest {
     val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
-    assertEquals(listOf("lint", "unit"), failed.failingChecks.map(PullRequestCheck::name))
+    assertEquals(listOf("lint"), failed.failingChecks.map(PullRequestCheck::name))
   }
 
   @Test
-  fun `failed or cancelled checks trigger repair without waiting for pending checks`() {
-    for (bucket in listOf(CheckBucket.FAIL, CheckBucket.CANCEL)) {
-      val clockBefore = clock
-      val failedCheck = check("lint", bucket)
-      val checks =
-        ScriptedChecks(
-          PullRequestChecks.Reported(
-            listOf(check("integration", CheckBucket.PENDING), failedCheck, check("build", CheckBucket.PASS)),
+  fun `all cancelled checks settle as passed`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(check("ios-build", CheckBucket.CANCEL), check("desktop-build", CheckBucket.CANCEL)),
+        ),
+      )
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(1, checks.calls)
+  }
+
+  @Test
+  fun `cancelled skipped and passing checks settle as passed`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(
+            check("lint", CheckBucket.CANCEL),
+            check("unit", CheckBucket.SKIPPING),
+            check("build", CheckBucket.PASS),
           ),
-        )
+        ),
+      )
 
-      val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
 
-      assertEquals(PullRequestCiOutcome.Failed(listOf(failedCheck)), outcome)
-      assertEquals(1, checks.calls)
-      assertEquals(clockBefore, clock)
-    }
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+  }
+
+  @Test
+  fun `cancelled checks with pending keep watching until remaining checks settle`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(check("lint", CheckBucket.CANCEL), check("integration", CheckBucket.PENDING)),
+        ),
+        PullRequestChecks.Reported(
+          listOf(check("lint", CheckBucket.CANCEL), check("integration", CheckBucket.PASS)),
+        ),
+      )
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(2, checks.calls)
+  }
+
+  @Test
+  fun `failed checks trigger repair without waiting for pending checks`() {
+    val clockBefore = clock
+    val failedCheck = check("lint", CheckBucket.FAIL)
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(check("integration", CheckBucket.PENDING), failedCheck, check("build", CheckBucket.PASS)),
+        ),
+      )
+
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failedCheck)), outcome)
+    assertEquals(1, checks.calls)
+    assertEquals(clockBefore, clock)
   }
 
   @Test

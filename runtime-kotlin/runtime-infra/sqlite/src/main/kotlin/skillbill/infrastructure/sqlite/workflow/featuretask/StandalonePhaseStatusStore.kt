@@ -38,6 +38,13 @@ internal class StandalonePhaseStatusStore(
 
   private fun registerInTransaction(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord {
     readByInvocation(request.invocationId)?.let { return it }
+    if (request.phaseId == MONITOR_PHASE_ID) {
+      supersedeActiveMonitors(
+        repositoryIdentity = request.repositoryIdentity,
+        branchCorrelation = request.branchCorrelation,
+        now = request.startedAt,
+      )
+    }
     val storeId = ensureStore(request.repositoryIdentity)
     val sequence = allocateSequence(request.repositoryIdentity)
     connection.prepareStatement(
@@ -108,7 +115,10 @@ internal class StandalonePhaseStatusStore(
 
   private fun updateInTransaction(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(request.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
-    val leaseExpired = current.lifecycleState !in TERMINAL_STATES && !current.leaseExpiresAt.isAfter(clock.instant())
+    val leaseExpired =
+      current.phaseId != MONITOR_PHASE_ID &&
+        current.lifecycleState !in TERMINAL_STATES &&
+        !current.leaseExpiresAt.isAfter(clock.instant())
     val rejected =
       when {
         !isAllowedTransition(current, request) -> StandalonePhaseStatusUpdateResult.TERMINAL_REGRESSION
@@ -177,9 +187,10 @@ internal class StandalonePhaseStatusStore(
       val candidates =
         connection.prepareStatement(
           "SELECT execution_id, status_revision FROM standalone_phase_status " +
-            "WHERE lease_expires_at <= ? AND lifecycle_state NOT IN ('terminal', 'failed', 'blocked', 'paused')",
+            "WHERE lease_expires_at <= ? AND phase_id != ? " +
+            "AND lifecycle_state NOT IN ('terminal', 'failed', 'blocked', 'paused')",
         ).use { read ->
-          read.bindAll(listOf(now.toString()))
+          read.bindAll(listOf(now.toString(), MONITOR_PHASE_ID))
           read.executeQuery().use { rows ->
             buildList { while (rows.next()) add(rows.getString("execution_id") to rows.getString("status_revision")) }
           }
@@ -190,6 +201,51 @@ internal class StandalonePhaseStatusStore(
         statement.executeUpdate()
       }
     }
+
+  private fun supersedeActiveMonitors(
+    repositoryIdentity: String,
+    branchCorrelation: String,
+    now: Instant,
+  ) {
+    val candidates =
+      connection.prepareStatement(
+        """
+        SELECT execution_id, status_revision FROM standalone_phase_status
+        WHERE repository_identity = ? AND branch_correlation = ? AND phase_id = ?
+          AND lifecycle_state IN ('active', 'paused')
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(listOf(repositoryIdentity, branchCorrelation, MONITOR_PHASE_ID))
+        statement.executeQuery().use { rows ->
+          buildList { while (rows.next()) add(rows.getString("execution_id") to rows.getString("status_revision")) }
+        }
+      }
+    if (candidates.isEmpty()) return
+    connection.prepareStatement(
+      """
+      UPDATE standalone_phase_status
+      SET lifecycle_state = 'terminal', finished_at = ?, updated_at = ?,
+          current_activity = ?, terminal_result = ?, status_revision = ?
+      WHERE execution_id = ? AND status_revision = ?
+      """.trimIndent(),
+    ).use { statement ->
+      candidates.forEach { (executionId, revision) ->
+        statement.clearParameters()
+        statement.bindAll(
+          listOf(
+            now.toString(),
+            now.toString(),
+            SUPERSEDED_MONITOR_ACTIVITY,
+            SUPERSEDED_MONITOR_ACTIVITY,
+            incrementDecimal(revision),
+            executionId,
+            revision,
+          ),
+        )
+        statement.executeUpdate()
+      }
+    }
+  }
 
   private fun ensureStore(repositoryIdentity: String): String {
     connection.prepareStatement(
@@ -380,6 +436,8 @@ internal class StandalonePhaseStatusStore(
   }
 
   private companion object {
+    const val MONITOR_PHASE_ID = "monitor"
+    const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked")
     val LIVE_RETENTION: Duration = Duration.ofHours(24)

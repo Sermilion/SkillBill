@@ -64,7 +64,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
           monitorOutput(
             run.phaseId,
             "CI passed for the pull request.",
-            "CI passed on branch '$branch': every check on the pull request passed or was skipped.",
+            "CI passed on branch '$branch': every check on the pull request passed, was skipped, or was cancelled.",
             verdict = null,
           ),
         )
