@@ -33,7 +33,8 @@ class MonitorStrategy(
       override fun watch(
         repoRoot: Path,
         branch: String,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch)
+        onCiRunning: (List<PullRequestCheck>) -> Unit,
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning)
 
       override fun recordFailingChecks(
         issueKey: String,

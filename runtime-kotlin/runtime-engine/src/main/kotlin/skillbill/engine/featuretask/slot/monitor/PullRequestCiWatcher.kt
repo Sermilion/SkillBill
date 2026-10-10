@@ -18,13 +18,17 @@ internal class PullRequestCiWatcher(
   private val sleep: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
   private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
+  private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
 ) {
   fun watch(
     repoRoot: Path,
     branch: String,
+    onCiRunning: (List<PullRequestCheck>) -> Unit = {},
   ): PullRequestCiOutcome {
     val startedAt = now()
     var ciStarted = false
+    var lastProgressAt: Instant? = null
+    var lastPendingNames: List<String>? = null
     while (true) {
       val identity = identityLookup.lookup(repoRoot, branch)
       val prNumber = (identity as? PullRequestIdentity.Found)?.number
@@ -39,7 +43,13 @@ internal class PullRequestCiWatcher(
               if (checks.checks.isNotEmpty()) {
                 ciStarted = true
               }
-              verdictFor(checks.checks)
+              val verdict = verdictFor(checks.checks)
+              reportRunning(checks.checks, verdict, onCiRunning, lastProgressAt, lastPendingNames)
+                ?.let { (reportedAt, pendingNames) ->
+                  lastProgressAt = reportedAt
+                  lastPendingNames = pendingNames
+                }
+              verdict
             }
           }
         }
@@ -49,6 +59,23 @@ internal class PullRequestCiWatcher(
       }
       sleep(pollInterval)
     }
+  }
+
+  private fun reportRunning(
+    checks: List<PullRequestCheck>,
+    verdict: PullRequestCiOutcome?,
+    onCiRunning: (List<PullRequestCheck>) -> Unit,
+    lastProgressAt: Instant?,
+    lastPendingNames: List<String>?,
+  ): Pair<Instant, List<String>>? {
+    if (verdict != null) return null
+    val pending = checks.filter { it.bucket == CheckBucket.PENDING }
+    if (pending.isEmpty()) return null
+    val names = pending.map(PullRequestCheck::name)
+    val due = lastProgressAt == null || Duration.between(lastProgressAt, now()) >= progressInterval
+    if (!due && names == lastPendingNames) return null
+    onCiRunning(pending)
+    return now() to names
   }
 
   private fun identityVerdict(identity: PullRequestIdentity): PullRequestCiOutcome? =
@@ -73,5 +100,6 @@ internal class PullRequestCiWatcher(
   private companion object {
     val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
     val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
+    val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofMinutes(10)
   }
 }

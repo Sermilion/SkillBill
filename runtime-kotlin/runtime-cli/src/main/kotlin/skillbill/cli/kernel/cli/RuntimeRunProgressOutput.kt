@@ -33,6 +33,8 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
         "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
     is FeatureTaskRuntimeRunEvent.ValidationGateProgress ->
       "feature-task-runtime $workflowId: phase $phaseId gate_run_count=$gateRunCount\n"
+    is FeatureTaskRuntimeRunEvent.CiStillRunning ->
+      "feature-task-runtime $workflowId: phase $phaseId CI still running pending=${pendingChecks.joinToString(",")}\n"
     is FeatureTaskRuntimeRunEvent.PhaseCompleted ->
       "feature-task-runtime $workflowId: phase $phaseId completed agent=$resolvedAgentId attempt=$attemptCount\n"
     is FeatureTaskRuntimeRunEvent.PhaseBlocked ->

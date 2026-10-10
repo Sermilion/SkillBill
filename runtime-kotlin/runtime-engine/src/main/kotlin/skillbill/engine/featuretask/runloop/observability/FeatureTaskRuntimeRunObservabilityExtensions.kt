@@ -50,6 +50,19 @@ internal fun FeatureTaskRuntimeRunObservability.continuation(
   )
 }
 
+fun FeatureTaskRuntimeRunObservability.ciStillRunning(
+  phaseId: String,
+  pendingChecks: List<String>,
+) {
+  emitSafely(
+    FeatureTaskRuntimeRunEvent.CiStillRunning(
+      workflowId = observabilityRequest.workflowId,
+      phaseId = phaseId,
+      pendingChecks = pendingChecks,
+    ),
+  )
+}
+
 fun FeatureTaskRuntimeRunObservability.completedEvent(
   phaseId: String,
   resolvedAgentId: String,

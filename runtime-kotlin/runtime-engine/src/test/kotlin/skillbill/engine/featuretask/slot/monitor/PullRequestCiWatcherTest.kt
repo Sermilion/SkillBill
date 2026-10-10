@@ -72,6 +72,55 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `pending checks keep reporting while ci is still running`() {
+    val pending =
+      PullRequestChecks.Reported(
+        listOf(check("desktop-build", CheckBucket.PENDING), check("build", CheckBucket.PASS)),
+      )
+    val checks =
+      ScriptedChecks(
+        pending,
+        pending,
+        pending,
+        pending,
+        pending,
+        PullRequestChecks.Reported(
+          listOf(check("desktop-build", CheckBucket.PASS), check("build", CheckBucket.PASS)),
+        ),
+      )
+    val reported = mutableListOf<List<String>>()
+
+    val outcome =
+      watcher(checks, progressInterval = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
+        reported += pendingChecks.map(PullRequestCheck::name)
+      }
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(listOf(listOf("desktop-build"), listOf("desktop-build"), listOf("desktop-build")), reported)
+  }
+
+  @Test
+  fun `a newly pending check is reported before the progress interval`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))),
+        PullRequestChecks.Reported(
+          listOf(check("build", CheckBucket.PENDING), check("desktop-build", CheckBucket.PENDING)),
+        ),
+        PullRequestChecks.Reported(
+          listOf(check("build", CheckBucket.PASS), check("desktop-build", CheckBucket.PASS)),
+        ),
+      )
+    val reported = mutableListOf<List<String>>()
+
+    watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
+      reported += pendingChecks.map(PullRequestCheck::name)
+    }
+
+    assertEquals(listOf(listOf("build"), listOf("build", "desktop-build")), reported)
+  }
+
+  @Test
   fun `pending checks are watched past the start timeout until they pass`() {
     val pending = PullRequestChecks.Reported(listOf(check("integration", CheckBucket.PENDING)))
     val checks =
@@ -209,6 +258,7 @@ class PullRequestCiWatcherTest {
     checks: ScriptedChecks,
     identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER),
     startTimeout: Duration = Duration.ofHours(1),
+    progressInterval: Duration = Duration.ofMinutes(10),
     identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
     PullRequestCiWatcher(
@@ -218,6 +268,7 @@ class PullRequestCiWatcherTest {
       sleep = { clock = clock.plus(it) },
       pollInterval = Duration.ofSeconds(30),
       startTimeout = startTimeout,
+      progressInterval = progressInterval,
     )
 
   private fun fixedIdentity(identity: PullRequestIdentity): PullRequestIdentityLookup =

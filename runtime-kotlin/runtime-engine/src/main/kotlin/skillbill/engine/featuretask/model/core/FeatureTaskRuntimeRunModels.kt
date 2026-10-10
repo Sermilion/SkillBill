@@ -296,6 +296,16 @@ sealed interface FeatureTaskRuntimeRunEvent {
     val gateRunCount: Int,
   ) : FeatureTaskRuntimeRunEvent
 
+  /**
+   * Pull request checks are still pending. Emitted so IDE status stays fresh for the whole CI run
+   * instead of going stale after the freshness window with no new phase event.
+   */
+  data class CiStillRunning(
+    override val workflowId: String,
+    override val phaseId: String,
+    val pendingChecks: List<String>,
+  ) : FeatureTaskRuntimeRunEvent
+
   data class PhaseCompleted(
     override val workflowId: String,
     override val phaseId: String,
