@@ -1,5 +1,22 @@
 # goalrunner boundary decisions
 
+## [2026-10-10] Rewrite status extras together on live goal finalization
+Context: GoalRunnerStatusProjectionRuntimeInputs keeps currentStepOverride and latestLivenessSignal as separate extras. The assembler already copied currentStepId from the goal_finalization declared event and left latestLivenessSignal on the parked parent row.
+Decision: When the parent lease is LIVE and the latest declared event is goal_finalization, copy both currentStepId and latestLivenessSignal from the same parent progress rewrite, using resolvedLivenessSignal(liveStepId).
+Reason: Updating only the step produced 0AC-46, current_step=monitor with latest_liveness_signal=workflow_status=PAUSED; step=plan. A second progress implementation was rejected because OutcomeStore.progress already forwards to progressRecording.progress.
+Alternatives considered: Walking the parked parent through implement, rejected because children still own that phase.
+
+## [2026-10-10] Defer idle child progress only during live goal finalization
+Context: currentSubtask.workflowId can still name a completed child during monitor, so child commit_push would override the live goal step. Skipping every idle child then hid implement/review and CLI goal status fell back to preplan.
+Decision: Use live child progress whenever the child is not idle or completed. Keep idle or completed child progress unless the parent is LIVE on a goal_finalization declared event; only then rewrite from the parent.
+Reason: Child implement/review remains the live signal until goal_finalization starts. Unconditional idle skip hid running children; unconditional child-id presence hid monitor after children finished.
+Revisit when: Subtask 2 reads these extras through goalRunnerStatusService.status for ide-status.
+
+## [2026-10-10] Keep operator pause on controlState during liveness rewrite
+Context: Decomposition parks the parent as WorkflowStatus.PAUSED at plan. Operator pause is a different control-state flag.
+Decision: extras.paused, pauseRequested, pauseReason, and pausedAt stay sourced from controlState. Liveness rewrite must not treat parking as an operator pause.
+Reason: SKILL-362 still requires a truthful idle-versus-pause distinction. Clearing pause because the parent row is PAUSED would hide a real operator stop.
+
 ## [2026-10-09] Stop reruns of a finalized goal
 Context: The manifest reports complete as soon as every subtask is terminal, before the commit, push and PR. Rerunning a finished goal therefore finalized it again against whatever worktree and branch were current.
 Decision: After a Completed or CompletedNoChange report, the runner records goal_completed_at and the PR URL in the goal control state. A later run returns AlreadyComplete before migration, planning or finalization while that marker exists and every subtask is still terminal.

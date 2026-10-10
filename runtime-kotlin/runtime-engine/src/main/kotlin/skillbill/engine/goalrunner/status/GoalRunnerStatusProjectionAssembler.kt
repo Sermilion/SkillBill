@@ -53,6 +53,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
@@ -137,6 +138,44 @@ class GoalRunnerStatusProjectionAssembler(
         .takeIf { it == ExecutionLiveness.LIVE || it == ExecutionLiveness.UNKNOWN }
     }
 
+  private fun resolveStatusWorkflowProgress(
+    parentWorkflowId: String,
+    childWorkflowId: String?,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): GoalRunnerWorkflowProgress? {
+    val childProgress = childWorkflowId?.let(outcomeStore::progress)
+    if (childProgress != null) {
+      val idleOrCompleted =
+        childProgress.workflowStatus == WorkflowStatus.COMPLETED ||
+          resolveChildExecutionLiveness(childProgress.workflowId, durableRead) == ExecutionLiveness.IDLE
+      if (!idleOrCompleted) {
+        return childProgress
+      }
+    }
+    val liveParent =
+      liveGoalFinalizationProgress(parentWorkflowId, durableRead)
+    if (childProgress != null && liveParent == null) {
+      return childProgress
+    }
+    return liveParent
+  }
+
+  private fun liveGoalFinalizationProgress(
+    parentWorkflowId: String,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): GoalRunnerWorkflowProgress? =
+    resolveParentExecutionLiveness(parentWorkflowId, durableRead)
+      .takeIf { it == ExecutionLiveness.LIVE }
+      ?.let { outcomeStore.progress(parentWorkflowId) }
+      ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
+      ?.let { parent ->
+        val liveStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()
+        parent.copy(
+          currentStepId = liveStepId,
+          latestLivenessSignal = parent.resolvedLivenessSignal(liveStepId),
+        )
+      }
+
   private fun statusProjectionRuntimeInputs(
     loadedState: GoalRunnerManifestState,
     request: GoalRunnerStatusRequest,
@@ -146,13 +185,7 @@ class GoalRunnerStatusProjectionAssembler(
   ): GoalRunnerStatusProjectionRuntimeInputs {
     val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
     val childWorkflowId = currentSubtask?.workflowId?.takeIf(String::isNotBlank)
-    val progress =
-      childWorkflowId?.let { workflowId -> outcomeStore.progress(workflowId) }
-        ?: resolveParentExecutionLiveness(loadedState.parentWorkflowId, durableRead)
-          .takeIf { it == ExecutionLiveness.LIVE }
-          ?.let { outcomeStore.progress(loadedState.parentWorkflowId) }
-          ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
-          ?.let { parent -> parent.copy(currentStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()) }
+    val progress = resolveStatusWorkflowProgress(loadedState.parentWorkflowId, childWorkflowId, durableRead)
     val ledgerSummary =
       runCatching {
         attemptLedgerStore.readAttemptLedgerSummary(loadedState.manifest.issueKey)

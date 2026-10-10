@@ -1,0 +1,59 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-417"
+feature_name: "keep-ide-status-on-the-live-goal-phase-after-children-finish"
+parent_spec_path: ".feature-specs/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish/spec.md"
+status: "in_progress"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Goal-status liveness agrees with the live goal step"
+  spec_path: ".feature-specs/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish/spec_subtask_1_goal-status-liveness.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261010-193859-pr17"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "ide-status selects and projects the live goal step"
+  spec_path: ".feature-specs/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish/spec_subtask_2_ide-status-live-goal-projection.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: "Both IDE plugins accept the post-child parent/goal snapshot"
+  spec_path: ".feature-specs/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish/spec_subtask_3_ide-plugins-accept-post-child-snapshot.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 2
+    optional: false
+    skipped: false

@@ -1,5 +1,15 @@
 # goalrunner boundary history
 
+## [2026-10-10] SKILL-417 subtask 1 — Goal-status liveness agrees with the live goal step
+Areas: runtime-engine/goalrunner/{status, model, persist}
+- Status extras take child progress while the child is not idle or completed. An idle or completed child still supplies implement/review until the parent is LIVE on a goal_finalization event; then the assembler rewrites the parent copy to the live monitor/PR/CI step.
+- That rewrite updates currentStepId and latestLivenessSignal together through GoalRunnerWorkflowProgress.resolvedLivenessSignal(liveStepId), so CLI no longer prints workflow_status=PAUSED; step=plan while current_step is monitor.
+- Pattern: one progress path. OutcomeStore.progress still forwards to progressRecording.progress; the helper lives on the progress model and persist uses it for the parked-row fallback string. reusable
+- Domain projection models and context stayed unchanged. No second progress implementation.
+- Limitation: operator pause still comes from controlState, not parent WorkflowStatus. Subtasks 2 and 3 still own ide-status selection and plugin snapshot acceptance.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-08] SKILL-408 subtask 2 — Operator no-change decision and completed_no_change outcome
 Areas: runtime-engine goalrunner (execution/core, persist, status, telemetry, manifest), runtime-engine featuretask slot/audit and runloop, runtime-domain goalrunner and workflow/taskruntime, runtime-cli goal, runtime-infra sqlite telemetry and schema, orchestration/contracts, skills/skill-bill
 - goal operator-decision routes decisions for a subtask whose child has an undecided no_change_pause before the review-remediation rejection; every other subtask keeps the existing rejection. --instructions is required for retry_fix and rejected with other decisions; it is recorded on the pause artifact.

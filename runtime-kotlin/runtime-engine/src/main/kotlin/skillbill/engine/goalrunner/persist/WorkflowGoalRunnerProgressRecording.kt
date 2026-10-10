@@ -15,7 +15,6 @@ import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.goalrunner.ledger.progressEventFrom
 import skillbill.goalrunner.ledger.summarizeAttemptLedgerFromEntries
-import skillbill.goalrunner.ledger.summary
 import skillbill.goalrunner.ledger.toProgressEvent
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
@@ -113,20 +112,18 @@ internal class WorkflowGoalRunnerProgressRecording(
         runCatching {
           goalObservabilityLatestEventFromArtifacts(artifacts)
         }.getOrNull()
-      GoalRunnerWorkflowProgress(
-        workflowId = record.workflowId,
-        workflowStatus = record.workflowStatus,
-        currentStepId = currentStep,
-        progressToken = record.progressToken(),
-        latestDurableProgressEvent = progressEvent,
-        latestGoalObservabilityEvent = observabilityEvent?.toProgressEvent(),
-        latestDeclaredProgressEvent = declaredProgressEvent,
-        latestLivenessSignal =
-          observabilityEvent?.compactLivenessSummary()
-            ?: progressEvent?.summary()
-            ?: "workflow_status=${record.workflowStatus}; step=$currentStep",
-        lastSnapshotUpdatedAt = record.updatedAt?.toString(),
-      )
+      val progress =
+        GoalRunnerWorkflowProgress(
+          workflowId = record.workflowId,
+          workflowStatus = record.workflowStatus,
+          currentStepId = currentStep,
+          progressToken = record.progressToken(),
+          latestDurableProgressEvent = progressEvent,
+          latestGoalObservabilityEvent = observabilityEvent?.toProgressEvent(),
+          latestDeclaredProgressEvent = declaredProgressEvent,
+          lastSnapshotUpdatedAt = record.updatedAt?.toString(),
+        )
+      progress.copy(latestLivenessSignal = progress.resolvedLivenessSignal())
     }
 
   override fun recordObservabilityEvent(request: GoalRunnerObservabilityRecordRequest): Boolean =
