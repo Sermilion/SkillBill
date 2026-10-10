@@ -9,11 +9,9 @@ import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
-import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CancellationException
 
@@ -105,21 +103,9 @@ class StandalonePhaseStatusPublisherFactory(
       startedAt = now,
       leaseOwner = invocationId,
       leaseGeneration = 1L,
-      leaseExpiresAt = leaseExpiresAt(phaseId, now),
+      leaseExpiresAt = now.plus(LEASE_DURATION),
     )
   }
 }
 
-private fun leaseExpiresAt(
-  phaseId: String,
-  now: Instant,
-): Instant =
-  if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR) {
-    MONITOR_LEASE_HORIZON
-  } else {
-    now.plus(LEASE_DURATION)
-  }
-
 private val LEASE_DURATION: Duration = Duration.ofDays(1)
-
-private val MONITOR_LEASE_HORIZON: Instant = Instant.parse("9999-12-31T00:00:00Z")

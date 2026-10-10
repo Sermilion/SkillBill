@@ -142,6 +142,7 @@ class IdeStatusServiceBranchScopingTest {
                 terminalResult = "completed",
               ),
             ),
+          goalUpdatedAt = "2026-08-06T11:58:00Z",
         ),
       ).status(
         IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
@@ -155,6 +156,7 @@ class IdeStatusServiceBranchScopingTest {
     registeredBranch: String,
     goalState: String = "running",
     eligibleStandalones: List<StandalonePhaseStatusRecord> = emptyList(),
+    goalUpdatedAt: String = "2026-08-06T10:00:00Z",
   ): TrackingDatabase {
     val database = goalOnlyDatabase(goalState)
     val statuses =
@@ -181,7 +183,11 @@ class IdeStatusServiceBranchScopingTest {
           now: Instant,
         ): List<StandalonePhaseStatusRecord> = eligibleStandalones
       }
-    return TrackingDatabase(database.work, database.workflows, statusRepository = statuses)
+    return TrackingDatabase(
+      listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, goalUpdatedAt)),
+      database.workflows,
+      statusRepository = statuses,
+    )
   }
 
   @Test

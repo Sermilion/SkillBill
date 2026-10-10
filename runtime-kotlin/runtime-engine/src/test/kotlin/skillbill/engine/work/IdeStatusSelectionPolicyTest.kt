@@ -139,7 +139,6 @@ class IdeStatusSelectionPolicyTest {
         workflowId = "zombie",
         updatedAt = "2026-08-06T09:02:00Z",
         runSequence = "18",
-        executionId = "phase-18",
       )
     val done =
       standalone(
@@ -148,7 +147,6 @@ class IdeStatusSelectionPolicyTest {
         workflowId = "done",
         updatedAt = "2026-08-06T11:53:00Z",
         runSequence = "19",
-        executionId = "phase-19",
       )
     assertEquals("done", IdeStatusSelectionPolicy.select(listOf(zombie, done), OBSERVED)?.workflowId)
   }
@@ -162,7 +160,6 @@ class IdeStatusSelectionPolicyTest {
         workflowId = "live",
         updatedAt = "2026-08-06T11:50:00Z",
         runSequence = "20",
-        executionId = "phase-20",
       )
     val done =
       standalone(
@@ -171,7 +168,6 @@ class IdeStatusSelectionPolicyTest {
         workflowId = "done",
         updatedAt = "2026-08-06T11:40:00Z",
         runSequence = "19",
-        executionId = "phase-19",
       )
     assertEquals("live", IdeStatusSelectionPolicy.select(listOf(done, live), OBSERVED)?.workflowId)
   }
@@ -287,17 +283,16 @@ class IdeStatusSelectionPolicyTest {
     workflowId: String,
     updatedAt: String,
     runSequence: String,
-    executionId: String,
   ): IdeStatusCandidate =
     candidate(issueKey, lifecycle, workflowId, updatedAt).copy(
       execution =
         IdeStatusExecutionIdentity(
           scope = IdeStatusExecutionScope.STANDALONE_PHASE,
-          executionId = executionId,
+          executionId = "phase-$runSequence",
           statusStoreId = "store",
           runSequence = runSequence,
           statusRevision = "1",
-          invocationId = "inv-$executionId",
+          invocationId = "inv-phase-$runSequence",
           phaseId = "monitor",
         ),
     )

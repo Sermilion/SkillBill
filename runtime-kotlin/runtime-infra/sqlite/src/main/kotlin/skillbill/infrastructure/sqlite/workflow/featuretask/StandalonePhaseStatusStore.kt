@@ -74,7 +74,7 @@ internal class StandalonePhaseStatusStore(
           request.startedAt.toString(),
           request.leaseOwner,
           request.leaseGeneration,
-          request.leaseExpiresAt.toString(),
+          request.storedLeaseExpiresAt().toString(),
         ),
       )
       statement.executeUpdate()
@@ -201,6 +201,9 @@ internal class StandalonePhaseStatusStore(
         statement.executeUpdate()
       }
     }
+
+  private fun StandalonePhaseStatusRegistration.storedLeaseExpiresAt(): Instant =
+    if (phaseId == MONITOR_PHASE_ID) MONITOR_LEASE_HORIZON else leaseExpiresAt
 
   private fun supersedeActiveMonitors(
     repositoryIdentity: String,
@@ -438,6 +441,7 @@ internal class StandalonePhaseStatusStore(
   private companion object {
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
+    val MONITOR_LEASE_HORIZON: Instant = Instant.parse("9999-12-31T00:00:00Z")
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked")
     val LIVE_RETENTION: Duration = Duration.ofHours(24)

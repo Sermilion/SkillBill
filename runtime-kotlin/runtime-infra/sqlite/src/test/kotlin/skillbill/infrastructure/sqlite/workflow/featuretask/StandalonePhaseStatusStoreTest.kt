@@ -74,7 +74,10 @@ class StandalonePhaseStatusStoreTest {
       }
     assertEquals("terminal", rows.first { it.executionId == "execution-first" }.lifecycleState)
     assertEquals("active", rows.first { it.executionId == "execution-second" }.lifecycleState)
-    assertEquals("Superseded by a later monitor run.", rows.first { it.executionId == "execution-first" }.terminalResult)
+    assertEquals(
+      "Superseded by a later monitor run.",
+      rows.first { it.executionId == "execution-first" }.terminalResult,
+    )
   }
 
   @Test

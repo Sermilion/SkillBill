@@ -13,7 +13,7 @@
         "contract_version": "0.7",
         "phase_id": "monitor",
         "produced_outputs": {
-            "value": "CI passed on branch 'feat/existing-runtime-branch': every check on the pull request passed or was skipped."
+            "value": "CI passed on branch 'feat/existing-runtime-branch': every check on the pull request passed, was skipped, or was cancelled."
         },
         "status": "completed",
         "summary": "CI passed for the pull request."
