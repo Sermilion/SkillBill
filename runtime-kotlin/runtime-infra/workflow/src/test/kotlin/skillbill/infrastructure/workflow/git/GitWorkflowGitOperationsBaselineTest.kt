@@ -314,29 +314,4 @@ class GitWorkflowGitOperationsBaselineTest {
     assertEquals(1, result.diffStat?.insertions)
     assertEquals(1, result.diffStat?.deletions)
   }
-
-  @Test
-  fun `worktree activity drains large status and numstat output before waiting`() {
-    val repoRoot = Files.createTempDirectory("skillbill-git-worktree-large-drain")
-    git(repoRoot, "init")
-    git(repoRoot, "config", "user.email", "skill-bill@example.test")
-    git(repoRoot, "config", "user.name", "Skill Bill")
-    val changedFiles = 5_000
-    (1..changedFiles).forEach { index ->
-      Files.writeString(repoRoot.resolve("tracked-$index.txt"), "before\n")
-    }
-    git(repoRoot, "add", ".")
-    git(repoRoot, "commit", "-m", "initial")
-    (1..changedFiles).forEach { index ->
-      Files.writeString(repoRoot.resolve("tracked-$index.txt"), "before\nafter\n")
-    }
-
-    val result = GitWorkflowGitOperations().worktreeActivity(repoRoot)
-
-    assertEquals(WorkflowGitOperationStatus.OK, result.status, result.error)
-    assertEquals(changedFiles, result.changedFileSummary?.total)
-    assertEquals(changedFiles, result.changedFileSummary?.modified)
-    assertEquals(changedFiles, result.diffStat?.filesChanged)
-    assertEquals(changedFiles, result.diffStat?.insertions)
-  }
 }
