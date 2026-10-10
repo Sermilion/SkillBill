@@ -120,7 +120,7 @@ class FeatureTaskRuntimeValidationGateTest {
       }
     val resolution = resolver.resolve(listOf("notes.txt"))
     val absent = assertIs<ValidationGateResolution.Absent>(resolution)
-    assertEquals("generic", absent.routedPackSlug)
+    assertEquals(null, absent.routedPackSlug)
   }
 
   private fun progressArtifact(

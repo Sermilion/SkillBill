@@ -155,6 +155,44 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
+  fun `creation records agent-validate when the installed catalog is only the review fallback`() {
+    val fixture = Fixture()
+    fixture.packs = listOf(reviewFallbackPackWithoutGate())
+    fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
+    fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
+    val resolver = fixture.resolver()
+    val inputs =
+      resolver.resolveInputs(
+        root,
+        FeatureTaskRuntimeQualityGateSelection.BUILD,
+        ValidationDepth.FULL,
+        7.minutes,
+      )
+    val descriptor =
+      resolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          root,
+          SkeletonDefinition.GOAL_CHILD,
+          CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+        ),
+      )
+    val plan =
+      fixture.execution.compatibility.requireSupportedExecution(
+        fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
+        inputs,
+      )
+
+    assertEquals(null, inputs.packSlug)
+    assertEquals(null, inputs.declaration)
+    assertEquals(ValidationGateCommandFamily.VALIDATION, inputs.commandFamily)
+    assertTrue("validate" in plan.selectedStepIds)
+    assertFalse("build" in plan.selectedStepIds)
+  }
+
+  @Test
   fun `clean or differently routed checkout resumes the recorded pack but changed commands are rejected`() {
     val fixture = Fixture()
     val resolver = fixture.resolver()

@@ -87,7 +87,7 @@ class ValidationGateRoutingTest {
 
     val result = resolver.resolveWithRepositoryFallback(listOf("README.md")) { listOf("README.md", "docs/a.md") }
 
-    assertEquals(ValidationGateResolution.Absent("generic"), result)
+    assertEquals(ValidationGateResolution.Absent(null), result)
   }
 
   @Test

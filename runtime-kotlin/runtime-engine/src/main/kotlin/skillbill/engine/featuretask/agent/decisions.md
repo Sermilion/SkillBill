@@ -1,3 +1,16 @@
+## [2026-10-10] A review-fallback-only catalog is unrouted for build and records agent-validate (SKILL-415)
+Context: A generic-only install routed every goal child to the review fallback. The fallback has no `validation_gate`, so non-final BUILD children recorded pack-build with no command pair and creation threw before the first child existed (incident 2026-10-09).
+Decision: When the dominant pack is the review fallback and has no gate, the resolver reports it as unrouted. Creation for a BUILD request then plans the VALIDATION family with a null pack slug and declaration, so the selection facts pick `agent-validate`. Launch, run entry and repair diagnosis use the planned or recorded selection, not the requested BUILD.
+Reason: The fallback owns review only; it is not a build owner. If the plan stayed in the BUILD family and skipped the build-gate check, resume would refuse every new plan. Recording pack-build with a null declaration would run a gate with no commands.
+Alternatives considered: Mapping BUILD to agent-validate in the `SkeletonStrategyBindings` ByFact map was rejected because recorded-selection matching would disagree with recorded VALIDATE plans. Treating every absent gate as unrouted was rejected because concrete kotlin/kmp packs without a gate must still refuse (SKILL-360). Giving generic a `validation_gate` was out of scope.
+Revisit when: The review fallback gains a build gate, or goal-child gate selection moves out of `GoalRunnerQualityGateSelectionResolver`.
+
+## [2026-10-10] Resume accepts BUILD against a recorded VALIDATE plan only when unrouted (SKILL-415)
+Context: The goal runner still requests BUILD for non-final children, but plans created for an unrouted catalog record VALIDATE. A strict selection match would refuse to resume those plans.
+Decision: `requireRequestedSettings` treats a BUILD request as compatible with a recorded VALIDATE plan only when the recorded pack slug and declaration are both null. Any other mismatch stays incompatible.
+Reason: An exception limited to the unrouted shape keeps the selection resolver unchanged. A VALIDATE plan with a concrete declaration still cannot be resumed under a BUILD request. Recorded generic BUILD plans still hit the recorded build-gate refusal instead of being rerouted silently.
+Alternatives considered: Widening `FeatureTaskRuntimeRunEntry.open` as well was rejected because it never calls this check. Accepting any BUILD-versus-VALIDATE mismatch was rejected because it would hide concrete-pack drift.
+
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
 Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` (three traversals, BLOCK on exhaustion). Return from `monitor_fix` to `commit_push` through an uncapped backward edge on ADVANCE with its own loop id. `monitor_fix` sits after `monitor` in forward order.

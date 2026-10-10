@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.remediation.buildCompletedUpstreamMissingOutputRepair
 import skillbill.engine.featuretask.lifecycle.remediation.diagnoseUnsettledCompletedUpstreamPhaseId
 import skillbill.engine.featuretask.lifecycle.remediation.featureSizeFromArtifacts
+import skillbill.engine.featuretask.lifecycle.remediation.qualityGateSelectionFromArtifacts
 import skillbill.engine.featuretask.model.subtask.CompletedUpstreamRepairRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowArtifactPatches
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -362,8 +363,10 @@ internal fun applyCompletedUpstreamChildRepairWedge(
   val phaseRecords = decodePhaseRecords(state.artifacts)
   val featureSize = featureSizeFromArtifacts(state.artifacts)
   val qualityGateSelection =
-    state.workingContinuation?.qualityGateSelection
-      ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
+    qualityGateSelectionFromArtifacts(
+      state.artifacts,
+      state.workingContinuation?.qualityGateSelection,
+    )
   val resumePhaseId =
     diagnoseUnsettledCompletedUpstreamPhaseId(
       phaseRecords,
