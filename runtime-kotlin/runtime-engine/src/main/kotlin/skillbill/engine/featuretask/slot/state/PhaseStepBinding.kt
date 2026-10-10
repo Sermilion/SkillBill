@@ -115,11 +115,10 @@ internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
 
 /** Pull request CI observation the monitor step drives; the selected monitor strategy supplies it. */
 internal interface PhaseCiObservation {
-  /** Watches the pull request open for [branch] until its checks settle, time out, or cannot be read. */
+  /** Watches the pull request open for [branch] until its checks settle, CI fails to start, or cannot be read. */
   fun watch(
     repoRoot: Path,
     branch: String,
-    requireChecks: Boolean,
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */

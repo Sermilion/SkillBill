@@ -49,7 +49,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    val outcome = observation.watch(request.repoRoot, branch, requireChecks = request.workflowId.isNotBlank())
+    val outcome = observation.watch(request.repoRoot, branch)
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
         complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))
