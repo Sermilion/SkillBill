@@ -81,7 +81,7 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
-  fun `expired monitor leases are not paused by reconciliation`() {
+  fun `monitor registration extends its lease without changing ordinary phase expiry`() {
     val directory = Files.createTempDirectory("standalone-monitor-lease")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
     val started = Instant.parse("2026-10-10T11:02:24Z")
@@ -97,15 +97,14 @@ class StandalonePhaseStatusStoreTest {
         ),
       )
     }
-    val paused =
-      database.transaction {
-        it.standalonePhaseStatuses.reconcileExpiredLeases(Instant.parse("2026-10-10T12:00:00Z"))
-      }
-    assertEquals(1, paused)
     val later = Instant.parse("2026-10-10T12:00:00Z")
     val rows = database.read { it.standalonePhaseStatuses.readEligible("repo", "feat/crashlytics", later) }
     assertEquals("active", rows.first { it.executionId == "execution-watch" }.lifecycleState)
-    assertEquals("paused", rows.first { it.executionId == "execution-review" }.lifecycleState)
+    assertEquals(
+      Instant.parse("9999-12-31T00:00:00Z"),
+      rows.first { it.executionId == "execution-watch" }.leaseExpiresAt,
+    )
+    assertEquals(expired, rows.first { it.executionId == "execution-review" }.leaseExpiresAt)
   }
 
   private fun monitorRegistration(

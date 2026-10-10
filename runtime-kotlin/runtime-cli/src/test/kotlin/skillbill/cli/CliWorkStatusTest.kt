@@ -2,10 +2,12 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
+import skillbill.contracts.workflow.identity.status.IdeStatusPayloadKeys
 import skillbill.engine.goalrunner.status.completed
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.infrastructure.contracts.workflow.goal.IdeStatusSchemaValidator
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPlanning
@@ -13,6 +15,7 @@ import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -105,6 +108,69 @@ class CliWorkStatusTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     assertTrue(before.contentEquals(Files.readAllBytes(dbPath)))
+  }
+
+  @Test
+  fun `work status projects expired phases without writing to the database`() {
+    val fixture = Files.createTempDirectory("skillbill-cli-work-status-expired")
+    val git =
+      ProcessBuilder("git", "init", "--initial-branch=feat/status-readonly", fixture.toString())
+        .redirectErrorStream(true).start()
+    val gitOutput = git.inputStream.bufferedReader().use { it.readText() }
+    assertEquals(0, git.waitFor(), gitOutput)
+    val dbPath = fixture.resolve("metrics.db")
+    val startedAt = Instant.now().minusSeconds(120)
+    val database =
+      sqliteSessionFactoryForTests(
+        userHome = fixture,
+        dbPathOverride = dbPath.toString(),
+        environment = emptyMap(),
+      )
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo-root-realpath-v1:${fixture.toRealPath()}",
+          branchCorrelation = "feat/status-readonly",
+          issueKey = null,
+          workflowId = null,
+          invocationId = "expired-pr-invocation",
+          phaseId = "pr",
+          executionId = "expired-pr-execution",
+          lifecycleState = "active",
+          currentStep = "pr",
+          startedAt = startedAt,
+          leaseOwner = "expired-pr-owner",
+          leaseGeneration = 1,
+          leaseExpiresAt = startedAt.plusSeconds(60),
+        ),
+      )
+    }
+    val before = Files.readAllBytes(dbPath)
+    repeat(2) {
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "work", "status", "--repo-root", fixture.toString(), "--format", "json"),
+          context = CliRuntimeContext(environment = emptyMap(), userHome = fixture),
+        )
+      assertEquals(0, result.exitCode, result.stdout)
+      val payload = decodeJsonObject(result.stdout)
+      IdeStatusSchemaValidator.validate(payload, "cli-expired-phase")
+      assertEquals("paused", payload["lifecycle_state"])
+      assertEquals("runner_interrupted", (payload["current_step"] as Map<*, *>)["id"])
+      assertEquals("1", payload[IdeStatusPayloadKeys.STATUS_REVISION])
+      assertTrue(before.contentEquals(Files.readAllBytes(dbPath)))
+    }
+    val stored =
+      database.read {
+        it.standalonePhaseStatuses.readEligible(
+          "repo-root-realpath-v1:${fixture.toRealPath()}",
+          "feat/status-readonly",
+          startedAt.plusSeconds(120),
+        ).single()
+      }
+    assertEquals("active", stored.lifecycleState)
+    assertEquals("pr", stored.currentStep)
+    assertEquals("1", stored.statusRevision)
   }
 
   @Test
