@@ -6,6 +6,7 @@ import java.nio.file.Path
 
 internal const val GIT_TIMEOUT_SECONDS = 30L
 internal const val GIT_HOOKED_COMMAND_TIMEOUT_SECONDS = 600L
+internal const val GIT_DIFF_RENAME_LIMIT = "1000"
 
 private val HOOKED_GIT_COMMANDS = setOf("commit", "push")
 

@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-10] SKILL-415 subtask 1 - Review-fallback-only catalogs are unrouted for build
+Areas: runtime-engine featuretask (lifecycle/execution, validation, runner, lifecycle/remediation), runtime-engine goalrunner (launch, repair), featuretask slot and validation tests
+- `ValidationGateResolver` returns an unrouted absence (null pack slug) when the dominant pack is the review fallback with no `validation_gate`. A concrete pack without a gate (kotlin, kmp) still resolves as selected-but-missing, so the SKILL-360 refusal stands.
+- A BUILD request on an unrouted catalog plans the VALIDATION family with a null pack slug and declaration, so goal-child creation records `agent-validate` instead of throwing "Selected build gate pack 'generic'". This fixes the 2026-10-09 generic-only-install incident.
+- `creationQualityGate` (reusable) returns the gate the plan will record. Run entry, goal-child launch preparation, and child repair wedge diagnosis and apply read the planned or recorded selection instead of the requested BUILD. The repair paths use `qualityGateSelectionFromArtifacts`.
+- On resume, a BUILD request is compatible with a recorded VALIDATE plan only when its pack slug and declaration are both null. Recorded generic BUILD plans still refuse with the Recorded/reviewed-semantic-mapping text.
+- The non-recorded "no concrete pack, agent-validate should have been selected" message was removed because nothing can reach it: unrouted BUILD now always plans VALIDATION. Concrete packs keep the Selected/Repair wording.
+- Unchanged: `SkeletonStrategyBindings` ByFact (BUILD stays pack-build), `GoalRunnerQualityGateSelectionResolver`, `generic/platform.yaml` (no gate), and review fallback routing.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented (AC7's non-recorded message is unreachable and was removed; validate passed `./gradlew check`)
+
 ## [2026-10-08] SKILL-408 subtask 1 - No-change claim, evidence audit and operator pause (partial)
 Areas: runtime-domain taskruntime audit model, runtime-domain goalrunner and verdict model, runtime-engine featuretask slot/audit and runloop, runtime-engine goalrunner status and telemetry, runtime-cli goal exit codes, runtime-ports idestatus, runtime-application and runtime-infra telemetry, orchestration/contracts
 - A no-change claim model and structural validator reject a claim with a missing or blank criterion verdict or evidence, a missing path:line citation, a blank boundary trace, changed files or unknown fields. It collects every failure and derives a suggested handoff per reason. reusable

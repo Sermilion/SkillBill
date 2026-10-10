@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.repair
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.remediation.diagnoseUnsettledCompletedUpstreamPhaseId
 import skillbill.engine.featuretask.lifecycle.remediation.featureSizeFromArtifacts
+import skillbill.engine.featuretask.lifecycle.remediation.qualityGateSelectionFromArtifacts
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.execution.support.GoalRunnerStaleBlockedOutcomeContext
 import skillbill.engine.goalrunner.execution.support.diagnoseStaleBlockedOutcome
@@ -19,7 +20,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
-import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import java.time.Clock
 
@@ -148,8 +148,10 @@ class GoalRunnerChildRepairWedgeDiagnosis(
   ) {
     val phaseRecords = decodePhaseRecords(artifacts)
     val qualityGateSelection =
-      continuationArtifact(artifacts)?.qualityGateSelection
-        ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
+      qualityGateSelectionFromArtifacts(
+        artifacts,
+        continuationArtifact(artifacts)?.qualityGateSelection,
+      )
     val resumePhaseId =
       diagnoseUnsettledCompletedUpstreamPhaseId(
         phaseRecords,

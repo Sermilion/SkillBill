@@ -37,6 +37,7 @@ import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
@@ -308,34 +309,38 @@ class GoalRunnerSubtaskLaunchPrepare(
     reviewMode: CodeReviewExecutionMode,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
     priorWorkflowId: String?,
-  ) = executionPlans.resolveCreation(
-    FeatureTaskRuntimeExecutionPlanCreationRequest(
-      repoRoot = request.repoRoot,
-      definition = SkeletonDefinition.GOAL_CHILD,
-      reviewMode = reviewMode,
-      qualityGate = qualityGate,
-      validationDepth = ValidationDepth.FULL,
-      timeout = request.timeout,
-      workflowId = priorWorkflowId,
-      stepLaunchAssignments =
-        FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
-          launcher = agentRunLauncher,
-          lookup = strategies,
-          facts =
-            PhaseStrategySelectionFacts(
-              SkeletonDefinition.GOAL_CHILD,
-              setOfNotNull(reviewMode, qualityGate),
-            ),
-          inputs =
-            StepLaunchAssignmentInputs(
-              invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
-              agentAssignment = FeatureTaskRuntimeAgentAssignment(),
-              modelAssignment = request.modelAssignment,
-              environmentKind = LaunchEnvironmentKind.GOVERNED_CHILD,
-            ),
-        ),
-    ),
-  )
+  ): ValidatedFeatureTaskRuntimeExecutionPlan {
+    val assignedQualityGate =
+      if (priorWorkflowId == null) executionPlans.creationQualityGate(request.repoRoot, qualityGate) else qualityGate
+    return executionPlans.resolveCreation(
+      FeatureTaskRuntimeExecutionPlanCreationRequest(
+        repoRoot = request.repoRoot,
+        definition = SkeletonDefinition.GOAL_CHILD,
+        reviewMode = reviewMode,
+        qualityGate = qualityGate,
+        validationDepth = ValidationDepth.FULL,
+        timeout = request.timeout,
+        workflowId = priorWorkflowId,
+        stepLaunchAssignments =
+          FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
+            launcher = agentRunLauncher,
+            lookup = strategies,
+            facts =
+              PhaseStrategySelectionFacts(
+                SkeletonDefinition.GOAL_CHILD,
+                setOfNotNull(reviewMode, assignedQualityGate),
+              ),
+            inputs =
+              StepLaunchAssignmentInputs(
+                invokedAgentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
+                agentAssignment = FeatureTaskRuntimeAgentAssignment(),
+                modelAssignment = request.modelAssignment,
+                environmentKind = LaunchEnvironmentKind.GOVERNED_CHILD,
+              ),
+          ),
+      ),
+    )
+  }
 
   private fun blockedBranchSetupIteration(
     state: GoalRunnerManifestState,

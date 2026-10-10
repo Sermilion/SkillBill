@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.engine.featuretask.lifecycle.checkpoint.completedUpstreamRepairRetryEntry
 import skillbill.engine.featuretask.lifecycle.checkpoint.completedUpstreamRepairWorkflowUpdate
 import skillbill.engine.featuretask.lifecycle.checkpoint.phasesToReopenForCompletedUpstreamRepair
@@ -27,6 +28,20 @@ internal fun featureSizeFromArtifacts(artifacts: Map<String, Any?>): FeatureTask
   val invariantsMap = JsonCodec.anyToStringAnyMap(raw) ?: return FeatureTaskRuntimeFeatureSize.MEDIUM
   return decodeRunInvariantsFromArtifact(invariantsMap)?.featureSize
     ?: FeatureTaskRuntimeFeatureSize.MEDIUM
+}
+
+internal fun qualityGateSelectionFromArtifacts(
+  artifacts: Map<String, Any?>,
+  continuationSelection: FeatureTaskRuntimeQualityGateSelection?,
+): FeatureTaskRuntimeQualityGateSelection {
+  val payload =
+    JsonCodec.anyToStringAnyMap(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts),
+    )
+  val token = payload?.get(FeatureTaskRuntimeExecutionPlanKeys.QUALITY_GATE_SELECTION) as? String
+  return token?.let(FeatureTaskRuntimeQualityGateSelection::fromWire)
+    ?: continuationSelection
+    ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
 }
 
 fun diagnoseUnsettledCompletedUpstreamPhaseId(

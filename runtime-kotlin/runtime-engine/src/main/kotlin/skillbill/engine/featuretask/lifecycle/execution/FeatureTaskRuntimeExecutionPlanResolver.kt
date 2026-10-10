@@ -60,23 +60,45 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       if (plan.definitionId != definition.id || plan.reviewSelection != expectedReview) {
         incompatible()
       }
-      requireRequestedSettings(plan, qualityGate, validationDepth, timeout)
-      requireBuildGate(resolveRecordedInputs(repoRoot, plan), recorded = true)
+      val recordedInputs = resolveRecordedInputs(repoRoot, plan)
+      requireRequestedSettings(plan, qualityGate, validationDepth, timeout, recordedInputs)
+      requireBuildGate(recordedInputs, recorded = true)
       return ValidatedFeatureTaskRuntimeExecutionPlan.read(requireNotNull(recorded), validator)
     }
+    val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
     val plan =
       strategies.executionPlan(
         PhaseStrategySelectionFacts(
           definition,
-          setOfNotNull(reviewMode, qualityGate),
+          setOfNotNull(reviewMode, plannedQualityGate(qualityGate, inputs)),
           request.stepLaunchAssignments,
         ),
       )
     recordSelectedStrategies(plan)
-    val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
     requireBuildGate(inputs, recorded = false)
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
   }
+
+  fun creationQualityGate(
+    repoRoot: Path,
+    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+  ): FeatureTaskRuntimeQualityGateSelection? {
+    if (qualityGate != FeatureTaskRuntimeQualityGateSelection.BUILD) return qualityGate
+    return plannedQualityGate(qualityGate, resolveInputs(repoRoot, qualityGate, ValidationDepth.DEFAULT, null))
+  }
+
+  private fun plannedQualityGate(
+    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+    inputs: EffectiveGatePolicyInputs,
+  ): FeatureTaskRuntimeQualityGateSelection? =
+    if (
+      qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD &&
+      inputs.commandFamily == ValidationGateCommandFamily.VALIDATION
+    ) {
+      FeatureTaskRuntimeQualityGateSelection.VALIDATE
+    } else {
+      qualityGate
+    }
 
   fun resolveInputs(
     repoRoot: Path,
@@ -87,8 +109,9 @@ class FeatureTaskRuntimeExecutionPlanResolver(
   ): EffectiveGatePolicyInputs {
     if (workflowId != null) {
       val plan = recordedPlan(workflowId)
-      requireRequestedSettings(plan, qualityGate, validationDepth, timeout)
-      return resolveRecordedInputs(repoRoot, plan)
+      val recordedInputs = resolveRecordedInputs(repoRoot, plan)
+      requireRequestedSettings(plan, qualityGate, validationDepth, timeout, recordedInputs)
+      return recordedInputs
     }
     val resolution =
       gateResolver.resolveWithRepositoryFallback(listedPaths(git.repositoryOwnedPaths(repoRoot))) {
@@ -103,7 +126,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     val declaration = (resolution as? ValidationGateResolution.Declared)?.declaration
     return EffectiveGatePolicyInputs(
       commandFamily =
-        if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+        if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD && pack != null) {
           ValidationGateCommandFamily.BUILD
         } else {
           ValidationGateCommandFamily.VALIDATION
@@ -158,15 +181,17 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     if (inputs.commandFamily != ValidationGateCommandFamily.BUILD) return
     if (ValidationGateCyclePhase.entries.all { !inputs.commandArgv(it).isNullOrEmpty() }) return
     val pack = inputs.packSlug ?: "unrouted"
-    val source = if (recorded) "Recorded" else "Selected"
-    val recovery =
-      if (recorded) {
-        " The original execution plan is retained." +
-          " Resume requires a reviewed semantic mapping to a declared build gate."
-      } else {
-        " Repair pack routing or its build commands before creating the workflow."
-      }
-    throw missingValidationGate("$source build gate pack '$pack' has no complete build command pair.$recovery")
+    if (recorded) {
+      throw missingValidationGate(
+        "Recorded build gate pack '$pack' has no complete build command pair." +
+          " The original execution plan is retained." +
+          " Resume requires a reviewed semantic mapping to a declared build gate.",
+      )
+    }
+    throw missingValidationGate(
+      "Selected build gate pack '$pack' has no complete build command pair." +
+        " Repair pack routing or its build commands before creating the workflow.",
+    )
   }
 
   private fun recordSelectedStrategies(plan: ResolvedPhaseExecutionPlan) {
@@ -217,9 +242,19 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
     validationDepth: ValidationDepth,
     timeout: Duration?,
+    recordedInputs: EffectiveGatePolicyInputs,
   ) {
     val settings = plan.effectivePolicySettings ?: incompatible()
-    if (plan.qualityGateSelection != qualityGate || settings.validationDepth != validationDepth ||
+    val compatibleQualityGate =
+      plan.qualityGateSelection == qualityGate ||
+        (
+          qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD &&
+            plan.qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.VALIDATE &&
+            recordedInputs.packSlug == null &&
+            recordedInputs.declaration == null
+        )
+    if (!compatibleQualityGate ||
+      settings.validationDepth != validationDepth ||
       settings.phaseTimeoutMillis != timeout?.inWholeMilliseconds
     ) {
       incompatible()

@@ -99,11 +99,25 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
     if (status !is WorkflowGitOperationResult.Ok) {
       return WorkflowWorktreeActivityResult(status = WorkflowGitOperationStatus.ERROR, error = status.error)
     }
-    val diff = combinedDiffStat(repoRoot)
+    val unstaged = runGitForActivity(repoRoot, listOf("diff", "--numstat"))
+    if (unstaged !is WorkflowGitOperationResult.Ok) {
+      return WorkflowWorktreeActivityResult(status = WorkflowGitOperationStatus.ERROR, error = unstaged.error)
+    }
+    val staged = runGitForActivity(repoRoot, listOf("diff", "--cached", "--numstat"))
+    if (staged !is WorkflowGitOperationResult.Ok) {
+      return WorkflowWorktreeActivityResult(status = WorkflowGitOperationStatus.ERROR, error = staged.error)
+    }
+    val unstagedStat = parseDiffStat(unstaged.value)
+    val stagedStat = parseDiffStat(staged.value)
     return WorkflowWorktreeActivityResult(
       status = WorkflowGitOperationStatus.OK,
       changedFileSummary = parseChangedFileSummary(status.value),
-      diffStat = diff,
+      diffStat =
+        GoalObservabilityDiffStat(
+          filesChanged = unstagedStat.filesChanged + stagedStat.filesChanged,
+          insertions = unstagedStat.insertions + stagedStat.insertions,
+          deletions = unstagedStat.deletions + stagedStat.deletions,
+        ),
     )
   }
 
@@ -383,28 +397,6 @@ internal object GitSuppressionEvidenceOperations : SuppressionEvidenceGitOperati
   ): String? {
     val result = runGitCommand(repoRoot, "show", "$baseRef:$path")
     return if (result is WorkflowGitOperationResult.Ok) result.value else null
-  }
-}
-
-internal fun combinedDiffStat(repoRoot: Path): GoalObservabilityDiffStat {
-  val unstaged = runCatchingDiffStat(repoRoot, "diff", "--numstat")
-  val staged = runCatchingDiffStat(repoRoot, "diff", "--cached", "--numstat")
-  return GoalObservabilityDiffStat(
-    filesChanged = unstaged.filesChanged + staged.filesChanged,
-    insertions = unstaged.insertions + staged.insertions,
-    deletions = unstaged.deletions + staged.deletions,
-  )
-}
-
-internal fun runCatchingDiffStat(
-  repoRoot: Path,
-  vararg args: String,
-): GoalObservabilityDiffStat {
-  val result = runGitForActivity(repoRoot, args.toList())
-  return if (result is WorkflowGitOperationResult.Ok) {
-    parseDiffStat(result.value)
-  } else {
-    GoalObservabilityDiffStat(0, 0, 0)
   }
 }
 

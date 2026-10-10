@@ -20,8 +20,7 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
   when (this) {
     is FeatureTaskRuntimeRunEvent.RunStarted ->
       "feature-task-runtime $workflowId: run started feature_size=$featureSize\n"
-    is FeatureTaskRuntimeRunEvent.BranchResolved ->
-      "feature-task-runtime $workflowId: branch ${if (reused) "reused" else "created"} $branch\n"
+    is FeatureTaskRuntimeRunEvent.BranchResolved -> progressLine()
     is FeatureTaskRuntimeRunEvent.BranchSetupBlocked ->
       "feature-task-runtime $workflowId: branch setup blocked at phase $phaseId: $blockedReason\n"
     is FeatureTaskRuntimeRunEvent.PhaseStarted -> progressLine()
@@ -44,6 +43,13 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
         "Work the first subtask first.\n"
   }
 
+internal fun FeatureTaskRuntimeRunEvent.BranchResolved.progressLine(): String =
+  "feature-task-runtime $workflowId: branch ${if (reused) "reused" else "created"} $branch\n"
+
+internal fun FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration.progressLine(): String =
+  "feature-task-runtime $workflowId: phase $phaseId " +
+    "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
+
 internal fun FeatureTaskRuntimeRunEvent.PhaseStarted.progressLine(): String =
   "feature-task-runtime $workflowId: phase $phaseId ${if (resumed) "resumed" else "started"} " +
     "agent=$resolvedAgentId attempt=$attemptCount" +
@@ -51,7 +57,3 @@ internal fun FeatureTaskRuntimeRunEvent.PhaseStarted.progressLine(): String =
     effort?.let { " effort=$it" }.orEmpty() +
     continuationKind?.let { " continuation=$it" }.orEmpty() +
     "\n"
-
-internal fun FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration.progressLine(): String =
-  "feature-task-runtime $workflowId: phase $phaseId " +
-    "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"

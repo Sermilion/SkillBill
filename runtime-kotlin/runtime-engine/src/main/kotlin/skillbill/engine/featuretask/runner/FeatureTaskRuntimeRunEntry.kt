@@ -126,7 +126,11 @@ class FeatureTaskRuntimeRunEntry(
       goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
         ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
     val qualityGate = goalContinuation?.qualityGateSelection
-    val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))
+    val facts =
+      PhaseStrategySelectionFacts(
+        definition,
+        setOfNotNull(reviewMode, executionPlans.creationQualityGate(input.repoRoot, qualityGate)),
+      )
     val opened =
       workflowService.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
@@ -176,7 +180,7 @@ class FeatureTaskRuntimeRunEntry(
     val goalContinuation = input.goalContinuation
     val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
-    val qualityGate = goalContinuation?.qualityGateSelection
+    val qualityGate = admittedExecution.plan.qualityGateSelection
     val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))
     val resolved =
       FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(

@@ -75,10 +75,10 @@ Fields used: `FeatureTaskRuntimeExecutionPlanCreationRequest` (`repoRoot`, `defi
 
 ### Intended files
 
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/FeatureTaskRuntimeExecutionPlanResolver.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/validation/ValidationGateResolver.kt`
-- `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slot/FeatureTaskRuntimeExecutionPlanResolverTest.kt`
-- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ManifestFailureCode.kt` (message only, if the formatter lives there)
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/FeatureTaskRuntimeExecutionPlanResolver.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/validation/ValidationGateResolver.kt`
+- `../../../runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/featuretask/slot/FeatureTaskRuntimeExecutionPlanResolverTest.kt`
+- `../../../runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ManifestFailureCode.kt` (message only, if the formatter lives there)
 - Possibly `ValidationGateRoutingTest.kt` and `FeatureTaskRuntimeValidationGateTest.kt` if `Absent("generic")` becomes `Absent(null)`
 - Reuse fixture in `FeatureTaskRuntimeValidationGateTestSupport.kt` (do not redesign)
 
@@ -93,7 +93,7 @@ This list is the intended seam, not a ban on production wiring, test setup, form
 5. `"resume refuses a recorded fallback build plan without replacing it with fresh Kotlin routing"` is unchanged: recorded BUILD family, `packSlug` `"generic"`, `declaration` `null`, throws, message contains `Recorded build gate pack 'generic'` and `reviewed semantic mapping`.
 6. `requireRequestedSettings` (or the `workflowId` branch of `resolveCreation`) treats a BUILD request as compatible with a recorded VALIDATE plan only when recorded `packSlug` and `declaration` are both null; a recorded VALIDATE plan with a concrete pack declaration is still incompatible with a BUILD request.
 7. Non-recorded `missingValidationGate` text for an unrouted or generic path names that there is no concrete pack with a build pair and that `agent-validate` should have been selected; it does not contain `Repair pack routing or its build commands before creating the workflow.` Recorded-path recovery for the generic resume-refusal test is unchanged. Selected/Recorded wording for concrete SKILL-360 packs stays.
-8. `platform-packs/generic/platform.yaml` has no `validation_gate`. `ReviewFallbackResolver`, `ReviewStackRouting`, `SkeletonDefinition.REVIEW` bindings, and generic `fallback_capabilities` are not changed for this subtask.
+8. `../../../platform-packs/generic/platform.yaml` has no `validation_gate`. `ReviewFallbackResolver`, `ReviewStackRouting`, `SkeletonDefinition.REVIEW` bindings, and generic `fallback_capabilities` are not changed for this subtask.
 
 ## Non-Goals
 

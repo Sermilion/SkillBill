@@ -16,7 +16,7 @@ class ValidationGateResolver(
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
   fun resolve(changedPaths: List<String>): ValidationGateResolution =
-    withManifests { manifests -> resolution(dominantPacks(manifests, changedPaths)) }
+    withManifests { manifests -> resolution(manifests, dominantPacks(manifests, changedPaths)) }
 
   fun resolveWithRepositoryFallback(
     changedPaths: List<String>,
@@ -30,7 +30,7 @@ class ValidationGateResolver(
         } else {
           dominantPacks(manifests, trackedPaths()).takeIf { hasConcreteOwner(manifests, it) } ?: changed
         }
-      resolution(candidates)
+      resolution(manifests, candidates)
     }
 
   fun declaredCandidates(): List<ValidationGateResolution> =
@@ -56,7 +56,10 @@ class ValidationGateResolver(
     return resolve(manifests)
   }
 
-  private fun resolution(candidates: List<PlatformManifest>): ValidationGateResolution {
+  private fun resolution(
+    manifests: List<PlatformManifest>,
+    candidates: List<PlatformManifest>,
+  ): ValidationGateResolution {
     val dominant =
       candidates.singleOrNull()
         ?: return ValidationGateResolution.Incompatible(
@@ -71,7 +74,9 @@ class ValidationGateResolver(
     return if (declaration != null) {
       ValidationGateResolution.Declared(dominant.slug, declaration)
     } else {
-      ValidationGateResolution.Absent(dominant.slug)
+      ValidationGateResolution.Absent(
+        dominant.slug.takeUnless { it == ReviewFallbackResolver.resolveOptional(manifests)?.slug },
+      )
     }
   }
 
