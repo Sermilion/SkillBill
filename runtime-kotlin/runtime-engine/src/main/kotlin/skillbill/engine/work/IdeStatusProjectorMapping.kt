@@ -99,6 +99,23 @@ internal fun goalPlanningSummary(
     "(${planning.plannedSubtaskCount}/${planning.totalSubtaskCount} planned).$wave"
 }
 
+/**
+ * Subtasks are finished and the goal has not completed, so finalization still owes CI.
+ * That wait is the monitor phase: it has no execution lease and stays until CI is fixed.
+ */
+internal fun goalStaysOnOpenCiMonitor(
+  projection: GoalRunnerStatusProjection?,
+  completionRecorded: Boolean,
+): Boolean {
+  if (completionRecorded || projection == null || projection.paused) return false
+  if (projection.pendingCount > 0 || projection.blockedCount > 0) return false
+  return projection.completeCount > 0
+}
+
+internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
+
+internal const val OPEN_CI_MONITOR_ACTIVITY: String = "CI not fixed"
+
 internal fun goalSummary(
   issueKey: String,
   lifecycle: IdeStatusLifecycleState,
