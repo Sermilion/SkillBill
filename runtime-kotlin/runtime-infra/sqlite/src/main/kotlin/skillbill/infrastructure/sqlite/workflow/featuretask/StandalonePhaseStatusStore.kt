@@ -169,39 +169,6 @@ internal class StandalonePhaseStatusStore(
     }
   }
 
-  override fun reconcileExpiredLeases(now: Instant): Int =
-    connection.inNestedWriteTransaction(diagnostics, transactionActive) {
-      reconcileExpiredLeasesInTransaction(now)
-    }
-
-  private fun reconcileExpiredLeasesInTransaction(now: Instant): Int =
-    connection.prepareStatement(
-      """
-      UPDATE standalone_phase_status
-      SET lifecycle_state = 'paused', current_step = 'runner_interrupted',
-          current_activity = NULL, status_revision = ?, updated_at = ?
-      WHERE lease_expires_at <= ? AND execution_id = ? AND status_revision = ?
-        AND lifecycle_state NOT IN ('terminal', 'failed', 'blocked', 'paused')
-      """.trimIndent(),
-    ).use { statement ->
-      val candidates =
-        connection.prepareStatement(
-          "SELECT execution_id, status_revision FROM standalone_phase_status " +
-            "WHERE lease_expires_at <= ? AND phase_id != ? " +
-            "AND lifecycle_state NOT IN ('terminal', 'failed', 'blocked', 'paused')",
-        ).use { read ->
-          read.bindAll(listOf(now.toString(), MONITOR_PHASE_ID))
-          read.executeQuery().use { rows ->
-            buildList { while (rows.next()) add(rows.getString("execution_id") to rows.getString("status_revision")) }
-          }
-        }
-      candidates.sumOf { (executionId, revision) ->
-        statement.clearParameters()
-        statement.bindAll(listOf(incrementDecimal(revision), now.toString(), now.toString(), executionId, revision))
-        statement.executeUpdate()
-      }
-    }
-
   private fun StandalonePhaseStatusRegistration.storedLeaseExpiresAt(): Instant =
     if (phaseId == MONITOR_PHASE_ID) MONITOR_LEASE_HORIZON else leaseExpiresAt
 

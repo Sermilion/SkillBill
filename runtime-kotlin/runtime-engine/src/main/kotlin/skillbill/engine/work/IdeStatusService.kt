@@ -20,6 +20,7 @@ import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -62,7 +63,6 @@ class IdeStatusService(
     val currentBranch = branchSource.checkedOutBranch(repoRoot)
     return try {
       database.read { unitOfWork ->
-        unitOfWork.standalonePhaseStatuses.reconcileExpiredLeases(observedAt)
         val candidates =
           scopeToBranch(
             collectCandidates(unitOfWork, repositoryIdentity, currentBranch, observedAt, repoRoot),
@@ -184,7 +184,8 @@ class IdeStatusService(
       }
     val standaloneCandidates =
       branch?.let { branchName ->
-        unitOfWork.standalonePhaseStatuses.readEligible(repositoryIdentity, branchName, observedAt).map { record ->
+        unitOfWork.standalonePhaseStatuses.readEligible(repositoryIdentity, branchName, observedAt).map { stored ->
+          val record = projectStandaloneLease(stored, observedAt)
           val lifecycle = standaloneLifecycle(record.lifecycleState)
           IdeStatusCandidate(
             workflowId = record.workflowId ?: "standalone:${record.executionId}",
@@ -213,6 +214,24 @@ class IdeStatusService(
       }.orEmpty()
     val standaloneWorkflowIds = standaloneCandidates.mapNotNull { it.standaloneStatus?.workflowId }.toSet()
     return workflowCandidates.filterNot { it.workflowId in standaloneWorkflowIds } + standaloneCandidates
+  }
+
+  private fun projectStandaloneLease(
+    record: StandalonePhaseStatusRecord,
+    observedAt: Instant,
+  ): StandalonePhaseStatusRecord {
+    if (record.phaseId == "monitor" ||
+      standaloneLifecycle(record.lifecycleState) != IdeStatusLifecycleState.ACTIVE ||
+      record.leaseExpiresAt.isAfter(observedAt)
+    ) {
+      return record
+    }
+    return record.copy(
+      lifecycleState = "paused",
+      currentStep = "runner_interrupted",
+      currentActivity = null,
+      activeDurationAsOf = null,
+    )
   }
 
   private fun standaloneLifecycle(state: String): IdeStatusLifecycleState =
