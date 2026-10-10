@@ -30,7 +30,12 @@ object IdeStatusSelectionPolicy {
         IdeStatusSelectionTier.PAUSED,
         IdeStatusSelectionTier.BLOCKED,
       )
-    val cohort = retained.filter { it.selectionTier in liveTiers }.ifEmpty { retained }
+    val freshLive =
+      retained.filter { candidate ->
+        candidate.selectionTier in liveTiers &&
+          IdeStatusFreshnessClassifier.classify(candidate.updatedAt, observedAt) != IdeStatusFreshness.STALE
+      }
+    val cohort = freshLive.ifEmpty { retained }
     cohort
       .filter { it.execution != null }
       .groupBy { it.execution?.statusStoreId to it.execution?.runSequence }

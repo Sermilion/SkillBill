@@ -121,9 +121,10 @@ class MonitorStrategy(
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
         "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
-        "A failed or cancelled check on an open pull request immediately completes it with verdict ci_failed, " +
-        "which routes to monitor_fix even while other checks are pending. All checks passing or skipped " +
-        "completes the phase only when none is pending. Monitoring waits while checks are running. " +
+        "A failed check on an open pull request immediately completes it with verdict ci_failed, " +
+        "which routes to monitor_fix even while other checks are pending. Cancelled checks do not start " +
+        "repair. All checks passing, skipped, or cancelled completes the phase only when none is pending. " +
+        "Monitoring waits while checks are running. " +
         "If no check has been reported within an hour, or a " +
         "GitHub CLI cannot report checks, monitoring blocks."
 

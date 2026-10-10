@@ -87,7 +87,7 @@ internal class PullRequestCiWatcher(
     }
 
   private fun verdictFor(checks: List<PullRequestCheck>): PullRequestCiOutcome? {
-    val failing = checks.filter { it.bucket == CheckBucket.FAIL || it.bucket == CheckBucket.CANCEL }
+    val failing = checks.filter { it.bucket == CheckBucket.FAIL }
     return when {
       failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing)
       checks.isEmpty() || checks.any { it.bucket == CheckBucket.PENDING } -> null

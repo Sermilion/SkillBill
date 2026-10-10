@@ -1415,10 +1415,11 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 
 `monitor` runs after `pr` in standalone and PR skeletons and is excluded from
 goal children. `PullRequestCiWatcher` polls the PR checks through
-`PullRequestChecksLookup`. A failed or cancelled check immediately sets verdict
+`PullRequestChecksLookup`. A failed check immediately sets verdict
 `ci_failed`, even while other checks are pending, and routes backward to
-`monitor_fix` and then to `commit_push`. Success requires every check to pass or
-be skipped with none pending.
+`monitor_fix` and then to `commit_push`. Cancelled checks do not start repair.
+Success requires every check to pass, be skipped, or be cancelled with none
+pending.
 Goal monitoring requires reported checks. An empty report keeps polling until
 checks arrive or the watch timeout blocks the goal; it does not settle as
 no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
@@ -1703,6 +1704,10 @@ Adding a phase strategy:
   candidate is dropped and the repository reports `no_matching_work`, so a
   settled or abandoned workflow reads as idle rather than occupying the widget.
   Clock skew (observation before update) never drops work.
+  After retention, the live cohort is only ACTIVE/PAUSED/BLOCKED rows whose
+  `updated_at` is still inside `IdeStatusFreshnessClassifier.FRESH_WINDOW`.
+  Rank that cohort first. When it is empty, rank remaining retained rows so a
+  completed run can occupy the surface instead of a stale active zombie.
   `SETTLED_RETENTION` must stay strictly greater than
   `IdeStatusFreshnessClassifier.FRESH_WINDOW`: equal values make retention and
   freshness exact complements, and no settled snapshot could ever be emitted with

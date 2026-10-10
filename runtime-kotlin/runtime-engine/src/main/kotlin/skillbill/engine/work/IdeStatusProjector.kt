@@ -182,34 +182,15 @@ class IdeStatusProjector(
       }
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
-    val openCiMonitor =
-      goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
-        projection?.executionLiveness != ExecutionLiveness.LIVE &&
-        lifecycle == IdeStatusLifecycleState.ACTIVE
+    val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val freshness =
       if (openCiMonitor) {
         IdeStatusFreshness.FRESH
       } else {
         IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt)
       }
-    val childPhaseStep =
-      childContext.currentPhaseId
-        ?.takeIf { it.isNotBlank() && planningStep == null && lifecycle != IdeStatusLifecycleState.TERMINAL }
     val step =
-      goalStep(
-        planningStep,
-        childPhaseStep
-          ?: projection?.currentStep?.takeUnless { lifecycle == IdeStatusLifecycleState.TERMINAL }
-          ?: OPEN_CI_MONITOR_STEP.takeIf { openCiMonitor },
-        lifecycle,
-      )
-    val total =
-      (projection?.let { it.completeCount + it.pendingCount + it.blockedCount })
-        ?.takeIf { it > 0 }
-    val progress =
-      total?.let {
-        IdeStatusProgress(completed = projection.completeCount, total = it)
-      }
+      goalCurrentStep(planningStep, childContext.currentPhaseId, projection?.currentStep, lifecycle, openCiMonitor)
     val currentSubtask = goalCurrentSubtask(projection, context)
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
@@ -221,7 +202,7 @@ class IdeStatusProjector(
       execution = candidate.execution,
       lifecycleState = lifecycle,
       currentStep = step,
-      progress = progress,
+      progress = projection?.toIdeStatusProgress(),
       startedAt = candidate.startedAt,
       currentSubtask = currentSubtask,
       currentModel = childContext.currentModel,

@@ -28,9 +28,7 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
     is FeatureTaskRuntimeRunEvent.PhaseLoopEdge ->
       "feature-task-runtime $workflowId: phase $phaseId $continuationKind loop=$loopId " +
         "edge_iteration=$edgeIteration driving_verdict=$drivingVerdict\n"
-    is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration ->
-      "feature-task-runtime $workflowId: phase $phaseId " +
-        "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
+    is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration -> progressLine()
     is FeatureTaskRuntimeRunEvent.ValidationGateProgress ->
       "feature-task-runtime $workflowId: phase $phaseId gate_run_count=$gateRunCount\n"
     is FeatureTaskRuntimeRunEvent.CiStillRunning ->
@@ -53,3 +51,7 @@ internal fun FeatureTaskRuntimeRunEvent.PhaseStarted.progressLine(): String =
     effort?.let { " effort=$it" }.orEmpty() +
     continuationKind?.let { " continuation=$it" }.orEmpty() +
     "\n"
+
+internal fun FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration.progressLine(): String =
+  "feature-task-runtime $workflowId: phase $phaseId " +
+    "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
