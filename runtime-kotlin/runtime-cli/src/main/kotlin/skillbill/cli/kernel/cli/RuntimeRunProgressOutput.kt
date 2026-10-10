@@ -20,17 +20,14 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
   when (this) {
     is FeatureTaskRuntimeRunEvent.RunStarted ->
       "feature-task-runtime $workflowId: run started feature_size=$featureSize\n"
-    is FeatureTaskRuntimeRunEvent.BranchResolved ->
-      "feature-task-runtime $workflowId: branch ${if (reused) "reused" else "created"} $branch\n"
+    is FeatureTaskRuntimeRunEvent.BranchResolved -> progressLine()
     is FeatureTaskRuntimeRunEvent.BranchSetupBlocked ->
       "feature-task-runtime $workflowId: branch setup blocked at phase $phaseId: $blockedReason\n"
     is FeatureTaskRuntimeRunEvent.PhaseStarted -> progressLine()
     is FeatureTaskRuntimeRunEvent.PhaseLoopEdge ->
       "feature-task-runtime $workflowId: phase $phaseId $continuationKind loop=$loopId " +
         "edge_iteration=$edgeIteration driving_verdict=$drivingVerdict\n"
-    is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration ->
-      "feature-task-runtime $workflowId: phase $phaseId " +
-        "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
+    is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration -> progressLine()
     is FeatureTaskRuntimeRunEvent.ValidationGateProgress ->
       "feature-task-runtime $workflowId: phase $phaseId gate_run_count=$gateRunCount\n"
     is FeatureTaskRuntimeRunEvent.PhaseCompleted ->
@@ -43,6 +40,13 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
       "feature-task-runtime $workflowId: decomposed at planning into $subtaskCount subtasks: $reason. " +
         "Work the first subtask first.\n"
   }
+
+internal fun FeatureTaskRuntimeRunEvent.BranchResolved.progressLine(): String =
+  "feature-task-runtime $workflowId: branch ${if (reused) "reused" else "created"} $branch\n"
+
+internal fun FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration.progressLine(): String =
+  "feature-task-runtime $workflowId: phase $phaseId " +
+    "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
 
 internal fun FeatureTaskRuntimeRunEvent.PhaseStarted.progressLine(): String =
   "feature-task-runtime $workflowId: phase $phaseId ${if (resumed) "resumed" else "started"} " +
