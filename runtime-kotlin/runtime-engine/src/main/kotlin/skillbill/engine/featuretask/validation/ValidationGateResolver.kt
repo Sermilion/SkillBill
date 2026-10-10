@@ -18,21 +18,6 @@ class ValidationGateResolver(
   fun resolve(changedPaths: List<String>): ValidationGateResolution =
     withManifests { manifests -> resolution(manifests, dominantPacks(manifests, changedPaths)) }
 
-  fun resolveWithRepositoryFallback(
-    changedPaths: List<String>,
-    trackedPaths: () -> List<String>,
-  ): ValidationGateResolution =
-    withManifests { manifests ->
-      val changed = dominantPacks(manifests, changedPaths)
-      val candidates =
-        if (hasConcreteOwner(manifests, changed)) {
-          changed
-        } else {
-          dominantPacks(manifests, trackedPaths()).takeIf { hasConcreteOwner(manifests, it) } ?: changed
-        }
-      resolution(manifests, candidates)
-    }
-
   fun declaredCandidates(): List<ValidationGateResolution> =
     installedCatalog.manifests().map { manifest ->
       manifest.validationGate?.let { ValidationGateResolution.Declared(manifest.slug, it) }
@@ -78,14 +63,6 @@ class ValidationGateResolver(
         dominant.slug.takeUnless { it == ReviewFallbackResolver.resolveOptional(manifests)?.slug },
       )
     }
-  }
-
-  private fun hasConcreteOwner(
-    manifests: List<PlatformManifest>,
-    candidates: List<PlatformManifest>,
-  ): Boolean {
-    val fallbackSlug = ReviewFallbackResolver.resolveOptional(manifests)?.slug
-    return candidates.any { it.slug != fallbackSlug }
   }
 
   private fun dominantPacks(

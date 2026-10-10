@@ -163,7 +163,7 @@ class ExecutionPlanAdmissionFixture(
       validator,
       ValidationGateResolver { listOf(kotlinPackWithBuildGate()) },
       object : WorkflowGitOperations by NoopWorkflowGitOperations {
-        override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
+        override fun trackedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
       },
       repoLocalConfig(),
       database,
@@ -183,7 +183,7 @@ class ExecutionPlanAdmissionFixture(
         listOf(kotlinPackWithValidationGate().copy(validationGate = recoveryGateDeclaration))
       },
       object : WorkflowGitOperations by NoopWorkflowGitOperations {
-        override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult.Listed {
+        override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult.Listed {
           onResolve?.invoke(repoRoot)
           return WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
         }

@@ -114,9 +114,7 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       return recordedInputs
     }
     val resolution =
-      gateResolver.resolveWithRepositoryFallback(listedPaths(git.repositoryOwnedPaths(repoRoot))) {
-        listedPaths(git.trackedPaths(repoRoot))
-      }
+      gateResolver.resolve(listedPaths(git.trackedPaths(repoRoot)))
     val pack =
       when (resolution) {
         is ValidationGateResolution.Declared -> resolution.packSlug

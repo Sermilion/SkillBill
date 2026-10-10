@@ -1,5 +1,10 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-10] Validation gates always use the whole branch
+Context: Changed-file routing let one edited language choose a different gate from the rest of the branch. A generic-only installation also refused the next goal child after the previous child committed and cleared the working tree.
+Decision: Goal execution-plan creation and standalone validation select the gate from the current branch's tracked files. Validation scope uses that inventory for every run. Remove the changed-file fallback selector. Preserve recorded descriptors and their command policies on resume.
+Reason: Gate selection and full project checks must cover the branch regardless of the active subtask's changes. Generic-only branches retain agent validation when no pack declares a gate.
+
 ## [2026-10-10] CLI configures process logging from the bootstrap-resolved environment
 Context: The CLI Main.kt read System.getenv() to resolve SKILL_BILL_VERBOSE, which broke the empty runtime-cli AmbientEnvironmentArchitectureTest baseline.
 Decision: CliRuntimeContext carries an onEnvironmentResolved callback. CliRuntime.run invokes it with the environment the runtime bootstrap resolves, and Main.kt configures process logging there. ProcessLogging stays in runtime-core, with ProcessLoggingEnvironmentKeys in its own file.
