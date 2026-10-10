@@ -41,12 +41,12 @@ subtasks:
 - id: 3
   name: "One terminology, accurate docs and help, safer routing"
   spec_path: ".feature-specs/SKILL-414-stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement/spec_subtask_3_terminology_docs_routing.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261010-081548-80ke"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

@@ -61,8 +61,9 @@ class SkillBillDispatcherRoutingTest {
 
     assertEquals(setOf("pr", "staged", "unstaged", "HEAD", "last", "uncommitted", "<sha>"), targets)
     assertContains(
-      section(dispatcher, "Phase Review"),
-      "The accepted targets are `pr`, `staged`, `unstaged`, `HEAD` or `last`, `uncommitted`, and a commit `<sha>`.",
+      section(dispatcher, "Review arguments"),
+      "The accepted `target:` values are `HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, `last` (maps to HEAD), " +
+        "or a commit, branch, or tag.",
     )
   }
 

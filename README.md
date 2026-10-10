@@ -12,7 +12,7 @@ Skill Bill takes feature work from an issue and acceptance criteria through plan
 
 Use it with Claude Code, Codex, or Cursor. One listed skill, `/skill-bill`, runs the full feature workflow, a single phase such as review or validation, or a runtime operation. You review the resulting changes before merging. The project is pre-1.0.
 
-[Quickstart](#quickstart) · [Workflow](#feature-workflow) · [Skills](#skills) · [Platform packs](#platform-packs) · [IDE integrations](#agents-and-ide-integrations) · [Execution matrix](#execution-matrix) · [Documentation](#learn-more)
+[Quickstart](#quickstart) · [Glossary](#glossary) · [Workflow](#feature-workflow) · [Skills](#skills) · [Platform packs](#platform-packs) · [IDE integrations](#agents-and-ide-integrations) · [Execution matrix](#execution-matrix) · [Documentation](#learn-more)
 
 ## Quickstart
 
@@ -77,15 +77,28 @@ Runtime files and rendered skills live under `~/.skill-bill/`. User configuratio
 To update later:
 
 ```bash
-skill-bill update-check
+skill-bill operation update-check
 skill-bill update
 ```
+
+## Glossary
+
+- **goal.** A full feature-task run keyed by an issue, URL, or spec. The runtime owns preparation, planning, execution, and durable state.
+- **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
+- **subtask.** One independently shipped unit of a decomposed goal.
+- **phase.** A standalone-invocable skeleton id: `review`, `validation`, `plan`, `pr`, `monitor`. Invoked as `skill-bill phase <name>`. `verify` is not a phase.
+- **slot.** One of the 11 `PhaseSlot` wire values: `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, `standalone_review`. `standalone_review` is the report-only operator review slot that `phase:review` runs.
+- **step.** An internal workflow step id, distinct from phases and slots.
+- **operation.** A `skill-bill operation <name>` command. `verify` and `update-check` are operations.
+- **pack.** A platform pack under `platform-packs/<slug>/` that owns review routing and `validation_gate`.
+- **lane.** A specialist review area routed to a pack skill.
+- **add-on.** A pack-owned add-on under `platform-packs/<slug>/addons/` or a user agent add-on under `agent-addons/<slug>/`, selected after dominant-stack routing.
 
 ## Feature workflow
 
 `/skill-bill <intake>` launches the goal runtime. The runtime prepares a missing spec, plans the work, and runs it. If a spec or goal already exists, it resumes that instead. A small feature uses one subtask. Larger work can use dependency-ordered subtasks, each with a fresh execution context and durable handoff artifacts.
 
-Every run follows the same fixed sequence of nine phase slots:
+The runtime defines 11 slots. A full run uses the first ten in this order; `standalone_review` runs only for `phase:review`:
 
 | Slot | What happens |
 | --- | --- |
@@ -98,8 +111,10 @@ Every run follows the same fixed sequence of nine phase slots:
 | `write_history` | Record boundary history and decisions in area-owned `agent/` files. |
 | `commit_push` | Commit and push the subtask: one commit per subtask on the feature branch. |
 | `pull_request` | Create or update the PR once every subtask is complete. |
+| `monitor` | Watch CI on the open PR and repair failing checks. |
+| `standalone_review` | Report-only operator review. `phase:review` runs this slot. |
 
-Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs only `code_review`, and `phase:plan` runs `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
+Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs `standalone_review`, and `phase:plan` runs `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
 
 The quality phases have different purposes:
 
@@ -176,7 +191,7 @@ The phase uses the same agent strategy as goal validate. It picks the platform g
 
 There are three kinds of form:
 
-- The full run (`/skill-bill <intake>`) runs all nine slots with durable state, so it can pause and resume.
+- The full run (`/skill-bill <intake>`) runs the ten feature-run slots (`preplan` through `monitor`) with durable state, so it can pause and resume.
 - A phase (`phase:<name>`) runs a few slots in memory. It writes no workflow row, branch, or checkpoint commit, and it cannot be resumed. `phase:plan` is the exception: it is a durable, resumable plan workflow that stops after the spec bundle, creates no branch or commit, and is finished by `skill-bill <KEY>`. `commit_push` is not available as a standalone phase.
 - An operation (`operation:<name>`) is a standalone job outside the feature workflow. Operations that edit files, tag a release, or push stop at `awaiting_confirmation` and act only after you confirm.
 
@@ -196,7 +211,7 @@ There are three kinds of form:
 | `/skill-bill operation:release bump:<patch\|minor\|major>` | Prepare a changelog, confirm the requested semver bump, and push an annotated tag | `skill-bill operation release` |
 | `/skill-bill operation:update-check` | Compare the installed runtime version with GitHub releases | `skill-bill operation update-check` |
 
-Boundary history and decisions are written by the goal's `write_history` phase. Goal status is CLI-only: run `skill-bill goal status <KEY>`.
+Boundary history and decisions are written by the goal's `write_history` slot. Goal status is CLI-only: run `skill-bill goal status <KEY>`.
 
 ```text
 /skill-bill APP-123 Add CSV export               # full workflow from intake

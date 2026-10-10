@@ -97,6 +97,15 @@ class CliRuntimeShellCommandsTest {
     val telemetryHelp = CliRuntime.run(listOf("telemetry", "--help"))
 
     assertEquals(0, rootHelp.exitCode)
+    assertContains(
+      rootHelp.stdout,
+      "Run a goal, a standalone phase, or a runtime operation, and inspect review and telemetry data.",
+    )
+    assertFalse(rootHelp.stdout.contains("Import Skill Bill review output"), rootHelp.stdout)
+    assertFalse(
+      Regex("""(?m)^\s+update-check\s""").containsMatchIn(rootHelp.stdout),
+      "root help must not list a top-level update-check command",
+    )
     assertContains(rootHelp.stdout, "--generate-completion=(bash|zsh|fish)")
     assertContains(rootHelp.stdout, "list")
     assertContains(rootHelp.stdout, "show")
@@ -118,15 +127,8 @@ class CliRuntimeShellCommandsTest {
       Regex("""(?m)^\s*workflow\s{2,}""").containsMatchIn(rootHelp.stdout),
       "root help must not list the removed workflow command",
     )
-    val workflowHelp = CliRuntime.run(listOf("workflow", "--help"))
-    val workflowContinue =
-      CliRuntime.run(listOf("workflow", "continue"), CliRuntimeContext(environment = emptyMap()))
     val verifyWorkflowHelp = CliRuntime.run(listOf("verify-workflow", "--help"))
 
-    assertEquals(0, workflowHelp.exitCode)
-    assertContains(workflowHelp.stdout, "Usage: skill-bill")
-    assertEquals(1, workflowContinue.exitCode)
-    assertContains(workflowContinue.stderr, "tracker issue key")
     assertEquals(0, verifyWorkflowHelp.exitCode)
     assertContains(verifyWorkflowHelp.stdout, "show")
     assertFalse(verifyWorkflowHelp.stdout.contains("--subtask-id"))

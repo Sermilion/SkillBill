@@ -170,7 +170,7 @@ class PruneReviewSnapshotsCommand(
 class FeatureVerifyStatsCommand(
   private val service: ReviewService,
   private val state: CliRunState,
-) : DocumentedCliCommand("verify-stats", "Show aggregate bill-feature-verify metrics.") {
+) : DocumentedCliCommand("verify-stats", "Show aggregate verify operation metrics.") {
   private val format by formatOption()
 
   override fun run() {

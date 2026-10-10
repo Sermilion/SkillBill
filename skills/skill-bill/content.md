@@ -78,7 +78,8 @@ that key later finishes an incomplete plan and then executes the goal. The
 dispatcher never invokes `phase plan` itself.
 
 If `phase:plan` has no intake, stop and ask for it. For any
-other `phase:` name, stop and list the names in this table. If
+other `phase:` name, stop and list the names in this table. `phase:verify` stops
+and points to `operation:verify`, because `verify` is an operation. If
 `operation:feature-guard` has no intake describing the change to guard, or
 `operation:feature-guard-cleanup` has no intake naming the flag, stop and ask for
 it. For `operation:unit-test-value-check`, forward a scope the caller gives (a test
@@ -228,7 +229,7 @@ repository-matched database checks.
 
 ## Rehydrate
 
-For each entry in `rehydrate_targets`, fetch the listed issue from Linear and
+For each entry in `rehydrate_targets`, fetch the listed issue from the connected tracker and
 write the returned spec content to the target path. Fetch nothing when the list is empty.
 
 ## Launch
@@ -246,6 +247,10 @@ planning; existing specs resume through the same entry point.
 
 Forward the supplied review and agent add-on flags. Never ask
 the user to run the command manually.
+
+The `feature-launch-warning` skill class (`orchestration/skill-classes/feature-launch-warning.yaml`,
+`exact: skill-bill`) injects pointers `peak-hours-warner`, `shell-ceremony`, and
+`telemetry-contract`, and the three `ceremony_lines` into rendered `## Ceremony`.
 
 ## Relay
 
@@ -290,24 +295,17 @@ run loop. It prints the findings register and exits 0 for either valid verdict.
 Invalid or incomplete output and execution failures retain available findings,
 explain the block, and exit 1. This operator review never edits or commits. Full
 feature runs keep the separate `code_review` slot and its verification and repair
-steps. The sections from Review mode argument through Present the register govern
-standalone review arguments and output. An omitted target reviews uncommitted changes when
-the worktree is dirty and HEAD otherwise. Where they say to invoke the driver, run the
-`phase:review` command instead of `skill-bill code-review`: forward the review
-target as `target:<value>` and the review mode as `mode:<value>`. The accepted
-targets are `pr`, `staged`, `unstaged`, `HEAD` or `last`, `uncommitted`, and a
-commit `<sha>`.
+steps. The sections from Review arguments through Present the register govern
+standalone review arguments and output. Forward the review
+target as `target:<value>` and the review mode as `mode:<value>`.
 
-## Review mode argument
+## Review arguments
 
-Recognize at most one `mode:auto|inline|delegated` argument.
+Recognize at most one `mode:inline|delegated` argument.
 Omission means `mode:inline`.
-Reject malformed, unknown, duplicate, or conflicting values before invoking the
-driver.
+Reject malformed, unknown, duplicate, or conflicting values.
 
-## Review target argument
-
-Recognize at most one non-blank positional review target:
+Recognize at most one `target:<value>`:
 
 - `pr` reviews the current pull request against its base.
 - `last` or `HEAD` reviews HEAD against its first parent.
@@ -315,53 +313,17 @@ Recognize at most one non-blank positional review target:
 - `uncommitted` reviews staged, unstaged, and untracked work.
 - `staged` and `unstaged` keep those narrower packets.
 
-A positional review target cannot be combined with `--diff-file`,
-`--base-revision`, `--head-revision`, or a conflicting `--scope`.
-When the positional target already names the packet (`pr`, `last`,
-`uncommitted`, `staged`, `unstaged`), omit `--scope`. A commit SHA uses the
-default branch scope so the driver diffs that commit against its first parent.
-Without a positional target, pass the caller's `--scope` normally.
-
-## Invoke the driver
-
-Do not invent a scope from git, classify diff signals, name rubrics, sequence
-commits, account budgets, merge lanes, or launch workers in this session. Map
-the caller's named target, invoke the runtime driver once, and present what it
-returns:
-
-```bash
-skill-bill code-review \
-  [<target>] \
-  --execution-mode inline \
-  [--scope <caller-scope>] \
-  --repo-root <repo-root>
-```
-
-Pass the caller's named target as the positional argument (`pr`, `last`,
-`<commit>`, `uncommitted`, `staged`, or `unstaged`). Do not pass `pr`,
-`last`, or `uncommitted` as a git revision unless the caller supplied a real SHA.
-When the positional target already names the packet, omit `--scope`.
-
-When the caller supplied an explicit `mode:delegated`, pass `--execution-mode delegated`
-instead. Omission and `mode:auto` always pass `--execution-mode inline`.
-
-Pass `--diff-file` with paired `--base-revision` and
-`--head-revision` when the caller already materialized an exact diff. With
-`--execution-mode delegated`, pass `--baseline-untracked-include` /
-`--baseline-untracked-exclude` when the caller supplied that inventory; inline
-mode rejects them.
-
-When a governed feature caller supplies a labelled `Selected agent add-ons`
-section, treat that section as an immutable compact-context field. The driver
-forwards it; do not rediscover add-ons.
+The accepted `target:` values are `HEAD`, `uncommitted`, `pr`, `staged`,
+`unstaged`, `last` (maps to HEAD), or a commit, branch, or tag.
+An omitted target reviews uncommitted changes when the worktree is dirty and HEAD otherwise.
 
 ## Present the register
 
-Display the driver's stdout as the review result. It already includes the risk
+Display the `phase:review` command's stdout as the review result. It already includes the risk
 register with provenance labels and any recorded stage verdicts. Do not rewrite
 findings, invent a second merge, or re-run the review in this session.
 
-The driver runs the report-only standalone review. A valid report exits 0 for
+The `phase:review` command runs the report-only standalone review. A valid report exits 0 for
 either verdict. Invalid or incomplete output and execution failures retain
 available findings, explain the block, and exit 1. The operator review never
 launches repair. Full feature runs retain their separate review, verification,
@@ -396,7 +358,7 @@ validation) routes to `phase:validation`: run
 `skill-bill phase validation [<intake>] --agent <currently-executing-agent>`
 once and relay its output as a phase form.
 
-## Routing
+## Pack routing
 
 Review routes to the dominant pack for the current unit of work. Validation uses
 the same full project validation strategy as goal validate. Its agent discovers

@@ -70,273 +70,122 @@ Kotlin paths are under `runtime-kotlin/`. Other paths are repo-relative.
 
 Independent of subtasks 1, 2 and 4. Subtask 2 also edits `SkillBillCommand.kt` (`--verbose` and the skip list). Apply this subtask's changes to the file as found, and keep every root option present.
 
-## Implementation Details
-
-### Planning basis and assumptions
-
-The preplan digest supplied to planning covers subtask 2 and not this subtask. This plan uses the facts that digest establishes, listed below. Every other fact is an assumption marked **Confirm:**, and implement checks it against the tree before editing.
-
-- `SkillBillCommand.routeIntake(arguments)` scans leading root options: `--db` and `--home` advance by 2, the `--db=` and `--home=` prefixes advance by 1, and any other token ends the scan. If the first remaining token starts with `-`, is in `registeredSubcommandNames()`, or is in `aliases()`, the function returns the input unchanged. Otherwise it inserts `goal` at that index. `CliRuntime.execute` calls `CommandLineParser.parseAndRun(rootCommand, rootCommand.routeIntake(arguments))`.
-- Subtask 2 may already have landed. If it has, it added `--verbose` to the skip list and extracted the pure helpers `leadingRootOptionCount(arguments)` and `routeIntakeTokens(arguments, isCommand)`. Apply this subtask to the file as found and keep every root option in the skip list.
-- No test calls `routeIntake` or builds `SkillBillCommand`. CLI tests drive `CliRuntime.run(listOf("--db", <tmp>, ...), context)`. No golden captures root `--help` text.
-- **Confirm:** the 11 slot ids and the standalone phase ids. Copy them verbatim from `PhaseSlot.kt` and `SkeletonDefinition.kt`. The dispatcher's form table suggests the standalone phases are `plan`, `review`, `validation`, `pr` and `monitor`. The slot list includes `monitor`, `standalone_review` and `write_history`.
-
-### Ordered tasks
-
-1. **Pinned-text census (AC 11).**
-   - Before editing, find tests and fixtures that pin text this subtask changes:
-     - `README.md` content, including README-vs-help consistency tests;
-     - root, `phase` and `verify-stats` help;
-     - `skills/skill-bill/content.md` and its rendered `SKILL.md` snapshots;
-     - top-level `update-check` invocations;
-     - CLI tests that send a free-text first token (no issue key, URL or spec path) through root routing to goal.
-   - Write `census_subtask_3.md` in this spec bundle with the notable entries. It also records the outcomes of the **Confirm:** points from tasks 2, 5, 7 and 8.
-   - Tests: none.
-
-2. **Shared goal-intake predicate (AC 7, AC 10).**
-   - In `runtime-contracts`, in the file that declares `TRACKER_STYLE_ISSUE_KEY_PATTERN`, add `fun looksLikeGoalIntakeToken(token: String): Boolean`. **Confirm:** the location of that file. The predicate is true when any of these holds:
-     - the token *starts with* a tracker-style issue key, matched as a prefix so that `SKILL-414-some-slug` and a quoted `"APP-123 Add CSV export\n..."` intake both match;
-     - the token contains `://`;
-     - the token contains `.feature-specs/`;
-     - the token ends with `.md`.
-   - Declare the URL marker, the spec directory marker and the `.md` suffix once, as private constants in that file.
-   - Make `GoalIntake.parseOrNull` reuse the predicate or the pattern only where its grammar matches exactly. If they differ, leave `GoalIntake` unchanged and record the difference in the census. Its acceptance behavior must not change (non-goal).
-   - Tests: add one runtime-contracts test, for example `GoalIntakeTokenPredicateTest`. It asserts that the predicate accepts `APP-123`, `SKILL-414-stabilization-pass`, `https://linear.app/x/issue/APP-1` and `.feature-specs/APP-1-x/spec.md`, and rejects `phse`. This catches a predicate that either misses real intakes or accepts plain words.
-
-3. **Routing guard (AC 7, AC 9).**
-   - If subtask 2's `routeIntakeTokens` exists, make the change there. Otherwise extract a pure `internal fun routeIntakeTokens(arguments: List<String>, isCommand: (String) -> Boolean): List<String>` and have `routeIntake` delegate to it, with `isCommand` covering `registeredSubcommandNames()` and `aliases()`. Keep the leading-option skip exactly as found.
-   - At the first non-option index:
-     - `phase:<name>` with a non-blank `<name>` becomes the two tokens `phase` and `<name>`.
-     - `operation:<name>` with a non-blank `<name>` becomes `operation` and `<name>`.
-     - A token starting with `-`, or one that `isCommand` accepts, passes through unchanged.
-     - A token that `looksLikeGoalIntakeToken` accepts gets `goal` inserted before it.
-     - Any other token passes through unchanged, so Clikt reports an unknown subcommand.
-   - Declare the `phase:` and `operation:` prefixes once. **Confirm:** whether the installed Clikt version suggests close command names for an unknown subcommand. If it does not, add the closest registered names by edit distance to the error message.
-   - Tests: add one test file in `runtime-cli/src/test/kotlin/skillbill/cli/core/`, or extend subtask 2's routing test file if it exists. It contains:
-     - a pure check that `routeIntakeTokens(listOf("APP-123", "Add CSV export"), ...)` returns `goal` followed by the input;
-     - a pure check that `routeIntakeTokens(listOf("phase:review"), ...)` returns `phase` and `review`;
-     - a `CliRuntime.run(listOf("--db", <tmp>, "phse", "review"), context)` check that exits non-zero, shows Clikt's unknown-command error naming `phse`, and does not show the goal intake error text.
-   - Update existing CLI tests from the census that relied on free text routing to goal: give them a key or an explicit `goal` token.
-
-4. **`phase verify` hint (AC 8, AC 9).**
-   - In `PhaseInvocationParser.definitionId`, strip a leading `phase:` and compare the result with `verify`. On a match, throw a `UsageError` saying that `verify` is an operation, with the hint `skill-bill operation verify <intake>`. Do this before the existing `Unknown phase` path.
-   - **Confirm:** whether the parser lives in `runtime-cli`, and whether it already strips the prefix.
-   - Tests: add one runtime-cli test that runs `CliRuntime.run` with `--db <tmp> phase verify APP-1`, then with `--db <tmp> phase:verify APP-1`. The second invocation goes through root normalization. Both exit non-zero, and stderr contains `skill-bill operation verify`. This catches a missing hint and a normalization step that bypasses it.
-
-5. **update-check (AC 6).**
-   - Compare the options of the top-level update-check command with those of `operation update-check` (`--include-prereleases`, `--format json`).
-   - If they match, remove the top-level command from `subcommands(...)` and add `"update-check" to listOf("operation", "update-check")` to `SkillBillCommand.aliases()`. If they do not match, keep the command and mark it hidden from help, using the Clikt hidden-from-help property of the installed version.
-   - Record the chosen path in the census.
-   - Tests: keep any existing test that invokes the top-level `update-check`, so it proves the invocation still works. Only if no such test exists, add one CLI test that runs `update-check --format json` and checks that the output is the operation's.
-   - Do not add a test that asserts root help is absent; audit reads the code.
-
-6. **CLI help text (AC 5).**
-   - Rewrite the `SkillBillCommand` root description in glossary terms: the CLI runs goals, standalone phases and runtime operations, and inspects review and telemetry data. Review import is no longer described as its purpose.
-   - Change the `verify-stats` help in `ReviewCliCommands.kt` to "Show aggregate verify operation metrics."
-   - Change the `rest` argument help in `PhaseCommand` to list `mode:inline|delegated`, with inline as the default. The parser still accepts `auto` (non-goal).
-   - Update every pinned help string the census finds.
-   - Tests: none new.
-
-7. **README glossary and fixes (AC 1, AC 2, AC 3).**
-   - Add a `## Glossary` section to `README.md` with one or two sentences each for goal, workflow, subtask, phase, slot, step, operation, pack, lane and add-on:
-     - **Phase:** the standalone phase ids, copied verbatim.
-     - **Slot:** all 11 `PhaseSlot` ids, copied verbatim.
-     - **Operation:** state plainly that `verify` is an operation.
-     - **Add-on:** cover both pack-owned add-ons under `platform-packs/<slug>/addons/` and user agent add-ons under `agent-addons/<slug>/`.
-   - Fix the slot sentence and table so that they list all 11 slots, including `monitor` and `standalone_review`.
-   - State that `phase:review` runs `standalone_review`, after confirming this in `SkeletonDefinition`.
-   - Call `write_history` a slot.
-   - Show update-check as `skill-bill operation update-check`.
-   - Add a link to `README.md#glossary` in `docs/getting-started.md`.
-
-8. **Docs sweep (AC 3).**
-   - Search `README.md`, `docs/` and `skills/skill-bill/content.md` once for `bill-feature-verify`, `skill-bill code-review`, `phase verify`, `phase:verify`, `nine phase`, and slots called phases. Rewrite each hit in glossary terms.
-   - **Confirm:** whether a `code-review` CLI command still exists. If it does, docs may name it, but never as the driver of `phase review`. If it does not, remove the mentions.
-
-9. **Dispatcher `skills/skill-bill/content.md` (AC 3, AC 4).** Edit only `content.md`. Move surviving rule text verbatim.
-   - Review mode: replace every `mode:auto|inline|delegated` with `mode:inline|delegated`, and state that omission means inline.
-   - Merge `Review mode argument` and `Review target argument` into one `Review arguments` section in `key:value` form:
-     - at most one `mode:inline|delegated`;
-     - at most one `target:<value>`, listing the targets exactly as `PhaseInvocationParser` accepts them. The current text lists `pr`, `staged`, `unstaged`, `HEAD`, `last`, `uncommitted` and `<sha>`; confirm these against the parser;
-     - an omitted target reviews uncommitted changes when the worktree is dirty and HEAD otherwise.
-     - Drop the positional target and the `--scope`, `--diff-file`, `--base-revision`, `--head-revision` and baseline-untracked flags.
-   - Delete `Invoke the driver`.
-   - In `Phase Review`, rewrite the sentence that maps the old driver onto `phase:review` so that it points at `Review arguments` and `Present the register` only.
-   - In `Present the register`, refer to the `phase:review` command's stdout instead of "the driver".
-   - Rehydrate: "fetch the listed issue from the connected tracker".
-   - Rename the second `Routing` heading, under Phase Validation, to `Pack routing`. **Confirm:** that heading is not a governed required section.
-   - Add one sentence near Launch or Ceremony naming `orchestration/skill-classes/feature-launch-warning.yaml` and what it injects. The rendered `Before launch, follow peak-hours-warner.md` pointer suggests it injects the pre-launch peak-hours warning sidecar. **Confirm:** the injection point in `docs/skill-source-generation.md` or the render code.
-   - Render snapshots and fixtures: update them by editing, or with the repository's render or snapshot path. Never run the installer.
-
-### Constraints
-
-- No `//` or non-KDoc block comments in Kotlin. KDoc is allowed only on interfaces.
-- No inline fully qualified names.
-- Each literal key or prefix is declared once in its owner.
-- Respect file line ceilings.
-- Tests pass an explicit non-empty environment map. Mocks, if any, use `relaxUnitFun = true`; hand-written fakes are preferred.
-- No new commands, phases or operations.
-- No change to `GoalIntake` acceptance behavior, phase semantics, or the parser's accepted mode values.
-- Implement and audit run no build, test or check commands, and no install commands. Validate runs `./gradlew check` and repairs snapshot or golden drift.
-
 ## Validation Strategy
 
 The validate phase runs `./gradlew check`: runtime-cli and runtime-contracts tests, CLI help goldens, skill render snapshots and agent-config validation, which together cover `content.md`. Implement and audit run nothing; `scripts/validate_agent_configs` is covered by `check`. Audit reads the edited docs, dispatcher and code against each criterion.
 
 ## Implementation Details
 
-Ordered implementer tasks from the parent preplan digest. Do not rerun discovery. Do not compile, execute tests, or run `./gradlew check`. Do not run `./install.sh` or any install refresh. Write `census_subtask_3.md` beside this spec for the confirmations marked census. Keep every `routeIntake` skip-list option already present, including `--verbose` if subtask 2 has landed. Do not add `completionOption()` to the skip list. Keep existing `aliases()` entries (`feature-verify-stats` → `verify-stats`, `feature-task-runtime-stats` → `runtime-stats`) when adding `update-check`. Mocks use `relaxUnitFun = true`. Tests that build an environment map pass a non-empty map. Do not change `GoalIntake` acceptance. Do not bump `WORKFLOW_STATE_CONTRACT_VERSION`. `RequestedReviewMode.isKnown` still accepts `auto` as inline. Tasks 2 and 4 both edit `SkillBillCommand.kt`; apply them in one pass on the file as found so this subtask does not clobber a landed `--verbose` skip-list hunk.
+This plan supersedes the earlier planning text for this subtask. An earlier run of subtask 3 got as far as review and left the unpushed checkpoint commit `2692cae42` ("SKILL-414: One terminology, accurate docs and help, safer routing") on HEAD. That commit already satisfies most of the scope. Implement finishes and corrects that work and does not re-implement it. Do not rewrite git history; `commit_push` decides how the remaining edits fold into this subtask's commit. Leave `decomposition-manifest.yaml` alone, because the runtime owns it.
 
-Slot and phase ids are settled from the digest. Do not reopen `PhaseSlot.kt` or `SkeletonDefinition.kt`. The 11 `PhaseSlot` wire values are `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, `standalone_review`. `SkeletonDefinition.FEATURE_RUN_SLOTS` is the first ten. Standalone-invocable skeleton ids (`standaloneInvocable = true`, and `PhaseInvocationParser.phaseNames()`) are `review`, `validation`, `plan`, `pr`, `monitor`. `verify` is an operation, not a phase.
+### Settled facts
 
-### Glossary wording (use in README)
+- The 11 `PhaseSlot` wire values are `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor` and `standalone_review`. A full run uses the first ten (`SkeletonDefinition.FEATURE_RUN_SLOTS`).
+- The standalone-invocable phase ids (`PhaseInvocationParser.phaseNames()`) are `review`, `validation`, `plan`, `pr` and `monitor`. `verify` is an operation.
+- `CodeReviewCommand` remains registered. Docs may name `skill-bill code-review` as an existing command, but never as the driver of `phase review`.
+- Clikt 5.1.0 offers its default Jaro-Winkler suggestions for an unknown subcommand, so no custom edit-distance code is needed.
+- The top-level `update-check` stays registered with `hiddenFromHelp = true`. It is not aliased, because `operation update-check` appends an `Operation invocation ID:` line and `CliRuntimeUpdateTest` and `McpSystemToolsTest` decode the top-level JSON payload.
+- The `.md` suffix check lives inside the shared predicate as the private `GOAL_INTAKE_SPEC_FILE_SUFFIX`, not in routing. `GoalIntake` acceptance is unchanged (`ISSUE_KEY.matches` plus `namedDirectory`, now using the two public marker constants). A first token such as `notes.md` is sent to goal and fails there. This is accepted routing behaviour, not a `GoalIntake` change.
 
-Define each term in one or two sentences.
+### Task 0. Keep what HEAD already delivers (AC 1, 2, 4, 5, 6, 7, 8, 9, 10, 11)
 
-- **goal.** A full feature-task run keyed by an issue, URL, or spec. The runtime owns preparation, planning, execution, and durable state.
-- **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
-- **subtask.** One independently shipped unit of a decomposed goal.
-- **phase.** A standalone-invocable skeleton id: `review`, `validation`, `plan`, `pr`, `monitor`. Invoked as `skill-bill phase <name>`. `verify` is not a phase.
-- **slot.** One of the 11 `PhaseSlot` wire values listed above. `standalone_review` is the report-only operator review slot that `phase:review` runs.
-- **step.** An internal workflow step id, distinct from phases and slots. Assumption: the digest names this third id space but lists no step ids; do not enumerate step ids in the glossary.
-- **operation.** A `skill-bill operation <name>` command. `verify` and `update-check` are operations.
-- **pack.** A platform pack under `platform-packs/<slug>/` that owns review routing and `validation_gate`.
-- **lane.** A specialist review area routed to a pack skill.
-- **add-on.** A pack-owned or user-owned agent add-on selected after dominant-stack routing.
+Do not redo or reshape these. Change them only where a later task in this plan says so.
 
-### Task 1. Shared goal-intake predicate
+- `runtime-contracts/src/main/kotlin/skillbill/contracts/issuekey/IssueAndFeature.kt`: `GOAL_INTAKE_URL_MARKER`, `GOAL_INTAKE_FEATURE_SPECS_MARKER`, the private `GOAL_INTAKE_SPEC_FILE_SUFFIX` and `TRACKER_STYLE_ISSUE_KEY_PREFIX`, and `looksLikeGoalIntakeToken(token)`.
+- `runtime-contracts/src/test/kotlin/skillbill/contracts/issuekey/GoalIntakeTokenPredicateTest.kt` (AC 10).
+- `runtime-engine/.../goalrunner/intake/GoalIntake.kt`: `reference()` uses the marker constants.
+- `runtime-cli/.../cli/core/SkillBillCommand.kt`: `routeIntakeTokens` keeps the `leadingRootOptionCount` skip (`--db`, `--home`, their `=` forms, `VERBOSE_OPTION`). It splits `phase:` and `operation:` tokens, then prepends `GOAL_SUBCOMMAND` only for predicate matches, and passes anything else through. HEAD also has the `OPERATION_COLON_PREFIX` constant and the new root description.
+- `runtime-cli/.../cli/phase/PhaseCommand.kt`: the `internal` `PHASE_COLON_PREFIX`, the `VERIFY_NAME` usage error naming `skill-bill operation verify <intake>`, and the `rest` help listing `mode:inline|delegated (omission means inline)`.
+- `cli/review/ReviewCliCommands.kt`: the `verify-stats` help "Show aggregate verify operation metrics." `cli/system/SystemCliCommands.kt`: `UpdateCheckCommand` with `hiddenFromHelp = true`.
+- Tests: `RouteIntakeTokensTest`, the verify case in `PhaseInvocationParserTest`, the explicit `goal` token in `CliGoalIntakeTest.refuseNewGoal`, the root-help pins in `CliRuntimeShellCommandsTest`, and the `mode:inline|delegated` pin in `FeatureFamilyRenderingIntegrationTest`.
+- `README.md` (Glossary, 11-slot table, `standalone_review`, `write_history` slot, `skill-bill operation update-check`), the `docs/getting-started.md` glossary link, and the `skills/skill-bill/content.md` rewrite (`## Review arguments`, no `Invoke the driver`, connected-tracker Rehydrate, `## Pack routing`).
+- **Confirm (AC 9):** check whether the pure goal case in `RouteIntakeTokensTest` passes the two tokens `APP-123` and `Add CSV export`. If it passes only `APP-123`, change its input to `listOf("APP-123", "Add CSV export")` and expect `goal` followed by both tokens. Do not add a sibling test.
 
-Serves AC 7, AC 10.
+### Task 1. Keep the uncommitted dispatcher routing test fix (AC 4, AC 11)
 
-Paths and symbols: `runtime-contracts` beside `TRACKER_STYLE_ISSUE_KEY_PATTERN` in `IssueAndFeature.kt` (`[A-Z0-9]+-\d+(?:\.\d+)?`). New predicate; implement chooses the name. `routeIntake` is the consumer. `GoalIntake.parseOrNull` reuses it only where that grammar already matches.
+- Path: `runtime-cli/src/repoTest/kotlin/skillbill/cli/phase/SkillBillDispatcherRoutingTest.kt`. Keep the working-tree change as it is. The test `phase review forwards the pr staged and unstaged targets…` reads `section(dispatcher, "Review arguments")` and expects: "The accepted `target:` values are `HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, `last` (maps to HEAD), or a commit, branch, or tag."
+- Every `content.md` edit in Tasks 4 and 5 must keep the phrases this file pins:
+  - the `Token Forwarding` `mode:` values `{inline, delegated}` and `target:` values;
+  - the `code-review:` values `{inline, auto}`;
+  - the `Launch` command line and the `Intake` phrases;
+  - "Linear, Jira, and any other connected tracker" in `Issue resolution`;
+  - no `bill-feature` anywhere;
+  - routed `skill-bill phase <name>` names equal to `phaseNames()`.
+- Tests: none new.
 
-Shared predicate is true when the token has an issue-key prefix (so `APP-123` and `KEY-feature-slug` both match), contains `://`, or contains `.feature-specs/`. `routeIntake` also treats a token ending in `.md` as a spec path. That `.md` branch is routeIntake-only.
+### Task 2. Remove stale workflow pins from the help test (AC 9, AC 11)
 
-`GoalIntake.parseOrNull` already matches issue key, `://`, `.feature-specs/`, and slash-free `KEY-feature-slug` via `namedDirectory`. It does not treat a generic `*.md` path as intake. Reuse the shared checks for those overlapping cases. Do not widen `GoalIntake`. Record the extra `.md` branch in `census_subtask_3.md`. Assumption: a first token such as `notes.md` will be prepended with `goal` and then fail GoalIntake rather than report an unknown subcommand; that is accepted routeIntake expansion, not a GoalIntake change.
+- Path: `runtime-cli/src/test/kotlin/.../CliRuntimeShellCommandsTest.kt`, test `help output documents nested clikt commands` (around lines 130–138).
+- Delete the `workflowHelp` assertions (`workflow --help` exits 0 and contains "Usage: skill-bill") and the `workflowContinue` assertions (`CliRuntime.run(listOf("workflow", "continue"), CliRuntimeContext(environment = emptyMap()))` exits 1 with "tracker issue key"). They passed only because the removed `workflow` token used to fall through to goal intake. The sibling test `removed prose workflow and implement-stats commands are unknown` already covers `workflow` as an unknown command. Deleting them also removes an empty environment map, which the constraints forbid.
+- Keep the `verify-workflow --help` and telemetry assertions in the same test. If the deletion leaves an unused local or import, remove it.
+- Tests: deletion only.
 
-test_obligations:
+### Task 3. `docs/capabilities.md` terminology (AC 3, parent AC 4)
 
-- One runtime-contracts test beside `IssueAndFeature.kt` (implement names the class in the census if it must create one). Accept an issue key, a `KEY-feature-slug` name, a URL, and a `.feature-specs/` path; reject `phse`. Bug it catches: a typo or plain word classified as goal intake, or a real key/URL/spec path rejected, while CLI tests still pass. Do not assert the `.md` branch here.
+- Line 62 (`phase:review`): replace `mode:auto|inline|delegated` with `mode:inline|delegated`, say that omission means inline, and add at most one clause noting that `auto` is still accepted as inline. Add `last` to the target list. Keep the rest of the sentence.
+- Line 134: change "The `write_history` phase's `boundary-history` strategy" to "The `write_history` slot's `boundary-history` strategy".
+- Treat the line numbers as hints; match by text.
+- Tests: none.
 
-### Task 2. `routeIntake` guard and colon forms
+### Task 4. Dispatcher `skills/skill-bill/content.md` corrections (AC 3, AC 4, parent AC 5)
 
-Serves AC 7, AC 9.
+- Around line 250: the Launch sentence about the `feature-launch-warning` skill class names only `feature-launch-warning.yaml`. Change it to the full path `orchestration/skill-classes/feature-launch-warning.yaml`. Keep the rest: `exact: skill-bill`, the pointers `peak-hours-warner`, `shell-ceremony` and `telemetry-contract`, and the three `ceremony_lines` injected into the rendered `## Ceremony`.
+- Around lines 80–81 ("For any other `phase:` name, stop and list the names in this table."): add one clause saying that `phase:verify` stops and points to `operation:verify`, because `verify` is an operation. Write `phase:verify` / `operation:verify` only. Never write `skill-bill phase verify`, so the routed-phase regex in `SkillBillDispatcherRoutingTest` still matches only real phases.
+- Leave `content.md:98` ("a Linear issue key or URL" for `operation:verify` intake) unchanged. It is outside the Rehydrate requirement, and `OperationCommandTest` pins the matching CLI help.
+- Edit `content.md` only. Do not hand-edit rendered `SKILL.md`, and do not run install.
+- Tests: none new. `FeatureFamilyRenderingIntegrationTest` renders from source.
 
-Paths and symbols: `SkillBillCommand.routeIntake` in `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/core/SkillBillCommand.kt`. Skip list today is `--db` / `--home` and their `=` forms; add `--verbose` with +1 only if that flag is already a root option. Today `routeIntake` prepends `goal` for any first non-option token that is not a registered subcommand or alias.
+### Task 5. `docs/runtime-command-guidance.md` sentence order (AC 3)
 
-Behavior, after the existing leading-option scan:
+- Around line 71: move "The `code-review` CLI command remains registered; it is not the driver of `phase review`." so it comes after "It never edits or commits." Then "It prints the findings register…" refers to `phase review` again.
+- Leave the retired-name list at around line 87 as it is.
+- Tests: none.
 
-- If the first remaining token is `phase:<name>`, replace it with `phase` and `<name>`.
-- If it is `operation:<name>`, replace it with `operation` and `<name>`.
-- If it matches the Task 1 predicate (including the routeIntake-only `.md` branch), prepend `goal`.
-- Otherwise leave the token list unchanged so Clikt reports an unknown subcommand.
+### Task 6. Optional compatibility wording in `docs/getting-started.md` (parent AC 4)
 
-Assumption, Clikt suggestions: rely on installed Clikt to suggest closest commands. Implement confirms that. If it does not suggest, add edit-distance against registered names to the error. Record the confirmation in the census. No test of suggestion strings.
+- Around line 181, "`mode:auto` resolves to `inline` everywhere" is accurate. Reword it to lead with the canonical vocabulary, for example: "Review mode is `mode:inline|delegated`; omission means inline, and `mode:auto` is still accepted as inline." Keep the glossary link the file already has.
+- **Assumption:** the digest found no test that pins this sentence. If validate finds one, it updates the pin to the new text.
+- Tests: none.
 
-test_obligations (new `CliRuntime.run` cases in the harness `CliRuntimeShellCommandsTest` and `OperationCommandTest` already use; no `routeIntake` tests exist today):
+### Task 7. Correct `census_subtask_3.md` (AC 7, AC 11; audit evidence)
 
-- `phse review` is an unknown-command error and does not reach goal intake. Bug: a typo still prepends `goal` and fails as missing intake.
-- `APP-123 Add CSV export` routes to goal. Bug: the predicate is too strict and a tracker key never reaches goal.
-- `phase:review` routes to `phase review`. Bug: the colon form is treated as one unknown token or as goal intake.
-- `phase verify` fails with the operation hint from Task 3. Bug: routing never reaches the parser hint.
+- Path: `census_subtask_3.md` beside this spec. It is untracked; keep it in the bundle.
+- Replace the wrong claim that the `.md` branch is "routeIntakeTokens-only … recorded in `SkillBillCommand.kt` as `MARKDOWN_SUFFIX`". State that `.md` lives in the shared predicate as the private `GOAL_INTAKE_SPEC_FILE_SUFFIX`, that `MARKDOWN_SUFFIX` does not exist, and that `GoalIntake` does not accept a generic `*.md` path, so `notes.md` routes to goal and fails there (accepted).
+- Add entries for:
+  - the `SkillBillDispatcherRoutingTest` repoTest pin (Task 1);
+  - the removal of the `CliRuntimeShellCommandsTest` workflow pins (Task 2);
+  - the `docs/capabilities.md` fixes (Task 3);
+  - the full-path skill-class sentence and the dispatcher `phase:verify` clause (Task 4);
+  - the `runtime-command-guidance.md` reorder (Task 5), plus the `getting-started.md` rewording if made (Task 6).
+- Keep its existing confirmations: Clikt 5.1.0 default suggestions, update-check hidden rather than aliased, `CodeReviewCommand` still registered, `## Pack routing` not a governed required section, skip list unchanged, existing aliases unchanged.
+- Record the retired names left unchanged on purpose:
+  - README retired-skill row `bill-feature-verify` → `/skill-bill operation:verify`;
+  - the retired lists in `docs/runtime-command-guidance.md`, `docs/internal-skills-architecture.md` and `docs/skill-source-generation.md`;
+  - the telemetry and workflow ids in `docs/review-telemetry.md`;
+  - the accurate `skill-bill code-review --review-session-id` mention in `docs/review-telemetry.md`;
+  - `InlineReviewDirectiveTest`'s pin of `## Review mode argument` in the engine's separate `review-directive.md` resource.
 
-No extra `.md` or `phase:verify` CliRuntime sibling. `phase:verify` is the same parser name after this split.
+### Test obligations
 
-### Task 3. `phase verify` operation hint
+- No new tests. AC 9 and AC 10 are covered by `RouteIntakeTokensTest`, `PhaseInvocationParserTest` and `GoalIntakeTokenPredicateTest` from HEAD, plus the input check in Task 0.
+- Task 2 deletes two stale assertions that would otherwise fail. Each named a bug the routing guard now prevents, and the sibling unknown-command test still covers that bug.
+- Do not add wording tests for docs or help. Existing pins are updated, not duplicated.
 
-Serves AC 8, AC 9 (the `phase verify` subcriterion).
+### Constraints
 
-Paths and symbols: `PhaseInvocationParser.definitionId(name)`. Today: a known standalone name returns it; `commit_push` has a special `UsageError`; other skeleton ids say not runnable; else `Unknown phase '$name'; expected ...`.
+- No `//` or non-KDoc block comments in Kotlin. No inline fully qualified names. Each prefix and marker is declared once in its owner. Respect file line ceilings. No new Kotlin source is expected.
+- Tests pass an explicit non-empty environment map. Mocks use `relaxUnitFun = true`.
+- No new commands, phases or operations. No change to `GoalIntake` acceptance, to parser mode acceptance (`auto` stays accepted as inline), or to `WORKFLOW_STATE_CONTRACT_VERSION`.
+- Keep every root option in the skip list, including `--verbose` from subtask 2. Keep the existing `aliases()` entries.
+- Implement and audit run no build, test, check or install commands.
 
-Before the unknown-phase branch, if `name` is `verify`, or is `phase:verify` after stripping a leading `phase:` prefix, throw `UsageError` stating that `verify` is an operation and naming `skill-bill operation verify <intake>`. The `phase:` strip covers a leftover colon token if routing did not already split it.
+### Left to later phases
 
-test_obligations:
-
-- Extend `PhaseInvocationParserTest` (beside the parser) with the verify hint. Bug: `phase verify` still prints the generic unknown-phase list with no operation pointer. One case covering `verify`; `phase:verify` is the same name after strip or Task 2 split.
-
-### Task 4. CLI help and `update-check` routing
-
-Serves AC 5, AC 6, AC 11.
-
-Paths and symbols:
-
-- `SkillBillCommand` description, today: "Import Skill Bill review output, triage findings, manage learnings, scaffold governed skills, and inspect telemetry." Rewrite to cover goals, standalone phases, operations, and review/telemetry inspection, using the glossary terms. Do not describe review import as the CLI's purpose.
-- `ReviewCliCommands.kt` `verify-stats` help, today: "Show aggregate bill-feature-verify metrics." Change to "Show aggregate verify operation metrics."
-- `PhaseCommand` `rest` help, today lists `mode:inline|delegated|auto`. Document `mode:inline|delegated` with omission meaning inline. Do not change parser acceptance of `auto`.
-- `UpdateCheckCommand` is a top-level `DocumentedCliCommand("update-check", ...)` with `--include-prereleases` and `formatOption()`, registered from `CliCommandGroups`. `OperationCommand` also owns `update-check` with the same flags. Preferred path: `aliases()["update-check"] = listOf("operation", "update-check")` and stop registering the top-level command so root help no longer lists it. Assumption: option parity holds, matching `OperationCommandTest` (top-level and operation forms print the same catalog answers). If implement finds a parity gap, keep the command and hide it from help instead. Either way `skill-bill update-check` still runs. Record the choice in the census.
-- `CodeReviewCommand` still exists (`CliCommandGroups` registers it; root-help ordered groups include `code-review`). Leave it registered. Docs may name it as an existing command; they must not call it the driver of `phase review`.
-
-test_obligations:
-
-- Update `CliRuntimeShellCommandsTest` pins for the new root description and for `update-check` no longer appearing as a listed top-level command. Bug: root help still advertises review import or a top-level `update-check`.
-- Keep `OperationCommandTest` catalog parity so the alias or hidden command still answers like `operation update-check`. Bug: `skill-bill update-check` stops reaching the operation or drops flags. No new sibling test.
-
-### Task 5. README glossary and listed inaccuracies
-
-Serves AC 1, AC 2, AC 3.
-
-Paths: `README.md`, `docs/getting-started.md`.
-
-Edits:
-
-- Add a `Glossary` section with the wording above, the 11 slot ids, the five standalone phase ids, and the sentence that `verify` is an operation.
-- Link that section from `docs/getting-started.md` (it has no glossary link today).
-- Line 80 today shows `skill-bill update-check`; show `skill-bill operation update-check`.
-- Line 88 says nine phase slots and the table omits `monitor` and `standalone_review`; list all 11 slots.
-- Line 102 says `phase:review` runs `code_review`; it runs `standalone_review`.
-- Line 199 calls `write_history` a phase; call it a slot.
-- Treat those line numbers as discovery hints, not identities. The retired-skill table already maps `bill-feature-verify` to `operation:verify`; leave that mapping. Do not present `bill-feature-verify` as a current command.
-
-test_obligations: empty. Docs wording has no new tests. Update any pin this file already has (Task 8).
-
-### Task 6. Remaining docs inaccuracies
-
-Serves AC 3.
-
-Paths: `README.md`, `docs/`, `skills/skill-bill/content.md`. Implement greps those three trees once for `bill-feature-verify`, `skill-bill code-review`, `phase verify`, `phase:verify`, `nine phase`, and slots called phases. Digest-settled hits besides README and `content.md`:
-
-- `docs/runtime-command-guidance.md` names `skill-bill code-review` beside `phase review` as the `standalone_review` driver. Change that so `phase review` runs `standalone_review`. The file may still name `code-review` as an existing CLI command. The same file already says telemetry keeps retired names; leave that.
-- Leave telemetry identifiers `bill-feature-verify` in `docs/review-telemetry.md` and Cloudflare worker tests. Those are stored workflow ids, not a current operator command, and the worker tests sit outside the AC 3 trees.
-
-Fix any other operator-facing hit in the three trees so none of them call `verify` a phase, name `bill-feature-verify` as a current command, describe nine phase slots, or present `skill-bill code-review` as the driver of `phase review`.
-
-test_obligations: empty.
-
-### Task 7. Dispatcher `content.md`
-
-Serves AC 4, AC 11.
-
-Path: `skills/skill-bill/content.md` only. Move surviving rule text. Do not re-author kept rules. Do not hand-edit generated `SKILL.md`. Update in-repo render snapshots and goldens that pin dispatcher text; do not run install to refresh them.
-
-Edits:
-
-- Review mode everywhere: `mode:inline|delegated`. Omission means inline. Remove `mode:auto|inline|delegated`.
-- Merge `Review mode argument` and `Review target argument` into one `Review arguments` section. Matching `PhaseInvocationParser`, accepted `target:<value>` values are `HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, `last` (maps to HEAD), or a commit/branch/tag. Drop positional target and `--scope` / `--diff-file` / `--base-revision`.
-- Delete `Invoke the driver`. Keep `Present the register`.
-- Rehydrate: the issue comes from the connected tracker, not from Linear.
-- Rename the second `## Routing` (today around line 399) to `Pack routing`. Do not fold it into Phase Validation unless a heading clash remains.
-- Add one sentence naming `orchestration/skill-classes/feature-launch-warning.yaml`: class `feature-launch-warning`, `exact: skill-bill`, pointers `peak-hours-warner`, `shell-ceremony`, `telemetry-contract`, and the three `ceremony_lines` injected into rendered `## Ceremony`. Injection is already documented in `docs/skill-source-generation.md` around the skill-class pointer family; do not edit that file for this sentence.
-
-test_obligations:
-
-- Update `FeatureFamilyRenderingIntegrationTest`, which asserts the rendered feature contains `mode:auto|inline|delegated`, to the new mode vocabulary. Bug: dispatcher source is fixed but the render pin still requires `mode:auto`, so check fails or the old text is restored. Record this golden and any other snapshot that pins dispatcher text in `census_subtask_3.md`.
-
-### Task 8. Pinned text census
-
-Serves AC 11.
-
-Write `census_subtask_3.md` beside this spec. Record the `.md` routeIntake-only branch, the Clikt-suggestion confirmation, the update-check alias vs hidden choice, and notable goldens: `FeatureFamilyRenderingIntegrationTest`, `CliRuntimeShellCommandsTest` root-help pins, `OperationCommandTest` update-check catalog answers, and any README-vs-help consistency test implement finds. Update those fixtures to the edited text. Do not add new wording tests.
-
-### Constraints for later phases
-
-- Implement writes tests and fixture updates; it does not run them. Validate owns `./gradlew check` (spotless, detekt, architecture repo tests, render snapshots, agent-config validation, new unit tests). If spotless reports a stale configuration cache, validate reruns with `--no-configuration-cache`.
-- Audit reads this plan, `census_subtask_3.md`, and the tree against each AC.
-- Implement confirms Clikt suggestions and the update-check alias vs hidden fallback, then records both in the census.
-- Shared file with subtask 2: `SkillBillCommand.kt`. Apply this subtask to the file as found.
+- Validate runs `./gradlew check`, rerunning with `--no-configuration-cache` if spotless reports a stale cache. It repairs drift, most likely in `CliRuntimeShellCommandsTest` (including the `(?m)^\s+update-check\s` regex, which could match an `operation` description line), `SkillBillDispatcherRoutingTest`, `FeatureFamilyRenderingIntegrationTest`, `RouteIntakeTokensTest`, `CliRuntimeUpdateTest` and `McpSystemToolsTest`. It also watches for any other test that sends free text through root routing and expects goal-intake text.
+- Audit checks every acceptance criterion against the tree and the corrected census.
 
 ## Next Path
 
 ```bash
 skill-bill goal SKILL-414
 ```
-

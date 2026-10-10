@@ -1,3 +1,14 @@
+## [2026-10-10] SKILL-414 subtask 3 — one terminology, accurate docs and help, safer routing
+Areas: runtime-cli cli/core, cli/phase, cli/review and cli/system; runtime-contracts issuekey; runtime-engine goalrunner/intake; README.md; docs/; skills/skill-bill/content.md
+- README gains a Glossary (goal, workflow, subtask, phase, slot, step, operation, pack, lane, add-on) taken from PhaseSlot and SkeletonDefinition: 11 slot ids, standalone phases review/validation/plan/pr/monitor, and verify as an operation. phase:review runs standalone_review, and write_history is a slot.
+- Reusable: looksLikeGoalIntakeToken in runtime-contracts issuekey (tracker key prefix, URL marker, .feature-specs/ marker, private .md suffix). GoalIntake reuses the two public marker constants, and its acceptance is unchanged.
+- routeIntakeTokens keeps the root-option skip list (--db, --home, --verbose), splits phase:/operation: tokens into two, and prepends goal only when the predicate matches. Any other token passes through to Clikt 5.1.0, which reports an unknown command with Jaro-Winkler suggestions, so `phse review` no longer becomes a goal intake.
+- PhaseInvocationParser rejects verify with a UsageError that names `skill-bill operation verify <intake>`. The top-level update-check stays registered but hidden from help; `skill-bill operation update-check` is canonical.
+- Dispatcher content.md: one Review arguments section (target:<value>, last maps to HEAD), mode:inline|delegated with omission meaning inline, no Invoke the driver section, a connected-tracker Rehydrate, Pack routing heading, and the full feature-launch-warning.yaml skill-class path. Docs no longer describe verify as a phase or code-review as the phase review driver.
+- Limits: the parser still accepts mode:auto as inline. A first token such as notes.md routes to goal and fails there. Retired names stay on purpose in the retired-name lists, review-telemetry ids, and InlineReviewDirectiveTest's review-directive.md pin (census_subtask_3.md). Stale workflow-help assertions were deleted from CliRuntimeShellCommandsTest.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-10-10] SKILL-414 subtask 2 — quiet, accurate CLI output
 Areas: runtime-core di/core, runtime-cli cli/core, runtime-mcp mcp/core, runtime-infra/host diagnostics and jvm
 - New runtime-core ProcessLogging (ProcessLoggingEnvironmentKeys.SKILL_BILL_VERBOSE, verboseLoggingRequestedByEnvironment, configureProcessLogging). It resets LogManager, then sets root OFF with no handler, or verbose ALL with one stderr ConsoleHandler and a single-line formatter (level, source class.method, message; stack trace only when a Throwable is attached).

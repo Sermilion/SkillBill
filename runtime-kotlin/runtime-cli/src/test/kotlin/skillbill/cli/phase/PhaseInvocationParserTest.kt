@@ -5,6 +5,7 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -56,6 +57,13 @@ class PhaseInvocationParserTest {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("commit_push", emptyList()) }
 
     assertEquals("Phase 'commit_push' is not runnable on its own; run the full feature-task workflow.", error.message)
+  }
+
+  @Test
+  fun `verify is a usage error naming the verify operation`() {
+    val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("verify", emptyList()) }
+
+    assertContains(error.message.orEmpty(), "skill-bill operation verify")
   }
 
   @Test

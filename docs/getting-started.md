@@ -4,7 +4,7 @@ Skill Bill installs governed agent workflows plus a local runtime. The fastest w
 
 The runtime is packaged Kotlin: normal `skill-bill` and `skill-bill-mcp` use distribution scripts built by `./install.sh`, not Gradle `run` tasks and not a legacy runtime selector.
 
-Use this guide when you want to install Skill Bill, understand the runtime model, and know which behavior is enforced by contracts versus model reasoning.
+Use this guide when you want to install Skill Bill, understand the runtime model, and know which behavior is enforced by contracts versus model reasoning. Terms such as goal, workflow, subtask, phase, slot, step, operation, pack, lane, and add-on are defined in the [glossary](../README.md#glossary).
 
 ## What Ships
 
@@ -178,7 +178,7 @@ Choose standalone review execution explicitly with:
 /skill-bill phase:review mode:delegated
 ```
 
-Omitting `mode:` is equivalent to `mode:inline`, the default reduced-depth review in one review session; `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. `mode:auto` resolves to `inline` everywhere. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
+Review mode is `mode:inline|delegated`; omission means inline, the default reduced-depth review in one review session, and `mode:auto` is still accepted as inline. `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
 
 ## Runtime Fallback Boundary
 

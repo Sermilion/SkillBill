@@ -59,7 +59,7 @@ provider-native worker inventory and recorded digests, so neither the reviewed
 repository nor a surviving Skill Bill source checkout needs `skills/` or
 `platform-packs/` directories.
 
-`/skill-bill phase:review` accepts an optional `target:` (`HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, or a commit sha) and `mode:auto|inline|delegated`: a commit target reviews that commit against its first parent; omission and `mode:auto` both resolve to `inline` for every pass and for a scope with no pass number; `mode:inline` runs the light judgment-depth tier in one review subagent covering the routed areas at reduced depth with full broker evidence delivery, with no specialist fan-out and not equivalent coverage to delegated; and `mode:delegated` is the experimental full-depth tier reached only by explicit selection on this phase, launching one specialist subagent per routed area. Feature and goal workflows review inline (`code-review:auto|inline`); they do not launch delegated review.
+`/skill-bill phase:review` accepts an optional `target:` (`HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, `last`, or a commit sha) and `mode:inline|delegated`: a commit target reviews that commit against its first parent; omission means inline for every pass and for a scope with no pass number, and `mode:auto` is still accepted as inline; `mode:inline` runs the light judgment-depth tier in one review subagent covering the routed areas at reduced depth with full broker evidence delivery, with no specialist fan-out and not equivalent coverage to delegated; and `mode:delegated` is the experimental full-depth tier reached only by explicit selection on this phase, launching one specialist subagent per routed area. Feature and goal workflows review inline (`code-review:auto|inline`); they do not launch delegated review.
 
 The shipped `rust` pack follows that same manifest-driven path: Cargo and first-party `.rs` signals route to `bill-rust-code-review`, with governed native agents for the baseline and all ten specialist lanes. Its `validation_gate` covers workspaces, features, targets, rustfmt, Clippy, nextest, cargo-deny, and cargo-audit; Rust-specific routing is not hard-coded into either generic shell.
 
@@ -131,7 +131,7 @@ Net effect: you fine-tune review with an extra checklist item, or force the `/sk
 <details>
 <summary><b>8. Per-module memory</b></summary>
 
-Every module/package has its own `agent/decisions.md` and `agent/history.md`. The `write_history` phase's `boundary-history` strategy knows how to write high-signal entries with hygiene rules that keep history from rotting. Result: cross-session institutional knowledge attached to the code itself, not to your head or a wiki. You can see it in this very repo — `agent/decisions.md` records the exact incident that hardened the override read in #8. That is how the system stays self-aware across sessions and contributors.
+Every module/package has its own `agent/decisions.md` and `agent/history.md`. The `write_history` slot's `boundary-history` strategy knows how to write high-signal entries with hygiene rules that keep history from rotting. Result: cross-session institutional knowledge attached to the code itself, not to your head or a wiki. You can see it in this very repo — `agent/decisions.md` records the exact incident that hardened the override read in #8. That is how the system stays self-aware across sessions and contributors.
 
 </details>
 
