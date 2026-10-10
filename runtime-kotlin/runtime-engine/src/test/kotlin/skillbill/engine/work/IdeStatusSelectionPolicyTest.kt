@@ -131,6 +131,48 @@ class IdeStatusSelectionPolicyTest {
   }
 
   @Test
+  fun `a stale active monitor does not mask a later terminal monitor`() {
+    val zombie =
+      standalone(
+        issueKey = "crashlytics",
+        lifecycle = IdeStatusLifecycleState.ACTIVE,
+        workflowId = "zombie",
+        updatedAt = "2026-08-06T09:02:00Z",
+        runSequence = "18",
+      )
+    val done =
+      standalone(
+        issueKey = "crashlytics",
+        lifecycle = IdeStatusLifecycleState.TERMINAL,
+        workflowId = "done",
+        updatedAt = "2026-08-06T11:53:00Z",
+        runSequence = "19",
+      )
+    assertEquals("done", IdeStatusSelectionPolicy.select(listOf(zombie, done), OBSERVED)?.workflowId)
+  }
+
+  @Test
+  fun `a fresh active monitor still outranks an older terminal monitor`() {
+    val live =
+      standalone(
+        issueKey = "crashlytics",
+        lifecycle = IdeStatusLifecycleState.ACTIVE,
+        workflowId = "live",
+        updatedAt = "2026-08-06T11:50:00Z",
+        runSequence = "20",
+      )
+    val done =
+      standalone(
+        issueKey = "crashlytics",
+        lifecycle = IdeStatusLifecycleState.TERMINAL,
+        workflowId = "done",
+        updatedAt = "2026-08-06T11:40:00Z",
+        runSequence = "19",
+      )
+    assertEquals("live", IdeStatusSelectionPolicy.select(listOf(done, live), OBSERVED)?.workflowId)
+  }
+
+  @Test
   fun `empty candidate list yields null`() {
     assertNull(IdeStatusSelectionPolicy.select(emptyList(), OBSERVED))
   }
@@ -233,5 +275,25 @@ class IdeStatusSelectionPolicyTest {
       updatedAt = Instant.parse(updatedAt),
       startedAt = Instant.parse("2026-08-06T08:00:00Z"),
       isGoalAuthoritative = false,
+    )
+
+  private fun standalone(
+    issueKey: String,
+    lifecycle: IdeStatusLifecycleState,
+    workflowId: String,
+    updatedAt: String,
+    runSequence: String,
+  ): IdeStatusCandidate =
+    candidate(issueKey, lifecycle, workflowId, updatedAt).copy(
+      execution =
+        IdeStatusExecutionIdentity(
+          scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+          executionId = "phase-$runSequence",
+          statusStoreId = "store",
+          runSequence = runSequence,
+          statusRevision = "1",
+          invocationId = "inv-phase-$runSequence",
+          phaseId = "monitor",
+        ),
     )
 }

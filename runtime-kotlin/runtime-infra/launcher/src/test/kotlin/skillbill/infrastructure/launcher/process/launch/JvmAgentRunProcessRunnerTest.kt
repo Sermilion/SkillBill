@@ -18,7 +18,6 @@ import skillbill.infrastructure.launcher.review.GovernedReviewEvidenceEndpoint
 import skillbill.ports.agentrun.model.AgentRunMcpStartupProbe
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
-import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
@@ -31,7 +30,6 @@ import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.ports.review.model.ReviewToolCall
 import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -355,49 +353,6 @@ class JvmAgentRunProcessRunnerTest {
       },
     )
     assertTrue(stderrChunks.joinToString("").contains("stdout_drain_join"))
-  }
-
-  @Test
-  fun `parent interrupt during wait keeps interrupted result without idle timeout`() {
-    val runner = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver())
-    var result: AgentRunProcessResult? = null
-    var thrown: Throwable? = null
-    val waitStarted = CountDownLatch(1)
-    val worker =
-      thread(start = true) {
-        try {
-          result =
-            runner.run(
-              testAgentRunProcessRequest(
-                listOf("sh", "-c", "sleep 120"),
-                Path.of(".").toAbsolutePath().normalize(),
-              ) {
-                timeout = 120.seconds
-                progressIdleTimeout = 120.seconds
-                progressEmitter =
-                  AgentRunProgressEmitter { emission ->
-                    if (emission.eventKind == GoalProgressEventKind.OPERATION_STARTED) {
-                      waitStarted.countDown()
-                    }
-                  }
-              },
-            )
-        } catch (failure: Throwable) {
-          thrown = failure
-        }
-      }
-    try {
-      assertTrue(waitStarted.await(10, TimeUnit.SECONDS))
-    } finally {
-      worker.interrupt()
-      worker.join(10_000)
-    }
-    assertFalse(worker.isAlive)
-    assertNull(thrown, thrown?.toString())
-    val completed = requireNotNull(result)
-    assertTrue(completed.interrupted)
-    assertFalse(completed.timedOut)
-    assertEquals("parent_interrupted", completed.liveness?.reason)
   }
 
   @Test

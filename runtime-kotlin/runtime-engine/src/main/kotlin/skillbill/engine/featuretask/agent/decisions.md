@@ -11,6 +11,20 @@ Decision: `requireRequestedSettings` treats a BUILD request as compatible with a
 Reason: An exception limited to the unrouted shape keeps the selection resolver unchanged. A VALIDATE plan with a concrete declaration still cannot be resumed under a BUILD request. Recorded generic BUILD plans still hit the recorded build-gate refusal instead of being rerouted silently.
 Alternatives considered: Widening `FeatureTaskRuntimeRunEntry.open` as well was rejected because it never calls this check. Accepting any BUILD-versus-VALIDATE mismatch was rejected because it would hide concrete-pack drift.
 
+## [2026-10-10] Stale active monitor status cannot mask a later completed run
+Context: Standalone monitor rows used a one-day lease and stayed `active` after the process died. IDE status treated any active/paused/blocked row in 24h as live work, so a zombie 11:02 monitor hid a later green `terminal` run. Operators saw Stale instead of Done after CI passed.
+Decision: Live selection includes only heartbeat-fresh active/paused/blocked rows. When none are fresh, retained settled work competes, so a later terminal monitor with a higher run sequence wins. Monitor registrations do not time-box a lease (`9999-12-31`) and are excluded from lease-expiry pause. Registering a new monitor terminals prior active/paused monitor rows on the same branch as superseded.
+Reason: Monitor is an open wait-until-green loop, not an exclusive leased worker. Freshness still shows a living watcher; a dead leased row must not outrank completed CI.
+Alternatives considered: Keeping the 24h live cohort and only extending the lease was rejected because a two-second crash still occupies the bar for a day. Mutating the Crashlytics rows by hand was rejected because status reads must be correct for existing state.
+Revisit when: Wall-clock caps still kill a watching monitor before CI settles.
+
+## [2026-10-10] Cancelled CI checks complete monitor instead of starting repair
+Context: Operators treat an all-cancelled check set as finished CI, the same as pass or skip. The watcher folded `CANCEL` into `FAIL`, so any cancelled check settled `ci_failed` and started `monitor_fix`, including when every check was cancelled.
+Decision: Only `FAIL` sets `ci_failed` and starts repair, including while other checks are still pending. `CANCEL` is a settled non-failure, like `PASS` and `SKIPPING`. Monitor completes when no check is pending and none failed.
+Reason: Cancelled jobs are not failures to fix. Waiting while a sibling is still pending keeps the open wait-until-green contract; an all-cancelled (or pass/skip/cancel) set can complete as done.
+Alternatives considered: Treating a single cancelled check as immediate repair was rejected because it fights the remaining pending work. A distinct `Cancelled` outcome was rejected because the run already completes on `Passed`.
+Revisit when: A cancelled check should mean a distinct operator action instead of done.
+
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
 Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` (three traversals, BLOCK on exhaustion). Return from `monitor_fix` to `commit_push` through an uncapped backward edge on ADVANCE with its own loop id. `monitor_fix` sits after `monitor` in forward order.

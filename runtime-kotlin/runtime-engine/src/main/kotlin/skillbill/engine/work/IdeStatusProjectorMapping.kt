@@ -3,12 +3,14 @@ package skillbill.engine.work
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeOperatorDecisionPause
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runner.operatorDecisionPause
+import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPlanning
+import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
@@ -106,6 +108,39 @@ internal fun goalStaysOnOpenCiMonitor(
   if (completionRecorded || projection == null || projection.paused) return false
   if (projection.pendingCount > 0 || projection.blockedCount > 0) return false
   return projection.completeCount > 0
+}
+
+internal fun goalShowsOpenCiMonitor(
+  projection: GoalRunnerStatusProjection?,
+  completionRecorded: Boolean,
+  lifecycle: IdeStatusLifecycleState,
+): Boolean =
+  goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
+    projection?.executionLiveness != ExecutionLiveness.LIVE &&
+    lifecycle == IdeStatusLifecycleState.ACTIVE
+
+internal fun goalCurrentStep(
+  planningStep: IdeStatusPlanning?,
+  childPhaseId: String?,
+  projectedStep: String?,
+  lifecycle: IdeStatusLifecycleState,
+  openCiMonitor: Boolean,
+): IdeStatusStep {
+  val terminal = lifecycle == IdeStatusLifecycleState.TERMINAL
+  val childPhaseStep = childPhaseId?.takeIf { it.isNotBlank() && planningStep == null && !terminal }
+  return goalStep(
+    planningStep,
+    childPhaseStep
+      ?: projectedStep?.takeUnless { terminal }
+      ?: OPEN_CI_MONITOR_STEP.takeIf { openCiMonitor },
+    lifecycle,
+  )
+}
+
+internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress? {
+  val total = completeCount + pendingCount + blockedCount
+  if (total <= 0) return null
+  return IdeStatusProgress(completed = completeCount, total = total)
 }
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"

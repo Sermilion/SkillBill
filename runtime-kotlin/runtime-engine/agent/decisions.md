@@ -3,6 +3,13 @@ Context: Goal IDE status treated an expired parent execution lease as idle when 
 Decision: When a goal has completed subtasks, no pending or blocked work, and no recorded completion, keep lifecycle ACTIVE on the monitor step with activity "CI not fixed" even without a live execution lease. Refresh updatedAt from the observation clock so the wait stays FRESH until CI is fixed or the goal completes.
 Reason: Finalization still owes CI after the last subtask. Painting that wait as idle hid the monitor phase. The lease is for execution occupancy; the monitor wait has none.
 
+## [2026-10-10] Live IDE status is heartbeat-fresh, not merely retained
+Context: A dead standalone monitor stayed `active` inside 24h live retention. Selection ranked only ACTIVE/PAUSED/BLOCKED rows when any existed, so that stale row hid a later terminal monitor and the IDE showed Stale after CI passed.
+Decision: The live cohort is heartbeat-fresh ACTIVE/PAUSED/BLOCKED only. When none are fresh, retained settled work competes and a later terminal monitor can win.
+Reason: Live occupancy should mean a process that is still heartbeating. Retention still keeps a quiet genuine run selectable when nothing fresher exists.
+Supersedes: Select live retained IDE status before sequence ranking (2026-10-10)
+Revisit when: a named live-vs-live incident requires reordering freshness and tier.
+
 ## [2026-10-10] Select live retained IDE status before sequence ranking
 Context: Repo-global run_sequence let a later completed standalone on the same branch outrank a live goal (2026-10-09 SKILL-414 vs SKILL-415 plan).
 Decision: After retainedAt, if any ACTIVE, PAUSED, or BLOCKED row remains, rank only that live cohort. Rank FAILED, RECENTLY_TERMINAL, and IDLE only when live is empty. Keep the existing comparator inside the chosen cohort.

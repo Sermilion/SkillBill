@@ -180,17 +180,15 @@ class IdeStatusProjector(
     val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
-    val openCiMonitor =
-      goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
-        projection?.executionLiveness != ExecutionLiveness.LIVE &&
-        lifecycle == IdeStatusLifecycleState.ACTIVE
+    val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val freshness =
       if (openCiMonitor) {
         IdeStatusFreshness.FRESH
       } else {
         IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt)
       }
-    val step = assembleGoalStep(planningStep, childContext, projection, lifecycle, openCiMonitor)
+    val step =
+      goalCurrentStep(planningStep, childContext.currentPhaseId, projection?.currentStep, lifecycle, openCiMonitor)
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
@@ -201,7 +199,7 @@ class IdeStatusProjector(
       execution = candidate.execution,
       lifecycleState = lifecycle,
       currentStep = step,
-      progress = goalSnapshotProgress(projection),
+      progress = projection?.toIdeStatusProgress(),
       startedAt = candidate.startedAt,
       currentSubtask = goalCurrentSubtask(projection, context),
       currentModel = childContext.currentModel,
@@ -237,32 +235,6 @@ class IdeStatusProjector(
     planning?.takeIf {
       it.state != GoalPlanningStatusState.PREPARED && !preliminaryLifecycle.isSettled()
     }
-
-  private fun assembleGoalStep(
-    planningStep: IdeStatusPlanning?,
-    childContext: ChildOptionalContext,
-    projection: GoalRunnerStatusProjection?,
-    lifecycle: IdeStatusLifecycleState,
-    openCiMonitor: Boolean,
-  ): IdeStatusStep {
-    val childPhaseStep =
-      childContext.currentPhaseId
-        ?.takeIf { it.isNotBlank() && planningStep == null && lifecycle != IdeStatusLifecycleState.TERMINAL }
-    return goalStep(
-      planningStep,
-      childPhaseStep
-        ?: projection?.currentStep?.takeUnless { lifecycle == IdeStatusLifecycleState.TERMINAL }
-        ?: OPEN_CI_MONITOR_STEP.takeIf { openCiMonitor },
-      lifecycle,
-    )
-  }
-
-  private fun goalSnapshotProgress(projection: GoalRunnerStatusProjection?): IdeStatusProgress? {
-    if (projection == null) return null
-    val total = projection.completeCount + projection.pendingCount + projection.blockedCount
-    if (total <= 0) return null
-    return IdeStatusProgress(completed = projection.completeCount, total = total)
-  }
 
   private fun goalPauseRequested(projection: GoalRunnerStatusProjection?): Boolean =
     projection?.pauseRequested == true && projection.paused != true
