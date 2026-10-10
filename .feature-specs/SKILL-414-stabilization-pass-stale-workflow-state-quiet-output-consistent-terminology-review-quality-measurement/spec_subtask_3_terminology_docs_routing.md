@@ -70,6 +70,115 @@ Kotlin paths are under `runtime-kotlin/`. Other paths are repo-relative.
 
 Independent of subtasks 1, 2 and 4. Subtask 2 also edits `SkillBillCommand.kt` (`--verbose` and the skip list). Apply this subtask's changes to the file as found, and keep every root option present.
 
+## Implementation Details
+
+### Planning basis and assumptions
+
+The preplan digest supplied to planning covers subtask 2 and not this subtask. This plan uses the facts that digest establishes, listed below. Every other fact is an assumption marked **Confirm:**, and implement checks it against the tree before editing.
+
+- `SkillBillCommand.routeIntake(arguments)` scans leading root options: `--db` and `--home` advance by 2, the `--db=` and `--home=` prefixes advance by 1, and any other token ends the scan. If the first remaining token starts with `-`, is in `registeredSubcommandNames()`, or is in `aliases()`, the function returns the input unchanged. Otherwise it inserts `goal` at that index. `CliRuntime.execute` calls `CommandLineParser.parseAndRun(rootCommand, rootCommand.routeIntake(arguments))`.
+- Subtask 2 may already have landed. If it has, it added `--verbose` to the skip list and extracted the pure helpers `leadingRootOptionCount(arguments)` and `routeIntakeTokens(arguments, isCommand)`. Apply this subtask to the file as found and keep every root option in the skip list.
+- No test calls `routeIntake` or builds `SkillBillCommand`. CLI tests drive `CliRuntime.run(listOf("--db", <tmp>, ...), context)`. No golden captures root `--help` text.
+- **Confirm:** the 11 slot ids and the standalone phase ids. Copy them verbatim from `PhaseSlot.kt` and `SkeletonDefinition.kt`. The dispatcher's form table suggests the standalone phases are `plan`, `review`, `validation`, `pr` and `monitor`. The slot list includes `monitor`, `standalone_review` and `write_history`.
+
+### Ordered tasks
+
+1. **Pinned-text census (AC 11).**
+   - Before editing, find tests and fixtures that pin text this subtask changes:
+     - `README.md` content, including README-vs-help consistency tests;
+     - root, `phase` and `verify-stats` help;
+     - `skills/skill-bill/content.md` and its rendered `SKILL.md` snapshots;
+     - top-level `update-check` invocations;
+     - CLI tests that send a free-text first token (no issue key, URL or spec path) through root routing to goal.
+   - Write `census_subtask_3.md` in this spec bundle with the notable entries. It also records the outcomes of the **Confirm:** points from tasks 2, 5, 7 and 8.
+   - Tests: none.
+
+2. **Shared goal-intake predicate (AC 7, AC 10).**
+   - In `runtime-contracts`, in the file that declares `TRACKER_STYLE_ISSUE_KEY_PATTERN`, add `fun looksLikeGoalIntakeToken(token: String): Boolean`. **Confirm:** the location of that file. The predicate is true when any of these holds:
+     - the token *starts with* a tracker-style issue key, matched as a prefix so that `SKILL-414-some-slug` and a quoted `"APP-123 Add CSV export\n..."` intake both match;
+     - the token contains `://`;
+     - the token contains `.feature-specs/`;
+     - the token ends with `.md`.
+   - Declare the URL marker, the spec directory marker and the `.md` suffix once, as private constants in that file.
+   - Make `GoalIntake.parseOrNull` reuse the predicate or the pattern only where its grammar matches exactly. If they differ, leave `GoalIntake` unchanged and record the difference in the census. Its acceptance behavior must not change (non-goal).
+   - Tests: add one runtime-contracts test, for example `GoalIntakeTokenPredicateTest`. It asserts that the predicate accepts `APP-123`, `SKILL-414-stabilization-pass`, `https://linear.app/x/issue/APP-1` and `.feature-specs/APP-1-x/spec.md`, and rejects `phse`. This catches a predicate that either misses real intakes or accepts plain words.
+
+3. **Routing guard (AC 7, AC 9).**
+   - If subtask 2's `routeIntakeTokens` exists, make the change there. Otherwise extract a pure `internal fun routeIntakeTokens(arguments: List<String>, isCommand: (String) -> Boolean): List<String>` and have `routeIntake` delegate to it, with `isCommand` covering `registeredSubcommandNames()` and `aliases()`. Keep the leading-option skip exactly as found.
+   - At the first non-option index:
+     - `phase:<name>` with a non-blank `<name>` becomes the two tokens `phase` and `<name>`.
+     - `operation:<name>` with a non-blank `<name>` becomes `operation` and `<name>`.
+     - A token starting with `-`, or one that `isCommand` accepts, passes through unchanged.
+     - A token that `looksLikeGoalIntakeToken` accepts gets `goal` inserted before it.
+     - Any other token passes through unchanged, so Clikt reports an unknown subcommand.
+   - Declare the `phase:` and `operation:` prefixes once. **Confirm:** whether the installed Clikt version suggests close command names for an unknown subcommand. If it does not, add the closest registered names by edit distance to the error message.
+   - Tests: add one test file in `runtime-cli/src/test/kotlin/skillbill/cli/core/`, or extend subtask 2's routing test file if it exists. It contains:
+     - a pure check that `routeIntakeTokens(listOf("APP-123", "Add CSV export"), ...)` returns `goal` followed by the input;
+     - a pure check that `routeIntakeTokens(listOf("phase:review"), ...)` returns `phase` and `review`;
+     - a `CliRuntime.run(listOf("--db", <tmp>, "phse", "review"), context)` check that exits non-zero, shows Clikt's unknown-command error naming `phse`, and does not show the goal intake error text.
+   - Update existing CLI tests from the census that relied on free text routing to goal: give them a key or an explicit `goal` token.
+
+4. **`phase verify` hint (AC 8, AC 9).**
+   - In `PhaseInvocationParser.definitionId`, strip a leading `phase:` and compare the result with `verify`. On a match, throw a `UsageError` saying that `verify` is an operation, with the hint `skill-bill operation verify <intake>`. Do this before the existing `Unknown phase` path.
+   - **Confirm:** whether the parser lives in `runtime-cli`, and whether it already strips the prefix.
+   - Tests: add one runtime-cli test that runs `CliRuntime.run` with `--db <tmp> phase verify APP-1`, then with `--db <tmp> phase:verify APP-1`. The second invocation goes through root normalization. Both exit non-zero, and stderr contains `skill-bill operation verify`. This catches a missing hint and a normalization step that bypasses it.
+
+5. **update-check (AC 6).**
+   - Compare the options of the top-level update-check command with those of `operation update-check` (`--include-prereleases`, `--format json`).
+   - If they match, remove the top-level command from `subcommands(...)` and add `"update-check" to listOf("operation", "update-check")` to `SkillBillCommand.aliases()`. If they do not match, keep the command and mark it hidden from help, using the Clikt hidden-from-help property of the installed version.
+   - Record the chosen path in the census.
+   - Tests: keep any existing test that invokes the top-level `update-check`, so it proves the invocation still works. Only if no such test exists, add one CLI test that runs `update-check --format json` and checks that the output is the operation's.
+   - Do not add a test that asserts root help is absent; audit reads the code.
+
+6. **CLI help text (AC 5).**
+   - Rewrite the `SkillBillCommand` root description in glossary terms: the CLI runs goals, standalone phases and runtime operations, and inspects review and telemetry data. Review import is no longer described as its purpose.
+   - Change the `verify-stats` help in `ReviewCliCommands.kt` to "Show aggregate verify operation metrics."
+   - Change the `rest` argument help in `PhaseCommand` to list `mode:inline|delegated`, with inline as the default. The parser still accepts `auto` (non-goal).
+   - Update every pinned help string the census finds.
+   - Tests: none new.
+
+7. **README glossary and fixes (AC 1, AC 2, AC 3).**
+   - Add a `## Glossary` section to `README.md` with one or two sentences each for goal, workflow, subtask, phase, slot, step, operation, pack, lane and add-on:
+     - **Phase:** the standalone phase ids, copied verbatim.
+     - **Slot:** all 11 `PhaseSlot` ids, copied verbatim.
+     - **Operation:** state plainly that `verify` is an operation.
+     - **Add-on:** cover both pack-owned add-ons under `platform-packs/<slug>/addons/` and user agent add-ons under `agent-addons/<slug>/`.
+   - Fix the slot sentence and table so that they list all 11 slots, including `monitor` and `standalone_review`.
+   - State that `phase:review` runs `standalone_review`, after confirming this in `SkeletonDefinition`.
+   - Call `write_history` a slot.
+   - Show update-check as `skill-bill operation update-check`.
+   - Add a link to `README.md#glossary` in `docs/getting-started.md`.
+
+8. **Docs sweep (AC 3).**
+   - Search `README.md`, `docs/` and `skills/skill-bill/content.md` once for `bill-feature-verify`, `skill-bill code-review`, `phase verify`, `phase:verify`, `nine phase`, and slots called phases. Rewrite each hit in glossary terms.
+   - **Confirm:** whether a `code-review` CLI command still exists. If it does, docs may name it, but never as the driver of `phase review`. If it does not, remove the mentions.
+
+9. **Dispatcher `skills/skill-bill/content.md` (AC 3, AC 4).** Edit only `content.md`. Move surviving rule text verbatim.
+   - Review mode: replace every `mode:auto|inline|delegated` with `mode:inline|delegated`, and state that omission means inline.
+   - Merge `Review mode argument` and `Review target argument` into one `Review arguments` section in `key:value` form:
+     - at most one `mode:inline|delegated`;
+     - at most one `target:<value>`, listing the targets exactly as `PhaseInvocationParser` accepts them. The current text lists `pr`, `staged`, `unstaged`, `HEAD`, `last`, `uncommitted` and `<sha>`; confirm these against the parser;
+     - an omitted target reviews uncommitted changes when the worktree is dirty and HEAD otherwise.
+     - Drop the positional target and the `--scope`, `--diff-file`, `--base-revision`, `--head-revision` and baseline-untracked flags.
+   - Delete `Invoke the driver`.
+   - In `Phase Review`, rewrite the sentence that maps the old driver onto `phase:review` so that it points at `Review arguments` and `Present the register` only.
+   - In `Present the register`, refer to the `phase:review` command's stdout instead of "the driver".
+   - Rehydrate: "fetch the listed issue from the connected tracker".
+   - Rename the second `Routing` heading, under Phase Validation, to `Pack routing`. **Confirm:** that heading is not a governed required section.
+   - Add one sentence near Launch or Ceremony naming `orchestration/skill-classes/feature-launch-warning.yaml` and what it injects. The rendered `Before launch, follow peak-hours-warner.md` pointer suggests it injects the pre-launch peak-hours warning sidecar. **Confirm:** the injection point in `docs/skill-source-generation.md` or the render code.
+   - Render snapshots and fixtures: update them by editing, or with the repository's render or snapshot path. Never run the installer.
+
+### Constraints
+
+- No `//` or non-KDoc block comments in Kotlin. KDoc is allowed only on interfaces.
+- No inline fully qualified names.
+- Each literal key or prefix is declared once in its owner.
+- Respect file line ceilings.
+- Tests pass an explicit non-empty environment map. Mocks, if any, use `relaxUnitFun = true`; hand-written fakes are preferred.
+- No new commands, phases or operations.
+- No change to `GoalIntake` acceptance behavior, phase semantics, or the parser's accepted mode values.
+- Implement and audit run no build, test or check commands, and no install commands. Validate runs `./gradlew check` and repairs snapshot or golden drift.
+
 ## Validation Strategy
 
 The validate phase runs `./gradlew check`: runtime-cli and runtime-contracts tests, CLI help goldens, skill render snapshots and agent-config validation, which together cover `content.md`. Implement and audit run nothing; `scripts/validate_agent_configs` is covered by `check`. Audit reads the edited docs, dispatcher and code against each criterion.

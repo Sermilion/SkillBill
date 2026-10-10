@@ -152,6 +152,7 @@ private fun diagnosticWithPrefix(
 private class RootFlagProbeCommand : CliktCommand("skill-bill") {
   val dbOverride by databasePathOption()
   val homeOverride by userHomeOverrideOption()
+  val verbose by verboseOption()
   val ignoredTokens by argument().multiple()
 
   override val treatUnknownOptionsAsArgs: Boolean = true

@@ -171,6 +171,132 @@ test_obligations: none. Audit reads this file.
 
 The validate phase runs the existing repository checks through `./gradlew check`, including scorer tests. These checks validate the implementation, not reviewer prose. The on-demand runner stays skipped there. Implement and audit run nothing. Audit reads the eval files and `census_subtask_4.md` against each criterion and confirms that review prompts, production parsing, and completion gates remain unchanged.
 
+## Implementation Details
+
+### Planning basis and assumptions for implement to confirm
+
+The upstream preplan digest supplied to the plan phase describes subtask 2 (quiet CLI output) and carries no facts about this subtask. This plan therefore rests on this sub-spec and the parent spec (Area 4). Implement must confirm each assumption below before relying on it and record any correction in `census_subtask_4.md`:
+
+- A1. `ReviewParser.parseReview` exists in one `runtime-kotlin` module and reads the PLAYBOOK bullet format `- [F-001] Sev | Conf | file:line | desc` and table rows. Implement locates the owning module, its signature (input text plus any required context), its return type, whether it throws on unparseable input, and the per-finding fields (id, severity, confidence, file, line, description, category, specialist or routed-skill label).
+- A2. The parent spec says bullet findings take the first routed specialist label for the whole review. That is a review-wide label, not per-finding attribution. Unless implement finds a genuine per-finding specialist field, reported findings bucket as `unattributed` for per-lane precision. Implement records the source used in `census_subtask_4.md`.
+- A3. The owning module may have a `repoTest` source set (as `runtime-core` does for architecture tests), wired into `./gradlew check`, and test code there can see the `ReviewParser` it calls (public API, or `internal` through an associated compilation). If both hold, all new Kotlin goes in `repoTest`. Otherwise it goes in the module's `test` source set, and the runner resolves the repository root the way existing repo-reading tests do.
+- A4. The module's test classpath already has a YAML reader (snakeyaml, kaml, or the one the runtime uses for contracts) and JUnit 5 assumptions. Use those and add no new dependency. If no YAML reader is on the test classpath, add it as a test-only dependency of that module and note it in the census.
+- A5. `census_subtask_4.md` lives in this spec bundle directory, next to this file.
+- A6. `phase review` prints its findings register to stdout, so the operator can redirect it to `<case-id>.md`.
+
+### Hard constraints (all tasks)
+
+- No production code, CLI command, parser change, finding template, category requirement, report schema, review validation, PLAYBOOK, skill `content.md`, telemetry, or completion-gate change (AC-1, AC-8). Every new Kotlin file is in a test source set.
+- No `//` or non-KDoc block comments in Kotlin. KDoc only on interfaces.
+- No mocks are needed. If one is used, it must use `relaxUnitFun = true`.
+- Declare YAML keys once in a private test-side `ReviewEvalCaseKeys` object, and the env var once in a test-side `ReviewEvalEnvironmentKeys` object (`SKILL_BILL_REVIEW_EVAL_REGISTER_DIR`). Do not repeat key literals.
+- No file under `evals/review/` holds a diff hunk, code line, or source excerpt from the evaluated repository. Rationales are short, original prose (AC-7).
+- Keep files small (scorer, loader, report model and rendering in separate files) so detekt and file-size rules pass if they also cover test sources.
+- No installer or install-sync commands, and no compile or test runs in implement. The validate phase runs `./gradlew check`.
+
+### Scoring rules (decided here, documented in the README)
+
+- Matching: a reported finding matches an expected entry when the normalized file paths are equal (strip a leading `./`, convert `\` to `/`) and the reported line falls within the entry's line or `line_start..line_end` widened by the window. The default window is ±5, both ends inclusive, overridable per entry with `line_window`. If several entries match, the entry with the nearest line wins; ties go to the entry listed first.
+- Many-to-one: every reported finding that matches a `true_positive` entry counts as a true positive. Recall counts distinct matched entries.
+- A reported finding that matches a `non_issue` entry is a false positive.
+- A reported finding that matches no scoreable entry is unlabeled. It is listed for the curator and excluded from both true and false positives.
+- Precision = true positives / (true positives + false positives), meaning labeled reported findings. Recall = distinct matched `true_positive` entries / scoreable `true_positive` entries. A metric with a zero denominator is reported as `n/a` (null), never 0 or 1. This reads the spec's "true positives / reported" as reported findings that hit a labeled entry, which is what AC-3/AC-4 require when unlabeled findings are excluded from both counts.
+- Per-lane: recall is grouped by the expected entry's `lane`. Precision is grouped by the reported finding's lane attribution (A2), or `unattributed`. Overall rolls up every lane.
+- Entries with `status: needs_curation`, and entries without a file or line for any other reason, are excluded from scoring and listed as curation items.
+- Partial: the report carries `partial: true` with explicit reasons whenever any of these hold:
+  - `extraction_incomplete`: the parser threw, returned zero findings for a non-blank register, returned findings without a file or line (each listed as a curation item), or found fewer findings than the `[F-<n>]` ids in the text. Unparsed passages are listed as curation items.
+  - `expected_entries_need_curation`: one or more expected entries were excluded.
+
+  The scorer never throws for reviewer prose. Only malformed case YAML in this repository fails loudly.
+
+### Ordered tasks
+
+1. **Locate and confirm (A1–A6).** Serves AC-1, AC-3, AC-5.
+   - Find the `ReviewParser` owner, its API and fields, its source sets, the check wiring, the YAML library, the JUnit version, and how repo-reading tests resolve the repo root.
+   - Read-only. No production edits.
+
+2. **Case model and loader.** Serves AC-3, AC-6.
+   - Paths: `<module>/src/<repoTest|test>/kotlin/skillbill/<parser-package>/eval/ReviewEvalCase.kt` and `ReviewEvalCaseLoader.kt`. Use the package next to `ReviewParser`, under an `eval` subpackage.
+   - Data classes:
+     - `ReviewEvalCase(caseId, repo, pr, branch, commit, baseRevision?, command)`.
+     - `ExpectedFinding(id, file?, lineStart?, lineEnd?, lineWindow = 5, severity?, category?, lane?, label: TRUE_POSITIVE|NON_ISSUE, rationale, needsCuration: Boolean)`, with a `label` enum that carries a `wireValue`.
+   - The loader parses `case.yaml` and `expected-findings.yaml` (a top-level `findings:` list). It accepts `line` or `line_start`/`line_end`, and allows a null file or line on any entry. It fails loudly on an unknown `label` or `status` value and on missing `id` or `rationale`.
+
+3. **Pure scorer and report.** Serves AC-3.
+   - Paths: `ReviewEvalScorer.kt` and `ReviewEvalReport.kt` in the same package.
+   - `fun scoreReview(register: String, expected: List<ExpectedFinding>): ReviewEvalReport` calls `ReviewParser.parseReview` inside `runCatching`. It maps parsed findings to an internal `ReportedFinding(id?, file?, line?, lane)`, then applies the scoring rules above.
+   - `ReviewEvalReport` holds:
+     - `partial`, `partialReasons`
+     - `overall: LaneScore` and `lanes: Map<String, LaneScore>`
+     - `truePositives`, `missedTruePositives`, `falsePositives`, `unlabeled`
+     - `curationItems: List<CurationItem(kind, detail)>` and `excludedEntries`
+   - `LaneScore` holds `truePositives`, `falsePositives`, `matchedExpected`, `expectedTruePositives`, `precision: Double?` and `recall: Double?`.
+   - `fun ReviewEvalReport.render(caseId): String` produces the plain-text per-lane report the runner prints, with `PARTIAL` and its reasons in the header when partial.
+
+4. **Scorer unit tests (canned registers).** Serves AC-4. Path: `ReviewEvalScorerTest.kt` next to the scorer. Exactly two tests:
+   - **Arithmetic, window, non_issue, and unlabeled.**
+     - Expected entries arrive through the loader from an inline YAML string, so the loader path is covered without a separate test:
+       - TP `A`: `Foo.kt:44`, lane `security`
+       - TP `B`: `Bar.kt:10`, lane `testing`, not reported
+       - non_issue `N`: `Baz.kt:20`
+       - `C`: `needs_curation` with no line
+     - Canned PLAYBOOK-format register with three findings:
+       - `Foo.kt:49` matches A at the inclusive +5 window edge.
+       - `Baz.kt:21` hits N.
+       - `Qux.kt:3` is unlabeled.
+     - Assert overall TP=1, FP=1, precision 0.5, recall 0.5.
+     - Assert recall per lane: `security` 1.0, `testing` 0.0.
+     - Assert the unlabeled list holds `Qux.kt:3` and is not counted in TP or FP, and that C is in the excluded entries.
+     - Assert `partial` is true with reason `expected_entries_need_curation`, and `extraction_incomplete` is absent.
+     - Realistic bugs caught: an exclusive window edge, unlabeled findings counted in precision, needs_curation entries in the recall denominator, a non_issue hit not counted as FP.
+   - **Prose without extractable locations.**
+     - Register: plain paragraphs that describe a concern with no `file:line`.
+     - Expected: one TP entry.
+     - Assert no exception, `partial` true with reason `extraction_incomplete`, a non-empty curation list, precision null, and recall 0.0 for the scoreable entry.
+     - Realistic bug caught: the measurement reader rejecting or crashing on ordinary prose, or reporting a complete score.
+   - No other tests. The YAML case files get no dedicated test.
+
+5. **On-demand runner test.** Serves AC-5.
+   - Path: `ReviewEvalRunnerTest.kt`.
+   - A single test. It calls `Assumptions.assumeTrue(System.getenv(ReviewEvalEnvironmentKeys.REGISTER_DIR) != null)`, so it is skipped under `./gradlew check`.
+   - When set, for each `evals/review/<case-id>/` with a matching `<register-dir>/<case-id>.md`, it loads the case, scores it, and prints `render(caseId)` to stdout. It prints a line for each case without a register.
+   - It never asserts on scores and never launches an agent review.
+
+6. **Eval files and README.** Serves AC-2, AC-6, AC-7.
+   - **`evals/review/README.md`:**
+     - Purpose: on-demand measurement only, never gating review completion or validation.
+     - Case format: every `case.yaml` and `expected-findings.yaml` field, `needs_curation`, and `line_window`.
+     - The scoring rules above, including precision, recall, unlabeled, n/a, lane attribution, and partial reasons.
+     - Best-effort extraction limits: prose is not required to follow any format, unparsed passages become curation items, review-wide specialist labels do not count as per-finding lanes.
+     - The no-source-excerpt rule.
+     - The on-demand steps:
+       1. In a checkout of the case repo at the case commit, run the `case.yaml` command (`skill-bill phase review target:<commit> --agent <agent> > <register-dir>/<case-id>.md`).
+       2. Run `SKILL_BILL_REVIEW_EVAL_REGISTER_DIR=<register-dir> ./gradlew :<module>:<repoTest|test> --tests '*ReviewEvalRunnerTest*'` from `runtime-kotlin/`, with the project path and task confirmed in task 1.
+   - **`evals/review/capmo-android-pr-3110/case.yaml`:**
+     - Fields: `repo: capmo-android`, `pr: 3110`, `branch: feat/FP-5545-accept-into-open-entry`, `commit: 98b49fb47`, `base_revision`, and the review command.
+     - If the base revision cannot be sourced from a local capmo-android checkout, write it as `null` and list it in the census.
+   - **`evals/review/capmo-android-pr-3110/expected-findings.yaml`:**
+     - Implement searches read-only for a local capmo-android checkout and for imported review runs or findings for PR 3110 in the local skill-bill database, and sources the verified P0/P1 findings from there as `true_positive` entries (file, line, severity, category, lane, short original rationale).
+     - Always include the custom-text-resurrection P1 as `label: non_issue` with rationale `device QA: not reachable`. Mark it `status: needs_curation` if its file or line cannot be sourced.
+     - Never invent findings. Any entry or field that cannot be sourced gets `status: needs_curation`. If no verified findings can be found at all, add no placeholder TP entries and let the census record that the list is pending.
+
+7. **Census.** Serves AC-3, AC-6.
+   - Write `census_subtask_4.md` in this bundle with:
+     - the confirmed `ReviewParser` module, API and source set, and the lane attribution source used (A2)
+     - the final Gradle command
+     - the sources searched for PR 3110 data and what each yielded
+     - every `needs_curation` entry and missing field (including `base_revision` if null) with what the user must supply
+     - any assumption from A1–A6 that turned out different
+
+8. **Unchanged-surface check.** Serves AC-1, AC-8.
+   - Before handing off, confirm the diff touches only test source sets, `evals/review/`, and this bundle's census.
+   - No changes to production `ReviewParser`, PLAYBOOK, review skills, completion or verdict logic, repair rounds, or telemetry.
+
+### Tests to add or run
+
+- Add: `ReviewEvalScorerTest` (two tests, task 4) and `ReviewEvalRunnerTest` (skipped by default, task 5).
+- Run: nothing in implement. The validate phase runs `./gradlew check`, which executes the scorer tests and skips the runner.
+
 ## Next Path
 
 ```bash

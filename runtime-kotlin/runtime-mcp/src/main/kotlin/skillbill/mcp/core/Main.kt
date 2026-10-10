@@ -6,7 +6,9 @@ import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.RuntimeContext
 import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
+import skillbill.di.core.configureProcessLogging
 import skillbill.di.core.create
+import skillbill.di.core.verboseLoggingRequestedByEnvironment
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.mcp.review.GovernedReviewEvidenceBridge
 import skillbill.mcp.shared.McpComponent
@@ -26,6 +28,7 @@ fun main(args: Array<String>) {
     return
   }
   val environment = System.getenv()
+  configureProcessLogging(verboseLoggingRequestedByEnvironment(environment))
   if (GovernedReviewEvidenceBridge.enabled(environment)) {
     GovernedReviewEvidenceBridge.run(environment)
   } else {

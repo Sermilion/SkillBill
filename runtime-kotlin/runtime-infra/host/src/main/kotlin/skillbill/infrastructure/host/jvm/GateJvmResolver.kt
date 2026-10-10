@@ -125,19 +125,23 @@ class GateJvmResolver(
     )
   }
 
-  private fun recordDecision(
+  internal fun recordDecision(
     sanitized: Map<String, String>,
     dropped: List<String>,
     imageRoot: Path?,
     disposition: GateJvmDisposition,
   ) {
-    diagnostics.warning(
+    val message =
       "Gate JVM resolution: seam=GateJvmResolver.resolve branch=${branchOf(sanitized, disposition)} " +
         "used=${usedValueOf(disposition)} " +
         "dropped_image_candidates=${dropped.joinToString(",").ifEmpty { "none" }} " +
         "image_root=${imageRoot?.toString() ?: "unknown"}" +
-        unresolvedDetailOf(disposition),
-    )
+        unresolvedDetailOf(disposition)
+    if (disposition is GateJvmDisposition.Unresolved || dropped.isNotEmpty()) {
+      diagnostics.warning(message)
+    } else {
+      diagnostics.info(message)
+    }
   }
 
   private companion object {

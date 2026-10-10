@@ -2,6 +2,7 @@ package skillbill.cli.core
 
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.PackagedContractComponent
+import skillbill.di.core.configureProcessLogging
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import kotlin.system.exitProcess
@@ -17,6 +18,7 @@ fun main(args: Array<String>) {
     }
     return
   }
+  configureProcessLogging(resolveVerboseLogging(args.toList(), System.getenv()))
   val result =
     CliRuntime.run(
       args.toList(),

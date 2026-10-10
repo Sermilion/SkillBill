@@ -1,5 +1,37 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-10] Configure process logging once in runtime-core for both mains
+Context: The CLI and MCP mains both needed the same JUL setup. Both depend in main on runtime-core, not runtime-infra:host.
+Decision: ProcessLogging lives in runtime-core skillbill.di.core, and each main calls configureProcessLogging before doing any work. SKILL_BILL_VERBOSE is declared only in ProcessLoggingEnvironmentKeys.
+Reason: No architecture rule bans java.util.logging outside runtime-application main and domain. The composition root both mains already import avoids duplicating the configuration in each entry point.
+Alternatives considered: Per-main configuration was rejected as duplication. A non-di package was the fallback only if a di guard rejected non-provider files, and none does.
+
+## [2026-10-10] Silence JUL by default and opt in with --verbose or SKILL_BILL_VERBOSE
+Context: Routine JUL diagnostics leaked to stderr on CLI runs and on the MCP server's stderr.
+Decision: Reset LogManager and set the root logger OFF with no handler unless verbose. Verbose installs exactly one stderr handler with a single-line formatter. The CLI honors a leading --verbose or the env var; MCP honors the env var only.
+Reason: Global configuration silences every direct JUL user without per-call-site edits. MCP has no root CLI options, so the env var is its only switch.
+
+## [2026-10-10] Handled conditions log one line without a Throwable
+Context: warning and info attached the Throwable, so handled conditions printed full stack traces.
+Decision: warning appends "ExceptionClass: message" (newlines collapsed) and attaches no Throwable. info never attaches one. Only error keeps the Throwable at SEVERE.
+Reason: A handled condition needs its cause summary, not a stack trace. Stack traces stay reserved for real errors, and the formatter prints one only when a Throwable is attached.
+
+## [2026-10-10] Resolve the diagnostics caller by skipping helper frames by name
+Context: JUL inferred the source as JdkRuntimeDiagnostics, hiding the real caller.
+Decision: StackWalker takes the first frame outside JdkRuntimeDiagnostics, RuntimeDiagnostics (including nested and default-method classes), and RuntimeDiagnosticsBestEffortWarning, then emits through logp.
+Reason: RuntimeDiagnosticsBestEffortWarning is an internal engine helper unreachable from host, so it is matched by simple-name string. Without the skip, every best-effort warning would name the helper instead of its caller.
+
+## [2026-10-10] Gate JVM resolution warns only when unresolved or candidates drop
+Context: GateJvmResolver.recordDecision logged every resolution at WARNING, including routine ones.
+Decision: Build the message once. Use warning for Unresolved dispositions or dropped image candidates, and info otherwise. recordDecision is internal.
+Reason: Routine resolutions are not actionable. Reaching Unresolved through resolve() depends on host JDKs found by the guard script's fallback scan, so the test drives recordDecision directly.
+
+## [2026-10-10] RootFlagProbeCommand must bind every root flag
+Context: The probe treats unknown options as arguments and disallows interspersed arguments.
+Decision: The probe binds --verbose alongside --db and --home.
+Reason: An unbound leading --verbose becomes a positional, which ends option parsing and drops a following --db or --home override.
+Revisit when: Another root flag is added to SkillBillCommand.
+
 ## [2026-10-09] Keep workflow-state contract version at 0.3 and upgrade via a readable set
 Context: Pre-current workflow-state rows broke list, latest, work-list, IDE status, and verify supersede. Schema-identity tests pin WORKFLOW_STATE_CONTRACT_VERSION to "0.3".
 Decision: Leave the current const at "0.3". Add WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS beside it. The validator copies the wire map and replaces a readable contract_version with the current const before schema validate. Writes persist the current const for an older readable version.

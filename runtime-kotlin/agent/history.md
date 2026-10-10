@@ -1,3 +1,15 @@
+## [2026-10-10] SKILL-414 subtask 2 — quiet, accurate CLI output
+Areas: runtime-core di/core, runtime-cli cli/core, runtime-mcp mcp/core, runtime-infra/host diagnostics and jvm
+- New runtime-core ProcessLogging (ProcessLoggingEnvironmentKeys.SKILL_BILL_VERBOSE, verboseLoggingRequestedByEnvironment, configureProcessLogging). It resets LogManager, then sets root OFF with no handler, or verbose ALL with one stderr ConsoleHandler and a single-line formatter (level, source class.method, message; stack trace only when a Throwable is attached).
+- The CLI and MCP mains are the only two runtime entry points, and both call it. CLI uses resolveVerboseLogging (leading --verbose or SKILL_BILL_VERBOSE 1/true, case-insensitive); MCP uses the env var only.
+- SkillBillCommand declares a root --verbose flag (VERBOSE_OPTION). Pure leadingRootOptionCount and routeIntakeTokens were extracted from routeIntake, so --verbose is skipped like --db/--home and the existing goal guard is kept. RootFlagProbeCommand also binds --verbose.
+- JdkRuntimeDiagnostics names the real caller through StackWalker plus logp, skipping its own frames, RuntimeDiagnostics, and RuntimeDiagnosticsBestEffortWarning. warning/info attach no Throwable and warning appends a one-line exception summary. error keeps SEVERE with the Throwable.
+- GateJvmResolver.recordDecision (now internal) logs routine resolutions at info and warns only for Unresolved or dropped image candidates.
+- Reusable: configureProcessLogging for any new runtime main; resolveVerboseLogging and routeIntakeTokens as pure, testable routing helpers.
+- Limits: other direct JUL call sites are silenced by the global config, not edited. No test asserts root logger structure; AC 1 is audited by reading Main.kt. stdout/JSON payloads and CliRuntime stderr text are unchanged.
+Feature flag: N/A (opt-in via --verbose or SKILL_BILL_VERBOSE)
+Acceptance criteria: 9/9 implemented
+
 ## [2026-10-09] SKILL-414 subtask 1 — stale workflow-state rows must not break the runtime
 Areas: runtime-contracts/workflow, runtime-infra/contracts/workflow, runtime-infra/sqlite/workflow, runtime-application/workflow and work, runtime-engine/verify and work
 - Added WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS (0.1, 0.2, current 0.3). The validator replaces a readable contract_version with the current const before schema validate and logs drift at FINE. Writes re-stamp older readable workflow-state versions to current.
