@@ -440,7 +440,6 @@ object PhaseLaunchPreparation {
         validationGateTriage = run.validationGateTriage,
         agentRunValidateFallback = run.agentRunValidateFallback,
         packBuildCommand = packCommand(run, checkpointArgs, carriesBuild = true),
-        packCollectAllCommand = packCommand(run, checkpointArgs, carriesBuild = false),
         mutating = run.policy.mutating,
         singleAgentSession = run.policy.singleAgentSession,
         repoRoot = run.request.repoRoot,
@@ -466,8 +465,6 @@ object PhaseLaunchPreparation {
     return when {
       carriesBuild && hooks.carriesPackBuildCommand ->
         FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(checkpointArgs)
-      !carriesBuild && hooks.carriesPackValidationCommand ->
-        FeatureTaskRuntimeRunLoopValidationScope.packCollectAllCommand(checkpointArgs)
       else -> null
     }
   }

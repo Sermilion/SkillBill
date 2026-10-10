@@ -2854,3 +2854,19 @@ Decision: Admit only the `standalonereview` slot package and matching relative s
 Reason: The new consumers require the existing review launch-runner allowance and review role authority. Their separate package must receive the same bounded traversal as `codereview`; raw run state, records, host, transition owner, and context prohibitions stay in force.
 Alternatives considered: A blanket slot exemption or admitting non-review packages (rejected: either removes transitive capability checks from unrelated strategies).
 Revisit when: The standalone review consumer package moves or its accepted binding authority changes.
+
+## 2026-10-10: Discover commands for all validation steps
+
+Operator direction supersedes the retained standalone pack-validation decision.
+Standalone and workflow validation use AgentValidateStrategy to discover required
+checks from project instructions, build configuration, scripts, and CI. No installed
+validation pack or declared full-suite command is required. When discovery finds no
+applicable commands, the agent prints a warning and completes the step. Failed
+discovery or unreadable configuration remains an obstacle.
+
+Remove PackValidationStrategy, its model-specific variant, registrations, command
+prompt hooks, and directive resource. Pack build execution retains its command and
+receipt contracts. Retire tests of the removed pack-validation cycle, including its
+repair-briefing interception, while keeping required-write rejection coverage in
+RequiredPhasePersistenceTest. Regression tests prove standalone command discovery
+without packs and workflow advancement with a retained no-command warning.

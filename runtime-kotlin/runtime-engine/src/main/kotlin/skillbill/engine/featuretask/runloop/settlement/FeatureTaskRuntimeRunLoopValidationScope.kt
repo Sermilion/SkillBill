@@ -44,18 +44,4 @@ object FeatureTaskRuntimeRunLoopValidationScope {
       is ValidationGateResolution.Incompatible -> null
     }
   }
-
-  internal fun packCollectAllCommand(args: RepositoryCheckpointResolutionArgs): String? {
-    val run = args.run
-    val gitOperations = args.gitOperations
-    run.request.admittedExecution?.let {
-      return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
-    }
-    val paths =
-      validationChangedPaths(args)
-    return (args.qualityGateCycles.resolve(run.request, paths.orEmpty()) as? ValidationGateResolution.Declared)
-      ?.declaration
-      ?.collectAllFullGateCommand
-      ?.joinToString(" ")
-  }
 }

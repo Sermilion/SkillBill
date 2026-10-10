@@ -42,8 +42,6 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
@@ -162,8 +160,6 @@ class PhaseStrategyCompositionTest {
       InlineStandaloneReviewOpus55Strategy(runner),
       PackBuildStrategy(),
       PackBuildOpus55Strategy(),
-      PackValidationStrategy(),
-      PackValidationOpus55Strategy(),
       AgentValidateStrategy(),
       AgentValidateOpus55Strategy(),
       BoundaryHistoryStrategy(),
@@ -464,7 +460,7 @@ class PhaseStrategyCompositionTest {
         EffectiveGatePolicyInputs(ValidationGateCommandFamily.VALIDATION, null, null, null, ValidationDepth.FULL, null),
       )
     val reordered = validator.read(encoded, "original").entries.reversed().associate { it.key to it.value }
-    val replacement = PackValidationStrategy()
+    val replacement = AgentValidateStrategy()
     val freshRegistry = PhaseStrategyRegistry(listOf(PhaseStrategyRegistration(replacement, runner)))
     val freshLookup =
       PhaseStrategyLookup(
@@ -474,7 +470,7 @@ class PhaseStrategyCompositionTest {
           mapOf(
             SkeletonDefinition.VALIDATION to
               mapOf(
-                PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackValidationStrategy.ID),
+                PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID),
               ),
           ),
         ),
@@ -640,7 +636,7 @@ class PhaseStrategyCompositionTest {
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
   ): String =
     when {
-      definition == SkeletonDefinition.VALIDATION -> PackValidationStrategy.ID
+      definition == SkeletonDefinition.VALIDATION -> AgentValidateStrategy.ID
       qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
       else -> AgentValidateStrategy.ID
     }

@@ -24,8 +24,6 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.model.EnvironmentContext
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -63,8 +61,6 @@ class RuntimeFeatureTaskSlotProvidesTest {
       listOf(
         PackBuildStrategy.ID,
         PackBuildOpus55Strategy.ID,
-        PackValidationStrategy.ID,
-        PackValidationOpus55Strategy.ID,
         AgentValidateStrategy.ID,
         AgentValidateOpus55Strategy.ID,
       ),
@@ -151,7 +147,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `the review definition selects delegated only for delegated mode and validation runs pack validation`() {
+  fun `the review definition selects delegated only for delegated mode and validation discovers project commands`() {
     val expected =
       mapOf(
         CodeReviewExecutionMode.AUTO to InlineReviewStrategy.ID,
@@ -167,7 +163,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
       strategies.selectedStepIds(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet())),
     )
     assertEquals(
-      PackValidationStrategy.ID,
+      AgentValidateStrategy.ID,
       strategies.strategyFor(
         PHASE_VALIDATE,
         PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()),
