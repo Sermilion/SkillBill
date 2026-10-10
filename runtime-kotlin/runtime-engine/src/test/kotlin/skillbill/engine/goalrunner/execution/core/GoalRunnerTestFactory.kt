@@ -290,6 +290,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           wiring.clock,
           wiring.diagnostics,
         ),
+        wiring.gitOperations,
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,

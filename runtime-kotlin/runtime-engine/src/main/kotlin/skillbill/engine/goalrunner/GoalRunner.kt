@@ -82,6 +82,7 @@ class GoalRunner(
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     alreadyCompleteReport(admittedState)?.let { return it }
+    runPreparation.alignGoalBranch(admittedState, request)?.let { return it }
     runPreparation.admitPlanningMigration(admittedState, request)
     val migratedState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)

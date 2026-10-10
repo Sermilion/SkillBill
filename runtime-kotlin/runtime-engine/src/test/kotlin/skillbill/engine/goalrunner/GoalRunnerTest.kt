@@ -70,6 +70,8 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
+import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -150,6 +152,7 @@ import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperationsTestBase
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -1187,6 +1190,32 @@ class GoalRunnerLinearScratchFinalizeTest {
 
     assertTrue(scratch.deletions.isEmpty(), "local mode must not delete any spec scratch")
     assertTrue(Files.exists(specDir.resolve("spec.md")), "local mode keeps the parent spec on disk")
+  }
+
+  @Test
+  fun `resume from another branch plans on the existing goal branch`() {
+    val git = BranchTrackingGitOperations(current = "main")
+    val planningBranches = mutableListOf<String>()
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1)),
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(
+          gitOperations = git,
+          goalPlanningSweep =
+            GoalPlanningSweep { state, request ->
+              planningBranches += git.current
+              PREPARE_ALL_GOAL_PLANNING_SWEEP.prepare(state, request)
+            },
+        ),
+      )
+
+    runner.run(GoalRunnerRunRequest("SKILL-56", Files.createTempDirectory("goal-branch-align"), "claude"))
+
+    assertEquals(listOf("feat/SKILL-56-goal"), planningBranches.distinct())
   }
 
   @Test
@@ -5227,7 +5256,7 @@ private class RecordingGitOperations(
   override fun branchExists(
     repoRoot: Path,
     branch: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "false")
 
   override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = currentBranch)
@@ -5261,6 +5290,26 @@ private class RecordingGitOperations(
     repoRoot: Path,
     request: WorkflowSelectedDiffHunksRequest,
   ): WorkflowSelectedDiffHunksResult = WorkflowSelectedDiffHunksResult(status = WorkflowGitOperationStatus.OK)
+}
+
+private class BranchTrackingGitOperations(
+  var current: String,
+) : WorkflowGitOperations by NoopWorkflowGitOperations {
+  override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(current)
+
+  override fun branchExists(
+    repoRoot: Path,
+    branch: String,
+  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
+
+  override fun checkoutBranch(
+    repoRoot: Path,
+    branch: String,
+    baseBranch: String?,
+  ): WorkflowGitOperationResult {
+    current = branch
+    return WorkflowGitOperationResult.Ok(value = branch)
+  }
 }
 
 private abstract class GoalReviewReadyGitOperations(

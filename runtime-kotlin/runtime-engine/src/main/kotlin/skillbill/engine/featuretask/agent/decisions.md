@@ -322,7 +322,7 @@ retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
 A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
 and expected rejection results.
 
-## 2026-10-10: Owed repair findings continue the round
+## [2026-10-10] Owed repair findings continue the round
 
 Context: SKILL-414 subtask 3 blocked on its first `implement_fix` attempt. The
 repair report left out two carried findings, the coverage rejection fell through
@@ -344,3 +344,23 @@ continuation is enough to recover it. The loop stays bounded because a
 non-shrinking retry blocks. Line-scoped citations accept the usual
 "F-001: rejected. Foo.kt:12 shows ..." form, while sentence-scoped cues keep
 later reasoning words such as "still" from vetoing a refutation.
+
+## [2026-10-10] Goal resume checks out its branch before reading specs
+
+Context: SKILL-414 was resumed while `main` was checked out. Spec drift recovery
+compared `main`'s copies of the sub-specs with the stored plans, found drift that
+did not exist on the goal branch, and replanned three subtasks into `main`'s
+working tree. When the subtask launch then ran `git checkout --merge`, those
+edits merged into the goal branch's specs, which left each spec with two
+"Implementation Details" sections. That merged file caused another spurious
+drift replan on the next resume.
+
+Decision: `GoalRunner.run` calls `GoalRunnerRunPreparation.alignGoalBranch`
+before planning migration, spec drift recovery, and the planning sweep. When
+the next runnable subtask's branch already exists and is not checked out, it
+checks that branch out. A failed check or checkout stops the run with a blocked
+report and changes nothing. A goal branch that does not exist yet is left to
+the subtask launch, which creates it from its base.
+
+Reason: Spec hashes and plan writes refer to the goal branch's files. Reading or
+writing them on another branch produces false drift and cross-branch merges.

@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
+import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
@@ -17,14 +18,20 @@ import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
+import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.goalrunner.model.GoalRunnerRunReport
+import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
 
 @Inject
 class GoalRunnerRunPreparation(
@@ -35,6 +42,7 @@ class GoalRunnerRunPreparation(
   private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
   private val migrationAdmission: GoalPlanningMigrationAdmission,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val gitOperations: WorkflowGitOperations,
 ) {
   internal fun admitPlanningMigration(
     state: GoalRunnerManifestState,
@@ -48,6 +56,46 @@ class GoalRunnerRunPreparation(
         repositoryIdentity,
       ),
     )
+  }
+
+  internal fun alignGoalBranch(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerRunReport? {
+    val selection = GoalRunnerPlanner.selectNext(state.manifest) as? GoalRunnerSelection.Run ?: return null
+    val subtaskId = selection.decision.subtask.id
+    val branch = state.manifest.branchPlanFor(subtaskId).branch.trim()
+    val failure = existingGoalBranchCheckoutFailure(request.repoRoot, branch) ?: return null
+    return stopped(
+      StoppedReportArgs(
+        issueKey = request.issueKey,
+        attempted = emptyList(),
+        subtaskId = subtaskId,
+        reason = GoalRunnerStopReason.BLOCKED,
+        blockedReason =
+          "Goal '${request.issueKey}' resumes on branch '$branch', and the runtime could not check it out " +
+            "before reading its specs, so it stopped instead of planning against another branch's spec " +
+            "files: $failure",
+        workflowId = state.parentWorkflowId,
+        lastResumableStep = "plan",
+      ),
+    )
+  }
+
+  private fun existingGoalBranchCheckoutFailure(
+    repoRoot: Path,
+    branch: String,
+  ): String? {
+    if (branch.isBlank() || gitOperations.currentBranch(repoRoot).value.trim() == branch) return null
+    val exists = gitOperations.branchExists(repoRoot, branch)
+    return when {
+      exists !is WorkflowGitOperationResult.Ok -> exists.error
+      exists.value.trim() != "true" -> null
+      else ->
+        gitOperations.checkoutBranch(repoRoot, branch, baseBranch = null)
+          .takeUnless { it is WorkflowGitOperationResult.Ok }
+          ?.error
+    }
   }
 
   internal fun refreshSpecPlanning(

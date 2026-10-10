@@ -24,6 +24,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -72,6 +73,7 @@ class BlockedWorkerCrashRecoveryTest {
             testHarnessClock,
             NoopRuntimeDiagnostics,
           ),
+          NoopWorkflowGitOperations,
         )
       val manifest =
         DecompositionManifest(
