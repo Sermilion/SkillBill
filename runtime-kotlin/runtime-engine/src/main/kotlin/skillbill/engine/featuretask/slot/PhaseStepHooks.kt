@@ -142,9 +142,6 @@ internal interface PhaseStepLaunchHooks {
   val carriesPackBuildCommand: Boolean
     get() = false
 
-  val carriesPackValidationCommand: Boolean
-    get() = false
-
   /** The prompt sections appended after the composed launch prompt of [run]. */
   fun launchPromptSupplement(
     run: PhaseRun,

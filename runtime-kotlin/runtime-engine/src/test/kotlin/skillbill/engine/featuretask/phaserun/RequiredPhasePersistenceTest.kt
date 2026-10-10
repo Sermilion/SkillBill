@@ -23,8 +23,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.stepCall
+import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
@@ -64,7 +64,7 @@ class RequiredPhasePersistenceTest {
         val strategy =
           when (phase) {
             "build" -> PackBuildStrategy()
-            "validate" -> PackValidationStrategy()
+            "validate" -> AgentValidateStrategy()
             else -> context.runState.strategyFor(phase)
           }
         val intercepted = context.withRecords(records, selectedStrategy = strategy)
