@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-416"
 feature_name: "ide-status-shows-live-work-on-the-current-branch"
 parent_spec_path: ".feature-specs/SKILL-416-ide-status-shows-live-work-on-the-current-branch/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-416-ide-status-shows-live-work-on-the-current-branch"
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Plugin accept live over stale Done"
   spec_path: ".feature-specs/SKILL-416-ide-status-shows-live-work-on-the-current-branch/spec_subtask_2_plugin-accept-live-over-done.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261010-044934-zgo8"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
