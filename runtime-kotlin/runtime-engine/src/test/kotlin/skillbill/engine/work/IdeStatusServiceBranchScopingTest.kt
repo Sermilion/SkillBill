@@ -178,6 +178,52 @@ class IdeStatusServiceBranchScopingTest {
     assertEquals("goal-1", result.snapshot.workflowId)
   }
 
+  @Test
+  fun `live feature goal on the checkout branch outranks a later blocked standalone`() {
+    val featureBranch = "feat/SKILL-148-status-fix"
+    val fixture = gitRepoFixture("ide-status-live-goal-beats-blocked-standalone", branch = featureBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val result =
+      ideStatusService(
+        registeredGoalDatabase(
+          identity,
+          featureBranch,
+          eligibleStandalones =
+            listOf(
+              StandalonePhaseStatusRecord(
+                repositoryIdentity = identity,
+                branchCorrelation = featureBranch,
+                issueKey = "SKILL-415",
+                workflowId = "standalone-415",
+                invocationId = "standalone-invocation",
+                phaseId = "validation",
+                executionId = "standalone-execution",
+                statusStoreId = "standalone-store",
+                runSequence = "11",
+                statusRevision = "1",
+                lifecycleState = "blocked",
+                currentStep = "validation",
+                currentActivity = null,
+                startedAt = ideStatusObservedAt.minusSeconds(300),
+                updatedAt = ideStatusObservedAt,
+                finishedAt = ideStatusObservedAt,
+                activeDurationMs = null,
+                activeDurationAsOf = null,
+                leaseOwner = "owner",
+                leaseGeneration = 1L,
+                leaseExpiresAt = ideStatusObservedAt.plusSeconds(3600),
+                terminalResult = "blocked",
+              ),
+            ),
+          goalUpdatedAt = "2026-08-06T11:58:00Z",
+        ),
+      ).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals("goal-1", result.snapshot.workflowId)
+  }
+
   private fun registeredGoalDatabase(
     identity: String,
     registeredBranch: String,

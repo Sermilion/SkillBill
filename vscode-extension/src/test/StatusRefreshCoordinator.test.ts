@@ -202,6 +202,89 @@ describe("StatusRefreshCoordinator", () => {
     assert.equal(seen.at(-1)?.runSequence, "11");
   });
 
+  it("accepts a later live parent goal monitor after a held child implement snapshot", async () => {
+    const child: SkillBillStatusOutcome = {
+      ...CORRELATED_METADATA,
+      executionScope: "workflow",
+      statusStoreId: "child-store",
+      kind: "active",
+      summary: "implementing",
+      observedAt: OBSERVED_AT,
+      issueKey: "0AC-46",
+      workflowId: "w-child",
+      workflowFamily: "feature-task",
+      currentStepId: "implement",
+      currentStepLabel: "Implement",
+      updatedAt: OBSERVED_AT,
+      executionId: "child-execution",
+      runSequence: "21",
+      statusRevision: "1",
+      invocationId: undefined,
+      phaseId: undefined,
+    };
+    const goal: SkillBillStatusOutcome = {
+      ...child,
+      statusStoreId: "goal-store",
+      summary: "monitoring",
+      workflowId: "goal-1",
+      workflowFamily: "feature-goal",
+      currentStepId: "monitor",
+      currentStepLabel: "Monitor",
+      executionId: "goal-execution",
+      runSequence: "19",
+    };
+    const seen = await acceptedOutcome([child, goal]);
+    const last = seen.at(-1);
+    assert.equal(last?.kind, "active");
+    assert.equal(last?.executionId, "goal-execution");
+    if (last?.kind === "active") {
+      assert.equal(last.currentStepId, "monitor");
+    }
+  });
+
+  it("accepts a live branch workflow after a finished standalone phase snapshot", async () => {
+    const standalone: SkillBillStatusOutcome = {
+      ...CORRELATED_METADATA,
+      kind: "blocked",
+      summary: "blocked",
+      observedAt: OBSERVED_AT,
+      issueKey: "0AC-46",
+      currentStepId: "validation",
+      currentStepLabel: "Validation",
+      updatedAt: OBSERVED_AT,
+      executionId: "validation-execution",
+      runSequence: "11",
+      statusStoreId: "standalone-store",
+      phaseId: "validation",
+    };
+    const workflow: SkillBillStatusOutcome = {
+      ...CORRELATED_METADATA,
+      executionScope: "workflow",
+      statusStoreId: "goal-store",
+      kind: "active",
+      summary: "monitoring",
+      observedAt: OBSERVED_AT,
+      issueKey: "0AC-46",
+      workflowId: "goal-1",
+      workflowFamily: "feature-goal",
+      currentStepId: "monitor",
+      currentStepLabel: "Monitor",
+      updatedAt: OBSERVED_AT,
+      executionId: "goal-execution",
+      runSequence: "2",
+      statusRevision: "1",
+      invocationId: undefined,
+      phaseId: undefined,
+    };
+    const seen = await acceptedOutcome([standalone, workflow]);
+    const last = seen.at(-1);
+    assert.equal(last?.kind, "active");
+    assert.equal(last?.executionId, "goal-execution");
+    if (last?.kind === "active") {
+      assert.equal(last.currentStepId, "monitor");
+    }
+  });
+
   it("rejects resurrection of the same execution from done to active", async () => {
     const seen = await acceptedOutcome([
       doneSnapshot("run-1", "11"),
