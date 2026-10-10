@@ -57,7 +57,3 @@ internal fun FeatureTaskRuntimeRunEvent.PhaseStarted.progressLine(): String =
     effort?.let { " effort=$it" }.orEmpty() +
     continuationKind?.let { " continuation=$it" }.orEmpty() +
     "\n"
-
-internal fun FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration.progressLine(): String =
-  "feature-task-runtime $workflowId: phase $phaseId " +
-    "${continuationKind ?: "fix_loop"} attempt=$attemptCount iteration=$fixLoopIteration\n"
