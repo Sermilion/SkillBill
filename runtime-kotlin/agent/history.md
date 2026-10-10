@@ -1,3 +1,14 @@
+## [2026-10-10] SKILL-414 subtask 4 validate repairs to subtask 2 and 3 carry-over
+Areas: runtime-cli cli/core and cli/model; runtime-core di/core; runtime-infra/skills repoTest; runtime-infra/sqlite test; skills/skill-bill/content.md
+- The CLI main no longer reads System.getenv(). CliRuntimeContext.onEnvironmentResolved receives the environment resolved by bootstrap, and Main.kt configures process logging from it. The runtime-cli ambient-environment baseline stays empty. reusable
+- ProcessLoggingEnvironmentKeys moved to its own file to satisfy detekt MatchingDeclarationName. SkillBillCommand.routeIntakeTokens extracts intakeCommandTokens to stay within ReturnCount, and routing output is unchanged.
+- RetiredSkillNameSweepRepoTest drops the stale ReviewCliCommands.kt allowlist entry, which tightens the guard.
+- content.md names the feature-launch-warning skill class without the bare orchestration path, which RepoValidation rejected.
+- CliRuntimeShellCommandsTest normalizes whitespace before asserting the Clikt-wrapped root description.
+- Limits: no suppression, baseline row, or exemption added. Logging takes effect only after bootstrap resolves the environment. ./install.sh is blocked inside goal runs, so the installed SKILL.md needs a re-render after the goal finishes.
+Feature flag: N/A
+Acceptance criteria: N/A (validate repairs)
+
 ## [2026-10-10] SKILL-414 subtask 3 — one terminology, accurate docs and help, safer routing
 Areas: runtime-cli cli/core, cli/phase, cli/review and cli/system; runtime-contracts issuekey; runtime-engine goalrunner/intake; README.md; docs/; skills/skill-bill/content.md
 - README gains a Glossary (goal, workflow, subtask, phase, slot, step, operation, pack, lane, add-on) taken from PhaseSlot and SkeletonDefinition: 11 slot ids, standalone phases review/validation/plan/pr/monitor, and verify as an operation. phase:review runs standalone_review, and write_history is a slot.

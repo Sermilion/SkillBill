@@ -1,0 +1,10 @@
+findings:
+  - id: custom-text-resurrection
+    file: ""
+    line:
+    severity: P1
+    category: ""
+    lane: ""
+    label: non_issue
+    rationale: "device QA: not reachable"
+    status: needs_curation

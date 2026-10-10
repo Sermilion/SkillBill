@@ -53,16 +53,13 @@ internal fun routeIntakeTokens(
   isCommand: (String) -> Boolean,
 ): List<String> {
   val index = leadingRootOptionCount(arguments)
-  val first = arguments.getOrNull(index) ?: return arguments
-  if (first.startsWith('-') || isCommand(first)) return arguments
-  splitColonCommand(first)?.let { parts ->
-    return arguments.take(index) + parts + arguments.drop(index + 1)
-  }
-  if (looksLikeGoalIntakeToken(first)) {
-    return arguments.take(index) + GOAL_SUBCOMMAND + arguments.drop(index)
-  }
-  return arguments
+  val first = arguments.getOrNull(index)?.takeUnless { it.startsWith('-') || isCommand(it) } ?: return arguments
+  val routed = intakeCommandTokens(first) ?: return arguments
+  return arguments.take(index) + routed + arguments.drop(index + 1)
 }
+
+private fun intakeCommandTokens(token: String): List<String>? =
+  splitColonCommand(token) ?: listOf(GOAL_SUBCOMMAND, token).takeIf { looksLikeGoalIntakeToken(token) }
 
 private fun splitColonCommand(token: String): List<String>? {
   val prefix = listOf(PHASE_COLON_PREFIX, OPERATION_COLON_PREFIX).firstOrNull(token::startsWith) ?: return null

@@ -248,8 +248,7 @@ planning; existing specs resume through the same entry point.
 Forward the supplied review and agent add-on flags. Never ask
 the user to run the command manually.
 
-The `feature-launch-warning` skill class (`orchestration/skill-classes/feature-launch-warning.yaml`,
-`exact: skill-bill`) injects pointers `peak-hours-warner`, `shell-ceremony`, and
+The `feature-launch-warning` skill class (`exact: skill-bill`) injects pointers `peak-hours-warner`, `shell-ceremony`, and
 `telemetry-contract`, and the three `ceremony_lines` into rendered `## Ceremony`.
 
 ## Relay

@@ -1,3 +1,14 @@
+## [2026-10-10] Measure review quality from prose without constraining reviewers
+Context: SKILL-414 needs precision and recall per review lane, but reviewers write prose findings and review completion must not depend on extracting metadata.
+Decision: Keep the scorer and on-demand runner in the runtime-domain test source set and use ReviewParser.parseReview only as a best-effort reader. Prepend placeholder run/session ids when they are missing. Route uninterpretable text and unlocated findings to curation and label the scores partial.
+Reason: Changing the parser or adding a finding template would impose an output format on reviewers and risk review completion. Curation items keep measurement from failing a review or forcing a rerun. runtime-domain owns ReviewParser and has no repoTest source set, so src/test is the closest home.
+Alternatives considered: A production eval command or a run inside ./gradlew check was rejected. Producing a register needs an agent review, and eval scores must never gate validation.
+
+## [2026-10-10] Unlabeled review findings stay out of precision
+Context: An agent review can report real findings that the eval set has not labeled yet.
+Decision: List unmatched reported findings as unlabeled for a curator and exclude them from TP, FP and the precision denominator. Only matches against non_issue entries count as false positives.
+Reason: Counting unlabeled findings as false positives would penalize a reviewer for gaps in the eval set, not for its own mistakes.
+
 ## [2026-10-09] Isolate non-blocking quality findings before deduplication
 Context: SKILL-413 adds quality suggestions that can share a file and near-identical wording with failure findings. Existing failure output must remain unchanged.
 Decision: Use one domain identity predicate and partition before fuzzy deduplication. Normalize quality findings to Minor before representative selection, order by confidence with emission-order ties, cap at five, and format them after failures with retained attribution.

@@ -42,6 +42,7 @@ data class CliRuntimeContext(
   val featureTaskRuntimeRunOverride: ((FeatureTaskRuntimeRunInput) -> FeatureTaskRuntimeRunReport)? = null,
   val liveStdout: (String) -> Unit = {},
   val liveStderr: (String) -> Unit = {},
+  val onEnvironmentResolved: (Map<String, String>) -> Unit = {},
 ) {
   fun toRuntimeContext(
     dbPathOverride: String? = this.dbPathOverride,

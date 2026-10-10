@@ -1,10 +1,17 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-10] CLI configures process logging from the bootstrap-resolved environment
+Context: The CLI Main.kt read System.getenv() to resolve SKILL_BILL_VERBOSE, which broke the empty runtime-cli AmbientEnvironmentArchitectureTest baseline.
+Decision: CliRuntimeContext carries an onEnvironmentResolved callback. CliRuntime.run invokes it with the environment the runtime bootstrap resolves, and Main.kt configures process logging there. ProcessLogging stays in runtime-core, with ProcessLoggingEnvironmentKeys in its own file.
+Reason: The exempt RuntimeBootstrapBindings already reads the environment, so the CLI makes no ambient read and the baseline gains no row. Logging is configured after bootstrap resolution, not at the first line of main.
+Alternatives considered: Adding a runtime-cli baseline row was rejected because baselines only tighten.
+
 ## [2026-10-10] Configure process logging once in runtime-core for both mains
 Context: The CLI and MCP mains both needed the same JUL setup. Both depend in main on runtime-core, not runtime-infra:host.
 Decision: ProcessLogging lives in runtime-core skillbill.di.core, and each main calls configureProcessLogging before doing any work. SKILL_BILL_VERBOSE is declared only in ProcessLoggingEnvironmentKeys.
 Reason: No architecture rule bans java.util.logging outside runtime-application main and domain. The composition root both mains already import avoids duplicating the configuration in each entry point.
 Alternatives considered: Per-main configuration was rejected as duplication. A non-di package was the fallback only if a di guard rejected non-provider files, and none does.
+Superseded by: CLI configures process logging from the bootstrap-resolved environment (2026-10-10)
 
 ## [2026-10-10] Silence JUL by default and opt in with --verbose or SKILL_BILL_VERBOSE
 Context: Routine JUL diagnostics leaked to stderr on CLI runs and on the MCP server's stderr.

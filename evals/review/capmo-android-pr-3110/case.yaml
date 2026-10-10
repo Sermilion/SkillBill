@@ -1,0 +1,6 @@
+repo: capmo-android
+pr: 3110
+branch: feat/FP-5545-accept-into-open-entry
+commit: 98b49fb47
+base_revision: ""
+register_command: skill-bill phase review target:98b49fb47

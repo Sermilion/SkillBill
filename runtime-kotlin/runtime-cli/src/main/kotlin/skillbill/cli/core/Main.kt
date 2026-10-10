@@ -18,13 +18,16 @@ fun main(args: Array<String>) {
     }
     return
   }
-  configureProcessLogging(resolveVerboseLogging(args.toList(), System.getenv()))
+  val arguments = args.toList()
   val result =
     CliRuntime.run(
-      args.toList(),
+      arguments,
       CliRuntimeContext(
         liveStdout = { print(it) },
         liveStderr = { System.err.print(it) },
+        onEnvironmentResolved = { environment ->
+          configureProcessLogging(resolveVerboseLogging(arguments, environment))
+        },
       ),
     )
   emitCliProcessStdout(result, System.out)

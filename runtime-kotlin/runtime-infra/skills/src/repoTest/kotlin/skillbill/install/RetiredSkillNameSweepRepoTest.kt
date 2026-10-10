@@ -145,7 +145,6 @@ class RetiredSkillNameSweepRepoTest {
     val VERIFY_WORKFLOW_HELP_LABELS: Map<String, Set<String>> =
       mapOf(
         "$MCP/core/McpToolRegistry.kt" to setOf(VERIFY_LABEL),
-        "$CLI/review/ReviewCliCommands.kt" to setOf(VERIFY_LABEL),
         "$CLI/workflow/WorkflowCliCommands.kt" to setOf(VERIFY_LABEL),
       )
 

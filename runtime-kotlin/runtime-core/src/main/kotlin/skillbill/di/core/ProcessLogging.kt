@@ -9,10 +9,6 @@ import java.util.logging.LogManager
 import java.util.logging.LogRecord
 import java.util.logging.Logger
 
-object ProcessLoggingEnvironmentKeys {
-  const val SKILL_BILL_VERBOSE = "SKILL_BILL_VERBOSE"
-}
-
 fun verboseLoggingRequestedByEnvironment(environment: Map<String, String>): Boolean {
   val value = environment[ProcessLoggingEnvironmentKeys.SKILL_BILL_VERBOSE]?.trim() ?: return false
   return value == "1" || value.equals("true", ignoreCase = true)

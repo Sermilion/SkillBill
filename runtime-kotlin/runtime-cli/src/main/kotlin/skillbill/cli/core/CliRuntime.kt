@@ -34,6 +34,7 @@ object CliRuntime {
         ),
       )
     val resolved = runtimeComponent.resolvedEnvironmentContext
+    context.onEnvironmentResolved(resolved.environment)
     val runState = CliRunState(context.stdinText)
     val runInputs =
       CliRunInputs(

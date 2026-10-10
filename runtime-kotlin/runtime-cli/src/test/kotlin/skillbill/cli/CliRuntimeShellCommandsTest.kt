@@ -98,7 +98,7 @@ class CliRuntimeShellCommandsTest {
 
     assertEquals(0, rootHelp.exitCode)
     assertContains(
-      rootHelp.stdout,
+      rootHelp.stdout.replace(Regex("""\s+"""), " "),
       "Run a goal, a standalone phase, or a runtime operation, and inspect review and telemetry data.",
     )
     assertFalse(rootHelp.stdout.contains("Import Skill Bill review output"), rootHelp.stdout)

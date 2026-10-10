@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-414"
 feature_name: "stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement"
 parent_spec_path: ".feature-specs/SKILL-414-stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-414-stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement"
@@ -54,12 +54,12 @@ subtasks:
 - id: 4
   name: "Measure review quality"
   spec_path: ".feature-specs/SKILL-414-stabilization-pass-stale-workflow-state-quiet-output-consistent-terminology-review-quality-measurement/spec_subtask_4_review_quality_measurement.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261010-083054-hcx1"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
