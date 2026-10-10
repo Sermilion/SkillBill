@@ -2,17 +2,20 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeCarriedFindings
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeCompactFindingRef
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRemediationRoundNumberOrNull
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptFromProse
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepeatedUnresolvedBlockReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeUnresolvedFindings
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -31,7 +34,7 @@ internal object ImplementFixReceipt {
     val prose = auditProseValue(outputMap) ?: return PhaseStepOutputCheck.Accept
     val reviewState = state.goalReviewState() ?: return PhaseStepOutputCheck.Accept
     val anchor = anchor(context, reviewState) ?: return PhaseStepOutputCheck.Accept
-    val refuted = refutedCarriedFindingIds(context, state, reviewState)
+    val refuted = refutedCarriedFindingIds(context.diagnostics, context.request, state, reviewState)
     val receipt =
       featureTaskRuntimeRepairReceiptFromProse(
         prose,
@@ -42,6 +45,31 @@ internal object ImplementFixReceipt {
     return settleReceipt(context, state, reviewState, receipt, refuted)
   }
 
+  fun carriedFindingsSection(
+    diagnostics: RuntimeDiagnostics,
+    request: FeatureTaskRuntimeRunFacts,
+    state: PhaseImplementFixStepBinding,
+  ): String {
+    val reviewState = state.goalReviewState() ?: return ""
+    val refuted = refutedCarriedFindingIds(diagnostics, request, state, reviewState)
+    val carried = featureTaskRuntimeCarriedFindings(reviewState, refuted).ifEmpty { return "" }
+    return buildString {
+      appendLine()
+      appendLine("## Carried findings (implement_fix)")
+      appendLine(
+        "The runtime carries exactly these review findings into this round. This list, not the wording of the " +
+          "verify_findings report, decides what you owe. Name each finding by its id in your report and say " +
+          "whether you fixed it, found that it needed no edit (with the reason), or left it open (with the reason).",
+      )
+      carried.forEach { finding ->
+        appendLine("- ${featureTaskRuntimeCompactFindingRef(finding)} [${finding.severity}] ${finding.text}")
+      }
+      if (refuted.isNotEmpty()) {
+        appendLine("Verification refuted ${refuted.sorted().joinToString(", ")}; do not fix or report on them.")
+      }
+    }
+  }
+
   private fun settleReceipt(
     context: PhaseStepOutputContext,
     state: PhaseImplementFixStepBinding,
@@ -50,7 +78,12 @@ internal object ImplementFixReceipt {
     refuted: Set<String>,
   ): PhaseStepOutputCheck {
     val omitted = featureTaskRuntimeRepairReceiptOmittedFindings(receipt, reviewState, refuted)
-    if (omitted.isNotEmpty()) return PhaseStepOutputCheck.Reject(featureTaskRuntimeOmittedFindingsRetryReason(omitted))
+    if (omitted.isNotEmpty()) {
+      return PhaseStepOutputCheck.OweFindings(
+        featureTaskRuntimeOmittedFindingsRetryReason(omitted),
+        omitted.mapTo(linkedSetOf(), ::featureTaskRuntimeCompactFindingRef),
+      )
+    }
     return persist(context, state, receipt)?.let { reason -> PhaseStepOutputCheck.Block(reason) }
       ?: repeatedUnresolvedBlock(receipt, reviewState)
       ?: PhaseStepOutputCheck.Accept
@@ -95,7 +128,8 @@ internal object ImplementFixReceipt {
     )
 
   private fun refutedCarriedFindingIds(
-    context: PhaseStepOutputContext,
+    diagnostics: RuntimeDiagnostics,
+    request: FeatureTaskRuntimeRunFacts,
     state: PhaseImplementFixStepBinding,
     reviewState: GoalSubtaskReviewState,
   ): Set<String> {
@@ -110,9 +144,9 @@ internal object ImplementFixReceipt {
         .toSet()
     }.getOrElse { error ->
       RuntimeDiagnosticsBestEffortWarning.record(
-        context.diagnostics,
+        diagnostics,
         "Feature-task-runtime could not read the unaddressed-findings ledger for issue " +
-          "${context.request.issueKey}, workflow ${context.request.workflowId}; repair-receipt coverage waives no " +
+          "${request.issueKey}, workflow ${request.workflowId}; repair-receipt coverage waives no " +
           "refuted finding for this round.",
         error,
       )

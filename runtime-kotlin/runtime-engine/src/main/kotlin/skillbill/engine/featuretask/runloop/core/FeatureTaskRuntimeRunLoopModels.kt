@@ -81,6 +81,8 @@ internal class PhaseAttemptLoopState(
   var continuationSegmentCount: Int,
   private var carryForward: PhaseAttemptLoopCarryForward = PhaseAttemptLoopCarryForward(),
 ) {
+  var priorOwedFindings: Set<String>? = null
+
   var priorCorrection: PriorAttemptCorrection?
     get() = carryForward.priorCorrection
     set(value) {

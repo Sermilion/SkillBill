@@ -147,6 +147,8 @@ internal object PhaseAttemptSteps {
         )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
         phaseAttempts.settleBoundaryBodyDelivery(observability, context)
+      attempt.findingsOwed != null ->
+        phaseAttempts.settleFindingsOwed(recorder, context, requireNotNull(attempt.findingsOwed))
       attempt.retryableTerminal != null ->
         phaseAttempts.settleRetryableTerminal(recorder, context, requireNotNull(attempt.retryableTerminal))
       else ->

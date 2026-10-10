@@ -62,6 +62,12 @@ internal sealed interface AttemptResult {
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   ) : AttemptResult
 
+  data class FindingsOwed(
+    val retryReason: String,
+    val refs: Set<String>,
+    override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
+  ) : AttemptResult
+
   val settledOutcome: PhaseOutcome? get() = (this as? Settled)?.outcome
   val schemaInvalidOperatorReason: String? get() = (this as? SchemaInvalid)?.operatorReason
   val schemaInvalidRetryReason: String? get() = (this as? SchemaInvalid)?.retryReason
@@ -73,6 +79,7 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> fileManifest
         is RetryableTerminal -> fileManifest
         is BoundaryBodyDelivery -> fileManifest
+        is FindingsOwed -> fileManifest
       }
   val rejectedOutput: String? get() = (this as? SchemaInvalid)?.rejectedOutput
 
@@ -84,6 +91,7 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> operatorReason
         is RetryableTerminal -> operatorReason
         is BoundaryBodyDelivery -> null
+        is FindingsOwed -> null
       }
 
   val semanticRetryReason: String?
@@ -94,9 +102,12 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> null
         is RetryableTerminal -> null
         is BoundaryBodyDelivery -> null
+        is FindingsOwed -> null
       }
 
   val retryableTerminal: RetryableTerminal? get() = this as? RetryableTerminal
+
+  val findingsOwed: FindingsOwed? get() = this as? FindingsOwed
 
   val incompleteWorkContinuationReason: String? get() = (this as? IncompleteWork)?.continuationReason
   val incompleteWorkOutput: NormalizedFeatureTaskRuntimePhaseOutput?

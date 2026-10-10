@@ -435,6 +435,8 @@ object PhaseOutputGate {
     when (check) {
       is PhaseStepOutputCheck.Reject -> reject(check.rule, check.reason)
       is PhaseStepOutputCheck.Redeliver -> AttemptResult.boundaryBodyDelivery(check.reason, capture.fileManifest)
+      is PhaseStepOutputCheck.OweFindings ->
+        AttemptResult.FindingsOwed(check.reason, check.refs, capture.fileManifest)
       is PhaseStepOutputCheck.Block -> {
         val coupling = settlementCoupling()
         AttemptResult.settled(

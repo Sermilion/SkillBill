@@ -204,6 +204,11 @@ internal sealed interface PhaseStepOutputCheck {
     val reason: String,
   ) : PhaseStepOutputCheck
 
+  data class OweFindings(
+    val reason: String,
+    val refs: Set<String>,
+  ) : PhaseStepOutputCheck
+
   data class Block(
     val reason: String,
     val disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,

@@ -321,3 +321,26 @@ retain the plan that justified the repair. This changes the repair loop, not its
 retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
 A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
 and expected rejection results.
+
+## 2026-10-10: Owed repair findings continue the round
+
+Context: SKILL-414 subtask 3 blocked on its first `implement_fix` attempt. The
+repair report left out two carried findings, the coverage rejection fell through
+to the invalid-output block, and no receipt was recorded. Both findings had been
+refuted in prose, but the citation came one sentence after the rejection, so
+the prose reader kept them as verified.
+
+Decision: A repair report that omits carried findings returns
+`PhaseStepOutputCheck.OweFindings`. The attempt loop continues the same round
+once with the "Findings still owed" correction and blocks for an operator when
+the retry accounts for none of them (`findingCoverageBlockReason`). The
+`implement_fix` launch prompt lists the carried findings, which outrank the
+verifier's wording. Prose dispositions read citation evidence from any line
+that names the finding; refutation and keep cues stay scoped to the sentence
+with the id.
+
+Reason: An omission is incomplete coverage, not a malformed report, and one
+continuation is enough to recover it. The loop stays bounded because a
+non-shrinking retry blocks. Line-scoped citations accept the usual
+"F-001: rejected. Foo.kt:12 shows ..." form, while sentence-scoped cues keep
+later reasoning words such as "still" from vetoing a refutation.

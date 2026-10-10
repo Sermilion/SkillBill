@@ -4,9 +4,11 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -37,6 +39,13 @@ internal class ImplementFixStep : PhaseStepHooks {
         ?: return emptyList()
     return state.recordedFindingVerdicts(envelope)
   }
+
+  override fun launchPromptSupplement(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseStepBinding,
+  ): String =
+    ImplementFixReceipt.carriedFindingsSection(context.diagnostics, run.request, state as PhaseImplementFixStepBinding)
 
   override fun settleCompletedOutput(
     run: PhaseRun,

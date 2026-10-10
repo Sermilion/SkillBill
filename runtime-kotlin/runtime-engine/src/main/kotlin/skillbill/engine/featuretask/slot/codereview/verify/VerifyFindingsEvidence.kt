@@ -231,13 +231,19 @@ internal object VerifyFindingsEvidence {
     val prose = auditProseValue(outputMap).orEmpty()
     val sectionByFindingId = sections.associateBy(FeatureTaskRuntimeFindingBoundaryMemorySection::findingId)
     return reviewFindingIds(state).sorted().map { findingId ->
-      proseDisposition(findingId, featureTaskRuntimeProseMentions(prose, findingId), sectionByFindingId[findingId])
+      proseDisposition(
+        findingId,
+        featureTaskRuntimeProseMentions(prose, findingId),
+        prose.lines().filter { line -> featureTaskRuntimeProseMentions(line, findingId).isNotEmpty() },
+        sectionByFindingId[findingId],
+      )
     }
   }
 
   private fun proseDisposition(
     findingId: String,
     mentions: List<String>,
+    mentionLines: List<String>,
     section: FeatureTaskRuntimeFindingBoundaryMemorySection?,
   ): FeatureTaskRuntimeFindingVerificationDisposition {
     val unavailable = section?.discovery?.boundaryContextUnavailable == true
@@ -253,7 +259,7 @@ internal object VerifyFindingsEvidence {
       mentions.isNotEmpty() &&
         mentions.any(REFUTATION_CUE::containsMatchIn) &&
         mentions.none(KEEP_CUE::containsMatchIn) &&
-        mentions.any(CITATION::containsMatchIn)
+        mentionLines.any(CITATION::containsMatchIn)
     return FeatureTaskRuntimeFindingVerificationDisposition(
       findingId = findingId,
       disposition =

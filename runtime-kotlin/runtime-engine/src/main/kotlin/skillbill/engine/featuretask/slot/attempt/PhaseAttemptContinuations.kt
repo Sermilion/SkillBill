@@ -135,6 +135,43 @@ object PhaseAttemptContinuations {
     return null
   }
 
+  internal fun settleFindingsOwed(
+    recorder: PhaseRunRecords,
+    context: FixLoopBranchContext,
+    owed: AttemptResult.FindingsOwed,
+  ): PhaseOutcome? {
+    val run = context.run
+    val loop = context.loop
+    FeatureTaskRuntimeAttemptBudgets.findingCoverageBlockReason(run.phaseId, owed.refs, loop.priorOwedFindings)
+      ?.let { reason ->
+        return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+          context.progress,
+          context.loopTransitions,
+          recorder,
+          PhaseBlockRequest(
+            run = run,
+            attemptCount = loop.iteration,
+            reason = reason,
+            observability = context.observability,
+            payload = BlockAndPersistPayload(fileManifest = owed.fileManifest),
+            failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          ),
+        )
+      }
+    loop.priorOwedFindings = owed.refs
+    loop.continuationSegmentCount += 1
+    loop.iteration += 1
+    loop.priorCorrection = PriorAttemptCorrection.unaccountedFindings(owed.retryReason)
+    context.observability.continuation(
+      run.phaseId,
+      context.agentId,
+      loop.iteration,
+      loop.continuationSegmentCount,
+      FeatureTaskRuntimeContinuationKind.ITEM_COVERAGE,
+    )
+    return null
+  }
+
   internal fun settleRetryableTerminal(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,

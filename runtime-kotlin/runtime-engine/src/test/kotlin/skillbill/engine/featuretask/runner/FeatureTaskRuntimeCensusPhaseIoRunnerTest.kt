@@ -107,7 +107,30 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
   }
 
   @Test
-  fun `omitted carried finding blocks implement_fix coverage`() {
+  fun `omitted carried finding is owed on a same-round retry that can account for it`() {
+    val harness =
+      goalCensusHarness(
+        findings = listOf(blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID)),
+        verifyOutput =
+          verifyCensus(
+            verdict = "findings_verified",
+            dispositions = listOf(proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
+          ),
+        implementFixOutput = emptyCensusFix(),
+        retryImplementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
+      )
+
+    val report = runInline(harness)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val fixPrompts = harness.launchedPrompts("implement_fix")
+    assertEquals(2, fixPrompts.size)
+    assertContains(fixPrompts.last(), "Findings still owed")
+    assertContains(fixPrompts.last(), REVIEW_FIX_BLOCKER_FINDING_ID)
+  }
+
+  @Test
+  fun `carried finding omitted on the retry too blocks implement_fix for an operator`() {
     val harness =
       goalCensusHarness(
         findings = listOf(blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID)),
@@ -122,14 +145,37 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(runInline(harness))
 
     assertEquals("implement_fix", blocked.lastIncompletePhase, blocked.blockedReason)
-    assertTrue(
-      blocked.blockedReason.contains("unaccounted") ||
-        harness.io.database.rejectedDiagnostics().any {
-          it.metadata.phaseId == "implement_fix" && it.metadata.reason.contains(REVIEW_FIX_BLOCKER_FINDING_ID)
-        },
-      blocked.blockedReason,
-    )
+    assertContains(blocked.blockedReason, "accounted for none of them: $REVIEW_FIX_BLOCKER_FINDING_ID")
+    assertEquals(2, harness.launchedPrompts("implement_fix").size)
     assertFalse(harness.launchedPromptPhaseOrder().contains("validate"))
+  }
+
+  @Test
+  fun `prose rejection citing its evidence in the next sentence refutes the finding`() {
+    val refutedId = "F-002"
+    val harness =
+      goalCensusHarness(
+        findings = listOf(blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID), nitFinding(refutedId)),
+        verifyOutput =
+          verifyCensus(
+            verdict = "findings_verified",
+            dispositions =
+              listOf(
+                proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified"),
+                "$refutedId: rejected. Bar.kt:1 is read by the scheduler on every tick.",
+              ),
+          ),
+        implementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
+      )
+
+    val report = runInline(harness)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    val rejected = harness.ledgerRows.single { it.findingId == refutedId }
+    assertEquals(UNADDRESSED_FINDING_REJECTED_DISPOSITION, rejected.verificationDisposition)
+    val fixPrompt = harness.launchedPrompts("implement_fix").single()
+    assertContains(fixPrompt, "- $REVIEW_FIX_BLOCKER_FINDING_ID [blocker]")
+    assertContains(fixPrompt, "Verification refuted $refutedId")
   }
 
   @Test
@@ -168,6 +214,11 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
 
   private fun runInline(harness: RunnerHarness): FeatureTaskRuntimeRunReport =
     harness.runner.run(harness.request().copy(requestedCodeReviewMode = CodeReviewExecutionMode.INLINE))
+
+  private fun RunnerHarness.launchedPrompts(phaseId: String): List<String> =
+    launcher.requests
+      .mapNotNull { request -> request.skillRunRequest.promptOverride }
+      .filter { prompt -> phaseIdFromPrompt(prompt) == phaseId }
 
   private fun seededVerifyHarness(
     verifyOutput: String,
@@ -208,7 +259,9 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     findings: List<String>,
     verifyOutput: String,
     implementFixOutput: String,
+    retryImplementFixOutput: String = implementFixOutput,
   ): RunnerHarness {
+    var implementFixLaunches = 0
     val repoRoot = Files.createTempDirectory("skillbill-census-goal")
     val git =
       RecordingWorkflowGitOperations(currentBranchValue = "feat/existing-runtime-branch")
@@ -237,7 +290,8 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
               "implement_fix" -> {
                 git.repositoryFingerprintValue = "after-fix"
                 git.goalReviewTrackedDelta = "census-fix\n"
-                facts(implementFixOutput)
+                implementFixLaunches += 1
+                facts(if (implementFixLaunches == 1) implementFixOutput else retryImplementFixOutput)
               }
               else -> facts(validJsonOutput(phaseId))
             }
