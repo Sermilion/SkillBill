@@ -1415,8 +1415,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 
 `monitor` runs after `pr` in standalone and PR skeletons and is excluded from
 goal children. `PullRequestCiWatcher` polls the PR checks through
-`PullRequestChecksLookup` until they settle. A failing result sets verdict
-`ci_failed`, which routes backward to `monitor_fix` and then to `commit_push`.
+`PullRequestChecksLookup`. A failed or cancelled check immediately sets verdict
+`ci_failed`, even while other checks are pending, and routes backward to
+`monitor_fix` and then to `commit_push`. Success requires every check to pass or
+be skipped with none pending.
 The loop is capped at 3 attempts per subtask. Exhausting the cap blocks the run
 through the cap-exhaustion reason. Monitor-owned steps never emit a verdict
 other than `ci_failed` or the default advance.

@@ -51,7 +51,7 @@ internal class PullRequestCiWatcher(
           is PullRequestChecks.Reported -> {
             noChecksSince = null
             pendingNames = checks.checks.filter { it.bucket == CheckBucket.PENDING }.map(PullRequestCheck::name)
-            if (pendingNames.isEmpty()) verdictFor(checks.checks) else null
+            verdictFor(checks.checks)
           }
         }
       if (settled != null) return settled
@@ -62,9 +62,13 @@ internal class PullRequestCiWatcher(
     }
   }
 
-  private fun verdictFor(checks: List<PullRequestCheck>): PullRequestCiOutcome {
+  private fun verdictFor(checks: List<PullRequestCheck>): PullRequestCiOutcome? {
     val failing = checks.filter { it.bucket == CheckBucket.FAIL || it.bucket == CheckBucket.CANCEL }
-    return if (failing.isEmpty()) PullRequestCiOutcome.Passed else PullRequestCiOutcome.Failed(failing)
+    return when {
+      failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing)
+      checks.any { it.bucket == CheckBucket.PENDING } -> null
+      else -> PullRequestCiOutcome.Passed
+    }
   }
 
   private fun timeoutReason(pendingNames: List<String>): String {

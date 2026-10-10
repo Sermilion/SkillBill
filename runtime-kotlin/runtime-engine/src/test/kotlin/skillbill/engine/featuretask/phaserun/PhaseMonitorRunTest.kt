@@ -86,7 +86,12 @@ class PhaseMonitorRunTest {
     initFeatureBranch()
     val failing =
       PullRequestChecksLookup { _, _ ->
-        PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run"),
+            PullRequestCheck("integration", CheckBucket.PENDING, "https://ci.example/integration"),
+          ),
+        )
       }
 
     val result = entry(checks = failing).run(monitorRequest("SKILL-904"))
@@ -104,12 +109,18 @@ class PhaseMonitorRunTest {
     val checks =
       PullRequestChecksLookup { _, _ ->
         observations += 1
+        if (observations > 1) assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
         PullRequestChecks.Reported(
           listOf(
             PullRequestCheck(
               "validate",
               if (observations == 1) CheckBucket.FAIL else CheckBucket.PASS,
               "https://ci.example/run",
+            ),
+            PullRequestCheck(
+              "integration",
+              if (observations == 1) CheckBucket.PENDING else CheckBucket.PASS,
+              "https://ci.example/integration",
             ),
           ),
         )

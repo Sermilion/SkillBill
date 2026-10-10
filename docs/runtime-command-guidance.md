@@ -107,7 +107,10 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 After all subtasks finish and the goal opens or finds its pull request, parent
 finalization runs the existing monitor and bounded CI repair loop before reporting
 completion. Monitoring belongs to that goal, so it publishes parent progress and
-does not register a standalone phase execution. A missing pull request, wrong
+does not register a standalone phase execution. Both goal and standalone
+monitoring start repair on the first poll reporting a failed or cancelled check,
+even while other checks are pending. Success still requires every check to pass
+or be skipped with none pending. A missing pull request, wrong
 branch, unavailable checks, or exhausted repair loop stops the goal at the failing
 finalization step. A later goal run reuses completed subtasks and the existing PR
 and monitors again. Accepted no-change goals create no PR and skip monitoring.
