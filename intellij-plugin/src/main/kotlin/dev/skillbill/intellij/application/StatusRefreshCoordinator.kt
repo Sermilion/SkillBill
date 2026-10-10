@@ -231,7 +231,6 @@ private fun acceptsNewerStatus(
     val incomingExecution = incoming.executionMetadata() ?: return true
     if (current.repositoryIdentity() != incoming.repositoryIdentity()) return false
     if (currentExecution.branchCorrelation != incomingExecution.branchCorrelation) return false
-    if (currentExecution.statusStoreId != incomingExecution.statusStoreId) return false
     val currentSequence = currentExecution.runSequence ?: return isLiveOverDone(current, incoming)
     val incomingSequence = incomingExecution.runSequence ?: return isLiveOverDone(current, incoming)
     val sequenceOrder = compareDecimalStrings(incomingSequence, currentSequence)
@@ -256,13 +255,28 @@ private fun isTerminal(outcome: SkillBillStatusOutcome): Boolean = when (outcome
 private fun isLiveOverDone(
     current: SkillBillStatusOutcome,
     incoming: SkillBillStatusOutcome,
-): Boolean =
-    when (incoming) {
+): Boolean {
+    val incomingLive = when (incoming) {
         is SkillBillStatusOutcome.Active,
         is SkillBillStatusOutcome.Paused,
         is SkillBillStatusOutcome.Blocked,
-        -> current is SkillBillStatusOutcome.Done &&
-            current.executionMetadata()?.executionId != incoming.executionMetadata()?.executionId
+        -> true
+        else -> false
+    }
+    if (!incomingLive) return false
+    if (current.executionMetadata()?.executionId == incoming.executionMetadata()?.executionId) return false
+    return isTerminal(current) || !bothLiveStandalone(current, incoming)
+}
+
+private fun bothLiveStandalone(
+    current: SkillBillStatusOutcome,
+    incoming: SkillBillStatusOutcome,
+): Boolean = isLiveStandalone(current) && isLiveStandalone(incoming)
+
+private fun isLiveStandalone(outcome: SkillBillStatusOutcome): Boolean =
+    when (outcome) {
+        is SkillBillStatusOutcome.Active, is SkillBillStatusOutcome.Paused ->
+            outcome.executionMetadata()?.executionScope == "standalone_phase"
         else -> false
     }
 
