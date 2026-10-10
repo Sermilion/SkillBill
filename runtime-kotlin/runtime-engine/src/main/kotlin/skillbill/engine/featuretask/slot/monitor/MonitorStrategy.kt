@@ -9,6 +9,8 @@ import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_VALUE_CONTENT
+import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
 import skillbill.engine.featuretask.slot.state.PhaseMonitorStepBinding
@@ -40,6 +42,11 @@ class MonitorStrategy(
         issueKey: String,
         checks: List<PullRequestCheck>,
       ) = fixBrief.record(issueKey, checks)
+
+      override fun recordMergeConflict(
+        issueKey: String,
+        baseBranch: String,
+      ) = fixBrief.recordConflict(issueKey, baseBranch)
     }
 
   private val policies =
@@ -75,7 +82,7 @@ class MonitorStrategy(
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
-    return if (stepId == entryStep) MONITOR_DIRECTIVE else MONITOR_FIX_DIRECTIVE
+    return if (stepId == entryStep) MONITOR_DIRECTIVE else MONITOR_FIX_DIRECTIVE + runtimeOwnedValidateAgentPhaseTask()
   }
 
   override fun promptSections(
@@ -89,6 +96,8 @@ class MonitorStrategy(
       PhaseStepPromptSections(
         taskDirective = directiveFor(stepId),
         stepContext = fixBrief.stepContextFor(inputs.issueKey),
+        runsValidationGate = true,
+        valueContent = VALIDATE_VALUE_CONTENT,
       )
     }
   }
@@ -122,17 +131,20 @@ class MonitorStrategy(
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
         "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
         "A failed check on an open pull request immediately completes it with verdict ci_failed, " +
-        "which routes to monitor_fix even while other checks are pending. Cancelled checks do not start " +
+        "which routes to monitor_fix even while other checks are pending. A merge conflict does the same " +
+        "on that poll, even when no checks are reported. Cancelled checks do not start " +
         "repair. All checks passing, skipped, or cancelled completes the phase only when none is pending. " +
         "Monitoring waits while checks are running. " +
         "If no check has been reported within an hour, or a " +
         "GitHub CLI cannot report checks, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
-      "Fix the root cause of the failing CI checks in the working tree. Read the failing run logs first, for " +
-        "example with `gh run view <run-id> --log-failed`, and fix the cause rather than the symptom. Do not " +
-        "commit or push: the runtime commits and pushes the fix. Settle with a prose summary of what you " +
-        "changed. If the failure cannot be fixed in this repository, such as missing secrets or an " +
-        "infrastructure outage, block with the reason instead."
+      "Repair the recorded monitor failure in the working tree. When the brief names a merge conflict, merge " +
+        "the named base branch into the current branch and resolve every conflict. When it names failing " +
+        "checks, read the failing run logs first, for example with `gh run view <run-id> --log-failed`, and " +
+        "fix the cause rather than the symptom. Do not commit or push; the runtime commits and pushes the " +
+        "repair only after you settle completed, so settle completed only once the local project checks below " +
+        "pass on the repaired tree. If the failure cannot be fixed in this repository, such as missing secrets " +
+        "or an infrastructure outage, block with the reason instead. "
   }
 }

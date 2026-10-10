@@ -5,6 +5,7 @@ sealed interface PullRequestIdentity {
     val url: String,
     val number: Int,
     val title: String = "",
+    val conflicting: Boolean = false,
   ) : PullRequestIdentity
 
   data class Merged(

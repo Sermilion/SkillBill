@@ -329,8 +329,10 @@ Required workflow artifacts for the pilot:
 - `monitor` (no named artifact) — settles the CI verdict for the PR the run
   created with a prose value. The runtime watches the PR checks and settles as
   passed, no-CI-configured, or failing. Failed checks route to
-  `monitor_fix` on that poll, even while other checks are pending. Passing
-  requires every check to pass, be skipped, or be cancelled with none pending.
+  `monitor_fix` on that poll, even while other checks are pending. A merge
+  conflict routes to the same repair on that poll, even when no checks are
+  reported. Passing requires every check to pass, be skipped, or be cancelled
+  with none pending.
   Monitor is runtime-owned: it does not launch an agent and does not read CI
   state from agent output.
 
@@ -344,11 +346,13 @@ Pilot-specific retry rules:
 - `commit_push` and `pr_description` are terminal gates; no downstream step may
   continue if they fail. `commit_push` is runtime-owned: it does not launch an
   agent, and it does not run `git commit` or `git push` from agent output.
-- `monitor` runs after `pr`. On failing CI it routes to `monitor_fix`, which
-  fixes the failures and returns to `commit_push`, then `monitor` re-checks the
-  PR. At most 3 `monitor_fix` attempts run per subtask. When CI still fails
-  after the third attempt, the run blocks with the last failing checks and the
-  last fix summary as the reason.
+- `monitor` runs after `pr`. On failing CI or a merge conflict it routes to
+  `monitor_fix`, which fixes the failure and returns to `commit_push`, then
+  `monitor` re-checks the PR. The repair agent runs the project's local checks,
+  as validation does, and settles completed only when they pass; a blocked
+  repair is not committed or pushed. At most 3 `monitor_fix` attempts run per subtask.
+  When the pull request still needs repair after the third attempt, the run
+  blocks with the last failure and the last fix summary as the reason.
 
 ## Authoring Boundary
 

@@ -346,9 +346,14 @@ or PR URL intake names the work; it does not switch branches. The phase composes
 first, like `phase:pr`. When every check passes, is skipped, or is cancelled, the
 phase completes. It also completes when the PR is merged, regardless of failing
 or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
-while other checks are pending. The runtime commits and pushes the fix, and
-monitor watches again, up to three fix attempts. The phase then blocks
-with the failing checks and the last fix summary. When the branch has no open PR,
+while other checks are pending. A merge conflict starts the same repair on that
+poll, even when no checks are reported: the fix merges the base branch and
+resolves every conflict. The repair agent then discovers and runs the
+project's local checks, as validation does, and keeps repairing until they
+pass. A repair that blocks is not pushed. Once it completes, the runtime
+commits and pushes the repair, and monitor watches again, up to three
+fix attempts. The phase then blocks
+with the last failure and the last fix summary. When the branch has no open PR,
 the phase completes and reports that there is nothing to monitor.
 
 ## Phase Validation

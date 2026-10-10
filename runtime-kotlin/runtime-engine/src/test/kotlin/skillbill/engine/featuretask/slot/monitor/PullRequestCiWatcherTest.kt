@@ -241,6 +241,20 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `a conflicting pull request settles before checks are read`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))))
+
+    val outcome =
+      watcher(
+        checks,
+        identity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER, conflicting = true),
+      ).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Conflicted, outcome)
+    assertEquals(0, checks.calls)
+  }
+
+  @Test
   fun `a merged pull request completes monitoring regardless of failing checks`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.FAIL))))
 

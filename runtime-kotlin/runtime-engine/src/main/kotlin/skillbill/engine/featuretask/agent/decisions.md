@@ -12,6 +12,18 @@ Reason: Cancelled jobs are not failures to fix. Waiting while a sibling is still
 Alternatives considered: Treating a single cancelled check as immediate repair was rejected because it fights the remaining pending work. A distinct `Cancelled` outcome was rejected because the run already completes on `Passed`.
 Revisit when: A cancelled check should mean a distinct operator action instead of done.
 
+## [2026-10-10] Monitor repair passes the project's local checks before it is pushed
+Context: The `monitor_fix` prompt carried the validation-ownership block, which forbids running `./gradlew check` or any full suite, so repairs were pushed unchecked. A merge repair pushed a duplicate declaration that failed compilation in CI.
+Decision: `monitor_fix` runs the validation gate. Its prompt carries the same agent validation directive as goal validate: discover the project's checks from repository instructions, build configuration, scripts, and CI, run them, and settle completed only when they pass. `commit_push` follows only a completed repair.
+Reason: The checks are the project's own, so they apply on every install, with or without platform packs.
+Alternatives considered: A runtime-run pack `full_gate_command`, rejected because packs are not the source of the project's checks and a generic-only install ran nothing.
+
+## [2026-10-10] A merge conflict uses the existing monitor repair loop
+Context: A conflicting pull request reports no checks, so the watcher treated it as CI that had not started and blocked after the start timeout. `monitor_fix` never ran.
+Decision: An open pull request is conflicting when GitHub reports `mergeable` `CONFLICTING` or `mergeStateStatus` `DIRTY`. The watcher returns that outcome before reading checks. Monitor completes with verdict `ci_failed`, and `monitor_fix` merges the recorded base branch and resolves the conflicts. Unknown mergeability stays unsettled. The three-attempt cap is unchanged.
+Reason: Conflict repair is the same commit-and-watch cycle as a failed check. A new verdict would duplicate the backward edge and the cap.
+Alternatives considered: Waiting until checks fail, rejected because a conflict often publishes no checks. Treating `UNKNOWN` or `BEHIND` as a conflict, rejected because GitHub has not reported a conflict yet.
+
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
 Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` (three traversals, BLOCK on exhaustion). Return from `monitor_fix` to `commit_push` through an uncapped backward edge on ADVANCE with its own loop id. `monitor_fix` sits after `monitor` in forward order.

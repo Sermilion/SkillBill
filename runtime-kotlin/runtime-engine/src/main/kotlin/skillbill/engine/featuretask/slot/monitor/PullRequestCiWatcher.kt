@@ -31,7 +31,9 @@ internal class PullRequestCiWatcher(
     var lastPendingNames: List<String>? = null
     while (true) {
       val identity = identityLookup.lookup(repoRoot, branch)
-      val prNumber = (identity as? PullRequestIdentity.Found)?.number
+      val found = identity as? PullRequestIdentity.Found
+      if (found?.conflicting == true) return PullRequestCiOutcome.Conflicted
+      val prNumber = found?.number
       val settled =
         if (prNumber == null) {
           identityVerdict(identity)

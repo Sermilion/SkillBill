@@ -5,15 +5,30 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal class MonitorFixBrief {
   private val failingChecks = ConcurrentHashMap<String, List<PullRequestCheck>>()
+  private val conflictBaseBranches = ConcurrentHashMap<String, String>()
 
   fun record(
     issueKey: String,
     checks: List<PullRequestCheck>,
   ) {
+    conflictBaseBranches.remove(issueKey)
     failingChecks[issueKey] = checks
   }
 
+  fun recordConflict(
+    issueKey: String,
+    baseBranch: String,
+  ) {
+    failingChecks.remove(issueKey)
+    conflictBaseBranches[issueKey] = baseBranch
+  }
+
   fun stepContextFor(issueKey: String): String {
+    conflictBaseBranches[issueKey]?.let { baseBranch ->
+      return "## Merge conflict\n" +
+        "The open pull request conflicts with '$baseBranch'. Merge '$baseBranch' into the current branch and " +
+        "resolve every conflict in the working tree. Do not commit or push."
+    }
     val checks = failingChecks[issueKey] ?: return NO_SNAPSHOT
     return "## Failing CI checks\n" + checks.joinToString("\n") { check -> "- ${check.name}: ${check.link}" }
   }

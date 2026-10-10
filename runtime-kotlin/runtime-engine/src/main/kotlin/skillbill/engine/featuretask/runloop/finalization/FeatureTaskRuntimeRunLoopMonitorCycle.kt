@@ -83,16 +83,16 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       PullRequestCiOutcome.NoPullRequest -> settleWithoutPullRequest(run, iteration, branch)
       is PullRequestCiOutcome.Failed -> {
         observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
-        complete(
+        routeToRepair(
           run,
           iteration,
-          monitorOutput(
-            run.phaseId,
-            "CI is failing for the pull request.",
-            failingChecksProse(branch, outcome.failingChecks),
-            verdict = FeatureTaskRuntimeVerdict.CI_FAILED,
-          ),
+          "CI is failing for the pull request.",
+          failingChecksProse(branch, outcome.failingChecks),
         )
+      }
+      PullRequestCiOutcome.Conflicted -> {
+        observation.recordMergeConflict(request.issueKey, baseBranch)
+        routeToRepair(run, iteration, "The pull request has merge conflicts.", conflictProse(branch, baseBranch))
       }
       is PullRequestCiOutcome.Blocked -> block(run, iteration, outcome.reason)
       is PullRequestCiOutcome.Unavailable -> {
@@ -104,6 +104,25 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       }
     }
   }
+
+  private fun PhaseRuntimeFinalizationContext.routeToRepair(
+    run: PhaseRun,
+    iteration: Int,
+    summary: String,
+    value: String,
+  ): PhaseOutcome =
+    complete(
+      run,
+      iteration,
+      monitorOutput(run.phaseId, summary, value, verdict = FeatureTaskRuntimeVerdict.CI_FAILED),
+    )
+
+  private fun conflictProse(
+    branch: String,
+    baseBranch: String,
+  ): String =
+    "The pull request for branch '$branch' conflicts with '$baseBranch'. " +
+      "Merge '$baseBranch' into '$branch' and resolve every conflict."
 
   private fun mergedMonitorOutput(
     phaseId: String,
@@ -124,7 +143,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val edge = FeatureTaskRuntimePhaseWorkflowQueries.backwardEdgeForLoop(loopId)
     val failingChecks = monitorPhaseProse(progress, edge?.fromPhaseId)
     val lastFixSummary = monitorPhaseProse(progress, edge?.destinationPhaseId)
-    return "CI is still failing after $edgeIteration fix attempt(s); the run blocks rather than fixing past the cap. " +
+    return "The pull request still needs repair after $edgeIteration fix attempt(s); " +
+      "the run blocks rather than fixing past the cap. " +
       (failingChecks ?: "The last failing checks were not recorded.") +
       " Last monitor_fix summary: " +
       (lastFixSummary ?: "none recorded.")

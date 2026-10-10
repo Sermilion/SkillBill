@@ -30,7 +30,18 @@ class GhPullRequestIdentityLookup internal constructor(
     val result =
       gh.run(
         root,
-        listOf("pr", "list", "--head", head, "--state", "all", "--json", "url,number,title,state", "--limit", "1"),
+        listOf(
+          "pr",
+          "list",
+          "--head",
+          head,
+          "--state",
+          "all",
+          "--json",
+          "url,number,title,state,mergeable,mergeStateStatus",
+          "--limit",
+          "1",
+        ),
       )
     return if (result.exitCode == 0) {
       parseIdentity(result.stdout)
@@ -52,10 +63,16 @@ class GhPullRequestIdentityLookup internal constructor(
     val title = first.path("title").takeIf(JsonNode::isTextual)?.asText().orEmpty()
     if (url == null || number == null) return null
     return when (first.path("state").asText()) {
-      "OPEN" -> PullRequestIdentity.Found(url, number, title)
+      "OPEN" -> PullRequestIdentity.Found(url, number, title, conflicting = conflicting(first))
       "MERGED" -> PullRequestIdentity.Merged(url, number)
       "CLOSED" -> PullRequestIdentity.Absent
       else -> null
     }
+  }
+
+  private fun conflicting(entry: JsonNode): Boolean {
+    val mergeable = entry.path("mergeable").asText()
+    val mergeState = entry.path("mergeStateStatus").asText()
+    return mergeable == "CONFLICTING" || mergeState == "DIRTY"
   }
 }

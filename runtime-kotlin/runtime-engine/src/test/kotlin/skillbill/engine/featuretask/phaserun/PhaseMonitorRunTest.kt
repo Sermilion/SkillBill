@@ -103,6 +103,45 @@ class PhaseMonitorRunTest {
   }
 
   @Test
+  fun `a conflicting pull request starts repair without waiting for checks`() {
+    initFeatureBranch()
+    val checks = PullRequestChecksLookup { _, _ -> error("A merge conflict settles before checks are read.") }
+
+    val result =
+      entry(
+        identity = { _, _ -> PullRequestIdentity.Found(PULL_REQUEST_URL, 7, conflicting = true) },
+        checks = checks,
+      ).run(monitorRequest("SKILL-904"))
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(blocked.reason.contains("after 3 fix attempt(s)"), blocked.reason)
+    assertTrue(blocked.reason.contains("conflicts with 'main'"), blocked.reason)
+    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+    assertTrue(
+      launcher.requests.all { request ->
+        "conflicts with 'main'" in request.skillRunRequest.promptOverride.orEmpty()
+      },
+    )
+  }
+
+  @Test
+  fun `the repair agent must pass the project checks instead of deferring them`() {
+    initFeatureBranch()
+    val failing =
+      PullRequestChecksLookup { _, _ ->
+        PullRequestChecks.Reported(
+          listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")),
+        )
+      }
+
+    entry(checks = failing).run(monitorRequest("SKILL-904"))
+
+    val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
+    assertTrue("Run the full project validation" in prompt, prompt)
+    assertTrue("## Validation ownership" !in prompt, prompt)
+  }
+
+  @Test
   fun `goal monitor reuses CI repair and does not publish a separate standalone execution`() {
     initFeatureBranch()
     var observations = 0

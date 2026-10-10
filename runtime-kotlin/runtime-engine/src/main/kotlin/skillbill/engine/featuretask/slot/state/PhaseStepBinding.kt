@@ -130,6 +130,12 @@ internal interface PhaseCiObservation {
     issueKey: String,
     checks: List<PullRequestCheck>,
   )
+
+  /** Keeps [baseBranch] so the fix step for [issueKey] can merge it and resolve conflicts. */
+  fun recordMergeConflict(
+    issueKey: String,
+    baseBranch: String,
+  )
 }
 
 internal sealed interface PullRequestCiOutcome {
@@ -142,6 +148,8 @@ internal sealed interface PullRequestCiOutcome {
   data object NoPullRequest : PullRequestCiOutcome
 
   data class Failed(val failingChecks: List<PullRequestCheck>) : PullRequestCiOutcome
+
+  data object Conflicted : PullRequestCiOutcome
 
   data class Blocked(val reason: String) : PullRequestCiOutcome
 

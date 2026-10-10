@@ -4,9 +4,27 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class GhPullRequestIdentityLookupTest {
   private val repoRoot = Path.of("/tmp/skillbill-pr-identity")
+
+  private fun listedIdentity(
+    mergeable: String,
+    mergeStateStatus: String,
+  ): PullRequestIdentity {
+    val lookup =
+      GhPullRequestIdentityLookup { _, _ ->
+        GhCommandResult(
+          exitCode = 0,
+          stdout =
+            """
+            [{"number":42,"url":"https://github.com/acme/repo/pull/42","state":"OPEN","mergeable":"$mergeable","mergeStateStatus":"$mergeStateStatus"}]
+            """.trimIndent(),
+        )
+      }
+    return lookup.lookup(repoRoot, "feat/SKILL-380")
+  }
 
   @Test
   fun `the first listed pull request for the branch is found with its url, number, and title`() {
@@ -28,10 +46,30 @@ class GhPullRequestIdentityLookupTest {
     assertEquals(PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules"), identity)
     assertEquals(
       listOf(
-        "pr", "list", "--head", "feat/SKILL-380", "--state", "all", "--json", "url,number,title,state", "--limit", "1",
+        "pr",
+        "list",
+        "--head",
+        "feat/SKILL-380",
+        "--state",
+        "all",
+        "--json",
+        "url,number,title,state,mergeable,mergeStateStatus",
+        "--limit",
+        "1",
       ),
       calls.single(),
     )
+  }
+
+  @Test
+  fun `an open pull request is conflicting only when GitHub reports a merge conflict`() {
+    val conflicting =
+      listedIdentity(mergeable = "CONFLICTING", mergeStateStatus = "DIRTY")
+    val unknown =
+      listedIdentity(mergeable = "UNKNOWN", mergeStateStatus = "UNKNOWN")
+
+    assertEquals(true, assertIs<PullRequestIdentity.Found>(conflicting).conflicting)
+    assertEquals(false, assertIs<PullRequestIdentity.Found>(unknown).conflicting)
   }
 
   @Test

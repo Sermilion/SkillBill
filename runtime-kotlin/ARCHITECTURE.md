@@ -1418,8 +1418,11 @@ goal children. `PullRequestCiWatcher` polls the PR checks through
 `PullRequestChecksLookup`. A failed check immediately sets verdict
 `ci_failed`, even while other checks are pending, and routes backward to
 `monitor_fix` and then to `commit_push`. Cancelled checks do not start repair.
-Success requires every check to pass, be skipped, or be cancelled with none
-pending.
+A merge conflict (`CONFLICTING` or
+`DIRTY`) does the same on that poll, before checks are read, and the repair
+merges the base branch and resolves the conflicts. The `monitor_fix` prompt carries the agent validation directive, so the repair agent runs the project's local checks and settles completed only when they pass; a blocked repair is not committed. An unknown mergeability
+result is not a conflict. Success requires every check to pass, be skipped,
+or be cancelled with none pending.
 Goal monitoring requires reported checks. An empty report keeps polling until
 checks arrive or the watch timeout blocks the goal; it does not settle as
 no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
