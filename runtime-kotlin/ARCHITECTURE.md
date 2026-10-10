@@ -1419,6 +1419,12 @@ goal children. `PullRequestCiWatcher` polls the PR checks through
 `ci_failed`, even while other checks are pending, and routes backward to
 `monitor_fix` and then to `commit_push`. Success requires every check to pass or
 be skipped with none pending.
+Goal monitoring requires reported checks. An empty report keeps polling until
+checks arrive or the watch timeout blocks the goal; it does not settle as
+no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
+written after all goal phases finish, rather than completed subtask counts.
+Each poll also reads PR state. A merged PR completes monitoring regardless of
+the CI verdict; a closed unmerged PR does not satisfy goal monitoring.
 The loop is capped at 3 attempts per subtask. Exhausting the cap blocks the run
 through the cap-exhaustion reason. Monitor-owned steps never emit a verdict
 other than `ci_failed` or the default advance.

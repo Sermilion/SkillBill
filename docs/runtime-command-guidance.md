@@ -115,6 +115,14 @@ branch, unavailable checks, or exhausted repair loop stops the goal at the faili
 finalization step. A later goal run reuses completed subtasks and the existing PR
 and monitors again. Accepted no-change goals create no PR and skip monitoring.
 
+Finishing the subtasks does not complete the goal. PR publication and monitoring
+must finish before the runtime records goal completion or the IDE reports "done".
+A merged PR completes monitoring regardless of failing or pending checks. The
+monitor checks the PR's state on every poll so a merge during CI ends the wait.
+An empty check report keeps goal monitoring active until checks arrive and pass
+or the monitor reaches its timeout. It never counts as CI success. A timeout or
+exhausted repair loop reports a blocked goal rather than completion.
+
 ## Edited subtask specs on resume
 
 A full goal launch checks unfinished subtask specs against their saved planning hashes

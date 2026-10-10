@@ -171,7 +171,9 @@ class IdeStatusProjector(
     issueKey: String,
     projection: GoalRunnerStatusProjection?,
   ): IdeStatusSnapshot {
-    val preliminaryLifecycle = goalLifecycle(candidate, projection)
+    val completionRecorded =
+      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null
+    val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val planningStep =
       planning?.takeIf {
@@ -241,21 +243,25 @@ class IdeStatusProjector(
   private fun goalLifecycle(
     candidate: IdeStatusCandidate,
     projection: GoalRunnerStatusProjection?,
+    completionRecorded: Boolean,
   ): IdeStatusLifecycleState {
-    val settledComplete =
-      projection != null &&
-        projection.pendingCount == 0 &&
-        projection.blockedCount == 0 &&
-        projection.completeCount > 0 &&
-        projection.executionLiveness != ExecutionLiveness.LIVE
-    if (settledComplete) return IdeStatusLifecycleState.TERMINAL
+    if (completionRecorded && projection?.executionLiveness != ExecutionLiveness.LIVE) {
+      return IdeStatusLifecycleState.TERMINAL
+    }
+    if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL) {
+      return if (projection?.executionLiveness == ExecutionLiveness.LIVE) {
+        IdeStatusLifecycleState.ACTIVE
+      } else {
+        IdeStatusLifecycleState.IDLE
+      }
+    }
     if (candidate.lifecycleState == IdeStatusLifecycleState.PAUSED &&
       projection?.executionLiveness == ExecutionLiveness.LIVE && !projection.paused
     ) {
       return IdeStatusLifecycleState.ACTIVE
     }
-    if (candidate.lifecycleState != IdeStatusLifecycleState.ACTIVE) return candidate.lifecycleState
     return when {
+      candidate.lifecycleState != IdeStatusLifecycleState.ACTIVE -> candidate.lifecycleState
       projection?.paused == true -> IdeStatusLifecycleState.PAUSED
       projection?.executionLiveness == ExecutionLiveness.IDLE -> IdeStatusLifecycleState.IDLE
       else -> IdeStatusLifecycleState.ACTIVE

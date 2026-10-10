@@ -147,6 +147,20 @@ class PhaseMonitorRunTest {
   }
 
   @Test
+  fun `goal monitoring completes for a merged pull request without repairing failing CI`() {
+    initFeatureBranch()
+    val result =
+      entry(
+        identity = { _, _ -> PullRequestIdentity.Merged(PULL_REQUEST_URL, 7) },
+        checks = { _, _ -> error("Merged pull requests need no CI observation.") },
+      ).runForGoal(monitorRequest("SKILL-904"), "goal-parent", FEATURE_BRANCH)
+
+    assertIs<PhaseRunResult.Completed>(result)
+    assertTrue(result.value.orEmpty().contains("was merged"), result.value)
+    assertEquals(emptyList(), launcher.requests)
+  }
+
+  @Test
   fun `goal monitor cannot succeed without its published pull request or on another branch`() {
     initFeatureBranch()
     val missing =

@@ -58,6 +58,11 @@ shortcuts and forbidden runtime/JDBC/SQLite imports as pure JVM source scans.
 
 ### Freshness versus lifecycle
 
+For goals, "done" requires the runtime's final completion record. Completed
+subtasks alone do not establish completion. PR publication and CI monitoring
+remain part of the goal run, and blocked finalization stays blocked even when
+every subtask is complete.
+
 Freshness is a **modifier**, not a state. It replaces the lifecycle only when the
 lifecycle claims to be live (`active` / `paused`), which is the genuine
 went-silent case. Against a settled lifecycle (`blocked` / `failed` / `terminal` /

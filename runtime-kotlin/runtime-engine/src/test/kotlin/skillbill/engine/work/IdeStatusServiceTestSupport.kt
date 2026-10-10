@@ -144,10 +144,18 @@ internal fun nestedWireMap(
   }
 }
 
-internal fun goalOnlyDatabase(goalState: String = "running"): TrackingDatabase =
+internal fun goalOnlyDatabase(
+  goalState: String = "running",
+  completionRecorded: Boolean = false,
+): TrackingDatabase =
   TrackingDatabase(
     work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, "2026-08-06T10:00:00Z")),
     workflows = IdeStatusWorkflowStates(),
+    controls =
+      object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+        override fun controlState(parentWorkflowId: String): GoalRunnerControlState =
+          GoalRunnerControlState(goalCompletedAt = ideStatusObservedAt.toString().takeIf { completionRecorded })
+      },
   )
 
 internal fun goalWithLaunchedChildDatabase(

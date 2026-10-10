@@ -23,35 +23,34 @@ internal class PullRequestCiWatcher(
   fun watch(
     repoRoot: Path,
     branch: String,
-  ): PullRequestCiOutcome =
-    when (val identity = identityLookup.lookup(repoRoot, branch)) {
-      is PullRequestIdentity.Found -> poll(repoRoot, identity.number)
-      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
-      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(identity.reason)
-    }
-
-  private fun poll(
-    repoRoot: Path,
-    prNumber: Int,
+    requireChecks: Boolean = false,
   ): PullRequestCiOutcome {
     val startedAt = now()
     var noChecksSince: Instant? = null
     var pendingNames: List<String> = emptyList()
     while (true) {
+      val identity = identityLookup.lookup(repoRoot, branch)
+      val prNumber = (identity as? PullRequestIdentity.Found)?.number
       val current = now()
       val settled =
-        when (val checks = checksLookup.lookup(repoRoot, prNumber)) {
-          is PullRequestChecks.Unavailable -> PullRequestCiOutcome.Unavailable(checks.reason)
-          PullRequestChecks.NoChecks -> {
-            val since = noChecksSince ?: current
-            noChecksSince = since
-            pendingNames = emptyList()
-            PullRequestCiOutcome.NoCiConfigured.takeIf { Duration.between(since, current) >= noChecksGrace }
-          }
-          is PullRequestChecks.Reported -> {
-            noChecksSince = null
-            pendingNames = checks.checks.filter { it.bucket == CheckBucket.PENDING }.map(PullRequestCheck::name)
-            verdictFor(checks.checks)
+        if (prNumber == null) {
+          identityVerdict(identity)
+        } else {
+          when (val checks = checksLookup.lookup(repoRoot, prNumber)) {
+            is PullRequestChecks.Unavailable -> PullRequestCiOutcome.Unavailable(checks.reason)
+            PullRequestChecks.NoChecks -> {
+              val since = noChecksSince ?: current
+              noChecksSince = since
+              pendingNames = emptyList()
+              PullRequestCiOutcome.NoCiConfigured.takeIf {
+                !requireChecks && Duration.between(since, current) >= noChecksGrace
+              }
+            }
+            is PullRequestChecks.Reported -> {
+              noChecksSince = null
+              pendingNames = checks.checks.filter { it.bucket == CheckBucket.PENDING }.map(PullRequestCheck::name)
+              verdictFor(checks.checks)
+            }
           }
         }
       if (settled != null) return settled
@@ -62,11 +61,19 @@ internal class PullRequestCiWatcher(
     }
   }
 
+  private fun identityVerdict(identity: PullRequestIdentity): PullRequestCiOutcome? =
+    when (identity) {
+      is PullRequestIdentity.Found -> null
+      is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
+      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
+      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(identity.reason)
+    }
+
   private fun verdictFor(checks: List<PullRequestCheck>): PullRequestCiOutcome? {
     val failing = checks.filter { it.bucket == CheckBucket.FAIL || it.bucket == CheckBucket.CANCEL }
     return when {
       failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing)
-      checks.any { it.bucket == CheckBucket.PENDING } -> null
+      checks.isEmpty() || checks.any { it.bucket == CheckBucket.PENDING } -> null
       else -> PullRequestCiOutcome.Passed
     }
   }

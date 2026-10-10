@@ -32,6 +32,7 @@ internal class PullRequestMeasurement(
           FeatureTaskRuntimeMeasuredFactKeys.PR_CREATED to created(before, after),
         )
       PullRequestIdentity.Absent -> unknown("pr found no open pull request for the branch after the step")
+      is PullRequestIdentity.Merged -> unknown("the pull request was merged before its creation could be measured")
       is PullRequestIdentity.Unavailable -> unknown("pr could not look the pull request up: ${after.reason}")
     }
 
@@ -42,6 +43,7 @@ internal class PullRequestMeasurement(
     when (before) {
       PullRequestIdentity.Absent -> true
       is PullRequestIdentity.Found -> before.number != after.number
+      is PullRequestIdentity.Merged -> before.number != after.number
       is PullRequestIdentity.Unavailable -> {
         record("pr could not look the pull request up before the step: ${before.reason}")
         FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN

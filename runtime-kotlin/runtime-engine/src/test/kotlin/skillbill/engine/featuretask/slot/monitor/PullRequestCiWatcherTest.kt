@@ -96,6 +96,45 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `goal monitoring keeps waiting for checks beyond the no ci grace period`() {
+    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+
+    val outcome =
+      watcher(checks, watchTimeout = Duration.ofMinutes(4), noChecksGrace = Duration.ofMinutes(1))
+        .watch(REPO_ROOT, BRANCH, requireChecks = true)
+
+    assertIs<PullRequestCiOutcome.Blocked>(outcome)
+    assertEquals(9, checks.calls)
+  }
+
+  @Test
+  fun `goal monitoring waits for late checks and then for pending checks to pass`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.NoChecks,
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
+      )
+
+    val outcome =
+      watcher(checks, noChecksGrace = Duration.ofSeconds(30)).watch(REPO_ROOT, BRANCH, requireChecks = true)
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(5, checks.calls)
+  }
+
+  @Test
+  fun `an empty reported check list cannot complete monitoring`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(emptyList()))
+
+    val outcome = watcher(checks, watchTimeout = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH, requireChecks = true)
+
+    assertIs<PullRequestCiOutcome.Blocked>(outcome)
+  }
+
+  @Test
   fun `checks that appear within the grace period are watched normally`() {
     val checks =
       ScriptedChecks(
@@ -107,6 +146,36 @@ class PullRequestCiWatcherTest {
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
     assertEquals(listOf("lint"), failed.failingChecks.map(PullRequestCheck::name))
+  }
+
+  @Test
+  fun `a merged pull request completes monitoring regardless of failing checks`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identity = PullRequestIdentity.Merged(PR_URL, PR_NUMBER)).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Merged, outcome)
+    assertEquals(0, checks.calls)
+  }
+
+  @Test
+  fun `a pull request merged during pending CI completes on the next poll`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))))
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        if (identityCalls == 1) {
+          PullRequestIdentity.Found(PR_URL, PR_NUMBER)
+        } else {
+          PullRequestIdentity.Merged(PR_URL, PR_NUMBER)
+        }
+      }
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, requireChecks = true)
+
+    assertEquals(PullRequestCiOutcome.Merged, outcome)
+    assertEquals(1, checks.calls)
   }
 
   @Test
@@ -147,9 +216,10 @@ class PullRequestCiWatcherTest {
     identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER),
     watchTimeout: Duration = Duration.ofMinutes(30),
     noChecksGrace: Duration = Duration.ofMinutes(3),
+    identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
     PullRequestCiWatcher(
-      identityLookup = fixedIdentity(identity),
+      identityLookup = identityLookup,
       checksLookup = checks,
       now = { clock },
       sleep = { clock = clock.plus(it) },

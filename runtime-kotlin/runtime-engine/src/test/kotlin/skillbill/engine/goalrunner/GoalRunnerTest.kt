@@ -1538,6 +1538,7 @@ class GoalRunnerLinearScratchFinalizeTest {
                 state.parentWorkflowId,
               )
               assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
+              assertNull(store.controlState(state.parentWorkflowId).goalCompletedAt)
               monitored = true
               PhaseRunResult.Completed("goal-monitor", listOf("monitor"), null, "CI passed")
             },

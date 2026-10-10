@@ -119,6 +119,7 @@ internal interface PhaseCiObservation {
   fun watch(
     repoRoot: Path,
     branch: String,
+    requireChecks: Boolean,
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
@@ -130,6 +131,8 @@ internal interface PhaseCiObservation {
 
 internal sealed interface PullRequestCiOutcome {
   data object Passed : PullRequestCiOutcome
+
+  data object Merged : PullRequestCiOutcome
 
   data object NoCiConfigured : PullRequestCiOutcome
 
