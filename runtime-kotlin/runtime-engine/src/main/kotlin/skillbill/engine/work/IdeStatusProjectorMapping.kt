@@ -99,10 +99,6 @@ internal fun goalPlanningSummary(
     "(${planning.plannedSubtaskCount}/${planning.totalSubtaskCount} planned).$wave"
 }
 
-/**
- * Subtasks are finished and the goal has not completed, so finalization still owes CI.
- * That wait is the monitor phase: it has no execution lease and stays until CI is fixed.
- */
 internal fun goalStaysOnOpenCiMonitor(
   projection: GoalRunnerStatusProjection?,
   completionRecorded: Boolean,

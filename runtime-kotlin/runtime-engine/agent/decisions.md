@@ -1,3 +1,8 @@
+## [2026-10-10] Keep unfinished CI monitor active without an execution lease
+Context: Goal IDE status treated an expired parent execution lease as idle when subtasks were finished and the goal had not completed, so the remaining CI wait disappeared from status.
+Decision: When a goal has completed subtasks, no pending or blocked work, and no recorded completion, keep lifecycle ACTIVE on the monitor step with activity "CI not fixed" even without a live execution lease. Refresh updatedAt from the observation clock so the wait stays FRESH until CI is fixed or the goal completes.
+Reason: Finalization still owes CI after the last subtask. Painting that wait as idle hid the monitor phase. The lease is for execution occupancy; the monitor wait has none.
+
 ## [2026-10-10] Select live retained IDE status before sequence ranking
 Context: Repo-global run_sequence let a later completed standalone on the same branch outrank a live goal (2026-10-09 SKILL-414 vs SKILL-415 plan).
 Decision: After retainedAt, if any ACTIVE, PAUSED, or BLOCKED row remains, rank only that live cohort. Rank FAILED, RECENTLY_TERMINAL, and IDLE only when live is empty. Keep the existing comparator inside the chosen cohort.
