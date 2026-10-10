@@ -288,7 +288,7 @@ class IdeStatusService(
     val state = item.issueKey?.let { manifestStore.readByIssueKey(it, repoRoot) }
     val manifest =
       state?.manifest?.takeIf {
-        state.parentWorkflowId == item.workflowId && it.baseBranch == registeredBranch
+        state.parentWorkflowId == item.workflowId
       }
     val ownsBranch =
       manifest != null &&

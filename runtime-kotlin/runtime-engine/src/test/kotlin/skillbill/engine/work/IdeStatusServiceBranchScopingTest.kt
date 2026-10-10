@@ -37,6 +37,33 @@ import kotlin.test.assertNull
 
 class IdeStatusServiceBranchScopingTest {
   @Test
+  fun `stale feature branch registration follows the branch owned by the goal manifest`() {
+    val featureBranch = "feat/SKILL-148-status-fix"
+    val fixture = gitRepoFixture("ide-status-goal-feature-branch-transition", branch = featureBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val initial = completedGoalManifestState(fixture, identity)
+    val state = initial.copy(manifest = initial.manifest.copy(featureBranch = featureBranch))
+    val database = registeredGoalDatabase(identity, "feat/SKILL-148-initial")
+    val result =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            state,
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertNull(result.snapshot.problem)
+    assertEquals("goal-1", result.snapshot.workflowId)
+    assertEquals(featureBranch, result.snapshot.branchCorrelation)
+    assertEquals("parent-execution", result.snapshot.execution?.executionId)
+    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals(0, database.writeCalls)
+  }
+
+  @Test
   fun `base branch registration follows the goal feature branch through live finalization`() {
     val featureBranch = "feat/SKILL-148-status-fix"
     val fixture = gitRepoFixture("ide-status-goal-branch-transition", branch = featureBranch)
