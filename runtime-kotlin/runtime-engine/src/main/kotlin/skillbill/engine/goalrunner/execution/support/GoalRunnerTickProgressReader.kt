@@ -12,8 +12,6 @@ import java.time.Clock
 val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
 
 const val FEATURE_SPEC_ROOT = ".feature-specs"
-const val GIT_PORCELAIN_MIN_LENGTH = 4
-const val GIT_PORCELAIN_STATUS_PREFIX_LENGTH = 3
 const val MAX_VALIDATION_QUALITY_RETRIES = 3
 const val MAX_REPORTED_FINALIZE_DIRTY_PATHS = 10
 
@@ -29,15 +27,6 @@ fun isFeatureSpecPath(path: String): Boolean {
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
   return dotted == FEATURE_SPEC_ROOT || dotted.startsWith("$FEATURE_SPEC_ROOT/")
 }
-
-fun parseGitPorcelainPaths(output: String): List<String> =
-  output
-    .lineSequence()
-    .map(String::trimEnd)
-    .filter { line -> line.length >= GIT_PORCELAIN_MIN_LENGTH }
-    .map { line -> line.substring(GIT_PORCELAIN_STATUS_PREFIX_LENGTH).substringAfterLast(" -> ").trim() }
-    .filter(String::isNotBlank)
-    .toList()
 
 internal data class GoalRunnerProgressState(
   val subtask: DecompositionSubtask,

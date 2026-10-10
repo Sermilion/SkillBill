@@ -1333,6 +1333,35 @@ class GoalRunnerLinearScratchFinalizeTest {
   }
 
   @Test
+  fun `finalize commit-all stages the full path when trimmed status drops the first leading space`() {
+    val repoRoot = Files.createTempDirectory("goal-trimmed-status-finalize")
+    val git =
+      CommitAllRecordingGitOperations(
+        dirtyPorcelain = "M runtime-kotlin/src/Extra.kt",
+        currentBranch = "feat/SKILL-56-goal",
+      )
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { launchFacts() },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = RecordingPullRequestPort(),
+        ).copy(
+          specScratchStore = RecordingSpecScratchStore(),
+          gitOperations = git,
+        ),
+      )
+
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(linearRunRequest(repoRoot)))
+    assertEquals(listOf(listOf("runtime-kotlin/src/Extra.kt")), git.stagePathsCalls)
+  }
+
+  @Test
   fun `local finalize commit-all ignores leftover collapsed feature-specs dirt`() {
     val repoRoot = Files.createTempDirectory("goal-local-finalize-collapsed-specs")
     val git =
