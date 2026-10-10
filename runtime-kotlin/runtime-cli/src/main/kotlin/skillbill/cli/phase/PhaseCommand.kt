@@ -59,8 +59,9 @@ class PhaseCommand(
   private val rest by argument(
     name = "args",
     help =
-      "Optional intake text, then key:value pairs: ${PhaseCommandKeys.MODE}:inline|delegated|auto " +
-        "and ${PhaseCommandKeys.TARGET}:HEAD|uncommitted|${PhaseInvocationParser.SCOPED_TARGETS.joinToString("|")}|" +
+      "Optional intake text, then key:value pairs: ${PhaseCommandKeys.MODE}:inline|delegated " +
+        "(omission means inline) and ${PhaseCommandKeys.TARGET}:HEAD|uncommitted|" +
+        "${PhaseInvocationParser.SCOPED_TARGETS.joinToString("|")}|" +
         "<commit-sha|branch|tag>. An omitted target reviews " +
         "uncommitted changes when the worktree is dirty and HEAD otherwise.",
   ).multiple()
@@ -157,6 +158,8 @@ internal fun runPhase(
     null
   }
 
+internal const val PHASE_COLON_PREFIX = "phase:"
+
 object PhaseCommandKeys {
   const val MODE: String = "mode"
   const val TARGET: String = "target"
@@ -175,6 +178,7 @@ object PhaseInvocationParser {
   private const val LAST_TARGET = "last"
   private const val UNCOMMITTED_TARGET = "uncommitted"
   private const val COMMIT_PUSH = "commit_push"
+  private const val VERIFY_NAME = "verify"
   val SCOPED_TARGETS: List<String> = listOf("pr", "staged", "unstaged")
   private val KEYS = setOf(PhaseCommandKeys.MODE, PhaseCommandKeys.TARGET)
 
@@ -202,14 +206,21 @@ object PhaseInvocationParser {
   }
 
   private fun definitionId(name: String): String {
+    val phaseName = name.removePrefix(PHASE_COLON_PREFIX).ifEmpty { name }
+    if (phaseName == VERIFY_NAME) {
+      throw UsageError(
+        "`$VERIFY_NAME` is an operation, not a phase; use `skill-bill operation $VERIFY_NAME <intake>`.",
+      )
+    }
     val names = phaseNames()
-    if (name in names) return name
+    if (phaseName in names) return phaseName
     throw UsageError(
       when {
-        name == COMMIT_PUSH -> "Phase '$COMMIT_PUSH' is not runnable on its own; run the full feature-task workflow."
-        SkeletonDefinition.entries.any { it.id == name } ->
-          "Phase '$name' runs over durable workflow state; expected ${expectedList(names)}."
-        else -> "Unknown phase '$name'; expected ${expectedList(names)}."
+        phaseName == COMMIT_PUSH ->
+          "Phase '$COMMIT_PUSH' is not runnable on its own; run the full feature-task workflow."
+        SkeletonDefinition.entries.any { it.id == phaseName } ->
+          "Phase '$phaseName' runs over durable workflow state; expected ${expectedList(names)}."
+        else -> "Unknown phase '$phaseName'; expected ${expectedList(names)}."
       },
     )
   }

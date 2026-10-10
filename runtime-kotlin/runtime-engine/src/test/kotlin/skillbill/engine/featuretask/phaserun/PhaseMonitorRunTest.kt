@@ -86,7 +86,12 @@ class PhaseMonitorRunTest {
     initFeatureBranch()
     val failing =
       PullRequestChecksLookup { _, _ ->
-        PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run"),
+            PullRequestCheck("integration", CheckBucket.PENDING, "https://ci.example/integration"),
+          ),
+        )
       }
 
     val result = entry(checks = failing).run(monitorRequest("SKILL-904"))
@@ -104,12 +109,18 @@ class PhaseMonitorRunTest {
     val checks =
       PullRequestChecksLookup { _, _ ->
         observations += 1
+        if (observations > 1) assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
         PullRequestChecks.Reported(
           listOf(
             PullRequestCheck(
               "validate",
               if (observations == 1) CheckBucket.FAIL else CheckBucket.PASS,
               "https://ci.example/run",
+            ),
+            PullRequestCheck(
+              "integration",
+              if (observations == 1) CheckBucket.PENDING else CheckBucket.PASS,
+              "https://ci.example/integration",
             ),
           ),
         )
@@ -133,6 +144,20 @@ class PhaseMonitorRunTest {
     assertTrue(outcomes.progressEvents.all { it.workflowId == "goal-parent" })
     assertTrue(outcomes.progressEvents.any { it.stepId == MONITOR_FIX })
     assertEquals(emptyList(), SlotBaselineSqlite.rows(database.resolveDbPath(), "standalone_phase_status"))
+  }
+
+  @Test
+  fun `goal monitoring completes for a merged pull request without repairing failing CI`() {
+    initFeatureBranch()
+    val result =
+      entry(
+        identity = { _, _ -> PullRequestIdentity.Merged(PULL_REQUEST_URL, 7) },
+        checks = { _, _ -> error("Merged pull requests need no CI observation.") },
+      ).runForGoal(monitorRequest("SKILL-904"), "goal-parent", FEATURE_BRANCH)
+
+    assertIs<PhaseRunResult.Completed>(result)
+    assertTrue(result.value.orEmpty().contains("was merged"), result.value)
+    assertEquals(emptyList(), launcher.requests)
   }
 
   @Test

@@ -33,7 +33,8 @@ class MonitorStrategy(
       override fun watch(
         repoRoot: Path,
         branch: String,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch)
+        requireChecks: Boolean,
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, requireChecks)
 
       override fun recordFailingChecks(
         issueKey: String,
@@ -119,8 +120,11 @@ class MonitorStrategy(
 
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
-        "the workflow created until none is pending. All checks passing or skipped completes the phase. A " +
-        "failing check completes it with verdict ci_failed, which routes to monitor_fix. A timeout, or a " +
+        "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
+        "A failed or cancelled check on an open pull request immediately completes it with verdict ci_failed, " +
+        "which routes to monitor_fix even while other checks are pending. All checks passing or skipped " +
+        "completes the phase only when none is pending. Goal monitoring waits for checks to be reported. " +
+        "A timeout, or a " +
         "GitHub CLI that cannot report checks, blocks it."
 
     private const val MONITOR_FIX_DIRECTIVE: String =

@@ -228,7 +228,7 @@ class CliGoalIntakeTest {
     val db = root.resolve("metrics.db")
     val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
     val launcher = StoppedPlanningLauncher(db)
-    val command = listOf("--db", db.toString(), text, "--agent", "codex", "--repo-root", root.toString())
+    val command = listOf("--db", db.toString(), "goal", text, "--agent", "codex", "--repo-root", root.toString())
     try {
       val result = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(1, result.exitCode, result.stderr + result.stdout)

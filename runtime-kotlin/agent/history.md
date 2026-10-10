@@ -1,3 +1,47 @@
+## [2026-10-10] SKILL-414 subtask 4 validate repairs to subtask 2 and 3 carry-over
+Areas: runtime-cli cli/core and cli/model; runtime-core di/core; runtime-infra/skills repoTest; runtime-infra/sqlite test; skills/skill-bill/content.md
+- The CLI main no longer reads System.getenv(). CliRuntimeContext.onEnvironmentResolved receives the environment resolved by bootstrap, and Main.kt configures process logging from it. The runtime-cli ambient-environment baseline stays empty. reusable
+- ProcessLoggingEnvironmentKeys moved to its own file to satisfy detekt MatchingDeclarationName. SkillBillCommand.routeIntakeTokens extracts intakeCommandTokens to stay within ReturnCount, and routing output is unchanged.
+- RetiredSkillNameSweepRepoTest drops the stale ReviewCliCommands.kt allowlist entry, which tightens the guard.
+- content.md names the feature-launch-warning skill class without the bare orchestration path, which RepoValidation rejected.
+- CliRuntimeShellCommandsTest normalizes whitespace before asserting the Clikt-wrapped root description.
+- Limits: no suppression, baseline row, or exemption added. Logging takes effect only after bootstrap resolves the environment. ./install.sh is blocked inside goal runs, so the installed SKILL.md needs a re-render after the goal finishes.
+Feature flag: N/A
+Acceptance criteria: N/A (validate repairs)
+
+## [2026-10-10] SKILL-414 subtask 3 — one terminology, accurate docs and help, safer routing
+Areas: runtime-cli cli/core, cli/phase, cli/review and cli/system; runtime-contracts issuekey; runtime-engine goalrunner/intake; README.md; docs/; skills/skill-bill/content.md
+- README gains a Glossary (goal, workflow, subtask, phase, slot, step, operation, pack, lane, add-on) taken from PhaseSlot and SkeletonDefinition: 11 slot ids, standalone phases review/validation/plan/pr/monitor, and verify as an operation. phase:review runs standalone_review, and write_history is a slot.
+- Reusable: looksLikeGoalIntakeToken in runtime-contracts issuekey (tracker key prefix, URL marker, .feature-specs/ marker, private .md suffix). GoalIntake reuses the two public marker constants, and its acceptance is unchanged.
+- routeIntakeTokens keeps the root-option skip list (--db, --home, --verbose), splits phase:/operation: tokens into two, and prepends goal only when the predicate matches. Any other token passes through to Clikt 5.1.0, which reports an unknown command with Jaro-Winkler suggestions, so `phse review` no longer becomes a goal intake.
+- PhaseInvocationParser rejects verify with a UsageError that names `skill-bill operation verify <intake>`. The top-level update-check stays registered but hidden from help; `skill-bill operation update-check` is canonical.
+- Dispatcher content.md: one Review arguments section (target:<value>, last maps to HEAD), mode:inline|delegated with omission meaning inline, no Invoke the driver section, a connected-tracker Rehydrate, Pack routing heading, and the full feature-launch-warning.yaml skill-class path. Docs no longer describe verify as a phase or code-review as the phase review driver.
+- Limits: the parser still accepts mode:auto as inline. A first token such as notes.md routes to goal and fails there. Retired names stay on purpose in the retired-name lists, review-telemetry ids, and InlineReviewDirectiveTest's review-directive.md pin (census_subtask_3.md). Stale workflow-help assertions were deleted from CliRuntimeShellCommandsTest.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
+## [2026-10-10] SKILL-414 subtask 2 — quiet, accurate CLI output
+Areas: runtime-core di/core, runtime-cli cli/core, runtime-mcp mcp/core, runtime-infra/host diagnostics and jvm
+- New runtime-core ProcessLogging (ProcessLoggingEnvironmentKeys.SKILL_BILL_VERBOSE, verboseLoggingRequestedByEnvironment, configureProcessLogging). It resets LogManager, then sets root OFF with no handler, or verbose ALL with one stderr ConsoleHandler and a single-line formatter (level, source class.method, message; stack trace only when a Throwable is attached).
+- The CLI and MCP mains are the only two runtime entry points, and both call it. CLI uses resolveVerboseLogging (leading --verbose or SKILL_BILL_VERBOSE 1/true, case-insensitive); MCP uses the env var only.
+- SkillBillCommand declares a root --verbose flag (VERBOSE_OPTION). Pure leadingRootOptionCount and routeIntakeTokens were extracted from routeIntake, so --verbose is skipped like --db/--home and the existing goal guard is kept. RootFlagProbeCommand also binds --verbose.
+- JdkRuntimeDiagnostics names the real caller through StackWalker plus logp, skipping its own frames, RuntimeDiagnostics, and RuntimeDiagnosticsBestEffortWarning. warning/info attach no Throwable and warning appends a one-line exception summary. error keeps SEVERE with the Throwable.
+- GateJvmResolver.recordDecision (now internal) logs routine resolutions at info and warns only for Unresolved or dropped image candidates.
+- Reusable: configureProcessLogging for any new runtime main; resolveVerboseLogging and routeIntakeTokens as pure, testable routing helpers.
+- Limits: other direct JUL call sites are silenced by the global config, not edited. No test asserts root logger structure; AC 1 is audited by reading Main.kt. stdout/JSON payloads and CliRuntime stderr text are unchanged.
+Feature flag: N/A (opt-in via --verbose or SKILL_BILL_VERBOSE)
+Acceptance criteria: 9/9 implemented
+
+## [2026-10-09] SKILL-414 subtask 1 — stale workflow-state rows must not break the runtime
+Areas: runtime-contracts/workflow, runtime-infra/contracts/workflow, runtime-infra/sqlite/workflow, runtime-application/workflow and work, runtime-engine/verify and work
+- Added WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS (0.1, 0.2, current 0.3). The validator replaces a readable contract_version with the current const before schema validate and logs drift at FINE. Writes re-stamp older readable workflow-state versions to current.
+- Followed the FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS pattern. No schema bump and no migration: census listed 0.1 and 0.2 as readable, so DatabaseMigrationEntries stays at version 50.
+- List, latest, work-list, MCP verify list, and verify supersede skip one unreadable sibling with a diagnostic. get, resume, and continue stay loud-fail. IDE filters unreadable FEATURE_VERIFY candidates before select and reports incompatible instead of collapsing status.
+- Reusable: readable-set plus per-row isInvalidWorkflowStateFailure skip. Re-stamp applies only to mode=runtime feature-task rows; prose FEATURE_IMPLEMENT 0.1 is a different family and is left unchanged.
+- Limits: skipped rows stay out of list payloads, with no new field. Old-shape 0.1 rows still fail after version-string normalization and are skipped per row. No FINE-log test. Unrelated SKILL-414 spec/manifest dirt and the SKILL-415 spec.md path were left untouched.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-10-07] SKILL-406 freshly resolved repository checkpoint
 Areas: runtime-engine featuretask run loop and phase attempt; runtime-domain handoff checkpoint policy; runtime-core planning-projection allow-list; slot-baseline fixtures
 - `refresh_from_repository` and `must_match` require a non-null freshly resolved repository checkpoint. `not_required` leaves the checkpoint fields unchanged. A resolved checkpoint satisfies both policies when its fingerprint differs from the expected checkpoint.

@@ -1,4 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow
+
+import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.requireUnchangedExecutionPlan
@@ -200,7 +203,7 @@ private fun PreparedStatement.bindWorkflowRow(
   parameters.text(row.workflowId)
   parameters.text(row.sessionId)
   parameters.text(row.workflowName)
-  parameters.text(row.contractVersion.ifBlank { defaultContractVersion })
+  parameters.text(persistableWorkflowStateContractVersion(row.contractVersion.ifBlank { defaultContractVersion }))
   parameters.text(row.workflowStatus)
   parameters.text(row.currentStepId)
   parameters.text(row.stepsJson)
@@ -224,7 +227,14 @@ private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   val parameters = SqlParameterBinder(this)
   parameters.text(row.workflowId)
   parameters.text(row.sessionId)
-  parameters.text(row.contractVersion.ifBlank { defaultContractVersion })
+  val storedVersion = row.contractVersion.ifBlank { defaultContractVersion }
+  parameters.text(
+    if (mode == FeatureTaskWorkflowMode.RUNTIME) {
+      persistableWorkflowStateContractVersion(storedVersion)
+    } else {
+      storedVersion
+    },
+  )
   parameters.text(row.workflowStatus)
   parameters.text(row.currentStepId)
   parameters.text(row.stepsJson)
@@ -239,6 +249,13 @@ private fun PreparedStatement.bindFeatureTaskWorkflowRow(
   parameters.text(implementationSkill)
   parameters.bind()
 }
+
+private fun persistableWorkflowStateContractVersion(stored: String): String =
+  if (stored in WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS) {
+    WORKFLOW_STATE_CONTRACT_VERSION
+  } else {
+    stored
+  }
 
 private fun nextStateEnteredAtSql(tableName: String): String =
   """

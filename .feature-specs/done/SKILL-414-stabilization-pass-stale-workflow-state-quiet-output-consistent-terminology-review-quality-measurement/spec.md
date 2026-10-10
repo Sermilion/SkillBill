@@ -30,7 +30,7 @@ Over 8 months skill-bill grew from a ~15k-line markdown skill pack into a ~494k-
 
 - "Phase" means three things: 5 standalone phases (`SkeletonDefinition.kt`), 11 `PhaseSlot`s (`PhaseSlot.kt`), and step ids. `verify` is an operation, not a phase. No glossary exists.
 - README says nine phase slots (it omits `monitor` and `standalone_review`), says `phase:review` runs `code_review` (it runs `standalone_review`), and calls `write_history` a phase.
-- The dispatcher `skills/skill-bill/content.md` contradicts itself on review mode vocabulary, review target syntax, which command drives a review, and tracker provider. It has a duplicate `Routing` heading and never names the sidecar it is injected with (`orchestration/skill-classes/feature-launch-warning.yaml`).
+- The dispatcher `../../../skills/skill-bill/content.md` contradicts itself on review mode vocabulary, review target syntax, which command drives a review, and tracker provider. It has a duplicate `Routing` heading and never names the sidecar it is injected with (`orchestration/skill-classes/feature-launch-warning.yaml`).
 - CLI root help describes review import. `verify-stats` help says `bill-feature-verify`. `update-check` exists both top-level and as an operation.
 - `routeIntake` turns any unrecognised first token into a goal intake, so a typo such as `skill-bill phse review` reaches goal intake and fails with a misleading intake message.
 - `skill-bill phase verify` fails with `Unknown phase` and no hint.
@@ -38,7 +38,7 @@ Over 8 months skill-bill grew from a ~15k-line markdown skill pack into a ~494k-
 ### Area 4: Measure review quality
 
 - No evals, golden-finding sets or calibration fixtures exist. Existing tests are structural.
-- The required finding format `- [F-001] Sev | Conf | file:line | desc` (`orchestration/review-orchestrator/PLAYBOOK.md`) has no category. Table rows without a Category column default to `other`. Bullet findings fall back to the first routed specialist label for the whole review. In PostHog, ~1,048 of 1,183 triaged findings have no category.
+- The required finding format `- [F-001] Sev | Conf | file:line | desc` (`../../../orchestration/review-orchestrator/PLAYBOOK.md`) has no category. Table rows without a Category column default to `other`. Bullet findings fall back to the first routed specialist label for the whole review. In PostHog, ~1,048 of 1,183 triaged findings have no category.
 
 ## Decomposition
 

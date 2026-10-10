@@ -328,7 +328,9 @@ Required workflow artifacts for the pilot:
 - `pr_result` — PR url/title or terminal failure note
 - `monitor` (no named artifact) — settles the CI verdict for the PR the run
   created with a prose value. The runtime watches the PR checks and settles as
-  passed, no-CI-configured, or failing. Failing checks route to `monitor_fix`.
+  passed, no-CI-configured, or failing. Failed or cancelled checks route to
+  `monitor_fix` on that poll, even while other checks are pending. Passing
+  requires every check to pass or be skipped with none pending.
   Monitor is runtime-owned: it does not launch an agent and does not read CI
   state from agent output.
 

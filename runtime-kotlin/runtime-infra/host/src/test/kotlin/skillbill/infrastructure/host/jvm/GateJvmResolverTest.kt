@@ -1,5 +1,6 @@
 package skillbill.infrastructure.host.jvm
 
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -7,6 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GateJvmResolverTest {
   @Test
@@ -122,6 +124,37 @@ class GateJvmResolverTest {
   }
 
   @Test
+  fun `a routine gate JVM resolution is recorded at info not warning`() {
+    val accepted = Files.createTempDirectory("gate-jvm-info")
+    val other = Files.createTempDirectory("gate-jvm-info-other")
+    try {
+      writeJdkShapedHome(accepted)
+      writeJdkShapedHome(other)
+      val recording = RecordingDiagnostics()
+      GateJvmResolver(recording, JdkHostPlatformPort).resolve(guardInput(accepted, other))
+      assertEquals(1, recording.infos.size)
+      assertTrue(recording.infos.single().contains("branch=skill_bill_java_home"))
+      assertEquals(emptyList(), recording.warnings)
+    } finally {
+      listOf(accepted, other).forEach { it.toFile().deleteRecursively() }
+    }
+  }
+
+  @Test
+  fun `an unresolved gate JVM resolution is recorded at warning`() {
+    val recording = RecordingDiagnostics()
+    GateJvmResolver(recording, JdkHostPlatformPort).recordDecision(
+      mutableMapOf(GateJvmEnvironmentKeys.PATH to hostPath()),
+      emptyList(),
+      null,
+      GateJvmDisposition.Unresolved("/opt/skill-bill/runtime", "21"),
+    )
+    assertEquals(1, recording.warnings.size)
+    assertTrue(recording.warnings.single().contains("branch=unresolved"))
+    assertEquals(emptyList(), recording.infos)
+  }
+
+  @Test
   fun `an unresolved gate JVM clears JAVA_HOME at the launch surface instead of failing the launch`() {
     val environment =
       mutableMapOf(
@@ -145,4 +178,25 @@ class GateJvmResolverTest {
       GateJvmEnvironmentKeys.JAVA_HOME to javaHome.toString(),
       GateJvmEnvironmentKeys.PATH to hostPath(),
     )
+}
+
+private class RecordingDiagnostics : RuntimeDiagnostics {
+  val warnings = mutableListOf<String>()
+  val infos = mutableListOf<String>()
+
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) {
+    warnings += message
+  }
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun info(message: String) {
+    infos += message
+  }
 }

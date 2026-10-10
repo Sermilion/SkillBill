@@ -10,6 +10,7 @@ import skillbill.mcp.shared.callToolPayload
 import skillbill.mcp.shared.disabledTelemetryEnvironment
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -80,6 +81,40 @@ class McpVerifyWorkflowToolsTest {
       continued["read_only_full_state_command"],
     )
     assertCompactContinuationPayload(continued)
+  }
+
+  @Test
+  fun `feature_verify_workflow_list returns readable rows when an unreadable sibling is present`() {
+    val tempDir = Files.createTempDirectory("skillbill-mcp-verify-unreadable")
+    val context = McpRuntimeContext(environment = disabledTelemetryEnvironment(tempDir), userHome = tempDir)
+    val readable =
+      context.callToolPayload(
+        "feature_verify_workflow_open",
+        mapOf("session_id" to "", "current_step_id" to "code_review"),
+      )
+    val readableId = readable["workflow_id"] as String
+    val stale =
+      context.callToolPayload(
+        "feature_verify_workflow_open",
+        mapOf("session_id" to "", "current_step_id" to "code_review"),
+      )
+    val staleId = stale["workflow_id"] as String
+    DriverManager.getConnection("jdbc:sqlite:${tempDir.resolve("metrics.db").toAbsolutePath()}").use { connection ->
+      connection.prepareStatement(
+        "UPDATE feature_verify_workflows SET contract_version = '9.9' WHERE workflow_id = ?",
+      ).use { update ->
+        update.setString(1, staleId)
+        check(update.executeUpdate() == 1)
+      }
+    }
+
+    val listed = context.callToolPayload("feature_verify_workflow_list")
+
+    assertEquals(1, listed["workflow_count"])
+    val workflows = listed["workflows"] as List<*>
+    assertEquals(1, workflows.size)
+    val row = workflows.single() as Map<*, *>
+    assertEquals(readableId, row["workflow_id"])
   }
 }
 

@@ -322,12 +322,12 @@ Skill Bill uses **parent-owned telemetry** across the whole skill suite. A singl
 
 ### Standalone-first contract
 
-Every telemeterable skill must be usable alone. When invoked directly by a user, each skill generates its own session id and emits its own events:
+Every telemeterable entry point must be usable alone. When invoked directly by a user, each one generates its own session id and emits its own events:
 
-- `bill-code-review` lifecycle — `skillbill_review_finished` once the final review output is imported and all findings resolve
-- `bill-code-check` lifecycle — `skillbill_quality_check_started` + `_finished`
-- `bill-feature-verify` — `skillbill_feature_verify_started` + `_finished`
-- `bill-pr-description` — `skillbill_pr_description_generated`
+- `/skill-bill phase:review` lifecycle — `skillbill_review_finished` once the final review output is imported and all findings resolve
+- `/skill-bill phase:validation` lifecycle — `skillbill_quality_check_started` + `_finished`
+- `/skill-bill operation:verify` (`skill-bill operation verify`) — `skillbill_feature_verify_started` + `_finished`
+- `/skill-bill phase:pr` — `skillbill_pr_description_generated`
 
 ### The `orchestrated` flag
 
@@ -404,9 +404,9 @@ If a parent skill forgets to pass `orchestrated=true` to a child, the child emit
 | `skillbill_review_stage_degradation` | verification/adjudication measurement after those stages settle | none; queued even at telemetry `off` |
 | `skillbill_quality_check_started` | standalone quality-check lifecycle | skipped in orchestrated mode |
 | `skillbill_quality_check_finished` | standalone quality-check lifecycle | `quality_check_finished(orchestrated=true)` returns payload |
-| `skillbill_feature_verify_started` | `bill-feature-verify` (standalone) | skipped in orchestrated mode |
-| `skillbill_feature_verify_finished` | `bill-feature-verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
-| `skillbill_pr_description_generated` | `bill-pr-description` (standalone), and the runtime `pr` step after it completes (skeleton run and `skill-bill phase pr`) | `pr_description_generated(orchestrated=true)` returns payload |
+| `skillbill_feature_verify_started` | `/skill-bill operation:verify` (standalone) | skipped in orchestrated mode |
+| `skillbill_feature_verify_finished` | `/skill-bill operation:verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
+| `skillbill_pr_description_generated` | the runtime `pr` step after it completes (skeleton run and standalone `/skill-bill phase:pr`) | `pr_description_generated(orchestrated=true)` returns payload |
 
 ## Quality-check telemetry
 

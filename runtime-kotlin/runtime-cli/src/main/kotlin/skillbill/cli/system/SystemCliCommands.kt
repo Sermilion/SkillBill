@@ -42,6 +42,8 @@ class UpdateCheckCommand(
   private val service: UpdateCheckService,
   private val state: CliRunState,
 ) : DocumentedCliCommand("update-check", "Check whether a Skill Bill update is available.") {
+  override val hiddenFromHelp: Boolean = true
+
   private val includePrereleases by option(
     "--include-prereleases",
     help = "Include prerelease GitHub releases in the comparison.",

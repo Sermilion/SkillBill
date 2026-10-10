@@ -1,5 +1,76 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-10] CLI configures process logging from the bootstrap-resolved environment
+Context: The CLI Main.kt read System.getenv() to resolve SKILL_BILL_VERBOSE, which broke the empty runtime-cli AmbientEnvironmentArchitectureTest baseline.
+Decision: CliRuntimeContext carries an onEnvironmentResolved callback. CliRuntime.run invokes it with the environment the runtime bootstrap resolves, and Main.kt configures process logging there. ProcessLogging stays in runtime-core, with ProcessLoggingEnvironmentKeys in its own file.
+Reason: The exempt RuntimeBootstrapBindings already reads the environment, so the CLI makes no ambient read and the baseline gains no row. Logging is configured after bootstrap resolution, not at the first line of main.
+Alternatives considered: Adding a runtime-cli baseline row was rejected because baselines only tighten.
+
+## [2026-10-10] Configure process logging once in runtime-core for both mains
+Context: The CLI and MCP mains both needed the same JUL setup. Both depend in main on runtime-core, not runtime-infra:host.
+Decision: ProcessLogging lives in runtime-core skillbill.di.core, and each main calls configureProcessLogging before doing any work. SKILL_BILL_VERBOSE is declared only in ProcessLoggingEnvironmentKeys.
+Reason: No architecture rule bans java.util.logging outside runtime-application main and domain. The composition root both mains already import avoids duplicating the configuration in each entry point.
+Alternatives considered: Per-main configuration was rejected as duplication. A non-di package was the fallback only if a di guard rejected non-provider files, and none does.
+Superseded by: CLI configures process logging from the bootstrap-resolved environment (2026-10-10)
+
+## [2026-10-10] Silence JUL by default and opt in with --verbose or SKILL_BILL_VERBOSE
+Context: Routine JUL diagnostics leaked to stderr on CLI runs and on the MCP server's stderr.
+Decision: Reset LogManager and set the root logger OFF with no handler unless verbose. Verbose installs exactly one stderr handler with a single-line formatter. The CLI honors a leading --verbose or the env var; MCP honors the env var only.
+Reason: Global configuration silences every direct JUL user without per-call-site edits. MCP has no root CLI options, so the env var is its only switch.
+
+## [2026-10-10] Handled conditions log one line without a Throwable
+Context: warning and info attached the Throwable, so handled conditions printed full stack traces.
+Decision: warning appends "ExceptionClass: message" (newlines collapsed) and attaches no Throwable. info never attaches one. Only error keeps the Throwable at SEVERE.
+Reason: A handled condition needs its cause summary, not a stack trace. Stack traces stay reserved for real errors, and the formatter prints one only when a Throwable is attached.
+
+## [2026-10-10] Resolve the diagnostics caller by skipping helper frames by name
+Context: JUL inferred the source as JdkRuntimeDiagnostics, hiding the real caller.
+Decision: StackWalker takes the first frame outside JdkRuntimeDiagnostics, RuntimeDiagnostics (including nested and default-method classes), and RuntimeDiagnosticsBestEffortWarning, then emits through logp.
+Reason: RuntimeDiagnosticsBestEffortWarning is an internal engine helper unreachable from host, so it is matched by simple-name string. Without the skip, every best-effort warning would name the helper instead of its caller.
+
+## [2026-10-10] Gate JVM resolution warns only when unresolved or candidates drop
+Context: GateJvmResolver.recordDecision logged every resolution at WARNING, including routine ones.
+Decision: Build the message once. Use warning for Unresolved dispositions or dropped image candidates, and info otherwise. recordDecision is internal.
+Reason: Routine resolutions are not actionable. Reaching Unresolved through resolve() depends on host JDKs found by the guard script's fallback scan, so the test drives recordDecision directly.
+
+## [2026-10-10] RootFlagProbeCommand must bind every root flag
+Context: The probe treats unknown options as arguments and disallows interspersed arguments.
+Decision: The probe binds --verbose alongside --db and --home.
+Reason: An unbound leading --verbose becomes a positional, which ends option parsing and drops a following --db or --home override.
+Revisit when: Another root flag is added to SkillBillCommand.
+
+## [2026-10-09] Keep workflow-state contract version at 0.3 and upgrade via a readable set
+Context: Pre-current workflow-state rows broke list, latest, work-list, IDE status, and verify supersede. Schema-identity tests pin WORKFLOW_STATE_CONTRACT_VERSION to "0.3".
+Decision: Leave the current const at "0.3". Add WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS beside it. The validator copies the wire map and replaces a readable contract_version with the current const before schema validate. Writes persist the current const for an older readable version.
+Reason: Bumping the const would make every existing 0.3 row stale again. The readable-set plus normalize-then-validate path mirrors FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS without a schema-shape change.
+Alternatives considered: Bumping to 0.4 was rejected because it recreates the stale-row problem this subtask exists to fix.
+
+## [2026-10-09] Put 0.1 and 0.2 on the readable path; add no terminalize migration
+Context: Each pre-current workflow-state version had to join the readable set or be terminalized by a new named migration. Last DatabaseMigrationEntries version was 50.
+Decision: Census listed 0.1 and 0.2 as readable. No version is terminalized. No migration 51.
+Reason: YAML const was 0.1 then jumped to 0.3; after the version string is normalized, a current-shape row validates. 0.2 never published as schema const but is in the readable set so a 0.2 stamp still normalizes. Historical CHECK constraints were on sibling tables, not feature_verify_workflows or feature_task_workflows. Shape churn under the long-lived 0.1 pin still fails after normalization and is skipped per row.
+Alternatives considered: Terminalizing 0.1 or 0.2 was rejected because those versions validate once the version string is normalized.
+
+## [2026-10-09] Re-stamp only workflow-state family rows
+Context: feature_task_workflows.contract_version holds WORKFLOW_STATE_CONTRACT_VERSION for mode=runtime phase-workflow rows and FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION ("0.1") for prose rows.
+Decision: bindWorkflowRow always re-stamps an older readable workflow-state version to current. bindFeatureTaskWorkflowRow does that only for mode=runtime. Prose FEATURE_IMPLEMENT "0.1" is left unchanged.
+Reason: The workflow-state validator checks only the runtime-mode rows. Re-stamping a different contract family would corrupt prose rows that the workflow-state schema does not validate.
+
+## [2026-10-09] Skip unreadable workflow-state rows on list surfaces
+Context: One unreadable sibling cancelled whole list, latest, work-list, MCP verify list, and verify supersede. Explicit get, resume, and continue should still fail on a requested unreadable row.
+Decision: Catch isInvalidWorkflowStateFailure per row, skip it, record one diagnostic with the workflow id, and return the rest in original order. workflowCount equals the returned size. latest walks newest-first and returns the first readable summary. get, resume, and continue stay loud-fail. No new list-payload field.
+Reason: Skipped rows stay out of payloads so CLI and MCP JSON goldens remain stable. An explicit single-row lookup must still fail loudly so the operator sees the requested row is unreadable.
+
+## [2026-10-09] Filter unreadable VERIFY candidates before IDE select
+Context: IdeStatusProjector.project is one candidate, not a loop. Surrounding database.read mapped any invalid-workflow-state failure during candidate assembly or the selected VERIFY validate to one incompatibleRecord for the whole status call, collapsing readable siblings.
+Decision: collectCandidates still does not validate. readableForSelection drops unreadable FEATURE_VERIFY candidates before select. projectWorkflowFamily returns incompatible(candidate, context, reason) instead of throwing. Select falls back to the full list only when every VERIFY candidate is unreadable.
+Reason: Wrapping before select lets a readable sibling still project. The fallback keeps a sole unreadable VERIFY as incompatible rather than no_matching_work.
+
+## [2026-10-09] Keep parked supersede best-effort after list is per-row tolerant
+Context: supersedeParked wrapped the whole list in skipUnreadable, so one unreadable list threw away the pass and left parked rows pending (incident 2026-10-09).
+Decision: Remove the whole-list skipUnreadable wrapper once list tolerates per row. Keep the per-row skip. On a Rejected supersede write, record a diagnostic and continue. failExtraction appends the rejection when the FAILED write is Rejected.
+Reason: Supersede stays best-effort and must not fail the new run. A rejected FAILED write is the failure record itself, so failExtraction must include that rejection in the outcome message.
+
 ## [2026-10-07] Checkpoint-aware policies require a fresh checkpoint and accept movement
 Context: `refresh_from_repository` and legacy `must_match` both carry repository scope into the next phase. `must_match` is a durable wire value whose name suggests an equality check.
 Decision: Both policies reject a null resolved checkpoint and accept a non-null one, including when its fingerprint differs from the expected checkpoint. The domain stays git-agnostic. The run loop resolves the checkpoint through the existing git port.

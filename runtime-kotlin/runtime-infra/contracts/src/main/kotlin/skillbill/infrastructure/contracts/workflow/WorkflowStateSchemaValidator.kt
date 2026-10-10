@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
+import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
@@ -31,13 +33,18 @@ class WorkflowStateSchemaValidator : WorkflowSnapshotValidator {
     parsedYaml: Map<String, Any?>,
     slug: String,
   ) {
-    val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(parsedYaml)
+    val normalized = parsedYaml.toMutableMap()
+    val storedVersion = normalized[SharedPayloadKeys.CONTRACT_VERSION] as? String
+    if (storedVersion != null && storedVersion in WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS) {
+      normalized[SharedPayloadKeys.CONTRACT_VERSION] = WORKFLOW_STATE_CONTRACT_VERSION
+    }
+    val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(normalized)
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(workflowStateSchema(), instance)
     if (errors.isEmpty()) {
       return
     }
 
-    log.log(Level.WARNING, buildWorkflowStateSchemaDriftLog(slug, errors, instance))
+    log.log(Level.FINE, buildWorkflowStateSchemaDriftLog(slug, errors, instance))
     throw invalidWorkflowStateSchemaError(formatWorkflowStateValidationMessage(slug, errors, instance))
   }
 }

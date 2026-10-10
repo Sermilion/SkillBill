@@ -16,7 +16,10 @@ class GhPullRequestIdentityLookupTest {
         calls += args
         GhCommandResult(
           exitCode = 0,
-          stdout = """[{"number":42,"url":"https://github.com/acme/repo/pull/42","title":"[SKILL-380] Rules"}]""",
+          stdout =
+            """
+            [{"number":42,"url":"https://github.com/acme/repo/pull/42","title":"[SKILL-380] Rules","state":"OPEN"}]
+            """.trimIndent(),
         )
       }
 
@@ -24,9 +27,32 @@ class GhPullRequestIdentityLookupTest {
 
     assertEquals(PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules"), identity)
     assertEquals(
-      listOf("pr", "list", "--head", "feat/SKILL-380", "--json", "url,number,title", "--limit", "1"),
+      listOf(
+        "pr", "list", "--head", "feat/SKILL-380", "--state", "all", "--json", "url,number,title,state", "--limit", "1",
+      ),
       calls.single(),
     )
+  }
+
+  @Test
+  fun `a merged pull request is distinguished from a closed unmerged pull request`() {
+    for (state in listOf("MERGED", "CLOSED")) {
+      val lookup =
+        GhPullRequestIdentityLookup { _, _ ->
+          GhCommandResult(
+            exitCode = 0,
+            stdout = """[{"number":42,"url":"https://github.com/acme/repo/pull/42","state":"$state"}]""",
+          )
+        }
+
+      val expected =
+        if (state == "MERGED") {
+          PullRequestIdentity.Merged("https://github.com/acme/repo/pull/42", 42)
+        } else {
+          PullRequestIdentity.Absent
+        }
+      assertEquals(expected, lookup.lookup(repoRoot, "feat/SKILL-380"))
+    }
   }
 
   @Test

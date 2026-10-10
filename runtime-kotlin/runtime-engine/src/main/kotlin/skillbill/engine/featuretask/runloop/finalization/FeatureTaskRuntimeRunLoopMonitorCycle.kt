@@ -49,7 +49,10 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    return when (val outcome = observation.watch(request.repoRoot, branch)) {
+    val outcome = observation.watch(request.repoRoot, branch, requireChecks = request.workflowId.isNotBlank())
+    return when (outcome) {
+      PullRequestCiOutcome.Merged ->
+        complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))
       PullRequestCiOutcome.Passed ->
         complete(
           run,
@@ -97,6 +100,17 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       }
     }
   }
+
+  private fun mergedMonitorOutput(
+    phaseId: String,
+    branch: String,
+  ): String =
+    monitorOutput(
+      phaseId,
+      "The pull request was merged.",
+      "The pull request for branch '$branch' was merged, so CI monitoring is complete.",
+      verdict = null,
+    )
 
   internal fun monitorCapExhaustionReason(
     loopId: String,

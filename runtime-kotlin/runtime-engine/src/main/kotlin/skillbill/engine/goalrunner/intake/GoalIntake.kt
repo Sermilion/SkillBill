@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.intake
 
+import skillbill.contracts.issuekey.GOAL_INTAKE_FEATURE_SPECS_MARKER
+import skillbill.contracts.issuekey.GOAL_INTAKE_URL_MARKER
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
@@ -32,9 +34,9 @@ internal data class GoalIntake(
     private fun reference(first: String): Pair<String, String?>? =
       when {
         ISSUE_KEY.matches(first) -> first.uppercase() to null
-        first.contains("://") -> {
+        first.contains(GOAL_INTAKE_URL_MARKER) -> {
           val segments =
-            first.substringAfter("://").substringBefore('?').substringBefore('#').split('/')
+            first.substringAfter(GOAL_INTAKE_URL_MARKER).substringBefore('?').substringBefore('#').split('/')
           val index = segments.indexOfFirst(ISSUE_KEY::matches)
           if (index < 0) {
             null
@@ -42,8 +44,8 @@ internal data class GoalIntake(
             segments[index].uppercase() to segments.getOrNull(index + 1)?.let(::slug)
           }
         }
-        first.contains(".feature-specs/") -> {
-          val directory = first.substringAfter(".feature-specs/").substringBefore('/')
+        first.contains(GOAL_INTAKE_FEATURE_SPECS_MARKER) -> {
+          val directory = first.substringAfter(GOAL_INTAKE_FEATURE_SPECS_MARKER).substringBefore('/')
           namedDirectory(directory)
         }
         !first.contains('/') -> namedDirectory(first)

@@ -88,7 +88,8 @@ class FeatureFamilyRenderingIntegrationTest {
       Files.exists(staged.stagingDir.resolve("bill-over-engineering-review.md").toPath()),
       "retired over-engineering skill must not be recreated during source installation",
     )
-    assertContains(feature, "mode:auto|inline|delegated")
+    assertContains(feature, "mode:inline|delegated")
+    assertFalse(feature.contains("mode:auto|inline|delegated"))
     assertFalse(feature.contains("execution-mode:auto|inline|delegated"))
     assertTrue(sourceFilesBefore.all { (path, bytes) -> bytes.contentEquals(Files.readAllBytes(path)) })
   }

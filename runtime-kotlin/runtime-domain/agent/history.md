@@ -1,5 +1,18 @@
 # Boundary History — runtime-domain
 
+## [2026-10-10] SKILL-414 subtask 4 — measure review quality with an on-demand eval set
+Areas: runtime-domain test skillbill.review.eval; evals/review (README.md, capmo-android-pr-3110 case)
+- Added a pure test-side scorer (ReviewEvalScorer) that reads a review register through ReviewParser.parseReview only as a best-effort reader. Production parsing, review templates, report schemas, validation, completion, verdicts, repair rounds and telemetry are unchanged.
+- Matching is same file plus a line window (default ±5, per-entry override, range-aware); each reported and expected finding matches at most once. Reports TP, missed TP, FP against non_issue, unlabeled findings (excluded from TP, FP and precision), and per-lane plus overall precision/recall.
+- needs_curation expected entries are excluded and listed. A parseReview throw or a missing/unparseable location becomes a curation item and marks scores partial; the scorer never throws.
+- Lane attribution: laneSkillName, else unattributed, for precision; expected entry lane for recall.
+- Registers from skill-bill phase review lack Review run/session ID lines, so the scorer prepends placeholder ids before parsing.
+- ReviewEvalExpectedYaml reads expected-findings.yaml with the jackson YAML library already on the test classpath. ReviewEvalOnDemandRunnerTest skips unless SKILL_BILL_REVIEW_EVAL_REGISTER_DIR is set, then scores each case with a <case-id>.md register. Command is in evals/review/README.md. reusable
+- evals/review stores revision pointers only, with no diffs or source excerpts from private repos.
+- Limits: the capmo-android-pr-3110 case has an empty base_revision and zero true_positive rows; custom-text-resurrection is a needs_curation non_issue. census_subtask_4.md lists what the operator must supply. Scores never gate review completion or validation.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented
+
 ## [2026-10-09] SKILL-413 subtask 2 code-quality report section and telemetry
 Areas: runtime-domain/review, runtime-engine/featuretask/slot/standalonereview, runtime-infra/skills/scaffold, orchestration/review-orchestrator, platform-packs/generic/code-review, docs/review-telemetry
 - Shared report contracts and generic finding discipline require a trailing non-blocking quality section, continuing F-ids, specialist attribution, and quality action items after failure action items.

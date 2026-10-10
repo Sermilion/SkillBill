@@ -2,6 +2,7 @@ package skillbill.cli.core
 
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.PackagedContractComponent
+import skillbill.di.core.configureProcessLogging
 import skillbill.di.core.create
 import skillbill.error.core.SkillBillRuntimeException
 import kotlin.system.exitProcess
@@ -17,12 +18,16 @@ fun main(args: Array<String>) {
     }
     return
   }
+  val arguments = args.toList()
   val result =
     CliRuntime.run(
-      args.toList(),
+      arguments,
       CliRuntimeContext(
         liveStdout = { print(it) },
         liveStderr = { System.err.print(it) },
+        onEnvironmentResolved = { environment ->
+          configureProcessLogging(resolveVerboseLogging(arguments, environment))
+        },
       ),
     )
   emitCliProcessStdout(result, System.out)

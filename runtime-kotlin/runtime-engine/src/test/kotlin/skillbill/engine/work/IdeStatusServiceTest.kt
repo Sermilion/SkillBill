@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.contracts.JsonCodec
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.toStatusWireMap
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -12,7 +13,10 @@ import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.workflow.WorkflowSnapshotValidator
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
@@ -128,6 +132,52 @@ class IdeStatusServiceTest {
     assertEquals(IdeStatusProblemCode.INCOMPATIBLE_RECORD, result.snapshot.problem?.code)
     assertEquals("Feature-task identity 'w-orphan' has no workflow row.", result.snapshot.problem?.message)
     assertEquals(1, result.exitCode)
+  }
+
+  @Test
+  fun `an unreadable verify candidate does not collapse a readable sibling`() {
+    val fixture = gitRepoFixture("ide-status-unreadable-sibling")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveRecord(
+      WorkflowFamily.VERIFY,
+      verifyRecord("w-stale", "2026-08-06T11:30:00Z").copy(contractVersion = "9.9"),
+    )
+    workflows.saveRecord(WorkflowFamily.VERIFY, verifyRecord("w-readable", "2026-08-06T11:00:00Z"))
+    workflows.saveFeatureTaskWorkflow(runtimeRecord("w-runtime", "2026-08-06T09:00:00Z", currentStep = "pr"), PROSE)
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-runtime", identity))
+    val database =
+      TrackingDatabase(
+        work =
+          listOf(
+            workItem("w-stale", WorkItemKind.FEATURE_VERIFY, "running", "2026-08-06T11:30:00Z"),
+            workItem("w-readable", WorkItemKind.FEATURE_VERIFY, "running", "2026-08-06T11:00:00Z"),
+            workItem("w-runtime", WorkItemKind.FEATURE_TASK_RUNTIME, "completed", "2026-08-06T09:00:00Z"),
+          ),
+        workflows = workflows,
+      )
+    val rejectingStale =
+      object : WorkflowSnapshotValidator {
+        override fun validate(
+          snapshot: WorkflowStateSnapshot,
+          slug: String,
+        ) {
+          if (snapshot.contractVersion == "9.9") {
+            throw invalidWorkflowStateSchemaError("Workflow '${snapshot.workflowId}' is unreadable.")
+          }
+        }
+      }
+    val service = ideStatusService(database, snapshotValidator = rejectingStale)
+
+    val result =
+      service.status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals(0, result.exitCode)
+    assertNull(result.snapshot.problem)
+    assertEquals("w-readable", result.snapshot.workflowId)
+    assertEquals(IdeStatusWorkflowFamily.FEATURE_VERIFY, result.snapshot.workflowFamily)
   }
 
   @Test

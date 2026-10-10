@@ -563,12 +563,12 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `running goal row with every subtask settled projects terminal complete`() {
+  fun `goal projects done only after final completion is recorded`() {
     val fixture = gitRepoFixture("ide-status-goal-settled")
     val identity = testGoalRepositoryIdentity(fixture)
     val service =
       ideStatusService(
-        goalOnlyDatabase(),
+        goalOnlyDatabase(completionRecorded = true),
         manifestStore =
           StubGoalManifestStore(
             completedGoalManifestState(fixture, identity),
@@ -587,7 +587,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `blocked or failed goal row with every subtask settled projects terminal complete`() {
+  fun `unfinished finalization stays blocked or failed even when every subtask is complete`() {
     listOf("blocked", "failed").forEach { stuckState ->
       val fixture = gitRepoFixture("ide-status-goal-settled-$stuckState")
       val identity = testGoalRepositoryIdentity(fixture)
@@ -605,8 +605,25 @@ class IdeStatusServiceBranchScopingTest {
           IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
         )
 
-      assertEquals(IdeStatusLifecycleState.TERMINAL, result.snapshot.lifecycleState, stuckState)
-      assertEquals("Goal SKILL-148 is complete.", result.snapshot.summary, stuckState)
+      val expected = if (stuckState == "blocked") IdeStatusLifecycleState.BLOCKED else IdeStatusLifecycleState.FAILED
+      assertEquals(expected, result.snapshot.lifecycleState, stuckState)
+      assertFalse(result.snapshot.currentStep.id == "done", stuckState)
+    }
+  }
+
+  @Test
+  fun `completed subtasks without goal completion cannot report done`() {
+    for (goalState in listOf("running", "completed")) {
+      val fixture = gitRepoFixture("ide-status-finalization-unfinished-$goalState")
+      val identity = testGoalRepositoryIdentity(fixture)
+      val result =
+        ideStatusService(
+          goalOnlyDatabase(goalState),
+          manifestStore = StubGoalManifestStore(completedGoalManifestState(fixture, identity)),
+        ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+      assertFalse(result.snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL, goalState)
+      assertFalse(result.snapshot.currentStep.id == "done", goalState)
     }
   }
 
