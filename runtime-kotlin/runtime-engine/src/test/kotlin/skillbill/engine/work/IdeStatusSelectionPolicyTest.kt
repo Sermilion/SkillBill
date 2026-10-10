@@ -173,6 +173,49 @@ class IdeStatusSelectionPolicyTest {
   }
 
   @Test
+  fun `live feature goal on monitor beats parked parent and completed child`() {
+    val goal =
+      candidate("SKILL-417", IdeStatusLifecycleState.ACTIVE, "goal-1", "2026-08-06T11:55:00Z").copy(
+        workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
+        isGoalAuthoritative = true,
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "goal-execution",
+            statusStoreId = "goal-store",
+            runSequence = "19",
+            statusRevision = "1",
+          ),
+      )
+    val parkedParent =
+      candidate("SKILL-417", IdeStatusLifecycleState.PAUSED, "w-parent", "2026-08-06T11:50:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "parent-execution",
+            statusStoreId = "parent-store",
+            runSequence = "20",
+            statusRevision = "1",
+          ),
+      )
+    val completedChild =
+      candidate("SKILL-417", IdeStatusLifecycleState.TERMINAL, "w-child", "2026-08-06T11:52:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "child-execution",
+            statusStoreId = "child-store",
+            runSequence = "21",
+            statusRevision = "1",
+          ),
+      )
+    assertEquals(
+      "goal-1",
+      IdeStatusSelectionPolicy.select(listOf(parkedParent, completedChild, goal), OBSERVED)?.workflowId,
+    )
+  }
+
+  @Test
   fun `empty candidate list yields null`() {
     assertNull(IdeStatusSelectionPolicy.select(emptyList(), OBSERVED))
   }

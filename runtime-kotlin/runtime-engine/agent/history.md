@@ -1,3 +1,14 @@
+## [2026-10-10] SKILL-417 subtask 2: ide-status live goal projection
+Areas: runtime-engine work (IdeStatusProjector, IdeStatusProjectorMapping, IdeStatusSelectionPolicy); runtime-engine work tests; runtime-core di IdeStatusReadSnapshotConcurrencyTest
+- Selection ranks a goal-authoritative live candidate above a non-goal PAUSED peer before runSequence, so a parked parent seq 20 no longer beats a live FEATURE_GOAL on monitor.
+- When the goal runner is on open CI monitor, a selected FEATURE_TASK_RUNTIME row is projected through assembleGoalStatusSnapshot as FEATURE_GOAL, covering the 0AC-46 work list that has no FEATURE_GOAL item.
+- goalCurrentStep drops a completed child's currentPhaseId once openCiMonitor or liveFinalization is set, so commit_push cannot replace monitor.
+- Pattern: keep the SKILL-416 live-cohort partition and add a parked-parent exception instead of putting selectionTier before sequence.
+- reusable: GoalCurrentStepSignals bundles openCiMonitor with liveFinalizationStep so goalCurrentStep stays under the parameter-list ceiling.
+- Breaking changes: none. Limitation: plugin acceptsNewerStatus still owns yielding a held child implement snapshot. That is subtask 3. Identity rows stay write-once.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-10-10] SKILL-416 subtask 1: runtime live-cohort selection
 Areas: runtime-engine work (IdeStatusSelectionPolicy, IdeStatusSelectionPolicyTest, IdeStatusServiceBranchScopingTest)
 - After retainedAt, select from the live cohort (ACTIVE, PAUSED, BLOCKED) when any retained live row exists; otherwise from the remaining retained cohort (FAILED, RECENTLY_TERMINAL, IDLE).

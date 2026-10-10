@@ -2,6 +2,10 @@ package skillbill.engine.work
 
 import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.toStatusWireMap
@@ -14,9 +18,15 @@ import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -560,4 +570,134 @@ class IdeStatusServiceGoalProjectionTest {
     assertTrue((wire["summary"] as String).contains(operatorReason))
     assertFalse((wire["summary"] as String).contains("active on validate", ignoreCase = true))
   }
+
+  @Test
+  fun `0AC-46 shape with feature goal work item projects monitor instead of parked parent or child`() {
+    assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem = true)
+  }
+
+  @Test
+  fun `0AC-46 shape without feature goal work item still projects monitor through goal status`() {
+    assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem = false)
+  }
+
+  private fun assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem: Boolean) {
+    val featureBranch = "feat/SKILL-148-status-fix"
+    val fixture = gitRepoFixture("ide-status-0ac-46-$includeFeatureGoalWorkItem", branch = featureBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val manifestState = zeroAc46ManifestState(fixture, identity)
+    val database = zeroAc46Database(identity, includeFeatureGoalWorkItem)
+    val outcomeStore =
+      object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+        override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+          when (workflowId) {
+            "goal-1" -> parkedParentProgressOnMonitor()
+            "w-child" ->
+              GoalRunnerWorkflowProgress(
+                workflowId = "w-child",
+                workflowStatus = WorkflowStatus.COMPLETED,
+                currentStepId = "commit_push",
+                progressToken = "child-done",
+                latestLivenessSignal = "durable_progress step=commit_push attempt=1",
+              )
+            else -> null
+          }
+      }
+    val result =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            manifestState,
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+        outcomeStore = outcomeStore,
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertEquals(IdeStatusWorkflowFamily.FEATURE_GOAL, result.snapshot.workflowFamily)
+    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals("monitor", result.snapshot.currentStep.id)
+    assertEquals("Goal SKILL-148 is active on monitor.", result.snapshot.summary)
+  }
+
+  private fun zeroAc46ManifestState(
+    fixture: Path,
+    identity: String,
+  ): GoalRunnerManifestState {
+    val base = goalManifestState(fixture, identity, childWorkflowId = "w-child")
+    return base.copy(
+      manifest =
+        base.manifest.copy(
+          featureBranch = "feat/SKILL-148-status-fix",
+          currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 2, action = "complete"),
+          subtasks =
+            base.manifest.subtasks.map { subtask ->
+              subtask.copy(
+                status = "complete",
+                lastResumableStep = "commit_push".takeIf { subtask.id == 2 },
+              )
+            },
+        ),
+    )
+  }
+
+  private fun zeroAc46Database(
+    identity: String,
+    includeFeatureGoalWorkItem: Boolean,
+  ): TrackingDatabase {
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveFeatureTaskWorkflow(
+      runtimeRecord("w-parent", "2026-08-06T10:30:00Z", currentStep = "plan")
+        .copy(workflowStatus = WorkflowStatus.PAUSED.wireValue),
+      FeatureTaskWorkflowMode.PROSE,
+    )
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-parent", identity))
+    workflows.saveFeatureTaskWorkflow(
+      runtimeRecord("w-child", "2026-08-06T11:55:00Z", currentStep = "commit_push")
+        .copy(
+          workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+          artifactsJson =
+            phaseRecordsArtifactsJson(
+              *FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+                .map { it to phaseRecordWire(it, "completed", null) }
+                .toTypedArray(),
+            ),
+        ),
+      FeatureTaskWorkflowMode.PROSE,
+    )
+    workflows.saveFeatureTaskExecutionIdentity(
+      identityFor("w-child", identity).copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+    )
+    val work =
+      buildList {
+        if (includeFeatureGoalWorkItem) {
+          add(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "paused", "2026-08-06T11:50:00Z"))
+        }
+        add(workItem("w-parent", WorkItemKind.FEATURE_TASK_RUNTIME, "paused", "2026-08-06T10:30:00Z"))
+        add(workItem("w-child", WorkItemKind.FEATURE_TASK_RUNTIME, "completed", "2026-08-06T11:55:00Z"))
+      }
+    return TrackingDatabase(work = work, workflows = workflows)
+  }
+
+  private fun parkedParentProgressOnMonitor(): GoalRunnerWorkflowProgress =
+    GoalRunnerWorkflowProgress(
+      workflowId = "goal-1",
+      workflowStatus = WorkflowStatus.PAUSED,
+      currentStepId = "plan",
+      progressToken = "monitor-heartbeat",
+      latestDeclaredProgressEvent =
+        GoalProgressEvent(
+          eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+          workflowId = "goal-1",
+          workflowPhase = "monitor",
+          processAlive = true,
+          sequenceNumber = 1,
+          timestamp = ideStatusObservedAt.toString(),
+          stepId = "monitor",
+          operationName = "monitor",
+          operationKind = GOAL_FINALIZATION_OPERATION_KIND,
+        ),
+      latestLivenessSignal = "workflow_status=PAUSED; step=plan",
+    )
 }

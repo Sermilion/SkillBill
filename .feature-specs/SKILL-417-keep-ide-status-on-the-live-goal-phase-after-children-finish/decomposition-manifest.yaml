@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "ide-status selects and projects the live goal step"
   spec_path: ".feature-specs/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish/spec_subtask_2_ide-status-live-goal-projection.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261010-201057-pnao"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

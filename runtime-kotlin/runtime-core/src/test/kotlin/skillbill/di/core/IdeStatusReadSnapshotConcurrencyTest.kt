@@ -201,6 +201,7 @@ private class SnapshotFixture(
           workflowSnapshotValidator = NoopSnapshotValidator,
           goalRunnerStatusService = component.goalRunnerStatusService,
           featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
+          manifestStore = EmptyManifestStore,
           diagnostics = NoopRuntimeDiagnostics,
         ),
       ideStatusValidator = NoopIdeStatusValidator,

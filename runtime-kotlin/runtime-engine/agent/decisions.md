@@ -1,3 +1,21 @@
+## [2026-10-10] Rank a live goal above a parked parent before runSequence
+Context: After SKILL-416's live-cohort partition, a parked FEATURE_TASK_RUNTIME parent stayed in the live cohort as PAUSED and beat a live FEATURE_GOAL on monitor because runSequence still ranked first.
+Decision: Before comparing runSequence, a goal-authoritative candidate in the live cohort outranks a non-goal PAUSED peer. Sequence, freshness, and tier stay as they were for every other pair.
+Reason: Putting selectionTier before sequence would also hide the parked parent but would change among-live ranking, which SKILL-416 rejected. isExcludedGoalChild cannot hide the parent because it is FEATURE_TASK_RUNTIME, not GOAL_CHILD. Identity rows stay write-once, so selection cannot bump status_revision.
+Alternatives considered: Reorder tier before sequence; hide the parked parent in collectCandidates; per-issue sequences. All rejected.
+Revisit when: sequences become per-issue, or a named live-vs-live incident needs a broader comparator change.
+
+## [2026-10-10] Project a selected parked parent through the live goal snapshot
+Context: The 0AC-46 work list may contain only the parked parent and completed child, with no FEATURE_GOAL item. project() would then call projectRuntime and show plan or paused even after selection is fixed.
+Decision: When a FEATURE_TASK_RUNTIME candidate's issue has a goal runner on open CI monitor or live finalization, inject GoalRunnerManifestStore and assemble the snapshot as FEATURE_GOAL through assembleGoalStatusSnapshot. Otherwise keep projectRuntime.
+Reason: The spec requires the live goal projection whenever the runner is on monitor, PR, or CI, even if the parked parent is the only non-terminal row. A work-list FEATURE_GOAL candidate is not guaranteed. Operator pause and operator-decision pause still flow through the existing goal lifecycle mappings.
+Revisit when: work-list always includes FEATURE_GOAL during monitor, or identity registration starts updating the parent row.
+
+## [2026-10-10] Ignore completed-child phase id once the goal is on monitor
+Context: goalCurrentStep preferred childPhaseId over projection.currentStep over monitor. currentChildWorkflowId can still name the finished child, so commit_push replaced monitor on ide-status.
+Decision: Drop childPhaseId from goalCurrentStep when openCiMonitor or liveFinalizationStep is set. Bundle those two flags as GoalCurrentStepSignals.
+Reason: Subtask 1 already rewrites extras for goal-status. Ide-status still read the child's FeatureTaskRuntimeStatusRequest phase id independently. Operator-pause mappings stay on the existing goalLifecycleForOperatorBlock path.
+
 ## [2026-10-10] Keep unfinished CI monitor active without an execution lease
 Context: Goal IDE status treated an expired parent execution lease as idle when subtasks were finished and the goal had not completed, so the remaining CI wait disappeared from status.
 Decision: When a goal has completed subtasks, no pending or blocked work, and no recorded completion, keep lifecycle ACTIVE on the monitor step with activity "CI not fixed" even without a live execution lease. Refresh updatedAt from the observation clock so the wait stays FRESH until CI is fixed or the goal completes.

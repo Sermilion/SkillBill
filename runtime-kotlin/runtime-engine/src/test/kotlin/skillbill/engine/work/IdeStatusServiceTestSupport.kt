@@ -283,6 +283,7 @@ internal fun ideStatusService(
             ),
         ),
       featureTaskRuntimeStatusService = runtimeStatusService,
+      manifestStore = manifestStore,
       diagnostics = NoopRuntimeDiagnostics,
     )
   return IdeStatusService(
