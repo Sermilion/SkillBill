@@ -68,7 +68,15 @@ internal fun invokeGitProcessWithBoundedLines(
 private fun gitArgv(
   repoRoot: Path,
   args: List<String>,
-): List<String> = listOf("git", "-C", repoRoot.toString()) + args
+): List<String> =
+  listOf(
+    "git",
+    "--no-pager",
+    "-c",
+    "diff.renameLimit=$GIT_DIFF_RENAME_LIMIT",
+    "-C",
+    repoRoot.toString(),
+  ) + args
 
 private fun gitReadFailure(result: BoundedExternalProcessResult): IOException? =
   result.readFailure ?: if (result.launchFailure) IOException(result.output) else null

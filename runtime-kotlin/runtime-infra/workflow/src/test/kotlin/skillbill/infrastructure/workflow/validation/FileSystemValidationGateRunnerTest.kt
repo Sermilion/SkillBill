@@ -134,24 +134,13 @@ class FileSystemValidationGateRunnerTest {
   fun `COLLECT_ALL parses detekt XML reports into discrete findings`() {
     val repo = Files.createTempDirectory("gate-detekt-xml")
     try {
-      val detektReport = repo.resolve("runtime-kotlin/runtime-application/build/reports/detekt/detekt.xml")
-      Files.createDirectories(detektReport.parent)
-      Files.writeString(
-        detektReport,
-        """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <checkstyle version="4.3">
-        <file name="runtime-application/src/main/kotlin/skillbill/example/Foo.kt">
-        	<error line="12" column="1" severity="warning" message="Too many functions" source="detekt.TooManyFunctions" />
-        </file>
-        </checkstyle>
-        """.trimIndent(),
-      )
       val script = repo.resolve("gate.sh")
       Files.writeString(
         script,
         """
         #!/bin/sh
+        mkdir -p runtime-kotlin/runtime-application/build/reports/detekt
+        printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<checkstyle version="4.3">' '<file name="runtime-application/src/main/kotlin/skillbill/example/Foo.kt">' '<error line="12" column="1" severity="warning" message="Too many functions" source="detekt.TooManyFunctions" />' '</file>' '</checkstyle>' > runtime-kotlin/runtime-application/build/reports/detekt/detekt.xml
         printf '%s\n' 'FAILURE: Build failed with an exception.'
         exit 1
         """.trimIndent(),

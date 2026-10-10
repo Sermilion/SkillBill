@@ -22,6 +22,7 @@ class McpVerifyWorkflowToolsTest {
     val tempDir = Files.createTempDirectory("skillbill-mcp-verify-workflow")
     val context = McpRuntimeContext(environment = disabledTelemetryEnvironment(tempDir), userHome = tempDir)
 
+    val checkpoint = repositoryCheckpoint()
     val opened =
       context.callToolPayload(
         "feature_verify_workflow_open",
@@ -36,7 +37,7 @@ class McpVerifyWorkflowToolsTest {
       "verify updated_at must not precede started_at",
     )
 
-    val updated = markVerifyWorkflowVerdictBlocked(context, workflowId)
+    val updated = markVerifyWorkflowVerdictBlocked(context, workflowId, checkpoint)
     val listed = context.callToolPayload("feature_verify_workflow_list")
     val latest = context.callToolPayload("feature_verify_workflow_latest")
     val got = context.callToolPayload("feature_verify_workflow_get", mapOf("workflow_id" to workflowId))
@@ -65,7 +66,7 @@ class McpVerifyWorkflowToolsTest {
       "<STARTED_AT>" to opened["started_at"].toString(),
       "<UPDATED_AT>" to got["updated_at"].toString(),
       "<CONTINUED_AT>" to continuedAt,
-      "<CHECKPOINT>" to repositoryCheckpoint(),
+      "<CHECKPOINT>" to checkpoint,
     )
     assertCompactUpdateAcknowledgementPayload(updated)
     assertEquals(1, listed["workflow_count"])
@@ -125,6 +126,7 @@ private fun repositoryCheckpoint(): String =
 private fun markVerifyWorkflowVerdictBlocked(
   context: McpRuntimeContext,
   workflowId: String,
+  checkpoint: String,
 ): Map<String, Any?> =
   context.callToolPayload(
     "feature_verify_workflow_update",
@@ -139,7 +141,7 @@ private fun markVerifyWorkflowVerdictBlocked(
         mapOf(
           "diff_projection" to
             mapOf(
-              "checkpoint" to repositoryCheckpoint(),
+              "checkpoint" to checkpoint,
               "comparison_scope" to "base..head",
               "changed_files" to emptyList<String>(),
             ),
