@@ -63,6 +63,67 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const CORRELATED_METADATA = {
+  repositoryIdentity: "repo",
+  branchCorrelation: "main",
+  executionScope: "standalone_phase" as const,
+  statusStoreId: "store",
+  statusRevision: "2",
+  invocationId: "invocation-1",
+  phaseId: "review",
+};
+
+const OBSERVED_AT = new Date("2026-10-09T10:00:00Z");
+
+function doneSnapshot(executionId: string, runSequence: string): SkillBillStatusOutcome {
+  return {
+    ...CORRELATED_METADATA,
+    kind: "done",
+    summary: "finished",
+    observedAt: OBSERVED_AT,
+    executionId,
+    runSequence,
+  };
+}
+
+function activeSnapshot(executionId: string, runSequence: string | undefined): SkillBillStatusOutcome {
+  return {
+    ...CORRELATED_METADATA,
+    kind: "active",
+    summary: "running",
+    observedAt: OBSERVED_AT,
+    currentStepId: "review",
+    currentStepLabel: "Review",
+    updatedAt: OBSERVED_AT,
+    executionId,
+    runSequence,
+  };
+}
+
+async function acceptedOutcome(responses: SkillBillStatusOutcome[]): Promise<SkillBillStatusOutcome[]> {
+  const remaining = [...responses];
+  const repo = new FakeStatusRepository(() => remaining.shift()!);
+  const coordinator = new StatusRefreshCoordinator(repo, new FakePreferences(), "/tmp/a");
+  const seen: SkillBillStatusOutcome[] = [];
+  coordinator.subscribe((outcome) => {
+    seen.push(outcome);
+  });
+  try {
+    for (let index = 0; index < responses.length; index += 1) {
+      coordinator.requestRefresh();
+      const target = index + 1;
+      const deadline = Date.now() + 2_000;
+      while (repo.callCount < target && Date.now() < deadline) {
+        await delay(10);
+      }
+      await delay(20);
+    }
+    return seen;
+  } finally {
+    coordinator.dispose();
+  }
+}
+
 describe("StatusRefreshCoordinator", () => {
   it("accepts the next run after a terminal result and rejects resurrection after a failed poll", async () => {
     const metadata = {
@@ -104,6 +165,50 @@ describe("StatusRefreshCoordinator", () => {
     } finally {
       coordinator.dispose();
     }
+  });
+
+  it("accepts a lower-sequence live snapshot over a displayed done snapshot", async () => {
+    const seen = await acceptedOutcome([
+      doneSnapshot("run-1", "11"),
+      activeSnapshot("run-2", "10"),
+    ]);
+    const last = seen.at(-1);
+    assert.equal(last?.kind, "active");
+    assert.equal(last?.executionId, "run-2");
+    assert.equal(last?.runSequence, "10");
+    if (last?.kind === "active") {
+      assert.equal(last.repositoryIdentity, "repo");
+      assert.equal(last.branchCorrelation, "main");
+    }
+  });
+
+  it("accepts a live snapshot with no run sequence over a displayed done snapshot", async () => {
+    const seen = await acceptedOutcome([
+      doneSnapshot("run-1", "11"),
+      activeSnapshot("run-2", undefined),
+    ]);
+    assert.equal(seen.at(-1)?.kind, "active");
+    assert.equal(seen.at(-1)?.executionId, "run-2");
+    assert.equal(seen.at(-1)?.runSequence, undefined);
+  });
+
+  it("rejects an older live snapshot when a newer live snapshot is displayed", async () => {
+    const seen = await acceptedOutcome([
+      activeSnapshot("run-1", "11"),
+      activeSnapshot("run-2", "10"),
+    ]);
+    assert.equal(seen.at(-1)?.kind, "active");
+    assert.equal(seen.at(-1)?.executionId, "run-1");
+    assert.equal(seen.at(-1)?.runSequence, "11");
+  });
+
+  it("rejects resurrection of the same execution from done to active", async () => {
+    const seen = await acceptedOutcome([
+      doneSnapshot("run-1", "11"),
+      activeSnapshot("run-1", "11"),
+    ]);
+    assert.equal(seen.at(-1)?.kind, "done");
+    assert.equal(seen.at(-1)?.executionId, "run-1");
   });
 
   it("coalesces overlapping refresh requests", async () => {

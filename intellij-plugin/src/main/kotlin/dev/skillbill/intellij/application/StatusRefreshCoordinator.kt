@@ -232,10 +232,10 @@ private fun acceptsNewerStatus(
     if (current.repositoryIdentity() != incoming.repositoryIdentity()) return false
     if (currentExecution.branchCorrelation != incomingExecution.branchCorrelation) return false
     if (currentExecution.statusStoreId != incomingExecution.statusStoreId) return false
-    val currentSequence = currentExecution.runSequence ?: return false
-    val incomingSequence = incomingExecution.runSequence ?: return false
+    val currentSequence = currentExecution.runSequence ?: return isLiveOverDone(current, incoming)
+    val incomingSequence = incomingExecution.runSequence ?: return isLiveOverDone(current, incoming)
     val sequenceOrder = compareDecimalStrings(incomingSequence, currentSequence)
-    if (sequenceOrder < 0) return false
+    if (sequenceOrder < 0) return isLiveOverDone(current, incoming)
     if (sequenceOrder > 0) return true
     if (currentExecution.executionId != incomingExecution.executionId) return false
     val currentRevision = currentExecution.statusRevision ?: return false
@@ -252,6 +252,19 @@ private fun isTerminal(outcome: SkillBillStatusOutcome): Boolean = when (outcome
     -> true
     else -> false
 }
+
+private fun isLiveOverDone(
+    current: SkillBillStatusOutcome,
+    incoming: SkillBillStatusOutcome,
+): Boolean =
+    when (incoming) {
+        is SkillBillStatusOutcome.Active,
+        is SkillBillStatusOutcome.Paused,
+        is SkillBillStatusOutcome.Blocked,
+        -> current is SkillBillStatusOutcome.Done &&
+            current.executionMetadata()?.executionId != incoming.executionMetadata()?.executionId
+        else -> false
+    }
 
 private fun isStoreReplacement(
     current: SkillBillStatusOutcome?,

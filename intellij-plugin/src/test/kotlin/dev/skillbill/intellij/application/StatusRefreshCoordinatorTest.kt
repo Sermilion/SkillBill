@@ -75,6 +75,157 @@ class StatusRefreshCoordinatorTest {
     }
 
     @Test
+    fun `a lower-sequence live execution replaces a displayed done snapshot`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val doneExecution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "run-1", statusStoreId = "store",
+            branchCorrelation = "main", runSequence = "11", statusRevision = "2",
+            invocationId = "invocation-1", phaseId = "review",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Done(
+            observedAt = now, summary = "finished", repositoryIdentity = "repo", issueKey = null,
+            progressCompleted = null, progressTotal = null, startedAt = now, updatedAt = now,
+            execution = doneExecution,
+        )
+        val coordinator = StatusRefreshCoordinator(
+            FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Done } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "running", repositoryIdentity = "repo", issueKey = null,
+                workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+                progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = doneExecution.copy(executionId = "run-2", runSequence = "10", statusRevision = "1"),
+            )
+            coordinator.requestRefresh()
+            val updated = withTimeout(2_000) {
+                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active }
+            } as SkillBillStatusOutcome.Active
+            assertEquals("run-2", updated.execution?.executionId)
+            assertEquals("10", updated.execution?.runSequence)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
+    fun `a live execution with no run sequence replaces a displayed done snapshot`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val doneExecution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "run-1", statusStoreId = "store",
+            branchCorrelation = "main", runSequence = "11", statusRevision = "2",
+            invocationId = "invocation-1", phaseId = "review",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Done(
+            observedAt = now, summary = "finished", repositoryIdentity = "repo", issueKey = null,
+            progressCompleted = null, progressTotal = null, startedAt = now, updatedAt = now,
+            execution = doneExecution,
+        )
+        val coordinator = StatusRefreshCoordinator(
+            FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Done } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "running", repositoryIdentity = "repo", issueKey = null,
+                workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+                progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = doneExecution.copy(executionId = "run-2", runSequence = null, statusRevision = "1"),
+            )
+            coordinator.requestRefresh()
+            val updated = withTimeout(2_000) {
+                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active }
+            } as SkillBillStatusOutcome.Active
+            assertEquals("run-2", updated.execution?.executionId)
+            assertEquals(null, updated.execution?.runSequence)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
+    fun `an older live execution does not replace a newer live execution`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val newerExecution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "run-1", statusStoreId = "store",
+            branchCorrelation = "main", runSequence = "11", statusRevision = "2",
+            invocationId = "invocation-1", phaseId = "review",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Active(
+            observedAt = now, summary = "running", repositoryIdentity = "repo", issueKey = null,
+            workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+            progressCompleted = null, progressTotal = null, startedAt = now,
+            currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+            execution = newerExecution,
+        )
+        val repo = FakeStatusRepository { response }
+        val coordinator = StatusRefreshCoordinator(
+            repo, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Active } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "older", repositoryIdentity = "repo", issueKey = null,
+                workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+                progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = newerExecution.copy(executionId = "run-2", runSequence = "10", statusRevision = "1"),
+            )
+            coordinator.requestRefresh()
+            awaitCallCount(repo, 2)
+            delay(50)
+            val held = coordinator.outcomes.value as SkillBillStatusOutcome.Active
+            assertEquals("run-1", held.execution?.executionId)
+            assertEquals("11", held.execution?.runSequence)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
+    fun `the same execution does not regress from done to active`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val execution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "run-1", statusStoreId = "store",
+            branchCorrelation = "main", runSequence = "11", statusRevision = "2",
+            invocationId = "invocation-1", phaseId = "review",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Done(
+            observedAt = now, summary = "finished", repositoryIdentity = "repo", issueKey = null,
+            progressCompleted = null, progressTotal = null, startedAt = now, updatedAt = now,
+            execution = execution,
+        )
+        val repo = FakeStatusRepository { response }
+        val coordinator = StatusRefreshCoordinator(
+            repo, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Done } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "running", repositoryIdentity = "repo", issueKey = null,
+                workflowId = null, workflowFamily = null, currentStepId = "review", currentStepLabel = "Review",
+                progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = execution,
+            )
+            coordinator.requestRefresh()
+            awaitCallCount(repo, 2)
+            delay(50)
+            assertTrue(coordinator.outcomes.value is SkillBillStatusOutcome.Done)
+            assertEquals("run-1", (coordinator.outcomes.value as SkillBillStatusOutcome.Done).execution?.executionId)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
     fun `polling starts only while a consumer is active and does not overlap`() = runBlocking {
         val gate = CompletableDeferred<Unit>()
         val repo = FakeStatusRepository {

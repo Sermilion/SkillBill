@@ -1,3 +1,13 @@
+## [2026-10-10] SKILL-416 subtask 2 — Plugin accept live over Done
+Areas: vscode-extension/application, vscode-extension/src/test
+- StatusRefreshCoordinator.acceptsNewerStatus applies live-over-Done when both sequences are present and sequenceOrder < 0: incoming Active, Paused, or Blocked replaces displayed Done for the same repo, branch, and store when executionId differs.
+- The existing missing-sequence-among-live accept is unchanged. Live-over-Done uses Active, Paused, or Blocked, not Failed or Stale. Cached Blocked is not the freeze-worthy terminal.
+- Pattern: keep the same-execution terminal-regression reject; among two live snapshots, lower runSequence still loses. isStoreReplacement, correlation change, uncorroborated-idle, and hasLegacyExecutionCorrelation stay. reusable
+- Coordinators do not rank workflows. Runtime selection remains the source of current work.
+- Limitation: plugin-only still shows whatever work status returns. Runtime live-cohort selection is subtask 1. Assert repositoryIdentity only after narrowing to a kind that carries it; unavailable and incompatible omit it.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
 ## [2026-09-14] SKILL-238 subtask 3 — IDE extension YAGNI parity
 Areas: vscode-extension/{application,composition,infrastructure/cli,ui,test}, vscode-extension/README.md
 - `CliGoalPauseRepository` / `CliGoalStopRepository` collapse into one `CliGoalMutationRepository`; the two ports and outcome types become one `GoalMutationRepository` with `GoalMutationOutcome`. TypeScript has no enum-with-fields, so the descriptor is a `GoalMutation` interface plus `GOAL_PAUSE_MUTATION` / `GOAL_STOP_MUTATION` consts — same parameterization as the IntelliJ enum, same preserved summary strings. Use this shape when mirroring a Kotlin enum-of-descriptors into TS. reusable

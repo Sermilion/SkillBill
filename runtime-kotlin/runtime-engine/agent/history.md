@@ -1,3 +1,14 @@
+## [2026-10-10] SKILL-416 subtask 1: runtime live-cohort selection
+Areas: runtime-engine work (IdeStatusSelectionPolicy, IdeStatusSelectionPolicyTest, IdeStatusServiceBranchScopingTest)
+- After retainedAt, select from the live cohort (ACTIVE, PAUSED, BLOCKED) when any retained live row exists; otherwise from the remaining retained cohort (FAILED, RECENTLY_TERMINAL, IDLE).
+- Within the selected cohort the comparator is unchanged: sequenced before unsequenced, higher runSequence, freshness, selectionTier.rank, goal-authoritative, descending updatedAt, workflowId.
+- Equal-sequence execution-id conflict still throws, now scanned only on the selected cohort. IdeStatusService.status still scopes then calls the same select; no third ranking path.
+- Tests inverted the terminal-standalone-beats-active unit case and added a within-live higher-sequence case plus a branch-scoped service case (live FEATURE_GOAL on feat/SKILL-148-status-fix beats a later completed SKILL-415 standalone).
+- Pattern: live partition before sequence ranking because run_sequence is repo-global, not per-issue.
+- Breaking changes: none. Limitation: plugin acceptsNewerStatus can still freeze a cached Done; that is subtask 2.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
 ## [2026-10-09] SKILL-411 standalone phase progress in VS Code and IntelliJ
 Areas: runtime-engine status and phase lifecycle; runtime-contracts, runtime-ports, runtime-infra/sqlite; runtime-cli; orchestration contracts; VS Code and IntelliJ extensions
 - Added versioned IDE-status execution scope and identity for workflows and standalone phases, including decimal-string ordering, revisions, bounded activity, and typed incompatible diagnostics.

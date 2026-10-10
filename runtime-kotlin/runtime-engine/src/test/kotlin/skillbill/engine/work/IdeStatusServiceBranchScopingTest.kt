@@ -19,6 +19,7 @@ import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -104,10 +105,56 @@ class IdeStatusServiceBranchScopingTest {
     assertNull(result.snapshot.workflowId)
   }
 
+  @Test
+  fun `live feature goal on the checkout branch outranks a later terminal standalone`() {
+    val featureBranch = "feat/SKILL-148-status-fix"
+    val fixture = gitRepoFixture("ide-status-live-goal-beats-terminal-standalone", branch = featureBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val result =
+      ideStatusService(
+        registeredGoalDatabase(
+          identity,
+          featureBranch,
+          eligibleStandalones =
+            listOf(
+              StandalonePhaseStatusRecord(
+                repositoryIdentity = identity,
+                branchCorrelation = featureBranch,
+                issueKey = "SKILL-415",
+                workflowId = "standalone-415",
+                invocationId = "standalone-invocation",
+                phaseId = "review",
+                executionId = "standalone-execution",
+                statusStoreId = "standalone-store",
+                runSequence = "11",
+                statusRevision = "1",
+                lifecycleState = "completed",
+                currentStep = "review",
+                currentActivity = null,
+                startedAt = ideStatusObservedAt.minusSeconds(300),
+                updatedAt = ideStatusObservedAt,
+                finishedAt = ideStatusObservedAt,
+                activeDurationMs = null,
+                activeDurationAsOf = null,
+                leaseOwner = "owner",
+                leaseGeneration = 1L,
+                leaseExpiresAt = ideStatusObservedAt.plusSeconds(3600),
+                terminalResult = "completed",
+              ),
+            ),
+        ),
+      ).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals("goal-1", result.snapshot.workflowId)
+  }
+
   private fun registeredGoalDatabase(
     identity: String,
     registeredBranch: String,
     goalState: String = "running",
+    eligibleStandalones: List<StandalonePhaseStatusRecord> = emptyList(),
   ): TrackingDatabase {
     val database = goalOnlyDatabase(goalState)
     val statuses =
@@ -127,6 +174,12 @@ class IdeStatusServiceBranchScopingTest {
             startedAt = ideStatusObservedAt.minusSeconds(600),
             updatedAt = ideStatusObservedAt,
           ).takeIf { workflowId == "goal-1" }
+
+        override fun readEligible(
+          repositoryIdentity: String,
+          branchCorrelation: String,
+          now: Instant,
+        ): List<StandalonePhaseStatusRecord> = eligibleStandalones
       }
     return TrackingDatabase(database.work, database.workflows, statusRepository = statuses)
   }

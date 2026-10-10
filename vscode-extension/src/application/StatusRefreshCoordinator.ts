@@ -300,7 +300,7 @@ function acceptsNewerStatus(
   }
   const sequenceOrder = compareDecimalStrings(incoming.runSequence, current.runSequence);
   if (sequenceOrder < 0) {
-    return false;
+    return isLiveOverDone(current, incoming);
   }
   if (sequenceOrder > 0) {
     return true;
@@ -323,6 +323,15 @@ function acceptsNewerStatus(
 
 function isTerminal(kind: SkillBillStatusOutcome["kind"]): boolean {
   return kind === "done" || kind === "failed" || kind === "blocked";
+}
+
+function isLiveOverDone(
+  current: SkillBillStatusOutcome,
+  incoming: SkillBillStatusOutcome,
+): boolean {
+  return (incoming.kind === "active" || incoming.kind === "paused" || incoming.kind === "blocked") &&
+    current.kind === "done" &&
+    current.executionId !== incoming.executionId;
 }
 
 function isStoreReplacement(

@@ -24,8 +24,14 @@ object IdeStatusSelectionPolicy {
     observedAt: Instant,
   ): IdeStatusCandidate? {
     val retained = candidates.filter { retainedAt(it, observedAt) }
-    if (retained.isEmpty()) return null
-    retained
+    val liveTiers =
+      setOf(
+        IdeStatusSelectionTier.ACTIVE,
+        IdeStatusSelectionTier.PAUSED,
+        IdeStatusSelectionTier.BLOCKED,
+      )
+    val cohort = retained.filter { it.selectionTier in liveTiers }.ifEmpty { retained }
+    cohort
       .filter { it.execution != null }
       .groupBy { it.execution?.statusStoreId to it.execution?.runSequence }
       .values
@@ -36,7 +42,7 @@ object IdeStatusSelectionPolicy {
             "execution_ids=${conflict.joinToString { it.execution?.executionId.orEmpty() }}",
         )
       }
-    return retained.sortedWith(comparator(observedAt)).first()
+    return cohort.sortedWith(comparator(observedAt)).firstOrNull()
   }
 
   private fun freshnessKey(

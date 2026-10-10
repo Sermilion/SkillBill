@@ -1,3 +1,13 @@
+## [2026-10-10] SKILL-416 subtask 2 — Plugin accept live over Done
+Areas: intellij-plugin/application, intellij-plugin/src/test/kotlin/dev/skillbill/intellij/application
+- StatusRefreshCoordinator.acceptsNewerStatus accepts incoming Active, Paused, or Blocked over a displayed Done for the same repositoryIdentity, branchCorrelation, and statusStoreId when executionId differs, even if incoming runSequence is lower or null.
+- Live-over-Done is a coordinator-local isLiveOverDone predicate, not domain isLiveOutcome(). Failed and Stale stay on sequence rules. Cached Blocked is not the freeze-worthy terminal.
+- Pattern: keep the same-execution terminal-regression reject; among two live snapshots, lower runSequence still loses. isStoreReplacement, correlation change, and uncorroborated-idle stay. reusable
+- Coordinators do not rank workflows. Runtime selection remains the source of current work.
+- Limitation: plugin-only still shows whatever work status returns. Runtime live-cohort selection is subtask 1.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
 ## [2026-09-14] SKILL-238 subtask 3 — IDE extension YAGNI parity
 Areas: intellij-plugin/{application,composition,domain,infrastructure/cli,ui}, intellij-plugin/{ARCHITECTURE.md,README.md}
 - `CliGoalPauseRepository` / `CliGoalStopRepository` collapse into one `CliGoalMutationRepository` parameterized by a `GoalMutation` enum holding the verb and the five failure-summary strings; the `GoalPauseRepository` / `GoalStopRepository` ports and their outcome types become one `GoalMutationRepository` fun interface with `GoalMutationOutcome`.
