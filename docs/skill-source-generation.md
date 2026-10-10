@@ -443,12 +443,13 @@ Re-run `./install.sh` after source, renderer, or support pointer changes so
 installed agents receive a fresh staging hash.
 
 The terminal installer uses this same
-runtime-owned install plan/apply path. Their choices may change which agents,
-platform packs, telemetry level, or MCP registrations are applied, but they do
-not change the governed source shape. Base skills remain part of every install;
-optional platform packs are selected from manifests; generated wrappers,
-support pointers and provider-native agent files
-remain install/render artifacts instead of authored source.
+runtime-owned install plan/apply path. Its choices may change which agents,
+telemetry level, or MCP registrations are applied, but they do not change the
+governed source shape. The terminal installer includes base skills and every
+manifest-discovered platform pack on every run, including saved-selection replay.
+Direct runtime install commands retain their explicit platform selection modes.
+Generated wrappers, support pointers and provider-native agent files remain
+install/render artifacts instead of authored source.
 
 Review-capable install plans include the unique manifest-declared
 `code-review` fallback pack in addition to explicitly selected concrete packs.

@@ -79,12 +79,9 @@ fi
 declare -a SUPPORTED_AGENTS=(claude codex junie cursor)
 declare -a AGENT_NAMES=()
 declare -a AGENT_PATHS=()
-declare -a PLATFORM_PACKAGES=()
-declare -a SELECTED_PLATFORM_PACKAGES=()
 declare -a RUNTIME_INSTALL_ARGS=()
 
 AGENT_SELECTION_MODE="manual"
-PLATFORM_SELECTION_MODE="none"
 TELEMETRY_LEVEL="anonymous"
 MCP_REGISTRATION="register"
 
@@ -100,8 +97,9 @@ Options:
                            Ignores --release. Requires a JDK.
   --release TAG            Install a specific release tag instead of the latest
                            stable release. Ignored with --from-source.
-  --reuse-last-selection   Reuse the latest successful agent, platform,
-                           telemetry, and MCP choices from ~/.skill-bill.
+  --reuse-last-selection   Reuse the latest successful agent, telemetry,
+                           and MCP choices from ~/.skill-bill.
+                           All platform packs are installed on every run.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -1423,10 +1421,6 @@ read_prompt_input() {
   fi
 }
 
-normalize_platform_token() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]_/-'
-}
-
 normalize_agent_token() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
 }
@@ -1633,197 +1627,6 @@ prompt_for_agent_selection() {
   fi
 }
 
-display_platform_name() {
-  local label="${1//-/ }"
-  printf '%s' "$label"
-}
-
-build_platform_packages() {
-  local pack_dir
-  local package
-  local manifest
-
-  PLATFORM_PACKAGES=()
-  if [[ ! -d "$PLATFORM_PACKS_DIR" ]]; then
-    return 0
-  fi
-
-  while IFS= read -r pack_dir; do
-    package="$(basename "$pack_dir")"
-    manifest="$pack_dir/platform.yaml"
-    # Fallback packs are installed with the horizontal review base. Packs with a required
-    # baseline layer are selected transitively with that baseline, so neither is a direct choice.
-    if grep -q '^fallback_capabilities:' "$manifest"; then
-      continue
-    fi
-    if grep -q '^  baseline_layers:' "$manifest" && grep -q '^      required: true' "$manifest"; then
-      continue
-    fi
-    if [[ ${#PLATFORM_PACKAGES[@]} -eq 0 ]] || ! array_contains "$package" "${PLATFORM_PACKAGES[@]}"; then
-      PLATFORM_PACKAGES+=("$package")
-    fi
-  done < <(find "$PLATFORM_PACKS_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/platform.yaml' ';' -print | sort)
-}
-
-resolve_platform_selection() {
-  local token="$1"
-  local normalized
-  local package
-  local index
-  local all_index
-  local none_index
-
-  token="$(trim_string "$token")"
-  [[ -n "$token" ]] || return 1
-
-  if [[ "$token" =~ ^[0-9]+$ ]]; then
-    index=$((token - 1))
-    if (( index >= 0 && index < ${#PLATFORM_PACKAGES[@]} )); then
-      printf '%s\n' "${PLATFORM_PACKAGES[$index]}"
-      return 0
-    fi
-    all_index=${#PLATFORM_PACKAGES[@]}
-    none_index=$(( ${#PLATFORM_PACKAGES[@]} + 1 ))
-    if (( index == all_index )); then
-      printf '__all__\n'
-      return 0
-    fi
-    if (( index == none_index )); then
-      printf '__none__\n'
-      return 0
-    fi
-    return 1
-  fi
-
-  normalized="$(normalize_platform_token "$token")"
-  case "$normalized" in
-    all)
-      printf '__all__\n'
-      return 0
-      ;;
-    none|base|baseskills|baseonly)
-      printf '__none__\n'
-      return 0
-      ;;
-  esac
-
-  for package in "${PLATFORM_PACKAGES[@]}"; do
-    if [[ "$normalized" == "$(normalize_platform_token "$package")" ]]; then
-      printf '%s\n' "$package"
-      return 0
-    fi
-    if [[ "$normalized" == "$(normalize_platform_token "$(display_platform_name "$package")")" ]]; then
-      printf '%s\n' "$package"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-format_platform_list() {
-  local result=""
-  local package
-  local label
-
-  for package in "$@"; do
-    label="$(display_platform_name "$package")"
-    if [[ -z "$result" ]]; then
-      result="$label"
-    else
-      result="$result, $label"
-    fi
-  done
-
-  printf '%s' "$result"
-}
-
-prompt_for_platform_selection() {
-  local input
-  local i
-  local option_number
-  local none_option_number
-  local package
-  local token
-  local resolved
-  local invalid_tokens=()
-  local raw_tokens=()
-
-  if [[ ${#PLATFORM_PACKAGES[@]} -eq 0 ]]; then
-    PLATFORM_SELECTION_MODE="none"
-    SELECTED_PLATFORM_PACKAGES=()
-    return 0
-  fi
-
-  while true; do
-    echo ""
-    info "Available optional platforms:"
-    for i in "${!PLATFORM_PACKAGES[@]}"; do
-      package="${PLATFORM_PACKAGES[$i]}"
-      printf "  %s. %s (%s)\n" "$((i + 1))" "$(display_platform_name "$package")" "$package"
-    done
-    option_number=$(( ${#PLATFORM_PACKAGES[@]} + 1 ))
-    none_option_number=$(( ${#PLATFORM_PACKAGES[@]} + 2 ))
-    printf "  %s. all (install every platform pack)\n" "$option_number"
-    printf "  %s. base only (skip optional platform packs)\n" "$none_option_number"
-    info "Base skills and the manifest-declared generic review fallback are always installed."
-    info "Required composed packs are installed with their selectable baseline pack."
-    info "Optional platform packs are resolved by the runtime from platform-packs/ manifests."
-    info "Choose one or more optional platform numbers (comma-separated). Names still work if you prefer them."
-    printf "${CYAN}▸${NC} Enter platforms [base only] (e.g. 1,3 or %s): " "$option_number"
-    if ! read_prompt_input input; then
-      input=""
-    fi
-
-    if [[ -z "$(trim_string "$input")" ]]; then
-      PLATFORM_SELECTION_MODE="none"
-      SELECTED_PLATFORM_PACKAGES=()
-      info "No platforms entered; installing base skills only."
-      return 0
-    fi
-
-    PLATFORM_SELECTION_MODE="selected"
-    SELECTED_PLATFORM_PACKAGES=()
-    invalid_tokens=()
-    IFS=',' read -ra raw_tokens <<< "$input"
-
-    for token in "${raw_tokens[@]}"; do
-      token="$(trim_string "$token")"
-      [[ -z "$token" ]] && continue
-      resolved="$(resolve_platform_selection "$token" 2>/dev/null || true)"
-      if [[ -z "$resolved" ]]; then
-        invalid_tokens+=("$token")
-        continue
-      fi
-      if [[ "$resolved" == "__all__" ]]; then
-        PLATFORM_SELECTION_MODE="all"
-        SELECTED_PLATFORM_PACKAGES=("${PLATFORM_PACKAGES[@]}")
-        break
-      fi
-      if [[ "$resolved" == "__none__" ]]; then
-        PLATFORM_SELECTION_MODE="none"
-        SELECTED_PLATFORM_PACKAGES=()
-        break
-      fi
-      if [[ ${#SELECTED_PLATFORM_PACKAGES[@]} -eq 0 ]] || ! array_contains "$resolved" "${SELECTED_PLATFORM_PACKAGES[@]}"; then
-        SELECTED_PLATFORM_PACKAGES+=("$resolved")
-      fi
-    done
-
-    if [[ ${#invalid_tokens[@]} -gt 0 ]]; then
-      warn "Unknown platform selection: $(printf '%s, ' "${invalid_tokens[@]}" | sed 's/, $//')"
-      continue
-    fi
-
-    if [[ "$PLATFORM_SELECTION_MODE" == "selected" && ${#SELECTED_PLATFORM_PACKAGES[@]} -eq 0 ]]; then
-      warn "No valid platforms selected. Choose a platform, all, or base only."
-      continue
-    fi
-
-    return 0
-  done
-}
-
 prompt_for_telemetry_preference() {
   local input
   local normalized
@@ -1891,8 +1694,6 @@ replay_last_install_selection() {
   AGENT_SELECTION_MODE="manual"
   AGENT_NAMES=()
   AGENT_PATHS=()
-  PLATFORM_SELECTION_MODE="none"
-  SELECTED_PLATFORM_PACKAGES=()
   TELEMETRY_LEVEL="anonymous"
   MCP_REGISTRATION="register"
 
@@ -1910,7 +1711,7 @@ replay_last_install_selection() {
       platform-mode)
         case "$value" in
           none|selected|all)
-            PLATFORM_SELECTION_MODE="$value"
+            :
             ;;
           *)
             err "Cannot reuse saved install selections: unknown platform mode '$value'."
@@ -1923,7 +1724,6 @@ replay_last_install_selection() {
           err "Cannot reuse saved install selections: malformed replay platform entry."
           exit 1
         fi
-        SELECTED_PLATFORM_PACKAGES+=("$value")
         ;;
       telemetry)
         case "$value" in
@@ -1972,15 +1772,7 @@ replay_last_install_selection() {
     err "Run ./install.sh without --reuse-last-selection to choose install options again."
     exit 1
   fi
-  if [[ "$PLATFORM_SELECTION_MODE" == "selected" && ${#SELECTED_PLATFORM_PACKAGES[@]} -eq 0 ]]; then
-    err "Cannot reuse saved install selections: selected platform mode has no saved platform slugs."
-    err "Run ./install.sh without --reuse-last-selection to choose install options again."
-    exit 1
-  fi
-  if [[ "$PLATFORM_SELECTION_MODE" == "all" ]]; then
-    SELECTED_PLATFORM_PACKAGES=("${PLATFORM_PACKAGES[@]}")
-  fi
-
+  info "Installing all platform packs, regardless of saved platform choices."
   ok "Reusing latest successful install selections from $SKILL_BILL_STATE_DIR/install-selection.json"
 }
 
@@ -1994,7 +1786,7 @@ build_runtime_install_args() {
     --skills "$SKILL_BILL_STATE_DIR/skills"
     --platform-packs "$SKILL_BILL_STATE_DIR/platform-packs"
     --agent-mode "$AGENT_SELECTION_MODE"
-    --platform-mode "$PLATFORM_SELECTION_MODE"
+    --platform-mode all
     --telemetry "$TELEMETRY_LEVEL"
     --mcp "$MCP_REGISTRATION"
     --replace-existing-skill-bill-links
@@ -2015,12 +1807,6 @@ build_runtime_install_args() {
       if [[ "${AGENT_NAMES[$i]}" != "claude" ]]; then
         RUNTIME_INSTALL_ARGS+=(--agent-target "${AGENT_NAMES[$i]}=${AGENT_PATHS[$i]}")
       fi
-    done
-  fi
-
-  if [[ "$PLATFORM_SELECTION_MODE" == "selected" && ${#SELECTED_PLATFORM_PACKAGES[@]} -gt 0 ]]; then
-    for i in "${!SELECTED_PLATFORM_PACKAGES[@]}"; do
-      RUNTIME_INSTALL_ARGS+=(--platform "${SELECTED_PLATFORM_PACKAGES[$i]}")
     done
   fi
 }
@@ -2115,36 +1901,16 @@ selected_agent_label() {
   format_agent_list "${AGENT_NAMES[@]}"
 }
 
-selected_platform_label() {
-  case "$PLATFORM_SELECTION_MODE" in
-    all)
-      printf 'all'
-      ;;
-    none)
-      printf 'base only'
-      ;;
-    *)
-      format_platform_list "${SELECTED_PLATFORM_PACKAGES[@]}"
-      ;;
-  esac
-}
-
-
-
 run_full_install() {
   bundle_bootstrap_if_needed
   print_install_plan
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
-    build_platform_packages
     replay_last_install_selection
   fi
   migrate_legacy_config_to_durable_path
   install_runtime_distributions || return 1
   copy_in_authored_source
   reconcile_and_commit_authored_source_with_recovery
-  if [[ "$REUSE_LAST_SELECTION" -ne 1 ]]; then
-    build_platform_packages
-  fi
 
   echo ""
   printf "${CYAN}━━━ Skill Bill Installer ━━━${NC}\n"
@@ -2155,17 +1921,15 @@ run_full_install() {
   else
     info "Install behavior: collect choices, then delegate planning and apply to the Kotlin runtime."
     prompt_for_agent_selection
-    prompt_for_platform_selection
     prompt_for_telemetry_preference
   fi
   install_runtime_launchers
   build_runtime_install_args
 
   echo ""
-  SELECTED_PLATFORM_LABEL="$(selected_platform_label)"
   info "Plugin:         $PLUGIN_DIR"
   info "Agents:         $(selected_agent_label)"
-  info "Platforms:      $SELECTED_PLATFORM_LABEL"
+  info "Platforms:      all"
   info "Telemetry:      $TELEMETRY_LEVEL"
   info "MCP:            $MCP_REGISTRATION"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
@@ -2180,7 +1944,7 @@ run_full_install() {
   echo ""
   info "Source of truth: $PLUGIN_DIR/skills/"
   info "Staging cache:   $SKILL_BILL_STATE_DIR/installed-skills"
-  info "Platforms:       $SELECTED_PLATFORM_LABEL"
+  info "Platforms:       all"
   info "Launchers:       $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "Telemetry:       $TELEMETRY_LEVEL"
   info "MCP:             $MCP_REGISTRATION"
@@ -2206,7 +1970,7 @@ run_full_install() {
   if [[ "$TELEMETRY_LEVEL" != "off" ]]; then
     info "Telemetry uses the default Skill Bill relay automatically. Override it with SKILL_BILL_TELEMETRY_PROXY_URL or ~/.skill-bill/config.json."
   fi
-  info "Run './install.sh' again to reinstall with different agent, platform, telemetry, or MCP choices."
+  info "Run './install.sh' again to reinstall with different agent, telemetry, or MCP choices."
   info "Next step:       open your agent and run /skill-bill"
   echo ""
 }
