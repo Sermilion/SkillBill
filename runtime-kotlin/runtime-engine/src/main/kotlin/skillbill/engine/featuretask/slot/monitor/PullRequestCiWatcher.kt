@@ -17,48 +17,65 @@ internal class PullRequestCiWatcher(
   private val now: () -> Instant = Instant::now,
   private val sleep: (Duration) -> Unit = { Thread.sleep(it.toMillis()) },
   private val pollInterval: Duration = DEFAULT_POLL_INTERVAL,
-  private val watchTimeout: Duration = DEFAULT_WATCH_TIMEOUT,
-  private val noChecksGrace: Duration = DEFAULT_NO_CHECKS_GRACE,
+  private val startTimeout: Duration = DEFAULT_START_TIMEOUT,
+  private val progressInterval: Duration = DEFAULT_PROGRESS_INTERVAL,
 ) {
   fun watch(
     repoRoot: Path,
     branch: String,
-    requireChecks: Boolean = false,
+    onCiRunning: (List<PullRequestCheck>) -> Unit = {},
   ): PullRequestCiOutcome {
     val startedAt = now()
-    var noChecksSince: Instant? = null
-    var pendingNames: List<String> = emptyList()
+    var ciStarted = false
+    var lastProgressAt: Instant? = null
+    var lastPendingNames: List<String>? = null
     while (true) {
       val identity = identityLookup.lookup(repoRoot, branch)
       val prNumber = (identity as? PullRequestIdentity.Found)?.number
-      val current = now()
       val settled =
         if (prNumber == null) {
           identityVerdict(identity)
         } else {
           when (val checks = checksLookup.lookup(repoRoot, prNumber)) {
             is PullRequestChecks.Unavailable -> PullRequestCiOutcome.Unavailable(checks.reason)
-            PullRequestChecks.NoChecks -> {
-              val since = noChecksSince ?: current
-              noChecksSince = since
-              pendingNames = emptyList()
-              PullRequestCiOutcome.NoCiConfigured.takeIf {
-                !requireChecks && Duration.between(since, current) >= noChecksGrace
-              }
-            }
+            PullRequestChecks.NoChecks -> null
             is PullRequestChecks.Reported -> {
-              noChecksSince = null
-              pendingNames = checks.checks.filter { it.bucket == CheckBucket.PENDING }.map(PullRequestCheck::name)
-              verdictFor(checks.checks)
+              if (checks.checks.isNotEmpty()) {
+                ciStarted = true
+              }
+              val verdict = verdictFor(checks.checks)
+              reportRunning(checks.checks, verdict, onCiRunning, lastProgressAt, lastPendingNames)
+                ?.let { (reportedAt, pendingNames) ->
+                  lastProgressAt = reportedAt
+                  lastPendingNames = pendingNames
+                }
+              verdict
             }
           }
         }
       if (settled != null) return settled
-      if (Duration.between(startedAt, now()) >= watchTimeout) {
-        return PullRequestCiOutcome.Blocked(timeoutReason(pendingNames))
+      if (!ciStarted && Duration.between(startedAt, now()) >= startTimeout) {
+        return PullRequestCiOutcome.Blocked(startTimeoutReason())
       }
       sleep(pollInterval)
     }
+  }
+
+  private fun reportRunning(
+    checks: List<PullRequestCheck>,
+    verdict: PullRequestCiOutcome?,
+    onCiRunning: (List<PullRequestCheck>) -> Unit,
+    lastProgressAt: Instant?,
+    lastPendingNames: List<String>?,
+  ): Pair<Instant, List<String>>? {
+    if (verdict != null) return null
+    val pending = checks.filter { it.bucket == CheckBucket.PENDING }
+    if (pending.isEmpty()) return null
+    val names = pending.map(PullRequestCheck::name)
+    val due = lastProgressAt == null || Duration.between(lastProgressAt, now()) >= progressInterval
+    if (!due && names == lastPendingNames) return null
+    onCiRunning(pending)
+    return now() to names
   }
 
   private fun identityVerdict(identity: PullRequestIdentity): PullRequestCiOutcome? =
@@ -78,15 +95,11 @@ internal class PullRequestCiWatcher(
     }
   }
 
-  private fun timeoutReason(pendingNames: List<String>): String {
-    val pending =
-      pendingNames.takeIf(List<String>::isNotEmpty)?.joinToString(", ") ?: "no checks reported yet"
-    return "CI did not finish within ${watchTimeout.toMinutes()} minutes; still pending: $pending."
-  }
+  private fun startTimeoutReason(): String = "CI did not start within ${startTimeout.toMinutes()} minutes."
 
   private companion object {
     val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
-    val DEFAULT_WATCH_TIMEOUT: Duration = Duration.ofMinutes(30)
-    val DEFAULT_NO_CHECKS_GRACE: Duration = Duration.ofMinutes(3)
+    val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
+    val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofMinutes(10)
   }
 }

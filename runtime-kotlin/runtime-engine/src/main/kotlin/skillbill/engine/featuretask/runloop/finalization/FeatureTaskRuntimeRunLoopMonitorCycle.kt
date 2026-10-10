@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
+import skillbill.engine.featuretask.runloop.observability.ciStillRunning
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -49,7 +50,10 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    val outcome = observation.watch(request.repoRoot, branch, requireChecks = request.workflowId.isNotBlank())
+    val outcome =
+      observation.watch(request.repoRoot, branch) { pending ->
+        observability.ciStillRunning(run.phaseId, pending.map(PullRequestCheck::name))
+      }
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
         complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))

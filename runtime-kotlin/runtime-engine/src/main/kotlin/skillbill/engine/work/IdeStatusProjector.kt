@@ -23,6 +23,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
 import skillbill.ports.idestatus.model.IdeStatusExecutionScope
+import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReason
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
@@ -179,7 +180,17 @@ class IdeStatusProjector(
     val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
-    val step = assembleGoalStep(planningStep, childContext, projection, lifecycle)
+    val openCiMonitor =
+      goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
+        projection?.executionLiveness != ExecutionLiveness.LIVE &&
+        lifecycle == IdeStatusLifecycleState.ACTIVE
+    val freshness =
+      if (openCiMonitor) {
+        IdeStatusFreshness.FRESH
+      } else {
+        IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt)
+      }
+    val step = assembleGoalStep(planningStep, childContext, projection, lifecycle, openCiMonitor)
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
@@ -203,8 +214,9 @@ class IdeStatusProjector(
       activeDurationAsOf = projection?.liveActiveDurationAnchor(),
       lastAgentActivityAt = activityAt,
       lastAgentActivityLabel = activityLabel,
-      updatedAt = candidate.updatedAt,
-      freshness = IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt),
+      updatedAt = if (openCiMonitor) context.observedAt else candidate.updatedAt,
+      freshness = freshness,
+      currentActivity = OPEN_CI_MONITOR_ACTIVITY.takeIf { openCiMonitor },
       summary =
         planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
           ?.let { goalPlanningSummary(issueKey, it) }
@@ -231,6 +243,7 @@ class IdeStatusProjector(
     childContext: ChildOptionalContext,
     projection: GoalRunnerStatusProjection?,
     lifecycle: IdeStatusLifecycleState,
+    openCiMonitor: Boolean,
   ): IdeStatusStep {
     val childPhaseStep =
       childContext.currentPhaseId
@@ -238,7 +251,8 @@ class IdeStatusProjector(
     return goalStep(
       planningStep,
       childPhaseStep
-        ?: projection?.currentStep?.takeUnless { lifecycle == IdeStatusLifecycleState.TERMINAL },
+        ?: projection?.currentStep?.takeUnless { lifecycle == IdeStatusLifecycleState.TERMINAL }
+        ?: OPEN_CI_MONITOR_STEP.takeIf { openCiMonitor },
       lifecycle,
     )
   }
@@ -283,7 +297,8 @@ class IdeStatusProjector(
     return when {
       candidate.lifecycleState != IdeStatusLifecycleState.ACTIVE -> candidate.lifecycleState
       projection?.paused == true -> IdeStatusLifecycleState.PAUSED
-      projection?.executionLiveness == ExecutionLiveness.IDLE -> IdeStatusLifecycleState.IDLE
+      projection?.executionLiveness == ExecutionLiveness.IDLE &&
+        !goalStaysOnOpenCiMonitor(projection, completionRecorded) -> IdeStatusLifecycleState.IDLE
       else -> IdeStatusLifecycleState.ACTIVE
     }
   }

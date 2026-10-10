@@ -72,43 +72,86 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `pending checks past the watch timeout block and name the pending checks`() {
+  fun `pending checks keep reporting while ci is still running`() {
+    val pending =
+      PullRequestChecks.Reported(
+        listOf(check("desktop-build", CheckBucket.PENDING), check("build", CheckBucket.PASS)),
+      )
     val checks =
       ScriptedChecks(
-        PullRequestChecks.Reported(listOf(check("integration", CheckBucket.PENDING))),
+        pending,
+        pending,
+        pending,
+        pending,
+        pending,
+        PullRequestChecks.Reported(
+          listOf(check("desktop-build", CheckBucket.PASS), check("build", CheckBucket.PASS)),
+        ),
       )
-
-    val outcome = watcher(checks, watchTimeout = Duration.ofMinutes(2)).watch(REPO_ROOT, BRANCH)
-
-    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
-    assertTrue("integration" in blocked.reason, blocked.reason)
-    assertTrue("did not finish within 2 minutes" in blocked.reason, blocked.reason)
-  }
-
-  @Test
-  fun `no checks beyond the grace period settle as no ci configured`() {
-    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
-
-    val outcome = watcher(checks, noChecksGrace = Duration.ofMinutes(3)).watch(REPO_ROOT, BRANCH)
-
-    assertEquals(PullRequestCiOutcome.NoCiConfigured, outcome)
-    assertTrue(checks.calls > 1, "the grace period must be polled, not decided on the first empty read")
-  }
-
-  @Test
-  fun `goal monitoring keeps waiting for checks beyond the no ci grace period`() {
-    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+    val reported = mutableListOf<List<String>>()
 
     val outcome =
-      watcher(checks, watchTimeout = Duration.ofMinutes(4), noChecksGrace = Duration.ofMinutes(1))
-        .watch(REPO_ROOT, BRANCH, requireChecks = true)
+      watcher(checks, progressInterval = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
+        reported += pendingChecks.map(PullRequestCheck::name)
+      }
 
-    assertIs<PullRequestCiOutcome.Blocked>(outcome)
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(listOf(listOf("desktop-build"), listOf("desktop-build"), listOf("desktop-build")), reported)
+  }
+
+  @Test
+  fun `a newly pending check is reported before the progress interval`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))),
+        PullRequestChecks.Reported(
+          listOf(check("build", CheckBucket.PENDING), check("desktop-build", CheckBucket.PENDING)),
+        ),
+        PullRequestChecks.Reported(
+          listOf(check("build", CheckBucket.PASS), check("desktop-build", CheckBucket.PASS)),
+        ),
+      )
+    val reported = mutableListOf<List<String>>()
+
+    watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
+      reported += pendingChecks.map(PullRequestCheck::name)
+    }
+
+    assertEquals(listOf(listOf("build"), listOf("build", "desktop-build")), reported)
+  }
+
+  @Test
+  fun `pending checks are watched past the start timeout until they pass`() {
+    val pending = PullRequestChecks.Reported(listOf(check("integration", CheckBucket.PENDING)))
+    val checks =
+      ScriptedChecks(
+        pending,
+        pending,
+        pending,
+        pending,
+        pending,
+        PullRequestChecks.Reported(listOf(check("integration", CheckBucket.PASS))),
+      )
+
+    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(2)).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(6, checks.calls)
+  }
+
+  @Test
+  fun `no checks within the start timeout block`() {
+    val checks = ScriptedChecks(PullRequestChecks.NoChecks)
+
+    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(4)).watch(REPO_ROOT, BRANCH)
+
+    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
+    assertTrue("did not start within 4 minutes" in blocked.reason, blocked.reason)
     assertEquals(9, checks.calls)
   }
 
   @Test
-  fun `goal monitoring waits for late checks and then for pending checks to pass`() {
+  fun `late checks are watched until pending checks pass`() {
     val checks =
       ScriptedChecks(
         PullRequestChecks.NoChecks,
@@ -118,31 +161,31 @@ class PullRequestCiWatcherTest {
         PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
       )
 
-    val outcome =
-      watcher(checks, noChecksGrace = Duration.ofSeconds(30)).watch(REPO_ROOT, BRANCH, requireChecks = true)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
 
     assertEquals(PullRequestCiOutcome.Passed, outcome)
     assertEquals(5, checks.calls)
   }
 
   @Test
-  fun `an empty reported check list cannot complete monitoring`() {
+  fun `an empty reported check list blocks when ci does not start`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(emptyList()))
 
-    val outcome = watcher(checks, watchTimeout = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH, requireChecks = true)
+    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(2)).watch(REPO_ROOT, BRANCH)
 
-    assertIs<PullRequestCiOutcome.Blocked>(outcome)
+    val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
+    assertTrue("did not start within 2 minutes" in blocked.reason, blocked.reason)
   }
 
   @Test
-  fun `checks that appear within the grace period are watched normally`() {
+  fun `checks that appear before the start timeout are watched normally`() {
     val checks =
       ScriptedChecks(
         PullRequestChecks.NoChecks,
         PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))),
       )
 
-    val outcome = watcher(checks, noChecksGrace = Duration.ofMinutes(3)).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
     assertEquals(listOf("lint"), failed.failingChecks.map(PullRequestCheck::name))
@@ -172,7 +215,7 @@ class PullRequestCiWatcherTest {
         }
       }
 
-    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, requireChecks = true)
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
 
     assertEquals(PullRequestCiOutcome.Merged, outcome)
     assertEquals(1, checks.calls)
@@ -214,8 +257,8 @@ class PullRequestCiWatcherTest {
   private fun watcher(
     checks: ScriptedChecks,
     identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER),
-    watchTimeout: Duration = Duration.ofMinutes(30),
-    noChecksGrace: Duration = Duration.ofMinutes(3),
+    startTimeout: Duration = Duration.ofHours(1),
+    progressInterval: Duration = Duration.ofMinutes(10),
     identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
     PullRequestCiWatcher(
@@ -224,8 +267,8 @@ class PullRequestCiWatcherTest {
       now = { clock },
       sleep = { clock = clock.plus(it) },
       pollInterval = Duration.ofSeconds(30),
-      watchTimeout = watchTimeout,
-      noChecksGrace = noChecksGrace,
+      startTimeout = startTimeout,
+      progressInterval = progressInterval,
     )
 
   private fun fixedIdentity(identity: PullRequestIdentity): PullRequestIdentityLookup =
