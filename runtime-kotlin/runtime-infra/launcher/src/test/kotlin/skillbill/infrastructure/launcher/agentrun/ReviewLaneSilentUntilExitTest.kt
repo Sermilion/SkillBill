@@ -47,6 +47,7 @@ class ReviewLaneSilentUntilExitTest {
       launch(
         laneRequest().withBoundedLaneProgress(200.milliseconds, AgentRunProgressProbe { "constant" }),
         BOUNDED_SILENT_PERIOD,
+        emitRegisterAfterSleep = false,
       )
 
     assertEquals(AgentRunTermination.TimedOut, facts.termination)
@@ -69,16 +70,18 @@ class ReviewLaneSilentUntilExitTest {
   private fun launch(
     request: SkillRunRequest,
     silentPeriod: Duration,
+    emitRegisterAfterSleep: Boolean = true,
   ) = ProcessAgentRunAdapter(
     agent = SupportedAgent.CLAUDE,
     commandBuilder = ClaudeAgentRunCommandBuilder(),
-    processRunner = SilentScriptRunner(silentPeriod),
+    processRunner = SilentScriptRunner(silentPeriod, emitRegisterAfterSleep),
     executableLookup = ALL_EXECUTABLES_AVAILABLE,
     diagnostics = NoopRuntimeDiagnostics,
   ).launchFacts(request)
 
   private class SilentScriptRunner(
     private val silentPeriod: Duration,
+    private val emitRegisterAfterSleep: Boolean,
   ) : AgentRunProcessRunner {
     private val delegate = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver())
 
@@ -91,7 +94,11 @@ class ReviewLaneSilentUntilExitTest {
                 listOf(
                   bashExecutable().toString(),
                   "-c",
-                  "sleep ${silentPeriod.inWholeSeconds}; echo '$REGISTER_LINE'",
+                  if (emitRegisterAfterSleep) {
+                    "sleep ${silentPeriod.inWholeSeconds}; echo '$REGISTER_LINE'"
+                  } else {
+                    "exec sleep ${silentPeriod.inWholeSeconds}"
+                  },
                 ),
             ),
         ),

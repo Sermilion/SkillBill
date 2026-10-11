@@ -189,17 +189,18 @@ class StatusRefreshCoordinatorTest {
     }
 
     @Test
-    fun `a lower-sequence goal monitor replaces the completed child implement snapshot`() = runBlocking {
+    fun `a later live parent goal monitor replaces a held child implement snapshot`() = runBlocking {
         val now = Instant.parse("2026-10-09T10:00:00Z")
+        val childExecution = StatusExecutionMetadata(
+            executionScope = "workflow", executionId = "child-execution", statusStoreId = "child-store",
+            branchCorrelation = "feat/0AC-46", runSequence = "21", statusRevision = "1",
+        )
         var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Active(
-            observedAt = now, summary = "implementing", repositoryIdentity = "repo", issueKey = "SKILL-417",
-            workflowId = "child-workflow", workflowFamily = "feature-task-runtime", currentStepId = "implement",
+            observedAt = now, summary = "implementing", repositoryIdentity = "repo", issueKey = "0AC-46",
+            workflowId = "w-child", workflowFamily = "feature-task", currentStepId = "implement",
             currentStepLabel = "Implement", progressCompleted = null, progressTotal = null, startedAt = now,
-            currentSubtaskId = "3", subtaskStartedAt = now, updatedAt = now,
-            execution = StatusExecutionMetadata(
-                executionScope = "workflow", executionId = "child-run", statusStoreId = "store",
-                branchCorrelation = "main", runSequence = "12", statusRevision = "1",
-            ),
+            currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+            execution = childExecution,
         )
         val coordinator = StatusRefreshCoordinator(
             FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
@@ -208,21 +209,66 @@ class StatusRefreshCoordinatorTest {
             coordinator.requestRefresh()
             withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Active } }
             response = SkillBillStatusOutcome.Active(
-                observedAt = now, summary = "monitoring", repositoryIdentity = "repo", issueKey = "SKILL-417",
-                workflowId = "goal-workflow", workflowFamily = "feature-goal", currentStepId = "monitor",
+                observedAt = now, summary = "monitoring", repositoryIdentity = "repo", issueKey = "0AC-46",
+                workflowId = "goal-1", workflowFamily = "feature-goal", currentStepId = "monitor",
                 currentStepLabel = "Monitor", progressCompleted = null, progressTotal = null, startedAt = now,
                 currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
-                execution = StatusExecutionMetadata(
-                    executionScope = "workflow", executionId = "goal-run", statusStoreId = "store",
-                    branchCorrelation = "main", runSequence = "10", statusRevision = "1",
+                execution = childExecution.copy(
+                    executionId = "goal-execution",
+                    statusStoreId = "goal-store",
+                    runSequence = "19",
                 ),
             )
             coordinator.requestRefresh()
             val updated = withTimeout(2_000) {
-                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active && it.currentStepId == "monitor" }
+                coordinator.outcomes.first { outcome ->
+                    outcome is SkillBillStatusOutcome.Active && outcome.currentStepId == "monitor"
+                }
             } as SkillBillStatusOutcome.Active
-            assertEquals("goal-run", updated.execution?.executionId)
-            assertEquals("10", updated.execution?.runSequence)
+            assertEquals("goal-execution", updated.execution?.executionId)
+            assertEquals("monitor", updated.currentStepId)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
+    fun `a live branch workflow replaces a finished standalone phase snapshot`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        val standaloneExecution = StatusExecutionMetadata(
+            executionScope = "standalone_phase", executionId = "validation-execution",
+            statusStoreId = "standalone-store", branchCorrelation = "feat/0AC-46",
+            runSequence = "11", statusRevision = "2", invocationId = "validation-invocation",
+            phaseId = "validation",
+        )
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Blocked(
+            observedAt = now, summary = "blocked", repositoryIdentity = "repo", issueKey = "0AC-46",
+            currentStepId = "validation", currentStepLabel = "Validation", startedAt = now,
+            currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+            execution = standaloneExecution,
+        )
+        val coordinator = StatusRefreshCoordinator(
+            FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Blocked } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "monitoring", repositoryIdentity = "repo", issueKey = "0AC-46",
+                workflowId = "goal-1", workflowFamily = "feature-goal", currentStepId = "monitor",
+                currentStepLabel = "Monitor", progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = StatusExecutionMetadata(
+                    executionScope = "workflow", executionId = "goal-execution", statusStoreId = "goal-store",
+                    branchCorrelation = "feat/0AC-46", runSequence = "2", statusRevision = "1",
+                ),
+            )
+            coordinator.requestRefresh()
+            val updated = withTimeout(2_000) {
+                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active }
+            } as SkillBillStatusOutcome.Active
+            assertEquals("goal-execution", updated.execution?.executionId)
+            assertEquals("monitor", updated.currentStepId)
         } finally {
             coordinator.dispose()
         }
