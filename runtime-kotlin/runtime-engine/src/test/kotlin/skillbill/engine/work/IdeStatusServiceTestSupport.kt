@@ -268,20 +268,21 @@ internal fun ideStatusService(
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
+  val goalStatusService =
+    testGoalRunnerStatusService(
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      phaseRecorder = phaseRecorder,
+      clock = ideStatusClock,
+      ports =
+        GoalRunnerStatusTestPorts(
+          runtimeStatusService = runtimeStatusService,
+        ),
+    )
   val projector =
     IdeStatusProjector(
       workflowSnapshotValidator = snapshotValidator,
-      goalRunnerStatusService =
-        testGoalRunnerStatusService(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          phaseRecorder = phaseRecorder,
-          clock = ideStatusClock,
-          ports =
-            GoalRunnerStatusTestPorts(
-              runtimeStatusService = runtimeStatusService,
-            ),
-        ),
+      goalRunnerStatusService = goalStatusService,
       featureTaskRuntimeStatusService = runtimeStatusService,
       manifestStore = manifestStore,
       diagnostics = NoopRuntimeDiagnostics,
@@ -294,6 +295,8 @@ internal fun ideStatusService(
     clock = ideStatusClock,
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
     manifestStore = manifestStore,
+    featureTaskRuntimeStatusService = runtimeStatusService,
+    goalRunnerStatusService = goalStatusService,
   )
 }
 

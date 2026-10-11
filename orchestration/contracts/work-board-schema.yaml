@@ -1,0 +1,57 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/work-board-schema.yaml"
+title: "Machine-wide work board"
+type: object
+additionalProperties: false
+required: [contract_version, items, observed_at, finished_within, diagnostics]
+properties:
+  contract_version:
+    type: string
+    const: "1.0"
+  items:
+    type: array
+    items:
+      $ref: "#/$defs/item"
+  observed_at:
+    type: string
+    format: date-time
+  finished_within:
+    type: string
+    enum: [6h, 24h, 7d]
+  diagnostics:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        workflow_id: {type: string, minLength: 1}
+        invocation_id: {type: string, minLength: 1}
+        repository_identity: {type: [string, "null"]}
+        reason:
+          type: string
+          enum: [missing_repository_identity, invalid_repository_identity, missing_completion_time]
+  problem:
+    type: object
+    additionalProperties: false
+    required: [code, message]
+    properties:
+      code: {type: string, const: absent_database}
+      message: {type: string, minLength: 1}
+$defs:
+  item:
+    type: object
+    additionalProperties: false
+    required: [snapshot, repository_root]
+    properties:
+      snapshot:
+        $ref: "https://skill-bill.dev/contracts/ide-status-schema.yaml"
+      repository_root:
+        type: string
+        minLength: 1
+      finished_at:
+        type: [string, "null"]
+        format: date-time
+      finished_at_source:
+        type: [string, "null"]
+        enum: [standalone_finished_at, workflow_completion, goal_completion, goal_state_entry, estimated_goal_state_entry, null]

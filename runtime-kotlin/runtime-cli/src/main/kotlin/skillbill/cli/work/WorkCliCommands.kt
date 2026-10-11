@@ -1,6 +1,7 @@
 package skillbill.cli.work
 
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
@@ -15,9 +16,19 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
 import skillbill.cli.model.CliFormat
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.model.IdeStatusRequest
+import skillbill.ports.idestatus.WorkPayloadValidator
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
+import skillbill.ports.idestatus.model.WorkBoardRequest
+import skillbill.ports.idestatus.model.WorkBoardWindow
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -25,10 +36,85 @@ import java.time.format.DateTimeFormatter
 class WorkTopLevelCommands(
   list: WorkListCommand,
   status: WorkStatusCommand,
+  board: WorkBoardCommand,
+  detail: WorkDetailCommand,
 ) {
   val command: DocumentedNoOpCliCommand =
     object : DocumentedNoOpCliCommand("work", "Inspect all persisted feature work.") {}
-      .subcommands(list, status)
+      .subcommands(list, status, board, detail)
+}
+
+@Inject
+class WorkBoardCommand(
+  private val service: IdeStatusService,
+  private val validator: WorkPayloadValidator,
+  private val state: CliRunState,
+) : DocumentedCliCommand("board", "Emit the machine-wide work board as JSON.") {
+  private val format by option("--format", help = "Output format.")
+    .choice("json")
+    .default("json")
+  private val finishedWithin by option("--finished-within", help = "Terminal retention window.")
+    .choice(*WorkBoardWindow.entries.map { it.wireValue }.toTypedArray())
+    .default(WorkBoardWindow.TWENTY_FOUR_HOURS.wireValue)
+
+  override fun run() {
+    val window = WorkBoardWindow.entries.single { it.wireValue == finishedWithin }
+    val result = service.board(WorkBoardRequest(window))
+    val payload =
+      linkedMapOf<String, Any?>(
+        SharedPayloadKeys.CONTRACT_VERSION to WORK_BOARD_CONTRACT_VERSION,
+        WorkBoardPayloadKeys.ITEMS to result.items.map { item ->
+          linkedMapOf(
+            WorkBoardPayloadKeys.SNAPSHOT to service.toWireMap(item.snapshot),
+            WorkBoardPayloadKeys.REPOSITORY_ROOT to item.repositoryRoot,
+            WorkBoardPayloadKeys.FINISHED_AT to item.finishedAt?.toString(),
+            WorkBoardPayloadKeys.FINISHED_AT_SOURCE to item.finishedAtSource?.wireValue,
+          )
+        },
+        WorkBoardPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
+        WorkBoardPayloadKeys.FINISHED_WITHIN to result.finishedWithin.wireValue,
+        WorkBoardPayloadKeys.DIAGNOSTICS to result.diagnostics.map(::workBoardDiagnosticWireMap),
+      )
+    if (result.absentDatabase) {
+      payload[WorkBoardPayloadKeys.PROBLEM] =
+        mapOf(
+          WorkBoardPayloadKeys.CODE to IdeStatusProblemCode.ABSENT_DATABASE.wireValue,
+          WorkBoardPayloadKeys.MESSAGE to "Skill Bill database is not present.",
+        )
+    }
+    validator.validateBoard(JsonCodec.mapToJsonObject(payload), "work-board-cli")
+    state.complete(payload, CliFormat.JSON)
+  }
+}
+
+@Inject
+class WorkDetailCommand(
+  private val service: IdeStatusService,
+  private val validator: WorkPayloadValidator,
+  private val state: CliRunState,
+) : DocumentedCliCommand("detail", "Emit one persisted work item and its detail as JSON.") {
+  private val id by argument("id", help = "Workflow id or standalone phase invocation id.")
+  private val format by option("--format", help = "Output format.")
+    .choice("json")
+    .default("json")
+
+  override fun run() {
+    val result = service.detail(WorkDetailRequest(id))
+    val payload =
+      linkedMapOf<String, Any?>(
+        SharedPayloadKeys.CONTRACT_VERSION to WORK_DETAIL_CONTRACT_VERSION,
+        WorkDetailPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
+        WorkDetailPayloadKeys.ITEM to result.item?.let { workDetailItemWireMap(it, service.toWireMap(it.snapshot)) },
+      )
+    result.problem?.let {
+      payload[WorkDetailPayloadKeys.PROBLEM] = mapOf(
+        WorkDetailPayloadKeys.CODE to it.code.wireValue,
+        WorkDetailPayloadKeys.MESSAGE to it.message,
+      )
+    }
+    validator.validateDetail(JsonCodec.mapToJsonObject(payload), "work-detail-cli")
+    state.complete(payload, CliFormat.JSON)
+  }
 }
 
 @Inject

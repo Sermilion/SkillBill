@@ -44,6 +44,15 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         now: Instant,
       ): List<StandalonePhaseStatusRecord> = emptyList()
 
+      override fun readBoardCandidates(
+        finishedFrom: Instant,
+        finishedThrough: Instant,
+      ): List<StandalonePhaseStatusRecord> = emptyList()
+
+      override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? = null
+
+      override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? = null
+
       override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
         StandalonePhaseStatusUpdateResult.MISSING
     }

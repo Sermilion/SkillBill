@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.JsonCodec
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.workflow.time.parsePersistedInstantOrNull
 
 internal fun decodeControlState(raw: String): GoalRunnerControlState {
   val state =
@@ -54,7 +55,11 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     validationQualityRetriesBySubtask = state.intIntMap("validation_quality_retries_by_subtask"),
     pendingReAttemptCauseBySubtask = state.intStringMap("pending_re_attempt_cause_by_subtask"),
     pendingCausingLoopEntryBySubtask = state.intStringMap("pending_causing_loop_entry_by_subtask"),
-    goalCompletedAt = state.nullableString("goal_completed_at"),
+    goalCompletedAt = state.nullableString("goal_completed_at")?.also { value ->
+      if (parsePersistedInstantOrNull(value) == null) {
+        goalRunnerControlSchemaError("field 'goal_completed_at' must be a supported persisted instant.")
+      }
+    },
     goalPullRequestUrl = state.nullableString("goal_pull_request_url"),
   )
 }

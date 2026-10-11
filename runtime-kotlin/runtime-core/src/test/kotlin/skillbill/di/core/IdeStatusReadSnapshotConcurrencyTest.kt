@@ -209,6 +209,8 @@ private class SnapshotFixture(
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
       manifestStore = EmptyManifestStore,
+      featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
+      goalRunnerStatusService = component.goalRunnerStatusService,
     )
   }
 }

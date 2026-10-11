@@ -107,6 +107,69 @@ class StandalonePhaseStatusStoreTest {
     assertEquals(expired, rows.first { it.executionId == "execution-review" }.leaseExpiresAt)
   }
 
+  @Test
+  fun `board candidate read keeps live rows across identities and completion bounds inclusive`() {
+    val directory = Files.createTempDirectory("standalone-board-candidates")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val finishedFrom = Instant.parse("2026-10-10T00:00:00Z")
+    val finishedThrough = Instant.parse("2026-10-11T00:00:00Z")
+    val registrationTime = finishedThrough.minusSeconds(300)
+    val names = listOf("live-old", "lower-bound", "upper-bound", "outside")
+    database.transaction {
+      names.forEachIndexed { index, name ->
+        val rootIdentity = if (index % 2 == 0) "repo-a" else "repo-b"
+        it.standalonePhaseStatuses.register(
+          StandalonePhaseStatusRegistration(
+            repositoryIdentity = rootIdentity,
+            branchCorrelation = "branch-$index",
+            issueKey = null,
+            workflowId = null,
+            invocationId = name,
+            phaseId = "review",
+            executionId = "execution-$name",
+            lifecycleState = "active",
+            currentStep = "review",
+            startedAt = registrationTime.minusSeconds(90_000),
+            leaseOwner = "owner-$name",
+            leaseGeneration = 1,
+            leaseExpiresAt = finishedThrough.plusSeconds(86_400),
+          ),
+        )
+        if (name != "live-old") {
+          val finishedAt =
+            when (name) {
+              "lower-bound" -> finishedFrom
+              "upper-bound" -> finishedThrough
+              else -> finishedFrom.minusNanos(1)
+            }
+          it.standalonePhaseStatuses.update(
+            StandalonePhaseStatusUpdate(
+              executionId = "execution-$name",
+              expectedRevision = "1",
+              leaseOwner = "owner-$name",
+              leaseGeneration = 1,
+              lifecycleState = "terminal",
+              currentStep = "review",
+              currentActivity = null,
+              updatedAt = finishedAt,
+              finishedAt = finishedAt,
+              terminalResult = "done",
+            ),
+          )
+        }
+      }
+    }
+
+    val (candidates, exactOld) =
+      database.read {
+        it.standalonePhaseStatuses.readBoardCandidates(finishedFrom, finishedThrough) to
+          it.standalonePhaseStatuses.readByInvocation("outside")
+      }
+
+    assertEquals(setOf("live-old", "lower-bound", "upper-bound"), candidates.map { it.invocationId }.toSet())
+    assertEquals("outside", exactOld?.invocationId)
+  }
+
   private fun monitorRegistration(
     suffix: String,
     startedAt: Instant,
