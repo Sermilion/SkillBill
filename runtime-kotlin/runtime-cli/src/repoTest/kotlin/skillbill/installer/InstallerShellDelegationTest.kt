@@ -83,6 +83,18 @@ class InstallerShellDelegationTest {
   @Test
   fun `pre-install wipe preserves copied source reserved baseline and state dbs`() {
     val fixtures = seedStateDirForWipe()
+    val journalsAndBackup =
+      listOf(
+        fixtures.stateDb.resolveSibling("review-metrics.db-wal"),
+        fixtures.stateDb.resolveSibling("review-metrics.db-shm"),
+        fixtures.stateDb.resolveSibling("review-metrics.db-journal"),
+        fixtures.stateDir.resolve("backups/baseline/review-metrics.db"),
+        fixtures.stateDir.resolve("backups/baseline/reset-report.json"),
+      )
+    journalsAndBackup.forEach { path ->
+      Files.createDirectories(path.parent)
+      Files.writeString(path, "preserved ${path.fileName}")
+    }
     val run = runUninstaller(fixtures, preserveSource = true, goalContinuation = false)
 
     assertEquals(0, run.exitCode, run.output)
@@ -95,6 +107,9 @@ class InstallerShellDelegationTest {
     assertFalse(Files.exists(fixtures.runtimeBin), "runtime/ must be cleared under preserve-wipe")
     assertFalse(Files.exists(fixtures.installedSkill), "installed-skills/ must be cleared under preserve-wipe")
     assertTrue(Files.isRegularFile(fixtures.stateDb), "*.db state DBs must be preserved under preserve-wipe")
+    journalsAndBackup.forEach { path ->
+      assertEquals("preserved ${path.fileName}", Files.readString(path), "Database recovery data must survive cleanup")
+    }
   }
 
   @Test
