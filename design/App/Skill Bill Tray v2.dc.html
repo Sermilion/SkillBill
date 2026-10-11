@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/colors.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/typography.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/base.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/brand.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/buttons.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/chips.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/forms.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/cards.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/tables.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/article.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/layout.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/styles.css">
+<script src="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/_ds_bundle.js"></script>
+<style>
+:root{
+  --ps-bg:#0E0E11; --ps-bg-2:#141417; --ps-surface:#17171B; --ps-surface-2:#1F1F24; --ps-surface-3:#2A2A31;
+  --ps-border:#26262C; --ps-border-strong:#383840;
+  --ps-ink:#EDEDF0; --ps-slate:#9C9CA6; --ps-slate-400:#6A6A74; --ps-ink-800:#08080A;
+  --ps-sakura-500:#E9A81C; --ps-sakura-300:#F3C462; --ps-sakura-700:#F5BC3E;
+  --ps-sakura-50:rgba(233,168,28,0.12); --ps-sakura-100:rgba(233,168,28,0.35);
+  --ps-gold-500:#E2703C; --ps-gold-600:#F49463; --ps-gold-50:rgba(226,112,60,0.12);
+  --ps-success-500:#3FB950; --ps-success-50:rgba(63,185,80,0.14);
+  --ps-danger-500:#F0555B; --ps-danger-50:rgba(240,85,91,0.12);
+  --ps-info-500:#6FA8DC; --ps-info-50:rgba(111,168,220,0.12);
+  --ps-on-accent:#14100A;
+  --glow-sakura:0 0 18px rgba(233,168,28,0.32);
+  --grad-hero-glow:radial-gradient(120% 80% at 85% -10%, rgba(233,168,28,0.10), transparent 60%);
+}
+</style>
+<style>
+body{margin:0;background:#0B0B0D;font-family:var(--font-sans)}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.dv-tid{font:600 10px var(--font-mono);padding:3px 7px;background:var(--ps-sakura-500);color:var(--ps-on-accent);border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--font-sans);color:var(--ps-ink)}
+.dv-tsub{margin:0 0 26px;max-width:900px;font:400 12px/1.6 var(--font-sans);color:var(--ps-slate)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start}
+.dv-opts+.dv-opts{margin-top:36px}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px}
+.dv-oid{font:600 10.5px var(--font-mono);padding:3px 7px;background:rgba(255,255,255,.08);color:var(--ps-ink);border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 var(--font-sans);color:var(--ps-slate)}
+.dv-note{max-width:380px;font:400 11px/1.55 var(--font-sans);color:var(--ps-slate-400)}
+@keyframes sb-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.mono{font-family:var(--font-mono)}
+.ink{color:var(--ps-ink)} .slate{color:var(--ps-slate)} .dim{color:var(--ps-slate-400)}
+.amber{color:var(--ps-sakura-300)} .gold{color:var(--ps-gold-600)} .red{color:var(--ps-danger-500)} .green{color:var(--ps-success-500)} .blue{color:var(--ps-info-500)}
+.sep{color:var(--ps-slate-400)}
+.label{font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400);text-transform:uppercase}
+
+.dot{width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;display:inline-block}
+.dot.active{background:var(--ps-sakura-500);box-shadow:var(--glow-sakura);animation:sb-pulse 1.8s ease-in-out infinite}
+.dot.planning{background:var(--ps-info-500);animation:sb-pulse 1.8s ease-in-out infinite}
+.dot.paused{border:1.5px solid var(--ps-slate)}
+.dot.blocked{border:2px solid var(--ps-gold-500);width:8px;height:8px}
+.dot.failed{background:var(--ps-danger-500)}
+.dot.done{background:var(--ps-success-500)}
+.dot.pending{border:1.5px solid var(--ps-slate-400)}
+.dot.stale{background:var(--ps-slate-400)}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11px/1 var(--font-mono);border-radius:999px;padding:4px 8px;border:1px solid var(--ps-border-strong);color:var(--ps-slate);white-space:nowrap}
+.chip.sm{font-size:10.5px;padding:3px 7px}
+.chip.amber{color:var(--ps-sakura-300);background:var(--ps-sakura-50);border-color:var(--ps-sakura-100)}
+.chip.gold{color:var(--ps-gold-600);border-color:rgba(226,112,60,.5)}
+.chip.red{color:var(--ps-danger-500);border-color:rgba(240,85,91,.45)}
+.chip.green{color:var(--ps-success-500);border-color:rgba(63,185,80,.45)}
+.chip.blue{color:var(--ps-info-500);border-color:rgba(111,168,220,.45)}
+.chip.ghost{background:var(--ps-surface-2)}
+
+.btn{height:32px;padding:0 13px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-ink);font:600 12px/1 var(--font-sans);cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--ps-sakura-500);border-color:transparent;color:var(--ps-on-accent);font-weight:700}
+.btn.danger{color:var(--ps-danger-500);border-color:rgba(240,85,91,.45)}
+.btn.off{opacity:.42;cursor:default}
+
+.bar{height:3px;border-radius:999px;background:var(--ps-surface-3);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ps-sakura-500)}
+.bar>i.blue{background:var(--ps-info-500)} .bar>i.slate{background:var(--ps-slate)} .bar>i.red{background:var(--ps-danger-500)} .bar>i.gold{background:var(--ps-gold-500)}
+
+/* tray panel */
+.tp{width:380px;background:var(--ps-surface);border:1px solid var(--ps-border);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.65);overflow:hidden}
+.tp-hd{display:flex;align-items:center;gap:9px;padding:13px 16px 12px;border-bottom:1px solid var(--ps-border);background:linear-gradient(180deg,rgba(233,168,28,0.07),transparent)}
+.tp-hd .name{font:700 15px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)}
+.tp-hd .meta{margin-left:auto;font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)}
+.tp-stats{display:flex;padding:11px 16px;border-bottom:1px solid var(--ps-border);background:var(--ps-bg-2)}
+.tp-stats>div{flex:1;display:flex;flex-direction:column;gap:4px}
+.tp-stats b{font:700 17px/1 var(--font-display)}
+.tp-tabs{display:flex;border-bottom:1px solid var(--ps-border);padding:0 10px}
+.tp-tabs>span{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 0 10px;font:600 12.5px/1 var(--font-sans);color:var(--ps-slate);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
+.tp-tabs>span.on{color:var(--ps-ink);border-bottom-color:var(--ps-sakura-500)}
+.tp-tabs .n{font:500 10.5px/1 var(--font-mono);color:var(--ps-slate-400);background:var(--ps-surface-3);border-radius:999px;padding:3px 6px}
+.tp-tabs>span.on .n{color:var(--ps-sakura-300);background:var(--ps-sakura-50)}
+.tp-tabs .att{width:6px;height:6px;border-radius:50%;background:var(--ps-gold-500)}
+.side-tabs{display:flex;gap:4px;margin:0 14px 8px;padding:3px;border-radius:8px;background:var(--ps-surface-2);border:1px solid var(--ps-border)}
+.side-tabs>span{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border-radius:6px;font:600 12px/1 var(--font-sans);color:var(--ps-slate)}
+.side-tabs>span.on{background:var(--ps-surface-3);color:var(--ps-ink)}
+.side-tabs .n{font:500 10.5px/1 var(--font-mono);color:var(--ps-slate-400)}
+.side-tabs .att{width:6px;height:6px;border-radius:50%;background:var(--ps-gold-500)}
+.tp-sec{display:flex;align-items:baseline;justify-content:space-between;padding:11px 16px 5px}
+.tp-sec+.row{border-top:none}
+.row{display:flex;flex-direction:column;gap:6px;padding:10px 16px 11px;border-left:2px solid transparent;border-top:1px solid var(--ps-border);cursor:pointer}
+.row:hover{background:var(--ps-surface-2)}
+.row.sel{border-left-color:var(--ps-sakura-500);background:rgba(233,168,28,0.06)}
+.row.warn{border-left-color:var(--ps-gold-500);background:rgba(226,112,60,0.07)}
+.row.err{border-left-color:var(--ps-danger-500);background:rgba(240,85,91,0.05)}
+.row.faded{opacity:.62}
+.r1{display:flex;align-items:center;gap:8px}
+.r1 .repo{font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r1 .grow{flex:1}
+.r2{display:flex;align-items:center;gap:6px;font:400 11.5px/1.35 var(--font-mono);color:var(--ps-slate);white-space:nowrap;overflow:hidden}
+.r2 .end{margin-left:auto;color:var(--ps-ink)}
+.r3{font:400 11px/1.45 var(--font-sans);color:var(--ps-slate)}
+.kind{font:600 9px/1 var(--font-mono);letter-spacing:.1em;color:var(--ps-slate-400);border:1px solid var(--ps-border-strong);border-radius:4px;padding:3px 4px;text-transform:uppercase}
+.tp-ft{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--ps-border);background:var(--ps-bg-2)}
+.tp-ft .lnk{font:600 12px/1 var(--font-sans);color:var(--ps-sakura-300)}
+.tp-ft .aux{display:flex;gap:14px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate-400)}
+
+/* windows */
+.win{background:var(--ps-bg);border:1px solid var(--ps-border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.win-tb{display:flex;align-items:center;height:36px;padding:0 14px;background:var(--ps-ink-800);border-bottom:1px solid var(--ps-border);font:600 12px/1 var(--font-sans);color:var(--ps-slate)}
+.win-tb .t{flex:1;text-align:center}
+.win-tb .ctl{display:flex;gap:14px;font:400 13px/1 var(--font-mono);color:var(--ps-slate-400)}
+.kv{display:flex;justify-content:space-between;gap:12px;font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)}
+.kv>span:last-child{font-family:var(--font-mono);color:var(--ps-ink);text-align:right;word-break:break-all}
+.hr{height:1px;background:var(--ps-border)}
+.side-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px}
+.side-item.on{background:var(--ps-surface-2);box-shadow:inset 2px 0 0 var(--ps-sakura-500)}
+.side-item .n{font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)}
+.side-item .s{font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)}
+.metric{padding:15px 18px;display:flex;flex-direction:column;gap:7px;border-right:1px solid var(--ps-border)}
+.metric:last-child{border-right:none}
+.metric b{font:700 19px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)}
+.metric small{font:400 11px/1 var(--font-mono);color:var(--ps-slate)}
+.st{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border)}
+.st .id{width:18px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-slate-400)}
+.st .dc{width:8px;flex:none;padding-top:5px}
+.st .body{flex:1;min-width:0}
+.st .tt{font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)}
+.st .sub{font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)}
+.st .rt{font:400 11px/1.5 var(--font-mono);color:var(--ps-slate);text-align:right}
+.st.cur{background:rgba(233,168,28,0.06);margin:0 -10px;padding-left:10px;padding-right:10px;border-radius:8px}
+.pipe{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.ph{font:500 10.5px/1 var(--font-mono);padding:4px 7px;border-radius:5px;border:1px solid var(--ps-border);color:var(--ps-slate-400)}
+.ph.ok{color:var(--ps-success-500);border-color:rgba(63,185,80,.35)}
+.ph.now{color:var(--ps-on-accent);background:var(--ps-sakura-500);border-color:transparent;font-weight:700}
+.ph.goal{border-style:dashed}
+.card{border:1px solid var(--ps-border);background:var(--ps-surface);border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:8px}
+.card.gold{border-color:rgba(226,112,60,.4);background:var(--ps-gold-50)}
+.card.red{border-color:rgba(240,85,91,.4);background:var(--ps-danger-50)}
+.cmd{display:flex;align-items:center;gap:10px;height:34px;padding:0 6px 0 12px;border-radius:8px;background:var(--ps-ink-800);border:1px solid var(--ps-border-strong);font:400 12px/1 var(--font-mono);color:var(--ps-ink);white-space:nowrap}
+.cmd>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ellip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd .btn{height:24px;padding:0 9px;font-size:11px;margin-left:auto}
+.tabs{display:flex;gap:4px;padding:3px;border-radius:8px;background:var(--ps-surface-2);border:1px solid var(--ps-border);width:max-content}
+.tabs span{font:600 11.5px/1 var(--font-sans);color:var(--ps-slate);padding:6px 11px;border-radius:6px}
+.tabs span.on{background:var(--ps-surface-3);color:var(--ps-ink)}
+.toast{width:360px;background:rgba(31,31,36,.97);border:1px solid var(--ps-border-strong);border-radius:14px;padding:13px 15px;display:flex;gap:12px;box-shadow:0 18px 40px rgba(0,0,0,.6)}
+.toast .ic{width:20px;height:20px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--font-sans)}
+.toast .hd{display:flex;align-items:baseline;gap:8px;font:700 12.5px/1 var(--font-display);color:var(--ps-ink)}
+.toast .hd span{margin-left:auto;font:400 10.5px/1 var(--font-mono)}
+.toast .ti{font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)}
+.toast .bd{font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)}
+.tog{width:28px;height:16px;border-radius:999px;background:var(--ps-surface-3);position:relative;flex:none}
+.tog::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--ps-slate)}
+.tog.on{background:var(--ps-sakura-500)}
+.tog.on::after{left:14px;background:var(--ps-on-accent)}
+.field{height:32px;display:flex;align-items:center;padding:0 10px;border-radius:8px;background:var(--ps-surface-3);border:1px solid var(--ps-border);font:400 12px/1 var(--font-mono);color:var(--ps-ink)}
+.menu{width:300px;white-space:nowrap;background:var(--ps-surface-2);border:1px solid var(--ps-border-strong);border-radius:8px;padding:5px;box-shadow:0 18px 40px rgba(0,0,0,.6);font:400 12.5px/1 var(--font-sans);color:var(--ps-ink)}
+.menu div{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:5px}
+.menu div.hl{background:var(--ps-sakura-50)}
+.menu hr{border:none;height:1px;background:var(--ps-border-strong);margin:4px 2px}
+.menu small{margin-left:auto;font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)}
+.desk{width:340px;height:420px;border-radius:12px;overflow:hidden;position:relative;border:1px solid var(--ps-border);background:radial-gradient(120% 90% at 30% 20%,#23232b,#101014)}
+.desk .mbar{position:absolute;left:0;right:0;top:0;height:24px;background:rgba(18,18,21,.92);display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 10px;font:500 11px/1 var(--font-sans);color:var(--ps-slate)}
+.desk .tbar{position:absolute;left:0;right:0;bottom:0;height:36px;background:rgba(18,18,21,.96);border-top:1px solid var(--ps-border);display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 10px;font:400 10.5px/1.25 var(--font-sans);color:var(--ps-slate)}
+.desk .ticon{display:inline-flex;align-items:center;gap:4px;padding:3px 5px;border-radius:5px}
+.desk .ticon.hot{background:rgba(255,255,255,.1)}
+.mini{position:absolute;width:236px;background:var(--ps-surface);border:1px solid var(--ps-border-strong);box-shadow:0 18px 40px rgba(0,0,0,.6);overflow:hidden}
+.mini .h{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--ps-border);font:700 11.5px/1 var(--font-display);color:var(--ps-ink)}
+.mini .h span{margin-left:auto;font:400 9.5px/1 var(--font-mono);color:var(--ps-slate-400)}
+.mini .t{display:flex;border-bottom:1px solid var(--ps-border);font:600 10.5px/1 var(--font-sans);color:var(--ps-slate)}
+.mini .t span{flex:1;text-align:center;padding:7px 0 6px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.mini .t span.on{color:var(--ps-ink);border-bottom-color:var(--ps-sakura-500)}
+.mini .r{display:flex;align-items:center;gap:6px;padding:7px 10px;border-top:1px solid var(--ps-border);font:700 11px/1 var(--font-display);color:var(--ps-ink)}
+.mini .r:first-of-type{border-top:none}
+.mini .r small{margin-left:auto;font:400 9.5px/1 var(--font-mono);color:var(--ps-slate)}
+.mini .f{padding:7px 10px;border-top:1px solid var(--ps-border);background:var(--ps-bg-2);font:600 10px/1 var(--font-sans);color:var(--ps-sakura-300)}
+.nub{position:absolute;width:12px;height:12px;background:var(--ps-surface);border-left:1px solid var(--ps-border-strong);border-top:1px solid var(--ps-border-strong);transform:rotate(45deg)}
+table.map{border-collapse:collapse;width:100%;font:400 11.5px/1.5 var(--font-sans);color:var(--ps-slate)}
+table.map th{font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;color:var(--ps-slate-400);text-align:left;padding:9px 12px;border-bottom:1px solid var(--ps-border-strong);text-transform:uppercase}
+table.map td{padding:8px 12px;border-bottom:1px solid var(--ps-border);vertical-align:top}
+table.map td:first-child{color:var(--ps-ink);font-weight:600;white-space:nowrap}
+table.map code{font:400 11px/1.4 var(--font-mono);color:var(--ps-sakura-300)}
+.tag-new{font:600 9px/1 var(--font-mono);color:var(--ps-info-500);border:1px solid rgba(111,168,220,.45);border-radius:4px;padding:2px 4px;margin-left:6px}
+ul.plain{margin:0;padding-left:16px;font:400 12px/1.7 var(--font-sans);color:var(--ps-slate)}
+ul.plain b{color:var(--ps-ink);font-weight:600}
+</style></helmet>
+
+<!-- ================================================================== -->
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Skill Bill tray, revised for runtime data</span></div>
+<p class="dv-tsub">Every value on these screens has a source in the Skill Bill runtime: the IDE status contract, goal status projection, decomposition manifest, standalone phase records, or the work list. Screen 3 maps each field. Several goals and standalone phases can run at once, across repositories. The tray lists all of them, and each row opens its own detail view.</p>
+
+<div class="dv-opts">
+
+<!-- 2a: popover -->
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Tray popover: every live goal and standalone phase</div>
+<div class="tp">
+  <div class="tp-hd">
+    <img src="docs/assets/skill-bill-app-icon.svg" alt="" width="18" height="18" style="display:block;border-radius:4px">
+    <span class="name">Skill Bill</span>
+    <span class="meta">polled 4s ago</span>
+  </div>
+  <div class="tp-stats">
+    <div><b class="amber">4</b><span class="label">Running</span></div>
+    <div><b class="gold">3</b><span class="label">Needs you</span></div>
+    <div><b class="ink">6</b><span class="label">Done 24h</span></div>
+  </div>
+
+  <div class="tp-tabs">
+    <span class="on">Goals <span class="n">6</span><span class="att"></span></span>
+    <span>Phases <span class="n">3</span><span class="att"></span></span>
+  </div>
+
+  <div class="row warn" style="border-top:none">
+    <div class="r1"><span class="dot blocked"></span><span class="repo">infra-terraform</span><span class="grow"></span><span class="chip sm gold">INF-7</span></div>
+    <div class="r2"><span class="gold">blocked</span><span class="sep">·</span><span>review</span><span class="sep">·</span><span>subtask 3/6</span><span class="sep">·</span><span>ran 7h 26m</span></div>
+    <div class="r3">Needs your decision: review left 2 Blocker findings after 3 fix passes.</div>
+  </div>
+
+  <div class="row err">
+    <div class="r1"><span class="dot failed"></span><span class="repo">design-tokens</span><span class="grow"></span><span class="chip sm red">DSN-31</span></div>
+    <div class="r2"><span class="red">failed</span><span class="sep">·</span><span>validate</span><span class="sep">·</span><span>subtask 6/9</span><span class="sep">·</span><span>ran 22m</span></div>
+  </div>
+
+  <div class="row sel">
+    <div class="r1"><span class="dot active"></span><span class="repo">skill-bill</span><span class="grow"></span><span class="chip sm amber">SKILL-417</span></div>
+    <div class="r2"><span class="ink">review</span><span class="amber">pass 2</span><span class="sep">·</span><span>1h 36m</span><span class="sep">·</span><span>12m 40s</span><span class="end">2/3</span></div>
+    <div class="bar"><i style="width:45%"></i></div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span class="dot active"></span><span class="repo">payments-svc</span><span class="grow"></span><span class="chip sm amber">PAY-19</span></div>
+    <div class="r2"><span class="ink">implement</span><span class="sep">·</span><span>48m</span><span class="sep">·</span><span>4m 12s</span><span class="end">4/7</span></div>
+    <div class="bar"><i style="width:50%"></i></div>
+    <div class="r3">Pause requested: stops after subtask 4.</div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span class="dot planning"></span><span class="repo">newsreader</span><span class="grow"></span><span class="chip sm blue">NEWS-171</span></div>
+    <div class="r2"><span class="blue">planning</span><span class="sep">·</span><span>2/5 plans saved</span><span class="sep">·</span><span>wave 3–5</span><span class="end">18m</span></div>
+    <div class="bar"><i class="blue" style="width:40%"></i></div>
+  </div>
+
+  <div class="row faded">
+    <div class="r1"><span class="dot paused"></span><span class="repo">atlas-web</span><span class="grow"></span><span class="chip sm ghost">ATL-402</span></div>
+    <div class="r2"><span class="ink">paused</span><span class="sep">·</span><span>runner interrupted</span><span class="sep">·</span><span>ran 1h 04m</span><span class="end">5/9</span></div>
+  </div>
+
+  <div class="tp-ft">
+    <span class="lnk">Open Skill Bill</span>
+    <div class="aux"><span>History</span><span>Refresh</span><span>Settings</span></div>
+  </div>
+</div>
+<div class="dv-note">Rows sort by urgency: blocked, failed, active, planning, paused. The two clocks on active rows are goal active time and current-subtask active time. Both count only time the runner actually executed, so blocked or paused intervals are excluded. Planning goals show <span class="mono">n/m plans saved</span> in place of subtask progress. A loop or pass count appears only when the runtime reports one. An orange dot on a tab means something in it needs you. The popover reopens on the last tab you used.</div>
+</div>
+
+<!-- 2a2: popover, phases tab -->
+<div class="dv-opt" id="2a2">
+<div class="dv-olabel"><a class="dv-oid" href="#2a2">2a′</a>Same popover, Phases tab</div>
+<div class="tp">
+  <div class="tp-hd">
+    <img src="docs/assets/skill-bill-app-icon.svg" alt="" width="18" height="18" style="display:block;border-radius:4px">
+    <span class="name">Skill Bill</span>
+    <span class="meta">polled 4s ago</span>
+  </div>
+  <div class="tp-stats">
+    <div><b class="amber">4</b><span class="label">Running</span></div>
+    <div><b class="gold">3</b><span class="label">Needs you</span></div>
+    <div><b class="ink">6</b><span class="label">Done 24h</span></div>
+  </div>
+
+  <div class="tp-tabs">
+    <span>Goals <span class="n">6</span><span class="att"></span></span>
+    <span class="on">Phases <span class="n">3</span><span class="att"></span></span>
+  </div>
+
+  <div class="row err" style="border-top:none">
+    <div class="r1"><span class="dot failed"></span><span class="repo">runtime-kotlin</span><span class="kind">review</span><span class="grow"></span><span class="mono dim" style="font-size:11px">ran 4m</span></div>
+    <div class="r2"><span class="red">failed</span><span class="sep">·</span><span class="dim">feat/RT-90-lease-cleanup</span></div>
+    <div class="r3">Review report was incomplete; available findings were printed.</div>
+  </div>
+
+  <div class="row sel">
+    <div class="r1"><span class="dot active"></span><span class="repo">skill-bill</span><span class="kind">validation</span><span class="grow"></span><span class="mono dim" style="font-size:11px">6m 12s</span></div>
+    <div class="r2"><span class="dim">fix/ide-status-readonly-lease</span></div>
+    <div class="r3 mono" style="font-size:11px">running ./gradlew check</div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span class="dot active"></span><span class="repo">atlas-web</span><span class="kind">pr</span><span class="grow"></span><span class="mono dim" style="font-size:11px">21m</span></div>
+    <div class="r2"><span class="ink">monitor_fix</span><span class="amber">1/3</span><span class="sep">·</span><span class="dim">feat/ATL-402-checkout-retry</span></div>
+    <div class="r3">Fixing 1 failing check: lint</div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span class="dot active"></span><span class="repo">newsreader</span><span class="kind">plan</span><span class="grow"></span><span class="chip sm amber">NEWS-180</span></div>
+    <div class="r2"><span class="ink">plan</span><span class="sep">·</span><span>preplan done</span><span class="sep">·</span><span>9m</span></div>
+  </div>
+
+  <div class="tp-sec" style="border-top:1px solid var(--ps-border)"><span class="label">Finished in the last hour</span></div>
+  <div class="row faded" style="border-top:none">
+    <div class="r1"><span class="dot done"></span><span class="repo">skill-bill</span><span class="kind">review</span><span class="grow"></span><span class="mono dim" style="font-size:11px">3m ago</span></div>
+    <div class="r2"><span class="green">completed</span><span class="sep">·</span><span class="dim">HEAD on main</span></div>
+  </div>
+
+  <div class="tp-ft">
+    <span class="lnk">Open Skill Bill</span>
+    <div class="aux"><span>History</span><span>Refresh</span><span>Settings</span></div>
+  </div>
+</div>
+<div class="dv-note">One row per standalone phase run: <span class="mono">review</span>, <span class="mono">validation</span>, <span class="mono">plan</span>, <span class="mono">pr</span>, or <span class="mono">monitor</span>, in any repository. Only <span class="mono">plan</span> carries an issue key. The tab count includes only live phases. Phases that finished in the last hour stay listed below them, then move to History.</div>
+</div>
+
+<!-- 2b: tray icon + menu -->
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Tray icon states and right-click menu (KDE, Windows, macOS)</div>
+<div style="width:400px;display:flex;flex-direction:column;gap:18px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div class="card" style="align-items:center;gap:9px;padding:14px 8px">
+      <img src="docs/assets/skill-bill-app-icon.svg" alt="" width="22" height="22" style="filter:grayscale(1);opacity:.55">
+      <span class="mono dim" style="font-size:10.5px">idle</span>
+    </div>
+    <div class="card" style="align-items:center;gap:9px;padding:14px 8px">
+      <span style="position:relative;display:inline-flex"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="22" height="22"><span style="position:absolute;right:-7px;bottom:-5px;min-width:13px;height:13px;border-radius:7px;background:var(--ps-sakura-500);color:var(--ps-on-accent);font:700 9px/13px var(--font-mono);text-align:center">4</span></span>
+      <span class="mono amber" style="font-size:10.5px">running</span>
+    </div>
+    <div class="card" style="align-items:center;gap:9px;padding:14px 8px">
+      <span style="position:relative;display:inline-flex"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="22" height="22"><span style="position:absolute;right:-6px;bottom:-4px;width:10px;height:10px;border-radius:50%;border:2.5px solid var(--ps-gold-500);background:var(--ps-surface)"></span></span>
+      <span class="mono gold" style="font-size:10.5px">needs you</span>
+    </div>
+    <div class="card" style="align-items:center;gap:9px;padding:14px 8px">
+      <span style="position:relative;display:inline-flex"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="22" height="22"><span style="position:absolute;right:-5px;bottom:-4px;width:10px;height:10px;border-radius:50%;background:var(--ps-danger-500)"></span></span>
+      <span class="mono red" style="font-size:10.5px">failed</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:16px;align-items:flex-start">
+    <div class="menu">
+      <div class="dim" style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;padding:6px 9px 4px">GOALS</div>
+      <div class="hl"><span class="dot blocked"></span>INF-7 · blocked<small>infra</small></div>
+      <div><span class="dot failed"></span>DSN-31 · failed<small>design</small></div>
+      <div><span class="dot active"></span>SKILL-417 · review 2/3<small>skill-bill</small></div>
+      <div><span class="dot active"></span>PAY-19 · implement 4/7<small>payments</small></div>
+      <div><span class="dot planning"></span>NEWS-171 · planning 2/5<small>news</small></div>
+      <hr>
+      <div class="dim" style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;padding:6px 9px 4px">PHASES</div>
+      <div><span class="dot failed"></span>review · failed<small>runtime-kotlin</small></div>
+      <div><span class="dot active"></span>validation<small>skill-bill</small></div>
+      <div><span class="dot active"></span>pr · monitor_fix 1/3<small>atlas-web</small></div>
+      <div><span class="dot active"></span>plan · NEWS-180<small>newsreader</small></div>
+      <hr>
+      <div>Open Skill Bill</div>
+      <div>History</div>
+      <div>Refresh now</div>
+      <div>Settings…</div>
+      <hr>
+      <div>Quit</div>
+    </div>
+    <div class="dv-note" style="max-width:130px">Tooltip: <span class="mono ink">Skill Bill · 4 running · 3 need you</span>.<br><br>KDE often delivers no left-click event to tray icons, so the right-click menu lists every item and opens the main window.</div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<!-- 2c: goal detail -->
+<div class="dv-opts">
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Main window: goal detail with subtasks and phase pipeline</div>
+<div class="win" style="width:1060px">
+  <div class="win-tb"><span style="width:60px"></span><span class="t">Skill Bill</span><span class="ctl" style="width:60px;justify-content:flex-end"><span>–</span><span>□</span><span>×</span></span></div>
+  <div style="display:flex;min-height:660px">
+
+    <div style="width:250px;flex:none;border-right:1px solid var(--ps-border);background:var(--ps-bg-2);display:flex;flex-direction:column">
+      <div style="padding:14px 14px 10px"><div class="field" style="color:var(--ps-slate-400);font-family:var(--font-sans)">⌕&nbsp; Filter by repo, issue, branch</div></div>
+      <div class="label" style="padding:4px 14px 6px">Needs you · 3</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px">
+        <div class="side-item"><span class="dot blocked"></span><div style="flex:1;min-width:0"><div class="n">infra-terraform</div><div class="s gold">INF-7 · blocked</div></div></div>
+        <div class="side-item"><span class="dot failed"></span><div style="flex:1;min-width:0"><div class="n">design-tokens</div><div class="s red">DSN-31 · failed</div></div></div>
+        <div class="side-item"><span class="dot paused"></span><div style="flex:1;min-width:0"><div class="n">atlas-web</div><div class="s">ATL-402 · paused</div></div><span class="mono dim" style="font-size:10.5px">5/9</span></div>
+      </div>
+      <div class="label" style="padding:14px 14px 6px">Goals running · 3</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px">
+        <div class="side-item on"><span class="dot active"></span><div style="flex:1;min-width:0"><div class="n">skill-bill</div><div class="s">SKILL-417 · review</div></div><span class="mono amber" style="font-size:10.5px">2/3</span></div>
+        <div class="side-item"><span class="dot active"></span><div style="flex:1;min-width:0"><div class="n">payments-svc</div><div class="s">PAY-19 · implement</div></div><span class="mono dim" style="font-size:10.5px">4/7</span></div>
+        <div class="side-item"><span class="dot planning"></span><div style="flex:1;min-width:0"><div class="n">newsreader</div><div class="s blue">NEWS-171 · planning</div></div><span class="mono dim" style="font-size:10.5px">2/5</span></div>
+      </div>
+      <div class="label" style="padding:14px 14px 6px">Standalone phases · 2</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px 14px">
+        <div class="side-item"><span class="dot active"></span><div style="flex:1;min-width:0"><div class="n">skill-bill</div><div class="s">validation</div></div></div>
+        <div class="side-item"><span class="dot active"></span><div style="flex:1;min-width:0"><div class="n">atlas-web</div><div class="s">pr · monitor_fix 1/3</div></div></div>
+      </div>
+      <div style="margin-top:auto;padding:12px 14px;border-top:1px solid var(--ps-border);display:flex;justify-content:space-between" class="mono dim"><span style="font-size:11px">History</span><span style="font-size:11px">Settings</span></div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--grad-hero-glow),var(--ps-bg)">
+      <div style="padding:20px 26px 18px;border-bottom:1px solid var(--ps-border);display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="chip amber"><span class="dot active"></span>active</span>
+            <span class="chip">SKILL-417</span>
+            <span class="chip gold">goal</span>
+            <span class="chip green">fresh</span>
+          </div>
+          <h1 style="margin:0;font:700 24px/1.2 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Keep IDE status on the live goal phase after children finish</h1>
+          <div class="mono slate ellip" style="font-size:12px">skill-bill · ~/IdeaProjects/SkillBill · feat/SKILL-417-keep-ide-status-on-the-live-goal-phase-after-children-finish</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none">
+          <button class="btn">Pause after current subtask</button>
+          <button class="btn danger">Stop goal</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--ps-border)">
+        <div class="metric"><span class="label">Subtask</span><b><span class="amber">2</span><span class="dim">/3</span></b><small>1 complete · 1 pending</small></div>
+        <div class="metric"><span class="label">Phase</span><b>review</b><small>pass 2</small></div>
+        <div class="metric"><span class="label">Goal active</span><b>1h 36m</b><small>since 10 Oct 21:38</small></div>
+        <div class="metric"><span class="label">Subtask active</span><b>12m 40s</b><small>ticking</small></div>
+      </div>
+
+      <div style="display:flex;flex:1;min-height:0">
+        <div style="flex:1.6;min-width:0;padding:18px 26px;border-right:1px solid var(--ps-border);display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">Subtasks</span>
+            <span class="mono dim" style="font-size:11px">from the goal manifest</span>
+          </div>
+          <div style="display:flex;gap:3px">
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-success-500)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-sakura-500);animation:sb-pulse 1.8s ease-in-out infinite"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+          </div>
+          <div>
+            <div class="st">
+              <span class="id">01</span><span class="dc"><span class="dot done"></span></span>
+              <div class="body"><div class="tt">Standalone status store keeps the workflow execution</div><div class="sub">complete · a41c9e2 · validation passed</div></div>
+            </div>
+            <div class="st cur">
+              <span class="id amber">02</span><span class="dc"><span class="dot active"></span></span>
+              <div class="body">
+                <div class="tt">IDE status selects the live goal phase after a child finishes</div>
+                <div class="sub amber">in_progress · review pass 2 · opus-5.5 · high</div>
+                <div class="pipe">
+                  <span class="ph ok">preplan</span><span class="ph ok">plan</span><span class="ph ok">implement</span><span class="ph ok">simplify</span><span class="ph ok">audit</span><span class="ph now">review · 2</span><span class="ph">build</span><span class="ph">validate</span><span class="ph">write_history</span><span class="ph">commit_push</span>
+                </div>
+              </div>
+              <span class="rt amber">12m 40s</span>
+            </div>
+            <div class="st" style="opacity:.55">
+              <span class="id">03</span><span class="dc"><span class="dot pending"></span></span>
+              <div class="body"><div class="tt">Both IDE plugins accept the post-child parent snapshot</div><div class="sub">pending · after #2</div></div>
+            </div>
+            <div class="st" style="opacity:.55;border-bottom:none">
+              <span class="id">—</span><span class="dc"><span class="dot pending"></span></span>
+              <div class="body"><div class="tt">Goal finish</div><div class="pipe"><span class="ph goal">pr</span><span class="ph goal">monitor</span><span class="ph goal">monitor_fix</span></div></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:4px">
+            <span class="label">Latest activity</span>
+            <div class="kv"><span>Agent activity</span><span>durable progress · 14s ago</span></div>
+            <div class="kv"><span>Last edit</span><span>…/work/IdeStatusService.kt <span class="green">+128</span> <span class="red">−42</span> · 2m ago</span></div>
+            <div class="kv"><span>Event</span><span>review · worker · verifying 3 findings</span></div>
+          </div>
+        </div>
+
+        <div style="width:290px;flex:none;padding:18px 22px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span class="label">Execution</span>
+            <div class="kv"><span>Workflow</span><span>wftr-20261010-193855-mpxi</span></div>
+            <div class="kv"><span>Agent</span><span>claude</span></div>
+            <div class="kv"><span>Model</span><span>opus-5.5 · high</span></div>
+            <div class="kv"><span>Liveness</span><span class="green">live</span></div>
+            <div class="kv"><span>Started</span><span>10 Oct 21:38</span></div>
+            <div class="kv"><span>Last update</span><span>09:48:33</span></div>
+          </div>
+          <div class="hr"></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span class="label">Attempts and fixes</span>
+            <div class="kv"><span>Attempts</span><span>implement 1 · review 2</span></div>
+            <div class="kv"><span>Fix iterations</span><span>review 1</span></div>
+            <div class="kv"><span>Findings in scope</span><span>3</span></div>
+            <div class="kv"><span>Re-attempts</span><span>timeout 1</span></div>
+          </div>
+          <div class="hr"></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span class="label">Validation</span>
+            <div style="display:flex;align-items:center;gap:8px"><span class="dot done"></span><span style="font:600 11.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">Subtask 1</span><span class="mono dim" style="font-size:11px">passed · 4 checks</span></div>
+          </div>
+          <div class="hr"></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <span class="label">From the terminal</span>
+            <div class="cmd" style="font-size:11px"><span>skill-bill goal status SKILL-417</span><button class="btn">Copy</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="dv-note" style="max-width:1060px">Phase chips come from the runtime phase order: <span class="mono">preplan → plan → implement → simplify → audit → review → build → validate → write_history → commit_push</span>, with <span class="mono">pr → monitor</span> run once for the whole goal. Phases a subtask skipped are left out. Panels with no data are hidden, not shown as zero. Pause and Stop appear only while a goal is active. Pause is disabled once a pause has been requested.</div>
+</div>
+</div>
+
+<!-- 2d / 2e -->
+<div class="dv-opts">
+
+<div class="dv-opt" id="2d">
+<div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Blocked goal: the reason first, resume stays in the terminal</div>
+<div class="win" style="width:640px">
+  <div class="win-tb"><span style="width:60px"></span><span class="t">Skill Bill — INF-7</span><span class="ctl" style="width:60px;justify-content:flex-end"><span>×</span></span></div>
+  <div style="padding:22px 26px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="chip gold"><span class="dot blocked"></span>blocked</span>
+      <span class="chip">INF-7</span><span class="chip gold">goal</span>
+      <span class="mono dim" style="font-size:11px;margin-left:auto">clock frozen at 17:49:54</span>
+    </div>
+    <h2 style="margin:0;font:700 21px/1.25 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Migrate state backend to a remote workspace</h2>
+    <div class="card gold">
+      <span style="font:700 12.5px/1 var(--font-display)" class="gold">Waiting for your decision</span>
+      <p style="margin:0;font:400 12.5px/1.6 var(--font-sans);color:var(--ps-ink)">Review left 2 Blocker findings on subtask 3 after 3 fix passes.</p>
+      <span class="mono dim" style="font-size:11px">awaiting_operator_decision · subtask 3 · review 3/3</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="label">Resume from the terminal</span>
+      <div class="cmd"><span>skill-bill INF-7</span><button class="btn">Copy</button></div>
+      <span class="r3">Resuming chooses the agent, the model, and the launch environment, so the tray does not offer it.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">
+      <div class="kv"><span>Subtask</span><span>3/6</span></div>
+      <div class="kv"><span>Goal active</span><span>7h 26m</span></div>
+      <div class="kv"><span>Phase</span><span>review</span></div>
+      <div class="kv"><span>Subtask active</span><span>48m</span></div>
+      <div class="kv"><span>Agent</span><span>codex</span></div>
+      <div class="kv"><span>Workflow</span><span>wftr-20261011-0623…</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="2e">
+<div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>Standalone phase detail: <span class="mono">phase pr</span> on a branch</div>
+<div class="win" style="width:640px">
+  <div class="win-tb"><span style="width:60px"></span><span class="t">Skill Bill — atlas-web · pr</span><span class="ctl" style="width:60px;justify-content:flex-end"><span>×</span></span></div>
+  <div style="padding:22px 26px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="chip amber"><span class="dot active"></span>active</span>
+      <span class="chip">standalone phase</span><span class="chip gold">pr</span><span class="chip green">fresh</span>
+    </div>
+    <div>
+      <h2 style="margin:0 0 6px;font:700 21px/1.25 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">pr on feat/ATL-402-checkout-retry</h2>
+      <div class="mono slate" style="font-size:12px">atlas-web · ~/dev/atlas-web</div>
+    </div>
+    <div class="pipe" style="margin:0"><span class="ph ok">commit_push</span><span class="ph ok">pr</span><span class="ph ok">monitor</span><span class="ph now">monitor_fix · 1/3</span></div>
+    <div class="card">
+      <span class="label">Now</span>
+      <span style="font:500 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Fixing 1 failing check: lint</span>
+      <span class="mono dim" style="font-size:11px">tool stream · 6s ago</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">
+      <div class="kv"><span>Started</span><span>09:27:02</span></div>
+      <div class="kv"><span>Active</span><span>21m 08s</span></div>
+      <div class="kv"><span>Model</span><span>sonnet-5.5 · medium</span></div>
+      <div class="kv"><span>Invocation</span><span>inv-7f3c…a91</span></div>
+    </div>
+    <span class="r3">No stop control: standalone phases have no runtime stop command yet. Cancel the phase in the terminal that started it.</span>
+  </div>
+</div>
+<div class="dv-note">The phase steps come from the phase definition: <span class="mono">pr</span> runs commit_push → pr → monitor, <span class="mono">monitor</span> runs commit_push → monitor, and <span class="mono">plan</span> runs preplan → plan. <span class="mono">review</span> and <span class="mono">validation</span> have a single step, so they show only the current activity.</div>
+</div>
+
+</div>
+
+<!-- 2f / 2g -->
+<div class="dv-opts">
+
+<div class="dv-opt" id="2f">
+<div class="dv-olabel"><a class="dv-oid" href="#2f">2f</a>History: goals and phases that finished in the last 24h</div>
+<div class="win" style="width:640px">
+  <div class="win-tb"><span style="width:60px"></span><span class="t">Skill Bill — History</span><span class="ctl" style="width:60px;justify-content:flex-end"><span>×</span></span></div>
+  <div style="padding:18px 24px 8px;display:flex;align-items:center;justify-content:space-between">
+    <div class="tabs"><span class="on">All</span><span>Goals</span><span>Phases</span></div>
+    <span class="mono dim" style="font-size:11px">last 24h · 6 finished</span>
+  </div>
+  <div style="padding:0 24px 18px">
+    <div class="st" style="align-items:center"><span class="dc" style="padding:0"><span class="dot done"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">skill-bill <span class="mono slate" style="font-weight:400;font-size:11.5px">SKILL-416</span> <span class="kind">goal</span></div><div class="r3">Completed 3/3 subtasks · claude</div></div><div class="rt"><div class="ink">2h 04m</div><div class="dim">07:46</div></div></div>
+    <div class="st" style="align-items:center"><span class="dc" style="padding:0"><span class="dot done"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">skill-bill <span class="kind">validation</span></div><div class="r3">completed · fix/standalone-validation-discovery</div></div><div class="rt"><div class="ink">6m</div><div class="dim">07:31</div></div></div>
+    <div class="st" style="align-items:center"><span class="dc" style="padding:0"><span class="dot done"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">atlas-web <span class="mono slate" style="font-weight:400;font-size:11.5px">ATL-399</span> <span class="kind">goal</span></div><div class="r3">Completed 14/14 subtasks · codex</div></div><div class="rt"><div class="ink">1h 12m</div><div class="dim">06:40</div></div></div>
+    <div class="st" style="align-items:center"><span class="dc" style="padding:0"><span class="dot failed"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">design-tokens <span class="mono slate" style="font-weight:400;font-size:11.5px">DSN-30</span> <span class="kind">goal</span></div><div class="r3">Failed on validate · subtask 4</div></div><div class="rt"><div class="ink">9m</div><div class="dim">03:48</div></div></div>
+    <div class="st" style="align-items:center"><span class="dc" style="padding:0"><span class="dot done"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">skill-bill <span class="kind">review</span></div><div class="r3">completed · HEAD on main</div></div><div class="rt"><div class="ink">3m</div><div class="dim">01:15</div></div></div>
+    <div class="st" style="align-items:center;border-bottom:none"><span class="dc" style="padding:0"><span class="dot stale"></span></span><div class="body"><div class="tt" style="font-family:var(--font-display);font-weight:700">payments-svc <span class="mono slate" style="font-weight:400;font-size:11.5px">PAY-18</span> <span class="kind">goal</span></div><div class="r3">Stopped by operator on subtask 4</div></div><div class="rt"><div class="ink">26m</div><div class="dim">yesterday 22:10</div></div></div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="2g">
+<div class="dv-olabel"><a class="dv-oid" href="#2g">2g</a>Notifications: lifecycle changes only</div>
+<div style="width:380px;display:flex;flex-direction:column;gap:12px">
+  <div class="toast" style="border-color:rgba(226,112,60,.45)">
+    <span class="ic" style="border:2px solid var(--ps-gold-500)"></span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div class="hd">Skill Bill<span class="gold">needs you</span></div>
+      <span class="ti">INF-7 is waiting for your decision</span>
+      <span class="bd">Review left 2 Blocker findings on subtask 3 · infra-terraform</span>
+    </div>
+  </div>
+  <div class="toast" style="border-color:rgba(240,85,91,.4)">
+    <span class="ic red" style="background:var(--ps-danger-50);border:1px solid rgba(240,85,91,.5)">!</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div class="hd">Skill Bill<span class="red">failed</span></div>
+      <span class="ti">DSN-31 failed on validate</span>
+      <span class="bd">Subtask 6/9 · design-tokens · ran 22m</span>
+    </div>
+  </div>
+  <div class="toast">
+    <span class="ic green" style="background:var(--ps-success-50);border:1px solid rgba(63,185,80,.5)">✓</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div class="hd">Skill Bill<span class="green">completed</span></div>
+      <span class="ti">SKILL-416 completed 3/3 subtasks</span>
+      <span class="bd">skill-bill · 2h 04m</span>
+    </div>
+  </div>
+  <div class="toast">
+    <span class="ic slate" style="border:1.5px solid var(--ps-slate)">॥</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div class="hd">Skill Bill<span class="slate">paused</span></div>
+      <span class="ti">PAY-19 paused after subtask 4</span>
+      <span class="bd">Your pause request took effect · payments-svc</span>
+    </div>
+  </div>
+  <div class="toast">
+    <span class="ic green" style="background:var(--ps-success-50);border:1px solid rgba(63,185,80,.5)">✓</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div class="hd">Skill Bill<span class="green">phase done</span></div>
+      <span class="ti">validation completed</span>
+      <span class="bd">skill-bill · fix/standalone-validation-discovery · 6m</span>
+    </div>
+  </div>
+  <div class="dv-note">A notification fires only when an item's lifecycle state changes. Phase and step changes stay silent. Clicking a notification opens that item's detail.</div>
+</div>
+</div>
+
+</div>
+
+<!-- 2h / 2i -->
+<div class="dv-opts">
+
+<div class="dv-opt" id="2h">
+<div class="dv-olabel"><a class="dv-oid" href="#2h">2h</a>Settings</div>
+<div class="win" style="width:560px">
+  <div class="win-tb"><span style="width:60px"></span><span class="t">Skill Bill — Settings</span><span class="ctl" style="width:60px;justify-content:flex-end"><span>×</span></span></div>
+  <div style="padding:20px 24px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <span class="label">Skill Bill CLI</span>
+      <div style="display:flex;gap:8px"><div class="field" style="flex:1">~/.local/bin/skill-bill</div><button class="btn">Choose…</button></div>
+      <span class="r3">Leave empty to use <span class="mono ink">skill-bill</span> from PATH, then <span class="mono ink">$SKILL_BILL_BIN_DIR</span>, then <span class="mono ink">~/.local/bin</span>. <span class="green">Resolved, board contract 0.1 supported.</span></span>
+    </div>
+    <div class="hr"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">Poll interval</div><div class="r3">One CLI read per poll. Clocks tick locally between polls.</div></div>
+      <div class="tabs"><span>5s</span><span class="on">15s</span><span>30s</span><span>60s</span></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">Keep finished items for</div><div class="r3">How long history lists them.</div></div>
+      <div class="tabs"><span>6h</span><span class="on">24h</span><span>7d</span></div>
+    </div>
+    <div class="hr"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <span class="label">Notify me when</span>
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="r3 ink" style="font-size:12px">A goal needs a decision (blocked)</span><span class="tog on"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="r3 ink" style="font-size:12px">A goal or phase fails</span><span class="tog on"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="r3 ink" style="font-size:12px">A goal completes</span><span class="tog on"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="r3 ink" style="font-size:12px">A pause takes effect</span><span class="tog on"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="r3 ink" style="font-size:12px">A standalone phase finishes</span><span class="tog"></span></div>
+    </div>
+    <div class="hr"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between"><span style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">Start at login</span><span class="tog on"></span></div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="2i">
+<div class="dv-olabel"><a class="dv-oid" href="#2i">2i</a>Empty, problem, and stale states</div>
+<div style="width:400px;display:flex;flex-direction:column;gap:14px">
+  <div class="tp">
+    <div class="tp-hd"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="18" height="18" style="filter:grayscale(1);opacity:.5"><span class="name">Skill Bill</span><span class="meta">idle</span></div>
+    <div style="padding:24px 22px;text-align:center;display:flex;flex-direction:column;gap:7px">
+      <span style="font:700 14px/1.3 var(--font-display);color:var(--ps-ink)">Nothing running</span>
+      <span class="r3" style="font-size:12px">Start a goal with <span class="mono ink">skill-bill &lt;KEY&gt;</span> or a phase with <span class="mono ink">skill-bill phase validation</span>. It appears here on the next poll.</span>
+    </div>
+    <div class="tp-ft"><span class="lnk">History</span><div class="aux"><span>Settings</span></div></div>
+  </div>
+
+  <div class="tp" style="border-color:rgba(240,85,91,.35)">
+    <div class="tp-hd"><span class="name">Skill Bill</span><span class="meta red">unavailable</span></div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:9px">
+      <span style="font:700 13.5px/1.3 var(--font-display);color:var(--ps-ink)">Skill Bill CLI not found</span>
+      <span class="r3" style="font-size:12px">No <span class="mono ink">skill-bill</span> on PATH, in <span class="mono ink">$SKILL_BILL_BIN_DIR</span>, or in <span class="mono ink">~/.local/bin</span>.</span>
+      <div style="display:flex;gap:8px"><button class="btn primary">Choose CLI path…</button><button class="btn">Retry</button></div>
+    </div>
+  </div>
+
+  <div class="tp" style="border-color:rgba(226,112,60,.4)">
+    <div class="tp-hd"><span class="name">Skill Bill</span><span class="meta gold">incompatible</span></div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:9px">
+      <span style="font:700 13.5px/1.3 var(--font-display);color:var(--ps-ink)">CLI is newer than this app</span>
+      <span class="r3" style="font-size:12px">The CLI reports board contract <span class="mono ink">0.2</span>. This app reads <span class="mono ink">0.1</span>. Update the app.</span>
+    </div>
+  </div>
+
+  <div class="tp">
+    <div class="tp-hd"><span class="name">Skill Bill</span><span class="meta">no data yet</span></div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:7px">
+      <span style="font:700 13.5px/1.3 var(--font-display);color:var(--ps-ink)">No Skill Bill database on this machine</span>
+      <span class="r3" style="font-size:12px">The CLI creates it on the first goal or phase run.</span>
+    </div>
+  </div>
+
+  <div class="tp">
+    <div class="row faded" style="border-top:none">
+      <div class="r1"><span class="dot stale"></span><span class="repo">skill-bill</span><span class="grow"></span><span class="chip sm ghost">SKILL-417</span></div>
+      <div class="r2"><span>stale</span><span class="sep">·</span><span>last update 4m ago</span><span class="sep">·</span><span>review</span><span class="end">2/3</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<!-- 2j: platforms -->
+<div class="dv-opts">
+<div class="dv-opt" id="2j">
+<div class="dv-olabel"><a class="dv-oid" href="#2j">2j</a>One popover on macOS, Windows, and Linux, anchored where each OS expects it</div>
+<div style="display:flex;gap:24px;flex-wrap:wrap">
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div class="desk">
+      <div class="mbar"><span class="ticon hot"><span style="width:8px;height:8px;border-radius:50%;background:var(--ps-ink)"></span><span class="mono ink" style="font-size:11px">4</span></span><span>Sun 10:22</span></div>
+      <div class="nub" style="top:30px;right:62px"></div>
+      <div class="mini" style="top:36px;right:8px;border-radius:12px">
+        <div class="h">Skill Bill<span>4s ago</span></div>
+        <div class="t"><span class="on">Goals 6</span><span>Phases 3</span></div>
+        <div class="r"><span class="dot blocked"></span>infra-terraform<small>blocked</small></div>
+        <div class="r"><span class="dot failed"></span>design-tokens<small>failed</small></div>
+        <div class="r"><span class="dot active"></span>skill-bill<small>review 2/3</small></div>
+        <div class="r"><span class="dot active"></span>payments-svc<small>4/7</small></div>
+        <div class="f">Open Skill Bill</div>
+      </div>
+    </div>
+    <span class="dv-olabel"><b class="ink">macOS</b> · menu bar, popover drops below the icon</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div class="desk">
+      <div class="mini" style="bottom:46px;right:8px;border-radius:8px">
+        <div class="h">Skill Bill<span>4s ago</span></div>
+        <div class="t"><span class="on">Goals 6</span><span>Phases 3</span></div>
+        <div class="r"><span class="dot blocked"></span>infra-terraform<small>blocked</small></div>
+        <div class="r"><span class="dot failed"></span>design-tokens<small>failed</small></div>
+        <div class="r"><span class="dot active"></span>skill-bill<small>review 2/3</small></div>
+        <div class="r"><span class="dot active"></span>payments-svc<small>4/7</small></div>
+        <div class="f">Open Skill Bill</div>
+      </div>
+      <div class="tbar"><span class="ticon hot" style="position:relative"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="15" height="15"><span style="position:absolute;right:-1px;bottom:0;width:7px;height:7px;border-radius:50%;border:2px solid var(--ps-gold-500);background:#121215"></span></span><span style="text-align:right">10:22<br>11.10.26</span></div>
+    </div>
+    <span class="dv-olabel"><b class="ink">Windows</b> · notification area, flyout above the taskbar</span>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div class="desk">
+      <div class="mini" style="bottom:46px;right:40px;border-radius:10px">
+        <div class="h">Skill Bill<span>4s ago</span></div>
+        <div class="t"><span class="on">Goals 6</span><span>Phases 3</span></div>
+        <div class="r"><span class="dot blocked"></span>infra-terraform<small>blocked</small></div>
+        <div class="r"><span class="dot failed"></span>design-tokens<small>failed</small></div>
+        <div class="r"><span class="dot active"></span>skill-bill<small>review 2/3</small></div>
+        <div class="r"><span class="dot active"></span>payments-svc<small>4/7</small></div>
+        <div class="f">Open Skill Bill</div>
+      </div>
+      <div class="tbar"><span class="ticon hot" style="position:relative"><img src="docs/assets/skill-bill-app-icon.svg" alt="" width="15" height="15"><span style="position:absolute;right:-1px;bottom:0;width:7px;height:7px;border-radius:50%;border:2px solid var(--ps-gold-500);background:#121215"></span></span><span>10:22</span></div>
+    </div>
+    <span class="dv-olabel"><b class="ink">Linux</b> · KDE panel shown; GNOME needs the AppIndicator extension</span>
+  </div>
+
+</div>
+</div>
+</div>
+
+<div class="dv-opts">
+<div class="dv-opt" style="width:1060px">
+<table class="map">
+  <tr><th></th><th>macOS</th><th>Windows</th><th>Linux</th></tr>
+  <tr><td>Tray icon</td><td>Monochrome template icon that follows light and dark menu bars. The running count shows as text beside it.</td><td>Full-color icon at 16 and 32 px. Count or state is drawn as an overlay badge.</td><td>StatusNotifierItem icon at 22 and 32 px with the same overlay badge. GNOME shows it only with the AppIndicator extension.</td></tr>
+  <tr><td>Left click</td><td>Toggles the popover under the icon.</td><td>Toggles the flyout above the taskbar.</td><td>Toggles the popover above or below the icon where the panel reports a position. If no click arrives (some KDE and GNOME setups), use the menu.</td></tr>
+  <tr><td>Right click</td><td>Same menu as 2b.</td><td>Same menu as 2b.</td><td>Same menu as 2b. On some panels this is the only interaction.</td></tr>
+  <tr><td>Popover close</td><td colspan="3">Closes on focus loss or Esc. Stays a single borderless window, never a second taskbar entry.</td></tr>
+  <tr><td>Main window</td><td>Native title bar with traffic lights. Closing hides the window; the app stays in the menu bar. No Dock icon unless the window is open.</td><td>Native title bar. Closing hides it to the tray. No taskbar entry while hidden.</td><td>Native decorations from the window manager. Closing hides it to the tray.</td></tr>
+  <tr><td>Notifications</td><td>Notification Center. Asks for permission on first launch.</td><td>Windows toast notifications, grouped under Skill Bill.</td><td>freedesktop notifications through the desktop's notification daemon.</td></tr>
+  <tr><td>Start at login</td><td>Login item.</td><td>Startup entry for the current user.</td><td>XDG autostart desktop file.</td></tr>
+  <tr><td>Finding the CLI</td><td colspan="3">Settings path first, then PATH, then <span class="mono">$SKILL_BILL_BIN_DIR</span>, then <span class="mono">~/.local/bin</span>. On Windows the tray also looks for <span class="mono">skill-bill.bat</span> and <span class="mono">.cmd</span>. GUI apps on macOS and Linux do not inherit the login shell's PATH, so the tray reads the login shell's PATH the way the IntelliJ plugin does.</td></tr>
+  <tr><td>Package</td><td>Signed <span class="mono">.dmg</span>.</td><td><span class="mono">.msi</span>.</td><td><span class="mono">.deb</span>, <span class="mono">.rpm</span>, and an AppImage.</td></tr>
+</table>
+</div>
+</div>
+</section>
+
+<!-- ================================================================== -->
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Where each value comes from</span></div>
+<p class="dv-tsub">Fields marked <span class="tag-new" style="margin:0">new</span> exist in runtime state but are not exposed through a JSON CLI command yet. The tray reads everything through two new read-only commands: <span class="mono ink">skill-bill work board --format json</span>, which lists every live item and recent finished items across repositories, and <span class="mono ink">skill-bill work detail &lt;workflow-id|invocation-id&gt; --format json</span>, which returns one item in full. Like the IDE plugins, the tray never reads the SQLite database directly.</p>
+
+<div class="dv-opts">
+<div class="dv-opt" style="width:1060px">
+<table class="map">
+  <tr><th>UI element</th><th>Source field</th><th>Today</th></tr>
+  <tr><td>Row repo name, path</td><td><code>repository_identity</code> (repo-root-realpath-v1), basename for the name</td><td>Per-repo <span class="mono">work status</span> only. Board lists all repos <span class="tag-new">new</span></td></tr>
+  <tr><td>Issue chip, kind</td><td><code>issue_key</code>, <code>workflow_family</code> (feature-goal, feature-task-runtime, feature-verify), <code>execution_scope</code> = standalone_phase</td><td>IDE status contract 0.3</td></tr>
+  <tr><td>Lifecycle dot and color</td><td><code>lifecycle_state</code>: active, paused, blocked, failed, terminal, idle; planning color when <code>planning.state</code> ≠ prepared</td><td>IDE status contract</td></tr>
+  <tr><td>Stale row</td><td><code>freshness</code> = stale, <code>updated_at</code></td><td>IDE status contract</td></tr>
+  <tr><td>Step / phase</td><td><code>current_step.label</code>; phase from <code>current_model.phase_id</code> or <code>current_phase_execution.phase_id</code></td><td>IDE status contract</td></tr>
+  <tr><td>"pass 2", "1/3"</td><td><code>current_phase_execution</code> kind + count (+ total for bounded_edge)</td><td>IDE status contract</td></tr>
+  <tr><td>Subtask n/m, progress bar</td><td><code>progress.completed</code>/<code>total</code>; while planning, <code>planning.planned_subtask_count</code>/<code>total_subtask_count</code> and <code>planning_wave_subtask_ids</code></td><td>IDE status contract</td></tr>
+  <tr><td>Goal active, subtask active</td><td><code>active_duration_ms</code> + now − <code>active_duration_as_of</code>; same pair on <code>current_subtask</code></td><td>IDE status contract</td></tr>
+  <tr><td>Pause requested, pause reason</td><td><code>pause_requested</code>, <code>paused_at</code>, <code>pause_reason.code</code> + <code>label</code></td><td>IDE status contract</td></tr>
+  <tr><td>Model</td><td><code>current_model.model</code>, <code>effort</code></td><td>IDE status contract</td></tr>
+  <tr><td>Agent activity</td><td><code>last_agent_activity_label</code>, <code>last_agent_activity_at</code></td><td>IDE status contract</td></tr>
+  <tr><td>Standalone phase row</td><td><code>phase_id</code> (review, validation, plan, pr, monitor), <code>current_activity</code>, <code>branch_correlation</code>, <code>invocation_id</code></td><td>Standalone phase records; one per repo today, all of them on the board <span class="tag-new">new</span></td></tr>
+  <tr><td>Goal title</td><td>Manifest feature name, humanized</td><td>Goal manifest <span class="tag-new">new</span></td></tr>
+  <tr><td>Subtask list</td><td>Manifest subtasks: <code>id</code>, <code>name</code>, <code>status</code> (pending, in_progress, complete, completed_no_change, skipped, blocked), <code>commit_sha</code>, <code>blocked_reason</code>, <code>dependencies</code></td><td>Goal manifest <span class="tag-new">new</span></td></tr>
+  <tr><td>Phase pipeline chips</td><td>Runtime phase order plus completed phase records for the current subtask's workflow</td><td>Phase records <span class="tag-new">new</span></td></tr>
+  <tr><td>Agent, liveness</td><td><code>active_agent</code>, <code>execution_liveness</code> (live, idle, unknown)</td><td><span class="mono">goal status</span> text only <span class="tag-new">new</span></td></tr>
+  <tr><td>Attempts and fixes</td><td><code>phase_attempt_counts</code>, <code>cumulative_fix_iterations</code>, <code>findings_in_scope</code>, <code>re_attempt_causes</code>, <code>supervisor_kill_count</code></td><td>Goal status projection <span class="tag-new">new</span></td></tr>
+  <tr><td>Latest activity</td><td><code>latest_observability_event.activity_summary</code>, <code>worktree_edits</code> (path sample, net insertions/deletions)</td><td>Goal status projection <span class="tag-new">new</span></td></tr>
+  <tr><td>Validation panel</td><td><code>completed_subtask_validation</code></td><td>Goal status projection <span class="tag-new">new</span></td></tr>
+  <tr><td>History</td><td>Work list terminal rows (<code>started_at</code>, <code>state_entered_at</code>) and standalone records (<code>finished_at</code>, <code>terminal_result</code>)</td><td>Work list has no repo; board adds it <span class="tag-new">new</span></td></tr>
+  <tr><td>Pause, Stop</td><td><span class="mono">skill-bill goal pause|stop &lt;KEY&gt; --repo-root &lt;root&gt;</span></td><td>Exists; same verbs as the IntelliJ plugin</td></tr>
+  <tr><td>Problem states</td><td><code>problem.code</code>: absent_database, schema_incompatible, …; CLI resolution failure handled in the app</td><td>IDE status contract</td></tr>
+</table>
+</div>
+</div>
+
+<div class="dv-opts">
+<div class="dv-opt" style="width:500px">
+  <span class="label">Removed from the first draft</span>
+  <ul class="plain">
+    <li><b>Queued goals.</b> Skill Bill has no goal queue. Goals start when you run them.</li>
+    <li><b>Agent profile.</b> Not a runtime concept. Replaced by model and effort.</li>
+    <li><b>"Total today" and "median goal time".</b> No per-day goal metrics exist. Replaced by Needs you, Phases, and Done 24h counts, all computed from the board.</li>
+    <li><b>Hard-coded subtask phases</b> ("analyze", "spec"). Replaced by real runtime phase ids.</li>
+    <li><b>Status contract v0.1.</b> The IDE contract is 0.3. The tray pins its own board contract version.</li>
+  </ul>
+</div>
+<div class="dv-opt" style="width:500px">
+  <span class="label">Added</span>
+  <ul class="plain">
+    <li><b>Standalone phases</b> as their own section, with their step pipeline and current activity.</li>
+    <li><b>Planning</b> state with plans saved and the planning wave.</li>
+    <li><b>Loop and pass counts</b>, model and effort, and last agent activity.</li>
+    <li><b>Copyable CLI commands</b> for resume and status in place of a Resume button.</li>
+    <li><b>Tray icon states and a right-click menu</b>, because KDE may not deliver left clicks to tray icons.</li>
+    <li><b>Settings</b> and a <b>no database</b> state.</li>
+  </ul>
+</div>
+</div>
+</section>
+</x-dc>
+</body>
+</html>
