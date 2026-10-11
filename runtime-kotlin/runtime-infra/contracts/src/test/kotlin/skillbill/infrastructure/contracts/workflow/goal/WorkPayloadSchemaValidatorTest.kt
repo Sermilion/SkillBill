@@ -21,46 +21,66 @@ class WorkPayloadSchemaValidatorTest {
   private val validator = WorkPayloadSchemaValidator()
 
   @Test
+  fun `invalid JSON at the text boundary retains each contract failure code`() {
+    val boardError =
+      assertFailsWith<SkillBillRuntimeException> {
+        validator.validateBoard("{", "invalid-board-json")
+      }
+    val detailError =
+      assertFailsWith<SkillBillRuntimeException> {
+        validator.validateDetail("{", "invalid-detail-json")
+      }
+    assertEquals(WorkFailureCode.INVALID_WORK_BOARD_SCHEMA, boardError.code)
+    assertEquals(WorkFailureCode.INVALID_WORK_DETAIL_SCHEMA, detailError.code)
+  }
+
+  @Test
   fun `detail accepts the durable completed subtask validation projection`() {
-    val gate = FeatureTaskRuntimeValidationGateExecutionEvidence(
-      validationStatus = "passed",
-      checks = listOf("unit tests"),
-      gateRunCount = 1,
-      gateRuns = listOf(
-        FeatureTaskRuntimeValidationGateRunRecord(
-          durationMs = 1,
-          outcome = ValidationGateRunOutcome.PASSED,
-          cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
-          executedWorkUnits = 1,
-          executedChecks = listOf("unit tests"),
-          command = "./gradlew test",
-          exitCode = 0,
-          repositoryCheckpoint = "checkpoint",
-        ),
-      ),
-    )
-    val snapshot = IdeStatusSnapshot(
-      repositoryIdentity = "repo-root-realpath-v1:/repo with spaces",
-      lifecycleState = IdeStatusLifecycleState.IDLE,
-      currentStep = IdeStatusStep("none", "No work"),
-      updatedAt = Instant.EPOCH,
-      freshness = IdeStatusFreshness.FRESH,
-      summary = "No work.",
-    )
-    val payload = JsonCodec.mapToJsonObject(
-      mapOf(
-        "contract_version" to "1.0",
-        "observed_at" to Instant.EPOCH.toString(),
-        "item" to mapOf(
-          "snapshot" to IdeStatusSchemaValidator().toWirePayload(snapshot).toPayload(),
-          "repository_root" to "/repo with spaces",
-          "step_pipeline" to emptyList<String>(),
-          "completed_subtask_validation" to listOf(
-            GoalRunnerSubtaskValidationEvidence(1, gateExecutionEvidence = gate).toStatusWire().toMap(),
+    val gate =
+      FeatureTaskRuntimeValidationGateExecutionEvidence(
+        validationStatus = "passed",
+        checks = listOf("unit tests"),
+        gateRunCount = 1,
+        gateRuns =
+          listOf(
+            FeatureTaskRuntimeValidationGateRunRecord(
+              durationMs = 1,
+              outcome = ValidationGateRunOutcome.PASSED,
+              cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+              executedWorkUnits = 1,
+              executedChecks = listOf("unit tests"),
+              command = "./gradlew test",
+              exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
+            ),
           ),
+      )
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = "repo-root-realpath-v1:/repo with spaces",
+        lifecycleState = IdeStatusLifecycleState.IDLE,
+        currentStep = IdeStatusStep("none", "No work"),
+        updatedAt = Instant.EPOCH,
+        freshness = IdeStatusFreshness.FRESH,
+        summary = "No work.",
+      )
+    val payload =
+      JsonCodec.mapToJsonString(
+        mapOf(
+          "contract_version" to "1.0",
+          "observed_at" to Instant.EPOCH.toString(),
+          "item" to
+            mapOf(
+              "snapshot" to IdeStatusSchemaValidator().toWirePayload(snapshot).toPayload(),
+              "repository_root" to "/repo with spaces",
+              "step_pipeline" to emptyList<String>(),
+              "completed_subtask_validation" to
+                listOf(
+                  GoalRunnerSubtaskValidationEvidence(1, gateExecutionEvidence = gate).toStatusWire().toMap(),
+                ),
+            ),
         ),
-      ),
-    )
+      )
 
     validator.validateDetail(payload, "completed-validation")
   }
@@ -69,7 +89,7 @@ class WorkPayloadSchemaValidatorTest {
   fun `malformed board envelope fails with board failure code`() {
     val error =
       assertFailsWith<SkillBillRuntimeException> {
-        validator.validateBoard(JsonCodec.mapToJsonObject(mapOf("contract_version" to "1.0")), "test-board")
+        validator.validateBoard(JsonCodec.mapToJsonString(mapOf("contract_version" to "1.0")), "test-board")
       }
     assertEquals(WorkFailureCode.INVALID_WORK_BOARD_SCHEMA, error.code)
   }
@@ -79,7 +99,7 @@ class WorkPayloadSchemaValidatorTest {
     val error =
       assertFailsWith<SkillBillRuntimeException> {
         validator.validateDetail(
-          JsonCodec.mapToJsonObject(
+          JsonCodec.mapToJsonString(
             mapOf(
               "contract_version" to "1.0",
               "observed_at" to Instant.EPOCH.toString(),

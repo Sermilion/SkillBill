@@ -3,10 +3,14 @@ package skillbill.ports.idestatus.model
 import java.time.Duration
 import java.time.Instant
 
+private const val SHORT_RETENTION_HOURS = 6L
+private const val DEFAULT_RETENTION_HOURS = 24L
+private const val LONG_RETENTION_DAYS = 7L
+
 enum class WorkBoardWindow(val wireValue: String, val duration: Duration) {
-  SIX_HOURS("6h", Duration.ofHours(6)),
-  TWENTY_FOUR_HOURS("24h", Duration.ofHours(24)),
-  SEVEN_DAYS("7d", Duration.ofDays(7)),
+  SIX_HOURS("6h", Duration.ofHours(SHORT_RETENTION_HOURS)),
+  TWENTY_FOUR_HOURS("24h", Duration.ofHours(DEFAULT_RETENTION_HOURS)),
+  SEVEN_DAYS("7d", Duration.ofDays(LONG_RETENTION_DAYS)),
 }
 
 enum class WorkBoardDiagnosticReason(val wireValue: String) {
