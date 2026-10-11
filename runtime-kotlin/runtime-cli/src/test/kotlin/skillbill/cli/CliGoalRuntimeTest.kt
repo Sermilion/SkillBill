@@ -4,6 +4,7 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliExecutionResult
 import skillbill.di.core.SkillBillVersion
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import java.nio.file.Files
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -615,7 +616,7 @@ class CliGoalExecutionOptionsTest {
   }
 
   @Test
-  fun `goal status reads checked-in decomposition manifest without importing workflow state`() {
+  fun `goal status does not infer workflow state from checked-in specs`() {
     val fixture = goalFixture(subtaskCount = 1)
     val recoveredDb = fixture.tempDir.resolve("status-recovered.db")
 
@@ -635,9 +636,9 @@ class CliGoalExecutionOptionsTest {
         fixture.context(launcher = NoopGoalTestAgentRunLauncher),
       )
 
-    assertEquals(0, status.exitCode, status.stdout)
-    assertContains(status.stdout, "status: ok")
-    assertContains(status.stdout, "current_subtask: 1")
+    assertEquals(1, status.exitCode, status.stdout)
+    assertContains(status.stdout, "status: not_found")
+    assertContains(status.stdout, "current_subtask: none")
     DriverManager.getConnection("jdbc:sqlite:$recoveredDb").use { connection ->
       connection.prepareStatement("SELECT COUNT(*) FROM feature_task_workflows WHERE issue_key = ?").use { statement ->
         statement.setString(1, "SKILL-901")
@@ -652,11 +653,15 @@ class CliGoalExecutionOptionsTest {
   }
 
   @Test
-  fun `goal status prefers authoritative complete child without mutating stale running child workflow`() {
+  fun `goal status uses durable completion after specs move to done without mutating stale child`() {
     val fixture = goalFixture(subtaskCount = 1)
     val staleChild = startRunningGoalChild(fixture)
     recordRunningGoalChildProgress(fixture, staleChild, sequence = 9, message = "stale active event")
     seedAuthoritativeCompleteChild(fixture)
+    val archivedBundle = fixture.tempDir.resolve(".feature-specs/done/SKILL-901-goal")
+    Files.createDirectories(archivedBundle.parent)
+    Files.move(fixture.parentSpec.parent, archivedBundle)
+    Files.writeString(archivedBundle.resolve("decomposition-manifest.yaml"), "invalid projection")
 
     val status =
       CliRuntime.run(
@@ -670,6 +675,7 @@ class CliGoalExecutionOptionsTest {
         fixture.context(launcher = NoopGoalTestAgentRunLauncher),
       )
 
+    assertFalse(Files.exists(fixture.parentSpec.parent))
     assertEquals(0, status.exitCode, status.stdout)
     assertContains(status.stdout, "complete: 1")
     assertContains(status.stdout, "pending: 0")

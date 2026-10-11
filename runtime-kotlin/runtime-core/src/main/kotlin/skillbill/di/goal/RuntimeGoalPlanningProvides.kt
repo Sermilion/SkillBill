@@ -7,8 +7,6 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.planning.attempt.DurableGoalPlanningAttemptRecorder
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
-import skillbill.engine.goalrunner.planning.recovery.GoalPlanningStatusReasonCoherence
-import skillbill.engine.goalrunner.planning.recovery.LaunchAlignedGoalPlanningStatusReasonCoherence
 import skillbill.engine.goalrunner.planning.remedies.DurableGoalPlanningRejectionRecorder
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
@@ -17,11 +15,6 @@ import skillbill.ports.goalrunner.planning.GoalPlanningBoundaryBodyResolver
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 
 internal interface RuntimeGoalPlanningProvides {
-  @Provides
-  fun goalPlanningStatusReasonCoherence(
-    adapter: LaunchAlignedGoalPlanningStatusReasonCoherence,
-  ): GoalPlanningStatusReasonCoherence = adapter
-
   @Provides
   fun goalRunnerExecutionCoordinator(
     coordinator: DefaultGoalRunnerExecutionCoordinator,

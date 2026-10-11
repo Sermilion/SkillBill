@@ -645,6 +645,11 @@ internal class StubGoalManifestStore(
   internal val planning: GoalPlanningStatusSnapshot? = null,
   internal val lease: GoalRunnerExecutionLease? = null,
 ) : GoalRunnerManifestStoreDefaults() {
+  override fun readByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): GoalRunnerManifestState? = error("IDE status must read durable state without consulting spec projections")
+
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = lease
 
   override fun loadByIssueKey(

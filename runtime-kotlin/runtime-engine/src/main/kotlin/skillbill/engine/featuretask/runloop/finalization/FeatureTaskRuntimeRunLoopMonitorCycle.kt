@@ -143,8 +143,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val edge = FeatureTaskRuntimePhaseWorkflowQueries.backwardEdgeForLoop(loopId)
     val failingChecks = monitorPhaseProse(progress, edge?.fromPhaseId)
     val lastFixSummary = monitorPhaseProse(progress, edge?.destinationPhaseId)
-    return "The pull request still needs repair after $edgeIteration fix attempt(s); " +
-      "the run blocks rather than fixing past the cap. " +
+    return "Monitoring stopped after $edgeIteration fix attempt(s); " +
+      "the run blocks rather than fixing past the cap. Last observed monitor result: " +
       (failingChecks ?: "The last failing checks were not recorded.") +
       " Last monitor_fix summary: " +
       (lastFixSummary ?: "none recorded.")

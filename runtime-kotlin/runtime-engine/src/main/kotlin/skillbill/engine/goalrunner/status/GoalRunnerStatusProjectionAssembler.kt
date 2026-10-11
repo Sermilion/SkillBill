@@ -21,8 +21,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.planning.model.GoalPlanningStatusAlignRequest
-import skillbill.engine.goalrunner.planning.recovery.GoalPlanningStatusReasonCoherence
 import skillbill.engine.goalrunner.planning.recovery.resolveChildExecutionLiveness
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
@@ -37,7 +35,6 @@ import skillbill.goalrunner.model.GoalRunnerStatusProjector
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.idestatus.model.summary
-import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -70,10 +67,8 @@ class GoalRunnerStatusProjectionAssembler(
   private val database: DatabaseSessionFactory,
   private val gitOperations: WorkflowGitOperations,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
-  private val planningStatusReasonCoherence: GoalPlanningStatusReasonCoherence,
   private val diagnostics: RuntimeDiagnostics,
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
-  private val repositoryRoot: RepositoryRoot,
 ) {
   fun project(
     loadedState: GoalRunnerManifestState,
@@ -242,9 +237,8 @@ class GoalRunnerStatusProjectionAssembler(
           durableRead = assembly.durableRead,
         ),
       planning =
-        alignedPlanningStatus(
+        durablePlanningStatus(
           assembly.loadedState,
-          assembly.request,
           assembly.manifest,
           assembly.currentSubtask,
         ),
@@ -412,9 +406,8 @@ class GoalRunnerStatusProjectionAssembler(
     )
   }
 
-  private fun alignedPlanningStatus(
+  private fun durablePlanningStatus(
     loadedState: GoalRunnerManifestState,
-    request: GoalRunnerStatusRequest,
     manifest: DecompositionManifest,
     currentSubtask: DecompositionSubtask?,
   ) = currentSubtask?.takeIf { subtask ->
@@ -426,17 +419,7 @@ class GoalRunnerStatusProjectionAssembler(
       manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }.map { it.id },
       planningBlock?.id,
       planningBlock?.blockedReason,
-    )?.let { snapshot ->
-      planningStatusReasonCoherence.align(
-        GoalPlanningStatusAlignRequest(
-          snapshot = snapshot,
-          parentWorkflowId = loadedState.parentWorkflowId,
-          issueKey = manifest.issueKey,
-          manifest = manifest,
-          repoRoot = request.repoRoot ?: repositoryRoot.path,
-        ),
-      )
-    }
+    )
   }
 
   private fun reconcileStatusManifest(

@@ -25,7 +25,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeatureSpecPreparationWriterValidationTest {
@@ -34,7 +34,7 @@ class FeatureSpecPreparationWriterValidationTest {
   private val writer = FeatureSpecPreparationWriter(validator, fileStore, DecompositionManifestWriter())
 
   @Test
-  fun `one subtask preparation writes schema valid manifest and is goal readable`() {
+  fun `one subtask preparation writes runnable specs without inventing goal status`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-goal-readable")
     val component =
       RuntimeComponent::class.create(
@@ -62,12 +62,7 @@ class FeatureSpecPreparationWriterValidationTest {
           repoRoot = repoRoot,
         ),
       )
-    assertNotNull(goalStatus)
-    assertEquals("SKILL-59", goalStatus.issueKey)
-    assertEquals(0, goalStatus.completeCount)
-    assertEquals(1, goalStatus.pendingCount)
-    assertEquals(0, goalStatus.blockedCount)
-    assertEquals(1, goalStatus.currentSubtaskId)
+    assertNull(goalStatus)
   }
 
   private fun decomposedWriteRequest(): FeatureSpecWriteRequest =

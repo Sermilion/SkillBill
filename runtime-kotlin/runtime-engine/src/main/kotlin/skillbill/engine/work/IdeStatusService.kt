@@ -149,7 +149,7 @@ class IdeStatusService(
     ) {
       return false
     }
-    val state = manifestStore.readByIssueKey(issueKey, repoRoot)
+    val state = manifestStore.loadDurableByIssueKey(issueKey, repoRoot)
     if (state == null || state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) {
       return false
     }
@@ -304,7 +304,7 @@ class IdeStatusService(
       return registeredBranch
     }
     if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
-    val state = item.issueKey?.let { manifestStore.readByIssueKey(it, repoRoot) }
+    val state = item.issueKey?.let { manifestStore.loadDurableByIssueKey(it, repoRoot) }
     val manifest =
       state?.manifest?.takeIf {
         state.parentWorkflowId == item.workflowId

@@ -75,6 +75,8 @@ import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -141,6 +143,8 @@ internal data class GoalRunnerTestWiring(
     GoalRunnerCiMonitor { _, _ ->
       PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
     },
+  val pullRequestIdentityLookup: PullRequestIdentityLookup =
+    PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 )
 
@@ -189,6 +193,8 @@ internal data class GoalRunnerTestInputs(
     GoalRunnerCiMonitor { _, _ ->
       PhaseRunResult.Completed("test-monitor", listOf("monitor"), null, "CI passed")
     },
+  val pullRequestIdentityLookup: PullRequestIdentityLookup =
+    PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
   val childWorkflowDatabase: DatabaseSessionFactory = TestGoalActivityStampDatabase,
 ) {
   fun toWiring(): GoalRunnerTestWiring =
@@ -209,6 +215,7 @@ internal data class GoalRunnerTestInputs(
       phaseRecorder = phaseRecorder,
       childWorkflowDatabase = childWorkflowDatabase,
       ciMonitor = ciMonitor,
+      pullRequestIdentityLookup = pullRequestIdentityLookup,
     )
 }
 
@@ -259,6 +266,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       progressReader,
       wiring.phaseRecorder,
       wiring.ciMonitor,
+      wiring.pullRequestIdentityLookup,
     )
   val pauseBoundary = GoalRunnerPauseBoundary(wiring.manifestStore)
   val perRunLoopAssembler =

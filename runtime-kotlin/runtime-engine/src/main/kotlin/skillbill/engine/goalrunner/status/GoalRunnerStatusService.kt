@@ -37,7 +37,7 @@ class GoalRunnerStatusService(
   private val purgeCoordinator: GoalRunnerPurgeCoordinator,
 ) {
   fun status(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? {
-    return manifestStore.readByIssueKey(request.issueKey, request.repoRoot)
+    return manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
       ?.let { loadedState -> projectionAssembler.project(loadedState, request) }
   }
 

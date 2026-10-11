@@ -3,13 +3,10 @@ package skillbill.engine.goalrunner.planning.model
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
-import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
-import skillbill.workflow.decomposition.model.DecompositionManifest
-import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -116,11 +113,3 @@ data class GoalPlanningBurstSchedule(
     val DEFAULT_WAIT_SLICE: Duration = 1.seconds
   }
 }
-
-data class GoalPlanningStatusAlignRequest(
-  val snapshot: GoalPlanningStatusSnapshot,
-  val parentWorkflowId: String,
-  val issueKey: String,
-  val manifest: DecompositionManifest,
-  val repoRoot: Path,
-)

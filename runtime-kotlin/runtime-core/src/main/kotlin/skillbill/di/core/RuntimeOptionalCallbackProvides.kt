@@ -25,8 +25,10 @@ internal interface RuntimeOptionalCallbackProvides {
     workflowOps.workflowGitOperations ?: GitWorkflowGitOperations()
 
   @Provides
-  fun goalPullRequestPort(callbacks: OptionalCallbacks): GoalPullRequestPort =
-    callbacks.goalPullRequestPort ?: GhGoalPullRequestPort()
+  fun goalPullRequestPort(
+    callbacks: OptionalCallbacks,
+    identityLookup: PullRequestIdentityLookup,
+  ): GoalPullRequestPort = callbacks.goalPullRequestPort ?: GhGoalPullRequestPort(identityLookup)
 
   @Provides
   fun pullRequestIdentityLookup(callbacks: OptionalCallbacks): PullRequestIdentityLookup =

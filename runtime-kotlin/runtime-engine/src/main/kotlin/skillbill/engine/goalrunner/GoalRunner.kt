@@ -188,7 +188,12 @@ class GoalRunner(
       closeGoalTelemetrySegment(telemetryEmitter, state, pausedReport, emptyList())
       return pausedReport
     }
-    val sweepOutcome = goalPlanningSweep.prepare(state, effectiveRequest)
+    val sweepOutcome =
+      if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
+        GoalPlanningSweepOutcome.PreparedAll()
+      } else {
+        goalPlanningSweep.prepare(state, effectiveRequest)
+      }
     if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
       return planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
     }

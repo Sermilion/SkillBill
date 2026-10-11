@@ -285,6 +285,44 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `a merge observed before returning a failure overrides stale checks or conflict`() {
+    for (conflicting in listOf(false, true)) {
+      var identityCalls = 0
+      val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.FAIL))))
+      val identities =
+        PullRequestIdentityLookup { _, _ ->
+          identityCalls += 1
+          if (identityCalls == 1) {
+            PullRequestIdentity.Found(PR_URL, PR_NUMBER, conflicting = conflicting)
+          } else {
+            PullRequestIdentity.Merged(PR_URL, PR_NUMBER)
+          }
+        }
+
+      val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+      assertEquals(PullRequestCiOutcome.Merged, outcome)
+      assertEquals(if (conflicting) 0 else 1, checks.calls)
+    }
+  }
+
+  @Test
+  fun `a cleared conflict resumes watching instead of reporting the stale conflict`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(PR_URL, PR_NUMBER, conflicting = identityCalls == 1)
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(1, checks.calls)
+  }
+
+  @Test
   fun `a missing pull request settles without reading checks`() {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 

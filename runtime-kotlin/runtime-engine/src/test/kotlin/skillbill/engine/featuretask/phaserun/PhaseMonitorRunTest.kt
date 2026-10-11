@@ -116,6 +116,7 @@ class PhaseMonitorRunTest {
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("after 3 fix attempt(s)"), blocked.reason)
     assertTrue(blocked.reason.contains("conflicts with 'main'"), blocked.reason)
+    assertTrue(blocked.reason.contains("Last observed monitor result"), blocked.reason)
     assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
     assertTrue(
       launcher.requests.all { request ->

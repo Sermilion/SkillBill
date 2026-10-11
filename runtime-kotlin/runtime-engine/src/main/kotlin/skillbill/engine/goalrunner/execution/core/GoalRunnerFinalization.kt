@@ -37,7 +37,9 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -62,6 +64,7 @@ class GoalRunnerFinalization(
   private val progressReader: GoalRunnerProgressReader,
   private val noChangePauses: FeatureTaskRuntimePhaseRecorder,
   private val ciMonitor: GoalRunnerCiMonitor,
+  private val pullRequestIdentityLookup: PullRequestIdentityLookup,
 ) {
   fun finalizeGoal(
     state: GoalRunnerManifestState,
@@ -80,6 +83,7 @@ class GoalRunnerFinalization(
     attempted: List<Int>,
   ): GoalRunnerRunReport {
     noChangeFinalization(finalState.manifest, request, attempted)?.let { return it }
+    publishedGoalResult(finalState, request, attempted)?.let { return it }
     commitAllRemainingWorktree(finalState.manifest, request)?.let { reason ->
       return stopped(
         StoppedReportArgs(
@@ -120,6 +124,39 @@ class GoalRunnerFinalization(
           ),
         )
     }
+  }
+
+  private fun publishedGoalResult(
+    finalState: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    attempted: List<Int>,
+  ): GoalRunnerRunReport? {
+    val published =
+      pullRequestIdentityLookup.lookup(request.repoRoot, finalState.manifest.featureBranch.orEmpty())
+    if (published is PullRequestIdentity.Merged) {
+      deleteGoalSpecScratchOnSuccess(finalState.manifest, request)
+      return completed(
+        finalState.manifest,
+        attempted,
+        published.url,
+        GoalPullRequestStatus.EXISTING,
+        resolveFindingsLedger(finalState.manifest.issueKey),
+      )
+    }
+    if (published is PullRequestIdentity.Unavailable) {
+      return stopped(
+        StoppedReportArgs(
+          issueKey = finalState.manifest.issueKey,
+          attempted = attempted,
+          subtaskId = 0,
+          reason = GoalRunnerStopReason.PULL_REQUEST_FAILED,
+          blockedReason = published.reason,
+          workflowId = finalState.parentWorkflowId,
+          lastResumableStep = "pr_description",
+        ),
+      )
+    }
+    return null
   }
 
   private fun completeMonitoredGoal(

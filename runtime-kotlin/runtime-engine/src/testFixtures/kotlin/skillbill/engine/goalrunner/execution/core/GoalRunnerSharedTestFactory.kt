@@ -23,7 +23,6 @@ import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerChildRepairSt
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
-import skillbill.engine.goalrunner.planning.recovery.NO_GOAL_PLANNING_STATUS_REASON_COHERENCE
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
@@ -93,10 +92,8 @@ fun testGoalRunnerStatusService(
       database = database,
       gitOperations = ports.gitOperations,
       workerSupervisor = ports.workerSupervisor,
-      planningStatusReasonCoherence = NO_GOAL_PLANNING_STATUS_REASON_COHERENCE,
       diagnostics = ports.diagnostics,
       runtimeStatusService = ports.runtimeStatusService,
-      repositoryRoot = testRepositoryRoot,
     )
   return GoalRunnerStatusService(
     manifestStore = manifestStore,

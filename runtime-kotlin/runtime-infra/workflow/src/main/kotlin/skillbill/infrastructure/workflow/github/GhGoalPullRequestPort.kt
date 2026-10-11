@@ -2,15 +2,18 @@ package skillbill.infrastructure.workflow.github
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Path
 
 class GhGoalPullRequestPort internal constructor(
   private val gh: GhCommandRunner,
+  private val identityLookup: PullRequestIdentityLookup,
 ) : GoalPullRequestPort {
   @Inject
-  constructor() : this(ProcessGhCommandRunner())
+  constructor(identityLookup: PullRequestIdentityLookup) : this(ProcessGhCommandRunner(), identityLookup)
 
   override fun open(request: GoalPullRequestRequest): GoalPullRequestResult =
     request.headBranch.takeIf(String::isNotBlank)
@@ -22,15 +25,11 @@ class GhGoalPullRequestPort internal constructor(
     head: String,
   ): GoalPullRequestResult {
     val root = request.repoRoot.toAbsolutePath().normalize()
-    val existing =
-      gh.run(
-        root,
-        listOf("pr", "list", "--head", head, "--json", "url", "--jq", ".[0].url", "--limit", "1"),
-      )
-    return if (existing.exitCode == 0 && existing.stdout.trim().startsWith("http")) {
-      GoalPullRequestResult.Existing(existing.stdout.trim())
-    } else {
-      createPullRequest(root, request, head)
+    return when (val existing = identityLookup.lookup(root, head)) {
+      is PullRequestIdentity.Found -> GoalPullRequestResult.Existing(existing.url)
+      is PullRequestIdentity.Merged -> GoalPullRequestResult.Existing(existing.url)
+      is PullRequestIdentity.Unavailable -> GoalPullRequestResult.Failed(existing.reason)
+      PullRequestIdentity.Absent -> createPullRequest(root, request, head)
     }
   }
 

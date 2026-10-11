@@ -30,7 +30,7 @@ internal class PullRequestCiWatcher(
     var lastProgressAt: Instant? = null
     var lastPendingNames: List<String>? = null
     while (true) {
-      val identity = identityLookup.lookup(repoRoot, branch)
+      val identity = currentIdentity(repoRoot, branch)
       val found = identity as? PullRequestIdentity.Found
       if (found?.conflicting == true) return PullRequestCiOutcome.Conflicted
       val prNumber = found?.number
@@ -55,13 +55,43 @@ internal class PullRequestCiWatcher(
             }
           }
         }
-      if (settled != null) return settled
+      if (settled != null) {
+        return if (settled is PullRequestCiOutcome.Failed || settled is PullRequestCiOutcome.Unavailable) {
+          refreshedFailure(repoRoot, branch, settled)
+        } else {
+          settled
+        }
+      }
       if (!ciStarted && Duration.between(startedAt, now()) >= startTimeout) {
         return PullRequestCiOutcome.Blocked(startTimeoutReason())
       }
       sleep(pollInterval)
     }
   }
+
+  private fun currentIdentity(
+    repoRoot: Path,
+    branch: String,
+  ): PullRequestIdentity {
+    val identity = identityLookup.lookup(repoRoot, branch)
+    return if ((identity as? PullRequestIdentity.Found)?.conflicting == true) {
+      identityLookup.lookup(repoRoot, branch)
+    } else {
+      identity
+    }
+  }
+
+  private fun refreshedFailure(
+    repoRoot: Path,
+    branch: String,
+    observed: PullRequestCiOutcome,
+  ): PullRequestCiOutcome =
+    when (val latest = identityLookup.lookup(repoRoot, branch)) {
+      is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
+      is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(latest.reason)
+      PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
+      is PullRequestIdentity.Found -> observed
+    }
 
   private fun reportRunning(
     checks: List<PullRequestCheck>,

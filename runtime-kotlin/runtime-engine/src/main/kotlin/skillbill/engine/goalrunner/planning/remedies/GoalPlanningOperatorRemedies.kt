@@ -1,13 +1,8 @@
 package skillbill.engine.goalrunner.planning.remedies
 
-import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
-import skillbill.engine.goalrunner.planning.recovery.GoalPlanningProvenanceRecoverability
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
-import skillbill.goalrunner.model.GoalPlanningStatusReasons
-import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
-import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
@@ -101,42 +96,4 @@ internal fun goalPlanningPreparationStateReadStopReason(
   val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recordedSubtaskId.takeIf { it > 0 }
   return "Goal planning preparation state could not be read: $reason. " +
     recoverySuffix(issueKey, remedySubtaskId, kind)
-}
-
-internal fun goalPlanningNonResumableStatusReason(
-  issueKey: String,
-  subtaskId: Int?,
-  kind: GoalPlanningRecoveryKind,
-): String =
-  "Saved planning is not resumable until provenance is repaired. " +
-    recoverySuffix(issueKey, subtaskId, kind)
-
-internal fun statusRecoverabilityOrRefuse(
-  classify: () -> GoalPlanningProvenanceRecoverability,
-): GoalPlanningProvenanceRecoverability =
-  runCatching(classify).getOrElse { error ->
-    error.rethrowIfCooperativeCancellationOrInterruption()
-    GoalPlanningProvenanceRecoverability.Irrecoverable(
-      classifyGoalPlanningRecovery(error),
-    )
-  }
-
-internal fun alignPlanningStatusWithLaunchRecoverability(
-  snapshot: GoalPlanningStatusSnapshot,
-  recoverability: GoalPlanningProvenanceRecoverability,
-  issueKey: String,
-  remedySubtaskId: Int?,
-): GoalPlanningStatusSnapshot {
-  if (recoverability !is GoalPlanningProvenanceRecoverability.Irrecoverable) return snapshot
-  if (
-    snapshot.state != GoalPlanningStatusState.PREPLANNED &&
-    snapshot.state != GoalPlanningStatusState.PARTIALLY_PLANNED
-  ) {
-    return snapshot
-  }
-  if (!GoalPlanningStatusReasons.claimsResume(snapshot.reason)) return snapshot
-  return snapshot.copy(
-    planningWaveSubtaskIds = emptyList(),
-    reason = goalPlanningNonResumableStatusReason(issueKey, remedySubtaskId, recoverability.recoveryKind),
-  )
 }

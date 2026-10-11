@@ -122,6 +122,17 @@ Finishing the subtasks does not complete the goal. PR publication and monitoring
 must finish before the runtime records goal completion or the IDE reports "done".
 A merged PR completes monitoring regardless of failing or pending checks. The
 monitor checks the PR's state on every poll so a merge during CI ends the wait.
+When every subtask is terminal, resume skips the planning sweep and continues
+finalization without reading archived planning specs.
+Goal and IDE status read workflow state from the database without consulting spec
+projections. Issue-key spec lookup checks `.feature-specs/done` when no active
+spec matches. When a bundle moves to `done`, subsequent manifest projection
+writes follow the archived bundle instead of recreating its active directory.
+A resumed goal recognizes its merged pull request before committing, pushing, or
+trying to publish another pull request, including after deletion of the remote
+feature branch. Before returning a failed check or conflict, monitoring refreshes
+the pull request state so an observed merge completes the run. Repair-limit
+reports label the retained failure as the last observation.
 An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.

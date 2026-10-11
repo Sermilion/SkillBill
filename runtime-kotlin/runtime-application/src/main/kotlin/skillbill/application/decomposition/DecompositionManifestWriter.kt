@@ -33,7 +33,10 @@ import java.nio.file.Path
 @Inject
 class DecompositionManifestWriter {
   fun writeFromWorkflowUpdate(input: DecompositionManifestWorkflowProjectionInput): DecompositionManifestWriteResult? {
-    val manifest = manifestFromWorkflowUpdate(input) ?: return null
+    val manifest =
+      manifestFromWorkflowUpdate(
+        input,
+      )?.atExistingSpecBundle(input.repoRoot, input.fileStore) ?: return null
     return when (
       val outcome =
         writeProjectionOutcome(
@@ -89,7 +92,9 @@ class DecompositionManifestWriter {
     validator: DecompositionManifestValidator,
     fileStore: DecompositionManifestStore,
   ): DecompositionManifestProjectionOutcome {
-    val runtime = artifacts.decompositionRuntime() ?: return DecompositionManifestProjectionOutcome.Absent
+    val runtime =
+      artifacts.decompositionRuntime()?.atExistingSpecBundle(repoRoot, fileStore)
+        ?: return DecompositionManifestProjectionOutcome.Absent
     return writeProjectionOutcome(
       WriteProjectionOutcomeArgs(
         repoRoot = repoRoot,

@@ -158,7 +158,7 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
   ): IdeStatusSnapshot? {
     val issueKey = candidate.issueKey ?: return null
-    val manifestState = manifestStore.readByIssueKey(issueKey, context.repoRoot) ?: return null
+    val manifestState = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot) ?: return null
     val projection =
       goalRunnerStatusService.status(
         GoalRunnerStatusRequest(

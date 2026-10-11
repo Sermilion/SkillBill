@@ -128,11 +128,13 @@ import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -1657,6 +1659,56 @@ class GoalRunnerLinearScratchFinalizeTest {
     assertTrue(events.none { it is GoalRunnerRunEvent.Completed })
     assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
     assertEquals(2, monitorAttempts)
+  }
+
+  @Test
+  fun `blocked monitoring resumes as complete after merge without publication or repairs`() {
+    val repoRoot = Files.createTempDirectory("goal-merged-resume")
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withCompletedSubtask(1, workflowId = "wfl-1", commitSha = "sha-1"),
+      )
+    val git = CommitAllRecordingGitOperations(dirtyPorcelain = "", currentBranch = "main")
+    val pullRequests = RecordingPullRequestPort()
+    var merged = false
+    var monitorAttempts = 0
+    val url = "https://github.com/example/repo/pull/463"
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(
+          manifestStore = store,
+          subtaskLauncher = RecordingSubtaskLauncher { error("Completed work must not be replayed.") },
+          outcomeStore = RecordingOutcomeStore(),
+          pullRequestPort = pullRequests,
+        ).copy(
+          gitOperations = git,
+          goalPlanningSweep =
+            GoalPlanningSweep { _, _ -> error("Archived completed specs must not be read for planning.") },
+          pullRequestIdentityLookup =
+            PullRequestIdentityLookup { _, _ ->
+              if (merged) PullRequestIdentity.Merged(url, 463) else PullRequestIdentity.Found(url, 463)
+            },
+          ciMonitor =
+            GoalRunnerCiMonitor { _, _ ->
+              monitorAttempts += 1
+              PhaseRunResult.Blocked("goal-monitor", emptyList(), null, "monitor", "Repair limit reached")
+            },
+        ),
+      )
+    val request = linearRunRequest(repoRoot)
+    assertIs<GoalRunnerRunReport.Stopped>(runner.run(request))
+    merged = true
+
+    val result = assertIs<GoalRunnerRunReport.Completed>(runner.run(request))
+
+    assertEquals(url, result.pullRequestUrl)
+    assertEquals("existing", result.pullRequestStatus.wireValue)
+    assertEquals(1, pullRequests.openCount)
+    assertEquals(1, monitorAttempts)
+    assertEquals(emptyList(), git.commitMessages)
+    assertEquals(emptyList(), git.pushedBranches)
+    assertIs<GoalRunnerRunReport.AlreadyComplete>(runner.run(request))
+    assertEquals(1, pullRequests.openCount)
   }
 
   @Test
