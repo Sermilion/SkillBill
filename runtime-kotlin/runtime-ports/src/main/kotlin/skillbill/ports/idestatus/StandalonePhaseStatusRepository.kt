@@ -22,6 +22,4 @@ interface StandalonePhaseStatusRepository {
   ): List<StandalonePhaseStatusRecord>
 
   fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult
-
-  fun reconcileExpiredLeases(now: Instant): Int
 }

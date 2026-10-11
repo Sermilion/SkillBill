@@ -5,4 +5,5 @@ build configuration, scripts, and CI. Compilation alone does not complete the ga
 Stop when every required check passes or a concrete external obstacle remains.
 
 Do not recurse into `skill-bill phase validation`. Keep repairing in this session.
-Name the checks you ran and how each ended. If a check cannot be found, say so.
+Name the checks you ran and how each ended. If discovery finds no applicable commands, print a warning and complete the step.
+Do not treat unreadable configuration or failed discovery as an empty check list.

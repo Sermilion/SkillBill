@@ -26,8 +26,6 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
@@ -117,8 +115,6 @@ fun testPhaseStrategies(
         },
         PhaseStrategyRegistration(PackBuildStrategy(), runner()),
         PhaseStrategyRegistration(PackBuildOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(PackValidationStrategy(), runner()),
-        PhaseStrategyRegistration(PackValidationOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
         PhaseStrategyRegistration(AgentValidateOpus55Strategy(), runner()),
         PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),

@@ -442,7 +442,6 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       val prompt =
         composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing) {
           copy(
-            packCollectAllCommand = "collect-all-$slug",
             packConfirmationGateCommand = "confirm-$slug",
             packBuildCommand = "build-$slug",
           )

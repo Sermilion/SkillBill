@@ -19,9 +19,14 @@ private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
 internal fun runtimeOwnedValidateAgentPhaseTask(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
-    "Run the full project validation, including required tests, static analysis, formatting checks, and " +
-    "repository checks. Compilation alone is insufficient. Project commands remain allowed when a pack " +
-    "also declares them. Do not recursively invoke `skill-bill phase validation`. " +
+    "If you find no applicable validation commands after inspecting those sources, print a warning " +
+    "that no validation commands were found, then settle completed and allow the workflow to advance. " +
+    "Do not invent commands or report checks as passed when none ran. A failed discovery command or " +
+    "unreadable project configuration is an obstacle, not evidence that no checks exist. " +
+    "Run the full project validation when checks exist, including required tests, static analysis, " +
+    "formatting checks, and " +
+    "repository checks. Compilation alone is insufficient. " +
+    "Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
     "subagents. Settle completed only when every required check passes, naming the checks you ran and how " +
     "each ended. Test failures, static-analysis findings, formatting failures, and outdated fixtures are " +
@@ -31,8 +36,8 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "rerunning the required checks in this session until they all pass. " +
     "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
     "the required operator action, and any remaining failures. Wall-clock timeout still stops " +
-    "the subtask. The runtime does not rerun the checks itself, and your report never replaces the " +
-    "runtime's own command, exit-status, and checkpoint evidence. Never silence findings with annotations, " +
+    "the subtask. The runtime does not rerun the checks itself. Report each command and its result, " +
+    "or the warning when discovery finds none. Never silence findings with annotations, " +
     "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead. " +
     "Discover the applicable checks independently from your existing plan and current repository-scope inputs. " +
     "Authoring phases may have run or deferred scoped formatter and analysis commands, but their reports are " +
@@ -66,26 +71,6 @@ internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
     "weakened configuration, or skipped tests — fix root causes instead. After you stop, the runtime " +
     "re-runs the pack build command and mints the receipt; report nothing but prose."
 }
-
-internal fun runtimeOwnedPackValidationPhaseTask(packCommand: String?): String {
-  val gateLine =
-    if (packCommand.isNullOrBlank()) {
-      "The runtime runs the dominant pack's collect_all_full_gate_command and reads its output."
-    } else {
-      "The runtime runs the dominant pack's collect_all_full_gate_command: `$packCommand`."
-    }
-  return "Repair every finding from the runtime-owned full validation gate in this session. $gateLine " +
-    "Do not run another project-wide validation command and do not report gate evidence. " +
-    "Do not spawn delegated subagents. After repair, the runtime runs the cache-bypassing full validation command " +
-    "once to verify the repository. Never silence findings with suppressions, baselines, disabled rules, " +
-    "or skipped tests."
-}
-
-internal fun packValidationGateTriagePhaseTask(packCommand: String?): String =
-  "Triage the unparseable runtime-owned validation gate failure before repair. Read the captured output and " +
-    "repository files as needed, but do not run the pack gate or mutate files. The dominant pack's discovery " +
-    "command is ${packCommand?.let { "`$it`" } ?: "collect_all_full_gate_command"}. Reply with a concise " +
-    "prose repair plan. Do not report validation evidence or spawn subagents."
 
 internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   val gateLine =

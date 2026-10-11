@@ -1,9 +1,9 @@
 # runtime-kotlin/ boundary decisions
 
-## [2026-10-10] Validation gates always use the whole branch
+## [2026-10-10] Pack build gates always use the whole branch
 Context: Changed-file routing let one edited language choose a different gate from the rest of the branch. A generic-only installation also refused the next goal child after the previous child committed and cleared the working tree.
-Decision: Goal execution-plan creation and standalone validation select the gate from the current branch's tracked files. Validation scope uses that inventory for every run. Remove the changed-file fallback selector. Preserve recorded descriptors and their command policies on resume.
-Reason: Gate selection and full project checks must cover the branch regardless of the active subtask's changes. Generic-only branches retain agent validation when no pack declares a gate.
+Decision: Goal execution-plan creation and pack build gate execution select the gate from the current branch's tracked files. Remove the changed-file fallback selector. Preserve recorded descriptors and their command policies on resume. Standalone and workflow validation discover project checks through the agent strategy.
+Reason: Build gate selection and full project checks must cover the branch regardless of the active subtask's changes. Validation requires no pack declaration.
 
 ## [2026-10-10] CLI configures process logging from the bootstrap-resolved environment
 Context: The CLI Main.kt read System.getenv() to resolve SKILL_BILL_VERBOSE, which broke the empty runtime-cli AmbientEnvironmentArchitectureTest baseline.
@@ -2859,3 +2859,19 @@ Decision: Admit only the `standalonereview` slot package and matching relative s
 Reason: The new consumers require the existing review launch-runner allowance and review role authority. Their separate package must receive the same bounded traversal as `codereview`; raw run state, records, host, transition owner, and context prohibitions stay in force.
 Alternatives considered: A blanket slot exemption or admitting non-review packages (rejected: either removes transitive capability checks from unrelated strategies).
 Revisit when: The standalone review consumer package moves or its accepted binding authority changes.
+
+## 2026-10-10: Discover commands for all validation steps
+
+Operator direction supersedes the retained standalone pack-validation decision.
+Standalone and workflow validation use AgentValidateStrategy to discover required
+checks from project instructions, build configuration, scripts, and CI. No installed
+validation pack or declared full-suite command is required. When discovery finds no
+applicable commands, the agent prints a warning and completes the step. Failed
+discovery or unreadable configuration remains an obstacle.
+
+Remove PackValidationStrategy, its model-specific variant, registrations, command
+prompt hooks, and directive resource. Pack build execution retains its command and
+receipt contracts. Retire tests of the removed pack-validation cycle, including its
+repair-briefing interception, while keeping required-write rejection coverage in
+RequiredPhasePersistenceTest. Regression tests prove standalone command discovery
+without packs and workflow advancement with a retained no-command warning.

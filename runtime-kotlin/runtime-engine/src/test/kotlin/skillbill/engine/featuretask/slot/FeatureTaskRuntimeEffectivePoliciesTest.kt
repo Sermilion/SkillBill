@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.effectivePolicyDigest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
@@ -126,8 +126,8 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         gradleWrapper = null,
         declaration =
           declaration.copy(
-            collectAllFullGateCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue"),
-            cacheBypassingCollectAllFullGateCommand =
+            buildCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue"),
+            cacheBypassingBuildCommand =
               listOf(
                 "runtime/gradlew",
                 "-p",
@@ -148,13 +148,13 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         inputs.copy(packSlug = "custom-pack"),
         inputs.copy(phaseTimeoutMillis = null),
         inputs.copy(phaseTimeoutMillis = 0),
-        inputs.copy(commandFamily = ValidationGateCommandFamily.BUILD),
+        inputs.copy(commandFamily = ValidationGateCommandFamily.VALIDATION),
         inputs.copy(declaration = null),
         inputs.copy(
-          declaration = declaration.copy(collectAllFullGateCommand = listOf("./gradlew", "--continue", "check")),
+          declaration = declaration.copy(buildCommand = listOf("./gradlew", "--continue", "check")),
         ),
         inputs.copy(
-          declaration = declaration.copy(cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check")),
+          declaration = declaration.copy(cacheBypassingBuildCommand = listOf("./gradlew", "check")),
         ),
         inputs.copy(declaration = declaration.copy(findings = declaration.findings.copy(executedWork = null))),
         inputs.copy(declaration = declaration.copy(suppressionMarkers = emptyList())),
@@ -210,7 +210,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
 
   private val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
   private val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
-  private val strategy = PackValidationStrategy()
+  private val strategy = PackBuildStrategy()
   private val registry = PhaseStrategyRegistry(listOf(strategy))
   private val lookup =
     PhaseStrategyLookup(
@@ -229,10 +229,12 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   private val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
   private val declaration =
     ValidationGateDeclaration(
+      collectAllFullGateCommand = listOf("./gradlew", "validation"),
+      cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation", "--rerun-tasks"),
       fullGateCommand = listOf("./gradlew", "check"),
       cacheBypassingFullGateCommand = listOf("./gradlew", "check", "--rerun-tasks"),
-      collectAllFullGateCommand = listOf("./gradlew", "check", "--continue"),
-      cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check", "--continue", "--rerun-tasks"),
+      buildCommand = listOf("./gradlew", "check", "--continue"),
+      cacheBypassingBuildCommand = listOf("./gradlew", "check", "--continue", "--rerun-tasks"),
       findings =
         ValidationGateFindingsLocator(
           ValidationGateFindingsFormat.JUNIT_XML,
@@ -246,7 +248,7 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     )
   private val inputs =
     EffectiveGatePolicyInputs(
-      ValidationGateCommandFamily.VALIDATION,
+      ValidationGateCommandFamily.BUILD,
       "kotlin",
       declaration,
       "runtime/gradlew",

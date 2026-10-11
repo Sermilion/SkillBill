@@ -22,8 +22,6 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationOpus55Strategy
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewOpus55Strategy
@@ -84,7 +82,7 @@ object SkeletonStrategyBindings {
       SkeletonDefinition.VALIDATION to
         mapOf(
           PhaseSlot.QUALITY_GATE to
-            PhaseStrategyBinding.Fixed(PackValidationStrategy.ID).withOpus(PackValidationOpus55Strategy.ID),
+            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
         ),
       SkeletonDefinition.PLAN to
         mapOf(
