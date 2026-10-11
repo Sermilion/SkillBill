@@ -189,6 +189,46 @@ class StatusRefreshCoordinatorTest {
     }
 
     @Test
+    fun `a lower-sequence goal monitor replaces the completed child implement snapshot`() = runBlocking {
+        val now = Instant.parse("2026-10-09T10:00:00Z")
+        var response: SkillBillStatusOutcome = SkillBillStatusOutcome.Active(
+            observedAt = now, summary = "implementing", repositoryIdentity = "repo", issueKey = "SKILL-417",
+            workflowId = "child-workflow", workflowFamily = "feature-task-runtime", currentStepId = "implement",
+            currentStepLabel = "Implement", progressCompleted = null, progressTotal = null, startedAt = now,
+            currentSubtaskId = "3", subtaskStartedAt = now, updatedAt = now,
+            execution = StatusExecutionMetadata(
+                executionScope = "workflow", executionId = "child-run", statusStoreId = "store",
+                branchCorrelation = "main", runSequence = "12", statusRevision = "1",
+            ),
+        )
+        val coordinator = StatusRefreshCoordinator(
+            FakeStatusRepository { response }, FakePreferenceCache(), this, Path.of("/tmp/a"),
+        )
+        try {
+            coordinator.requestRefresh()
+            withTimeout(2_000) { coordinator.outcomes.first { it is SkillBillStatusOutcome.Active } }
+            response = SkillBillStatusOutcome.Active(
+                observedAt = now, summary = "monitoring", repositoryIdentity = "repo", issueKey = "SKILL-417",
+                workflowId = "goal-workflow", workflowFamily = "feature-goal", currentStepId = "monitor",
+                currentStepLabel = "Monitor", progressCompleted = null, progressTotal = null, startedAt = now,
+                currentSubtaskId = null, subtaskStartedAt = null, updatedAt = now,
+                execution = StatusExecutionMetadata(
+                    executionScope = "workflow", executionId = "goal-run", statusStoreId = "store",
+                    branchCorrelation = "main", runSequence = "10", statusRevision = "1",
+                ),
+            )
+            coordinator.requestRefresh()
+            val updated = withTimeout(2_000) {
+                coordinator.outcomes.first { it is SkillBillStatusOutcome.Active && it.currentStepId == "monitor" }
+            } as SkillBillStatusOutcome.Active
+            assertEquals("goal-run", updated.execution?.executionId)
+            assertEquals("10", updated.execution?.runSequence)
+        } finally {
+            coordinator.dispose()
+        }
+    }
+
+    @Test
     fun `the same execution does not regress from done to active`() = runBlocking {
         val now = Instant.parse("2026-10-09T10:00:00Z")
         val execution = StatusExecutionMetadata(

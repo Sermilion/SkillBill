@@ -1,0 +1,24 @@
+/* Pixel Sakura — Brand lockup (Space Grotesk wordmark, neon sakura) */
+
+.ps-brand { display: inline-flex; align-items: center; gap: var(--space-2); text-decoration: none; line-height: 1; }
+.ps-brand__mark { width: 30px; height: 30px; flex: none; display: block; filter: drop-shadow(0 0 10px rgba(255, 77, 141, 0.45)); }
+.ps-brand__word {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  color: var(--color-text);
+}
+.ps-brand__word b { color: var(--color-primary); font-weight: inherit; }
+.ps-brand:hover { text-decoration: none; }
+.ps-brand:hover .ps-brand__word b { color: var(--ps-sakura-300); }
+
+.ps-brand--sm .ps-brand__mark { width: 24px; height: 24px; }
+.ps-brand--sm .ps-brand__word { font-size: var(--fs-card-title); }
+
+.ps-brand--lg .ps-brand__mark { width: 44px; height: 44px; }
+.ps-brand--lg .ps-brand__word { font-size: var(--fs-h1); }
+
+/* Invert kept for API compatibility — on dark it matches default */
+.ps-brand--invert .ps-brand__word { color: var(--color-text); }
+.ps-brand--invert .ps-brand__word b { color: var(--ps-sakura-300); }

@@ -1,0 +1,92 @@
+/* Pixel Sakura — Buttons (modern: bright accent fill + ink text, glow on focus)
+ * Variants: primary, secondary, danger, ghost. Sizes: sm, md (default), lg. */
+
+.ps-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  border: var(--border-1) solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-med) var(--ease-out),
+              transform var(--dur-fast) var(--ease-standard);
+  user-select: none;
+  text-decoration: none;
+}
+.ps-btn:active { transform: translateY(1px); }
+.ps-btn:disabled, .ps-btn[aria-disabled="true"] { cursor: not-allowed; opacity: 0.45; transform: none; box-shadow: none; }
+
+.ps-btn--sm { height: 34px; padding: 0 var(--space-3); font-size: var(--fs-small); border-radius: var(--radius-sm); }
+.ps-btn--lg { height: 52px; padding: 0 var(--space-6); font-size: var(--fs-body); }
+.ps-btn--block { display: flex; width: 100%; }
+
+/* Primary — neon sakura fill, dark ink text, glow on hover */
+.ps-btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-accent);
+}
+.ps-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); box-shadow: var(--glow-sakura); }
+.ps-btn--primary:active:not(:disabled) { background: var(--color-primary-active); box-shadow: none; }
+
+/* Secondary — elevated surface, hairline border */
+.ps-btn--secondary {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.ps-btn--secondary:hover:not(:disabled) { background: var(--ps-surface-3); border-color: var(--ps-slate-400); }
+
+/* Danger — bright red fill, dark ink text */
+.ps-btn--danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #2A0808;
+}
+.ps-btn--danger:hover:not(:disabled) { background: var(--color-danger-hover); border-color: var(--color-danger-hover); box-shadow: 0 0 22px rgba(255, 106, 106, 0.30); }
+
+/* Ghost — text only */
+.ps-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-link);
+}
+.ps-btn--ghost:hover:not(:disabled) { background: var(--ps-sakura-50); color: var(--color-link-hover); }
+
+/* Loading state */
+.ps-btn[data-loading="true"] { color: transparent; position: relative; pointer-events: none; }
+.ps-btn[data-loading="true"]::after {
+  content: ""; position: absolute;
+  width: 16px; height: 16px;
+  border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%;
+  color: var(--color-on-accent);
+  animation: ps-spin 0.6s linear infinite;
+}
+.ps-btn--secondary[data-loading="true"]::after { color: var(--color-text); }
+.ps-btn--ghost[data-loading="true"]::after { color: var(--color-link); }
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+
+/* Icon-only button */
+.ps-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: var(--radius-sm);
+  border: var(--border-1) solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.ps-icon-btn:hover { background: var(--color-surface-subtle); color: var(--color-text); }
+.ps-icon-btn--danger:hover { background: var(--ps-danger-50); color: var(--color-danger); }

@@ -202,6 +202,28 @@ describe("StatusRefreshCoordinator", () => {
     assert.equal(seen.at(-1)?.runSequence, "11");
   });
 
+  it("accepts a lower-sequence goal monitor after the child implement snapshot", async () => {
+    const seen = await acceptedOutcome([
+      {
+        ...CORRELATED_METADATA, executionScope: "workflow", kind: "active",
+        summary: "running", observedAt: OBSERVED_AT, updatedAt: OBSERVED_AT,
+        executionId: "child-run", runSequence: "12", workflowId: "child-workflow",
+        currentStepId: "implement", currentStepLabel: "Implement",
+      },
+      {
+        ...CORRELATED_METADATA, executionScope: "workflow", kind: "active",
+        summary: "running", observedAt: OBSERVED_AT, updatedAt: OBSERVED_AT,
+        executionId: "goal-run", runSequence: "10", workflowId: "goal-workflow",
+        currentStepId: "monitor", currentStepLabel: "Monitor",
+      },
+    ]);
+    const latest = seen.at(-1);
+    assert.ok(latest?.kind === "active");
+    assert.equal(latest.executionId, "goal-run");
+    assert.equal(latest.currentStepId, "monitor");
+    assert.equal(latest.runSequence, "10");
+  });
+
   it("rejects resurrection of the same execution from done to active", async () => {
     const seen = await acceptedOutcome([
       doneSnapshot("run-1", "11"),
