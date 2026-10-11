@@ -281,7 +281,7 @@ class IdeStatusServiceTest {
 
     assertEquals("goal-1", result.snapshot.workflowId)
     assertEquals(IdeStatusWorkflowFamily.FEATURE_GOAL, result.snapshot.workflowFamily)
-    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
   }
 
   @Test

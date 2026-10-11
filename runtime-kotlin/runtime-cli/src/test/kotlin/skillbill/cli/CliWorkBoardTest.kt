@@ -12,6 +12,44 @@ import kotlin.test.assertEquals
 
 class CliWorkBoardTest {
   @Test
+  fun `expired standalone monitor does not remain running on the work board`() {
+    val home = Files.createTempDirectory("cli-work-board-expired-monitor")
+    val repo = Files.createTempDirectory("cli-work-board-monitor-repo")
+    val dbPath = home.resolve("metrics.db")
+    val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
+    val now = Instant.now()
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo-root-realpath-v1:${repo.toRealPath()}",
+          branchCorrelation = "feature/monitor",
+          issueKey = null,
+          workflowId = null,
+          invocationId = "expired-monitor",
+          phaseId = "monitor",
+          executionId = "expired-monitor-execution",
+          lifecycleState = "active",
+          currentStep = "monitor",
+          startedAt = now.minusSeconds(3600),
+          leaseOwner = "dead-owner",
+          leaseGeneration = 1,
+          leaseExpiresAt = now.minusSeconds(1800),
+        ),
+      )
+    }
+    val result =
+      CliRuntime.run(
+        listOf("--db", dbPath.toString(), "work", "board", "--format", "json"),
+        CliRuntimeContext(environment = emptyMap(), userHome = home),
+      )
+    assertEquals(0, result.exitCode, result.stdout)
+    val item = (decodeJsonObject(result.stdout)["items"] as List<*>).single() as Map<*, *>
+    val snapshot = item["snapshot"] as Map<*, *>
+    assertEquals("paused", snapshot["lifecycle_state"])
+    assertEquals("runner_interrupted", snapshot["current_step"].let { it as Map<*, *> }["id"])
+  }
+
+  @Test
   fun `board includes live standalone work from more than one repository`() {
     val home = Files.createTempDirectory("cli-work-board-home")
     val repoOne = Files.createTempDirectory("cli-work-board-repo-one")

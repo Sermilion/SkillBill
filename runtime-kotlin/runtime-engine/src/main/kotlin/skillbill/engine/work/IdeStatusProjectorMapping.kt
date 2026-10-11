@@ -116,7 +116,8 @@ internal fun goalShowsOpenCiMonitor(
   lifecycle: IdeStatusLifecycleState,
 ): Boolean =
   goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
-    projection?.executionLiveness != ExecutionLiveness.LIVE &&
+    projection?.executionLiveness == ExecutionLiveness.LIVE &&
+    projection.currentStep in setOf(OPEN_CI_MONITOR_STEP, "monitor_fix") &&
     lifecycle == IdeStatusLifecycleState.ACTIVE
 
 internal fun goalProjectsLiveFinalizationStep(
@@ -162,8 +163,6 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 }
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
-
-internal const val OPEN_CI_MONITOR_ACTIVITY: String = "CI not fixed"
 
 private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 

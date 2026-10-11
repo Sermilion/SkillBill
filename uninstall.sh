@@ -742,7 +742,8 @@ remove_state_dir_full() {
 # installed-skills staging so generator changes land on the next install, while
 # PRESERVING the copied-in self-contained source set and durable state DBs:
 #   - skills/, platform-packs/, orchestration/, agent-addons/
-#   - *.db workflow / telemetry / review stores
+#   - *.db workflow / telemetry / review stores and their SQLite journals
+#   - backups/ for operator database snapshots and maintenance reports
 #   - the RESERVED baseline-manifest path (subtask-2 seam) below
 # An explicit ./uninstall.sh leaves this flag unset and fully removes
 # ~/.skill-bill via remove_state_dir_full.
@@ -760,13 +761,14 @@ remove_state_dir_preserving_source() {
     "orchestration"
     "agent-addons"
     "baseline-manifest.json"
+    "backups"
   )
 
   local is_preserved entry name keep
   for entry in "$SKILL_BILL_STATE_DIR"/* "$SKILL_BILL_STATE_DIR"/.[!.]* "$SKILL_BILL_STATE_DIR"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
     name="$(basename "$entry")"
-    if [[ "$name" == *.db ]]; then
+    if [[ "$name" == *.db || "$name" == *.db-wal || "$name" == *.db-shm || "$name" == *.db-journal ]]; then
       continue
     fi
     is_preserved=0

@@ -6,6 +6,7 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
@@ -13,7 +14,12 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
+import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -25,6 +31,40 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GoalRunnerStatusProjectionLivenessTest {
+  private val liveSupervisor =
+    object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
+      override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ExactLive
+    }
+
+  @Test
+  fun `reused pid and unsupported process inspection cannot prove a live goal owner`() {
+    val store =
+      InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+        .apply { executionLeaseForTest = liveLease() }
+    val cases =
+      listOf(
+        FeatureTaskRuntimeProcessInspection.ExactLive to ExecutionLiveness.LIVE,
+        FeatureTaskRuntimeProcessInspection.NotRunning to ExecutionLiveness.IDLE,
+        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("process birth differs") to ExecutionLiveness.IDLE,
+        FeatureTaskRuntimeProcessInspection.Unsupported("inspection unavailable") to ExecutionLiveness.UNKNOWN,
+      )
+    for ((inspection, expected) in cases) {
+      val supervisor =
+        object : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
+          override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
+        }
+      val status =
+        requireNotNull(
+          testGoalRunnerStatusService(
+            manifestStore = store,
+            outcomeStore = RecordingOutcomeStore(),
+            ports = GoalRunnerStatusTestPorts(workerSupervisor = supervisor),
+          ).status(GoalRunnerStatusRequest(issueKey = "SKILL-56")),
+        )
+      assertEquals(expected, status.executionLiveness, inspection.toString())
+    }
+  }
+
   @Test
   fun `parked parent progress with goal finalization on monitor aligns liveness with current step`() {
     val store =
@@ -37,6 +77,7 @@ class GoalRunnerStatusProjectionLivenessTest {
       requireNotNull(
         testGoalRunnerStatusService(
           manifestStore = store,
+          ports = GoalRunnerStatusTestPorts(workerSupervisor = liveSupervisor),
           outcomeStore = outcomes,
           phaseRecorder = goalRunnerDefaultPhaseRecorder(),
         ).status(
@@ -82,6 +123,7 @@ class GoalRunnerStatusProjectionLivenessTest {
       requireNotNull(
         testGoalRunnerStatusService(
           manifestStore = store,
+          ports = GoalRunnerStatusTestPorts(workerSupervisor = liveSupervisor),
           outcomeStore = outcomes,
           phaseRecorder = phaseRecorder,
         ).status(
@@ -115,6 +157,7 @@ class GoalRunnerStatusProjectionLivenessTest {
       requireNotNull(
         testGoalRunnerStatusService(
           manifestStore = store,
+          ports = GoalRunnerStatusTestPorts(workerSupervisor = liveSupervisor),
           outcomeStore = outcomes,
           phaseRecorder = goalRunnerDefaultPhaseRecorder(),
         ).status(

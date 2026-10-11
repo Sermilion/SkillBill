@@ -1,9 +1,9 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.JsonSchema
-import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
@@ -23,28 +23,38 @@ import java.util.logging.Logger
 
 @Inject
 class WorkPayloadSchemaValidator : WorkPayloadValidator {
-  override fun validateBoard(payload: JsonObject, sourceLabel: String) =
-    validate(payload, sourceLabel, boardSchema(), true)
+  override fun validateBoard(
+    payload: String,
+    sourceLabel: String,
+  ) = validate(payload, sourceLabel, boardSchema(), true)
 
-  override fun validateDetail(payload: JsonObject, sourceLabel: String) =
-    validate(payload, sourceLabel, detailSchema(), false)
+  override fun validateDetail(
+    payload: String,
+    sourceLabel: String,
+  ) = validate(payload, sourceLabel, detailSchema(), false)
 
   private fun validate(
-    payload: JsonObject,
+    payload: String,
     sourceLabel: String,
     schema: JsonSchema,
     board: Boolean,
   ) {
-    val instance = ClasspathContractSchemaLoader.sharedObjectMapper().readTree(payload.toString())
+    val instance =
+      try {
+        ClasspathContractSchemaLoader.sharedObjectMapper().readTree(payload)
+      } catch (error: JsonProcessingException) {
+        throw failure(sourceLabel, board, "Work payload must be valid JSON.", error)
+      }
     val errors = ClasspathContractSchemaLoader.validate(schema, instance)
     if (errors.isEmpty()) return
     val orderedErrors = errors.sortedWith(violationOrdering)
     val first = orderedErrors.first()
     val reason = formatValidationReason(orderedErrors, instance)
-    if (board) {
-      throw invalidWorkBoardSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
+    throw if (board) {
+      invalidWorkBoardSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
+    } else {
+      invalidWorkDetailSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
     }
-    throw invalidWorkDetailSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
   }
 
   private fun boardSchema() =
@@ -108,17 +118,18 @@ class WorkPayloadSchemaValidator : WorkPayloadValidator {
     board: Boolean,
     reason: String,
     cause: Throwable? = null,
-  ) =
-    if (board) invalidWorkBoardSchemaError(source, "<schema>", reason, cause)
-    else invalidWorkDetailSchemaError(source, "<schema>", reason, cause)
+  ) = if (board) {
+    invalidWorkBoardSchemaError(source, "<schema>", reason, cause)
+  } else {
+    invalidWorkDetailSchemaError(source, "<schema>", reason, cause)
+  }
 
   private fun ObjectNode.requireObject(
     name: String,
     path: String,
     resource: String,
     board: Boolean,
-  ): ObjectNode =
-    get(name) as? ObjectNode ?: throw failure(resource, board, "Schema path '$path' must be an object.")
+  ): ObjectNode = get(name) as? ObjectNode ?: throw failure(resource, board, "Schema path '$path' must be an object.")
 
   companion object {
     private val logger = Logger.getLogger("skillbill.contracts.workflow.WorkPayloadSchemaValidator")

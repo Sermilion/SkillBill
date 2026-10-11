@@ -22,7 +22,10 @@ internal fun workBoardDiagnosticWireMap(diagnostic: WorkBoardDiagnostic): Map<St
     diagnostic.invocationId?.let { put(IdeStatusPayloadKeys.INVOCATION_ID, it) }
   }
 
-internal fun workDetailItemWireMap(item: WorkDetailItem, snapshot: Map<String, Any?>): Map<String, Any?> =
+internal fun workDetailItemWireMap(
+  item: WorkDetailItem,
+  snapshot: Map<String, Any?>,
+): Map<String, Any?> =
   buildMap {
     put(WorkBoardPayloadKeys.SNAPSHOT, snapshot)
     put(WorkBoardPayloadKeys.REPOSITORY_ROOT, item.repositoryRoot)
@@ -53,26 +56,31 @@ private fun phaseWireMap(phase: WorkDetailPhase): Map<String, Any?> =
     WorkDetailPayloadKeys.EFFORT to phase.effort,
   )
 
-private fun goalManifestWireMap(manifest: DecompositionManifest, finishPipeline: List<String>): Map<String, Any?> =
+private fun goalManifestWireMap(
+  manifest: DecompositionManifest,
+  finishPipeline: List<String>,
+): Map<String, Any?> =
   linkedMapOf(
     WorkDetailPayloadKeys.FEATURE_TITLE to manifest.featureName,
     WorkDetailPayloadKeys.GOAL_FINISH_PIPELINE to finishPipeline,
-    WorkDetailPayloadKeys.SUBTASKS to manifest.subtasks.map { subtask ->
-      linkedMapOf(
-        SharedPayloadKeys.SUBTASK_ID to subtask.id,
-        DecompositionPlanningPayloadKeys.NAME to subtask.name,
-        SharedPayloadKeys.STATUS to subtask.status,
-        DecompositionManifestPayloadKeys.COMMIT_SHA to subtask.commitSha,
-        DecompositionManifestPayloadKeys.BLOCKED_REASON to subtask.blockedReason,
-        DecompositionPlanningPayloadKeys.DEPENDENCIES to subtask.dependencies.map { dependency ->
-          linkedMapOf(
-            DecompositionPlanningPayloadKeys.SUBTASK_ID to dependency.subtaskId,
-            DecompositionPlanningPayloadKeys.OPTIONAL to dependency.optional,
-            DecompositionPlanningPayloadKeys.SKIPPED to dependency.skipped,
-          )
-        },
-      )
-    },
+    WorkDetailPayloadKeys.SUBTASKS to
+      manifest.subtasks.map { subtask ->
+        linkedMapOf(
+          SharedPayloadKeys.SUBTASK_ID to subtask.id,
+          DecompositionPlanningPayloadKeys.NAME to subtask.name,
+          SharedPayloadKeys.STATUS to subtask.status,
+          DecompositionManifestPayloadKeys.COMMIT_SHA to subtask.commitSha,
+          DecompositionManifestPayloadKeys.BLOCKED_REASON to subtask.blockedReason,
+          DecompositionPlanningPayloadKeys.DEPENDENCIES to
+            subtask.dependencies.map { dependency ->
+              linkedMapOf(
+                DecompositionPlanningPayloadKeys.SUBTASK_ID to dependency.subtaskId,
+                DecompositionPlanningPayloadKeys.OPTIONAL to dependency.optional,
+                DecompositionPlanningPayloadKeys.SKIPPED to dependency.skipped,
+              )
+            },
+        )
+      },
   )
 
 private fun goalStatusWireMap(projection: GoalRunnerStatusProjection): Map<String, Any?> =

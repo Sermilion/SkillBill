@@ -46,19 +46,26 @@ class CliWorkDetailTest {
     }
   }
 
-  private fun seedCompletedPlan(home: Path, dbPath: Path): String {
+  private fun seedCompletedPlan(
+    home: Path,
+    dbPath: Path,
+  ): String {
     val repoRoot = Files.createTempDirectory("cli-work-detail-backed-plan-repo")
-    val component = RuntimeComponent::class.create(
-      RuntimeContext(
-        EnvironmentContext(dbPathOverride = dbPath.toString(), environment = emptyMap(), userHome = home),
-        TransportContext(), WorkflowOpsContext(), OptionalCallbacks(),
-      ),
-    )
-    val workflowId = assertIs<WorkflowOpenResult.Ok>(
-      component.workflowService.open(
-        WorkflowServiceOpenArgs(kind = WorkflowFamilyKind.TASK_RUNTIME, issueKey = "SKILL-418"),
-      ),
-    ).workflowId
+    val component =
+      RuntimeComponent::class.create(
+        RuntimeContext(
+          EnvironmentContext(dbPathOverride = dbPath.toString(), environment = emptyMap(), userHome = home),
+          TransportContext(),
+          WorkflowOpsContext(),
+          OptionalCallbacks(),
+        ),
+      )
+    val workflowId =
+      assertIs<WorkflowOpenResult.Ok>(
+        component.workflowService.open(
+          WorkflowServiceOpenArgs(kind = WorkflowFamilyKind.TASK_RUNTIME, issueKey = "SKILL-418"),
+        ),
+      ).workflowId
     val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
     val finishedAt = Instant.now().minusSeconds(8 * 86_400)
     database.transaction {

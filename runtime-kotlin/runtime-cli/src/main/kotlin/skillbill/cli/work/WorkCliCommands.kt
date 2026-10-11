@@ -54,23 +54,23 @@ class WorkBoardCommand(
     .choice("json")
     .default("json")
   private val finishedWithin by option("--finished-within", help = "Terminal retention window.")
-    .choice(*WorkBoardWindow.entries.map { it.wireValue }.toTypedArray())
-    .default(WorkBoardWindow.TWENTY_FOUR_HOURS.wireValue)
+    .choice(WorkBoardWindow.entries.associateBy { it.wireValue })
+    .default(WorkBoardWindow.TWENTY_FOUR_HOURS)
 
   override fun run() {
-    val window = WorkBoardWindow.entries.single { it.wireValue == finishedWithin }
-    val result = service.board(WorkBoardRequest(window))
+    val result = service.board(WorkBoardRequest(finishedWithin))
     val payload =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.CONTRACT_VERSION to WORK_BOARD_CONTRACT_VERSION,
-        WorkBoardPayloadKeys.ITEMS to result.items.map { item ->
-          linkedMapOf(
-            WorkBoardPayloadKeys.SNAPSHOT to service.toWireMap(item.snapshot),
-            WorkBoardPayloadKeys.REPOSITORY_ROOT to item.repositoryRoot,
-            WorkBoardPayloadKeys.FINISHED_AT to item.finishedAt?.toString(),
-            WorkBoardPayloadKeys.FINISHED_AT_SOURCE to item.finishedAtSource?.wireValue,
-          )
-        },
+        WorkBoardPayloadKeys.ITEMS to
+          result.items.map { item ->
+            linkedMapOf(
+              WorkBoardPayloadKeys.SNAPSHOT to service.toWireMap(item.snapshot),
+              WorkBoardPayloadKeys.REPOSITORY_ROOT to item.repositoryRoot,
+              WorkBoardPayloadKeys.FINISHED_AT to item.finishedAt?.toString(),
+              WorkBoardPayloadKeys.FINISHED_AT_SOURCE to item.finishedAtSource?.wireValue,
+            )
+          },
         WorkBoardPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
         WorkBoardPayloadKeys.FINISHED_WITHIN to result.finishedWithin.wireValue,
         WorkBoardPayloadKeys.DIAGNOSTICS to result.diagnostics.map(::workBoardDiagnosticWireMap),
@@ -82,7 +82,7 @@ class WorkBoardCommand(
           WorkBoardPayloadKeys.MESSAGE to "Skill Bill database is not present.",
         )
     }
-    validator.validateBoard(JsonCodec.mapToJsonObject(payload), "work-board-cli")
+    validator.validateBoard(JsonCodec.mapToJsonString(payload), "work-board-cli")
     state.complete(payload, CliFormat.JSON)
   }
 }
@@ -107,12 +107,13 @@ class WorkDetailCommand(
         WorkDetailPayloadKeys.ITEM to result.item?.let { workDetailItemWireMap(it, service.toWireMap(it.snapshot)) },
       )
     result.problem?.let {
-      payload[WorkDetailPayloadKeys.PROBLEM] = mapOf(
-        WorkDetailPayloadKeys.CODE to it.code.wireValue,
-        WorkDetailPayloadKeys.MESSAGE to it.message,
-      )
+      payload[WorkDetailPayloadKeys.PROBLEM] =
+        mapOf(
+          WorkDetailPayloadKeys.CODE to it.code.wireValue,
+          WorkDetailPayloadKeys.MESSAGE to it.message,
+        )
     }
-    validator.validateDetail(JsonCodec.mapToJsonObject(payload), "work-detail-cli")
+    validator.validateDetail(JsonCodec.mapToJsonString(payload), "work-detail-cli")
     state.complete(payload, CliFormat.JSON)
   }
 }

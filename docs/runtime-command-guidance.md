@@ -120,6 +120,9 @@ and monitors again. Accepted no-change goals create no PR and skip monitoring.
 
 Finishing the subtasks does not complete the goal. PR publication and monitoring
 must finish before the runtime records goal completion or the IDE reports "done".
+Status also honors persisted completed goal rows from older runtimes that did not
+write the newer completion control marker. Completed subtasks alone do not prove
+that monitoring is running. Running status requires a verified live process owner.
 A merged PR completes monitoring regardless of failing or pending checks. The
 monitor checks the PR's state on every poll so a merge during CI ends the wait.
 When every subtask is terminal, resume skips the planning sweep and continues
