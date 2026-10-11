@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Dispatcher for the full governed feature run, single standalone phases, and runtime operations."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor commits, pushes, watches CI, and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
