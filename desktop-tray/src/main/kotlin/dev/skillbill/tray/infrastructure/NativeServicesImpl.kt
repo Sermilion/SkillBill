@@ -1,0 +1,70 @@
+package dev.skillbill.tray.infrastructure
+
+import dev.nucleusframework.autolaunch.AutoLaunch
+import dev.nucleusframework.autolaunch.AutoLaunchResult
+import dev.nucleusframework.notification.common.NotificationManager
+import dev.nucleusframework.notification.common.notification
+import dev.skillbill.tray.application.NativeServices
+import dev.skillbill.tray.domain.WorkIdentity
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
+import dev.skillbill.tray.infrastructure.cli.ProcessRunner
+import dev.skillbill.tray.infrastructure.cli.ProcessResult
+import java.time.Duration
+
+class NativeServicesImpl : NativeServices {
+  override suspend fun hasSystemTray(): Boolean {
+    if (!os().contains("linux")) return true
+    return when (val result = ProcessRunner(timeout = Duration.ofSeconds(2)).run(listOf("gdbus", "call", "--session", "--dest", "org.freedesktop.DBus", "--object-path", "/org/freedesktop/DBus", "--method", "org.freedesktop.DBus.GetNameOwner", "org.kde.StatusNotifierWatcher"))) {
+      is ProcessResult.Success -> true
+      else -> false.also { dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("status_notifier_watcher_unavailable") }
+    }
+  }
+
+  override fun notify(title: String, body: String, identity: WorkIdentity, onClick: (WorkIdentity) -> Unit) = notifyAuthorized(title, body, identity, { send -> send() }, onClick)
+
+  override fun notifyAuthorized(title: String, body: String, identity: WorkIdentity, authorizeAndSend: (() -> Unit) -> Unit, onClick: (WorkIdentity) -> Unit) {
+    Thread({
+      try {
+        NotificationManager.initialize()
+        authorizeAndSend { notification(title = title.take(120), message = body.take(240), onActivated = { onClick(identity) }).send() }
+      } catch (_: Exception) {
+        dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("notification_failed")
+      }
+    }, "skillbill-notification").apply { isDaemon = true }.start()
+  }
+
+  override fun setStartAtLogin(enabled: Boolean): Boolean = try {
+    if (os().contains("mac") || os().contains("win")) {
+      (if (enabled) AutoLaunch.enable() else AutoLaunch.disable()) in setOf(AutoLaunchResult.OK, AutoLaunchResult.UNCHANGED)
+    } else {
+      setXdgAutostart(enabled)
+    }
+  } catch (_: Exception) {
+    dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("login_start_failed")
+    false
+  }
+
+  private fun setXdgAutostart(enabled: Boolean): Boolean {
+    val path = Path.of(System.getProperty("user.home"), ".config/autostart/skill-bill-tray.desktop")
+    if (!enabled) return Files.deleteIfExists(path) || !Files.exists(path)
+    val launcher = System.getenv("APPIMAGE") ?: System.getProperty("jpackage.app-path")
+    val app = launcher?.let { Path.of(it) }
+    if (app == null || !Files.isExecutable(app)) {
+      dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("xdg_launcher_unavailable")
+      return false
+    }
+    return try {
+      Files.createDirectories(path.parent)
+      val escaped = app.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+      Files.writeString(path, "[Desktop Entry]\nType=Application\nName=Skill Bill\nExec=\"$escaped\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+      true
+    } catch (_: Exception) {
+      dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("xdg_autostart_write_failed")
+      false
+    }
+  }
+
+  private fun os() = System.getProperty("os.name").lowercase()
+}

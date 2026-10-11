@@ -1,0 +1,29 @@
+name: Desktop tray CI
+
+on:
+  pull_request:
+    paths:
+      - "desktop-tray/**"
+      - ".github/workflows/desktop-tray-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "desktop-tray/**"
+      - ".github/workflows/desktop-tray-ci.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Run desktop checks
+        run: (cd desktop-tray && ./gradlew clean check --no-build-cache)

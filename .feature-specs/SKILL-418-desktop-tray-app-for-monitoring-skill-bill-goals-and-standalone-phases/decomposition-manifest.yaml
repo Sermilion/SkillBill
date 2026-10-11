@@ -3,34 +3,40 @@ contract_version: "0.5"
 issue_key: "SKILL-418"
 feature_name: "desktop-tray-app-for-monitoring-skill-bill-goals-and-standalone-phases"
 parent_spec_path: ".feature-specs/SKILL-418-desktop-tray-app-for-monitoring-skill-bill-goals-and-standalone-phases/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-418-desktop-tray-app-for-monitoring-skill-bill-goals-and-standalone-phases"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Governed work board and detail CLI"
   spec_path: ".feature-specs/SKILL-418-desktop-tray-app-for-monitoring-skill-bill-goals-and-standalone-phases/spec_subtask_1_work-board-and-detail-cli.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261011-093138-ps5c"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Desktop tray application"
   spec_path: ".feature-specs/SKILL-418-desktop-tray-app-for-monitoring-skill-bill-goals-and-standalone-phases/spec_subtask_2_desktop-tray-application.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261011-104544-3pho"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false

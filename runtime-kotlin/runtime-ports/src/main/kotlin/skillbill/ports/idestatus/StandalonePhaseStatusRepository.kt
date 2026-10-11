@@ -21,5 +21,14 @@ interface StandalonePhaseStatusRepository {
     now: Instant,
   ): List<StandalonePhaseStatusRecord>
 
+  fun readBoardCandidates(
+    finishedFrom: Instant,
+    finishedThrough: Instant,
+  ): List<StandalonePhaseStatusRecord>
+
+  fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord?
+
+  fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord?
+
   fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult
 }

@@ -85,6 +85,8 @@ governedResources {
     "ide-status-schema.yaml",
     "SKILL-148: canonical IDE status schema",
   )
+  copy("copyWorkBoardSchema", "work-board-schema.yaml", "SKILL-418: canonical work-board schema")
+  copy("copyWorkDetailSchema", "work-detail-schema.yaml", "SKILL-418: canonical work-detail schema")
   copy(
     "copyGoalSubtaskReviewStateSchema",
     "goal-subtask-review-state-schema.yaml",

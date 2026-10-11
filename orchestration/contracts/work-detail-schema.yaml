@@ -1,0 +1,118 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/work-detail-schema.yaml"
+title: "Work item detail"
+type: object
+additionalProperties: false
+required: [contract_version, observed_at, item]
+properties:
+  contract_version: {type: string, const: "1.0"}
+  observed_at: {type: string, format: date-time}
+  item:
+    oneOf:
+      - type: "null"
+      - $ref: "#/$defs/item"
+  problem:
+    type: object
+    additionalProperties: false
+    required: [code, message]
+    properties:
+      code: {type: string, enum: [absent_database, unknown_work_item, ambiguous_work_item, invalid_repository_identity]}
+      message: {type: string, minLength: 1}
+allOf:
+  - if:
+      properties:
+        item: {type: "null"}
+      required: [item]
+    then:
+      required: [problem]
+  - if:
+      properties:
+        item: {type: object}
+      required: [item]
+    then:
+      not:
+        required: [problem]
+$defs:
+  item:
+    type: object
+    additionalProperties: true
+    required: [snapshot, repository_root, step_pipeline]
+    properties:
+      snapshot: { $ref: "https://skill-bill.dev/contracts/ide-status-schema.yaml" }
+      repository_root: {type: string, minLength: 1}
+      finished_at: {type: [string, "null"], format: date-time}
+      finished_at_source:
+        type: [string, "null"]
+        enum: [standalone_finished_at, workflow_completion, goal_completion, goal_state_entry, estimated_goal_state_entry, null]
+      feature_title: {type: string}
+      subtasks: {type: array, items: {type: object}}
+      phases: {type: array, items: {type: object}}
+      current_phase: {type: [string, "null"]}
+      complete_count: {type: integer, minimum: 0}
+      pending_count: {type: integer, minimum: 0}
+      blocked_count: {type: integer, minimum: 0}
+      step_pipeline: {type: array, items: {type: string}}
+      goal_finish_pipeline: {type: array, items: {type: string}}
+      active_agent: {type: [string, "null"]}
+      execution_liveness: {type: [string, "null"]}
+      phase_attempt_counts: {type: object}
+      cumulative_fix_iterations: {type: object}
+      re_attempt_cause_counts: {type: object}
+      findings_in_scope: {type: [integer, "null"]}
+      supervisor_kill_count: {type: integer, minimum: 0}
+      latest_observability_event: {type: [object, "null"]}
+      latest_worktree_edit: {type: [object, "null"]}
+      completed_subtask_validation:
+        type: [array, "null"]
+        items:
+          type: object
+          additionalProperties: false
+          required: [subtask_id, validation_passed, validation_evidence, validation_result, integrity_problem]
+          properties:
+            subtask_id: {type: integer, minimum: 1}
+            validation_passed: {type: [boolean, "null"]}
+            validation_evidence:
+              oneOf:
+                - type: "null"
+                - type: object
+                  additionalProperties: false
+                  required: [contract_version, results]
+                  properties:
+                    contract_version: {type: string, const: "0.2"}
+                    results:
+                      type: array
+                      minItems: 1
+                      maxItems: 50
+                      items:
+                        type: object
+                        required: [command, exit_code]
+                        properties:
+                          command: {type: string, minLength: 1}
+                          exit_code: {type: integer}
+            validation_result:
+              type: [object, "null"]
+              required: [validation_status, checks, gate_run_count, gate_runs]
+              properties:
+                validation_status: {type: string, minLength: 1}
+                checks: {type: array, items: {type: string}}
+                repository_checkpoint:
+                  type: object
+                  required: [fingerprint]
+                  properties:
+                    fingerprint: {type: string, minLength: 1}
+                gate_run_count: {type: integer, minimum: 0}
+                gate_runs:
+                  type: array
+                  items:
+                    type: object
+                    required: [duration_ms, outcome, cache_mode, executed_work_units]
+                    properties:
+                      duration_ms: {type: integer, minimum: 0}
+                      outcome: {type: string}
+                      cache_mode: {type: string}
+                      executed_work_units: {type: integer, minimum: 0}
+                      executed_checks: {type: array, items: {type: string}}
+                      command: {type: [string, "null"]}
+                      exit_code: {type: [integer, "null"]}
+                      repository_checkpoint: {type: [string, "null"]}
+            integrity_problem: {type: [string, "null"]}

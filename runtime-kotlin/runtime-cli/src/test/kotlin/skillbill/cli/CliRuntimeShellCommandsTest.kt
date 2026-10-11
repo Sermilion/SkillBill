@@ -2,7 +2,6 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
-import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
@@ -353,6 +352,8 @@ class CliRuntimeShellCommandsTest {
   fun `verify workflow cli preserves prior step completion and continuation payloads`() {
     val tempDir = Files.createTempDirectory("skillbill-cli-verify-workflow")
     val dbPath = tempDir.resolve("metrics.db")
+    val repositoryRoot = createVerifyRepository(tempDir.resolve("repo"))
+    val context = CliRuntimeContext(repositoryRoot = repositoryRoot)
     val opened =
       runJson(
         "--db",
@@ -363,11 +364,12 @@ class CliRuntimeShellCommandsTest {
         "code_review",
         "--format",
         "json",
+        context = context,
       )
     val workflowId = opened["workflow_id"] as String
     val checkpoint =
       GitWorkflowGitOperations()
-        .repositoryFingerprint(CanonicalRepositoryRoot.enclosingRepositoryRoot(Path.of(""))).value
+        .repositoryFingerprint(repositoryRoot).value
     val steps = opened.steps()
     assertEquals("completed", steps.single { it["step_id"] == "gather_diff" }["status"])
 
@@ -384,20 +386,25 @@ class CliRuntimeShellCommandsTest {
       "--step-updates",
       """[{"step_id":"verdict","status":"blocked","attempt_count":1}]""",
       "--artifacts-patch",
-      "{" +
-        "\"diff_projection\":{\"checkpoint\":\"$checkpoint\"," +
-        "\"comparison_scope\":\"base..head\",\"changed_files\":[]}," +
-        "\"feature_flag_audit_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
-        "\"code_review_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
-        "\"unit_test_value_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
-        "\"completeness_audit_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}" +
-        "}",
+      verifyWorkflowReceipts(checkpoint),
       "--format",
       "json",
+      context = context,
     )
 
-    val continued = runJson("--db", dbPath.toString(), "verify-workflow", "continue", "--latest", "--format", "json")
-    val shown = runJson("--db", dbPath.toString(), "verify-workflow", "show", workflowId, "--format", "json")
+    val continued =
+      runJson(
+        "--db",
+        dbPath.toString(),
+        "verify-workflow",
+        "continue",
+        "--latest",
+        "--format",
+        "json",
+        context = context,
+      )
+    val shown =
+      runJson("--db", dbPath.toString(), "verify-workflow", "show", workflowId, "--format", "json", context = context)
     assertEquals("reopened", continued["continue_status"])
     assertEquals("running", continued["workflow_status_before_continue"])
     assertEquals("verdict", continued["continue_step_id"])
@@ -425,5 +432,33 @@ class CliRuntimeShellCommandsTest {
     val unknownCommand = CliRuntime.run(listOf("install", "unknown"))
     assertEquals(1, unknownCommand.exitCode)
     assertContains(unknownCommand.stderr, "no such subcommand")
+  }
+
+  private fun verifyWorkflowReceipts(checkpoint: String): String =
+    "{" +
+      "\"diff_projection\":{\"checkpoint\":\"$checkpoint\"," +
+      "\"comparison_scope\":\"base..head\",\"changed_files\":[]}," +
+      "\"feature_flag_audit_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
+      "\"code_review_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
+      "\"unit_test_value_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}," +
+      "\"completeness_audit_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"approved\",\"findings\":[]}" +
+      "}"
+
+  private fun createVerifyRepository(path: Path): Path {
+    val repositoryRoot = Files.createDirectory(path).toRealPath()
+    val commands =
+      listOf(
+        listOf("git", "init", repositoryRoot.toString()),
+        listOf(
+          "git", "-C", repositoryRoot.toString(), "-c", "user.name=Test", "-c", "user.email=test@example.com",
+          "commit", "--allow-empty", "-m", "Initial test repository",
+        ),
+      )
+    commands.forEach { command ->
+      val process = ProcessBuilder(command).redirectErrorStream(true).start()
+      val output = process.inputStream.bufferedReader().use { it.readText() }
+      assertEquals(0, process.waitFor(), output)
+    }
+    return repositoryRoot
   }
 }

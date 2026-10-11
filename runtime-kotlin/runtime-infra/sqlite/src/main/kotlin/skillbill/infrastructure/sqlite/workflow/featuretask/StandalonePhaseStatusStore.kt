@@ -108,6 +108,36 @@ internal class StandalonePhaseStatusStore(
       )
   }
 
+  override fun readBoardCandidates(
+    finishedFrom: Instant,
+    finishedThrough: Instant,
+  ): List<StandalonePhaseStatusRecord> =
+    connection.prepareStatement("SELECT * FROM standalone_phase_status").use { statement ->
+      statement.executeQuery().use { rows ->
+        buildList { while (rows.next()) add(rows.toRecord()) }
+      }
+    }.filter { record ->
+      val finishedAt = record.finishedAt
+      record.workflowId != null || record.lifecycleState !in BOARD_FINISHED_STATES ||
+        finishedAt == null ||
+        (finishedAt >= finishedFrom && finishedAt <= finishedThrough)
+    }.sortedWith(
+      compareByDescending<StandalonePhaseStatusRecord> { it.runSequence.length }
+        .thenByDescending { it.runSequence },
+    )
+
+  override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
+    readOne("invocation_id", invocationId)
+
+  override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? =
+    connection.prepareStatement(
+      "SELECT * FROM standalone_phase_status WHERE workflow_id = ? " +
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC LIMIT 1",
+    ).use { statement ->
+      statement.setString(1, workflowId)
+      statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
+    }
+
   override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       updateInTransaction(request)
@@ -350,9 +380,6 @@ internal class StandalonePhaseStatusStore(
     return next
   }
 
-  private fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
-    readOne("invocation_id", invocationId)
-
   private fun readByExecution(executionId: String): StandalonePhaseStatusRecord? = readOne("execution_id", executionId)
 
   private fun readOne(
@@ -411,6 +438,7 @@ internal class StandalonePhaseStatusStore(
     val MONITOR_LEASE_HORIZON: Instant = Instant.parse("9999-12-31T00:00:00Z")
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked")
+    val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed")
     val LIVE_RETENTION: Duration = Duration.ofHours(24)
     val SETTLED_RETENTION: Duration = Duration.ofHours(6)
     val UPDATE_STATUS_REGISTRY_SQL =
