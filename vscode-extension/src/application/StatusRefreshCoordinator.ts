@@ -295,9 +295,6 @@ function acceptsNewerStatus(
       current.branchCorrelation !== incoming.branchCorrelation) {
     return false;
   }
-  if (current.statusStoreId !== incoming.statusStoreId) {
-    return false;
-  }
   const sequenceOrder = compareDecimalStrings(incoming.runSequence, current.runSequence);
   if (sequenceOrder < 0) {
     return isLiveOverDone(current, incoming);
@@ -329,9 +326,27 @@ function isLiveOverDone(
   current: SkillBillStatusOutcome,
   incoming: SkillBillStatusOutcome,
 ): boolean {
-  return (incoming.kind === "active" || incoming.kind === "paused" || incoming.kind === "blocked") &&
-    current.kind === "done" &&
-    current.executionId !== incoming.executionId;
+  const incomingLive =
+    incoming.kind === "active" || incoming.kind === "paused" || incoming.kind === "blocked";
+  if (!incomingLive) {
+    return false;
+  }
+  if (current.executionId === incoming.executionId) {
+    return false;
+  }
+  return isTerminal(current.kind) || !bothLiveStandalone(current, incoming);
+}
+
+function bothLiveStandalone(
+  current: SkillBillStatusOutcome,
+  incoming: SkillBillStatusOutcome,
+): boolean {
+  return isLiveStandalone(current) && isLiveStandalone(incoming);
+}
+
+function isLiveStandalone(outcome: SkillBillStatusOutcome): boolean {
+  return (outcome.kind === "active" || outcome.kind === "paused") &&
+    outcome.executionScope === "standalone_phase";
 }
 
 function isStoreReplacement(

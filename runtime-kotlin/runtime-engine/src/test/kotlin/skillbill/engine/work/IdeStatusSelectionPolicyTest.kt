@@ -104,6 +104,25 @@ class IdeStatusSelectionPolicyTest {
   }
 
   @Test
+  fun `active workflow outranks a later blocked standalone with a higher sequence`() {
+    val workflow = candidate("SKILL-417", IdeStatusLifecycleState.ACTIVE, "workflow", "2026-08-06T12:00:00Z")
+    val phase =
+      candidate("SKILL-417", IdeStatusLifecycleState.BLOCKED, "phase", "2026-08-06T12:00:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+            executionId = "execution",
+            statusStoreId = "store",
+            runSequence = "11",
+            statusRevision = "3",
+            invocationId = "invocation",
+            phaseId = "validation",
+          ),
+      )
+    assertEquals("workflow", IdeStatusSelectionPolicy.select(listOf(workflow, phase), OBSERVED)?.workflowId)
+  }
+
+  @Test
   fun `higher execution runSequence wins among active candidates with the same timestamp`() {
     val low =
       candidate("SKILL-416", IdeStatusLifecycleState.ACTIVE, "seq-low", "2026-08-06T12:00:00Z").copy(

@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import java.time.Duration
@@ -24,17 +25,7 @@ object IdeStatusSelectionPolicy {
     observedAt: Instant,
   ): IdeStatusCandidate? {
     val retained = candidates.filter { retainedAt(it, observedAt) }
-    val liveTiers =
-      setOf(
-        IdeStatusSelectionTier.ACTIVE,
-        IdeStatusSelectionTier.PAUSED,
-        IdeStatusSelectionTier.BLOCKED,
-      )
-    val freshLive =
-      retained.filter { candidate ->
-        candidate.selectionTier in liveTiers &&
-          IdeStatusFreshnessClassifier.classify(candidate.updatedAt, observedAt) != IdeStatusFreshness.STALE
-      }
+    val freshLive = retained.filter { candidate -> inFreshLiveCohort(candidate, observedAt) }
     val cohort = freshLive.ifEmpty { retained }
     cohort
       .filter { it.execution != null }
@@ -48,6 +39,24 @@ object IdeStatusSelectionPolicy {
         )
       }
     return cohort.sortedWith(comparator(observedAt)).firstOrNull()
+  }
+
+  private fun inFreshLiveCohort(
+    candidate: IdeStatusCandidate,
+    observedAt: Instant,
+  ): Boolean {
+    if (IdeStatusFreshnessClassifier.classify(candidate.updatedAt, observedAt) == IdeStatusFreshness.STALE) {
+      return false
+    }
+    return when (candidate.selectionTier) {
+      IdeStatusSelectionTier.ACTIVE, IdeStatusSelectionTier.PAUSED -> true
+      IdeStatusSelectionTier.BLOCKED ->
+        candidate.execution?.scope != IdeStatusExecutionScope.STANDALONE_PHASE
+      IdeStatusSelectionTier.FAILED,
+      IdeStatusSelectionTier.RECENTLY_TERMINAL,
+      IdeStatusSelectionTier.IDLE,
+      -> false
+    }
   }
 
   private fun freshnessKey(
