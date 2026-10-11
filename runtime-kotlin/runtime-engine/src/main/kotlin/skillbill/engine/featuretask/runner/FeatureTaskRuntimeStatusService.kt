@@ -40,7 +40,7 @@ class FeatureTaskRuntimeStatusService(
   fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
     val records = recorder.loadPhaseRecords(request.workflowId) ?: return null
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
-    val ledger = recorder.loadPhaseLedger(request.workflowId).orEmpty()
+    val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
     return buildStatusProjection(request, records, decomposeTerminal, ledger)
   }
 
@@ -136,6 +136,7 @@ class FeatureTaskRuntimeStatusService(
         agentAttributionFromPhaseState(
           recorder.phaseQuery,
           request.workflowId,
+          includeParticipatingAgents = false,
         ).finalizingAgentId,
       decomposeTerminal = decomposeTerminalStatus(parts.decomposeTerminal),
       gateRunCount = parts.gateRunCount,

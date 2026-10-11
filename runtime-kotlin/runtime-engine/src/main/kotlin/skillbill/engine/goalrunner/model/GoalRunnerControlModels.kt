@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.model
 
 enum class GoalRunnerPauseStatus(val wireValue: String) {
   NOT_FOUND("not_found"),
+  CHANGED_TARGET("changed_target"),
   PAUSED("paused"),
   REQUESTED("requested"),
 }
@@ -24,6 +25,8 @@ enum class GoalRunnerStopStatus(val wireValue: String) {
   ALREADY_STOPPED("already_stopped"),
   NO_LIVE_LEASE("no_live_lease"),
   IDENTITY_MISMATCH("identity_mismatch"),
+  CHANGED_TARGET("changed_target"),
+  TERMINATION_INCOMPLETE("termination_incomplete"),
   NOT_FOUND("not_found"),
 }
 
@@ -34,6 +37,7 @@ data class GoalRunnerStopVerbResult(
   val pauseReason: String? = null,
   val pausedAt: String? = null,
   val terminationAttempted: Boolean = false,
+  val terminationFailureCode: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

@@ -22,10 +22,13 @@ class FeatureTaskRuntimeRunInvariantsStore(
   ): FeatureTaskRuntimeRunInvariants? {
     proposed?.let { persistOrUpdateAgentAddons(workflowId, it) }
     return database.read { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RUN_INVARIANTS),
+        )
           ?: return@read null
-      runInvariantsFrom(record.artifacts)
+      runInvariantsFrom(artifacts)
     }
   }
 

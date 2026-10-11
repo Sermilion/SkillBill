@@ -14,19 +14,22 @@ fun List<GoalContinuationCandidate>.authoritativeOutcomesBySubtask(): Map<Int, G
     }
     .toMap()
 
-fun List<GoalContinuationCandidate>.selectAuthoritativeOutcome(): GoalRunnerStoredOutcome? {
+fun List<GoalContinuationCandidate>.selectAuthoritativeOutcome(): GoalRunnerStoredOutcome? =
+  selectAuthoritativeCandidate()?.outcome
+
+fun List<GoalContinuationCandidate>.selectAuthoritativeCandidate(): GoalContinuationCandidate? {
   val completeWinner =
     asSequence()
       .filter { candidate -> candidate.outcome?.status == GoalRunnerTerminalStatus.COMPLETE }
       .maxWithOrNull(compareBy<GoalContinuationCandidate> { it.snapshot.updatedAt }.thenBy { it.snapshot.workflowId })
   if (completeWinner != null) {
-    return completeWinner.outcome
+    return completeWinner
   }
   val fallbackWinner =
     asSequence()
       .filter { candidate -> candidate.outcome != null }
       .maxWithOrNull(compareBy<GoalContinuationCandidate> { it.snapshot.updatedAt }.thenBy { it.snapshot.workflowId })
-  return fallbackWinner?.outcome
+  return fallbackWinner
 }
 
 fun staleRunningReason(

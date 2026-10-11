@@ -1,11 +1,20 @@
 package skillbill.infrastructure.sqlite.worklist
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
+import skillbill.ports.work.model.WorkBoardCandidateQuery
+import skillbill.ports.work.model.WorkBoardCandidateRow
+import skillbill.ports.work.model.WorkGoalDependencyPage
+import skillbill.ports.work.model.WorkGoalParentCandidate
+import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkStoreObservation
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.time.parsePersistedInstantOrNull
@@ -17,6 +26,60 @@ import java.time.Instant
 internal class SQLiteWorkListRepository(
   private val connection: Connection,
 ) : WorkListRepository {
+  override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> =
+    readWorkBoardCandidates(connection, query)
+
+  override fun goalSubtaskPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+    completedOnly: Boolean,
+  ): WorkGoalSubtaskPage? = goalSubtasks.page(workflowId, offset, limit, completedOnly)
+
+  private val goalSubtasks = WorkGoalSubtaskStore(connection)
+
+  override fun observation(): WorkStoreObservation =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(
+        "SELECT store_id, (SELECT sum(revision) FROM ${DesktopReadSchema.REVISIONS_TABLE}) AS revision " +
+          "FROM ${DesktopReadSchema.IDENTITY_TABLE} WHERE id = 1",
+      ).use { rows ->
+        if (!rows.next()) throw invalidWorkListRowError("Work store identity is missing.")
+        WorkStoreObservation(rows.getString("store_id"), rows.getLong("revision"))
+      }
+    }
+
+  override fun goalSubtasksByIds(
+    workflowId: String,
+    subtaskIds: Set<Int>,
+  ): List<DecompositionSubtask> =
+    if (subtaskIds.isEmpty()) {
+      emptyList()
+    } else {
+      goalSubtasks.page(
+        workflowId,
+        0,
+        subtaskIds.size,
+        false,
+        subtaskIds,
+      )?.manifest?.subtasks.orEmpty()
+    }
+
+  override fun goalParentCandidatePage(
+    issueKey: String,
+    repositoryIdentity: String?,
+    offset: Int,
+    limit: Int,
+  ): List<WorkGoalParentCandidate> =
+    readWorkGoalParentCandidatePage(connection, issueKey, repositoryIdentity, offset, limit)
+
+  override fun goalDependencyPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+    subtaskId: Int?,
+  ): WorkGoalDependencyPage = readWorkGoalDependencyPage(connection, workflowId, offset, limit, subtaskId)
+
   override fun list(limit: Int?): List<WorkItem> {
     require(limit == null || limit > 0) { "Work-list limit must be positive." }
     return connection.prepareStatement(query()).use { statement ->
@@ -30,9 +93,57 @@ internal class SQLiteWorkListRepository(
       }
     }
   }
+
+  override fun findByWorkflowId(workflowId: String): List<WorkItem> =
+    connection.prepareStatement(query("WHERE workflow_id = ?")).use { statement ->
+      statement.bindAll(workflowId, MAX_EXACT_WORKFLOW_MATCHES)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) add(rows.toWorkItem())
+        }
+      }
+    }
+
+  override fun repositoryIdentityForIssue(
+    normalizedIssueKey: String,
+    excludedWorkflowId: String,
+  ): IssueRepositoryIdentityLookup {
+    val identities =
+      connection.prepareStatement(
+        ISSUE_IDENTITY_SQL,
+      ).use { statement ->
+        statement.bindAll(
+          normalizedIssueKey,
+          excludedWorkflowId,
+          normalizedIssueKey,
+          excludedWorkflowId,
+          normalizedIssueKey,
+          excludedWorkflowId,
+          normalizedIssueKey,
+          excludedWorkflowId,
+          normalizedIssueKey,
+          excludedWorkflowId,
+          normalizedIssueKey,
+          excludedWorkflowId,
+        )
+        statement.executeQuery().use { rows ->
+          buildList {
+            while (rows.next()) add(rows.getString("repository_identity"))
+          }
+        }
+      }
+    return when (identities.size) {
+      0 -> IssueRepositoryIdentityLookup.Missing
+      1 -> IssueRepositoryIdentityLookup.Unique(identities.single())
+      else -> IssueRepositoryIdentityLookup.Ambiguous(identities)
+    }
+  }
+
+  override fun repositoryIdentityForGoalChildren(parentWorkflowId: String): IssueRepositoryIdentityLookup =
+    readWorkGoalChildRepositoryIdentity(connection, parentWorkflowId)
 }
 
-private fun query(): String =
+private fun query(predicate: String = ""): String =
   """
   SELECT issue_key, workflow_kind, workflow_id, started_at, current_state,
          state_entered_at, state_entered_at_estimated
@@ -68,11 +179,12 @@ private fun query(): String =
            state_entered_at_estimated
     FROM goal_issue_progress
   )
+  $predicate
   ORDER BY unixepoch(started_at) DESC, ${fractionalSecondsSql("started_at")} DESC, workflow_id DESC
   LIMIT ?
   """.trimIndent()
 
-private fun fractionalSecondsSql(columnName: String): String =
+internal fun fractionalSecondsSql(columnName: String): String =
   """
   CASE
     WHEN instr($columnName, '.') = 0 THEN 0
@@ -158,3 +270,83 @@ private fun invalid(
   val label = if (workflowId.isBlank()) "<unknown>" else workflowId
   throw invalidWorkListRowError("Work-list row '$label' $detail.", cause)
 }
+
+private const val MAX_EXACT_WORKFLOW_MATCHES = 3
+
+private val ISSUE_IDENTITY_SQL =
+"""
+WITH identity_evidence(repository_identity) AS (
+  SELECT identities.repository_identity
+  FROM feature_task_execution_identities AS identities
+  WHERE identities.normalized_issue_key = ? AND identities.workflow_id <> ?
+  UNION ALL
+  SELECT executions.repository_identity
+  FROM ide_status_workflow_execution AS executions
+  JOIN feature_task_workflows AS workflows ON workflows.workflow_id = executions.workflow_id
+  WHERE UPPER(TRIM(COALESCE(NULLIF(executions.issue_key, ''), workflows.issue_key))) = ?
+    AND executions.workflow_id <> ?
+    AND NOT EXISTS (
+      SELECT 1 FROM feature_task_execution_identities AS identities
+      WHERE identities.workflow_id = executions.workflow_id
+    )
+  UNION ALL
+  SELECT CASE WHEN json_valid(controls.control_state_json)
+      AND json_type(controls.control_state_json, '$.repository_identity') = 'text'
+    THEN json_extract(controls.control_state_json, '$.repository_identity') END
+  FROM feature_task_workflows AS goals
+  JOIN goal_runner_controls AS controls ON controls.parent_workflow_id = goals.workflow_id
+  WHERE UPPER(TRIM(goals.issue_key)) = ? AND goals.workflow_id <> ?
+  UNION ALL
+  SELECT executions.repository_identity
+  FROM ide_status_workflow_execution AS executions
+  JOIN feature_task_workflows AS goals ON goals.workflow_id = executions.workflow_id
+  WHERE UPPER(TRIM(COALESCE(NULLIF(executions.issue_key, ''), goals.issue_key))) = ?
+    AND executions.workflow_id <> ?
+    AND NOT EXISTS (
+      SELECT 1 FROM goal_runner_controls AS controls
+      WHERE controls.parent_workflow_id = goals.workflow_id
+        AND CASE WHEN json_valid(controls.control_state_json)
+            AND json_type(controls.control_state_json, '$.repository_identity') = 'text'
+          THEN json_extract(controls.control_state_json, '$.repository_identity') END IS NOT NULL
+    )
+  UNION ALL
+  SELECT preparations.repository_identity
+  FROM goal_planning_preparations AS preparations
+  JOIN feature_task_workflows AS goals
+    ON goals.workflow_id = preparations.parent_goal_workflow_id
+  WHERE UPPER(TRIM(goals.issue_key)) = ? AND goals.workflow_id <> ?
+    AND NOT EXISTS (
+      SELECT 1 FROM goal_runner_controls AS controls
+      WHERE controls.parent_workflow_id = goals.workflow_id
+        AND CASE WHEN json_valid(controls.control_state_json)
+            AND json_type(controls.control_state_json, '$.repository_identity') = 'text'
+          THEN json_extract(controls.control_state_json, '$.repository_identity') END IS NOT NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM ide_status_workflow_execution AS executions
+      WHERE executions.workflow_id = goals.workflow_id
+    )
+  UNION ALL
+  SELECT plans.repository_identity
+  FROM goal_subtask_plans AS plans
+  JOIN feature_task_workflows AS goals
+    ON goals.workflow_id = plans.parent_goal_workflow_id
+  WHERE UPPER(TRIM(goals.issue_key)) = ? AND goals.workflow_id <> ?
+    AND NOT EXISTS (
+      SELECT 1 FROM goal_runner_controls AS controls
+      WHERE controls.parent_workflow_id = goals.workflow_id
+        AND CASE WHEN json_valid(controls.control_state_json)
+            AND json_type(controls.control_state_json, '$.repository_identity') = 'text'
+          THEN json_extract(controls.control_state_json, '$.repository_identity') END IS NOT NULL
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM ide_status_workflow_execution AS executions
+      WHERE executions.workflow_id = goals.workflow_id
+    )
+)
+SELECT DISTINCT repository_identity
+FROM identity_evidence
+WHERE repository_identity IS NOT NULL AND TRIM(repository_identity) <> ''
+ORDER BY repository_identity
+LIMIT 2
+""".trimIndent()

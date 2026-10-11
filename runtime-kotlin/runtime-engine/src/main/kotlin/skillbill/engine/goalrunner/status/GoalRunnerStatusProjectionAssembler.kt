@@ -3,12 +3,13 @@ package skillbill.engine.goalrunner.status
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
-import skillbill.engine.featuretask.review.core.auditGapIterationCount
+import skillbill.engine.featuretask.review.core.isAuditGapRound
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -27,6 +28,7 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalNoChangeState
+import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -44,7 +46,6 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
-import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -93,6 +94,70 @@ class GoalRunnerStatusProjectionAssembler(
         ),
     )
   }
+
+  fun projectWorkflow(
+    parentWorkflowId: String,
+    request: GoalRunnerStatusRequest,
+  ): GoalRunnerStatusProjection? =
+    database.read { unit ->
+      require(!request.pruneCheckpointRefs)
+      require(!request.includeCompletedSubtaskValidation || request.completedSubtaskValidationIds != null)
+      require(request.completedSubtaskValidationIds.orEmpty().size <= WorkPaginationLimits.MAX_PAGE_SIZE)
+      val subject =
+        GoalRunnerStatusSubtaskReader(manifestStore, outcomeStore, unit).read(parentWorkflowId, request)
+          ?: return@read null
+      val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
+      val childWorkflowId = subject.current?.workflowId?.takeIf(String::isNotBlank)
+      val progress = resolveStatusWorkflowProgress(parentWorkflowId, childWorkflowId, durableRead)
+      val noChange =
+        pausedNoChangeStatus(subject.state.manifest, subject.current)
+          ?: subject.completedNoChange?.let {
+            GoalRunnerNoChangeStatus(
+              GoalNoChangeState.COMPLETED_NO_CHANGE,
+              acceptedNoChangeReason(it.workflowId, durableRead) ?: "unknown",
+            )
+          }
+      val inputs =
+        buildStatusProjectionRuntimeInputs(
+          GoalStatusProjectionRuntimeAssembly(
+            loadedState = subject.state,
+            request = request,
+            planning = subject.planning,
+            validation = subject.validationSubtasks.map(::completedSubtaskValidationFor),
+            currentSubtask = subject.current,
+            acceptances = subject.acceptances,
+            durableRead = durableRead,
+            progress = progress,
+            ledgerSummary =
+              readLedgerSummary(
+                request.issueKey,
+                durableRead,
+                listOfNotNull(subject.current?.id).toSet(),
+              ),
+            childWorkflowId = childWorkflowId,
+            latestWorktreeEdit = latestWorktreeEditSummary(childWorkflowId, durableRead),
+            auditAcRetryCount = measuredAuditAcRetryCount(childWorkflowId, durableRead),
+            noChangeStatus = noChange,
+          ),
+        )
+      GoalRunnerStatusProjector.project(
+        request.issueKey,
+        subject.current,
+        subject.counts,
+        resolveActiveAgent(subject.current),
+        inputs,
+      )
+    }
+
+  fun reconcileSubtaskPage(
+    parentWorkflowId: String,
+    request: GoalRunnerStatusRequest,
+    subtasks: List<DecompositionSubtask>,
+  ): List<DecompositionSubtask> =
+    database.read { unit ->
+      require(subtasks.size <= WorkPaginationLimits.MAX_PAGE_SIZE)
+      GoalRunnerStatusSubtaskReader(manifestStore, outcomeStore, unit).reconcile(parentWorkflowId, request, subtasks)
+    }
 
   internal fun resolveExecutionLiveness(
     parentWorkflowId: String,
@@ -181,23 +246,18 @@ class GoalRunnerStatusProjectionAssembler(
     val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
     val childWorkflowId = currentSubtask?.workflowId?.takeIf(String::isNotBlank)
     val progress = resolveStatusWorkflowProgress(loadedState.parentWorkflowId, childWorkflowId, durableRead)
-    val ledgerSummary =
-      runCatching {
-        attemptLedgerStore.readAttemptLedgerSummary(loadedState.manifest.issueKey)
-      }.getOrElse { error ->
-        durableRead.recordDegradedRead(
-          seam = "goal-status.attempt_ledger",
-          expected = "ledger_summary",
-          used = "degraded",
-          error = error,
-        )
-        null
-      }
+    val ledgerSummary = readLedgerSummary(loadedState.manifest.issueKey, durableRead)
     return buildStatusProjectionRuntimeInputs(
       GoalStatusProjectionRuntimeAssembly(
         loadedState = loadedState,
         request = request,
-        manifest = manifest,
+        planning = durablePlanningStatus(loadedState, manifest, currentSubtask),
+        validation =
+          if (request.includeCompletedSubtaskValidation) {
+            completedSubtaskValidation(manifest, request.completedSubtaskValidationIds)
+          } else {
+            emptyList()
+          },
         currentSubtask = currentSubtask,
         acceptances = acceptances,
         durableRead = durableRead,
@@ -214,7 +274,8 @@ class GoalRunnerStatusProjectionAssembler(
   private data class GoalStatusProjectionRuntimeAssembly(
     val loadedState: GoalRunnerManifestState,
     val request: GoalRunnerStatusRequest,
-    val manifest: DecompositionManifest,
+    val planning: GoalPlanningStatusSnapshot?,
+    val validation: List<GoalRunnerSubtaskValidationEvidence>,
     val currentSubtask: DecompositionSubtask?,
     val acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
     val durableRead: GoalRunnerStatusDurableReadTracker,
@@ -236,12 +297,7 @@ class GoalRunnerStatusProjectionAssembler(
           currentSubtask = assembly.currentSubtask,
           durableRead = assembly.durableRead,
         ),
-      planning =
-        durablePlanningStatus(
-          assembly.loadedState,
-          assembly.manifest,
-          assembly.currentSubtask,
-        ),
+      planning = assembly.planning,
       currentStepOverride =
         assembly.progress?.currentStepId
           ?: derivedChildCurrentStep(assembly.childWorkflowId),
@@ -257,15 +313,7 @@ class GoalRunnerStatusProjectionAssembler(
       reAttemptCauseCounts = assembly.ledgerSummary?.reAttemptCauseCounts ?: emptyMap(),
       findingsInScope = assembly.ledgerSummary?.findingsInScope,
       outOfBandAcceptances = assembly.acceptances.toAcceptedSubtasks(),
-      completedSubtaskValidation =
-        if (assembly.request.includeCompletedSubtaskValidation) {
-          completedSubtaskValidation(
-            assembly.manifest,
-            assembly.request.completedSubtaskValidationIds,
-          )
-        } else {
-          emptyList()
-        },
+      completedSubtaskValidation = assembly.validation,
       paused = assembly.loadedState.controlState.paused,
       pauseRequested = assembly.loadedState.controlState.pauseRequested,
       pauseReason = assembly.loadedState.controlState.pauseReason,
@@ -280,6 +328,27 @@ class GoalRunnerStatusProjectionAssembler(
       auditAcRetryCount = assembly.auditAcRetryCount,
       noChangeStatus = assembly.noChangeStatus,
     )
+
+  private fun readLedgerSummary(
+    issueKey: String,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+    subtaskIds: Set<Int>? = null,
+  ): GoalRunnerAttemptLedgerSummary? =
+    runCatching {
+      if (subtaskIds == null) {
+        attemptLedgerStore.readAttemptLedgerSummary(issueKey)
+      } else {
+        attemptLedgerStore.readAttemptLedgerSummaryForSubtasks(issueKey, subtaskIds)
+      }
+    }.getOrElse { error ->
+      durableRead.recordDegradedRead(
+        seam = "goal-status.attempt_ledger",
+        expected = "ledger_summary",
+        used = "degraded",
+        error = error,
+      )
+      null
+    }
 
   private fun noChangeStatusFor(
     manifest: DecompositionManifest,
@@ -329,9 +398,12 @@ class GoalRunnerStatusProjectionAssembler(
     val pause: FeatureTaskRuntimeNoChangePause? =
       runCatching {
         database.readIfPresent { unitOfWork ->
-          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)?.let { record ->
+          unitOfWork.workflowStates.readFeatureTaskArtifacts(
+            id,
+            setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE),
+          )?.let { artifacts ->
             decodeNoChangePauseFromArtifact(
-              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.value(record.artifacts),
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.value(artifacts),
             )
           }
         }
@@ -371,7 +443,8 @@ class GoalRunnerStatusProjectionAssembler(
     durableRead: GoalRunnerStatusDurableReadTracker,
   ) = childWorkflowId?.let { workflowId ->
     runCatching {
-      auditGapIterationCount(phaseQuery.loadPhaseLedger(workflowId))
+      var count = 0
+      if (phaseQuery.visitPhaseLedger(workflowId) { if (isAuditGapRound(it)) count++ }) count else null
     }.getOrElse { error ->
       durableRead.recordDegradedRead(
         seam = "goal-status.audit_ac_retry_count",
@@ -557,7 +630,7 @@ class GoalRunnerStatusProjectionAssembler(
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME
     ) {
-      agentAttributionFromPhaseState(phaseQuery, workflowId).finalizingAgentId
+      agentAttributionFromPhaseState(phaseQuery, workflowId, includeParticipatingAgents = false).finalizingAgentId
         ?.takeIf(String::isNotBlank)
         ?.let { return it }
     }

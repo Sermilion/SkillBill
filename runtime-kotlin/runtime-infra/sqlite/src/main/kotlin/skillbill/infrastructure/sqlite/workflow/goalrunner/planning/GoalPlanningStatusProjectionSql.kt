@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.planningStatusSnapshot
@@ -32,6 +33,47 @@ internal class GoalPlanningStatusProjectionSql(
   fun listPreparedPlanSubtaskIds(parentGoalWorkflowId: String): List<Int> {
     requireParentGoalWorkflowId(parentGoalWorkflowId)
     return preparedPlanIds(parentGoalWorkflowId)
+  }
+
+  fun preparedPlanStatusCount(parentGoalWorkflowId: String): Int =
+    connection.prepareStatement(
+      """
+      SELECT count(*), count(CASE WHEN preparation_status != ? OR subtask_id < 1 THEN 1 END)
+      FROM goal_subtask_plans WHERE parent_goal_workflow_id = ?
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(GoalPlanningPreparationState.PREPARED.wireValue, parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        check(rows.next())
+        if (rows.getInt(
+            2,
+          ) > 0
+        ) {
+          throw invalidGoalPlanningPreparationSchemaError(
+            parentGoalWorkflowId,
+            "preparation_status",
+            "plan checkpoints must be prepared and use positive subtask ids",
+          )
+        }
+        rows.getInt(1)
+      }
+    }
+
+  fun preparedPlanIdsForSubtasks(
+    parentGoalWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Set<Int> {
+    require(subtaskIds.size <= WorkPaginationLimits.MAX_PAGE_SIZE)
+    if (subtaskIds.isEmpty()) return emptySet()
+    return connection.prepareStatement(
+      """
+      SELECT subtask_id FROM goal_subtask_plans WHERE parent_goal_workflow_id = ?
+        AND subtask_id IN (${subtaskIds.joinToString { "?" }})
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(listOf(parentGoalWorkflowId) + subtaskIds)
+      statement.executeQuery().use { rows -> buildSet { while (rows.next()) add(rows.getInt(1)) } }
+    }
   }
 
   private fun validateStatusRequest(

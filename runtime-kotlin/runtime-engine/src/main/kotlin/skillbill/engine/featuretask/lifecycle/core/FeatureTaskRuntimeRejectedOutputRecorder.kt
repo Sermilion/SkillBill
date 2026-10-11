@@ -310,11 +310,14 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
 
   fun loadDiagnosticSignals(workflowId: String): List<FeatureTaskRuntimeDiagnosticSignal> =
     database.read { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS),
+        )
           ?: return@read emptyList()
       decodeDiagnosticSignalsFromArtifact(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.value(record.artifacts),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.value(artifacts),
       )
     }
 

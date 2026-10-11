@@ -11,7 +11,39 @@ enum class DatabaseAccessOperation(val wireValue: String) {
 enum class DatabaseFailureCode : RuntimeFailureCode {
   ACCESS,
   BUSY,
+  MISSING,
+  INCOMPATIBLE_SCHEMA,
+  CORRUPT,
 }
+
+fun databaseMissing(
+  dbPath: String,
+  operation: DatabaseAccessOperation,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    DatabaseFailureCode.MISSING,
+    "Database ${operation.wireValue} failed for '$dbPath': file is missing.",
+  )
+
+fun databaseIncompatible(
+  dbPath: String,
+  operation: DatabaseAccessOperation,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    DatabaseFailureCode.INCOMPATIBLE_SCHEMA,
+    "Database ${operation.wireValue} failed for '$dbPath': schema is incompatible with this runtime.",
+  )
+
+fun databaseCorrupt(
+  dbPath: String,
+  operation: DatabaseAccessOperation,
+  cause: Throwable,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    DatabaseFailureCode.CORRUPT,
+    "Database ${operation.wireValue} failed for '$dbPath': file is corrupt or is not a database.",
+    cause,
+  )
 
 fun databaseAccessFailure(
   dbPath: String,
@@ -26,7 +58,11 @@ fun databaseAccessFailure(
   )
 
 fun databaseBusy(cause: Throwable): SkillBillRuntimeException =
-  SkillBillRuntimeException(DatabaseFailureCode.BUSY, cause.message.orEmpty(), cause)
+  SkillBillRuntimeException(
+    DatabaseFailureCode.BUSY,
+    "Database is busy or locked. Retry after the current write completes.",
+    cause,
+  )
 
 fun databaseAccessCondition(failure: SkillBillRuntimeException): String =
   failure.message.orEmpty().substringAfter("': ")

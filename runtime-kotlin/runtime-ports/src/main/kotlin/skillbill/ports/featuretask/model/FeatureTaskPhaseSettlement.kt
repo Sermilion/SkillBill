@@ -17,6 +17,16 @@ data class FeatureTaskPhaseSettlement(
   }
 }
 
+sealed interface FeatureTaskPhaseSettlementReasonLookup {
+  data class Unique(val settlement: FeatureTaskPhaseSettlement) : FeatureTaskPhaseSettlementReasonLookup
+
+  data object Missing : FeatureTaskPhaseSettlementReasonLookup
+
+  data object Ambiguous : FeatureTaskPhaseSettlementReasonLookup
+
+  data object BudgetExceeded : FeatureTaskPhaseSettlementReasonLookup
+}
+
 sealed interface FeatureTaskPhaseSettlementKind {
   val wireValue: String
 

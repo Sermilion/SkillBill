@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.addDelegatedReviewLifecycleProjection
@@ -31,6 +32,7 @@ import skillbill.infrastructure.sqlite.core.migration.persistGoalPlanningRepairE
 import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningRepairEvidence
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
+import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -740,6 +742,31 @@ internal val databaseMigrations: List<DatabaseMigration> =
             "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_goal_parent " +
               "ON feature_task_workflows(CASE WHEN json_valid(artifacts_json) " +
               "THEN json_extract(artifacts_json, '$.goal_continuation.parent_workflow_id') END)",
+          )
+        }
+      },
+    ),
+    DatabaseMigration(
+      version = 52,
+      name = "add-desktop-room-read-identity",
+      operation = ::installDesktopReadCompatibility,
+    ),
+    DatabaseMigration(
+      version = 53,
+      name = "bind-work-observations-and-accepted-results",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN accepted_result TEXT")
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN owner_host_identity TEXT")
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN owner_boot_identity TEXT")
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN owner_pid INTEGER")
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN owner_birth_token TEXT")
+          statement.execute(
+            "CREATE TABLE ${DesktopReadSchema.IDENTITY_TABLE} " +
+              "(id INTEGER PRIMARY KEY CHECK (id = 1), store_id TEXT NOT NULL)",
+          )
+          statement.execute(
+            "INSERT INTO ${DesktopReadSchema.IDENTITY_TABLE} VALUES (1, lower(hex(randomblob(16))))",
           )
         }
       },

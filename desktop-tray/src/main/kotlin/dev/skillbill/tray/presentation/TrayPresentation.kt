@@ -6,7 +6,7 @@ import dev.skillbill.tray.domain.*
 import java.time.Instant
 
 data class PopoverView(
-  val pollAgeSeconds: Long?,
+  val observationAgeSeconds: Long?,
   val running: Int,
   val needsYou: Int,
   val done24h: Int,
@@ -24,7 +24,7 @@ fun presentPopover(state: DashboardState, now: Instant): PopoverView {
   val board = state.board
   val projected = board?.let { project(it, now) }
   return PopoverView(
-    pollAgeSeconds = board?.let { java.time.Duration.between(it.observedAt, now).seconds.coerceAtLeast(0) },
+    observationAgeSeconds = board?.let { java.time.Duration.between(it.observedAt, now).seconds.coerceAtLeast(0) },
     running = projected?.running ?: 0,
     needsYou = projected?.needsYou ?: 0,
     done24h = projected?.done24h ?: 0,

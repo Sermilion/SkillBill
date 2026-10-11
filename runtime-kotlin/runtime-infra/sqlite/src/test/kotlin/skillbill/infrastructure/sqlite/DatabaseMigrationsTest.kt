@@ -120,6 +120,8 @@ class DatabaseMigrationsTest {
         49 to "add-feature-task-phase-strategy-telemetry-columns",
         50 to "add-standalone-phase-status-authority",
         51 to "index-feature-task-workflow-issue-lookup",
+        52 to "add-desktop-room-read-identity",
+        53 to "bind-work-observations-and-accepted-results",
       ),
       migrationDefinitions,
     )

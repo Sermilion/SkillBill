@@ -12,11 +12,11 @@ import skillbill.engine.work.model.toStatusWireMap
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskRouteScope

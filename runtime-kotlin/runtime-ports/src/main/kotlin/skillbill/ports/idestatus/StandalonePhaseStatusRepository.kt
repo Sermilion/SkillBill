@@ -2,6 +2,7 @@ package skillbill.ports.idestatus
 
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -26,12 +27,14 @@ interface StandalonePhaseStatusRepository {
     finishedThrough: Instant,
   ): List<StandalonePhaseStatusRecord>
 
-  fun readPhaseExecutions(
-    repositoryIdentity: String,
-    phaseId: String,
-  ): List<StandalonePhaseStatusRecord>
+  fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord>
 
-  fun readWorkflowExecutions(workflowId: String): List<IdeStatusWorkflowExecution>
+  fun readWorkflowExecutions(
+    workflowId: String,
+    startedThrough: Instant,
+    offset: Int,
+    limit: Int,
+  ): List<IdeStatusWorkflowExecution>
 
   fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord?
 

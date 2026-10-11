@@ -6,13 +6,13 @@ import skillbill.engine.featuretask.runner.operatorDecisionPause
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusStep
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus

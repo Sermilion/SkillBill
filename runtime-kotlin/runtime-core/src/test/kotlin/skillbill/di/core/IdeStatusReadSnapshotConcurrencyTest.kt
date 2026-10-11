@@ -20,6 +20,7 @@ import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -211,6 +212,7 @@ private class SnapshotFixture(
       manifestStore = EmptyManifestStore,
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
+      workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
     )
   }
 }
@@ -277,8 +279,13 @@ private class InterleavingUnitOfWork(
 private class CountingWorkList(
   private val delegate: WorkListRepository,
   private val trigger: () -> Unit,
-) : WorkListRepository {
+) : WorkListRepository by delegate {
   override fun list(limit: Int?): List<WorkItem> = delegate.list(limit).also { trigger() }
+
+  override fun findByWorkflowId(workflowId: String): List<WorkItem> =
+    delegate.findByWorkflowId(workflowId).also {
+      trigger()
+    }
 }
 
 private class CountingWorkflowStates(

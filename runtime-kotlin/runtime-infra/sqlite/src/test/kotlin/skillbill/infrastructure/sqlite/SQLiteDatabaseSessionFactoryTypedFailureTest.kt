@@ -6,7 +6,7 @@ import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.sql.DriverManager
+import java.sql.Connection
 import kotlin.io.path.createDirectories
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,15 +40,22 @@ class SQLiteDatabaseSessionFactoryTypedFailureTest {
   @Test
   fun `a sqlite condition raised while executing the read converts to the typed error`() {
     val tempDir = Files.createTempDirectory("skillbill-typed-read-statement")
-    val schemaless = tempDir.resolve("schemaless.db")
-    DriverManager.getConnection("jdbc:sqlite:$schemaless").use { connection ->
-      connection.createStatement().use { it.execute("CREATE TABLE placeholder (id INTEGER PRIMARY KEY)") }
-    }
+    val schemaless = tempDir.resolve("statement-failure.db")
+    ensureTestDatabase(schemaless).close()
     val database = boundDatabase(tempDir, schemaless)
 
     val error =
       assertFailsWith<SkillBillRuntimeException> {
-        database.read { it.workflowStates.getFeatureTaskExecutionIdentity("missing") }
+        database.read {
+          val connection =
+            it::class.java.getDeclaredField(
+              "connection",
+            ).apply { isAccessible = true }.get(it) as Connection
+          connection.createStatement().use {
+              statement ->
+            statement.executeQuery("SELECT * FROM absent_statement_probe")
+          }
+        }
       }
 
     assertEquals(DatabaseFailureCode.ACCESS, error.code)

@@ -2,6 +2,8 @@ plugins {
   alias(libs.plugins.kotlin.jvm)
   alias(libs.plugins.compose)
   alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.ksp)
+  alias(libs.plugins.kotlin.serialization)
 }
 
 group = "dev.skillbill.tray"
@@ -28,11 +30,35 @@ dependencies {
   implementation(libs.nucleus.notification.common)
   implementation(libs.nucleus.application)
   implementation(libs.nucleus.autolaunch)
+  implementation(libs.room.runtime)
+  implementation(libs.sqlite.bundled)
+  implementation(libs.datastore.core)
+  implementation(libs.paging.common)
+  ksp(libs.room.compiler)
+  implementation("dev.skillbill:runtime-core")
+  implementation("dev.skillbill:runtime-contracts")
+  testImplementation("dev.skillbill:runtime-infra-host")
+  testImplementation("dev.skillbill:runtime-infra-contracts")
+  testImplementation(testFixtures("dev.skillbill:runtime-infra-sqlite"))
+  testImplementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.21")
   testImplementation(kotlin("test"))
   testImplementation(libs.junit.jupiter)
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+  useJUnitPlatform()
+  maxHeapSize = "2g"
+}
+
+tasks.withType<Test>().configureEach {
+  inputs.dir("src/main/kotlin").withPropertyName("desktopArchitectureProductionSources")
+  inputs.file("../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/RuntimeModuleCatalog.kt")
+    .withPropertyName("runtimeModuleCatalog")
+  inputs.files(fileTree("../runtime-kotlin") {
+    include("**/src/main/kotlin/**/*.kt")
+    exclude("**/build/**", "**/.gradle/**")
+  }).withPropertyName("runtimeArchitectureProductionSources")
+}
 
 compose.desktop {
   application {
@@ -42,6 +68,7 @@ compose.desktop {
       jvmArgs("-XstartOnFirstThread")
     }
     nativeDistributions {
+      modules("java.sql", "java.net.http", "java.management", "jdk.unsupported")
       targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
         org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
         org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
@@ -56,6 +83,17 @@ compose.desktop {
 }
 
 val appImageToolVersion = "1.9.1"
+val appImageLauncher = layout.buildDirectory.file("generated/appImage/AppRun")
+val compileAppImageLauncher by tasks.registering(Exec::class) {
+  val source = layout.projectDirectory.file("src/main/native/linux/AppRun.c")
+  inputs.file(source)
+  outputs.file(appImageLauncher)
+  onlyIf { System.getProperty("os.name").contains("linux", true) }
+  doFirst {
+    appImageLauncher.get().asFile.parentFile.mkdirs()
+    commandLine("cc", "-std=c11", "-O2", source.asFile.absolutePath, "-o", appImageLauncher.get().asFile.absolutePath)
+  }
+}
 if (System.getProperty("os.name").contains("linux", true)) {
   val linuxTrayDirectory = layout.buildDirectory.dir("generated/linuxTray")
   val compileLinuxTrayNative by tasks.registering(Exec::class) {
@@ -91,17 +129,16 @@ if (System.getProperty("os.name").contains("mac", true)) {
 }
 
 val stageAppImage by tasks.registering(Sync::class) {
+  onlyIf { System.getProperty("os.name").contains("linux", true) }
   dependsOn("createDistributable")
+  dependsOn(compileAppImageLauncher)
   from(layout.buildDirectory.dir("compose/binaries/main/app"))
   into(layout.buildDirectory.dir("appimage/AppDir"))
   doLast {
     val appDir = layout.buildDirectory.dir("appimage/AppDir").get().asFile
     val launcher = appDir.resolve("Skill Bill/bin/Skill Bill")
     check(launcher.exists()) { "Compose did not stage the Linux application launcher." }
-    appDir.resolve("AppRun").writeText("""#!/bin/sh
-HERE="${'$'}(dirname "${'$'}(readlink -f "${'$'}0")")"
-exec "${'$'}HERE/Skill Bill/bin/Skill Bill" "${'$'}@"
-""")
+    appImageLauncher.get().asFile.copyTo(appDir.resolve("AppRun"), overwrite = true)
     appDir.resolve("AppRun").setExecutable(true)
     appDir.resolve("skill-bill.desktop").writeText("[Desktop Entry]\nType=Application\nName=Skill Bill\nExec=AppRun\nIcon=skill-bill\nCategories=Development;\nTerminal=false\n")
     val icon = appDir.resolve("skill-bill.svg")

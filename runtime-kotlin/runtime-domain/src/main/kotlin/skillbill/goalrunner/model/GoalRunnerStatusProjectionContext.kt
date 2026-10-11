@@ -1,6 +1,5 @@
 package skillbill.goalrunner.model
 
-import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
@@ -13,10 +12,9 @@ internal data class GoalRunnerStatusProjectionContext(
 )
 
 internal fun buildGoalRunnerStatusProjectionContext(
-  manifest: DecompositionManifest,
+  currentSubtask: DecompositionSubtask?,
   extras: GoalRunnerStatusProjectionRuntimeInputs,
 ): GoalRunnerStatusProjectionContext {
-  val currentSubtask = manifest.subtasks.firstOrNull { it.id == manifest.currentSubtaskIntent.subtaskId }
   val statusOf: (DecompositionSubtask) -> DecompositionStatus? = { subtask ->
     if (subtask.id == currentSubtask?.id && extras.currentWorkflowStatus in LIVE_WORKFLOW_STATUSES) {
       DecompositionStatus.IN_PROGRESS
@@ -34,23 +32,19 @@ internal fun buildGoalRunnerStatusProjectionContext(
 }
 
 internal fun assembleGoalRunnerStatusProjection(
-  manifest: DecompositionManifest,
+  issueKey: String,
+  counts: GoalRunnerStatusCounts,
   activeAgent: String?,
   extras: GoalRunnerStatusProjectionRuntimeInputs,
   context: GoalRunnerStatusProjectionContext,
 ): GoalRunnerStatusProjection {
   val currentSubtask = context.currentSubtask
   val statusOf = context.statusOf
-  val settledStatuses =
-    setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED, DecompositionStatus.COMPLETED_NO_CHANGE)
   return GoalRunnerStatusProjection(
-    issueKey = manifest.issueKey,
-    completeCount = manifest.subtasks.count { statusOf(it) in settledStatuses },
-    pendingCount =
-      manifest.subtasks.count {
-        statusOf(it) !in settledStatuses && statusOf(it) != DecompositionStatus.BLOCKED
-      },
-    blockedCount = manifest.subtasks.count { statusOf(it) == DecompositionStatus.BLOCKED },
+    issueKey = issueKey,
+    completeCount = counts.complete,
+    pendingCount = counts.pending,
+    blockedCount = counts.blocked,
     currentSubtaskId = currentSubtask?.id,
     currentChildWorkflowId = currentSubtask?.workflowId?.takeIf(String::isNotBlank),
     currentSubtaskStatus = currentSubtask?.let(statusOf),

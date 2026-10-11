@@ -32,6 +32,20 @@ internal fun workDetailItemWireMap(
     put(WorkBoardPayloadKeys.REPOSITORY_ROOT, item.repositoryRoot)
     put(WorkBoardPayloadKeys.FINISHED_AT, item.finishedAt?.toString())
     put(WorkBoardPayloadKeys.FINISHED_AT_SOURCE, item.finishedAtSource?.wireValue)
+    put(
+      DecompositionPlanningPayloadKeys.DEPENDENCIES,
+      item.dependencies.map { entry ->
+        mapOf(
+          SharedPayloadKeys.SUBTASK_ID to entry.subtaskId,
+          DecompositionPlanningPayloadKeys.DEPENDENCIES to
+            mapOf(
+              SharedPayloadKeys.SUBTASK_ID to entry.dependency.subtaskId,
+              DecompositionPlanningPayloadKeys.OPTIONAL to entry.dependency.optional,
+              DecompositionPlanningPayloadKeys.SKIPPED to entry.dependency.skipped,
+            ),
+        )
+      },
+    )
     put(WorkDetailPayloadKeys.STEP_PIPELINE, item.stepPipeline)
     put(
       WorkDetailPayloadKeys.EXECUTION_HISTORY,
@@ -54,7 +68,7 @@ internal fun workDetailItemWireMap(
       put(WorkDetailPayloadKeys.PENDING_COUNT, status.pendingCount)
       put(WorkDetailPayloadKeys.BLOCKED_COUNT, status.blockedCount)
     }
-    item.goalManifest?.let { putAll(goalManifestWireMap(it, item.goalFinishPipeline, item.pageOffset, item.pageSize)) }
+    item.goalManifest?.let { putAll(goalManifestWireMap(it, item.goalFinishPipeline)) }
     item.goalStatus?.let { putAll(goalStatusWireMap(it)) }
   }
 
@@ -74,14 +88,12 @@ private fun phaseWireMap(phase: WorkDetailPhase): Map<String, Any?> =
 private fun goalManifestWireMap(
   manifest: DecompositionManifest,
   finishPipeline: List<String>,
-  offset: Int,
-  pageSize: Int,
 ): Map<String, Any?> =
   linkedMapOf(
     WorkDetailPayloadKeys.FEATURE_TITLE to manifest.featureName,
     WorkDetailPayloadKeys.GOAL_FINISH_PIPELINE to finishPipeline,
     WorkDetailPayloadKeys.SUBTASKS to
-      manifest.subtasks.drop(offset).take(pageSize).map { subtask ->
+      manifest.subtasks.map { subtask ->
         linkedMapOf(
           SharedPayloadKeys.SUBTASK_ID to subtask.id,
           DecompositionPlanningPayloadKeys.NAME to subtask.name,

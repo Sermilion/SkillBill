@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
@@ -11,10 +12,13 @@ import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
+import skillbill.infrastructure.sqlite.core.schema.fileObservation
 import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentContext
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.nio.file.Files
@@ -32,6 +36,7 @@ class SQLiteDatabaseSessionFactory(
   private val runtimeVersion: String,
 ) : DatabaseSessionFactory {
   private val activeRead = ThreadLocal<UnitOfWork>()
+  private val activeWrite = ThreadLocal<UnitOfWork>()
   private val resolvedContext = requireResolvedEnvironmentContext(context)
   private val resolvedPath by lazy {
     DatabaseRuntime.resolveDbPath(
@@ -46,13 +51,19 @@ class SQLiteDatabaseSessionFactory(
   override fun databaseExists(): Boolean = Files.exists(resolveDbPath())
 
   override fun <T> read(block: (UnitOfWork) -> T): T {
+    activeWrite.get()?.let { return block(it) }
     activeRead.get()?.let { return block(it) }
     return DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb -> readInDatabase(openDb, block) }
   }
 
   override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? {
+    activeWrite.get()?.let { return block(it) }
     activeRead.get()?.let { return block(it) }
-    return DatabaseRuntime.openReadDbIfPresentAt(resolveDbPath())?.use { openDb -> readInDatabase(openDb, block) }
+    if (!databaseExists()) return null
+    return DatabaseRuntime.openExistingReadDbAt(resolveDbPath(), diagnostics).use {
+        openDb ->
+      readInDatabase(openDb, block)
+    }
   }
 
   private fun <T> readInDatabase(
@@ -78,6 +89,7 @@ class SQLiteDatabaseSessionFactory(
     }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
+    activeWrite.get()?.let { return block(it) }
     repeat(DatabaseRuntime.SELF_MANAGED_WRITE_BUSY_ATTEMPTS - 1) {
       val outcome = runCatching { withWriteDatabase { openDb -> block(unitOfWork(openDb)) } }
       val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
@@ -87,8 +99,9 @@ class SQLiteDatabaseSessionFactory(
     return translatingBusyFailures { withWriteDatabase { openDb -> block(unitOfWork(openDb)) } }
   }
 
-  override fun <T> transaction(block: (UnitOfWork) -> T): T =
-    translatingBusyFailures {
+  override fun <T> transaction(block: (UnitOfWork) -> T): T {
+    activeWrite.get()?.let { return block(it) }
+    return translatingBusyFailures {
       withWriteDatabase { openDb ->
         openDb.connection.inDatabaseTransaction(
           DatabaseTransactionSpec(
@@ -98,10 +111,60 @@ class SQLiteDatabaseSessionFactory(
             diagnostics = diagnostics,
           ),
         ) {
-          block(unitOfWork(openDb, transactionActive = true))
+          activeWrite.set(unitOfWork(openDb, transactionActive = true))
+          try {
+            block(requireNotNull(activeWrite.get()))
+          } finally {
+            activeWrite.remove()
+          }
         }
       }
     }
+  }
+
+  override fun <T> transactionFenced(
+    expected: DatabaseFileObservation,
+    block: (UnitOfWork) -> T,
+  ): FencedTransactionResult<T> {
+    if (activeWrite.get() != null) return FencedTransactionResult.ChangedTarget
+    return translatingBusyFailures {
+      withWriteDatabase { openDb ->
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            openDb.dbPath,
+            DatabaseTransactionBeginMode.IMMEDIATE,
+            DatabaseAccessOperation.WRITE,
+            diagnostics,
+          ),
+          commitWhen = { it is FencedTransactionResult.Committed },
+        ) {
+          val unit = unitOfWork(openDb, transactionActive = true)
+          activeWrite.set(unit)
+          try {
+            fencedResult(unit, expected, block)
+          } finally {
+            activeWrite.remove()
+          }
+        }
+      }
+    }
+  }
+
+  private fun <T> fencedResult(
+    unit: UnitOfWork,
+    expected: DatabaseFileObservation,
+    block: (UnitOfWork) -> T,
+  ): FencedTransactionResult<T> {
+    if (unit.databaseFileObservation != expected || fileObservation(resolveDbPath()) != expected) {
+      return FencedTransactionResult.ChangedTarget
+    }
+    val result = block(unit)
+    return if (fileObservation(resolveDbPath()) == expected) {
+      FencedTransactionResult.Committed(result)
+    } else {
+      FencedTransactionResult.ChangedTarget
+    }
+  }
 
   private fun unitOfWork(
     openDb: OpenDatabase,
@@ -115,18 +178,20 @@ class SQLiteDatabaseSessionFactory(
       workflowSnapshotValidator,
       runtimeVersion,
       transactionActive,
+      openDb.fileObservation,
     )
 
   private fun <T> withWriteDatabase(block: (OpenDatabase) -> T): T {
     val dbPath = resolveDbPath()
     DatabaseRuntime.ensureWriteReady(dbPath, diagnostics)
-    return DatabaseRuntime.openWriteDbAt(dbPath).use(block)
+    return DatabaseRuntime.openWriteDbAt(dbPath, diagnostics).use(block)
   }
 }
 
 private fun <T> translatingBusyFailures(block: () -> T): T =
   runCatching(block).getOrElse { error ->
     error.rethrowIfCooperativeCancellationOrInterruption()
+    if (error is SkillBillRuntimeException) throw error
     if (error.isSqliteBusy()) throw databaseBusy(error)
     throw error
   }

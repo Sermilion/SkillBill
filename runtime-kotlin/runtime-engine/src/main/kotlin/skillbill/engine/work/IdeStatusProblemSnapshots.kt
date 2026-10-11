@@ -1,7 +1,7 @@
 package skillbill.engine.work
 
-import skillbill.ports.idestatus.model.IdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblem
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusSnapshot

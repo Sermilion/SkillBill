@@ -152,7 +152,7 @@ class DatabaseWriteReadinessTest {
   }
 
   @Test
-  fun `unreadable database file surfaces read ACCESS database failure from ensureReady`() {
+  fun `unreadable database file surfaces read CORRUPT database failure from ensureReady`() {
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-unreadable")
     val dbPath = tempDir.resolve("metrics.db")
     Files.writeString(dbPath, "not-a-sqlite-database")
@@ -163,7 +163,7 @@ class DatabaseWriteReadinessTest {
       assertFailsWith<SkillBillRuntimeException> {
         gate.ensureReady(dbPath)
       }
-    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertEquals(DatabaseFailureCode.CORRUPT, error.code)
     assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.READ.wireValue} failed for '"))
     assertEquals(0, establishments)
   }

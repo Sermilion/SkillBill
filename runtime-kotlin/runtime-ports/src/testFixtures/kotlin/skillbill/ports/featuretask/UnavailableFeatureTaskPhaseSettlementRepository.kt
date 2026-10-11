@@ -1,6 +1,8 @@
 package skillbill.ports.featuretask
 
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import java.time.Instant
 
 object UnavailableFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlementRepository {
   override fun upsert(settlement: FeatureTaskPhaseSettlement) {
@@ -17,6 +19,14 @@ object UnavailableFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlem
     workflowId: String,
     phaseId: String,
   ): List<FeatureTaskPhaseSettlement> = unavailable()
+
+  override fun findReasonAtOrBefore(
+    workflowId: String,
+    phaseId: String,
+    startedAt: Instant,
+    recordedAt: Instant,
+    storedReason: String,
+  ): FeatureTaskPhaseSettlementReasonLookup = unavailable()
 
   override fun delete(
     workflowId: String,

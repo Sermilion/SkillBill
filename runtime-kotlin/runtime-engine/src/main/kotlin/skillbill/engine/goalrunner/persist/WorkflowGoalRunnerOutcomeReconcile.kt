@@ -1,6 +1,8 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
+import skillbill.engine.goalrunner.execution.support.selectAuthoritativeCandidate
 import skillbill.engine.goalrunner.execution.support.staleRunningReason
 import skillbill.engine.goalrunner.model.GoalContinuationCandidate
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
@@ -175,6 +177,39 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
           )
         }
     }
+
+  fun authoritativeOutcomesForSubtasks(
+    workflowStates: WorkflowStateRepository,
+    issueKey: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> {
+    val winners = mutableMapOf<Int, GoalContinuationCandidate>()
+    var offset = 0
+    do {
+      val page =
+        workflowStates.readGoalStatusChildPage(
+          issueKey.trim(),
+          offset,
+          WorkPaginationLimits.MAX_PAGE_SIZE,
+          subtaskIds,
+        )
+      page.forEach { snapshot ->
+        engine.snapshotView(WorkflowFamily.TASK_RUNTIME.definition, snapshot)
+        val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation() ?: return@forEach
+        val candidate =
+          GoalContinuationCandidate(
+            WorkflowFamily.TASK_RUNTIME,
+            snapshot,
+            continuation,
+            terminalOutcomeFor(snapshot, snapshot.artifacts, continuation),
+          )
+        listOfNotNull(winners[continuation.subtaskId], candidate).selectAuthoritativeCandidate()
+          ?.let { winners[continuation.subtaskId] = it }
+      }
+      offset += page.size
+    } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
+    return winners.mapValues { requireNotNull(it.value.outcome) }
+  }
 
   private fun candidateIsStale(candidate: GoalContinuationCandidate): Boolean =
     runCatching {

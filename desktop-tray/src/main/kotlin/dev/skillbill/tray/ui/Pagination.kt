@@ -30,7 +30,10 @@ internal fun LoadNextPageOnScroll(scroll: ScrollState, hasMore: Boolean, loading
 }
 
 @Composable
-internal fun PageFooter(hasMore: Boolean, loading: Boolean, load: () -> Unit) {
+internal fun PageFooter(hasMore: Boolean, loading: Boolean, load: () -> Unit) = PageFooter(hasMore, loading, false, load)
+
+@Composable
+internal fun PageFooter(hasMore: Boolean, loading: Boolean, failed: Boolean, load: () -> Unit) {
   if (loading) Text("Loading...", color = muted)
-  else if (hasMore) TextButton(onClick = load) { Text("Load more", color = mint) }
+  else if (hasMore) TextButton(onClick = load) { Text(if (failed) "Retry page" else "Load more", color = mint) }
 }

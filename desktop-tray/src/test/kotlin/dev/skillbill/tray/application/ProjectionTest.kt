@@ -13,7 +13,7 @@ class ProjectionTest {
     val blocked = item("a", Lifecycle.BLOCKED, WorkFamily.FEATURE_GOAL)
     val running = item("b", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL)
     val failed = item("failed", Lifecycle.FAILED, WorkFamily.FEATURE_GOAL)
-    val phase = item("c", Lifecycle.TERMINAL, WorkFamily.FEATURE_VERIFY).copy(scope = ExecutionScope.STANDALONE_PHASE, finishedAt = observed.minusSeconds(120))
+    val phase = item("c", Lifecycle.TERMINAL, WorkFamily.FEATURE_VERIFY).copy(scope = ExecutionScope.STANDALONE_PHASE, finishedAt = observed.minusSeconds(120), displayGroup = WorkSection.PHASES)
     val oldFinished = item("d", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL).copy(finishedAt = observed.minusSeconds(90_000))
     val board = Board(observed, Retention.WEEK, listOf(running, blocked, failed, phase, oldFinished))
     val projection = project(board, observed.plusSeconds(10))
@@ -59,5 +59,18 @@ class ProjectionTest {
     updatedAt = Instant.parse("2026-10-11T10:00:00Z"),
     finishedAt = null,
     finishedAtSource = null,
+    liveSection = when (lifecycle) {
+      Lifecycle.BLOCKED, Lifecycle.FAILED -> WorkSection.NEEDS_YOU
+      Lifecycle.ACTIVE -> if (family == WorkFamily.FEATURE_GOAL) WorkSection.GOALS else WorkSection.PHASES
+      else -> null
+    },
+    requiresAttention = lifecycle in setOf(Lifecycle.BLOCKED, Lifecycle.FAILED),
+    displayGroup = if (lifecycle in setOf(Lifecycle.ACTIVE, Lifecycle.BLOCKED, Lifecycle.FAILED)) WorkSection.GOALS else null,
+    displayPriority = when (lifecycle) {
+      Lifecycle.BLOCKED -> 0
+      Lifecycle.FAILED -> 1
+      Lifecycle.ACTIVE -> 2
+      else -> 5
+    },
   )
 }

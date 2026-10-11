@@ -75,6 +75,49 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   }
 
   @Test
+  fun `owner exit delivers an event without heartbeat or database writes`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val current = supervisor.currentProcess()
+    val child = ProcessBuilder("sleep", "30").start()
+    val ownership =
+      ownershipFor(current, current.bootIdentity).copy(
+        pid = child.pid(),
+        processBirthToken = processBirthToken(child.toHandle())!!,
+      )
+    val exited = CountDownLatch(1)
+    val observation = supervisor.observe(ownership) { exited.countDown() }
+    try {
+      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
+      child.destroyForcibly()
+      assertTrue(exited.await(5, TimeUnit.SECONDS))
+      assertEquals(FeatureTaskRuntimeProcessInspection.NotRunning, supervisor.inspect(ownership))
+    } finally {
+      observation?.close()
+      child.destroyForcibly()
+    }
+  }
+
+  @Test
+  fun `owner death before exit registration still delivers the invalidation`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val current = supervisor.currentProcess()
+    val child = ProcessBuilder("sleep", "30").start()
+    val ownership =
+      ownershipFor(current, current.bootIdentity).copy(
+        pid = child.pid(),
+        processBirthToken = processBirthToken(child.toHandle())!!,
+      )
+    child.destroyForcibly()
+    assertTrue(child.waitFor(5, TimeUnit.SECONDS))
+    val events = AtomicInteger()
+    assertNull(supervisor.observe(ownership) { events.incrementAndGet() })
+    assertEquals(1, events.get())
+    val reused = ownershipFor(current, current.bootIdentity, (current.processBirthToken.toLong() - 1).toString())
+    assertNull(supervisor.observe(reused) { events.incrementAndGet() })
+    assertEquals(2, events.get())
+  }
+
+  @Test
   fun `awaitExit returns after a live owned process exits`() {
     val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
     val current = supervisor.currentProcess()

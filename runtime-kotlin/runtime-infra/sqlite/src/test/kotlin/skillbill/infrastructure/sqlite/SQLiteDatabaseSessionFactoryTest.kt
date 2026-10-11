@@ -29,6 +29,48 @@ import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryTest {
   @Test
+  fun `nested control writes share the outer transaction and roll back together`() {
+    val tempDir = Files.createTempDirectory("skillbill-nested-write")
+    val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
+    val initial = workflowRecord("wftr-nested-write")
+    database.transaction { it.workflowStates.saveFeatureTaskWorkflow(initial, RUNTIME) }
+    assertFailsWith<IllegalStateException> {
+      database.transaction { outer ->
+        database.selfManagedWrite { nested ->
+          assertTrue(outer === nested)
+          nested.workflowStates.saveFeatureTaskWorkflow(initial.copy(workflowStatus = "completed"), RUNTIME)
+        }
+        database.transaction { nested ->
+          assertTrue(outer === nested)
+          assertEquals(
+            "completed",
+            database.read {
+              it.workflowStates.getFeatureTaskWorkflow(initial.workflowId)?.workflowStatus
+            },
+          )
+          error("reject the coupled control")
+        }
+      }
+    }
+    assertEquals(
+      "running",
+      database.read { it.workflowStates.getFeatureTaskWorkflow(initial.workflowId)?.workflowStatus },
+    )
+    database.transaction {
+      it.workflowStates.saveFeatureTaskWorkflow(
+        initial.copy(workflowStatus = "completed"),
+        RUNTIME,
+      )
+    }
+    assertEquals(
+      "completed",
+      database.read {
+        it.workflowStates.getFeatureTaskWorkflow(initial.workflowId)?.workflowStatus
+      },
+    )
+  }
+
+  @Test
   fun `nested reads share a snapshot and release it after failure`() {
     val tempDir = Files.createTempDirectory("skillbill-nested-read")
     val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
@@ -181,8 +223,10 @@ class SQLiteDatabaseSessionFactoryTest {
 
     assertEquals(dbPath.toAbsolutePath().normalize(), database.resolveDbPath())
     assertEquals(false, database.databaseExists())
+    assertNull(database.readIfPresent { Unit })
+    assertFalse(database.databaseExists())
     database.read { Unit }
-    assertEquals(true, database.databaseExists())
+    assertTrue(database.databaseExists())
   }
 
   @Test
@@ -216,7 +260,8 @@ class SQLiteDatabaseSessionFactoryTest {
       assertFailsWith<SkillBillRuntimeException> {
         database.readIfPresent { Unit }
       }
-    assertEquals(DatabaseFailureCode.ACCESS, failure.code)
+    assertEquals(DatabaseFailureCode.INCOMPATIBLE_SCHEMA, failure.code)
+    assertEquals(0L, Files.size(dbPath))
   }
 
   @Test

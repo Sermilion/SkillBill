@@ -47,8 +47,9 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
+import skillbill.engine.featuretask.phaserun.StandalonePhaseRegistrationFactory
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
@@ -61,6 +62,8 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.work.IdeStatusService
+import skillbill.engine.work.control.WorkControlService
+import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -79,7 +82,6 @@ import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -161,12 +163,11 @@ abstract class RuntimeComponent(
   @Provides
   fun standalonePhaseStatusPublisherFactory(
     database: DatabaseSessionFactory,
-    repositories: RepositoryEnclosingRootPort,
-    branchSource: CheckedOutBranchSource,
+    registrations: StandalonePhaseRegistrationFactory,
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
   ): StandalonePhaseStatusPublisherFactory =
-    StandalonePhaseStatusPublisherFactory(database, repositories, branchSource, clock, diagnostics)
+    StandalonePhaseStatusPublisherFactory(database, registrations, clock, diagnostics)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort
@@ -190,7 +191,7 @@ abstract class RuntimeComponent(
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
   abstract val agentRunLauncher: AgentRunLauncher
   abstract val agentRunService: AgentRunService
-  abstract val featureTaskRuntimeRunner: FeatureTaskRuntimeRunner
+  abstract val featureTaskRuntimeRunEntry: FeatureTaskRuntimeRunEntry
   abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
@@ -223,5 +224,10 @@ abstract class RuntimeComponent(
   abstract val telemetryService: TelemetryService
   abstract val workflowService: WorkflowService
   abstract val workListService: WorkListService
+  abstract val workControlService: WorkControlService
+
+  abstract val workObservationService: WorkObservationService
+
   abstract val ideStatusService: IdeStatusService
+  abstract val databaseSession: DatabaseSessionFactory
 }

@@ -1,15 +1,16 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.nio.file.Path
-import java.sql.Connection
 import java.sql.SQLException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class DatabasePathsTest {
   @Test
@@ -49,47 +50,27 @@ class DatabasePathsTest {
   }
 
   @Test
-  fun `openReadDb migrates a zero-byte working-directory database instead of reporting it empty`() {
-    val workingDir = Files.createTempDirectory("runtime-kotlin-zero-byte-store")
-    val dbPath = workingDir.resolve(".skill-bill").resolve("review-metrics.db")
-    Files.createDirectories(dbPath.parent)
-    Files.createFile(dbPath)
-    assertEquals(0, Files.size(dbPath), "The regression starts from a genuinely zero-byte file.")
-
-    listOf(
-      DatabaseRuntime.resolveDbPath(cliValue = dbPath.toString(), environment = emptyMap(), userHome = workingDir),
-      DatabaseRuntime.resolveDbPath(
-        cliValue = null,
-        environment = mapOf(DatabasePaths.DB_ENVIRONMENT_KEY to dbPath.toString()),
-        userHome = workingDir,
-      ),
-    ).forEach { resolved ->
-      assertEquals(dbPath.toAbsolutePath().normalize(), resolved)
-      DatabaseRuntime.openReadDb(
-        cliValue = resolved.toString(),
-        environment = emptyMap(),
-        userHome = workingDir,
-      ).use { open ->
-        assertTrue(
-          tableNames(open.connection).containsAll(setOf("review_runs", "findings", "telemetry_outbox")),
-          "A schema-less file must be migrated to schema-complete, not reported as an empty store.",
-        )
+  fun `strict existing reads refuse zero-byte stores without installing a schema`() {
+    val home = Files.createTempDirectory("runtime-zero-byte-refusal")
+    val dbPath = Files.createFile(home.resolve("metrics.db"))
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        DatabaseRuntime.openExistingReadDbAt(dbPath, SqliteTestDiagnostics).close()
       }
-    }
+    assertEquals(DatabaseFailureCode.INCOMPATIBLE_SCHEMA, error.code)
+    assertEquals(0L, Files.size(dbPath))
   }
 
   @Test
-  fun `openReadDb on an absent path still bootstraps a schema-complete database`() {
-    val workingDir = Files.createTempDirectory("runtime-kotlin-absent-store")
-    val dbPath = workingDir.resolve("review-metrics.db")
-
-    DatabaseRuntime.openReadDb(
-      cliValue = dbPath.toString(),
-      environment = emptyMap(),
-      userHome = workingDir,
-    ).use { open ->
-      assertTrue(tableNames(open.connection).containsAll(setOf("review_runs", "findings")))
-    }
+  fun `strict existing reads refuse missing stores without creating a file`() {
+    val home = Files.createTempDirectory("runtime-missing-refusal")
+    val dbPath = home.resolve("metrics.db")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        DatabaseRuntime.openExistingReadDbAt(dbPath, SqliteTestDiagnostics).close()
+      }
+    assertEquals(DatabaseFailureCode.MISSING, error.code)
+    assertFalse(Files.exists(dbPath))
   }
 
   @Test
@@ -110,11 +91,4 @@ class DatabasePathsTest {
       }
     }
   }
-
-  private fun tableNames(connection: Connection): Set<String> =
-    connection.createStatement().use { statement ->
-      statement.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table'").use { rows ->
-        buildSet { while (rows.next()) add(rows.getString("name")) }
-      }
-    }
 }

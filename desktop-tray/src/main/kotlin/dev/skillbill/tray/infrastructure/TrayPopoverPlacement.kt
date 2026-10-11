@@ -4,10 +4,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
 import dev.nucleusframework.composenativetray.utils.TrayClickTracker
-import dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics
-import dev.skillbill.tray.domain.DesktopUiScaleConfiguration
-import dev.skillbill.tray.infrastructure.cli.ProcessRunner
-import dev.skillbill.tray.infrastructure.cli.ProcessResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -16,7 +12,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.boolean
-import java.time.Duration
 import java.awt.GraphicsEnvironment
 import java.awt.MouseInfo
 import java.awt.Point
@@ -32,16 +27,10 @@ fun trayIconAnchor(): Point {
   return pointer.location
 }
 
-class TrayPopoverPlacement(
-  private val layoutRunner: ProcessRunner = ProcessRunner(maxStdoutBytes = 256 * 1024, timeout = Duration.ofSeconds(2)),
-) {
-  suspend fun position(size: DpSize, nativeAnchor: Point, scale: DesktopUiScaleConfiguration, gap: Int): WindowPosition {
+class TrayPopoverPlacement {
+  fun position(size: DpSize, nativeAnchor: Point, gap: Int): WindowPosition {
     val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration }
-    val anchor = if (System.getProperty("os.name").contains("linux", true) &&
-      !System.getenv("WAYLAND_DISPLAY").isNullOrBlank() && System.getenv("XDG_CURRENT_DESKTOP").orEmpty().contains("KDE", true)) {
-      kdeAnchor(nativeAnchor, screens.map { it.bounds }, scale)
-    } else nativeAnchor
-    val screen = screens.firstOrNull { it.bounds.contains(anchor) }
+    val screen = screens.firstOrNull { it.bounds.contains(nativeAnchor) }
       ?: MouseInfo.getPointerInfo().device.defaultConfiguration.also {
         RuntimeDiagnostics.record("tray_icon_screen_unavailable")
       }
@@ -49,20 +38,10 @@ class TrayPopoverPlacement(
     val insets = Toolkit.getDefaultToolkit().getScreenInsets(screen)
     val workArea = Rectangle(bounds.x + insets.left, bounds.y + insets.top,
       bounds.width - insets.left - insets.right, bounds.height - insets.top - insets.bottom)
-    val position = anchoredTrayPosition(anchor, workArea, size.width.value.roundToInt(), size.height.value.roundToInt(), gap)
+    val position = anchoredTrayPosition(nativeAnchor, workArea, size.width.value.roundToInt(), size.height.value.roundToInt(), gap)
     System.getLogger("SkillBillTrayPlacement").log(System.Logger.Level.INFO,
-      "tray_window_anchored native=$nativeAnchor anchor=$anchor work_area=$workArea position=$position")
+      "tray_window_anchored native=$nativeAnchor anchor=$nativeAnchor work_area=$workArea position=$position")
     return WindowPosition(position.x.dp, position.y.dp)
-  }
-
-  private suspend fun kdeAnchor(raw: Point, screens: List<Rectangle>, scale: DesktopUiScaleConfiguration): Point {
-    val result = layoutRunner.run(listOf("kscreen-doctor", "--json"))
-    if (result !is ProcessResult.Success) {
-      RuntimeDiagnostics.record("tray_kde_layout_unavailable")
-      return raw
-    }
-    return runCatching { mapKdeTrayAnchor(raw, result.output, screens, scale.contentDensity ?: 1f) }
-      .onFailure { RuntimeDiagnostics.record("tray_kde_layout_invalid") }.getOrDefault(raw)
   }
 }
 

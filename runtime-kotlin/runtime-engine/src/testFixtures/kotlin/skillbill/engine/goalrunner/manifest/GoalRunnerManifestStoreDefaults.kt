@@ -9,6 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -23,6 +24,32 @@ import java.nio.file.Path
 import java.time.Instant
 
 abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
+  open override fun statusManifestPage(
+    parentWorkflowId: String,
+    issueKey: String,
+    offset: Int,
+    limit: Int,
+    repoRoot: Path?,
+  ): GoalRunnerStatusManifestPage? =
+    loadDurableByIssueKey(issueKey, repoRoot)
+      ?.takeIf { it.parentWorkflowId == parentWorkflowId }
+      ?.let {
+          state ->
+        GoalRunnerStatusManifestPage(
+          state.copy(manifest = state.manifest.copy(subtasks = state.manifest.subtasks.drop(offset).take(limit))),
+          state.manifest.subtasks.size,
+        )
+      }
+
+  open override fun statusParentWorkflowId(
+    issueKey: String,
+    repoRoot: Path?,
+  ): String? =
+    loadDurableByIssueKey(
+      issueKey,
+      repoRoot,
+    )?.parentWorkflowId
+
   override fun readByIssueKey(
     issueKey: String,
     repoRoot: Path?,

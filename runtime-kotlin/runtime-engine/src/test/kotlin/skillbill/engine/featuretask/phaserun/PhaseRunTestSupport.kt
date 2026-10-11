@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -23,7 +22,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.review.ReviewContextEnvelopeValidator
-import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
@@ -61,13 +59,7 @@ internal fun phaseRunEntry(
 ): PhaseRunEntry =
   PhaseRunEntry(
     statusPublisherFactory =
-      StandalonePhaseStatusPublisherFactory(
-        database,
-        TestRepositoryEnclosingRoot,
-        CheckedOutBranchSource { "main" },
-        clock,
-        NoopRuntimeDiagnostics,
-      ),
+      testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
     strategies = strategies,
     gitOperations = gitOperations,
     reviewResultAssembly =

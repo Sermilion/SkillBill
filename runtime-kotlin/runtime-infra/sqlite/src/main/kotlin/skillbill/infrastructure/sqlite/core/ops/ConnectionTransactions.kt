@@ -29,6 +29,12 @@ internal data class DatabaseTransactionSpec(
 internal inline fun <T> Connection.inDatabaseTransaction(
   spec: DatabaseTransactionSpec,
   block: Connection.() -> T,
+): T = inDatabaseTransaction(spec, { true }, block)
+
+internal inline fun <T> Connection.inDatabaseTransaction(
+  spec: DatabaseTransactionSpec,
+  commitWhen: (T) -> Boolean,
+  block: Connection.() -> T,
 ): T {
   executeTransactionStatement(spec.beginMode.sql)
   var committed = false
@@ -49,8 +55,10 @@ internal inline fun <T> Connection.inDatabaseTransaction(
           }
         throw primaryFailure
       }
-    commitWriteTransaction { failure -> primaryFailure = failure }
-    committed = true
+    if (commitWhen(result)) {
+      commitWriteTransaction { failure -> primaryFailure = failure }
+      committed = true
+    }
     result
   } finally {
     if (!committed) {

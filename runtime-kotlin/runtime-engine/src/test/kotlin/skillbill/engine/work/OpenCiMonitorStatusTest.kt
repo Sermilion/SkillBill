@@ -2,7 +2,7 @@ package skillbill.engine.work
 
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

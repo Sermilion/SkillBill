@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.time.Instant
 
 data class IdeStatusWorkflowRegistration(
@@ -42,6 +43,7 @@ data class StandalonePhaseStatusRegistration(
   val leaseOwner: String,
   val leaseGeneration: Long,
   val leaseExpiresAt: Instant,
+  val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -57,6 +59,7 @@ data class StandalonePhaseStatusUpdate(
   val activeDurationMs: Long? = null,
   val activeDurationAsOf: Instant? = null,
   val terminalResult: String? = null,
+  val acceptedResult: String? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -91,4 +94,15 @@ data class StandalonePhaseStatusRecord(
   val leaseGeneration: Long,
   val leaseExpiresAt: Instant,
   val terminalResult: String?,
+  val acceptedResult: String? = null,
+  val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
+)
+
+data class StandalonePhaseExecutionQuery(
+  val repositoryIdentity: String,
+  val phaseId: String,
+  val phaseGroup: String,
+  val startedThrough: Instant,
+  val offset: Int,
+  val limit: Int,
 )

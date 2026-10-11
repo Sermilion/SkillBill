@@ -3,14 +3,17 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.sql.Connection
 import java.sql.ResultSet
@@ -55,8 +58,8 @@ internal class StandalonePhaseStatusStore(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
-        lease_generation, lease_expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?)
+        lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -77,6 +80,10 @@ internal class StandalonePhaseStatusStore(
           request.leaseOwner,
           request.leaseGeneration,
           request.leaseExpiresAt.toString(),
+          request.processOwner?.hostIdentity,
+          request.processOwner?.bootIdentity,
+          request.processOwner?.pid,
+          request.processOwner?.processBirthToken,
         ),
       )
       statement.executeUpdate()
@@ -89,65 +96,120 @@ internal class StandalonePhaseStatusStore(
     branchCorrelation: String,
     now: Instant,
   ): List<StandalonePhaseStatusRecord> {
-    val records =
-      connection.prepareStatement(
-        "SELECT * FROM standalone_phase_status WHERE repository_identity = ? AND branch_correlation = ?",
-      ).use { statement ->
-        statement.bindAll(listOf(repositoryIdentity, branchCorrelation))
-        statement.executeQuery().use { rows ->
-          buildList { while (rows.next()) add(rows.toRecord()) }
-        }
+    val liveFrom = now.minus(LIVE_RETENTION)
+    val settledFrom = now.minus(SETTLED_RETENTION)
+    return connection.prepareStatement(
+      """
+      WITH bounds(live_from, settled_from) AS (VALUES (?, ?))
+      SELECT * FROM standalone_phase_status
+      WHERE repository_identity = ? AND branch_correlation = ?
+        AND (
+          (lifecycle_state IN (${LIVE_STATES.joinToString(", ") { "'$it'" }})
+            AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})
+          OR (finished_at IS NOT NULL
+            AND ${instantAfterBoundSql("finished_at", "settled_from")})
+        )
+      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation))
+      statement.executeQuery().use { rows ->
+        buildList { while (rows.next()) add(rows.toRecord()) }
       }
-    return records
-      .filter {
-        val age = Duration.between(it.updatedAt, now)
-        (it.lifecycleState in LIVE_STATES && age <= LIVE_RETENTION) ||
-          (it.finishedAt?.plus(SETTLED_RETENTION)?.isAfter(now) == true)
-      }
-      .sortedWith(
-        compareByDescending<StandalonePhaseStatusRecord> { it.runSequence.length }
-          .thenByDescending { it.runSequence },
-      )
+    }
   }
 
   override fun readBoardCandidates(
     finishedFrom: Instant,
     finishedThrough: Instant,
   ): List<StandalonePhaseStatusRecord> =
-    connection.prepareStatement("SELECT * FROM standalone_phase_status").use { statement ->
+    connection.prepareStatement(
+      """
+      WITH bounds(from_value, through_value) AS (VALUES (?, ?))
+      SELECT * FROM standalone_phase_status
+      WHERE workflow_id IS NOT NULL
+         OR lifecycle_state NOT IN (${BOARD_FINISHED_STATES.joinToString(", ") { "'$it'" }})
+         OR finished_at IS NULL
+         OR (
+           ${instantAtOrAfterBoundSql("finished_at", "from_value")}
+           AND ${instantAtOrBeforeBoundSql("finished_at", "through_value")}
+         )
+      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(listOf(finishedFrom.toString(), finishedThrough.toString()))
       statement.executeQuery().use { rows ->
         buildList { while (rows.next()) add(rows.toRecord()) }
       }
-    }.filter { record ->
-      val finishedAt = record.finishedAt
-      record.workflowId != null || record.lifecycleState !in BOARD_FINISHED_STATES ||
-        finishedAt == null ||
-        (finishedAt >= finishedFrom && finishedAt <= finishedThrough)
-    }.sortedWith(
-      compareByDescending<StandalonePhaseStatusRecord> { it.runSequence.length }
-        .thenByDescending { it.runSequence },
-    )
+    }
 
-  override fun readPhaseExecutions(
-    repositoryIdentity: String,
-    phaseId: String,
-  ): List<StandalonePhaseStatusRecord> =
-    connection.prepareStatement(
-      "SELECT * FROM standalone_phase_status WHERE repository_identity = ? AND phase_id = ? " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC",
+  override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> {
+    require(query.offset >= 0 && query.limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    return connection.prepareStatement(
+      "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM standalone_phase_status " +
+        "WHERE repository_identity = ? AND phase_id = ? " +
+        "AND COALESCE(upper(issue_key), workflow_id, invocation_id) = ? AND ${instantAtOrBeforeSql("started_at")} " +
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
     ).use { statement ->
-      statement.bindAll(listOf(repositoryIdentity, phaseId))
+      statement.bindAll(
+        listOf(
+          query.startedThrough.toString(),
+          query.repositoryIdentity,
+          query.phaseId,
+          query.phaseGroup,
+          query.limit,
+          query.offset,
+        ),
+      )
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toRecord()) } }
     }
+  }
 
-  override fun readWorkflowExecutions(workflowId: String): List<IdeStatusWorkflowExecution> =
-    connection.prepareStatement(
-      "SELECT * FROM ide_status_workflow_execution WHERE workflow_id = ? " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC",
+  override fun readWorkflowExecutions(
+    workflowId: String,
+    startedThrough: Instant,
+    offset: Int,
+    limit: Int,
+  ): List<IdeStatusWorkflowExecution> {
+    require(offset >= 0 && limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    return connection.prepareStatement(
+      "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM ide_status_workflow_execution " +
+        "WHERE workflow_id = ? AND ${instantAtOrBeforeSql("started_at")} " +
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
     ).use { statement ->
-      statement.bindAll(workflowId)
+      statement.bindAll(listOf(startedThrough.toString(), workflowId, limit, offset))
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toWorkflowExecution()) } }
     }
+  }
+
+  private fun instantAtOrBeforeSql(columnName: String): String =
+    "(unixepoch($columnName) < unixepoch((SELECT value FROM cutoff)) OR " +
+      "(unixepoch($columnName) = unixepoch((SELECT value FROM cutoff)) AND " +
+      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT value FROM cutoff)")}))"
+
+  private fun instantAtOrAfterBoundSql(
+    columnName: String,
+    boundName: String,
+  ): String =
+    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
+      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
+      "${fractionalSecondsSql(columnName)} >= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
+
+  private fun instantAfterBoundSql(
+    columnName: String,
+    boundName: String,
+  ): String =
+    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
+      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
+      "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
+
+  private fun instantAtOrBeforeBoundSql(
+    columnName: String,
+    boundName: String,
+  ): String =
+    "(unixepoch($columnName) < unixepoch((SELECT $boundName FROM bounds)) OR " +
+      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
+      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
 
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
@@ -191,7 +253,7 @@ internal class StandalonePhaseStatusStore(
           status_revision = ?, lifecycle_state = ?, current_step = ?, current_activity = ?,
           updated_at = ?, finished_at = ?, active_duration_ms = COALESCE(?, active_duration_ms),
           active_duration_as_of = COALESCE(?, active_duration_as_of),
-          terminal_result = ?
+          terminal_result = ?, accepted_result = ?
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -206,6 +268,7 @@ internal class StandalonePhaseStatusStore(
             request.activeDurationMs,
             request.activeDurationAsOf?.toString(),
             request.terminalResult,
+            request.acceptedResult,
             request.executionId,
             request.expectedRevision,
             request.leaseOwner,
@@ -452,7 +515,22 @@ internal class StandalonePhaseStatusStore(
       leaseGeneration = getLong("lease_generation"),
       leaseExpiresAt = Instant.parse(getString("lease_expires_at")),
       terminalResult = getString("terminal_result"),
+      acceptedResult = getString("accepted_result"),
+      processOwner = readProcessOwner(),
     )
+
+  private fun ResultSet.readProcessOwner(): FeatureTaskRuntimeProcessIdentity? {
+    val host = getString("owner_host_identity")
+    val boot = getString("owner_boot_identity")
+    val pid = getLong("owner_pid").takeIf { !wasNull() }
+    val birth = getString("owner_birth_token")
+    val fields = listOf(host, boot, pid?.toString(), birth)
+    if (fields.all { it == null }) return null
+    if (fields.any { it.isNullOrBlank() } || pid == null || pid <= 0) {
+      throw invalidIdeStatusSchemaError("standalone-status", "process_owner", "owner identity is incomplete")
+    }
+    return FeatureTaskRuntimeProcessIdentity(requireNotNull(host), requireNotNull(boot), pid, requireNotNull(birth))
+  }
 
   private fun incrementDecimal(value: String): String {
     val digits = value.toCharArray()

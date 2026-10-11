@@ -43,8 +43,12 @@ class FeatureTaskRuntimeGateProgressRecorder(
   FeatureTaskRuntimeNoChangePausePort {
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
-      val raw = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS.value(record.artifacts)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS),
+        ) ?: return@read null
+      val raw = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_VALIDATION_GATE_PROGRESS.value(artifacts)
       val artifact = JsonCodec.anyToStringAnyMap(raw) ?: return@read null
       decodeValidationGateProgressFromArtifact(artifact)
     }
@@ -73,23 +77,35 @@ class FeatureTaskRuntimeGateProgressRecorder(
 
   fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
-      val raw = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_BUILD_GATE_PROGRESS.value(record.artifacts)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_BUILD_GATE_PROGRESS),
+        ) ?: return@read null
+      val raw = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_BUILD_GATE_PROGRESS.value(artifacts)
       val artifact = JsonCodec.anyToStringAnyMap(raw) ?: return@read null
       decodeValidationGateProgressFromArtifact(artifact)
     }
 
   fun loadGoalContinuation(workflowId: String): FeatureTaskRuntimeGoalContinuationArtifact? =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
-      GoalSubtaskReviewArtifactDecoder.decodeContinuationOnly(record.artifacts)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION),
+        ) ?: return@read null
+      GoalSubtaskReviewArtifactDecoder.decodeContinuationOnly(artifacts)
     }
 
   override fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence? =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE),
+        ) ?: return@read null
       val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE
-      val raw = family.value(record.artifacts)
+      val raw = family.value(artifacts)
       val artifact = JsonCodec.anyToStringAnyMap(raw) ?: return@read null
       decodeReadinessEvidenceFromArtifact(artifact, family.label())
     }
@@ -118,9 +134,13 @@ class FeatureTaskRuntimeGateProgressRecorder(
 
   override fun loadNoChangePause(workflowId: String): FeatureTaskRuntimeNoChangePause? =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE),
+        ) ?: return@read null
       decodeNoChangePauseFromArtifact(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.value(record.artifacts),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.value(artifacts),
       )
     }
 

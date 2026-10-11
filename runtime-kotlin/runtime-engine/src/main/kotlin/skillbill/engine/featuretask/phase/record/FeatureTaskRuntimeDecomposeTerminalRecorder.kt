@@ -55,9 +55,12 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
 
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     database.read { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL),
+        )
           ?: return@read null
-      decomposeTerminalFromWorkflowArtifacts(record.artifacts)
+      decomposeTerminalFromWorkflowArtifacts(artifacts)
     }
 }

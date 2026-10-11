@@ -15,7 +15,18 @@ import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 
-interface SharedGoalPreplanRepository {
+interface GoalPlanningStatusReadRepository {
+  fun listPreparedPlanSubtaskIds(parentGoalWorkflowId: String): List<Int>
+
+  fun preparedPlanStatusCount(parentGoalWorkflowId: String): Int = listPreparedPlanSubtaskIds(parentGoalWorkflowId).size
+
+  fun preparedPlanIdsForSubtasks(
+    parentGoalWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Set<Int> = listPreparedPlanSubtaskIds(parentGoalWorkflowId).filterTo(mutableSetOf(), subtaskIds::contains)
+}
+
+interface SharedGoalPreplanRepository : GoalPlanningStatusReadRepository {
   fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult
 
   fun replaceSharedPreplan(
@@ -46,8 +57,6 @@ interface SharedGoalPreplanRepository {
     identity: GoalPlanningIdentity,
     expectedPayloadSha256: String,
   ): GoalPlanningPreparationCountResult
-
-  fun listPreparedPlanSubtaskIds(parentGoalWorkflowId: String): List<Int>
 
   fun hasPreparedSharedPreplan(parentGoalWorkflowId: String): Boolean
 

@@ -13,6 +13,7 @@ import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
+import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
@@ -164,8 +165,11 @@ private class WorkListDatabase(
       override val dbPath: Path = Path.of("/fake/work-list.db")
       override val workflowStates = workflows
       override val workList: WorkListRepository =
-        object : WorkListRepository {
+        object : WorkListRepository by EmptyWorkListRepository {
           override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+
+          override fun findByWorkflowId(workflowId: String): List<WorkItem> =
+            work.filter { it.workflowId == workflowId }
         }
       override val learnings: LearningRepository
         get() = error("Not exercised by WorkListServiceTest.")

@@ -4,7 +4,7 @@ import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
-import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
+import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
@@ -19,7 +19,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
@@ -66,13 +65,7 @@ class BlockedWorkerCrashRecoveryTest {
           reconciler,
           testSpecDriftRecovery(TestNoopGoalPlanningManifestStore, RecordingOutcomeStore()),
           GoalPlanningMigrationAdmission(database, planningMigrationForTest(), NoopRuntimeDiagnostics),
-          StandalonePhaseStatusPublisherFactory(
-            database,
-            TestRepositoryEnclosingRoot,
-            CheckedOutBranchSource { "main" },
-            testHarnessClock,
-            NoopRuntimeDiagnostics,
-          ),
+          testStandalonePhasePublisher(database, testHarnessClock, NoopRuntimeDiagnostics),
           NoopWorkflowGitOperations,
         )
       val manifest =

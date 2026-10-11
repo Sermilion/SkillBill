@@ -140,10 +140,13 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
 
   fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? =
     database.read { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+      val artifacts =
+        unitOfWork.workflowStates.readFeatureTaskArtifacts(
+          workflowId,
+          setOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RESOLVED_BRANCH),
+        )
           ?: return@read null
-      resolvedBranchFromWorkflowArtifacts(record.artifacts)
+      resolvedBranchFromWorkflowArtifacts(artifacts)
     }
 
   fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch? =

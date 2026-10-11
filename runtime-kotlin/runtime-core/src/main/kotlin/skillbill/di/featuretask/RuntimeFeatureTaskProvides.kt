@@ -19,6 +19,7 @@ import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.WorkOwnerExitObserver
 
 internal interface RuntimeFeatureTaskProvides {
   @Provides
@@ -34,6 +35,9 @@ internal interface RuntimeFeatureTaskProvides {
   fun featureTaskRuntimeWorkerSupervisor(
     adapter: JdkFeatureTaskRuntimeWorkerSupervisor,
   ): FeatureTaskRuntimeWorkerSupervisor = adapter
+
+  @Provides
+  fun workOwnerExitObserver(adapter: JdkFeatureTaskRuntimeWorkerSupervisor): WorkOwnerExitObserver = adapter
 
   @Provides
   fun featureTaskRuntimeSpecStatusWriter(

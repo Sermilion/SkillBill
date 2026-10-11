@@ -1,6 +1,7 @@
 package dev.skillbill.tray.domain
 
 import java.time.Instant
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 
 enum class Lifecycle { ACTIVE, PAUSED, BLOCKED, FAILED, TERMINAL, IDLE }
 enum class Freshness { FRESH, STALE, UNKNOWN }
@@ -59,10 +60,24 @@ data class WorkItem(
   val statusStoreId: String? = null,
   val runSequence: String? = null,
   val statusRevision: String? = null,
+  val databaseGeneration: Long = 0,
+  val controlLeaseOwner: String? = null,
+  val controlLeaseGeneration: Long? = null,
+  val databaseStoreId: String? = null,
+  val databaseRevision: Long? = null,
+  val liveSection: WorkSection? = null,
+  val controlEligible: Boolean = false,
+  val requiresAttention: Boolean = false,
+  val displayGroup: WorkSection? = null,
+  val displayPriority: Int = 5,
+  val exactPauseReason: String? = null,
+  val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)
 enum class PhaseExecutionKind { PASS, SEMANTIC_LOOP, GATE_RUN, BOUNDED_EDGE, ATTEMPT }
+
+enum class DetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }
 
 data class Detail(
   val item: WorkItem,
@@ -84,6 +99,10 @@ data class Detail(
   val executionHistory: List<ExecutionInstance> = emptyList(),
   val observedAt: Instant? = null,
   val nextCursor: String? = null,
+  val pageOffset: Int = 0,
+  val cursors: Map<DetailList, String> = emptyMap(),
+  val dependencies: List<SubtaskDependency> = emptyList(),
+  val freshnessDeadline: Instant? = null,
 )
 
 data class DetailAttempts(
@@ -141,28 +160,87 @@ data class Board(
   val problem: Problem? = null,
   val diagnostics: List<String> = emptyList(),
   val nextCursor: String? = null,
+  val generation: Long = 0,
+  val observationSession: Long = 0,
+  val databasePath: String? = null,
+  val storeId: String? = null,
+  val revision: Long? = null,
+  val pageKey: String = "root",
+  val queryEpoch: Long = 0,
+  val filter: String = "",
+  val historyFilter: HistoryFilter = HistoryFilter.ALL,
 )
 
-data class Problem(val code: String, val summary: String)
+data class BoardRetention(
+  val section: WorkSection,
+  val retention: Retention,
+  val filter: String,
+  val historyFilter: HistoryFilter,
+  val queryEpoch: Long,
+  val generation: Long,
+  val observationSession: Long,
+  val storeId: String?,
+  val revision: Long?,
+  val pageKeys: List<String>,
+)
+
+enum class StorageFailure(val code: String) {
+  MISSING("missing_database"), ACCESS("database_access"), BUSY("busy"), CORRUPT("corrupt_database"),
+  INCOMPATIBLE_SCHEMA("incompatible_database"), INCOMPATIBLE_RECORD("incompatible_record"),
+  OBSERVATION_UNAVAILABLE("observation_unavailable"), STALE_QUERY("stale_target"),
+}
+
+enum class ProblemCode(val wireValue: String) {
+  SETTINGS_UNAVAILABLE("settings_unavailable"),
+  SETTINGS_CORRUPT("settings_corrupt"),
+  LOGIN_SETTING_FAILED("login_setting_failed"),
+  STALE_TARGET("stale_target"),
+  DATABASE_ACCESS("database_access"),
+  MISSING_DATABASE("missing_database"),
+  BUSY("busy"),
+  CORRUPT_DATABASE("corrupt_database"),
+  INCOMPATIBLE_DATABASE("incompatible_database"),
+  INCOMPATIBLE_RECORD("incompatible_record"),
+  OBSERVATION_UNAVAILABLE("observation_unavailable"),
+  TRAY_UNAVAILABLE("tray_unavailable"),
+  UNKNOWN_WORK_ITEM("unknown_work_item"),
+  UNKNOWN("unknown"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): ProblemCode = entries.firstOrNull { it.wireValue == value } ?: UNKNOWN
+  }
+}
+
+data class Problem(val code: ProblemCode, val summary: String, val storageFailure: StorageFailure? = null)
+
+enum class HistoryFilter { ALL, GOALS, PHASES }
 
 data class AppSettings(
-  val cliOverride: String? = null,
-  val pollSeconds: Int = 15,
+  val databasePath: String? = null,
   val retention: Retention = Retention.DAY,
+  val historyFilter: HistoryFilter = HistoryFilter.ALL,
   val notifications: Map<String, Boolean> = defaultNotifications,
   val startAtLogin: Boolean = true,
   val lastPopoverTab: String = "Goals",
 ) {
   init {
-    require(pollSeconds in setOf(5, 15, 30, 60))
     require(lastPopoverTab in setOf("Goals", "Phases"))
   }
 }
 
+enum class WorkSection { NEEDS_YOU, GOALS, PHASES, HISTORY, RECENT }
+
 val allowedTransitions = listOf("blocked", "failed", "goal_completed", "pause_took_effect", "standalone_phase_finished")
 val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_completed" to true, "pause_took_effect" to true, "standalone_phase_finished" to false)
 
-fun WorkItem.ongoing(): Boolean = lifecycle == Lifecycle.ACTIVE || lifecycle == Lifecycle.BLOCKED || lifecycle == Lifecycle.PAUSED
+fun WorkItem.needsAttention(): Boolean =
+  requiresAttention
+
+fun WorkItem.isPhase(): Boolean = displayGroup == WorkSection.PHASES
+
+fun WorkItem.eligibleForControl(): Boolean =
+  controlEligible
 
 data class ExecutionInstance(
   val invocationId: String,
@@ -173,3 +251,5 @@ data class ExecutionInstance(
   val finishedAt: Instant?,
   val result: String?,
 )
+
+data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)

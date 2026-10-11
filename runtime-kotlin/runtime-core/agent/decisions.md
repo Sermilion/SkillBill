@@ -27,3 +27,13 @@ Reason: G3 and G5 require fixtures that prove acceptance and rejection through t
 Context: RuntimeRawMapArchitectureTest pinned architecture prose, walked the whole repository for retired machinery, and checked a retired annotation.
 Decision: Delete those assertions while retaining the inner-layer raw-map rule, domain artifact-key rule and synthetic rejection fixtures.
 Reason: The deleted assertions tracked incidental prose and retired implementation details. The repository walk also exceeded the guard's declared-input scope under G6. Keeping live boundary checks preserves A12 and G3 without recreating retirement guards.
+
+## [2026-10-12] Expose desktop storage snapshots and control admission through runtime composition
+Context: The desktop uses the same generated runtime graph for status reads and goal controls. Creating another database graph or assembling engine collaborators in the desktop would split ownership.
+Decision: RuntimeComponent exposes databaseSession and workControlService. The inbound API inventory pins both names and still rejects every unlisted property. The desktop repository consumes readIfPresent for strict snapshots and WorkControlService for admitted controls. PackagedDataSmoke also consumes the database session to create its disposable fixture through the supported runtime write path.
+Reason: The runtime retains database and control ownership while the desktop owns read-only Room connections and external observation. No ceiling, exemption or boundary rule changes.
+
+## [2026-10-12] Bind work ownership and feature execution in the runtime component
+Context: Standalone process identity and exit observation use the existing host supervisor. A generated CLI child cannot construct its concrete host adapter through runtime-core's implementation dependency.
+Decision: Expose FeatureTaskRuntimeRunEntry through RuntimeComponent and remove the unused FeatureTaskRuntimeRunner export. Keep workObservationService as the desktop's bounded owner-registration entry. The inbound API inventory pins these production consumers and retains the rejection fixture.
+Reason: A1, A3 and A5 keep adapter construction in the existing runtime composition root. The CLI consumes the admitted execution entry rather than depending on host infrastructure. The replacement removes an unused export instead of adding another one beside it.

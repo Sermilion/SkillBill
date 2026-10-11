@@ -33,6 +33,7 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
@@ -78,6 +79,7 @@ internal class SQLiteUnitOfWork(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
   transactionActive: Boolean = false,
+  override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     SqliteFeatureTaskPhaseSettlementStore(connection)

@@ -5,13 +5,13 @@ import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.toStatusWireMap
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
-import skillbill.ports.idestatus.model.IdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily

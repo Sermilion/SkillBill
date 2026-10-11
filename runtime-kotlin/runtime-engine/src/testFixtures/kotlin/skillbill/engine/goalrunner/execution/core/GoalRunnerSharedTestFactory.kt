@@ -100,9 +100,11 @@ fun testGoalRunnerStatusService(
     controlVerbs =
       GoalRunnerStatusControlVerbs(
         manifestStore,
+        database,
         clock,
         ports.workerSupervisor,
         TestRepositoryEnclosingRoot,
+        ports.diagnostics,
       ),
     repairCoordinator =
       GoalRunnerRepairCoordinator(

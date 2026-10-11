@@ -23,6 +23,8 @@ import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.model.RepositoryRoot
+import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.nio.file.Path
 
 @Inject
@@ -41,17 +43,44 @@ class GoalRunnerStatusService(
       ?.let { loadedState -> projectionAssembler.project(loadedState, request) }
   }
 
+  fun statusForWorkflow(
+    parentWorkflowId: String,
+    request: GoalRunnerStatusRequest,
+  ): GoalRunnerStatusProjection? = projectionAssembler.projectWorkflow(parentWorkflowId, request)
+
+  fun reconcileSubtaskPage(
+    parentWorkflowId: String,
+    request: GoalRunnerStatusRequest,
+    subtasks: List<DecompositionSubtask>,
+  ): List<DecompositionSubtask> = projectionAssembler.reconcileSubtaskPage(parentWorkflowId, request, subtasks)
+
   fun statusRefresh(request: GoalRunnerStatusRequest): GoalRunnerStatusProjection? = status(request)
 
   fun pause(
     issueKey: String,
     repoRoot: Path? = null,
-  ): GoalRunnerPauseResult = controlVerbs.pause(issueKey, effectiveGoalRepoRoot(repoRoot, repositoryRoot))
+    expectedParentWorkflowId: String? = null,
+  ): GoalRunnerPauseResult =
+    controlVerbs.pause(
+      issueKey,
+      effectiveGoalRepoRoot(repoRoot, repositoryRoot),
+      expectedParentWorkflowId,
+    )
 
   fun stop(
     issueKey: String,
     repoRoot: Path? = null,
-  ): GoalRunnerStopVerbResult = controlVerbs.stop(issueKey, effectiveGoalRepoRoot(repoRoot, repositoryRoot))
+    expectedParentWorkflowId: String? = null,
+    databaseFileObservation: DatabaseFileObservation? = null,
+    beforeAdmission: (() -> Boolean)? = null,
+  ): GoalRunnerStopVerbResult =
+    controlVerbs.stop(
+      issueKey,
+      effectiveGoalRepoRoot(repoRoot, repositoryRoot),
+      expectedParentWorkflowId,
+      databaseFileObservation,
+      beforeAdmission,
+    )
 
   fun resume(
     issueKey: String,

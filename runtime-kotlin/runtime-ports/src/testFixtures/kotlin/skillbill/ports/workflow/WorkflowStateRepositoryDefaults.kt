@@ -3,18 +3,89 @@ package skillbill.ports.workflow
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
+import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
+import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.taskruntime.artifact.phaseLedger
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
+  open override fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot? =
+    get(WorkflowFamily.TASK_RUNTIME, workflowId)
+
+  open override fun readGoalStatusChildPage(
+    normalizedIssueKey: String,
+    offset: Int,
+    limit: Int,
+    subtaskIds: Set<Int>?,
+  ): List<WorkflowStateSnapshot> =
+    findFeatureTaskWorkflowsForIssue(FeatureTaskWorkflowMode.RUNTIME, normalizedIssueKey)
+      .map { it.toSnapshot() }
+      .filter { snapshot ->
+        val continuation = DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuation()
+        continuation != null && (subtaskIds == null || continuation.subtaskId in subtaskIds)
+      }.drop(offset).take(limit)
+
+  open override fun readGoalAttemptLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<GoalAttemptLedgerStatusEntry> =
+    (
+      readGoalStatusSnapshot(
+        workflowId,
+      )?.artifacts?.let(DurableWorkflowArtifactFamily.GOAL_ATTEMPT_LEDGER::value) as? List<*>
+    )
+      .orEmpty().drop(offset).take(limit).map {
+        GoalAttemptLedgerStatusEntry.fromWire(FeatureTaskRuntimeWorkflowArtifactMap.from(it))
+      }
+
+  open override fun readFeatureTaskArtifacts(
+    workflowId: String,
+    families: Set<DurableWorkflowArtifactFamily>,
+  ): DurableWorkflowArtifacts? =
+    get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts
+      ?.let {
+          artifacts ->
+        DurableWorkflowArtifacts.fromMap(
+          artifacts.toMap().filterKeys {
+              key ->
+            families.any { it.label() == key }
+          },
+        )
+      }
+
+  open override fun readFeatureTaskWorkflowHeader(workflowId: String): FeatureTaskRuntimeWorkflowHeader? =
+    getFeatureTaskWorkflow(workflowId)?.let {
+        row ->
+      row.mode?.let { FeatureTaskRuntimeWorkflowHeader(it, row.currentStepId) }
+    }
+
+  open override fun readFeatureTaskPhaseLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): FeatureTaskRuntimePhaseLedgerPage? {
+    val ledger = get(WorkflowFamily.TASK_RUNTIME, workflowId)?.artifacts?.phaseLedger() ?: return null
+    return FeatureTaskRuntimePhaseLedgerPage(
+      ledger.drop(offset).take(limit),
+      (offset + limit).takeIf { it < ledger.size },
+    )
+  }
+
   open override fun migrateFeatureTaskArtifacts(
     source: WorkflowStateRecord,
     targetArtifactsJson: String,

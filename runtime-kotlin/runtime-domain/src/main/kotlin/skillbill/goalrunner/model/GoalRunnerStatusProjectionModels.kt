@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.idestatus.model.WorktreeEditSummary
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
@@ -194,7 +195,24 @@ object GoalRunnerStatusProjector {
     activeAgent: String? = null,
     extras: GoalRunnerStatusProjectionRuntimeInputs = GoalRunnerStatusProjectionRuntimeInputs(),
   ): GoalRunnerStatusProjection {
-    val context = buildGoalRunnerStatusProjectionContext(manifest, extras)
-    return assembleGoalRunnerStatusProjection(manifest, activeAgent, extras, context)
+    return project(
+      manifest.issueKey,
+      manifest.subtasks.firstOrNull { it.id == manifest.currentSubtaskIntent.subtaskId },
+      GoalRunnerStatusCounts.fromSubtasks(manifest.subtasks),
+      activeAgent,
+      extras,
+    )
+  }
+
+  fun project(
+    issueKey: String,
+    currentSubtask: DecompositionSubtask?,
+    counts: GoalRunnerStatusCounts,
+    activeAgent: String? = null,
+    extras: GoalRunnerStatusProjectionRuntimeInputs = GoalRunnerStatusProjectionRuntimeInputs(),
+  ): GoalRunnerStatusProjection {
+    val context = buildGoalRunnerStatusProjectionContext(currentSubtask, extras)
+    val adjusted = currentSubtask?.let { counts.reclassify(it, context.statusOf(it)) } ?: counts
+    return assembleGoalRunnerStatusProjection(issueKey, adjusted, activeAgent, extras, context)
   }
 }

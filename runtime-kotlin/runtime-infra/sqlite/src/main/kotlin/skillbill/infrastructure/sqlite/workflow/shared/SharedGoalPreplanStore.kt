@@ -32,6 +32,17 @@ internal class SharedGoalPreplanStore(
       statusProjection.listPreparedPlanSubtaskIds(parentGoalWorkflowId)
     }
 
+  override fun preparedPlanStatusCount(parentGoalWorkflowId: String): Int =
+    translateSqlFailure(parentGoalWorkflowId, 0) { statusProjection.preparedPlanStatusCount(parentGoalWorkflowId) }
+
+  override fun preparedPlanIdsForSubtasks(
+    parentGoalWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Set<Int> =
+    translateSqlFailure(parentGoalWorkflowId, 0) {
+      statusProjection.preparedPlanIdsForSubtasks(parentGoalWorkflowId, subtaskIds)
+    }
+
   override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult =
     translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, 0) {
       sharedPreplan.checkpointSharedPreplan(checkpoint)

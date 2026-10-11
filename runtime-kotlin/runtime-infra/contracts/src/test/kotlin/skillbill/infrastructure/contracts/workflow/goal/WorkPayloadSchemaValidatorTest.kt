@@ -4,8 +4,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkFailureCode
 import skillbill.goalrunner.model.GoalRunnerSubtaskValidationEvidence
-import skillbill.ports.idestatus.model.IdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence

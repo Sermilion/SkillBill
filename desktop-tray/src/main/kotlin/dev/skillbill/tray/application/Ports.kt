@@ -3,22 +3,37 @@ package dev.skillbill.tray.application
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 
-interface BoardSource {
-  fun setExecutableOverride(path: String?)
-  suspend fun board(retention: Retention, cursor: String? = null): Outcome<Board>
-  suspend fun detail(identity: WorkIdentity, cursor: String? = null): Outcome<Detail>
+interface WorkBoardRepository {
+  val refreshEvents: Flow<Set<WorkSection>>
+  fun observe(section: WorkSection, retention: Retention, filter: String = "", historyFilter: HistoryFilter = HistoryFilter.ALL, anchor: String? = null): Flow<Outcome<Board>>
+  suspend fun board(section: WorkSection, retention: Retention, cursor: String? = null, filter: String = "", historyFilter: HistoryFilter = HistoryFilter.ALL): Outcome<Board>
+  fun retainPages(retention: BoardRetention)
   suspend fun refresh()
-  suspend fun nextRefresh()
-  fun acceptBoard(board: Board) = Unit
-  fun invalidateBoard() = Unit
+}
+
+interface WorkDetailRepository {
+  fun observeDetail(identity: WorkIdentity): Flow<Outcome<Detail>>
+  suspend fun detail(identity: WorkIdentity, cursor: String? = null, list: DetailList? = null, startOffset: Int = 0): Outcome<Detail>
+}
+
+interface WorkControlRepository {
   suspend fun pause(item: WorkItem): Outcome<Unit>
   suspend fun stop(item: WorkItem): Outcome<Unit>
 }
 
+interface WorkStoreSession {
+  suspend fun selectDatabase(path: String?)
+  fun close()
+  suspend fun closeAndJoin()
+}
+
 interface SettingsStore {
-  fun load(): AppSettings
-  fun save(settings: AppSettings)
+  val settings: Flow<Outcome<AppSettings>>
+  suspend fun update(transform: (AppSettings) -> AppSettings): Outcome<Unit>
+  fun close()
+  suspend fun closeAndJoin()
 }
 
 interface NativeServices {
@@ -51,7 +66,17 @@ data class DashboardState(
   val trayProbeComplete: Boolean = false,
   val boardLoading: Boolean = true,
   val detailLoading: Boolean = false,
+  val detailListLoading: Set<DetailList> = emptySet(),
+  val sectionLoadStates: Map<WorkSection, ListLoadState> = emptyMap(),
+  val detailLoadStates: Map<DetailList, ListLoadState> = emptyMap(),
+  val sections: Map<WorkSection, Board> = emptyMap(),
+  val sectionLoading: Set<WorkSection> = setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES),
+  val sectionProblems: Map<WorkSection, Problem> = emptyMap(),
+  val filter: String = "",
+  val databasePath: String? = null,
 )
+
+enum class ListLoadState { INITIAL_LOADING, READY, READY_EMPTY, REFRESHING, APPENDING, APPEND_FAILED, FAILED, EXHAUSTED }
 
 data class DisplayDurations(val goalMs: Long?, val subtaskId: String?, val subtaskMs: Long?)
 
@@ -59,7 +84,10 @@ interface DashboardModel {
   val state: StateFlow<DashboardState>
   fun refresh()
   fun loadMoreBoard()
-  fun loadMoreDetail()
+  fun loadMore(section: WorkSection)
+  fun observeHistory(enabled: Boolean)
+  fun filter(value: String)
+  fun loadMoreDetail(list: DetailList)
   fun select(identity: WorkIdentity)
   fun updateSettings(settings: AppSettings)
   fun chooseTab(tab: String)
