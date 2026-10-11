@@ -17,7 +17,8 @@ internal class GoalChildWorkflowStore(
       JOIN feature_task_execution_identities AS identities
         ON identities.workflow_id = workflows.workflow_id
       WHERE identities.route_scope = 'goal_child'
-        AND json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') = ?
+        AND CASE WHEN json_valid(workflows.artifacts_json)
+          THEN json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') END = ?
       ORDER BY workflows.workflow_id
       """.trimIndent(),
     ).use { statement ->
@@ -41,7 +42,8 @@ internal class GoalChildWorkflowStore(
         JOIN feature_task_execution_identities AS identities
           ON identities.workflow_id = workflows.workflow_id
         WHERE identities.route_scope = 'goal_child'
-          AND json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') = ?
+          AND CASE WHEN json_valid(workflows.artifacts_json)
+          THEN json_extract(workflows.artifacts_json, '$.goal_continuation.parent_workflow_id') END = ?
       )
       """.trimIndent(),
     ).use { statement ->

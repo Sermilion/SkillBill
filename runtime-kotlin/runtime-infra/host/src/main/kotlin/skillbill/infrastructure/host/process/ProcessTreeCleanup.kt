@@ -23,7 +23,9 @@ fun destroyOwnedProcessTree(
   handle?.let { ownedProcess ->
     val descendants = linkedSetOf<ProcessHandle>()
     descendants += knownDescendants
-    descendants += ownedProcess.descendants().toList()
+    if (ownedProcess.isAlive) {
+      ownedProcess.descendants().use { descendants += it.toList() }
+    }
     descendants.forEach { descendant ->
       attempt { descendant.destroyForcibly() }
     }

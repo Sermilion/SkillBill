@@ -11,7 +11,11 @@ class MalformedPayloadException : IllegalArgumentException("The Skill Bill CLI r
 object WorkPayloadDecoder {
   fun board(source: String): Board {
     val root = source.jsonObjectOrFail()
-    if (root.string(WorkPayloadKeys.CONTRACT_VERSION) != "1.0") throw IncompatibleContractException()
+    if (root.string(WorkPayloadKeys.CONTRACT_VERSION) != "1.1") throw IncompatibleContractException()
+    val pageSize = root.requiredInt(WorkPayloadKeys.PAGE_SIZE)
+    if (pageSize !in 1..100 || !root.containsKey(WorkPayloadKeys.NEXT_CURSOR)) throw MalformedPayloadException()
+    val nextCursor = root.optionalString(WorkPayloadKeys.NEXT_CURSOR)
+    if (nextCursor != null && nextCursor.isBlank()) throw MalformedPayloadException()
     val observed = root.instant(WorkPayloadKeys.OBSERVED_AT)
     val retention = Retention.entries.singleOrNull { it.cliValue == root.string(WorkPayloadKeys.FINISHED_WITHIN) } ?: throw MalformedPayloadException()
     val items = root.array(WorkPayloadKeys.ITEMS).map { decodeItem(it.jsonObjectOrFail()) }
@@ -22,15 +26,21 @@ object WorkPayloadDecoder {
     }
     val problem = root[WorkPayloadKeys.PROBLEM]?.jsonObjectOrFail()?.let { Problem(it.string(WorkPayloadKeys.CODE), "Skill Bill's database has not been created yet.") }
     if (problem != null && problem.code != "absent_database") throw MalformedPayloadException()
-    return Board(observed, retention, items, problem, diagnostics)
+    if (items.size > pageSize || (problem != null && nextCursor != null)) throw MalformedPayloadException()
+    return Board(observed, retention, items, problem, diagnostics, nextCursor)
   }
 
   fun detail(source: String, expectedIdentity: WorkIdentity? = null): DetailLookup {
     val root = source.jsonObjectOrFail()
-    if (root.string(WorkPayloadKeys.CONTRACT_VERSION) != "1.0") throw IncompatibleContractException()
-    root.instant(WorkPayloadKeys.OBSERVED_AT)
+    if (root.string(WorkPayloadKeys.CONTRACT_VERSION) != "1.1") throw IncompatibleContractException()
+    val observed = root.instant(WorkPayloadKeys.OBSERVED_AT)
+    val pageSize = root.requiredInt(WorkPayloadKeys.PAGE_SIZE)
+    if (pageSize !in 1..100 || !root.containsKey(WorkPayloadKeys.NEXT_CURSOR)) throw MalformedPayloadException()
+    val nextCursor = root.optionalString(WorkPayloadKeys.NEXT_CURSOR)
+    if (nextCursor != null && nextCursor.isBlank()) throw MalformedPayloadException()
     val item = root[WorkPayloadKeys.ITEM] ?: throw MalformedPayloadException()
     if (item == JsonNull) {
+      if (nextCursor != null) throw MalformedPayloadException()
       val problem = root[WorkPayloadKeys.PROBLEM].jsonObjectOrFail()
       val code = problem.string(WorkPayloadKeys.CODE)
       problem.string(WorkPayloadKeys.MESSAGE)
@@ -39,6 +49,9 @@ object WorkPayloadDecoder {
     }
     if (root.containsKey(WorkPayloadKeys.PROBLEM)) throw MalformedPayloadException()
     val value = item.jsonObjectOrFail()
+    listOf(WorkPayloadKeys.SUBTASKS, WorkPayloadKeys.PHASES, WorkPayloadKeys.EXECUTION_HISTORY, WorkPayloadKeys.COMPLETED_SUBTASK_VALIDATION).forEach { key ->
+      if (value.objectListOrNull(key).orEmpty().size > pageSize) throw MalformedPayloadException()
+    }
     val work = decodeItem(value)
     if (expectedIdentity != null && work.identity != expectedIdentity) {
       return DetailLookup(null, Problem("unknown_work_item", safeDetailProblem("unknown_work_item")))
@@ -55,6 +68,14 @@ object WorkPayloadDecoder {
       activeAgent = value.optionalString(WorkPayloadKeys.ACTIVE_AGENT),
       executionLiveness = value.optionalString(WorkPayloadKeys.EXECUTION_LIVENESS),
       extras = emptyMap(),
+      observedAt = observed,
+      nextCursor = nextCursor,
+      executionHistory = value.objectListOrNull(WorkPayloadKeys.EXECUTION_HISTORY).orEmpty().map { instance ->
+        ExecutionInstance(instance.string(WorkPayloadKeys.INVOCATION_ID), instance.string(WorkPayloadKeys.EXECUTION_ID),
+          instance.string(WorkPayloadKeys.LIFECYCLE_STATE), instance.instant(WorkPayloadKeys.STARTED_AT),
+          instance.instant(WorkPayloadKeys.UPDATED_AT), instance.optionalInstant(WorkPayloadKeys.FINISHED_AT),
+          instance.optionalString(WorkPayloadKeys.EXECUTION_RESULT))
+      },
       attempts = DetailAttempts(
         value.intMap(WorkPayloadKeys.PHASE_ATTEMPT_COUNTS),
         value.intMap(WorkPayloadKeys.CUMULATIVE_FIX_ITERATIONS),

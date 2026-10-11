@@ -6,7 +6,7 @@ Reason: The spec requires existing work list/status behavior and 0.3 payloads to
 ## [2026-10-11] Retain finished work by completion evidence
 Context: Board windows must describe when work finished, even when heartbeats or status freshness continue changing.
 Decision: Apply inclusive windows to completion evidence after lifecycle projection. Include unfinished work regardless of age; label terminal-goal state-entry fallback and diagnose missing completion evidence.
-Reason: Freshness timestamps would extend retention without a new completion. Projecting first keeps goals awaiting monitor active even when their child has finished.
+Reason: Freshness timestamps would extend retention without a new completion. Projecting first keeps a live goal monitor visible even when its child has finished.
 Alternatives considered: Updated-at or heartbeat retention would misrepresent the selected completion window.
 
 ## [2026-10-11] Correlate machine-wide work by stored repository identity
@@ -18,3 +18,15 @@ Reason: The spec requires repository-local issue correlation and forbids manufac
 Context: An old standalone invocation remains addressable after its board window expires, and an issue key can have several historical goal runs.
 Decision: Resolve exact workflow and invocation ids, merge only associated execution records, and attach manifest extras only when the parent workflow matches.
 Reason: Searching retained board output would lose old invocations. Matching a manifest only by issue key could attach another run's title and subtasks.
+
+## [2026-10-11] Keep terminal goal evidence and require live monitor ownership
+Context: The desktop board exposed historical completed goals as idle and stopped goals as fresh running monitors.
+Decision: Preserve terminal goal rows and completion controls. Project a running monitor only with verified live ownership and a monitor step. Apply standalone lease expiry to monitors and retain the durable update timestamp.
+Reason: Completed subtasks describe implementation progress. They do not prove that a CI monitor exists. Older completed rows remain valid completion evidence even without the newer control marker.
+Validation: Legacy completion, stopped finalization, expired standalone monitor and process ownership regression tests cover the observable states. The change removes fabricated freshness and CI failure activity. Architecture review A1 through A12 and G1 through G7 is clean. Production dependencies and guards are unchanged.
+
+
+## [2026-10-11] Keep board projection free of unused validation evidence
+Context: Each goal snapshot loaded validation records for every completed child even though the status snapshot does not expose them. Current-subtask start time also triggered another global work-list query.
+Decision: Snapshot projection opts out of completed-subtask validation evidence and reads the current child's start timestamp directly. Detail and explicit goal status retain validation evidence by default.
+Reason: Board refresh must avoid expanding all historical phase records. The change removes unused reads while preserving detailed inspection. Full runtime checks pass without widening architecture guards, baselines or exceptions, under A1 through A12 and G1 through G7.

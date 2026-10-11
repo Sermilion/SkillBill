@@ -110,39 +110,16 @@ class StandalonePlanRun(
     statusPublisher: StandalonePhaseStatusEventSink,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
-    if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
-      val completed =
-        database.read { unitOfWork ->
-          unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, repositories.repositoryIdentity(repoRoot))
-            ?.let { id ->
-              unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
-                ?.let { id to it.artifacts.decomposeTerminal() }
-            }
-        }
-      if (completed != null && (suppliedIntake == null || suppliedIntake.trim().equals(issueKey, ignoreCase = true))) {
-        val (id, terminal) = completed
-        if (terminal != null) {
-          preparation.capture(id, issueKey, repoRoot)
-          val result =
-            StandalonePlanResult.Completed(
-              id,
-              terminal.parentSpecPath,
-              terminal.decompositionManifestPath,
-              terminal.subtaskSpecPaths,
-            )
-          statusPublisher.settlePlan("completed", result.workflowId)
-          return result
-        }
-      }
-      return refused(
-        statusPublisher,
-        "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
-          "Run `skill-bill $issueKey` to execute it.",
-      )
-    }
     val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
     val identity = repositories.repositoryIdentity(repoRoot)
-    return when (val found = lookupPlanAfterCrashRecovery(issueKey, identity)) {
+    val found = lookupPlanAfterCrashRecovery(issueKey, identity)
+    if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
+      if (found is FeatureTaskContinuationLookupResult.Resumable) {
+        return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
+      }
+      return settleExistingManifest(issueKey, suppliedIntake, repoRoot, statusPublisher)
+    }
+    return when (found) {
       is FeatureTaskContinuationLookupResult.Resumable ->
         resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
       is FeatureTaskContinuationLookupResult.AlreadyRunning ->
@@ -163,6 +140,42 @@ class StandalonePlanRun(
       FeatureTaskContinuationLookupResult.NoMatch,
       -> open(issueKey, intake, repoRoot, inputFor, statusPublisher)
     }
+  }
+
+  private fun settleExistingManifest(
+    issueKey: String,
+    suppliedIntake: String?,
+    repoRoot: Path,
+    statusPublisher: StandalonePhaseStatusEventSink,
+  ): StandalonePlanResult {
+    val completed =
+      database.read { unitOfWork ->
+        unitOfWork.workflowStates.findCompletedPlanWorkflowId(issueKey, repositories.repositoryIdentity(repoRoot))
+          ?.let { id ->
+            unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
+              ?.let { id to it.artifacts.decomposeTerminal() }
+          }
+      }
+    if (completed != null && (suppliedIntake == null || suppliedIntake.trim().equals(issueKey, ignoreCase = true))) {
+      val (id, terminal) = completed
+      if (terminal != null) {
+        preparation.capture(id, issueKey, repoRoot)
+        val result =
+          StandalonePlanResult.Completed(
+            id,
+            terminal.parentSpecPath,
+            terminal.decompositionManifestPath,
+            terminal.subtaskSpecPaths,
+          )
+        statusPublisher.settlePlan("completed", result.workflowId)
+        return result
+      }
+    }
+    return refused(
+      statusPublisher,
+      "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
+        "Run `skill-bill $issueKey` to execute it.",
+    )
   }
 
   private fun lookupPlanAfterCrashRecovery(

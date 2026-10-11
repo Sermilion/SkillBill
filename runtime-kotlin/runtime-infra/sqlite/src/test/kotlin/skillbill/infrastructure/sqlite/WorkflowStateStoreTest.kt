@@ -172,6 +172,26 @@ class WorkflowStateStoreTest {
   }
 
   @Test
+  fun `indexed child lookup preserves both issue sources and excludes foreign repositories`() {
+    val dbPath = Files.createTempDirectory("indexed-child-lookup").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val child = goalChildWorkflow("wftr-child", "wftr-parent").copy(issueKey = "skill-128")
+      val identity = goalChildIdentity(child).copy(normalizedIssueKey = "SKILL-129")
+      store.saveFeatureTaskWorkflow(child, RUNTIME)
+      store.saveFeatureTaskExecutionIdentity(identity)
+
+      listOf("SKILL-128", "SKILL-129").forEach { key ->
+        assertEquals(
+          listOf(child.workflowId),
+          store.findGoalChildFeatureTaskCandidates(key, identity.repositoryIdentity).map { it.workflow.workflowId },
+        )
+        assertEquals(emptyList(), store.findGoalChildFeatureTaskCandidates(key, "foreign-repo"))
+      }
+    }
+  }
+
+  @Test
   fun `feature task execution identity can be read exactly at adoption boundary`() {
     val dbPath = Files.createTempDirectory("goal-child-identity-read").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->

@@ -239,6 +239,19 @@ internal fun Connection.listFeatureTaskWorkflowRows(
   repositoryIdentity: String? = null,
 ): List<WorkflowStateRecord> {
   val normalizedLimit = limit.coerceAtLeast(0)
+  val issuePredicate =
+    if (normalizedIssueKey == null) {
+      ""
+    } else {
+      """
+      AND (UPPER(TRIM(issue_key)) = ? OR (
+        issue_key IS NULL AND CASE WHEN json_valid(artifacts_json)
+          THEN UPPER(TRIM(COALESCE(json_extract(artifacts_json, '$.decomposition_runtime.issue_key'),
+            json_extract(artifacts_json, '$.goal_continuation.issue_key')))) = ?
+          ELSE 0 END
+      ))
+      """.trimIndent()
+    }
   return prepareStatement(
     """
     SELECT
@@ -260,12 +273,7 @@ internal fun Connection.listFeatureTaskWorkflowRows(
       finished_at
     FROM feature_task_workflows
     WHERE mode = ?
-      AND (? IS NULL OR UPPER(TRIM(issue_key)) = ? OR (
-        issue_key IS NULL AND CASE WHEN json_valid(artifacts_json)
-          THEN UPPER(TRIM(COALESCE(json_extract(artifacts_json, '$.decomposition_runtime.issue_key'),
-            json_extract(artifacts_json, '$.goal_continuation.issue_key')))) = ?
-          ELSE 0 END
-      ))
+      $issuePredicate
       AND (? IS NULL OR COALESCE(
         (SELECT repository_identity FROM goal_planning_preparations
           WHERE parent_goal_workflow_id = feature_task_workflows.workflow_id LIMIT 1),
@@ -280,16 +288,11 @@ internal fun Connection.listFeatureTaskWorkflowRows(
     LIMIT ?
     """.trimIndent(),
   ).use { statement ->
-    statement.bindAll(
-      mode.wireValue,
-      normalizedIssueKey,
-      normalizedIssueKey,
-      normalizedIssueKey,
-      repositoryIdentity,
-      repositoryIdentity,
-      repositoryIdentity,
-      normalizedLimit,
-    )
+    val parameters =
+      listOf(mode.wireValue) +
+        (if (normalizedIssueKey == null) emptyList() else listOf(normalizedIssueKey, normalizedIssueKey)) +
+        listOf(repositoryIdentity, repositoryIdentity, repositoryIdentity, normalizedLimit)
+    statement.bindAll(parameters)
     statement.executeQuery().use { resultSet ->
       buildList {
         while (resultSet.next()) {

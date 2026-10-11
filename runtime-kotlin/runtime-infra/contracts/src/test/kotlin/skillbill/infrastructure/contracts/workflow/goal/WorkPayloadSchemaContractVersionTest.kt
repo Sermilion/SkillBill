@@ -19,7 +19,17 @@ class WorkPayloadSchemaContractVersionTest {
     assertEquals(WorkBoardSchemaPaths.EXPECTED_SCHEMA_ID, schema.path("\$id").asText())
     assertTrue(
       schema.path("required").map { it.asText() }
-        .containsAll(listOf("contract_version", "items", "observed_at", "finished_within", "diagnostics")),
+        .containsAll(
+          listOf(
+            "contract_version",
+            "items",
+            "observed_at",
+            "finished_within",
+            "diagnostics",
+            "page_size",
+            "next_cursor",
+          ),
+        ),
     )
   }
 
@@ -32,7 +42,9 @@ class WorkPayloadSchemaContractVersionTest {
     )
     assertEquals(WorkDetailSchemaPaths.EXPECTED_SCHEMA_ID, schema.path("\$id").asText())
     assertTrue(
-      schema.path("required").map { it.asText() }.containsAll(listOf("contract_version", "observed_at", "item")),
+      schema.path("required").map {
+        it.asText()
+      }.containsAll(listOf("contract_version", "observed_at", "item", "page_size", "next_cursor")),
     )
   }
 

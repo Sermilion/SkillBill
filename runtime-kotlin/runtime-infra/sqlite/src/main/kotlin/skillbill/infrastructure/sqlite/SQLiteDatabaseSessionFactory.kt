@@ -31,6 +31,7 @@ class SQLiteDatabaseSessionFactory(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
 ) : DatabaseSessionFactory {
+  private val activeRead = ThreadLocal<UnitOfWork>()
   private val resolvedContext = requireResolvedEnvironmentContext(context)
   private val resolvedPath by lazy {
     DatabaseRuntime.resolveDbPath(
@@ -44,37 +45,37 @@ class SQLiteDatabaseSessionFactory(
 
   override fun databaseExists(): Boolean = Files.exists(resolveDbPath())
 
-  override fun <T> read(block: (UnitOfWork) -> T): T =
-    DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb ->
-      runCatching {
-        openDb.connection.inDatabaseTransaction(
-          DatabaseTransactionSpec(
-            dbPath = openDb.dbPath,
-            beginMode = DatabaseTransactionBeginMode.DEFERRED,
-            operation = DatabaseAccessOperation.READ,
-            diagnostics = diagnostics,
-          ),
-        ) {
-          block(unitOfWork(openDb, transactionActive = true))
-        }
-      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-    }
+  override fun <T> read(block: (UnitOfWork) -> T): T {
+    activeRead.get()?.let { return block(it) }
+    return DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb -> readInDatabase(openDb, block) }
+  }
 
-  override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? =
-    DatabaseRuntime.openReadDbIfPresentAt(resolveDbPath())?.use { openDb ->
-      runCatching {
-        openDb.connection.inDatabaseTransaction(
-          DatabaseTransactionSpec(
-            dbPath = openDb.dbPath,
-            beginMode = DatabaseTransactionBeginMode.DEFERRED,
-            operation = DatabaseAccessOperation.READ,
-            diagnostics = diagnostics,
-          ),
-        ) {
-          block(unitOfWork(openDb, transactionActive = true))
+  override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? {
+    activeRead.get()?.let { return block(it) }
+    return DatabaseRuntime.openReadDbIfPresentAt(resolveDbPath())?.use { openDb -> readInDatabase(openDb, block) }
+  }
+
+  private fun <T> readInDatabase(
+    openDb: OpenDatabase,
+    block: (UnitOfWork) -> T,
+  ): T =
+    runCatching {
+      openDb.connection.inDatabaseTransaction(
+        DatabaseTransactionSpec(
+          dbPath = openDb.dbPath,
+          beginMode = DatabaseTransactionBeginMode.DEFERRED,
+          operation = DatabaseAccessOperation.READ,
+          diagnostics = diagnostics,
+        ),
+      ) {
+        activeRead.set(unitOfWork(openDb, transactionActive = true))
+        try {
+          block(requireNotNull(activeRead.get()))
+        } finally {
+          activeRead.remove()
         }
-      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-    }
+      }
+    }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
     repeat(DatabaseRuntime.SELF_MANAGED_WRITE_BUSY_ATTEMPTS - 1) {

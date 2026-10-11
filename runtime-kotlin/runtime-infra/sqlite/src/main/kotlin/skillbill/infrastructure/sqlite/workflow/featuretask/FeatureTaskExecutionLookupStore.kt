@@ -104,12 +104,17 @@ internal class FeatureTaskExecutionLookupStore(
   ): List<FeatureTaskWorkflowCandidate> =
     connection.prepareStatement(
       """
+      WITH matching_ids AS (
+        SELECT workflow_id FROM feature_task_workflows WHERE UPPER(issue_key) = ?
+        UNION
+        SELECT workflow_id FROM feature_task_execution_identities WHERE normalized_issue_key = ?
+      )
       SELECT workflows.workflow_id
-      FROM feature_task_workflows AS workflows
+      FROM matching_ids
+      JOIN feature_task_workflows AS workflows ON workflows.workflow_id = matching_ids.workflow_id
       LEFT JOIN feature_task_execution_identities AS identities
         ON identities.workflow_id = workflows.workflow_id
-      WHERE (UPPER(workflows.issue_key) = ? OR identities.normalized_issue_key = ?)
-        AND (
+      WHERE (
           (
             ? = 'standalone'
             AND identities.workflow_id IS NULL

@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -139,6 +140,11 @@ class AgentPlanStrategy : PhaseStrategy() {
   internal object PlanResumeRules : PhaseResumeRules {
     override val buffersIncompleteOutput: Boolean = false
 
+    override fun persistedBlockResume(
+      reason: String,
+      recentBlockedReasons: List<String?>,
+    ): PhaseBlockResume = PhaseBlockResume.RELAUNCH_WITH_FRESH_BUDGET
+
     override fun dropsResumedCompletion(completedStepIds: Set<String>): Boolean =
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN !in completedStepIds
   }
@@ -156,7 +162,8 @@ class AgentPlanStrategy : PhaseStrategy() {
         "digest. Write files only inside the .feature-specs/<issue key>-<slug>/ directory that already " +
         "holds the parent spec.md and modify no other repository file. When the bundle is complete, finish " +
         "with a short prose summary of the plan. " +
-        PREPLAN_DIGEST_AUTHORITY + " Do not read existing .feature-specs bundles either; the manifest template " +
+        PREPLAN_DIGEST_AUTHORITY + " Do not read other .feature-specs bundles; inspect this workflow's own " +
+        "bundle on resume. The manifest template " +
         "below is the format."
 
     private const val DIRECTIVE: String =
@@ -206,10 +213,14 @@ class AgentPlanStrategy : PhaseStrategy() {
         No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
         disk. The directory .feature-specs/<issue key>-<slug>/ already holds the parent spec.md. $parentSpecRule
         Add one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency order) and
-        decomposition-manifest.yaml (it must not exist yet) whose parent spec path names that spec.md and whose
+        decomposition-manifest.yaml whose parent spec path names that spec.md and whose
         subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
-        spec need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
-        directory, never write through a symlink, and never overwrite an existing subtask spec. A bundle that
+        spec need an Acceptance Criteria list as the Spec Format Contract requires. Every subtask spec also
+        needs a non-blank Implementation Details section containing its executable plan. Write nothing outside that
+        directory and never write through a symlink. When resuming, this workflow's previously authored
+        manifest and subtask specs may already exist. Inspect them, keep valid content, and repair incomplete
+        content in that same bundle. An existing file in your own resumed bundle is not a reason to block.
+        Never replace a bundle owned by another workflow. A bundle that
         fails these checks blocks the plan.
         """.trimIndent()
     }

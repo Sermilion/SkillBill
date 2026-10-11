@@ -1,0 +1,36 @@
+package dev.skillbill.tray.ui
+
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+
+@Composable
+internal fun LoadNextPageOnScroll(scroll: LazyListState, hasMore: Boolean, loading: Boolean, load: () -> Unit) {
+  LaunchedEffect(scroll, hasMore, loading) {
+    if (hasMore && !loading) snapshotFlow {
+      scroll.isScrollInProgress && scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let {
+        it >= scroll.layoutInfo.totalItemsCount - 2
+      } == true
+    }.distinctUntilChanged().collect { if (it) load() }
+  }
+}
+
+@Composable
+internal fun LoadNextPageOnScroll(scroll: ScrollState, hasMore: Boolean, loading: Boolean, load: () -> Unit) {
+  LaunchedEffect(scroll, hasMore, loading) {
+    if (hasMore && !loading) snapshotFlow {
+      scroll.isScrollInProgress && scroll.value >= (scroll.maxValue - 200).coerceAtLeast(1)
+    }.distinctUntilChanged().collect { if (it) load() }
+  }
+}
+
+@Composable
+internal fun PageFooter(hasMore: Boolean, loading: Boolean, load: () -> Unit) {
+  if (loading) Text("Loading...", color = muted)
+  else if (hasMore) TextButton(onClick = load) { Text("Load more", color = mint) }
+}

@@ -6,11 +6,12 @@ import dev.skillbill.tray.application.eligibleForControl
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
 import kotlinx.coroutines.channels.Channel
+import java.time.Duration
 
 class CliBoardSource(
   private val resolver: CliResolver = CliResolver(),
-  private val pollRunner: ProcessRunner = ProcessRunner(),
-  private val detailRunner: ProcessRunner = ProcessRunner(),
+  private val pollRunner: ProcessRunner = ProcessRunner(timeout = Duration.ofSeconds(120)),
+  private val detailRunner: ProcessRunner = ProcessRunner(timeout = Duration.ofSeconds(120)),
   private val pauseRunner: ProcessRunner = ProcessRunner(),
   private val stopRunner: ProcessRunner = ProcessRunner(),
 ) : BoardSource {
@@ -26,14 +27,17 @@ class CliBoardSource(
     }
   }
 
-  override suspend fun board(retention: Retention): Outcome<Board> = invoke(pollRunner, executableOverride,
-    listOf("work", "board", "--format", "json", "--finished-within", retention.cliValue)) { WorkPayloadDecoder.board(it) }
+  override suspend fun board(retention: Retention, cursor: String?): Outcome<Board> = invoke(pollRunner, executableOverride,
+    listOf("work", "board", "--format", "json", "--finished-within", retention.cliValue, "--page-size", "10") +
+      (cursor?.let { listOf("--cursor", it) } ?: emptyList())) { WorkPayloadDecoder.board(it) }
 
   override fun acceptBoard(board: Board) { synchronized(boardLock) { acceptedBoard = board } }
   override fun invalidateBoard() { synchronized(boardLock) { acceptedBoard = null } }
 
-  override suspend fun detail(identity: WorkIdentity): Outcome<Detail> {
-    return when (val outcome = invoke(detailRunner, executableOverride, listOf("work", "detail", identity.id, "--format", "json")) { WorkPayloadDecoder.detail(it, identity) }) {
+  override suspend fun detail(identity: WorkIdentity, cursor: String?): Outcome<Detail> {
+    val arguments = listOf("work", "detail", identity.id, "--format", "json", "--page-size", "10") +
+      (cursor?.let { listOf("--cursor", it) } ?: emptyList())
+    return when (val outcome = invoke(detailRunner, executableOverride, arguments) { WorkPayloadDecoder.detail(it, identity) }) {
       is Outcome.Failure -> outcome
       is Outcome.Value -> outcome.value.item?.let { Outcome.Value(it) } ?: Outcome.Failure(outcome.value.problem ?: Problem("unknown_work_item", "This work item is no longer available."))
     }

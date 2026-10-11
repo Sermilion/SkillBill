@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 
@@ -30,6 +32,10 @@ class DashboardController(
   private val detailRefreshLock = Any()
   private var detailRefreshJob: Job? = null
   private var pendingDetailRefresh: Pair<WorkIdentity, Long>? = null
+  private val boardPageMutex = Mutex()
+  private val detailPageMutex = Mutex()
+  private var loadedBoardPages = 1
+  private var loadedDetailPages = 1
   @Volatile private var boardRevision = 0L
 
   init {
@@ -46,13 +52,53 @@ class DashboardController(
     scope.launch { pollLoop() }
   }
 
-  override fun refresh() { scope.launch { source.refresh() } }
+  override fun refresh() {
+    mutable.value.selected?.let { enqueueDetailRefresh(it, boardRevision) }
+    scope.launch { source.refresh() }
+  }
+
+  override fun loadMoreBoard() {
+    synchronized(pollInputsLock) {
+      val state = mutable.value
+      val cursor = state.board?.nextCursor ?: return
+      if (state.boardLoading || state.stale) return
+      mutable.update { it.copy(boardLoading = true) }
+      val generation = settingsGeneration.get()
+      scope.launch {
+        boardPageMutex.withLock {
+          if (generation == settingsGeneration.get() && mutable.value.board?.nextCursor == cursor) {
+            loadBoardPages(state.settings, generation, cursor)
+          }
+        }
+      }
+    }
+  }
+
+  override fun loadMoreDetail() {
+    synchronized(detailRefreshLock) {
+      val state = mutable.value
+      val identity = state.selected ?: return
+      val cursor = state.detail?.nextCursor ?: return
+      if (state.detailLoading || state.stale) return
+      mutable.update { it.copy(detailLoading = true) }
+      val selection = selectionGeneration.get()
+      val settings = settingsGeneration.get()
+      scope.launch {
+        detailPageMutex.withLock {
+          if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && mutable.value.detail?.nextCursor == cursor) {
+            loadDetailPages(identity, boardRevision, selection, settings, cursor)
+          }
+        }
+      }
+    }
+  }
 
   override fun select(identity: WorkIdentity) {
     onSelect(identity)
-    val generation = selectionGeneration.incrementAndGet()
-    mutable.update { it.copy(selected = identity, detail = null, detailProblem = null) }
-    loadDetail(identity, generation)
+    selectionGeneration.incrementAndGet()
+    loadedDetailPages = 1
+    mutable.update { it.copy(selected = identity, detail = null, detailProblem = null, detailLoading = true) }
+    enqueueDetailRefresh(identity, boardRevision)
   }
 
   override fun updateSettings(settings: AppSettings) {
@@ -65,7 +111,7 @@ class DashboardController(
     }
     val changedPollInputs = previous.retention != settings.retention || previous.cliOverride != settings.cliOverride
     synchronized(pollInputsLock) {
-      if (changedPollInputs) settingsGeneration.incrementAndGet()
+      if (changedPollInputs) { settingsGeneration.incrementAndGet(); loadedBoardPages = 1; loadedDetailPages = 1 }
       synchronized(notificationLock) { mutable.update { it.copy(settings = settings, settingsProblem = null) } }
       source.setExecutableOverride(settings.cliOverride)
       if (changedPollInputs) {
@@ -82,9 +128,9 @@ class DashboardController(
       mutable.update { it.copy(settings = settings.copy(startAtLogin = previous.startAtLogin), settingsProblem = Problem("login_setting_failed", "Start at login could not be changed.")) }
     }
     if (changedPollInputs) {
-      val generation = selectionGeneration.incrementAndGet()
+      selectionGeneration.incrementAndGet()
       mutable.update { it.copy(detail = null, detailProblem = null, stale = it.board != null, detailExtrasStale = it.selected != null) }
-      mutable.value.selected?.let { loadDetail(it, generation) }
+      mutable.value.selected?.let { enqueueDetailRefresh(it, boardRevision) }
       refresh()
     }
   }
@@ -136,7 +182,50 @@ class DashboardController(
   private suspend fun pollLoop() {
     while (currentCoroutineContext().isActive) {
       val (settings, generation) = synchronized(pollInputsLock) { mutable.value.settings to settingsGeneration.get() }
-      val result = source.board(settings.retention)
+      boardPageMutex.withLock { loadBoardPages(settings, generation) }
+      if (generation == settingsGeneration.get()) {
+        withTimeoutOrNull(mutable.value.settings.pollSeconds * 1000L) { source.nextRefresh() }
+      }
+    }
+  }
+
+  private suspend fun loadBoardPages(settings: AppSettings, generation: Long, continuation: String? = null) {
+    val previousBoard = mutable.value.board
+    val received = linkedMapOf<WorkIdentity, WorkItem>()
+    if (continuation != null) previousBoard?.items?.forEach { received[it.identity] = it }
+    val pageLimit = if (continuation == null) loadedBoardPages else 1
+    var receivedPages = 0
+    val diagnostics = linkedSetOf<String>()
+    val seenCursors = mutableSetOf<String>()
+    var cursor: String? = continuation
+    var observedAt: java.time.Instant? = previousBoard?.observedAt?.takeIf { continuation != null }
+    mutable.update { it.copy(boardLoading = true) }
+    do {
+      val page = source.board(settings.retention, cursor)
+      if (generation != settingsGeneration.get()) return
+      val result = when (page) {
+        is Outcome.Failure -> page
+        is Outcome.Value -> {
+          val board = page.value
+          if ((observedAt != null && board.observedAt != observedAt) || board.finishedWithin != settings.retention ||
+            (board.nextCursor != null && !seenCursors.add(board.nextCursor))) {
+            System.getLogger("dev.skillbill.tray").log(System.Logger.Level.WARNING, "board_pagination_invalid")
+            Outcome.Failure(Problem("malformed_response", "Skill Bill returned an invalid board page."))
+          } else {
+            observedAt = board.observedAt
+            cursor = board.nextCursor
+            receivedPages++
+            if (continuation != null) loadedBoardPages++
+            board.items.forEach { received[it.identity] = it }
+            diagnostics.addAll(board.diagnostics)
+            val visible = if (cursor == null || receivedPages >= pageLimit) received.values.toList() else {
+              (previousBoard?.items.orEmpty().map { it.copy(freshness = Freshness.STALE) } + received.values).associateBy { it.identity }.values.toList()
+            }
+            Outcome.Value(board.copy(items = visible, diagnostics = diagnostics.toList()))
+          }
+        }
+      }
+      val loading = result is Outcome.Value && result.value.nextCursor != null && result.value.problem == null && receivedPages < pageLimit
       synchronized(pollInputsLock) {
         val oldBoard = mutable.value.board
         when (result) {
@@ -148,7 +237,7 @@ class DashboardController(
               } else {
                 if (board.problem == null) {
                   source.acceptBoard(board)
-                  publishTransitions(board)
+                  if (!loading) publishTransitions(board)
                   boardRevision++
                   val now = java.time.Instant.now()
                   val previousItems = oldBoard?.items?.associateBy { it.identity }.orEmpty()
@@ -173,19 +262,26 @@ class DashboardController(
                     )).let { projection -> if (frozen == null && item.freshness == Freshness.STALE) previousDurations[item.identity] ?: projection else projection }
                   }
                   mutable.update { state ->
-                    val detail = state.detail?.let { current -> board.items.singleOrNull { it.identity == current.item.identity }?.let { current.copy(item = it) } ?: current }
-                    state.copy(board = board, problem = null, stale = false, displayDurations = displayed, detail = detail, detailExtrasStale = state.selected != null)
+                    val previous = state.board?.items?.singleOrNull { it.identity == state.selected }
+                    val replacement = previous?.let { old -> board.items.singleOrNull { current ->
+                      current.identity == old.identity || (old.scope == ExecutionScope.STANDALONE_PHASE && old.issueKey != null &&
+                        current.scope == old.scope && current.issueKey == old.issueKey && current.phaseId == old.phaseId &&
+                        current.identity.repositoryIdentity == old.identity.repositoryIdentity)
+                    } }
+                    val selected = replacement?.identity ?: state.selected
+                    val detail = state.detail?.let { current -> replacement?.let { current.copy(item = it) } ?: current }
+                    state.copy(board = board, selected = selected, problem = null, stale = false, displayDurations = displayed, detail = detail, detailExtrasStale = selected != null, boardLoading = loading)
                   }
-                  mutable.value.selected?.let { enqueueDetailRefresh(it, boardRevision) }
-                } else mutable.update { it.copy(board = board, problem = board.problem, stale = false) }
+                  if (!loading) mutable.value.selected?.let { enqueueDetailRefresh(it, boardRevision) }
+                } else mutable.update { it.copy(board = board, problem = board.problem, stale = false, boardLoading = false) }
               }
             }
           }
-          is Outcome.Failure -> if (generation == settingsGeneration.get()) if (oldBoard == null) mutable.update { it.copy(problem = result.problem) } else freezeBoard(oldBoard, result.problem)
+          is Outcome.Failure -> if (generation == settingsGeneration.get()) if (oldBoard == null) mutable.update { it.copy(problem = result.problem, boardLoading = false) } else freezeBoard(oldBoard, result.problem)
         }
       }
-      withTimeoutOrNull(mutable.value.settings.pollSeconds * 1000L) { source.nextRefresh() }
-    }
+      if (!loading) return
+    } while (currentCoroutineContext().isActive)
   }
 
   private fun freezeBoard(board: Board, problem: Problem) {
@@ -205,28 +301,11 @@ class DashboardController(
         )
       }
     }
-    mutable.update { it.copy(problem = problem, stale = true, displayDurations = frozen, detailExtrasStale = it.selected != null) }
+    mutable.update { it.copy(problem = problem, stale = true, displayDurations = frozen, detailExtrasStale = it.selected != null, boardLoading = false) }
   }
 
   private fun DisplayDurations.forSubtask(subtaskId: String?) =
     if (subtaskId == this.subtaskId) this else copy(subtaskId = subtaskId, subtaskMs = null)
-
-  private fun loadDetail(identity: WorkIdentity, generation: Long) {
-    val revision = boardRevision
-    scope.launch {
-      when (val result = source.detail(identity)) {
-        is Outcome.Value -> if (generation == selectionGeneration.get() && mutable.value.selected == identity) {
-          val currentItem = mutable.value.board?.items?.singleOrNull { it.identity == identity }
-          mutable.update { state ->
-            if (generation == selectionGeneration.get() && state.selected == identity && revision == boardRevision) state.copy(detail = result.value.copy(item = currentItem ?: result.value.item), detailProblem = null, detailExtrasStale = state.stale) else state
-          }
-        }
-        is Outcome.Failure -> mutable.update { state ->
-          if (generation == selectionGeneration.get() && state.selected == identity) state.copy(detailProblem = result.problem) else state
-        }
-      }
-    }
-  }
 
   private fun enqueueDetailRefresh(identity: WorkIdentity, revision: Long) {
     synchronized(detailRefreshLock) {
@@ -245,19 +324,67 @@ class DashboardController(
       } ?: return
       val selection = selectionGeneration.get()
       val settings = settingsGeneration.get()
-      when (val result = source.detail(request.first)) {
-        is Outcome.Value -> if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && mutable.value.selected == request.first) {
-          val boardItem = mutable.value.board?.items?.singleOrNull { it.identity == request.first }
-          mutable.update { state ->
-            if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && state.selected == request.first && boardRevision == request.second) state.copy(detail = result.value.copy(item = boardItem ?: result.value.item), detailProblem = null, detailExtrasStale = state.stale) else state
-          }
-        }
-        is Outcome.Failure -> mutable.update { state ->
-          if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && state.selected == request.first) state.copy(detailProblem = result.problem, detailExtrasStale = true) else state
+      detailPageMutex.withLock {
+        if (selection == selectionGeneration.get() && settings == settingsGeneration.get()) {
+          loadDetailPages(request.first, request.second, selection, settings)
         }
       }
     }
   }
+
+  private suspend fun loadDetailPages(identity: WorkIdentity, revision: Long, selection: Long, settings: Long, continuation: String? = null) {
+    val previous = mutable.value.detail?.takeIf { it.item.identity == identity }
+    var received: Detail? = previous?.takeIf { continuation != null }
+    var cursor: String? = continuation
+    val pageLimit = if (continuation == null) loadedDetailPages else 1
+    var receivedPages = 0
+    val seenCursors = mutableSetOf<String>()
+    mutable.update { it.copy(detailLoading = true) }
+    do {
+      val result = source.detail(identity, cursor)
+      if (selection != selectionGeneration.get() || settings != settingsGeneration.get() || mutable.value.selected != identity) return
+      when (result) {
+        is Outcome.Value -> {
+          val page = result.value
+          if ((received != null && received.observedAt != page.observedAt) ||
+            (page.nextCursor != null && !seenCursors.add(page.nextCursor))) {
+            System.getLogger("dev.skillbill.tray").log(System.Logger.Level.WARNING, "detail_pagination_invalid")
+            mutable.update { it.copy(detailProblem = Problem("malformed_response", "Skill Bill returned an invalid detail page."), detailLoading = false, detailExtrasStale = true) }
+            return
+          }
+          received = mergeDetailLists(page, received)
+          cursor = page.nextCursor
+          receivedPages++
+          if (continuation != null) loadedDetailPages++
+          val loading = cursor != null && receivedPages < pageLimit
+          val visible = if (!loading) received else mergeDetailLists(received, previous)
+          mutable.update { state ->
+            if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && state.selected == identity) {
+              val boardItem = state.board?.items?.singleOrNull { it.identity == identity }
+              state.copy(detail = visible.copy(item = boardItem ?: visible.item), detailProblem = null,
+                detailExtrasStale = state.stale || boardRevision != revision, detailLoading = loading)
+            } else state
+          }
+        }
+        is Outcome.Failure -> {
+          mutable.update { state ->
+            if (selection == selectionGeneration.get() && settings == settingsGeneration.get() && state.selected == identity) {
+              state.copy(detailProblem = result.problem, detailExtrasStale = true, detailLoading = false)
+            } else state
+          }
+          return
+        }
+      }
+      if (receivedPages >= pageLimit) return
+    } while (cursor != null && currentCoroutineContext().isActive)
+  }
+
+  private fun mergeDetailLists(page: Detail, previous: Detail?): Detail = page.copy(
+    subtasks = (previous?.subtasks.orEmpty() + page.subtasks).associateBy { it.id }.values.toList(),
+    phases = (previous?.phases.orEmpty() + page.phases).associateBy { it.id }.values.toList(),
+    validation = (previous?.validation.orEmpty() + page.validation).associateBy { it.subtaskId }.values.toList(),
+    executionHistory = (previous?.executionHistory.orEmpty() + page.executionHistory).associateBy { it.invocationId }.values.toList(),
+  )
 
   private fun publishTransitions(board: Board) {
     transitions.observe(board).forEach { (item, transition) ->

@@ -11,6 +11,11 @@ interface FeatureTaskPhaseSettlementRepository {
     attempt: Int,
   ): FeatureTaskPhaseSettlement?
 
+  fun history(
+    workflowId: String,
+    phaseId: String,
+  ): List<FeatureTaskPhaseSettlement>
+
   fun delete(
     workflowId: String,
     phaseId: String,

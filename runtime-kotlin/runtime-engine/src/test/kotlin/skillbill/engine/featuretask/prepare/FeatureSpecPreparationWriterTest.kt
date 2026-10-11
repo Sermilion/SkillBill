@@ -625,13 +625,13 @@ class FeatureSpecPreparationWriterTest {
   }
 
   @Test
-  fun `bundle authorization refuses outside edits and symlinks that escape the repository`() {
+  fun `bundle authorization ignores outside edits and refuses symlinks that escape the repository`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authorization")
     val outside = Files.createTempDirectory("skillbill-feature-spec-outside")
     val written = writer.write(repoRoot, authoredBundleRequest())
     val bundleDirectory = repoRoot.resolve(written.parentSpecPath).parent
 
-    assertTrue(PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf("src/Main.kt"), writer::listTree) != null)
+    assertEquals(null, PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf("src/Main.kt"), writer::listTree))
     Files.createSymbolicLink(bundleDirectory.resolve("escape.md"), outside.resolve("target.md"))
     assertTrue(
       PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf(written.parentSpecPath), writer::listTree) != null,

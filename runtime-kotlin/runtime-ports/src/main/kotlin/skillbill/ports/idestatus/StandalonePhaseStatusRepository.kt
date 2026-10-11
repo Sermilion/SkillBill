@@ -26,6 +26,13 @@ interface StandalonePhaseStatusRepository {
     finishedThrough: Instant,
   ): List<StandalonePhaseStatusRecord>
 
+  fun readPhaseExecutions(
+    repositoryIdentity: String,
+    phaseId: String,
+  ): List<StandalonePhaseStatusRecord>
+
+  fun readWorkflowExecutions(workflowId: String): List<IdeStatusWorkflowExecution>
+
   fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord?
 
   fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord?

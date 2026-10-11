@@ -1,6 +1,10 @@
 package dev.skillbill.tray.infrastructure.cli
 
 internal object WorkPayloadKeys {
+  const val PAGE_SIZE = "page_size"
+  const val NEXT_CURSOR = "next_cursor"
+  const val EXECUTION_HISTORY = "execution_history"
+  const val EXECUTION_RESULT = "result"
   const val ACTIVE_AGENT = "active_agent"
   const val ACTIVE_DURATION_AS_OF = "active_duration_as_of"
   const val ACTIVE_DURATION_MS = "active_duration_ms"

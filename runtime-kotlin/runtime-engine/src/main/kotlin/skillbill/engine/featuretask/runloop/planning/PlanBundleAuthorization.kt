@@ -23,13 +23,13 @@ internal object PlanBundleAuthorization {
           segments[0] == SPECS_DIRECTORY &&
           segments[1].startsWith("$issueKey-") &&
           ".." !in segments
-      if (!insideBundle) return "Plan changed '$raw' outside the authorized $SPECS_DIRECTORY/$issueKey-<slug>/ bundle."
+      if (!insideBundle) return@forEach
       bundles += segments[1]
     }
     if (bundles.size > 1) return "Plan authored more than one $SPECS_DIRECTORY/$issueKey-<slug>/ bundle."
     val bundle = bundles.singleOrNull() ?: return null
     return try {
-      escapedPath(repoRoot, bundle, introducedPaths, listTree)
+      escapedPath(repoRoot, bundle, listTree)
         ?.let { "Plan path '$it' resolves outside the authorized bundle." }
     } catch (error: IOException) {
       "Plan bundle could not be verified: ${error.message}"
@@ -39,12 +39,11 @@ internal object PlanBundleAuthorization {
   private fun escapedPath(
     repoRoot: Path,
     bundle: String,
-    introducedPaths: List<String>,
     listTree: (Path) -> List<Path>,
   ): String? {
     val bundleDirectory = repoRoot.resolve(SPECS_DIRECTORY).resolve(bundle)
     val realBundle = repoRoot.toRealPath().resolve(SPECS_DIRECTORY).resolve(bundle)
-    val candidates = introducedPaths.map(repoRoot::resolve) + listTree(bundleDirectory)
+    val candidates = listTree(bundleDirectory)
     return candidates.firstOrNull { candidate -> escapes(candidate, realBundle) }?.let(repoRoot::relativize)?.toString()
   }
 

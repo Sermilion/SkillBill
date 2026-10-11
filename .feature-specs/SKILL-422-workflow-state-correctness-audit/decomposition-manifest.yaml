@@ -1,0 +1,50 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-422"
+feature_name: "workflow-state-correctness-audit"
+parent_spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-422-workflow-state-correctness-audit"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Durable state and ownership"
+  spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_1_durable-state-and-ownership.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: "Goal finalization and public state"
+  spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_2_goal-finalization-and-public-state.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: "SQLite maintenance and audit closure"
+  spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_3_sqlite-maintenance-and-audit-closure.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 2
+    optional: false
+    skipped: false

@@ -22,6 +22,7 @@ import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.ports.idestatus.WorkPayloadValidator
@@ -56,9 +57,14 @@ class WorkBoardCommand(
   private val finishedWithin by option("--finished-within", help = "Terminal retention window.")
     .choice(WorkBoardWindow.entries.associateBy { it.wireValue })
     .default(WorkBoardWindow.TWENTY_FOUR_HOURS)
+  private val pageSize by option("--page-size", help = "Maximum candidates projected per page, from 1 to 100.")
+    .int().default(WorkPaginationLimits.DEFAULT_PAGE_SIZE).validate {
+      require(it in 1..WorkPaginationLimits.MAX_PAGE_SIZE) { "Page size must be from 1 to 100." }
+    }
+  private val cursor by option("--cursor", help = "Continue from the previous page's next_cursor.")
 
   override fun run() {
-    val result = service.board(WorkBoardRequest(finishedWithin))
+    val result = service.board(WorkBoardRequest(finishedWithin, pageSize = pageSize, cursor = cursor))
     val payload =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.CONTRACT_VERSION to WORK_BOARD_CONTRACT_VERSION,
@@ -74,6 +80,8 @@ class WorkBoardCommand(
         WorkBoardPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
         WorkBoardPayloadKeys.FINISHED_WITHIN to result.finishedWithin.wireValue,
         WorkBoardPayloadKeys.DIAGNOSTICS to result.diagnostics.map(::workBoardDiagnosticWireMap),
+        WorkBoardPayloadKeys.PAGE_SIZE to result.pageSize,
+        WorkBoardPayloadKeys.NEXT_CURSOR to result.nextCursor,
       )
     if (result.absentDatabase) {
       payload[WorkBoardPayloadKeys.PROBLEM] =
@@ -97,14 +105,21 @@ class WorkDetailCommand(
   private val format by option("--format", help = "Output format.")
     .choice("json")
     .default("json")
+  private val pageSize by option("--page-size", help = "Maximum records from each detail list per page, from 1 to 100.")
+    .int().default(WorkPaginationLimits.DEFAULT_PAGE_SIZE).validate {
+      require(it in 1..WorkPaginationLimits.MAX_PAGE_SIZE) { "Page size must be from 1 to 100." }
+    }
+  private val cursor by option("--cursor", help = "Continue from the previous detail page's next_cursor.")
 
   override fun run() {
-    val result = service.detail(WorkDetailRequest(id))
+    val result = service.detail(WorkDetailRequest(id, pageSize = pageSize, cursor = cursor))
     val payload =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.CONTRACT_VERSION to WORK_DETAIL_CONTRACT_VERSION,
         WorkDetailPayloadKeys.OBSERVED_AT to result.observedAt.toString(),
         WorkDetailPayloadKeys.ITEM to result.item?.let { workDetailItemWireMap(it, service.toWireMap(it.snapshot)) },
+        WorkDetailPayloadKeys.PAGE_SIZE to result.pageSize,
+        WorkDetailPayloadKeys.NEXT_CURSOR to result.nextCursor,
       )
     result.problem?.let {
       payload[WorkDetailPayloadKeys.PROBLEM] =

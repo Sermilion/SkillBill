@@ -20,6 +20,12 @@ class SqliteFeatureTaskPhaseSettlementRepository(
   ): FeatureTaskPhaseSettlement? =
     databaseSessionFactory.read { it.featureTaskPhaseSettlements.find(workflowId, phaseId, attempt) }
 
+  override fun history(
+    workflowId: String,
+    phaseId: String,
+  ): List<FeatureTaskPhaseSettlement> =
+    databaseSessionFactory.read { it.featureTaskPhaseSettlements.history(workflowId, phaseId) }
+
   override fun delete(
     workflowId: String,
     phaseId: String,

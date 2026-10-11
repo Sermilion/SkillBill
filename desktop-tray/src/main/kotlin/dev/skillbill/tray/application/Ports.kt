@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface BoardSource {
   fun setExecutableOverride(path: String?)
-  suspend fun board(retention: Retention): Outcome<Board>
-  suspend fun detail(identity: WorkIdentity): Outcome<Detail>
+  suspend fun board(retention: Retention, cursor: String? = null): Outcome<Board>
+  suspend fun detail(identity: WorkIdentity, cursor: String? = null): Outcome<Detail>
   suspend fun refresh()
   suspend fun nextRefresh()
   fun acceptBoard(board: Board) = Unit
@@ -49,6 +49,8 @@ data class DashboardState(
   val detailExtrasStale: Boolean = false,
   val trayProblem: Problem? = null,
   val trayProbeComplete: Boolean = false,
+  val boardLoading: Boolean = true,
+  val detailLoading: Boolean = false,
 )
 
 data class DisplayDurations(val goalMs: Long?, val subtaskId: String?, val subtaskMs: Long?)
@@ -56,6 +58,8 @@ data class DisplayDurations(val goalMs: Long?, val subtaskId: String?, val subta
 interface DashboardModel {
   val state: StateFlow<DashboardState>
   fun refresh()
+  fun loadMoreBoard()
+  fun loadMoreDetail()
   fun select(identity: WorkIdentity)
   fun updateSettings(settings: AppSettings)
   fun chooseTab(tab: String)

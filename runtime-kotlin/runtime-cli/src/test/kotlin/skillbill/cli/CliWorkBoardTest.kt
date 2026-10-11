@@ -9,8 +9,113 @@ import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class CliWorkBoardTest {
+  @Test
+  fun `board pages keep their observation time and return every repository once`() {
+    val home = Files.createTempDirectory("cli-work-board-pages")
+    val dbPath = home.resolve("metrics.db")
+    val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
+    val now = Instant.now()
+    val roots = List(3) { Files.createTempDirectory("board-page-repo-$it") }
+    database.transaction { unit ->
+      roots.forEachIndexed { index, root ->
+        unit.standalonePhaseStatuses.register(
+          StandalonePhaseStatusRegistration(
+            repositoryIdentity = "repo-root-realpath-v1:${root.toRealPath()}",
+            branchCorrelation = "feature/pages",
+            issueKey = null,
+            workflowId = null,
+            invocationId = "page-$index",
+            phaseId = "review",
+            executionId = "page-execution-$index",
+            lifecycleState = "active",
+            currentStep = "review",
+            startedAt = now.minusSeconds(index.toLong()),
+            leaseOwner = "page-owner-$index",
+            leaseGeneration = 1,
+            leaseExpiresAt = now.plusSeconds(600),
+          ),
+        )
+      }
+    }
+    val received = mutableListOf<String>()
+    var cursor: String? = null
+    var observedAt: String? = null
+    do {
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "work", "board", "--page-size", "1") +
+            (cursor?.let { listOf("--cursor", it) } ?: emptyList()),
+          CliRuntimeContext(environment = emptyMap(), userHome = home),
+        )
+      assertEquals(0, result.exitCode, result.stdout)
+      val payload = decodeJsonObject(result.stdout)
+      val page = payload["items"] as List<*>
+      assertEquals(1, page.size)
+      assertEquals(1, payload["page_size"])
+      received += (page.single() as Map<*, *>)["repository_root"] as String
+      if (observedAt == null) observedAt = payload["observed_at"] as String
+      assertEquals(observedAt, payload["observed_at"])
+      cursor = payload["next_cursor"] as String?
+      assertTrue(received.size <= roots.size)
+      if (received.size < roots.size) assertNotNull(cursor)
+    } while (cursor != null)
+    assertEquals(roots.map { it.toRealPath().toString() }, received)
+
+    val invalid =
+      CliRuntime.run(
+        listOf("--db", dbPath.toString(), "work", "board", "--cursor", "invalid!"),
+        CliRuntimeContext(environment = emptyMap(), userHome = home),
+      )
+    assertEquals(1, invalid.exitCode)
+    assertTrue(
+      invalid.stderr.contains(
+        "Invalid board continuation cursor",
+      ) || invalid.stdout.contains("Invalid board continuation cursor"),
+    )
+  }
+
+  @Test
+  fun `expired standalone monitor does not remain running on the work board`() {
+    val home = Files.createTempDirectory("cli-work-board-expired-monitor")
+    val repo = Files.createTempDirectory("cli-work-board-monitor-repo")
+    val dbPath = home.resolve("metrics.db")
+    val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
+    val now = Instant.now()
+    database.transaction {
+      it.standalonePhaseStatuses.register(
+        StandalonePhaseStatusRegistration(
+          repositoryIdentity = "repo-root-realpath-v1:${repo.toRealPath()}",
+          branchCorrelation = "feature/monitor",
+          issueKey = null,
+          workflowId = null,
+          invocationId = "expired-monitor",
+          phaseId = "monitor",
+          executionId = "expired-monitor-execution",
+          lifecycleState = "active",
+          currentStep = "monitor",
+          startedAt = now.minusSeconds(3600),
+          leaseOwner = "dead-owner",
+          leaseGeneration = 1,
+          leaseExpiresAt = now.minusSeconds(1800),
+        ),
+      )
+    }
+    val result =
+      CliRuntime.run(
+        listOf("--db", dbPath.toString(), "work", "board", "--format", "json"),
+        CliRuntimeContext(environment = emptyMap(), userHome = home),
+      )
+    assertEquals(0, result.exitCode, result.stdout)
+    val item = (decodeJsonObject(result.stdout)["items"] as List<*>).single() as Map<*, *>
+    val snapshot = item["snapshot"] as Map<*, *>
+    assertEquals("paused", snapshot["lifecycle_state"])
+    assertEquals("runner_interrupted", snapshot["current_step"].let { it as Map<*, *> }["id"])
+  }
+
   @Test
   fun `board includes live standalone work from more than one repository`() {
     val home = Files.createTempDirectory("cli-work-board-home")
@@ -55,7 +160,7 @@ class CliWorkBoardTest {
       setOf(repoOne.toRealPath().toString(), repoTwo.toRealPath().toString()),
       items.map { (it as Map<*, *>)["repository_root"] }.toSet(),
     )
-    assertEquals("1.0", payload["contract_version"])
+    assertEquals("1.1", payload["contract_version"])
   }
 
   @Test

@@ -46,6 +46,8 @@ internal fun terminalBlockedReasonFrom(
     return null
   }
   val summary = (outputMap[SharedPayloadKeys.SUMMARY] as? String).orEmpty().trim()
+  val produced = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
+  val fullReason = (produced?.get(SharedPayloadKeys.VALUE) as? String)?.trim()?.takeIf(String::isNotBlank)
   val blockingReasons =
     (outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)
       ?.get("blocking_reasons")
@@ -58,7 +60,7 @@ internal fun terminalBlockedReasonFrom(
       }
       .orEmpty()
   val detail =
-    (listOf(summary) + blockingReasons)
+    (listOf(fullReason ?: summary) + blockingReasons)
       .filter(String::isNotBlank)
       .joinToString("; ")
   val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)

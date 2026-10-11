@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import java.time.Duration
 import java.time.Instant
 
@@ -30,6 +31,8 @@ enum class WorkBoardCompletionSource(val wireValue: String) {
 data class WorkBoardRequest(
   val finishedWithin: WorkBoardWindow = WorkBoardWindow.TWENTY_FOUR_HOURS,
   val observedAt: Instant? = null,
+  val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
+  val cursor: String? = null,
 )
 
 data class WorkBoardItem(
@@ -52,4 +55,6 @@ data class WorkBoardResult(
   val items: List<WorkBoardItem>,
   val diagnostics: List<WorkBoardDiagnostic> = emptyList(),
   val absentDatabase: Boolean = false,
+  val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
+  val nextCursor: String? = null,
 )

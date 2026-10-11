@@ -22,8 +22,63 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class CliWorkDetailTest {
+  @Test
+  fun `detail execution history returns bounded pages without dropping earlier invocations`() {
+    val home = Files.createTempDirectory("cli-detail-pages")
+    val repo = Files.createTempDirectory("cli-detail-pages-repo")
+    val dbPath = home.resolve("metrics.db")
+    val database = sqliteSessionFactoryForTests(home, dbPath.toString(), emptyMap())
+    val now = Instant.now()
+    database.transaction { unit ->
+      repeat(3) { index ->
+        unit.standalonePhaseStatuses.register(
+          StandalonePhaseStatusRegistration(
+            repositoryIdentity = "repo-root-realpath-v1:${repo.toRealPath()}",
+            branchCorrelation = "feature/detail-pages",
+            issueKey = "SKILL-500",
+            workflowId = null,
+            invocationId = "detail-invocation-$index",
+            phaseId = "review",
+            executionId = "detail-execution-$index",
+            lifecycleState = "completed",
+            currentStep = "review",
+            startedAt = now.minusSeconds(60 - index.toLong()),
+            leaseOwner = "detail-owner-$index",
+            leaseGeneration = 1,
+            leaseExpiresAt = now.plusSeconds(600),
+          ),
+        )
+      }
+    }
+    var cursor: String? = null
+    var observedAt: String? = null
+    val invocations = mutableListOf<String>()
+    do {
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "work", "detail", "detail-invocation-2", "--page-size", "1") +
+            (cursor?.let { listOf("--cursor", it) } ?: emptyList()),
+          CliRuntimeContext(environment = emptyMap(), userHome = home),
+        )
+      assertEquals(0, result.exitCode, result.stdout)
+      val payload = decodeJsonObject(result.stdout)
+      val item = payload["item"] as Map<*, *>
+      val history = item["execution_history"] as List<*>
+      assertEquals(1, history.size)
+      invocations += (history.single() as Map<*, *>)["invocation_id"] as String
+      if (observedAt == null) observedAt = payload["observed_at"] as String
+      assertEquals(observedAt, payload["observed_at"])
+      cursor = payload["next_cursor"] as String?
+      assertTrue(invocations.size <= 3)
+      if (invocations.size < 3) assertNotNull(cursor)
+    } while (cursor != null)
+    assertEquals(listOf("detail-invocation-2", "detail-invocation-1", "detail-invocation-0"), invocations)
+  }
+
   @Test
   fun `workflow backed plan keeps its invocation and pipeline after board retention expires`() {
     val home = Files.createTempDirectory("cli-work-detail-backed-plan")

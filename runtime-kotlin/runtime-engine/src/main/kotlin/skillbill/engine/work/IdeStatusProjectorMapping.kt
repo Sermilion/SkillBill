@@ -32,12 +32,9 @@ internal fun goalCurrentSubtask(
       id = subtaskId.toString(),
       startedAt =
         projection.currentChildWorkflowId?.takeIf(String::isNotBlank)?.let { workflowId ->
-          context.unitOfWork.workList.list(limit = null)
-            .firstOrNull { it.workflowId == workflowId }
-            ?.startedAt
-            ?: parseInstantOrNull(
-              context.unitOfWork.workflowStates.getFeatureTaskWorkflow(workflowId)?.startedAt,
-            )
+          parseInstantOrNull(
+            context.unitOfWork.workflowStates.getFeatureTaskWorkflow(workflowId)?.startedAt,
+          )
         },
       activeDurationMs = projection.recordedSubtaskActiveDurationMs(),
       activeDurationAsOf = projection.liveSubtaskActiveDurationAnchor(),
@@ -116,7 +113,8 @@ internal fun goalShowsOpenCiMonitor(
   lifecycle: IdeStatusLifecycleState,
 ): Boolean =
   goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
-    projection?.executionLiveness != ExecutionLiveness.LIVE &&
+    projection?.executionLiveness == ExecutionLiveness.LIVE &&
+    projection.currentStep in setOf(OPEN_CI_MONITOR_STEP, "monitor_fix") &&
     lifecycle == IdeStatusLifecycleState.ACTIVE
 
 internal fun goalProjectsLiveFinalizationStep(
@@ -162,8 +160,6 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 }
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
-
-internal const val OPEN_CI_MONITOR_ACTIVITY: String = "CI not fixed"
 
 private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 

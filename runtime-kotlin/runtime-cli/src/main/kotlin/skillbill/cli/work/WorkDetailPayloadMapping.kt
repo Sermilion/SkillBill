@@ -6,6 +6,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.identity.status.IdeStatusPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
 import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
+import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.WorktreeEditSource
@@ -32,6 +33,20 @@ internal fun workDetailItemWireMap(
     put(WorkBoardPayloadKeys.FINISHED_AT, item.finishedAt?.toString())
     put(WorkBoardPayloadKeys.FINISHED_AT_SOURCE, item.finishedAtSource?.wireValue)
     put(WorkDetailPayloadKeys.STEP_PIPELINE, item.stepPipeline)
+    put(
+      WorkDetailPayloadKeys.EXECUTION_HISTORY,
+      item.executionHistory.map { instance ->
+        mapOf(
+          IdeStatusPayloadKeys.INVOCATION_ID to instance.invocationId,
+          IdeStatusPayloadKeys.EXECUTION_ID to instance.executionId,
+          IdeStatusPayloadKeys.LIFECYCLE_STATE to instance.lifecycleState,
+          WorkflowWirePayloadKeys.STARTED_AT to instance.startedAt.toString(),
+          WorkflowWirePayloadKeys.UPDATED_AT to instance.updatedAt.toString(),
+          WorkBoardPayloadKeys.FINISHED_AT to instance.finishedAt?.toString(),
+          WorkDetailPayloadKeys.EXECUTION_RESULT to instance.result,
+        )
+      },
+    )
     item.runtimeStatus?.let { status ->
       put(WorkDetailPayloadKeys.PHASES, status.phases.map(::phaseWireMap))
       put(WorkDetailPayloadKeys.CURRENT_PHASE, status.currentPhase)
@@ -39,7 +54,7 @@ internal fun workDetailItemWireMap(
       put(WorkDetailPayloadKeys.PENDING_COUNT, status.pendingCount)
       put(WorkDetailPayloadKeys.BLOCKED_COUNT, status.blockedCount)
     }
-    item.goalManifest?.let { putAll(goalManifestWireMap(it, item.goalFinishPipeline)) }
+    item.goalManifest?.let { putAll(goalManifestWireMap(it, item.goalFinishPipeline, item.pageOffset, item.pageSize)) }
     item.goalStatus?.let { putAll(goalStatusWireMap(it)) }
   }
 
@@ -59,12 +74,14 @@ private fun phaseWireMap(phase: WorkDetailPhase): Map<String, Any?> =
 private fun goalManifestWireMap(
   manifest: DecompositionManifest,
   finishPipeline: List<String>,
+  offset: Int,
+  pageSize: Int,
 ): Map<String, Any?> =
   linkedMapOf(
     WorkDetailPayloadKeys.FEATURE_TITLE to manifest.featureName,
     WorkDetailPayloadKeys.GOAL_FINISH_PIPELINE to finishPipeline,
     WorkDetailPayloadKeys.SUBTASKS to
-      manifest.subtasks.map { subtask ->
+      manifest.subtasks.drop(offset).take(pageSize).map { subtask ->
         linkedMapOf(
           SharedPayloadKeys.SUBTASK_ID to subtask.id,
           DecompositionPlanningPayloadKeys.NAME to subtask.name,

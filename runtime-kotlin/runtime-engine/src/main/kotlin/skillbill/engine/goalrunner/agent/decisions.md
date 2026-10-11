@@ -57,3 +57,16 @@ Reason: Returning a conflict after a write would commit partial preparation stat
 Context: The base branch added transactional planning and phase-output migration while SKILL-399 replaced schema exception classes and preparation repository return types.
 Decision: Keep migration admission before planning reads and child ownership acquisition. Adapt its reads and guarded catches to the coded failures and typed results. Preserve source checks, transaction ownership, rollback, and import history. Use scoped replan for stale planning conflicts. Unsupported or corrupt records retain their saved bytes and report the repair needed to resume.
 Reason: A version mismatch with a supported conversion must recover through migration before classification can stop execution. Hard-reset guidance and exception-message classification would bypass that recovery. This preserves the base behavior under A7 and P5 without widening a catch or weakening a guard.
+
+
+## [2026-10-11] Resume blocked planning after bundle authoring
+Context: A plan can write its decomposition manifest and then fail the outside-bundle scope guard. The existing-manifest refusal previously prevented a key-only retry of that incomplete plan.
+Decision: Resolve the repository-scoped plan continuation before refusing an existing manifest. A resumable plan re-enters its own plan step; completed-plan settlement and refusal of unrelated existing manifests retain their existing behavior.
+Reason: An authored manifest does not prove that planning settled. The CLI regression creates this failure and proves that retry keeps one workflow, skips preplan and saves both implementation checkpoints.
+
+## Ignore unrelated edits when settling a plan
+
+On 2026-10-11, the operator removed the rule that blocked plan settlement when
+other files changed during planning. Shared worktrees can receive concurrent edits.
+The plan still verifies its authored bundle and rejects bundle paths that escape
+its directory. Unrelated worktree changes do not determine bundle readiness.

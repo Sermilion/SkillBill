@@ -1,5 +1,7 @@
 package skillbill.cli
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_VERSION
@@ -10,6 +12,8 @@ import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,6 +37,57 @@ class CliPhasePlanRuntimeTest {
   @AfterTest
   fun cleanUp() {
     tempDir.toFile().deleteRecursively()
+  }
+
+  @Test
+  fun `blocked planning resumes its own authored manifest without rerunning preplan`() {
+    installGoalBuildPack(tempDir)
+    val launcher = PhasePlanLauncher(tempDir, incompleteFirstBundle = true)
+    val arguments = listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY)
+    val context = fixture.context(launcher = launcher).copy(repositoryRoot = tempDir)
+    val first = CliRuntime.run(arguments + listOf("split the work", "--agent", "codex"), context)
+    assertEquals(1, first.exitCode, first.stdout + first.stderr)
+    assertContains(first.stdout, "Readiness problem")
+
+    val resumed = CliRuntime.run(arguments + listOf("--agent", "codex"), context)
+    assertEquals(0, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertEquals(listOf("preplan", "plan", "plan"), launcher.phaseIds)
+    assertEquals(1, rowCount("feature_task_workflows"))
+    assertEquals(2, rowCount("goal_subtask_plans"))
+    val board = CliRuntime.run(listOf("--db", fixture.dbPath.toString(), "work", "board", "--format", "json"), context)
+    val boardPayload = requireNotNull(JsonCodec.parseObjectOrNull(board.stdout))
+    val items = boardPayload["items"] as JsonArray
+    assertEquals(1, items.size, board.stdout)
+    val detail =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "work", "detail", resumedWorkflowId(), "--format", "json"),
+        context,
+      )
+    assertEquals(0, detail.exitCode, detail.stdout + detail.stderr)
+    val detailPayload = requireNotNull(JsonCodec.parseObjectOrNull(detail.stdout))
+    val item = detailPayload["item"] as JsonObject
+    assertEquals(2, (item["execution_history"] as JsonArray).size, detail.stdout)
+  }
+
+  @Test
+  fun `phase plan completes despite concurrent edits outside its bundle`() {
+    installGoalBuildPack(tempDir)
+    val launcher = PhasePlanLauncher(tempDir, dirtyOutsideBundle = true)
+    val git =
+      object : WorkflowGitOperations by GoalTestWorkflowGitOperations {
+        override fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult =
+          WorkflowGitOperationResult.Ok(
+            if (Files.exists(repoRoot.resolve("outside-plan.txt"))) "?? outside-plan.txt" else "",
+          )
+      }
+    val result =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "split the work", "--agent", "codex"),
+        fixture.context(launcher = launcher, workflowGitOperations = git).copy(repositoryRoot = tempDir),
+      )
+    assertEquals(0, result.exitCode, result.stdout + result.stderr)
+    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals("Concurrent edit", Files.readString(tempDir.resolve("outside-plan.txt")))
   }
 
   @Test
@@ -94,6 +149,16 @@ class CliPhasePlanRuntimeTest {
     assertGoalStartsAtImplementation(launcher)
   }
 
+  private fun resumedWorkflowId(): String =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT workflow_id FROM feature_task_workflows").use { rows ->
+          check(rows.next())
+          rows.getString(1)
+        }
+      }
+    }
+
   private fun assertGoalStartsAtImplementation(launcher: PhasePlanLauncher) {
     val implementation = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
     val goal =
@@ -147,6 +212,8 @@ class CliPhasePlanRuntimeTest {
 
   private class PhasePlanLauncher(
     private val repoRoot: Path,
+    private val dirtyOutsideBundle: Boolean = false,
+    private val incompleteFirstBundle: Boolean = false,
   ) : AgentRunLauncher {
     val phaseIds = mutableListOf<String>()
 
@@ -160,6 +227,9 @@ class CliPhasePlanRuntimeTest {
         }
       phaseIds += phaseId
       val stdout = if (phaseId == "plan") authorBundle() else phasePlanningPayload(phaseId)
+      if (dirtyOutsideBundle && phaseIds.count { it == "plan" } == 1 && phaseId == "plan") {
+        Files.writeString(repoRoot.resolve("outside-plan.txt"), "Concurrent edit")
+      }
       return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
     }
 
@@ -167,6 +237,7 @@ class CliPhasePlanRuntimeTest {
       val bundle = seededBundle()
       Files.writeString(bundle.resolve("spec.md"), specText("Parent", "The split work completes."))
       SUBTASK_FILES.forEach { (id, fileName) ->
+        if (incompleteFirstBundle && phaseIds.count { it == "plan" } == 1 && id == 2) return@forEach
         Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works."))
       }
       Files.writeString(

@@ -29,6 +29,33 @@ import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryTest {
   @Test
+  fun `nested reads share a snapshot and release it after failure`() {
+    val tempDir = Files.createTempDirectory("skillbill-nested-read")
+    val database = boundDatabase(tempDir, tempDir.resolve("metrics.db"))
+    val workflowId = "wftr-nested-read"
+    val initial = workflowRecord(workflowId)
+    database.transaction { it.workflowStates.saveFeatureTaskWorkflow(initial, RUNTIME) }
+
+    assertFailsWith<IllegalStateException> {
+      database.read { outer ->
+        assertEquals("running", outer.workflowStates.getFeatureTaskWorkflow(workflowId)?.workflowStatus)
+        database.transaction {
+          it.workflowStates.saveFeatureTaskWorkflow(initial.copy(workflowStatus = "completed"), RUNTIME)
+        }
+        database.read { nested ->
+          assertEquals("running", nested.workflowStates.getFeatureTaskWorkflow(workflowId)?.workflowStatus)
+        }
+        database.readIfPresent { nested ->
+          assertEquals("running", nested.workflowStates.getFeatureTaskWorkflow(workflowId)?.workflowStatus)
+        }
+        error("end read")
+      }
+    }
+
+    assertEquals("completed", database.read { it.workflowStates.getFeatureTaskWorkflow(workflowId)?.workflowStatus })
+  }
+
+  @Test
   fun `transaction maps write SQLException to ACCESS database failure`() {
     val tempDir = Files.createTempDirectory("skillbill-write-sql")
     val dbPath = tempDir.resolve("metrics.db")

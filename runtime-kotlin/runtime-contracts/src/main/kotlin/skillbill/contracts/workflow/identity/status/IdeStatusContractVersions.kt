@@ -7,10 +7,11 @@ import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKe
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.3"
-const val WORK_BOARD_CONTRACT_VERSION: String = "1.0"
-const val WORK_DETAIL_CONTRACT_VERSION: String = "1.0"
+const val WORK_BOARD_CONTRACT_VERSION: String = "1.1"
+const val WORK_DETAIL_CONTRACT_VERSION: String = "1.1"
 
 object IdeStatusPayloadKeys {
+  const val LIFECYCLE_STATE = "lifecycle_state"
   const val BRANCH_CORRELATION = "branch_correlation"
   const val EXECUTION_SCOPE = "execution_scope"
   const val EXECUTION_ID = "execution_id"
@@ -22,6 +23,8 @@ object IdeStatusPayloadKeys {
 }
 
 object WorkBoardPayloadKeys {
+  const val PAGE_SIZE = "page_size"
+  const val NEXT_CURSOR = "next_cursor"
   const val ITEMS = "items"
   const val OBSERVED_AT = "observed_at"
   const val FINISHED_WITHIN = "finished_within"
@@ -38,6 +41,10 @@ object WorkBoardPayloadKeys {
 }
 
 object WorkDetailPayloadKeys {
+  const val PAGE_SIZE = WorkBoardPayloadKeys.PAGE_SIZE
+  const val NEXT_CURSOR = WorkBoardPayloadKeys.NEXT_CURSOR
+  const val EXECUTION_HISTORY = "execution_history"
+  const val EXECUTION_RESULT = "result"
   const val OBSERVED_AT = WorkBoardPayloadKeys.OBSERVED_AT
   const val ITEM = "item"
   const val PROBLEM = WorkBoardPayloadKeys.PROBLEM
@@ -79,3 +86,8 @@ object WorkDetailPayloadKeys {
 }
 
 const val GOAL_PLANNING_WAVE_CAP: Int = 5
+
+object WorkPaginationLimits {
+  const val DEFAULT_PAGE_SIZE = 20
+  const val MAX_PAGE_SIZE = 100
+}

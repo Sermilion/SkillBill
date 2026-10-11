@@ -60,6 +60,31 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
     }
   }
 
+  override fun history(
+    workflowId: String,
+    phaseId: String,
+  ): List<FeatureTaskPhaseSettlement> =
+    connection.prepareStatement(
+      "SELECT workflow_id, phase_id, attempt, kind, envelope_json, recorded_at " +
+        "FROM feature_task_phase_settlements WHERE workflow_id = ? AND phase_id = ? ORDER BY attempt DESC",
+    ).use { statement ->
+      statement.bindAll(workflowId, phaseId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) add(
+            FeatureTaskPhaseSettlement(
+              rows.getString("workflow_id"),
+              rows.getString("phase_id"),
+              rows.getInt("attempt"),
+              FeatureTaskPhaseSettlementKind.fromWire(rows.getString("kind")),
+              rows.getString("envelope_json"),
+              rows.getString("recorded_at"),
+            ),
+          )
+        }
+      }
+    }
+
   override fun delete(
     workflowId: String,
     phaseId: String,

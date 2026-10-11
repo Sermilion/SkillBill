@@ -21,6 +21,27 @@ import kotlin.test.assertNull
 
 class GoalRunnerValidationEvidenceProjectionTest {
   @Test
+  fun `detail pagination projects validation only for the selected subtask ids`() {
+    val manifest =
+      manifest(2).let { original ->
+        original.copy(subtasks = original.subtasks.map { it.copy(status = "complete") })
+      }
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = InMemoryGoalManifestStore(manifest),
+        outcomeStore = RecordingOutcomeStore(),
+      )
+    val result =
+      requireNotNull(
+        service.status(
+          GoalRunnerStatusRequest(issueKey = manifest.issueKey, completedSubtaskValidationIds = setOf(2)),
+        ),
+      )
+    assertEquals(listOf(2), result.completedSubtaskValidation.map { it.subtaskId })
+    assertEquals(2, result.completeCount)
+  }
+
+  @Test
   fun `completed subtask status derives the validation result from the validate envelope status`() {
     data class Case(
       val envelopeStatus: String,

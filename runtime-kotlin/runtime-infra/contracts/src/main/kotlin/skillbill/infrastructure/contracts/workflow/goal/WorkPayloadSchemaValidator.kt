@@ -8,6 +8,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WORK_DETAIL_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.status.WorkBoardPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkDetailPayloadKeys
 import skillbill.error.shellcontent.invalidWorkBoardSchemaError
 import skillbill.error.shellcontent.invalidWorkDetailSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
@@ -46,7 +47,10 @@ class WorkPayloadSchemaValidator : WorkPayloadValidator {
         throw failure(sourceLabel, board, "Work payload must be valid JSON.", error)
       }
     val errors = ClasspathContractSchemaLoader.validate(schema, instance)
-    if (errors.isEmpty()) return
+    if (errors.isEmpty()) {
+      validatePageBounds(instance, sourceLabel, board)
+      return
+    }
     val orderedErrors = errors.sortedWith(violationOrdering)
     val first = orderedErrors.first()
     val reason = formatValidationReason(orderedErrors, instance)
@@ -54,6 +58,32 @@ class WorkPayloadSchemaValidator : WorkPayloadValidator {
       invalidWorkBoardSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
     } else {
       invalidWorkDetailSchemaError(sourceLabel, first.instanceLocation?.toString().orEmpty(), reason)
+    }
+  }
+
+  private fun validatePageBounds(
+    instance: JsonNode,
+    sourceLabel: String,
+    board: Boolean,
+  ) {
+    val pageSize = instance.path(WorkBoardPayloadKeys.PAGE_SIZE).asInt()
+    val lists =
+      if (board) {
+        listOf(instance.path(WorkBoardPayloadKeys.ITEMS))
+      } else {
+        val item = instance.path(WorkDetailPayloadKeys.ITEM)
+        listOf(
+          item.path(WorkDetailPayloadKeys.SUBTASKS),
+          item.path(WorkDetailPayloadKeys.PHASES),
+          item.path(WorkDetailPayloadKeys.EXECUTION_HISTORY),
+          item.path(WorkDetailPayloadKeys.COMPLETED_SUBTASK_VALIDATION),
+        )
+      }
+    if (lists.any { it.isArray && it.size() > pageSize }) {
+      throw failure(sourceLabel, board, "A work list exceeds the requested page size.")
+    }
+    if (instance.has(WorkBoardPayloadKeys.PROBLEM) && !instance.path(WorkBoardPayloadKeys.NEXT_CURSOR).isNull) {
+      throw failure(sourceLabel, board, "A failed work lookup must not include a continuation cursor.")
     }
   }
 

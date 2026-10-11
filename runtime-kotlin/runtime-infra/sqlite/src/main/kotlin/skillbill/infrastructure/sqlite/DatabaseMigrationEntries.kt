@@ -719,4 +719,29 @@ internal val databaseMigrations: List<DatabaseMigration> =
       name = "add-standalone-phase-status-authority",
       operation = StandalonePhaseStatusMigration::apply,
     ),
+    DatabaseMigration(
+      version = 51,
+      name = "index-feature-task-workflow-issue-lookup",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_issue_key " +
+              "ON feature_task_workflows(UPPER(issue_key))",
+          )
+          statement.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_normalized_issue_key " +
+              "ON feature_task_workflows(UPPER(TRIM(issue_key)))",
+          )
+          statement.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_missing_issue_key " +
+              "ON feature_task_workflows(issue_key) WHERE issue_key IS NULL",
+          )
+          statement.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feature_task_workflows_goal_parent " +
+              "ON feature_task_workflows(CASE WHEN json_valid(artifacts_json) " +
+              "THEN json_extract(artifacts_json, '$.goal_continuation.parent_workflow_id') END)",
+          )
+        }
+      },
+    ),
   )

@@ -9,17 +9,24 @@ version = "0.1.0"
 
 kotlin { jvmToolchain(21) }
 
+val desktopJavaHome = javaToolchains.launcherFor {
+  languageVersion.set(JavaLanguageVersion.of(21))
+}.get().metadata.installationPath.asFile.absolutePath
+
+configurations.configureEach {
+  exclude(group = "dev.nucleusframework", module = "nucleus.decorated-window-tao")
+}
+
 dependencies {
   implementation(compose.desktop.currentOs)
   implementation(compose.material3)
   implementation(compose.materialIconsExtended)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.kotlinx.coroutines.core)
+  implementation(libs.kotlinx.coroutines.swing)
   implementation(libs.compose.native.tray)
-  implementation(libs.compose.native.tray.app)
   implementation(libs.nucleus.notification.common)
   implementation(libs.nucleus.application)
-  implementation(libs.nucleus.decorated.window.tao)
   implementation(libs.nucleus.autolaunch)
   testImplementation(kotlin("test"))
   testImplementation(libs.junit.jupiter)
@@ -30,6 +37,7 @@ tasks.test { useJUnitPlatform() }
 compose.desktop {
   application {
     mainClass = "dev.skillbill.tray.composition.MainKt"
+    javaHome = desktopJavaHome
     if (System.getProperty("os.name").contains("mac", true)) {
       jvmArgs("-XstartOnFirstThread")
     }
@@ -48,6 +56,19 @@ compose.desktop {
 }
 
 val appImageToolVersion = "1.9.1"
+if (System.getProperty("os.name").contains("linux", true)) {
+  val linuxTrayDirectory = layout.buildDirectory.dir("generated/linuxTray")
+  val compileLinuxTrayNative by tasks.registering(Exec::class) {
+    inputs.file("src/main/native/linux/build-tray.sh")
+    outputs.dir(linuxTrayDirectory.map { it.dir("resources") })
+    commandLine("bash", "src/main/native/linux/build-tray.sh",
+      linuxTrayDirectory.get().asFile.absolutePath, desktopJavaHome)
+  }
+  tasks.processResources {
+    dependsOn(compileLinuxTrayNative)
+    from(linuxTrayDirectory.map { it.dir("resources") })
+  }
+}
 val macTrayNativeOutput = layout.buildDirectory.file("generated/macosTray/libskillbilltray.dylib")
 val compileMacTrayNative by tasks.registering(Exec::class) {
   val source = layout.projectDirectory.file("src/main/native/macos/MacStatusItemBridge.m")
@@ -56,7 +77,7 @@ val compileMacTrayNative by tasks.registering(Exec::class) {
   onlyIf { System.getProperty("os.name").contains("mac", true) }
   doFirst {
     macTrayNativeOutput.get().asFile.parentFile.mkdirs()
-    val javaHome = System.getProperty("java.home")
+    val javaHome = desktopJavaHome
     commandLine("clang", "-dynamiclib", "-undefined", "dynamic_lookup", "-framework", "AppKit", "-I$javaHome/include", "-I$javaHome/include/darwin",
       source.asFile.absolutePath, "-o", macTrayNativeOutput.get().asFile.absolutePath)
   }

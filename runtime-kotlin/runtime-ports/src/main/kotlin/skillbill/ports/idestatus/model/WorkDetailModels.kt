@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.time.Instant
@@ -14,6 +15,8 @@ enum class WorkDetailProblemCode(val wireValue: String) {
 data class WorkDetailRequest(
   val id: String,
   val observedAt: Instant? = null,
+  val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
+  val cursor: String? = null,
 ) {
   init {
     require(id.isNotBlank()) { "id is required." }
@@ -24,6 +27,8 @@ data class WorkDetailResult(
   val observedAt: Instant,
   val item: WorkDetailItem? = null,
   val problem: WorkDetailProblem? = null,
+  val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
+  val nextCursor: String? = null,
 )
 
 data class WorkDetailProblem(
@@ -41,6 +46,10 @@ data class WorkDetailItem(
   val goalFinishPipeline: List<String> = emptyList(),
   val runtimeStatus: WorkDetailRuntimeStatus? = null,
   val goalStatus: GoalRunnerStatusProjection? = null,
+  val executionHistory: List<WorkExecutionInstance> = emptyList(),
+  val pageOffset: Int = 0,
+  val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
+  val hasMore: Boolean = false,
 )
 
 data class WorkDetailRuntimeStatus(
@@ -61,4 +70,14 @@ data class WorkDetailPhase(
   val continuationKind: String?,
   val launchedModel: String?,
   val effort: String?,
+)
+
+data class WorkExecutionInstance(
+  val invocationId: String,
+  val executionId: String,
+  val lifecycleState: String,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val finishedAt: Instant?,
+  val result: String?,
 )

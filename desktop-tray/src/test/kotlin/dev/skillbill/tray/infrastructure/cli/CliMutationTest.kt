@@ -19,7 +19,7 @@ class CliMutationTest {
     val temp = Files.createTempDirectory("skillbill-cli-mutation")
     val capture = temp.resolve("args.txt")
     val script = temp.resolve("skill-bill")
-    Files.writeString(script, "#!/bin/sh\nprintf '%s\\n' \"\$@\" >> '${capture}'\nif [ \"\$1\" = work ]; then printf '%s' '{\"contract_version\":\"1.0\",\"items\":[],\"observed_at\":\"2026-10-11T10:00:00Z\",\"finished_within\":\"24h\",\"diagnostics\":[]}'; exit 0; fi\necho PRIVATE_STDOUT\necho PRIVATE_STDERR >&2\nexit 7\n")
+    Files.writeString(script, "#!/bin/sh\nprintf '%s\\n' \"\$@\" >> '${capture}'\nif [ \"\$1\" = work ]; then printf '%s' '{\"contract_version\":\"1.1\",\"page_size\":10,\"next_cursor\":null,\"items\":[],\"observed_at\":\"2026-10-11T10:00:00Z\",\"finished_within\":\"24h\",\"diagnostics\":[]}'; exit 0; fi\necho PRIVATE_STDOUT\necho PRIVATE_STDERR >&2\nexit 7\n")
     script.toFile().setExecutable(true)
     val source = CliBoardSource(resolver = CliResolver())
     source.setExecutableOverride(script.toString())
@@ -32,7 +32,7 @@ class CliMutationTest {
     assertEquals("command_failed", failure.problem.code)
     assertFalse(failure.problem.summary.contains("PRIVATE"))
     source.stop(item)
-    assertEquals(listOf("work", "board", "--format", "json", "--finished-within", "24h", "goal", "pause", "SKILL-418", "--repo-root", "/repo with spaces", "goal", "stop", "SKILL-418", "--repo-root", "/repo with spaces"), Files.readAllLines(capture))
+    assertEquals(listOf("work", "board", "--format", "json", "--finished-within", "24h", "--page-size", "10", "goal", "pause", "SKILL-418", "--repo-root", "/repo with spaces", "goal", "stop", "SKILL-418", "--repo-root", "/repo with spaces"), Files.readAllLines(capture))
   }
 
   private fun item() = WorkItem(

@@ -15,10 +15,9 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 compose-native-tray = { module = "dev.nucleusframework:composenativetray", version.ref = "tray" }
-compose-native-tray-app = { module = "dev.nucleusframework:composenativetray-app", version.ref = "tray" }
 nucleus-notification-common = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "native-os" }
 nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "native-os" }
-nucleus-decorated-window-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "native-os" }
 nucleus-autolaunch = { module = "dev.nucleusframework:nucleus.autolaunch", version.ref = "native-os" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }

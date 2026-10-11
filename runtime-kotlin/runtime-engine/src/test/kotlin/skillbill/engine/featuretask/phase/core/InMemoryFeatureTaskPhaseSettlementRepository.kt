@@ -17,6 +17,12 @@ class InMemoryFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlementR
     attempt: Int,
   ): FeatureTaskPhaseSettlement? = rows[key(workflowId, phaseId, attempt)]
 
+  override fun history(
+    workflowId: String,
+    phaseId: String,
+  ): List<FeatureTaskPhaseSettlement> =
+    rows.values.filter { it.workflowId == workflowId && it.phaseId == phaseId }.sortedByDescending { it.attempt }
+
   override fun delete(
     workflowId: String,
     phaseId: String,

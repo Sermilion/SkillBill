@@ -119,7 +119,7 @@ class IdeStatusServiceGoalProjectionTest {
 
     assertEquals("implement", result.snapshot.currentStep.id)
     assertEquals("implement", result.snapshot.currentStep.label)
-    assertEquals("Goal SKILL-148 is active on implement.", result.snapshot.summary)
+    assertEquals("Goal SKILL-148 is idle.", result.snapshot.summary)
     assertEquals(GoalPlanningStatusState.PREPARED, result.snapshot.planning?.state)
   }
 
@@ -170,7 +170,7 @@ class IdeStatusServiceGoalProjectionTest {
 
     assertEquals("implement", result.snapshot.currentStep.id)
     assertEquals("implement", result.snapshot.currentStep.label)
-    assertEquals("Goal SKILL-148 is active on implement.", result.snapshot.summary)
+    assertEquals("Goal SKILL-148 is idle.", result.snapshot.summary)
     assertNull(result.snapshot.planning)
     assertFalse(result.snapshot.toStatusWireMap().containsKey("planning"))
   }
@@ -196,6 +196,30 @@ class IdeStatusServiceGoalProjectionTest {
     assertEquals(IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME, result.snapshot.workflowFamily)
     assertNull(result.snapshot.planning)
     assertFalse(result.snapshot.toStatusWireMap().containsKey("planning"))
+  }
+
+  @Test
+  fun `blocked goal board includes durable subtask reason without an active child pause`() {
+    val fixture = gitRepoFixture("ide-status-goal-durable-block-reason")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val reason = "Provide the sandbox credential before validation can resume"
+    val state = goalManifestState(fixture, identity, childWorkflowId = "w-child")
+    val blocked =
+      state.copy(
+        manifest =
+          state.manifest.copy(
+            subtasks =
+              state.manifest.subtasks.map { subtask ->
+                if (subtask.id == 2) subtask.copy(status = "blocked", blockedReason = reason) else subtask
+              },
+          ),
+      )
+    val service =
+      ideStatusService(goalOnlyDatabase(goalState = "blocked"), manifestStore = StubGoalManifestStore(blocked))
+    val result = service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    assertEquals(IdeStatusLifecycleState.BLOCKED, result.snapshot.lifecycleState)
+    assertEquals(reason, result.snapshot.pauseReason?.label)
+    assertEquals(reason, nestedWireMap(result.snapshot.toStatusWireMap(), "pause_reason")["label"])
   }
 
   @Test
@@ -244,28 +268,28 @@ class IdeStatusServiceGoalProjectionTest {
   }
 
   @Test
-  fun `active goal candidate with an unconsumed pause request stays active and reports the request`() {
+  fun `goal without a live runner remains idle while reporting an unconsumed pause request`() {
     val wire =
       goalWireMapUnderControls(
         "ide-status-goal-active-pause-requested",
         GoalRunnerControlState(pauseRequested = true),
       ) { result ->
-        assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+        assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
       }
 
-    assertEquals("active", wire["lifecycle_state"])
+    assertEquals("idle", wire["lifecycle_state"])
     assertEquals(true, wire["pause_requested"])
     assertFalse(wire.containsKey("paused_at"))
   }
 
   @Test
-  fun `plain active goal emits neither pause signal`() {
+  fun `idle goal emits neither pause signal`() {
     val wire =
       goalWireMapUnderControls(
         "ide-status-goal-active-no-pause",
         GoalRunnerControlState(),
       ) { result ->
-        assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+        assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
       }
 
     assertFalse(wire.containsKey("pause_requested"))
@@ -279,7 +303,7 @@ class IdeStatusServiceGoalProjectionTest {
         "ide-status-goal-active-duration-unrecorded",
         GoalRunnerControlState(),
       ) { result ->
-        assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+        assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
       }
 
     assertFalse(wire.containsKey("active_duration_ms"))
@@ -296,7 +320,7 @@ class IdeStatusServiceGoalProjectionTest {
           activeDurationAsOf = "2026-08-06T09:00:00Z",
         ),
       ) { result ->
-        assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+        assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
       }
 
     assertEquals(90_000L, wire["active_duration_ms"])
@@ -619,6 +643,8 @@ class IdeStatusServiceGoalProjectionTest {
     assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
     assertEquals("monitor", result.snapshot.currentStep.id)
     assertEquals("Goal SKILL-148 is active on monitor.", result.snapshot.summary)
+    assertNull(result.snapshot.execution)
+    assertFalse(result.snapshot.toStatusWireMap().containsKey("current_activity"))
   }
 
   private fun zeroAc46ManifestState(

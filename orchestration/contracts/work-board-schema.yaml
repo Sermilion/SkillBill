@@ -3,11 +3,18 @@ $id: "https://skill-bill.dev/contracts/work-board-schema.yaml"
 title: "Machine-wide work board"
 type: object
 additionalProperties: false
-required: [contract_version, items, observed_at, finished_within, diagnostics]
+required: [contract_version, items, observed_at, finished_within, diagnostics, page_size, next_cursor]
 properties:
   contract_version:
     type: string
-    const: "1.0"
+    const: "1.1"
+  page_size:
+    type: integer
+    minimum: 1
+    maximum: 100
+  next_cursor:
+    type: [string, "null"]
+    minLength: 1
   items:
     type: array
     items:

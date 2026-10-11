@@ -16,3 +16,9 @@ Alternatives considered: Keeping the registry with attach/detach was rejected as
 Context: Atomic execution-plan admission acquires a worker lease inside an existing SQLite write transaction. Starting a second BEGIN there fails.
 Decision: Worker acquisition joins the caller's owned transaction when present. Standalone acquisition still opens its own write transaction.
 Reason: The workflow advance and worker lease must commit or roll back together. Joining the existing transaction preserves that ownership and keeps standalone acquisition atomic.
+
+
+## [2026-10-11] Bound nested status reads to one read transaction
+Context: A board request repeatedly opened SQLite connections through nested status services. Issue and parent lookup queries also scanned large workflow artifacts for each historical goal.
+Decision: Index both stored issue-key forms, missing-key fallback candidates and guarded parent identities. Select execution candidates through indexed issue ids. Synchronous nested reads on the same factory and thread reuse the outer read transaction, with thread state removed in finally. Write transactions retain their separate ownership.
+Reason: One status request needs a consistent snapshot and bounded connection lifetime. Reopening connections and rescanning unrelated artifacts amplified work across the complete workflow history. The snapshot regression proves that nested reads retain the outer view and that the next request sees committed writes after an exception.

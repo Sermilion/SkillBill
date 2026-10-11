@@ -81,6 +81,9 @@ data class Detail(
   val attempts: DetailAttempts = DetailAttempts(),
   val validation: List<SubtaskValidation> = emptyList(),
   val latestActivity: LatestActivity = LatestActivity(),
+  val executionHistory: List<ExecutionInstance> = emptyList(),
+  val observedAt: Instant? = null,
+  val nextCursor: String? = null,
 )
 
 data class DetailAttempts(
@@ -137,6 +140,7 @@ data class Board(
   val items: List<WorkItem>,
   val problem: Problem? = null,
   val diagnostics: List<String> = emptyList(),
+  val nextCursor: String? = null,
 )
 
 data class Problem(val code: String, val summary: String)
@@ -159,3 +163,13 @@ val allowedTransitions = listOf("blocked", "failed", "goal_completed", "pause_to
 val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_completed" to true, "pause_took_effect" to true, "standalone_phase_finished" to false)
 
 fun WorkItem.ongoing(): Boolean = lifecycle == Lifecycle.ACTIVE || lifecycle == Lifecycle.BLOCKED || lifecycle == Lifecycle.PAUSED
+
+data class ExecutionInstance(
+  val invocationId: String,
+  val executionId: String,
+  val lifecycleState: String,
+  val startedAt: Instant,
+  val updatedAt: Instant,
+  val finishedAt: Instant?,
+  val result: String?,
+)

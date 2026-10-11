@@ -49,6 +49,13 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         finishedThrough: Instant,
       ): List<StandalonePhaseStatusRecord> = emptyList()
 
+      override fun readPhaseExecutions(
+        repositoryIdentity: String,
+        phaseId: String,
+      ): List<StandalonePhaseStatusRecord> = emptyList()
+
+      override fun readWorkflowExecutions(workflowId: String): List<IdeStatusWorkflowExecution> = emptyList()
+
       override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? = null
 
       override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? = null

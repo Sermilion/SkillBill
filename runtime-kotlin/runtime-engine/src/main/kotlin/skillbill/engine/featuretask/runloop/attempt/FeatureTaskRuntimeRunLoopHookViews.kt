@@ -32,6 +32,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object FeatureTaskRuntimeRunLoopHookViews {
   internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(
@@ -53,9 +54,13 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   ) : LaunchView(context),
     PhasePlanningLaunchContext {
     override fun existingBundleReason(): String? =
-      context.decompositionPlanner
-        .existingManifest(request.repoRoot, request.issueKey)
-        ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
+      if (request.skeletonDefinition == SkeletonDefinition.PLAN) {
+        null
+      } else {
+        context.decompositionPlanner
+          .existingManifest(request.repoRoot, request.issueKey)
+          ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
+      }
   }
 
   private open class LaunchView(

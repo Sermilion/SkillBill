@@ -13,6 +13,11 @@ object UnavailableFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlem
     attempt: Int,
   ): FeatureTaskPhaseSettlement? = unavailable()
 
+  override fun history(
+    workflowId: String,
+    phaseId: String,
+  ): List<FeatureTaskPhaseSettlement> = unavailable()
+
   override fun delete(
     workflowId: String,
     phaseId: String,
