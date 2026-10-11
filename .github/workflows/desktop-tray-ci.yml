@@ -25,5 +25,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - name: Install Linux tray build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libsystemd-dev
       - name: Run desktop checks
         run: (cd desktop-tray && ./gradlew clean check --no-build-cache)
