@@ -17,6 +17,7 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -35,6 +36,48 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeStatusServiceGoalProjectionTest {
+  @Test
+  fun `reopened goal ignores historical completion in status and work detail`() {
+    listOf("running", "completed").forEach { parentState ->
+      val fixture = gitRepoFixture("ide-status-resumed-goal-$parentState")
+      val identity = testGoalRepositoryIdentity(fixture)
+      val service =
+        ideStatusService(
+          TrackingDatabase(
+            work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, parentState, "2026-08-06T10:00:00Z")),
+            workflows = IdeStatusWorkflowStates(),
+            controls =
+              object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+                override fun controlState(parentWorkflowId: String) =
+                  GoalRunnerControlState(
+                    repositoryIdentity = identity,
+                    goalCompletedAt = "2026-08-06T09:00:00Z",
+                  )
+              },
+          ),
+          manifestStore =
+            StubGoalManifestStore(
+              goalManifestState(fixture, identity, childWorkflowId = ""),
+              planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+              lease = liveLease(),
+            ),
+        )
+
+      val snapshot =
+        service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt)).snapshot
+      assertEquals(IdeStatusLifecycleState.ACTIVE, snapshot.lifecycleState)
+      assertEquals("implement", snapshot.currentStep.id)
+      assertEquals("Goal SKILL-148 is active on implement.", snapshot.summary)
+      assertEquals(1, snapshot.progress?.completed)
+      assertEquals(2, snapshot.progress?.total)
+
+      val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+      assertEquals(IdeStatusLifecycleState.ACTIVE, detail.snapshot.lifecycleState)
+      assertNull(detail.finishedAt)
+      assertNull(detail.finishedAtSource)
+    }
+  }
+
   @Test
   fun `running goal whose parent lease expired projects idle or active without operator pause`() {
     val fixture = gitRepoFixture("ide-status-goal-lease-expired")

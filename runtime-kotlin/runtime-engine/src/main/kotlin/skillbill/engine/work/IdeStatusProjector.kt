@@ -168,7 +168,8 @@ class IdeStatusProjector(
         ),
       )
     val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(manifestState.parentWorkflowId).goalCompletedAt != null
+      context.unitOfWork.goalRunnerControls.controlState(manifestState.parentWorkflowId).goalCompletedAt != null &&
+        projection?.hasUnfinishedSubtasks() != true
     val goalCandidate =
       candidate.copy(
         workflowId = manifestState.parentWorkflowId,
@@ -210,7 +211,8 @@ class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
   ): IdeStatusSnapshot {
     val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null
+      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null &&
+        projection?.hasUnfinishedSubtasks() != true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
@@ -291,16 +293,22 @@ class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
     completionRecorded: Boolean,
   ): IdeStatusLifecycleState {
-    if (completionRecorded || candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL) {
+    val candidateLifecycle =
+      if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL && projection?.hasUnfinishedSubtasks() == true) {
+        IdeStatusLifecycleState.ACTIVE
+      } else {
+        candidate.lifecycleState
+      }
+    if (completionRecorded || candidateLifecycle == IdeStatusLifecycleState.TERMINAL) {
       return IdeStatusLifecycleState.TERMINAL
     }
-    if (candidate.lifecycleState == IdeStatusLifecycleState.PAUSED &&
+    if (candidateLifecycle == IdeStatusLifecycleState.PAUSED &&
       projection?.executionLiveness == ExecutionLiveness.LIVE && !projection.paused
     ) {
       return IdeStatusLifecycleState.ACTIVE
     }
     return when {
-      candidate.lifecycleState != IdeStatusLifecycleState.ACTIVE -> candidate.lifecycleState
+      candidateLifecycle != IdeStatusLifecycleState.ACTIVE -> candidateLifecycle
       projection?.paused == true -> IdeStatusLifecycleState.PAUSED
       projection?.executionLiveness != ExecutionLiveness.LIVE -> IdeStatusLifecycleState.IDLE
       else -> IdeStatusLifecycleState.ACTIVE
