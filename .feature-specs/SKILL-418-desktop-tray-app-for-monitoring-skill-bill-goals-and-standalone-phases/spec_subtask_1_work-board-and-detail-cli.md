@@ -4,7 +4,7 @@
 
 Land the two read-only JSON commands and everything they need to emit schema-valid payloads: YAML contracts, Kotlin versions, payload keys, failure codes, classpath locators, validators, engine query paths, CLI wiring on the existing `work` group, and the tests named under test obligations.
 
-Add `WorkBoardCommand` and `WorkDetailCommand` next to `WorkListCommand` and `WorkStatusCommand` in `WorkTopLevelCommands` (`runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/work/WorkCliCommands.kt`), already wired through `CliCommandGroups.kt` as `CliMiscCommands(workCommands.command)`. Command names: `board` and `detail`.
+Add `WorkBoardCommand` and `WorkDetailCommand` next to `WorkListCommand` and `WorkStatusCommand` in `WorkTopLevelCommands` (`../../runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/work/WorkCliCommands.kt`), already wired through `CliCommandGroups.kt` as `CliMiscCommands(workCommands.command)`. Command names: `board` and `detail`.
 
 Board is machine-wide, like `work list`. It has no `--repo-root`. Options: `--format json` only (copy `WorkStatusCommand`'s format rule; implement confirms the exact reject path) and `--finished-within` with values `6h`, `24h`, `7d`, default `24h`.
 
@@ -69,7 +69,7 @@ CLI tests use the same harness as `CliWorkStatusTest.kt`: `CliRuntime.run(listOf
 
 ### Runtime coding rules
 
-No `//` or block comments in runtime Kotlin. KDoc only on interfaces. Wire keys only via Keys objects. Loud-fail typed `SkillBillRuntimeException`. Follow `AGENTS.md` Runtime Contract Schemas, `docs/architecture-guidelines.md`, `runtime-kotlin/ARCHITECTURE.md`, and `docs/code-principles.md`.
+No `//` or block comments in runtime Kotlin. KDoc only on interfaces. Wire keys only via Keys objects. Loud-fail typed `SkillBillRuntimeException`. Follow `../../AGENTS.md` Runtime Contract Schemas, `docs/architecture-guidelines.md`, `runtime-kotlin/ARCHITECTURE.md`, and `docs/code-principles.md`.
 
 Production edits may include engine, ports, sqlite adapter, contracts, CLI, and the tests named here. Do not edit `intellij-plugin` or VS Code plugin trees. Do not expand this subtask into the desktop app.
 

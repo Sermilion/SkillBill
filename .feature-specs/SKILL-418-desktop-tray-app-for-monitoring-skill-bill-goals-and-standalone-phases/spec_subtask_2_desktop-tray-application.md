@@ -2,21 +2,21 @@
 
 ## Scope
 
-Create top-level `desktop-tray`, a Compose Multiplatform Desktop Gradle build on JDK 21, not included in `runtime-kotlin/settings.gradle.kts` (there is no root `settings.gradle.kts`; do not add one that includes the runtime). Pattern: `intellij-plugin/settings.gradle.kts` (own `rootProject.name`, own `pluginManagement`) and `intellij-plugin/build.gradle.kts` `kotlin.jvmToolchain(21)`.
+Create top-level `desktop-tray`, a Compose Multiplatform Desktop Gradle build on JDK 21, not included in `../../runtime-kotlin/settings.gradle.kts` (there is no root `settings.gradle.kts`; do not add one that includes the runtime). Pattern: `intellij-plugin/settings.gradle.kts` (own `rootProject.name`, own `pluginManagement`) and `intellij-plugin/build.gradle.kts` `kotlin.jvmToolchain(21)`.
 
 The app reads only through the skill-bill CLI: poll `work board`, fetch `work detail`, invoke existing `goal pause` / `goal stop`. It never opens SQLite.
 
-Ship UI 2a–2j from `design/App/Skill Bill Tray v2.dc.html`, architecture tests, start at login, a path-filtered GitHub workflow analogous to `.github/workflows/plugin-ci.yml`, and installer files `.dmg`, `.msi`, `.deb`, `.rpm`, AppImage. Unsigned unless the operator supplies signing secrets.
+Ship UI 2a–2j from `design/App/Skill Bill Tray v2.dc.html`, architecture tests, start at login, a path-filtered GitHub workflow analogous to `../../.github/workflows/plugin-ci.yml`, and installer files `.dmg`, `.msi`, `.deb`, `.rpm`, AppImage. Unsigned unless the operator supplies signing secrets.
 
 ## Implementation details
 
 ### Gradle sibling and layering
 
-Packages, inward deps, matching `intellij-plugin/ARCHITECTURE.md`: domain, application, infrastructure (CLI adapter + prefs), presentation, ui, composition. Presentation must not import infrastructure. Domain and application must not import `ProcessBuilder`, `java.lang.Process`, or Compose/AWT windowing. No `skillbill.infrastructure.sqlite`, `skillbill.ports.db`, JDBC, or SQLite anywhere in the app.
+Packages, inward deps, matching `../../intellij-plugin/ARCHITECTURE.md`: domain, application, infrastructure (CLI adapter + prefs), presentation, ui, composition. Presentation must not import infrastructure. Domain and application must not import `ProcessBuilder`, `java.lang.Process`, or Compose/AWT windowing. No `skillbill.infrastructure.sqlite`, `skillbill.ports.db`, JDBC, or SQLite anywhere in the app.
 
 Base package: `dev.skillbill.tray`. Implement confirms against the IntelliJ plugin group and keeps `dev.skillbill.*`.
 
-Architecture tests copy the source-scan style of `intellij-plugin/src/test/kotlin/dev/skillbill/intellij/architecture/PluginArchitectureTest.kt` (presentation→infrastructure ban, forbidden process/JSON/filesystem tokens in presentation, forbidden runtime persistence imports). Do not edit that plugin test.
+Architecture tests copy the source-scan style of `../../intellij-plugin/src/test/kotlin/dev/skillbill/intellij/architecture/PluginArchitectureTest.kt` (presentation→infrastructure ban, forbidden process/JSON/filesystem tokens in presentation, forbidden runtime persistence imports). Do not edit that plugin test.
 
 Compose Multiplatform Gradle plugin version is the current stable at implement time. Native tray: pick a maintained library that supports macOS, Windows, and Linux StatusNotifierItem and can position a Compose popup against the icon. Reject `java.awt.SystemTray`. Record the coordinate in `desktop-tray` Gradle version catalog or an architecture note in that tree.
 
@@ -26,7 +26,7 @@ Resolution order: settings override, then PATH including the login shell PATH (G
 
 Poll `skill-bill work board --format json --finished-within <retention>`. Fetch `skill-bill work detail <id> --format json` when the main window needs the extras. Poll interval 5, 15 (default), 30, 60 seconds.
 
-Pause and stop: exactly `skill-bill goal pause <KEY> --repo-root <root>` and `skill-bill goal stop <KEY> --repo-root <root>`. Safety, copied from `intellij-plugin/README.md` Goal controls and `intellij-plugin/ARCHITECTURE.md` Goal controls:
+Pause and stop: exactly `skill-bill goal pause <KEY> --repo-root <root>` and `skill-bill goal stop <KEY> --repo-root <root>`. Safety, copied from `../../intellij-plugin/README.md` Goal controls and `intellij-plugin/ARCHITECTURE.md` Goal controls:
 
 - Show only for an active feature-goal with an issue key.
 - Disable Pause when `pause_requested` is true.
@@ -73,7 +73,7 @@ Standalone phase 2e: `step_pipeline` from the detail payload, current activity, 
 
 ### CI and installers
 
-Add a GitHub workflow analogous to `.github/workflows/plugin-ci.yml`: path-filter the `desktop-tray` tree and run `(cd desktop-tray && ./gradlew clean check --no-build-cache)` on `ubuntu-latest` with JDK 21 Temurin. Do not fold the app into `runtime-kotlin/gradlew check`. `plugin-release.yml` is the artifact-copy pattern; a tray release workflow can wait until installer tasks exist in this same subtask, then copy that pattern if it is a small addition. Do not publish to stores.
+Add a GitHub workflow analogous to `../../.github/workflows/plugin-ci.yml`: path-filter the `desktop-tray` tree and run `(cd desktop-tray && ./gradlew clean check --no-build-cache)` on `ubuntu-latest` with JDK 21 Temurin. Do not fold the app into `runtime-kotlin/gradlew check`. `plugin-release.yml` is the artifact-copy pattern; a tray release workflow can wait until installer tasks exist in this same subtask, then copy that pattern if it is a small addition. Do not publish to stores.
 
 Installers: `.dmg`, `.msi`, `.deb`, `.rpm`, AppImage. Unsigned in CI. Table 2j's signed `.dmg` is overridden by the non-goal: no code signing beyond producing installer files, unless the operator supplies secrets (do not block on missing secrets).
 
@@ -83,7 +83,7 @@ Behavioral mapping in this spec and the parent spec is binding. Visual layout au
 
 ## Acceptance Criteria
 
-1. `desktop-tray/` is a Compose Multiplatform Desktop Gradle build with JDK 21 toolchain, own settings, and no include from `runtime-kotlin/settings.gradle.kts`. Packages are domain, application, infrastructure, presentation, ui, composition under `dev.skillbill.tray` (or the confirmed `dev.skillbill.*` prefix). Architecture tests ban presentation→infrastructure imports, process/JSON/filesystem tokens in presentation, process APIs in domain/application, and SQLite/JDBC/`skillbill.ports.db` anywhere in the app.
+1. `desktop-tray/` is a Compose Multiplatform Desktop Gradle build with JDK 21 toolchain, own settings, and no include from `../../runtime-kotlin/settings.gradle.kts`. Packages are domain, application, infrastructure, presentation, ui, composition under `dev.skillbill.tray` (or the confirmed `dev.skillbill.*` prefix). Architecture tests ban presentation→infrastructure imports, process/JSON/filesystem tokens in presentation, process APIs in domain/application, and SQLite/JDBC/`skillbill.ports.db` anywhere in the app.
 2. Native tray is not `java.awt.SystemTray`. It uses a StatusNotifierItem-capable backend on Linux and anchors the popover to the icon on macOS, Windows, and Linux. Icon states idle, running with count, needs you, failed; macOS template icon with count text; Windows/Linux overlay badge. Menu 2b groups Goals and Phases and includes Open Skill Bill, History, Refresh now, Settings, Quit.
 3. Popover 2a/2a′ shows poll age from `observed_at`, Running / Needs you / Done 24h counts as defined in Implementation details, Goals and Phases tabs with counts and attention dot, persisted last tab, goal sort and row fields including locally ticking clocks and stale treatment, and phase rows including last-hour finished phases.
 4. CLI resolution follows override, login-shell PATH, `SKILL_BILL_BIN_DIR`, `~/.local/bin`, plus `.bat`/`.cmd` on Windows. Board poll passes `--finished-within` matching retention. Detail is fetched for the main-window extras. Settings persist poll interval (default 15s) and retention (default 24h).
