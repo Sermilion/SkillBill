@@ -1,3 +1,13 @@
+## [2026-10-11] SKILL-417 subtask 3 IDE post-child monitor acceptance
+Areas: intellij-plugin/src/main/kotlin/dev/skillbill/intellij/application, intellij-plugin/src/test/kotlin/dev/skillbill/intellij/application; paired change in intellij-plugin and vscode-extension
+- StatusRefreshCoordinator lets a lower-sequence Active or Paused workflow monitor replace a displayed Active workflow implement snapshot when executionId differs.
+- Both IDE coordinators follow the same bounded exception after repository, branch, and status-store correlation checks. Older standalone live snapshots still lose.
+- Reusable pattern: keep post-child acceptance in a coordinator-local predicate; runtime selection owns which workflow snapshot each poll returns.
+- Added matching 0AC-46 polling regressions for the child implement to goal monitor transition. Done replacement and same-execution resurrection guards remain.
+- No wire or shared-interface changes. Requires the runtime-selected goal monitor snapshot from subtask 2; this exception does not cover other incoming phases or missing sequences.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-10] SKILL-416 subtask 2 — Plugin accept live over Done
 Areas: intellij-plugin/application, intellij-plugin/src/test/kotlin/dev/skillbill/intellij/application
 - StatusRefreshCoordinator.acceptsNewerStatus accepts incoming Active, Paused, or Blocked over a displayed Done for the same repositoryIdentity, branchCorrelation, and statusStoreId when executionId differs, even if incoming runSequence is lower or null.

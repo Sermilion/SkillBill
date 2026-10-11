@@ -32,7 +32,7 @@ internal fun PhaseQualityGateCycleContext.gateCheckpoint(run: PhaseRun): String?
 
 internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<String> =
   FeatureTaskRuntimeRunLoopValidationScope
-    .validationChangedPaths(
+    .validationBranchPaths(
       RepositoryCheckpointResolutionArgs(
         gitOperations = gitOperations,
         qualityGateCycles = qualityGateCycles,

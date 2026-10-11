@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS
 import skillbill.engine.featuretask.runner.operatorDecisionPause
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
@@ -67,6 +68,7 @@ class IdeStatusProjector(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
+  private val manifestStore: GoalRunnerManifestStore,
   private val diagnostics: RuntimeDiagnostics,
 ) {
   private val workflowEngine = WorkflowEngine()
@@ -78,7 +80,8 @@ class IdeStatusProjector(
     candidate.standaloneStatus?.let { return projectStandalonePhase(context, it) }
     return when (candidate.workflowFamily) {
       IdeStatusWorkflowFamily.FEATURE_GOAL -> projectGoal(candidate, context)
-      IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME -> projectRuntime(candidate, context)
+      IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ->
+        goalBackedRuntimeSnapshot(candidate, context) ?: projectRuntime(candidate, context)
       IdeStatusWorkflowFamily.FEATURE_VERIFY ->
         projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY)
     }
@@ -150,6 +153,35 @@ class IdeStatusProjector(
       else -> IdeStatusLifecycleState.FAILED
     }
 
+  private fun goalBackedRuntimeSnapshot(
+    candidate: IdeStatusCandidate,
+    context: IdeStatusProjectionContext,
+  ): IdeStatusSnapshot? {
+    val issueKey = candidate.issueKey ?: return null
+    val manifestState = manifestStore.readByIssueKey(issueKey, context.repoRoot) ?: return null
+    val projection =
+      goalRunnerStatusService.status(
+        GoalRunnerStatusRequest(
+          issueKey = issueKey,
+          repoRoot = context.repoRoot,
+        ),
+      )
+    val completionRecorded =
+      context.unitOfWork.goalRunnerControls.controlState(manifestState.parentWorkflowId).goalCompletedAt != null
+    val goalCandidate =
+      candidate.copy(
+        workflowId = manifestState.parentWorkflowId,
+        workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
+        isGoalAuthoritative = true,
+      )
+    val preliminaryLifecycle = goalLifecycle(goalCandidate, projection, completionRecorded)
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
+    if (!goalShowsOpenCiMonitor(projection, completionRecorded, preliminaryLifecycle) && !liveFinalization) {
+      return null
+    }
+    return assembleGoalStatusSnapshot(goalCandidate, context, issueKey, projection)
+  }
+
   private fun projectGoal(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
@@ -181,6 +213,7 @@ class IdeStatusProjector(
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
     val freshness =
       if (openCiMonitor) {
         IdeStatusFreshness.FRESH
@@ -188,7 +221,16 @@ class IdeStatusProjector(
         IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt)
       }
     val step =
-      goalCurrentStep(planningStep, childContext.currentPhaseId, projection?.currentStep, lifecycle, openCiMonitor)
+      goalCurrentStep(
+        planningStep,
+        childContext.currentPhaseId,
+        projection?.currentStep,
+        lifecycle,
+        GoalCurrentStepSignals(
+          openCiMonitor = openCiMonitor,
+          liveFinalizationStep = liveFinalization,
+        ),
+      )
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,

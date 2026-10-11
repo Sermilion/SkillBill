@@ -234,7 +234,7 @@ private fun acceptsNewerStatus(
     val currentSequence = currentExecution.runSequence ?: return isLiveOverDone(current, incoming)
     val incomingSequence = incomingExecution.runSequence ?: return isLiveOverDone(current, incoming)
     val sequenceOrder = compareDecimalStrings(incomingSequence, currentSequence)
-    if (sequenceOrder < 0) return isLiveOverDone(current, incoming)
+    if (sequenceOrder < 0) return isLiveOverDone(current, incoming) || isPostChildMonitor(current, incoming)
     if (sequenceOrder > 0) return true
     if (currentExecution.executionId != incomingExecution.executionId) return false
     val currentRevision = currentExecution.statusRevision ?: return false
@@ -242,6 +242,22 @@ private fun acceptsNewerStatus(
     if (compareDecimalStrings(incomingRevision, currentRevision) < 0) return false
     if (isTerminal(current) && current::class != incoming::class) return false
     return true
+}
+
+private fun isPostChildMonitor(
+    current: SkillBillStatusOutcome,
+    incoming: SkillBillStatusOutcome,
+): Boolean {
+    val incomingIsMonitor = when (incoming) {
+        is SkillBillStatusOutcome.Active -> incoming.currentStepId == "monitor"
+        is SkillBillStatusOutcome.Paused -> incoming.currentStepId == "monitor"
+        else -> false
+    }
+    val incomingExecution = incoming.executionMetadata()
+    return current is SkillBillStatusOutcome.Active && current.currentStepId == "implement" &&
+        current.execution?.executionScope == "workflow" &&
+        incomingIsMonitor && incomingExecution?.executionScope == "workflow" &&
+        current.execution?.executionId != incomingExecution?.executionId
 }
 
 private fun isTerminal(outcome: SkillBillStatusOutcome): Boolean = when (outcome) {

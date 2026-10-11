@@ -27,12 +27,12 @@ class InstallerShellDelegationTest {
   }
 
   @Test
-  fun `installer shell builds base-only all-agent runtime apply argv`() {
-    val run = runInstallerShell(input = "1\nall\nbase only\noff\nskip\n")
+  fun `installer shell builds all-pack all-agent runtime apply argv`() {
+    val run = runInstallerShell(input = "1\nall\noff\nskip\n")
 
     assertEquals(
       expectedApplyArgs(
-        ExpectedApply(run, agentMode = "manual", platformMode = "none", telemetry = "off", mcp = "register"),
+        ExpectedApply(run, agentMode = "manual", platformMode = "all", telemetry = "off", mcp = "register"),
       ) +
         listOf(
           "--agent",
@@ -57,7 +57,7 @@ class InstallerShellDelegationTest {
 
   @Test
   fun `installer copy-in materializes self-contained source so deleting the clone keeps skills resolving`() {
-    val run = runInstallerShell(input = "1\nclaude\nbase only\noff\nskip\n")
+    val run = runInstallerShell(input = "1\nclaude\noff\nskip\n")
 
     assertCopyInPopulatedRealFiles(run)
 
@@ -136,48 +136,28 @@ class InstallerShellDelegationTest {
   }
 
   @Test
-  fun `installer shell builds selected platform runtime apply argv`() {
-    val run = runInstallerShell(input = "1\ncodex\nkotlin\nfull\nskip\n")
+  fun `installer shell installs all packs without consuming a platform prompt`() {
+    val run = runInstallerShell(input = "1\ncodex\nfull\nskip\n")
 
     assertEquals(
       expectedApplyArgs(
-        ExpectedApply(run, agentMode = "manual", platformMode = "selected", telemetry = "full", mcp = "register"),
+        ExpectedApply(run, agentMode = "manual", platformMode = "all", telemetry = "full", mcp = "register"),
       ) +
         listOf(
           "--agent",
           "codex",
           "--agent-target",
           "codex=${run.home.resolve("agent-targets/codex")}",
-          "--platform",
-          "kotlin",
         ),
       run.applyArgs,
     )
-  }
-
-  @Test
-  fun `installer shell selected platform argv comes from discovered platform manifests`() {
-    val run = runInstallerShell(input = "1\ncodex\npython\nfull\nskip\n")
-
-    assertEquals(
-      expectedApplyArgs(
-        ExpectedApply(run, agentMode = "manual", platformMode = "selected", telemetry = "full", mcp = "register"),
-      ) +
-        listOf(
-          "--agent",
-          "codex",
-          "--agent-target",
-          "codex=${run.home.resolve("agent-targets/codex")}",
-          "--platform",
-          "python",
-        ),
-      run.applyArgs,
-    )
+    assertFalse(run.output.contains("Enter platforms"))
+    assertFalse(run.output.contains("Available optional platforms"))
   }
 
   @Test
   fun `installer shell builds detected all-platform runtime apply argv`() {
-    val run = runInstallerShell(input = "detected\nall\nanonymous\nskip\n")
+    val run = runInstallerShell(input = "detected\nanonymous\nskip\n")
 
     assertEquals(
       expectedApplyArgs(
@@ -226,7 +206,7 @@ class InstallerShellDelegationTest {
 
   @Test
   fun `from-source keeps gradle skip-build install behavior`() {
-    val run = runInstallerShell(input = "1\nclaude\nbase only\noff\nskip\n", fromSource = true)
+    val run = runInstallerShell(input = "1\nclaude\noff\nskip\n", fromSource = true)
 
     assertContains(run.output, "Installing runtime from source (--from-source)")
     assertFalse(run.output.contains("verified checksum:"), "from-source must not verify release checksums")

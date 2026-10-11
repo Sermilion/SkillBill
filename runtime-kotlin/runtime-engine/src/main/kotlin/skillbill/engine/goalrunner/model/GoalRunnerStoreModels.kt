@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.model
 
+import skillbill.goalrunner.ledger.summary
 import skillbill.goalrunner.model.GoalAttemptLaunchOutcome
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -98,6 +99,11 @@ data class GoalRunnerWorkflowProgress(
     latestLivenessSignal = latestLivenessSignal,
     lastSnapshotUpdatedAt = lastSnapshotUpdatedAt,
   )
+
+  fun resolvedLivenessSignal(stepId: String = currentStepId): String =
+    latestGoalObservabilityEvent?.toObservabilityEvent()?.compactLivenessSummary()
+      ?: latestDurableProgressEvent?.summary()
+      ?: "workflow_status=$workflowStatus; step=$stepId"
 }
 
 data class GoalProgressEventDraft(

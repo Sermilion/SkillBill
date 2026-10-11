@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/colors.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/typography.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/base.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/brand.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/buttons.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/chips.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/forms.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/cards.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/tables.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/article.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/css/layout.css">
+<link rel="stylesheet" href="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/styles.css">
+<script src="_ds/pixel-sakura-design-system-db61f34c-bb56-4cbd-a893-56b400fb826d/_ds_bundle.js"></script>
+<style>
+:root{
+  --ps-bg:#0E0E11; --ps-bg-2:#141417; --ps-surface:#17171B; --ps-surface-2:#1F1F24; --ps-surface-3:#2A2A31;
+  --ps-border:#26262C; --ps-border-strong:#383840;
+  --ps-ink:#EDEDF0; --ps-slate:#9C9CA6; --ps-slate-400:#6A6A74; --ps-ink-800:#08080A;
+  --ps-sakura-500:#E9A81C; --ps-sakura-300:#F3C462; --ps-sakura-700:#F5BC3E; --ps-sakura-800:#FFD166; --ps-sakura-900:#D18F0C;
+  --ps-sakura-50:rgba(233,168,28,0.12); --ps-sakura-100:rgba(233,168,28,0.35);
+  --ps-gold-500:#E2703C; --ps-gold-600:#F49463; --ps-gold-50:rgba(226,112,60,0.12);
+  --ps-success-500:#3FB950; --ps-success-50:rgba(63,185,80,0.14);
+  --ps-danger-500:#F0555B; --ps-danger-600:#F5787D; --ps-danger-50:rgba(240,85,91,0.12);
+  --ps-on-accent:#14100A;
+  --glow-sakura:0 0 18px rgba(233,168,28,0.32);
+  --grad-hero-glow:radial-gradient(120% 80% at 85% -10%, rgba(233,168,28,0.10), transparent 60%);
+  --focus-ring:#E9A81C;
+}
+</style>
+<style>
+body{margin:0;background:#0B0B0D;font-family:var(--font-sans)}
+a{color:var(--color-link);text-decoration:none}
+a:hover{color:var(--color-link-hover)}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(255,255,255,.06);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 24px}
+.dv-tid{font:600 10px var(--font-mono);padding:3px 7px;background:var(--ps-sakura-500);color:var(--ps-on-accent);border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 var(--font-sans);color:var(--ps-ink)}
+.dv-opts{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px var(--font-mono);padding:3px 7px;background:rgba(255,255,255,.08);color:var(--ps-ink);border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 var(--font-sans);color:var(--ps-slate)}
+.dv-opt:target .dv-oid{background:var(--ps-sakura-500);color:var(--ps-on-accent)}
+.dv-next{margin:26px 0 0;font:12px/1.6 var(--font-sans);color:var(--ps-slate-400)}
+@keyframes sb-spin{to{transform:rotate(360deg)}}
+@keyframes sb-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style></helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Skill Bill desktop tray — one direction, built out</span></div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>macOS menu bar popover — all projects at a glance</div>
+<div style="width:400px;background:#0B0B0D;border-radius:16px;padding:0 0 20px">
+  <div style="height:26px;background:rgba(18,18,21,.94);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:flex-end;gap:18px;padding:0 14px;font:500 12px/1 var(--font-sans);color:var(--ps-slate)">
+    <span style="display:flex;align-items:center;gap:6px;color:var(--ps-ink)">
+      <span style="width:9px;height:9px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura)"></span>
+      <span style="font:500 12px var(--font-mono)">4</span>
+    </span>
+    <span>Fri 17:55</span>
+  </div>
+  <div style="height:10px"></div>
+  <div style="width:380px;margin:0 auto;background:var(--ps-surface);border:1px solid var(--ps-border);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.65);overflow:hidden">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--ps-border);background:linear-gradient(180deg,rgba(233,168,28,0.07),transparent)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <img src="docs/assets/skill-bill-app-icon.svg" alt="Skill Bill" width="18" height="18" style="display:block;border-radius:4px;flex:none;">
+        <span style="font:700 15px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Skill Bill</span>
+      </div>
+      <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">updated 4s ago</span>
+    </div>
+
+    <div style="display:flex;gap:0;padding:11px 16px;border-bottom:1px solid var(--ps-border);background:var(--ps-bg-2)">
+      <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+        <span style="font:700 17px/1 var(--font-display);color:var(--ps-sakura-500)">4</span>
+        <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;color:var(--ps-slate-400)">ACTIVE</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+        <span style="font:700 17px/1 var(--font-display);color:var(--ps-gold-500)">1</span>
+        <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;color:var(--ps-slate-400)">BLOCKED</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+        <span style="font:700 17px/1 var(--font-display);color:var(--ps-ink)">2</span>
+        <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;color:var(--ps-slate-400)">QUEUED</span>
+      </div>
+      <div style="flex:1.2;display:flex;flex-direction:column;gap:3px">
+        <span style="font:700 17px/1 var(--font-display);color:var(--ps-ink)">14h 08m</span>
+        <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.12em;color:var(--ps-slate-400)">TOTAL TODAY</span>
+      </div>
+    </div>
+
+    <div style="padding:10px 16px 4px;font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">RUNNING</div>
+
+    <div style="display:flex;flex-direction:column">
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid var(--ps-sakura-500);background:rgba(233,168,28,0.06);cursor:pointer" style-hover="background:rgba(233,168,28,0.11)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura);animation:sb-pulse 1.8s ease-in-out infinite"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">skill-bill</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-sakura-300);background:var(--ps-sakura-50);border:1px solid var(--ps-sakura-100);border-radius:999px;padding:3px 7px">SKILL-15</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-ink)">implement</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>2h 51m</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>20s</span>
+          <span style="margin-left:auto;color:var(--ps-ink)">3/15</span>
+        </div>
+        <div style="height:3px;border-radius:999px;background:var(--ps-surface-3);overflow:hidden">
+          <div style="width:20%;height:100%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura)"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid transparent;border-top:1px solid var(--ps-border);cursor:pointer" style-hover="background:var(--ps-surface-2)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-sakura-500);animation:sb-pulse 1.8s ease-in-out infinite"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">atlas-web</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-sakura-300);background:var(--ps-sakura-50);border:1px solid var(--ps-sakura-100);border-radius:999px;padding:3px 7px">ATL-402</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-ink)">review</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>48m</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>4m 12s</span>
+          <span style="margin-left:auto;color:var(--ps-ink)">9/11</span>
+        </div>
+        <div style="height:3px;border-radius:999px;background:var(--ps-surface-3);overflow:hidden">
+          <div style="width:82%;height:100%;background:var(--ps-sakura-500)"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid transparent;border-top:1px solid var(--ps-border);cursor:pointer" style-hover="background:var(--ps-surface-2)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-sakura-500);animation:sb-pulse 1.8s ease-in-out infinite"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">runtime-kotlin</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-sakura-300);background:var(--ps-sakura-50);border:1px solid var(--ps-sakura-100);border-radius:999px;padding:3px 7px">RT-88</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-ink)">spec</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>12m</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>12m</span>
+          <span style="margin-left:auto;color:var(--ps-ink)">1/8</span>
+        </div>
+        <div style="height:3px;border-radius:999px;background:var(--ps-surface-3);overflow:hidden">
+          <div style="width:12%;height:100%;background:var(--ps-sakura-500)"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid transparent;border-top:1px solid var(--ps-border);cursor:pointer" style-hover="background:var(--ps-surface-2)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ps-slate);background:transparent"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">payments-svc</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-slate);background:var(--ps-surface-2);border:1px solid var(--ps-border-strong);border-radius:999px;padding:3px 7px">PAY-19</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-ink)">paused</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>1h 04m</span>
+          <span style="margin-left:auto;color:var(--ps-ink)">5/12</span>
+        </div>
+        <div style="height:3px;border-radius:999px;background:var(--ps-surface-3);overflow:hidden">
+          <div style="width:42%;height:100%;background:var(--ps-slate)"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid var(--ps-gold-500);border-top:1px solid var(--ps-border);background:rgba(224,123,57,0.07);cursor:pointer" style-hover="background:rgba(224,123,57,0.11)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:8px;height:8px;box-sizing:border-box;border-radius:50%;border:2px solid var(--ps-gold-500)"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">infra-terraform</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-gold-600);border:1px solid rgba(224,123,57,0.5);border-radius:999px;padding:3px 7px">INF-7</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-gold-600)">blocked</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>pending_launch</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>ran 7h 26m</span>
+        </div>
+        <div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Awaiting approval on plan revision 2.</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;padding:10px 16px 11px;border-left:2px solid transparent;border-top:1px solid var(--ps-border);cursor:pointer" style-hover="background:var(--ps-surface-2)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-danger-500)"></span>
+          <span style="font:700 13.5px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">design-tokens</span>
+          <span style="font:500 11px/1 var(--font-mono);color:var(--ps-danger-500);border:1px solid rgba(240,85,91,0.45);border-radius:999px;padding:3px 7px">DSN-31</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate)">
+          <span style="color:var(--ps-danger-500)">failed</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>verify</span><span style="color:var(--ps-slate-400)">·</span>
+          <span>ran 22m</span>
+          <span style="margin-left:auto;color:var(--ps-ink)">6/9</span>
+        </div>
+        <div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Contract tests failed on subtask 7.</div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showQueued }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:12px 16px 4px;border-top:1px solid var(--ps-border);font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">QUEUED</div>
+    <div style="display:flex;flex-direction:column;padding:6px 16px 10px;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;opacity:.72">
+        <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-slate-400);width:14px">1</span>
+        <span style="font:600 12.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">atlas-web</span>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">ATL-403</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;opacity:.72">
+        <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-slate-400);width:14px">2</span>
+        <span style="font:600 12.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">skill-bill</span>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">SKILL-16</span>
+      </div>
+    </div>
+    </sc-if>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--ps-border);background:var(--ps-bg-2)">
+      <span style="font:600 12px/1 var(--font-sans);color:var(--ps-sakura-300);cursor:pointer">Open Skill Bill</span>
+      <div style="display:flex;gap:14px;font:400 11.5px/1 var(--font-mono);color:var(--ps-slate-400)">
+        <span style="cursor:pointer">Refresh</span>
+        <span style="cursor:pointer">Settings</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Windows tray flyout — same list, native corner</div>
+<div style="width:400px;background:#0B0B0D;border-radius:16px;padding:20px 0 0;display:flex;flex-direction:column;align-items:center">
+  <div style="width:376px;background:var(--ps-surface);border:1px solid var(--ps-border-strong);border-radius:8px;box-shadow:0 20px 50px rgba(0,0,0,.7);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid var(--ps-border)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <img src="docs/assets/skill-bill-app-icon.svg" alt="Skill Bill" width="16" height="16" style="display:block;border-radius:4px;flex:none;">
+        <span style="font:700 14px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Skill Bill</span>
+        <span style="font:500 10px/1 var(--font-mono);color:var(--ps-slate);border:1px solid var(--ps-border-strong);border-radius:999px;padding:3px 6px">4 active</span>
+      </div>
+      <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">15s poll</span>
+    </div>
+    <div style="display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;border-left:2px solid var(--ps-sakura-500);background:rgba(233,168,28,0.06)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura)"></span>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">skill-bill</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-sakura-300)">SKILL-15</span></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">implement · 2h 51m · 3/15</span>
+        </div>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">›</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--ps-border);border-left:2px solid transparent">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-sakura-500)"></span>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">atlas-web</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-sakura-300)">ATL-402</span></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">review · 48m · 9/11</span>
+        </div>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">›</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--ps-border);border-left:2px solid var(--ps-gold-500);background:rgba(224,123,57,0.07)">
+        <span style="width:8px;height:8px;box-sizing:border-box;border-radius:50%;border:2px solid var(--ps-gold-500)"></span>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">infra-terraform</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-gold-600)">INF-7</span></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">blocked · pending_launch · ran 7h 26m</span>
+        </div>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">›</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--ps-border);border-left:2px solid transparent">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-danger-500)"></span>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">design-tokens</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-danger-500)">DSN-31</span></div>
+          <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">failed · verify · ran 22m</span>
+        </div>
+        <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">›</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 15px;border-top:1px solid var(--ps-border);background:var(--ps-bg-2)">
+      <span style="font:600 12px/1 var(--font-sans);color:var(--ps-sakura-300)">Open Skill Bill</span>
+      <span style="font:400 11.5px/1 var(--font-mono);color:var(--ps-slate-400)">Settings</span>
+    </div>
+  </div>
+  <div style="width:400px;height:40px;margin-top:14px;background:rgba(18,18,21,.96);border-top:1px solid var(--ps-border);border-radius:0 0 16px 16px;display:flex;align-items:center;justify-content:flex-end;gap:14px;padding:0 16px">
+    <span style="display:flex;align-items:center;gap:6px">
+      <img src="docs/assets/skill-bill-app-icon.svg" alt="Skill Bill" width="14" height="14" style="display:block;border-radius:3px;flex:none;">
+      <span style="font:500 11px/1 var(--font-mono);color:var(--ps-ink)">4</span>
+    </span>
+    <span style="font:400 11px/1.3 var(--font-sans);color:var(--ps-slate);text-align:right">17:55<br>08.08.26</span>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div class="dv-opts" style="margin-top:36px">
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Detail window — one goal, full context</div>
+<div style="width:1000px;background:var(--ps-bg);border:1px solid var(--ps-border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;gap:9px;height:38px;padding:0 14px;background:var(--ps-ink-800);border-bottom:1px solid var(--ps-border)">
+    <span style="width:11px;height:11px;border-radius:50%;background:#FF5F57"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#FEBC2E"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#28C840"></span>
+    <span style="flex:1;text-align:center;font:600 12px/1 var(--font-sans);color:var(--ps-slate)">Skill Bill</span>
+    <span style="width:60px"></span>
+  </div>
+
+  <div style="display:flex;min-height:620px">
+
+    <div style="width:262px;flex:none;border-right:1px solid var(--ps-border);background:var(--ps-bg-2);display:flex;flex-direction:column">
+      <div style="padding:14px 14px 10px">
+        <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;background:var(--ps-surface-3);border:1px solid var(--ps-border);border-radius:8px">
+          <span style="font:400 12px/1 var(--font-mono);color:var(--ps-slate-400)">⌕</span>
+          <span style="font:400 12.5px/1 var(--font-sans);color:var(--ps-slate-400)">Filter goals</span>
+        </div>
+      </div>
+      <div style="padding:4px 14px 6px;font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">RUNNING · 4</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;background:var(--ps-surface-2);box-shadow:inset 2px 0 0 var(--ps-sakura-500)">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">skill-bill</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">SKILL-15 · implement</div></div>
+          <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-sakura-300)">3/15</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-sakura-500)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">atlas-web</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">ATL-402 · review</div></div>
+          <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-slate)">9/11</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-sakura-500)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">runtime-kotlin</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">RT-88 · spec</div></div>
+          <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-slate)">1/8</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px">
+          <span style="width:6px;height:6px;border-radius:50%;border:1.5px solid var(--ps-slate)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">payments-svc</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">PAY-19 · paused</div></div>
+          <span style="font:500 10.5px/1 var(--font-mono);color:var(--ps-slate)">5/12</span>
+        </div>
+      </div>
+      <div style="padding:14px 14px 6px;font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">NEEDS ATTENTION · 2</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px">
+          <span style="width:7px;height:7px;box-sizing:border-box;border-radius:50%;border:2px solid var(--ps-gold-500)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">infra-terraform</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-gold-600)">INF-7 · blocked</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-danger-500)"></span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">design-tokens</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-danger-500)">DSN-31 · failed</div></div>
+        </div>
+      </div>
+      <div style="padding:14px 14px 6px;font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">QUEUED · 2</div>
+      <div style="display:flex;flex-direction:column;padding:0 8px 14px">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;opacity:.7">
+          <span style="font:500 10px/1 var(--font-mono);color:var(--ps-slate-400);width:6px">1</span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">atlas-web</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">ATL-403</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;opacity:.7">
+          <span style="font:500 10px/1 var(--font-mono);color:var(--ps-slate-400);width:6px">2</span>
+          <div style="flex:1;min-width:0"><div style="font:700 12.5px/1.3 var(--font-display);color:var(--ps-ink)">skill-bill</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate)">SKILL-16</div></div>
+        </div>
+      </div>
+      <div style="margin-top:auto;padding:12px 14px;border-top:1px solid var(--ps-border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font:400 10.5px/1 var(--font-mono);color:var(--ps-slate-400)">History</span>
+        <span style="font:400 10.5px/1 var(--font-mono);color:var(--ps-slate-400)">Settings</span>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--grad-hero-glow),var(--ps-bg)">
+      <div style="padding:22px 26px 18px;border-bottom:1px solid var(--ps-border)">
+        <div style="display:flex;align-items:flex-start;gap:16px">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="display:inline-flex;align-items:center;gap:6px;font:500 11px/1 var(--font-mono);color:var(--ps-sakura-300);background:var(--ps-sakura-50);border:1px solid var(--ps-sakura-100);border-radius:999px;padding:5px 9px">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura)"></span>active
+              </span>
+              <span style="font:500 11px/1 var(--font-mono);color:var(--ps-slate);border:1px solid var(--ps-border-strong);border-radius:999px;padding:5px 9px">SKILL-15</span>
+              <span style="font:500 11px/1 var(--font-mono);color:var(--ps-gold-600);border:1px solid rgba(224,123,57,0.5);border-radius:999px;padding:5px 9px">feature-goal</span>
+            </div>
+            <h1 style="margin:0;font:700 26px/1.2 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Tray status app for multi-project goal execution</h1>
+            <div style="font:400 12.5px/1 var(--font-mono);color:var(--ps-slate)">skill-bill · ~/dev/oila/skill-bill · feature/skill-15-tray</div>
+          </div>
+          <div style="display:flex;gap:9px;flex:none">
+            <button style="height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-ink);font:600 12.5px/1 var(--font-sans);cursor:pointer" style-hover="border-color:var(--ps-sakura-100);color:var(--ps-sakura-300)">Pause after current subtask</button>
+            <button style="height:34px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:var(--ps-sakura-500);color:var(--ps-on-accent);font:700 12.5px/1 var(--font-sans);cursor:pointer;box-shadow:var(--glow-sakura)" style-hover="background:var(--ps-sakura-700)">Stop goal</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--ps-border)">
+        <div style="padding:16px 20px;border-right:1px solid var(--ps-border);display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">STEP</span>
+          <span style="font:700 20px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">implement</span>
+        </div>
+        <div style="padding:16px 20px;border-right:1px solid var(--ps-border);display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">GOAL ELAPSED</span>
+          <span style="font:700 20px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">2h 51m</span>
+        </div>
+        <div style="padding:16px 20px;border-right:1px solid var(--ps-border);display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">SUBTASK ELAPSED</span>
+          <span style="font:700 20px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">20s</span>
+        </div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:6px">
+          <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">PROGRESS</span>
+          <span style="font:700 20px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-sakura-500)">3<span style="color:var(--ps-slate-400)">/15</span></span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0;flex:1;min-height:0">
+
+        <div style="flex:1.5;min-width:0;padding:20px 26px;border-right:1px solid var(--ps-border);display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between">
+            <span style="font:700 13px/1 var(--font-display);letter-spacing:-.01em;color:var(--ps-ink)">Subtask timeline</span>
+            <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">15 subtasks · 3 done</span>
+          </div>
+          <div style="display:flex;gap:3px">
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-sakura-500)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-sakura-500)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-sakura-500)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-sakura-500);opacity:.5;animation:sb-pulse 1.8s ease-in-out infinite"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+            <div style="flex:1;height:5px;border-radius:2px;background:var(--ps-surface-3)"></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column">
+            <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border)">
+              <span style="width:16px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">01</span>
+              <span style="width:8px;flex:none;display:flex;justify-content:center"><span style="width:6px;height:6px;margin-top:5px;border-radius:50%;background:var(--ps-success-500)"></span></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Read feature spec and prior decisions</div><div style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">analyze</div></div>
+              <span style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate)">4m 02s</span>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border)">
+              <span style="width:16px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">02</span>
+              <span style="width:8px;flex:none;display:flex;justify-content:center"><span style="width:6px;height:6px;margin-top:5px;border-radius:50%;background:var(--ps-success-500)"></span></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Draft status contract additions</div><div style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">plan</div></div>
+              <span style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate)">21m 47s</span>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border)">
+              <span style="width:16px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">03</span>
+              <span style="width:8px;flex:none;display:flex;justify-content:center"><span style="width:6px;height:6px;margin-top:5px;border-radius:50%;background:var(--ps-success-500)"></span></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Scaffold tray process and poll loop</div><div style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">implement</div></div>
+              <span style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate)">1h 12m</span>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border);background:rgba(233,168,28,0.06);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px">
+              <span style="width:16px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-sakura-300)">04</span>
+              <span style="width:8px;flex:none;display:flex;justify-content:center"><span style="width:6px;height:6px;margin-top:5px;border-radius:50%;background:var(--ps-sakura-500);box-shadow:var(--glow-sakura);animation:sb-pulse 1.8s ease-in-out infinite"></span></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Render multi-project list from status snapshot</div><div style="font:400 11px/1.5 var(--font-mono);color:var(--ps-sakura-300)">implement · running</div></div>
+              <span style="font:400 11px/1.5 var(--font-mono);color:var(--ps-sakura-300)">20s</span>
+            </div>
+            <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--ps-border);opacity:.5">
+              <span style="width:16px;flex:none;font:500 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">05</span>
+              <span style="width:8px;flex:none;display:flex;justify-content:center"><span style="width:6px;height:6px;margin-top:5px;border-radius:50%;border:1.5px solid var(--ps-slate-400)"></span></span>
+              <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.5 var(--font-sans);color:var(--ps-ink)">Wire detail window navigation</div><div style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">implement</div></div>
+              <span style="font:400 11px/1.5 var(--font-mono);color:var(--ps-slate-400)">—</span>
+            </div>
+            <div style="padding:10px 0;font:400 11.5px/1.5 var(--font-mono);color:var(--ps-slate-400)">+ 10 more subtasks pending</div>
+          </div>
+        </div>
+
+        <div style="width:290px;flex:none;padding:20px 24px;display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">EXECUTION</span>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Workflow</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink);text-align:right;word-break:break-all">wfl-20260808-102345-j6d0</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Agent</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">claude-code</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Profile</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">kotlin-strict</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Contract</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">v0.1</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Started</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">15:04:22Z</span></div>
+              <div style="display:flex;justify-content:space-between;gap:12px"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Last update</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">17:55:07Z</span></div>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--ps-border)"></div>
+
+          <div style="display:flex;flex-direction:column;gap:11px">
+            <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">ACROSS ALL PROJECTS</span>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1 var(--font-sans);color:var(--ps-slate)">Goals today</span><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">11</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1 var(--font-sans);color:var(--ps-slate)">Completed</span><span style="font:700 13px/1 var(--font-display);color:var(--ps-success-500)">5</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1 var(--font-sans);color:var(--ps-slate)">Needs attention</span><span style="font:700 13px/1 var(--font-display);color:var(--ps-gold-500)">2</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1 var(--font-sans);color:var(--ps-slate)">Median goal time</span><span style="font:700 13px/1 var(--font-display);color:var(--ps-ink)">1h 47m</span></div>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--ps-border)"></div>
+
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <span style="font:600 9.5px/1 var(--font-mono);letter-spacing:.14em;color:var(--ps-slate-400)">RECENTLY FINISHED</span>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--ps-success-500)"></span><span style="font:600 11.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">ATL-399</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">1h 12m</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--ps-success-500)"></span><span style="font:600 11.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">RT-86</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">38m</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:var(--ps-danger-500)"></span><span style="font:600 11.5px/1 var(--font-sans);color:var(--ps-ink);flex:1">DSN-30</span><span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">9m</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div class="dv-opts" style="margin-top:36px">
+
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Detail window — blocked goal, reason up front</div>
+<div style="width:640px;background:var(--ps-bg);border:1px solid var(--ps-border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;gap:9px;height:38px;padding:0 14px;background:var(--ps-ink-800);border-bottom:1px solid var(--ps-border)">
+    <span style="width:11px;height:11px;border-radius:50%;background:#FF5F57"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#FEBC2E"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#28C840"></span>
+    <span style="flex:1;text-align:center;font:600 12px/1 var(--font-sans);color:var(--ps-slate)">Skill Bill — INF-7</span>
+    <span style="width:60px"></span>
+  </div>
+  <div style="padding:22px 26px;display:flex;flex-direction:column;gap:18px">
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="display:inline-flex;align-items:center;gap:6px;font:500 11px/1 var(--font-mono);color:var(--ps-gold-600);border:1px solid rgba(224,123,57,0.5);border-radius:999px;padding:5px 9px"><span style="width:7px;height:7px;box-sizing:border-box;border-radius:50%;border:2px solid var(--ps-gold-500)"></span>blocked</span>
+      <span style="font:500 11px/1 var(--font-mono);color:var(--ps-slate);border:1px solid var(--ps-border-strong);border-radius:999px;padding:5px 9px">INF-7</span>
+      <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400);margin-left:auto">frozen at 17:49:54Z</span>
+    </div>
+    <h2 style="margin:0;font:700 22px/1.25 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Migrate state backend to remote workspace</h2>
+    <div style="border:1px solid rgba(224,123,57,0.4);background:var(--ps-gold-50);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:7px">
+      <span style="font:700 12px/1 var(--font-display);color:var(--ps-gold-600)">Blocked on pending_launch</span>
+      <p style="margin:0;font:400 12.5px/1.6 var(--font-sans);color:var(--ps-ink)">The runner requested a launch approval for plan revision 2 and no operator response was recorded. Nothing is running; the goal clock is frozen at the last authoritative update.</p>
+      <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate)">Resume is a CLI decision — it selects agent, profile and launch environment.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 24px">
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Step</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">pending_launch</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Goal ran</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">7h 26m</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Subtask ran</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">—</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Agent</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">codex</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Workflow</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">wfl-20260808-1023</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">Retained until</span><span style="font:400 11.5px/1.4 var(--font-mono);color:var(--ps-ink)">+24h</span></div>
+    </div>
+    <div style="display:flex;gap:9px">
+      <button style="height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-slate-400);font:600 12.5px/1 var(--font-sans);opacity:.45">Pause after current subtask</button>
+      <button style="height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-ink);font:600 12.5px/1 var(--font-sans);cursor:pointer" style-hover="border-color:var(--ps-danger-500);color:var(--ps-danger-500)">Stop goal</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>History — recently finished goals</div>
+<div style="width:640px;background:var(--ps-bg);border:1px solid var(--ps-border);border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;gap:9px;height:38px;padding:0 14px;background:var(--ps-ink-800);border-bottom:1px solid var(--ps-border)">
+    <span style="width:11px;height:11px;border-radius:50%;background:#FF5F57"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#FEBC2E"></span>
+    <span style="width:11px;height:11px;border-radius:50%;background:#28C840"></span>
+    <span style="flex:1;text-align:center;font:600 12px/1 var(--font-sans);color:var(--ps-slate)">Skill Bill — History</span>
+    <span style="width:60px"></span>
+  </div>
+  <div style="padding:20px 24px 8px;display:flex;align-items:baseline;justify-content:space-between">
+    <span style="font:700 16px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Finished in the last 24h</span>
+    <span style="font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">retention: 24h blocked · 6h failed</span>
+  </div>
+  <div style="padding:0 24px 20px">
+    <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--ps-border);align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-success-500);flex:none"></span>
+      <div style="flex:1;min-width:0"><div style="font:700 13px/1.4 var(--font-display);color:var(--ps-ink)">atlas-web <span style="font:400 11.5px var(--font-mono);color:var(--ps-slate)">ATL-399</span></div><div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Completed all 14 subtasks · claude-code</div></div>
+      <div style="text-align:right"><div style="font:500 12px/1.4 var(--font-mono);color:var(--ps-ink)">1h 12m</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">16:40Z</div></div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--ps-border);align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-success-500);flex:none"></span>
+      <div style="flex:1;min-width:0"><div style="font:700 13px/1.4 var(--font-display);color:var(--ps-ink)">runtime-kotlin <span style="font:400 11.5px var(--font-mono);color:var(--ps-slate)">RT-86</span></div><div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Completed all 6 subtasks · codex</div></div>
+      <div style="text-align:right"><div style="font:500 12px/1.4 var(--font-mono);color:var(--ps-ink)">38m</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">14:02Z</div></div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--ps-border);align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-danger-500);flex:none"></span>
+      <div style="flex:1;min-width:0"><div style="font:700 13px/1.4 var(--font-display);color:var(--ps-ink)">design-tokens <span style="font:400 11.5px var(--font-mono);color:var(--ps-slate)">DSN-30</span></div><div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Failed on verify · contract tests</div></div>
+      <div style="text-align:right"><div style="font:500 12px/1.4 var(--font-mono);color:var(--ps-ink)">9m</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">13:48Z</div></div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--ps-border);align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-slate);flex:none"></span>
+      <div style="flex:1;min-width:0"><div style="font:700 13px/1.4 var(--font-display);color:var(--ps-ink)">payments-svc <span style="font:400 11.5px var(--font-mono);color:var(--ps-slate)">PAY-18</span></div><div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Stopped by operator on subtask 4</div></div>
+      <div style="text-align:right"><div style="font:500 12px/1.4 var(--font-mono);color:var(--ps-ink)">26m</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">11:15Z</div></div>
+    </div>
+    <div style="display:flex;gap:12px;padding:12px 0;align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ps-success-500);flex:none"></span>
+      <div style="flex:1;min-width:0"><div style="font:700 13px/1.4 var(--font-display);color:var(--ps-ink)">skill-bill <span style="font:400 11.5px var(--font-mono);color:var(--ps-slate)">SKILL-14</span></div><div style="font:400 11px/1.4 var(--font-sans);color:var(--ps-slate)">Completed all 9 subtasks · claude-code</div></div>
+      <div style="text-align:right"><div style="font:500 12px/1.4 var(--font-mono);color:var(--ps-ink)">2h 04m</div><div style="font:400 10.5px/1.4 var(--font-mono);color:var(--ps-slate-400)">09:30Z</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div class="dv-opts" style="margin-top:36px">
+
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Notifications — state changes only</div>
+<div style="width:400px;display:flex;flex-direction:column;gap:14px">
+  <div style="width:360px;background:rgba(31,31,36,.97);border:1px solid var(--ps-border-strong);border-radius:14px;padding:14px 16px;display:flex;gap:12px;box-shadow:0 18px 40px rgba(0,0,0,.6)">
+    <img src="docs/assets/skill-bill-app-icon.svg" alt="Skill Bill" width="20" height="20" style="display:block;border-radius:5px;flex:none;margin-top:1px;">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:700 12.5px/1 var(--font-display);color:var(--ps-ink)">Skill Bill</span><span style="font:400 10.5px/1 var(--font-mono);color:var(--ps-gold-600);margin-left:auto">blocked</span></div>
+      <span style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">INF-7 is blocked on pending_launch</span>
+      <span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">infra-terraform · ran 7h 26m</span>
+    </div>
+  </div>
+
+  <div style="width:360px;background:rgba(31,31,36,.97);border:1px solid rgba(240,85,91,0.4);border-radius:14px;padding:14px 16px;display:flex;gap:12px;box-shadow:0 18px 40px rgba(0,0,0,.6)">
+    <span style="width:20px;height:20px;border-radius:50%;background:var(--ps-danger-50);border:1px solid rgba(240,85,91,0.5);flex:none;display:flex;align-items:center;justify-content:center;font:700 12px/1 var(--font-sans);color:var(--ps-danger-500)">!</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:700 12.5px/1 var(--font-display);color:var(--ps-ink)">Skill Bill</span><span style="font:400 10.5px/1 var(--font-mono);color:var(--ps-danger-500);margin-left:auto">failed</span></div>
+      <span style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">DSN-31 failed on verify</span>
+      <span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">design-tokens · contract tests failed on subtask 7</span>
+    </div>
+  </div>
+
+  <div style="width:360px;background:rgba(31,31,36,.97);border:1px solid var(--ps-border-strong);border-radius:14px;padding:14px 16px;display:flex;gap:12px;box-shadow:0 18px 40px rgba(0,0,0,.6)">
+    <span style="width:20px;height:20px;border-radius:50%;background:var(--ps-success-50);border:1px solid rgba(63,185,80,0.5);flex:none;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--font-sans);color:var(--ps-success-500)">✓</span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font:700 12.5px/1 var(--font-display);color:var(--ps-ink)">Skill Bill</span><span style="font:400 10.5px/1 var(--font-mono);color:var(--ps-success-500);margin-left:auto">completed</span></div>
+      <span style="font:600 12.5px/1.4 var(--font-sans);color:var(--ps-ink)">ATL-399 completed all 14 subtasks</span>
+      <span style="font:400 11.5px/1.4 var(--font-sans);color:var(--ps-slate)">atlas-web · 1h 12m</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="1g">
+<div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Empty and error states</div>
+<div style="width:400px;display:flex;flex-direction:column;gap:16px">
+
+  <div style="width:380px;background:var(--ps-surface);border:1px solid var(--ps-border);border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--ps-border)">
+      <img src="docs/assets/skill-bill-app-icon.svg" alt="Skill Bill" width="18" height="18" style="display:block;border-radius:4px;flex:none;filter:grayscale(1);opacity:.5;">
+      <span style="font:700 15px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Skill Bill</span>
+      <span style="margin-left:auto;font:400 11px/1 var(--font-mono);color:var(--ps-slate-400)">idle</span>
+    </div>
+    <div style="padding:28px 22px;text-align:center;display:flex;flex-direction:column;gap:7px">
+      <span style="font:700 14px/1.3 var(--font-display);color:var(--ps-ink)">No goals running</span>
+      <span style="font:400 12px/1.6 var(--font-sans);color:var(--ps-slate)">Nothing is in flight across the 6 tracked repos. Start a goal from the CLI and it will appear here within 15 seconds.</span>
+    </div>
+    <div style="padding:11px 16px;border-top:1px solid var(--ps-border);background:var(--ps-bg-2);display:flex;justify-content:space-between">
+      <span style="font:600 12px/1 var(--font-sans);color:var(--ps-sakura-300)">View history</span>
+      <span style="font:400 11.5px/1 var(--font-mono);color:var(--ps-slate-400)">Settings</span>
+    </div>
+  </div>
+
+  <div style="width:380px;background:var(--ps-surface);border:1px solid rgba(240,85,91,0.35);border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--ps-border)">
+      <span style="font:700 15px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Skill Bill</span>
+      <span style="margin-left:auto;font:400 11px/1 var(--font-mono);color:var(--ps-danger-500)">unavailable</span>
+    </div>
+    <div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
+      <span style="font:700 13.5px/1.3 var(--font-display);color:var(--ps-ink)">Skill Bill CLI not found</span>
+      <span style="font:400 12px/1.6 var(--font-sans);color:var(--ps-slate)">No <span style="font-family:var(--font-mono);color:var(--ps-ink)">skill-bill</span> executable on PATH. Set an absolute path in settings, or install the CLI.</span>
+      <div style="display:flex;gap:9px;margin-top:2px">
+        <button style="height:32px;padding:0 13px;border-radius:8px;border:1px solid transparent;background:var(--ps-sakura-500);color:var(--ps-on-accent);font:700 12px/1 var(--font-sans);cursor:pointer">Choose CLI path…</button>
+        <button style="height:32px;padding:0 13px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-ink);font:600 12px/1 var(--font-sans);cursor:pointer">Retry</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="width:380px;background:var(--ps-surface);border:1px solid rgba(224,123,57,0.4);border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--ps-border)">
+      <span style="font:700 15px/1 var(--font-display);letter-spacing:-.02em;color:var(--ps-ink)">Skill Bill</span>
+      <span style="margin-left:auto;font:400 11px/1 var(--font-mono);color:var(--ps-gold-600)">incompatible</span>
+    </div>
+    <div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
+      <span style="font:700 13.5px/1.3 var(--font-display);color:var(--ps-ink)">Status contract mismatch</span>
+      <span style="font:400 12px/1.6 var(--font-sans);color:var(--ps-slate)">The CLI reports contract <span style="font-family:var(--font-mono);color:var(--ps-ink)">v0.3</span>; this app reads <span style="font-family:var(--font-mono);color:var(--ps-ink)">v0.1</span>. Upgrade the app or pin the CLI.</span>
+      <div style="display:flex;gap:9px;margin-top:2px">
+        <button style="height:32px;padding:0 13px;border-radius:8px;border:1px solid var(--ps-border-strong);background:var(--ps-surface-2);color:var(--ps-ink);font:600 12px/1 var(--font-sans);cursor:pointer">Check for update</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="width:380px;background:var(--ps-surface);border:1px solid var(--ps-border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 20px 50px rgba(0,0,0,.6)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--ps-slate-400)"></span>
+    <div style="flex:1"><div style="font:700 13px/1.3 var(--font-display);color:var(--ps-ink)">skill-bill <span style="font:400 11px var(--font-mono);color:var(--ps-slate)">SKILL-15</span></div><div style="font:400 11px/1.4 var(--font-mono);color:var(--ps-slate)">stale · last seen 4m ago · implement</div></div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<p class="dv-next">Try next: "make the popover rows denser, drop the progress bars" · "add a settings screen" · "show <a class="dv-oid" href="#1c">1c</a> at a smaller window size"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showQueued&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Tray popover&quot;}}"></script>
+</body>
+</html>

@@ -119,6 +119,11 @@ case "$cmd" in
     ;;
 
   "install apply")
+    if [[ "$(flag_value --platform-mode "${cmd_parts[@]}")" != "all" ]] ||
+      has_flag "--platform" "${cmd_parts[@]}"; then
+      echo "installer must request every platform pack without a slug filter" >&2
+      exit 1
+    fi
     skills_src="$(flag_value --skills "${cmd_parts[@]}")"
     effective_home="${home_dir:-$HOME}"
     if has_flag "--agent-target" "${cmd_parts[@]}"; then
@@ -234,10 +239,12 @@ setup_release_dir() {
 
 seed_selection_json() {
   local fake_home="$1"
+  local platform_mode="${2:-none}"
+  local selected_slugs="${3:-[]}"
   local mcp_bin="$fake_home/.skill-bill/runtime/runtime-mcp/bin/runtime-mcp"
   mkdir -p "$fake_home/.skill-bill"
   printf '%s\n' \
-    '{"contract_version":"1.0","selected_agents":["claude"],"platform_pack_selection":{"mode":"none","selected_slugs":[]},"telemetry_level":"off","mcp_registration":{"register":false,"runtime_mcp_bin":"'"$mcp_bin"'"}}' \
+    '{"contract_version":"1.0","selected_agents":["claude"],"platform_pack_selection":{"mode":"'"$platform_mode"'","selected_slugs":'"$selected_slugs"'},"telemetry_level":"off","mcp_registration":{"register":false,"runtime_mcp_bin":"'"$mcp_bin"'"}}' \
     >"$fake_home/.skill-bill/install-selection.json"
 }
 
@@ -456,18 +463,17 @@ else
   fail "blank agent selection summary unexpected"
 fi
 
-if [[ "$INTERACTIVE_OUTPUT" == *"Platforms:      base only"* ]]; then
-  pass "blank platform selection defaults to base only"
+if [[ "$INTERACTIVE_OUTPUT" == *"Platforms:      all"* ]]; then
+  pass "blank defaults install every platform pack"
 else
-  fail "blank platform selection summary unexpected"
+  fail "blank defaults platform summary unexpected"
 fi
 
-if [[ "$INTERACTIVE_OUTPUT" != *" generic (generic)"* &&
-  "$INTERACTIVE_OUTPUT" != *" kmp (kmp)"* &&
-  "$INTERACTIVE_OUTPUT" == *" kotlin (kotlin)"* ]]; then
-  pass "implicit generic and composed KMP packs are hidden from optional choices"
+if [[ "$INTERACTIVE_OUTPUT" != *"Enter platforms"* &&
+  "$INTERACTIVE_OUTPUT" != *"Available optional platforms"* ]]; then
+  pass "interactive install has no platform selection prompt"
 else
-  fail "interactive platform choices exposed an implicit pack or omitted Kotlin"
+  fail "interactive install still prompts for platforms"
 fi
 
 echo ""
@@ -482,14 +488,14 @@ else
   fail "piped EOF agent selection summary unexpected"
 fi
 
-if [[ "$PIPED_OUTPUT" == *"Platforms:      base only"* ]]; then
-  pass "piped EOF platform selection defaults to base only"
+if [[ "$PIPED_OUTPUT" == *"Platforms:      all"* ]]; then
+  pass "piped EOF installs every platform pack"
 else
-  fail "piped EOF platform selection summary unexpected"
+  fail "piped EOF platform summary unexpected"
 fi
 
 echo ""
-echo "--- scenario 4: base install (AC#1) ---"
+echo "--- scenario 4: replay of a base-only install ---"
 FAKE_HOME="$(mktemp -d)"
 mkdir -p "$FAKE_HOME/.claude"
 seed_selection_json "$FAKE_HOME"
@@ -516,6 +522,8 @@ fi
 
 echo ""
 echo "--- scenario 5: --clean flag (AC#2) ---"
+
+seed_selection_json "$FAKE_HOME" selected '["kotlin"]'
 
 SENTINEL="$FAKE_HOME/.skill-bill/skills/__smoke_extra_file__"
 mkdir -p "$(dirname "$SENTINEL")"

@@ -18,7 +18,7 @@ class InstallerShellReuseLastSelectionTest {
     }.parent
 
   @Test
-  fun `installer shell reuses last selection without prompting and applies fresh mcp path`() {
+  fun `installer shell reuses agent choices with all packs and a fresh mcp path`() {
     val run = runInstaller(extraArgs = listOf("--reuse-last-selection"))
 
     assertEquals(0, run.exitCode, run.output)
@@ -31,8 +31,6 @@ class InstallerShellReuseLastSelectionTest {
           "codex",
           "--agent-target",
           "codex=${run.home.resolve("agent-targets/codex")}",
-          "--platform",
-          "kotlin",
         ),
       run.applyArgs,
     )
@@ -244,7 +242,7 @@ class InstallerShellReuseLastSelectionTest {
       "--agent-mode",
       "manual",
       "--platform-mode",
-      "selected",
+      "all",
       "--telemetry",
       "full",
       "--mcp",

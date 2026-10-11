@@ -297,7 +297,7 @@ function acceptsNewerStatus(
   }
   const sequenceOrder = compareDecimalStrings(incoming.runSequence, current.runSequence);
   if (sequenceOrder < 0) {
-    return isLiveOverDone(current, incoming);
+    return isLiveOverDone(current, incoming) || isPostChildMonitor(current, incoming);
   }
   if (sequenceOrder > 0) {
     return true;
@@ -316,6 +316,17 @@ function acceptsNewerStatus(
     return false;
   }
   return true;
+}
+
+function isPostChildMonitor(
+  current: SkillBillStatusOutcome,
+  incoming: SkillBillStatusOutcome,
+): boolean {
+  return current.kind === "active" && current.currentStepId === "implement" &&
+    current.executionScope === "workflow" &&
+    (incoming.kind === "active" || incoming.kind === "paused") && incoming.currentStepId === "monitor" &&
+    incoming.executionScope === "workflow" &&
+    current.executionId !== incoming.executionId;
 }
 
 function isTerminal(kind: SkillBillStatusOutcome["kind"]): boolean {

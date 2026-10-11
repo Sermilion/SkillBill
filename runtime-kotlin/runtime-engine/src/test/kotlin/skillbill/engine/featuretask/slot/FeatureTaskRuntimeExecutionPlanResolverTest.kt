@@ -104,16 +104,16 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   @Test
   fun `creation refuses unknown routing and missing build commands before implementation`() {
     val fixture = Fixture()
-    fixture.inventory = WorkflowGitNameListResult.Failed("inventory unavailable")
+    fixture.tracked = WorkflowGitNameListResult.Failed("inventory unavailable")
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
-    fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "ios/Main.swift"))
+    fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "ios/Main.swift"))
     fixture.packs = fixture.packs +
       fixture.packs.single().copy(
         slug = "ios",
         routingSignals = RoutingSignals(listOf("*.swift"), emptyList(), listOf("*.swift")),
       )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
-    fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
+    fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
     assertFailsWith<SkillBillRuntimeException> {
       fixture.create()
@@ -130,12 +130,19 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
-  fun `goal child creation before implementation binds the repository's pack instead of the review fallback`() {
+  fun `goal validation routes the whole branch even when changed files belong to another pack`() {
     val fixture = Fixture()
-    fixture.packs = fixture.packs + reviewFallbackPackWithoutGate()
-    fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "README.md"))
+    fixture.packs = fixture.packs + reviewFallbackPackWithoutGate() +
+      fixture.packs.single().copy(
+        slug = "ios",
+        routingSignals = RoutingSignals(listOf("*.swift"), emptyList(), listOf("*.swift")),
+      )
+    fixture.tracked =
+      WorkflowGitNameListResult.Listed(
+        listOf("runtime-kotlin/Main.kt", "runtime-kotlin/Other.kt", "ios/App.swift", "README.md"),
+      )
 
-    listOf(emptyList(), listOf(".feature-specs/SKILL-1-demo/decomposition-manifest.yaml")).forEach { owned ->
+    listOf(emptyList(), listOf("ios/App.swift")).forEach { owned ->
       fixture.inventory = WorkflowGitNameListResult.Listed(owned)
 
       val inputs =
@@ -158,7 +165,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   fun `creation records agent-validate when the installed catalog is only the review fallback`() {
     val fixture = Fixture()
     fixture.packs = listOf(reviewFallbackPackWithoutGate())
-    fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
+    fixture.inventory = WorkflowGitNameListResult.Listed(emptyList())
     fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     val resolver = fixture.resolver()
     val inputs =
@@ -299,7 +306,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
       )
     var inventory: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
-    var tracked: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(emptyList())
+    var tracked: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     var inventoryRoot: Path? = null
     var packs =
       listOf(
@@ -320,11 +327,13 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         ValidationGateResolver { packs },
         object : WorkflowGitOperations by NoopWorkflowGitOperations {
           override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
-            inventoryRoot = repoRoot
             return inventory
           }
 
-          override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult = tracked
+          override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult {
+            inventoryRoot = repoRoot
+            return tracked
+          }
         },
         repoLocalConfig(wrapper),
         database,

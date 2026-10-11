@@ -1,0 +1,84 @@
+/* Pixel Sakura — Chips & Badges (dark, modern)
+ * Chips classify posts (type / platform / topic / neutral). Pill-ish, 30px. */
+
+.ps-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 30px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: var(--border-1) solid var(--chip-neutral-border);
+  background: transparent;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  color: var(--chip-neutral-text);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+
+a.ps-chip { text-decoration: none; cursor: pointer; }
+a.ps-chip:hover { background: var(--color-surface-subtle); color: var(--color-text); }
+
+/* Post type — sakura tint fill */
+.ps-chip--type {
+  background: var(--chip-type-bg);
+  border-color: var(--chip-type-border);
+  color: var(--chip-type-text);
+}
+a.ps-chip--type:hover { border-color: var(--ps-sakura-500); color: var(--ps-sakura-300); background: var(--ps-sakura-50); }
+
+/* Platform — gold hairline */
+.ps-chip--platform {
+  border-color: var(--chip-platform-border);
+  color: var(--chip-platform-text);
+}
+a.ps-chip--platform:hover { background: var(--ps-gold-50); border-color: var(--ps-gold-500); }
+
+/* Topic — neutral light */
+.ps-chip--topic {
+  border-color: var(--chip-topic-border);
+  color: var(--chip-topic-text);
+}
+a.ps-chip--topic:hover { border-color: var(--ps-sakura-500); color: var(--ps-sakura-300); }
+
+/* Neutral — muted */
+.ps-chip--neutral {
+  border-color: var(--chip-neutral-border);
+  color: var(--chip-neutral-text);
+}
+
+.ps-chip--sm { height: 24px; padding: 0 var(--space-2); font-size: var(--fs-tiny); }
+
+.ps-chip-group { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* ---- Status badges ---- */
+.ps-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 26px;
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  border: var(--border-1) solid var(--color-border);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}
+.ps-badge::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+  margin-left: var(--space-1);
+}
+.ps-badge--published {
+  background: var(--badge-published-bg);
+  border-color: var(--badge-published-border);
+  color: var(--badge-published-text);
+}
+.ps-badge--published::before { box-shadow: var(--glow-sakura); }
+.ps-badge--draft {
+  background: var(--badge-draft-bg);
+  border-color: var(--badge-draft-border);
+  color: var(--badge-draft-text);
+}

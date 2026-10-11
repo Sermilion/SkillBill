@@ -1354,7 +1354,7 @@ private fun runnerExecutionEntry(
       fixture.validator,
       ValidationGateResolver { config.validationGatePlatformManifests },
       object : WorkflowGitOperations by config.harnessGitOperations {
-        override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
+        override fun trackedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
       },
       config.gateRepoLocalConfig,
       database,
