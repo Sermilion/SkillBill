@@ -46,8 +46,6 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
         StandalonePhaseStatusUpdateResult.MISSING
-
-      override fun reconcileExpiredLeases(now: Instant): Int = 0
     }
   open override val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository =
     UnavailableRejectedOutputDiagnosticRepository

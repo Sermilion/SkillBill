@@ -63,6 +63,25 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
+  fun `no discovered commands warns and advances workflow validation without packs`() {
+    val warning = "Warning: No applicable validation commands were found after inspecting project configuration."
+    val harness = validationHarness(false) { facts(warning) }
+
+    val report = harness.runner.run(harness.request())
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    assertEquals(warning, admittedValue(harness, "validate"))
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "write_history" })
+    val prompt =
+      harness.launcher.requests.single {
+        "Phase: validate" in it.skillRunRequest.promptOverride.orEmpty()
+      }.skillRunRequest.promptOverride.orEmpty()
+    assertContains(prompt, "print a warning")
+    assertContains(prompt, "then settle completed and allow the workflow to advance")
+    assertNull(harness.recorder.loadValidationGateProgress(WORKFLOW_ID))
+  }
+
+  @Test
   fun `blank results cannot advance beyond validate`() {
     val harness = validationHarness("")
 
