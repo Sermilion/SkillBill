@@ -20,7 +20,7 @@
   <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="url(#goldHighlight)"></rect>
   <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="none" stroke="#070709" stroke-opacity="0.18" stroke-width="6"></rect>
 
-  
+
   <g fill="url(#ink)" font-family="&#39;DejaVu Sans Mono&#39;, &#39;JetBrains Mono&#39;, &#39;Fira Code&#39;, Hack, &#39;Liberation Mono&#39;, monospace" font-weight="700" font-size="360" text-anchor="end" letter-spacing="-4">
     <text x="944" y="944">SB</text>
   </g>
