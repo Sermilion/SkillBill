@@ -6,11 +6,12 @@ import dev.skillbill.tray.application.eligibleForControl
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
 import kotlinx.coroutines.channels.Channel
+import java.time.Duration
 
 class CliBoardSource(
   private val resolver: CliResolver = CliResolver(),
-  private val pollRunner: ProcessRunner = ProcessRunner(),
-  private val detailRunner: ProcessRunner = ProcessRunner(),
+  private val pollRunner: ProcessRunner = ProcessRunner(timeout = Duration.ofSeconds(120)),
+  private val detailRunner: ProcessRunner = ProcessRunner(timeout = Duration.ofSeconds(30)),
   private val pauseRunner: ProcessRunner = ProcessRunner(),
   private val stopRunner: ProcessRunner = ProcessRunner(),
 ) : BoardSource {

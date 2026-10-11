@@ -9,17 +9,20 @@ version = "0.1.0"
 
 kotlin { jvmToolchain(21) }
 
+configurations.configureEach {
+  exclude(group = "dev.nucleusframework", module = "nucleus.decorated-window-tao")
+}
+
 dependencies {
   implementation(compose.desktop.currentOs)
   implementation(compose.material3)
   implementation(compose.materialIconsExtended)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.kotlinx.coroutines.core)
+  implementation(libs.kotlinx.coroutines.swing)
   implementation(libs.compose.native.tray)
-  implementation(libs.compose.native.tray.app)
   implementation(libs.nucleus.notification.common)
   implementation(libs.nucleus.application)
-  implementation(libs.nucleus.decorated.window.tao)
   implementation(libs.nucleus.autolaunch)
   testImplementation(kotlin("test"))
   testImplementation(libs.junit.jupiter)
@@ -48,6 +51,19 @@ compose.desktop {
 }
 
 val appImageToolVersion = "1.9.1"
+if (System.getProperty("os.name").contains("linux", true)) {
+  val linuxTrayDirectory = layout.buildDirectory.dir("generated/linuxTray")
+  val compileLinuxTrayNative by tasks.registering(Exec::class) {
+    inputs.file("src/main/native/linux/build-tray.sh")
+    outputs.dir(linuxTrayDirectory.map { it.dir("resources") })
+    commandLine("bash", "src/main/native/linux/build-tray.sh",
+      linuxTrayDirectory.get().asFile.absolutePath, System.getProperty("java.home"))
+  }
+  tasks.processResources {
+    dependsOn(compileLinuxTrayNative)
+    from(linuxTrayDirectory.map { it.dir("resources") })
+  }
+}
 val macTrayNativeOutput = layout.buildDirectory.file("generated/macosTray/libskillbilltray.dylib")
 val compileMacTrayNative by tasks.registering(Exec::class) {
   val source = layout.projectDirectory.file("src/main/native/macos/MacStatusItemBridge.m")

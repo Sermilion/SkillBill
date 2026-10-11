@@ -23,3 +23,23 @@ Revisit when: Host verification or backend changes alter anchoring, menu access,
 Context: The spec requires AppImage alongside native installer tasks and makes signing optional unless the operator supplies secrets.
 Decision: Package unsigned by default and require the operator to verify and place pinned appimagetool 1.9.1 before running the separate AppImage task.
 Reason: The implementation keeps packaging-tool downloads and execution out of Gradle configuration. Separate AppDir staging avoids requiring Debian or RPM packaging tools for AppImage.
+
+## [2026-10-11] Use the native tray API with AWT windows
+Context: TrayApp requires the Tao backend, while the desktop windows use Compose's AWT Window. Mixing them caused startup thread errors and an absent Linux tray icon.
+Decision: Use the native Tray API with an app-owned popover window. Keep the main Window mounted when hidden. Apply Context's Linux scale correction to window bounds and content together.
+Reason: The native Tray API registers with KDE independently of Tao. The mounted main window keeps the application alive after Hide to tray. KDE reports 1.5x Xwayland scaling on this host while AWT reports 1x.
+
+## KDE tray activation
+
+ComposeNativeTray 2.1.6 returns `ItemIsMenu=true` unconditionally. KDE opens
+the native menu instead of calling the icon activation handler. Build its
+pinned, checksum-verified source with `ItemIsMenu=false`, advertise no
+menu object, and omit the native menu. The activation handler opens the designed tray window directly.
+
+## KDE monitor origins
+
+KDE reports tray activation relative to each output native origin. AWT uses
+Xwayland bounds with a global scale. On monitors stacked at different scales,
+these origins differ. Map the native click using current KScreen output
+geometry and AWT screen bounds. Xwayland pointer coordinates can be stale
+while the pointer is over a native Wayland panel.

@@ -642,7 +642,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `goal projects done only after final completion is recorded`() {
+  fun `recorded goal completion wins over a leftover live lease`() {
     val fixture = gitRepoFixture("ide-status-goal-settled")
     val identity = testGoalRepositoryIdentity(fixture)
     val service =
@@ -651,6 +651,7 @@ class IdeStatusServiceBranchScopingTest {
         manifestStore =
           StubGoalManifestStore(
             completedGoalManifestState(fixture, identity),
+            lease = liveLease(),
           ),
       )
 
@@ -691,19 +692,35 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `completed subtasks without goal completion cannot report done`() {
-    for (goalState in listOf("running", "completed")) {
-      val fixture = gitRepoFixture("ide-status-finalization-unfinished-$goalState")
-      val identity = testGoalRepositoryIdentity(fixture)
-      val result =
-        ideStatusService(
-          goalOnlyDatabase(goalState),
-          manifestStore = StubGoalManifestStore(completedGoalManifestState(fixture, identity)),
-        ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+  fun `completed subtasks without a terminal goal record stay idle without fabricating a fresh monitor`() {
+    val fixture = gitRepoFixture("ide-status-finalization-unfinished")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val result =
+      ideStatusService(
+        goalOnlyDatabase("running"),
+        manifestStore = StubGoalManifestStore(completedGoalManifestState(fixture, identity)),
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
-      assertFalse(result.snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL, goalState)
-      assertFalse(result.snapshot.currentStep.id == "done", goalState)
-    }
+    assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
+    assertEquals(IdeStatusFreshness.STALE, result.snapshot.freshness)
+    assertEquals(Instant.parse("2026-08-06T10:00:00Z"), result.snapshot.updatedAt)
+    assertNull(result.snapshot.currentActivity)
+    assertFalse(result.snapshot.currentStep.id == "monitor")
+  }
+
+  @Test
+  fun `legacy completed goal remains terminal without a newer completion control marker`() {
+    val fixture = gitRepoFixture("ide-status-legacy-completed-goal")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val result =
+      ideStatusService(
+        goalOnlyDatabase("completed"),
+        manifestStore = StubGoalManifestStore(completedGoalManifestState(fixture, identity)),
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertEquals(IdeStatusLifecycleState.TERMINAL, result.snapshot.lifecycleState)
+    assertEquals("done", result.snapshot.currentStep.id)
+    assertEquals("Goal SKILL-148 is complete.", result.snapshot.summary)
   }
 
   private fun completedGoalManifestState(
@@ -760,7 +777,7 @@ class IdeStatusServiceBranchScopingTest {
       )
 
     assertEquals(IdeStatusWorkflowFamily.FEATURE_GOAL, result.snapshot.workflowFamily)
-    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals(IdeStatusLifecycleState.IDLE, result.snapshot.lifecycleState)
     assertEquals(Instant.parse("2026-08-06T11:45:00Z"), result.snapshot.updatedAt)
     assertEquals(IdeStatusFreshness.FRESH, result.snapshot.freshness)
   }

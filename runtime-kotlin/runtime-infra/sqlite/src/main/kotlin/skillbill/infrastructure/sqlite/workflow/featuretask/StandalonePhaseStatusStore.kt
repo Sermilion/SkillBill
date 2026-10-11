@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
+import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -10,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.workflow.time.parsePersistedInstantOrNull
 import java.sql.Connection
 import java.sql.ResultSet
 import java.time.Clock
@@ -74,7 +76,7 @@ internal class StandalonePhaseStatusStore(
           request.startedAt.toString(),
           request.leaseOwner,
           request.leaseGeneration,
-          request.storedLeaseExpiresAt().toString(),
+          request.leaseExpiresAt.toString(),
         ),
       )
       statement.executeUpdate()
@@ -146,8 +148,7 @@ internal class StandalonePhaseStatusStore(
   private fun updateInTransaction(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(request.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
     val leaseExpired =
-      current.phaseId != MONITOR_PHASE_ID &&
-        current.lifecycleState !in TERMINAL_STATES &&
+      current.lifecycleState !in TERMINAL_STATES &&
         !current.leaseExpiresAt.isAfter(clock.instant())
     val rejected =
       when {
@@ -198,9 +199,6 @@ internal class StandalonePhaseStatusStore(
       StandalonePhaseStatusUpdateResult.STALE_LEASE
     }
   }
-
-  private fun StandalonePhaseStatusRegistration.storedLeaseExpiresAt(): Instant =
-    if (phaseId == MONITOR_PHASE_ID) MONITOR_LEASE_HORIZON else leaseExpiresAt
 
   private fun supersedeActiveMonitors(
     repositoryIdentity: String,
@@ -343,9 +341,27 @@ internal class StandalonePhaseStatusStore(
       runSequence = getString("run_sequence"),
       statusRevision = getString("status_revision"),
       lifecycleState = getString("lifecycle_state"),
-      startedAt = Instant.parse(getString("started_at")),
-      updatedAt = Instant.parse(getString("updated_at")),
+      startedAt = workflowExecutionInstant("started_at"),
+      updatedAt = workflowExecutionInstant("updated_at"),
     )
+
+  private fun ResultSet.workflowExecutionInstant(column: String): Instant {
+    val raw = getString(column)
+    val parsed =
+      raw?.let(::parsePersistedInstantOrNull)
+        ?: throw invalidIdeStatusSchemaError(
+          sourceLabel = "workflow execution '${getString("workflow_id")}'",
+          fieldPath = column,
+          reason = "Invalid persisted timestamp.",
+        )
+    if (raw.contains(' ')) {
+      diagnostics.info(
+        "seam=workflow_execution_timestamp record_kind=migration column=$column " +
+          "value_expected=iso_instant value_used=sqlite_utc_timestamp",
+      )
+    }
+    return parsed
+  }
 
   private fun isAllowedTransition(
     current: StandalonePhaseStatusRecord,
@@ -435,7 +451,6 @@ internal class StandalonePhaseStatusStore(
   private companion object {
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
-    val MONITOR_LEASE_HORIZON: Instant = Instant.parse("9999-12-31T00:00:00Z")
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked")
     val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed")

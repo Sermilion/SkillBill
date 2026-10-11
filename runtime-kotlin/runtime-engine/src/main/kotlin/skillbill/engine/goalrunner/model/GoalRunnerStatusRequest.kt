@@ -11,6 +11,7 @@ data class GoalRunnerStatusRequest(
   val configuredAgentOverrideId: String? = null,
   val repoRoot: Path? = null,
   val includeDiffStat: Boolean = false,
+  val pruneCheckpointRefs: Boolean = true,
   val selectedDiffHunkPaths: List<String> = emptyList(),
   val selectedDiffMaxHunks: Int = DEFAULT_SELECTED_DIFF_MAX_HUNKS,
   val selectedDiffMaxLines: Int = DEFAULT_SELECTED_DIFF_MAX_LINES,

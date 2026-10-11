@@ -434,7 +434,7 @@ class GoalRunnerStatusProjectionAssembler(
         acceptances = acceptances,
         outcomeStore = outcomeStore,
       )
-    request.repoRoot?.let { repoRoot ->
+    request.repoRoot?.takeIf { request.pruneCheckpointRefs }?.let { repoRoot ->
       pruneEligibleCheckpointRefsForManifest(
         manifest = reconciled,
         gitOperations = gitOperations,
@@ -486,7 +486,7 @@ class GoalRunnerStatusProjectionAssembler(
         if (ownership == null) {
           ExecutionLiveness.IDLE
         } else {
-          livenessOfLeaseOwner(ownership)
+          livenessOfLeaseOwner(ownership, durableRead)
         }
       }
     }.getOrElse { error ->
@@ -507,7 +507,7 @@ class GoalRunnerStatusProjectionAssembler(
       val lease =
         manifestStore.executionLease(parentWorkflowId)
           ?: return@runCatching ExecutionLiveness.IDLE
-      livenessOfLeaseOwner(lease.asWorkerOwnership(parentWorkflowId))
+      livenessOfLeaseOwner(lease.asWorkerOwnership(parentWorkflowId), durableRead)
     }.getOrElse { error ->
       durableRead.recordDegradedRead(
         seam = "goal-status.parent_execution_liveness",
@@ -518,13 +518,28 @@ class GoalRunnerStatusProjectionAssembler(
       ExecutionLiveness.UNKNOWN
     }
 
-  private fun livenessOfLeaseOwner(ownership: FeatureTaskRuntimeWorkerOwnership): ExecutionLiveness =
-    when (workerSupervisor.inspect(ownership)) {
+  private fun livenessOfLeaseOwner(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    durableRead: GoalRunnerStatusDurableReadTracker,
+  ): ExecutionLiveness =
+    when (val inspection = workerSupervisor.inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning -> ExecutionLiveness.IDLE
-      FeatureTaskRuntimeProcessInspection.ExactLive,
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
-      is FeatureTaskRuntimeProcessInspection.Unsupported,
-      -> ExecutionLiveness.LIVE
+      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> {
+        diagnostics.info(
+          "seam=goal-status.execution_liveness workflow_id=${ownership.workflowId} " +
+            "value_used=idle reason=${inspection.reason}",
+        )
+        ExecutionLiveness.IDLE
+      }
+      FeatureTaskRuntimeProcessInspection.ExactLive -> ExecutionLiveness.LIVE
+      is FeatureTaskRuntimeProcessInspection.Unsupported -> {
+        durableRead.recordDegradedRead(
+          seam = "goal-status.execution_liveness",
+          expected = "verified_process_owner",
+          used = ExecutionLiveness.UNKNOWN.wireValue,
+        )
+        ExecutionLiveness.UNKNOWN
+      }
     }
 
   private fun resolveActiveAgent(currentSubtask: DecompositionSubtask?): String? {

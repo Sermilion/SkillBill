@@ -15,8 +15,10 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
@@ -148,23 +150,30 @@ internal class WorkflowGoalRunnerOutcomeReconcile(
     repoRoot: Path? = null,
   ): List<GoalContinuationCandidate> =
     listOf(WorkflowFamily.TASK_RUNTIME).flatMap { family ->
-      workflowStates.list(family, Int.MAX_VALUE).mapNotNull { snapshot ->
-        engine.snapshotView(family.definition, snapshot)
-        val artifacts = snapshot.artifacts
-        val goalContinuation = DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation() ?: return@mapNotNull null
-        if (goalContinuation.issueKey != issueKey) {
-          return@mapNotNull null
-        }
-        GoalContinuationCandidate(
-          family = family,
-          snapshot = snapshot,
-          goalContinuation = goalContinuation,
-          outcome =
-            terminalOutcomeFor(snapshot, artifacts, goalContinuation) {
-              repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
-            },
+      workflowStates
+        .findFeatureTaskWorkflowsForIssue(
+          FeatureTaskWorkflowMode.RUNTIME,
+          issueKey.trim().uppercase(),
         )
-      }
+        .map { it.toSnapshot() }
+        .mapNotNull { snapshot ->
+          engine.snapshotView(family.definition, snapshot)
+          val artifacts = snapshot.artifacts
+          val goalContinuation =
+            DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation() ?: return@mapNotNull null
+          if (goalContinuation.issueKey != issueKey) {
+            return@mapNotNull null
+          }
+          GoalContinuationCandidate(
+            family = family,
+            snapshot = snapshot,
+            goalContinuation = goalContinuation,
+            outcome =
+              terminalOutcomeFor(snapshot, artifacts, goalContinuation) {
+                repoRoot?.let { root -> gitOperations.headCommitSha(root).measuredCommitSha() }
+              },
+          )
+        }
     }
 
   private fun candidateIsStale(candidate: GoalContinuationCandidate): Boolean =

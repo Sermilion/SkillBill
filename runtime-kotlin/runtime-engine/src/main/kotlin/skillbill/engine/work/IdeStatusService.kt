@@ -327,7 +327,11 @@ class IdeStatusService(
     val goalStatus =
       goalManifest?.let { manifest ->
         goalRunnerStatusService.status(
-          GoalRunnerStatusRequest(issueKey = manifest.manifest.issueKey, repoRoot = context.repoRoot),
+          GoalRunnerStatusRequest(
+            issueKey = manifest.manifest.issueKey,
+            repoRoot = context.repoRoot,
+            pruneCheckpointRefs = false,
+          ),
         )
           ?.takeIf { it.issueKey == manifest.manifest.issueKey }
       }
@@ -634,8 +638,7 @@ class IdeStatusService(
     record: StandalonePhaseStatusRecord,
     observedAt: Instant,
   ): StandalonePhaseStatusRecord {
-    if (record.phaseId == "monitor" ||
-      standaloneLifecycle(record.lifecycleState) != IdeStatusLifecycleState.ACTIVE ||
+    if (standaloneLifecycle(record.lifecycleState) != IdeStatusLifecycleState.ACTIVE ||
       record.leaseExpiresAt.isAfter(observedAt)
     ) {
       return record
