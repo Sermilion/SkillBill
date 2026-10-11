@@ -8,8 +8,8 @@ Depends on subtask 2 because each poll is one selected snapshot, not a pair of c
 
 Files:
 
-- `intellij-plugin/src/main/kotlin/dev/skillbill/intellij/application/StatusRefreshCoordinator.kt` — `acceptsNewerStatus`
-- `vscode-extension/src/application/StatusRefreshCoordinator.ts` — `acceptsNewerStatus`
+- `../../../intellij-plugin/src/main/kotlin/dev/skillbill/intellij/application/StatusRefreshCoordinator.kt` — `acceptsNewerStatus`
+- `../../../vscode-extension/src/application/StatusRefreshCoordinator.ts` — `acceptsNewerStatus`
 
 Change both in lockstep. They share the identity/ordering contract: `repositoryIdentity`, `branchCorrelation`, `statusStoreId`, then `runSequence` via decimal-string compare.
 

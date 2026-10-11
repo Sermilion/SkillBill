@@ -8,10 +8,10 @@ Owner: runtime-kotlin goal runner. Do not invent a second `progress` implementat
 
 Files:
 
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/persist/WorkflowGoalRunnerProgressRecording.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/status/GoalRunnerStatusProjectionAssembler.kt`
-- `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerStatusProjectionModels.kt`
-- `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerStatusProjectionContext.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/persist/WorkflowGoalRunnerProgressRecording.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/status/GoalRunnerStatusProjectionAssembler.kt`
+- `../../../runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerStatusProjectionModels.kt`
+- `../../../runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerStatusProjectionContext.kt`
 
 Related readers, not a second progress path: `GoalRunnerStatusProjector.project` / `assembleGoalRunnerStatusProjection` (current step from `extras.currentStepOverride`, liveness from `extras.latestLivenessSignal`), and CLI formatting in `GoalCliStatusFormatting` as `latest_liveness_signal`.
 
@@ -47,7 +47,7 @@ Each obligation names the realistic bug it would catch while the rest of the sui
 1. New assembler/progress case: parked parent `PAUSED` at plan plus `goal_finalization` `stepId` monitor. Bug: extras copy `currentStepId` from the goal_finalization event and leave `latestLivenessSignal` on the parked-row fallback, so CLI prints `workflow_status=PAUSED; step=plan` while `current_step` is monitor (0AC-46 AC2).
 2. New case: completed child `workflowId` still set while the live goal step is monitor. Bug: assembler still calls `progress(childWorkflowId)` and publishes the child's completed `commit_push` row as the live signal.
 
-Extend, do not replace: `runtime-kotlin/runtime-domain/src/test/kotlin/skillbill/goalrunner/GoalRunnerStatusProjectorTest.kt` (stale versus live signals, blocked child versus running child) and `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/goalrunner/GoalRunnerTest.kt` assertions on `status.latestLivenessSignal`.
+Extend, do not replace: `../../../runtime-kotlin/runtime-domain/src/test/kotlin/skillbill/goalrunner/GoalRunnerStatusProjectorTest.kt` (stale versus live signals, blocked child versus running child) and `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/goalrunner/GoalRunnerTest.kt` assertions on `status.latestLivenessSignal`.
 
 Do not run these tests in implement. Validate owns execution.
 

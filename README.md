@@ -183,7 +183,7 @@ For full project validation:
 /skill-bill phase:validation
 ```
 
-The phase uses the same agent strategy as goal validate. It picks the platform gate from the branch's tracked files and validates the whole branch, not only the changed files. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures. Ambiguous platform ownership or a missing gate declaration blocks the phase. It does not fall back to another pack's gate.
+The phase uses the same agent strategy as goal validate. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures. Validation covers the full project regardless of which files changed and requires no platform pack or declared validation command. If discovery finds no applicable commands, the agent prints a warning and completes the step. Unreadable configuration or failed discovery blocks validation.
 
 ## Skills
 

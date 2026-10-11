@@ -8,10 +8,10 @@ Depends on subtask 1 because `projectGoal` calls `goalRunnerStatusService.status
 
 Files:
 
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusService.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusProjector.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusProjectorMapping.kt`
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusSelectionPolicy.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusService.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusProjector.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusProjectorMapping.kt`
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusSelectionPolicy.kt`
 
 Identity registration stays insert-once (`StandalonePhaseStatusStore.registerWorkflowInTransaction` writes `ide_status_workflow_execution` with `status_revision` `'1'` and `updated_at` equal to `started_at`). There is no UPDATE path for that table. Do not bump `status_revision`. Projection is computed at read time.
 

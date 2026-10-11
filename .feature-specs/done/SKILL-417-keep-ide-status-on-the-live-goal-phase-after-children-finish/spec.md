@@ -30,7 +30,7 @@ This goal fixes projection, liveness, selection, and plugin acceptance so UIs fo
 
 ## Constraints
 
-- Follow runtime-kotlin `ARCHITECTURE.md`, `docs/code-principles.md`, and `AGENTS.md`.
+- Follow runtime-kotlin `ARCHITECTURE.md`, `../../../docs/code-principles.md`, and `AGENTS.md`.
 - Kotlin under `runtime-kotlin` and `intellij-plugin`: no `//` comments and no non-KDoc block comments. Wire keys stay in `runtime-contracts`.
 - Do not make the parent feature-task walk implement or review. Children still own those phases. Fix projection, liveness, selection, and/or plugin acceptance.
 - Keep one user-level review-metrics SQLite file.
