@@ -119,20 +119,38 @@ internal fun goalShowsOpenCiMonitor(
     projection?.executionLiveness != ExecutionLiveness.LIVE &&
     lifecycle == IdeStatusLifecycleState.ACTIVE
 
+internal fun goalProjectsLiveFinalizationStep(
+  projection: GoalRunnerStatusProjection?,
+  goalCompletionRecorded: Boolean,
+): Boolean {
+  if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE) return false
+  if (!goalStaysOnOpenCiMonitor(projection, goalCompletionRecorded)) return false
+  val step = projection.currentStep?.takeIf(String::isNotBlank) ?: return false
+  return step in LIVE_GOAL_FINALIZATION_STEP_IDS
+}
+
+internal data class GoalCurrentStepSignals(
+  val openCiMonitor: Boolean,
+  val liveFinalizationStep: Boolean,
+)
+
 internal fun goalCurrentStep(
   planningStep: IdeStatusPlanning?,
   childPhaseId: String?,
   projectedStep: String?,
   lifecycle: IdeStatusLifecycleState,
-  openCiMonitor: Boolean,
+  signals: GoalCurrentStepSignals,
 ): IdeStatusStep {
   val terminal = lifecycle == IdeStatusLifecycleState.TERMINAL
-  val childPhaseStep = childPhaseId?.takeIf { it.isNotBlank() && planningStep == null && !terminal }
+  val childPhaseStep =
+    childPhaseId
+      ?.takeIf { it.isNotBlank() && planningStep == null && !terminal }
+      ?.takeUnless { signals.openCiMonitor || signals.liveFinalizationStep }
   return goalStep(
     planningStep,
     childPhaseStep
       ?: projectedStep?.takeUnless { terminal }
-      ?: OPEN_CI_MONITOR_STEP.takeIf { openCiMonitor },
+      ?: OPEN_CI_MONITOR_STEP.takeIf { signals.openCiMonitor },
     lifecycle,
   )
 }
@@ -146,6 +164,8 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
 
 internal const val OPEN_CI_MONITOR_ACTIVITY: String = "CI not fixed"
+
+private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 
 internal fun goalSummary(
   issueKey: String,

@@ -104,6 +104,25 @@ class IdeStatusSelectionPolicyTest {
   }
 
   @Test
+  fun `active workflow outranks a later blocked standalone with a higher sequence`() {
+    val workflow = candidate("SKILL-417", IdeStatusLifecycleState.ACTIVE, "workflow", "2026-08-06T12:00:00Z")
+    val phase =
+      candidate("SKILL-417", IdeStatusLifecycleState.BLOCKED, "phase", "2026-08-06T12:00:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.STANDALONE_PHASE,
+            executionId = "execution",
+            statusStoreId = "store",
+            runSequence = "11",
+            statusRevision = "3",
+            invocationId = "invocation",
+            phaseId = "validation",
+          ),
+      )
+    assertEquals("workflow", IdeStatusSelectionPolicy.select(listOf(workflow, phase), OBSERVED)?.workflowId)
+  }
+
+  @Test
   fun `higher execution runSequence wins among active candidates with the same timestamp`() {
     val low =
       candidate("SKILL-416", IdeStatusLifecycleState.ACTIVE, "seq-low", "2026-08-06T12:00:00Z").copy(
@@ -170,6 +189,49 @@ class IdeStatusSelectionPolicyTest {
         runSequence = "19",
       )
     assertEquals("live", IdeStatusSelectionPolicy.select(listOf(done, live), OBSERVED)?.workflowId)
+  }
+
+  @Test
+  fun `live feature goal on monitor beats parked parent and completed child`() {
+    val goal =
+      candidate("SKILL-417", IdeStatusLifecycleState.ACTIVE, "goal-1", "2026-08-06T11:55:00Z").copy(
+        workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
+        isGoalAuthoritative = true,
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "goal-execution",
+            statusStoreId = "goal-store",
+            runSequence = "19",
+            statusRevision = "1",
+          ),
+      )
+    val parkedParent =
+      candidate("SKILL-417", IdeStatusLifecycleState.PAUSED, "w-parent", "2026-08-06T11:50:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "parent-execution",
+            statusStoreId = "parent-store",
+            runSequence = "20",
+            statusRevision = "1",
+          ),
+      )
+    val completedChild =
+      candidate("SKILL-417", IdeStatusLifecycleState.TERMINAL, "w-child", "2026-08-06T11:52:00Z").copy(
+        execution =
+          IdeStatusExecutionIdentity(
+            scope = IdeStatusExecutionScope.WORKFLOW,
+            executionId = "child-execution",
+            statusStoreId = "child-store",
+            runSequence = "21",
+            statusRevision = "1",
+          ),
+      )
+    assertEquals(
+      "goal-1",
+      IdeStatusSelectionPolicy.select(listOf(parkedParent, completedChild, goal), OBSERVED)?.workflowId,
+    )
   }
 
   @Test

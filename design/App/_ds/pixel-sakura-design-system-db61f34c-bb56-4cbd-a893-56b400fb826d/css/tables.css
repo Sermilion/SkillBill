@@ -1,0 +1,71 @@
+/* Pixel Sakura — Tables (dark admin). Dense desktop; stacks on mobile. */
+
+.ps-table-wrap {
+  border: var(--border-1) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.ps-table { width: 100%; border-collapse: collapse; font-size: var(--fs-form); }
+
+.ps-table thead th {
+  text-align: left;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--fs-tiny);
+  font-weight: var(--text-label-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-1) solid var(--color-border);
+  white-space: nowrap;
+}
+
+.ps-table tbody td {
+  padding: var(--space-4);
+  border-bottom: var(--border-1) solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+.ps-table tbody tr:last-child td { border-bottom: 0; }
+.ps-table tbody tr { transition: background var(--dur-fast) var(--ease-standard); }
+.ps-table tbody tr:hover { background: var(--color-surface-subtle); }
+
+.ps-table__title { font-weight: var(--fw-semibold); color: var(--color-text); }
+.ps-table__title a { color: inherit; }
+.ps-table__title a:hover { color: var(--ps-sakura-300); }
+.ps-table__sub { font-size: var(--fs-small); color: var(--color-text-muted); }
+.ps-table__num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.ps-table__actions { display: flex; gap: var(--space-1); justify-content: flex-end; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .ps-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .ps-table, .ps-table tbody, .ps-table tr, .ps-table td { display: block; width: 100%; }
+  .ps-table tbody tr {
+    border: var(--border-1) solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+  }
+  .ps-table tbody td { border: 0; padding: var(--space-2) 0; display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+  .ps-table tbody td::before {
+    content: attr(data-label);
+    font-size: var(--fs-tiny);
+    font-weight: var(--text-label-weight);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    flex: none;
+  }
+  .ps-table__actions { justify-content: flex-start; }
+}
+
+.ps-table-empty {
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.ps-table-empty__title { font-family: var(--font-display); font-size: var(--fs-h3); font-weight: var(--fw-bold); color: var(--color-text); margin-bottom: var(--space-2); }

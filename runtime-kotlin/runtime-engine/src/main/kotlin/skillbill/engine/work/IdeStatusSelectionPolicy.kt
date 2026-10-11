@@ -3,6 +3,7 @@ package skillbill.engine.work
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import java.time.Duration
@@ -12,6 +13,12 @@ object IdeStatusSelectionPolicy {
   private const val LIVE_RETENTION_HOURS = 24L
   private const val BLOCKED_RETENTION_HOURS = 24L
   private const val SETTLED_RETENTION_HOURS = 6L
+  private val LIVE_COHORT_TIERS =
+    setOf(
+      IdeStatusSelectionTier.ACTIVE,
+      IdeStatusSelectionTier.PAUSED,
+      IdeStatusSelectionTier.BLOCKED,
+    )
 
   val LIVE_RETENTION: Duration = Duration.ofHours(LIVE_RETENTION_HOURS)
 
@@ -24,17 +31,7 @@ object IdeStatusSelectionPolicy {
     observedAt: Instant,
   ): IdeStatusCandidate? {
     val retained = candidates.filter { retainedAt(it, observedAt) }
-    val liveTiers =
-      setOf(
-        IdeStatusSelectionTier.ACTIVE,
-        IdeStatusSelectionTier.PAUSED,
-        IdeStatusSelectionTier.BLOCKED,
-      )
-    val freshLive =
-      retained.filter { candidate ->
-        candidate.selectionTier in liveTiers &&
-          IdeStatusFreshnessClassifier.classify(candidate.updatedAt, observedAt) != IdeStatusFreshness.STALE
-      }
+    val freshLive = retained.filter { candidate -> inFreshLiveCohort(candidate, observedAt) }
     val cohort = freshLive.ifEmpty { retained }
     cohort
       .filter { it.execution != null }
@@ -48,6 +45,24 @@ object IdeStatusSelectionPolicy {
         )
       }
     return cohort.sortedWith(comparator(observedAt)).firstOrNull()
+  }
+
+  private fun inFreshLiveCohort(
+    candidate: IdeStatusCandidate,
+    observedAt: Instant,
+  ): Boolean {
+    if (IdeStatusFreshnessClassifier.classify(candidate.updatedAt, observedAt) == IdeStatusFreshness.STALE) {
+      return false
+    }
+    return when (candidate.selectionTier) {
+      IdeStatusSelectionTier.ACTIVE, IdeStatusSelectionTier.PAUSED -> true
+      IdeStatusSelectionTier.BLOCKED ->
+        candidate.execution?.scope != IdeStatusExecutionScope.STANDALONE_PHASE
+      IdeStatusSelectionTier.FAILED,
+      IdeStatusSelectionTier.RECENTLY_TERMINAL,
+      IdeStatusSelectionTier.IDLE,
+      -> false
+    }
   }
 
   private fun freshnessKey(
@@ -76,12 +91,34 @@ object IdeStatusSelectionPolicy {
 
   private fun comparator(observedAt: Instant): Comparator<IdeStatusCandidate> =
     compareBy<IdeStatusCandidate> { it.execution?.runSequence == null }
+      .thenComparator { left, right -> goalAuthoritativeLiveOverPausedNonGoal(left, right) }
       .thenComparator { left, right -> compareRunSequence(right, left) }
       .thenBy { freshnessKey(it, observedAt) }
       .thenBy { it.selectionTier.rank }
       .thenBy { if (it.isGoalAuthoritative) 0 else 1 }
       .thenByDescending { it.updatedAt }
       .thenBy { it.workflowId }
+
+  private fun goalAuthoritativeLiveOverPausedNonGoal(
+    left: IdeStatusCandidate,
+    right: IdeStatusCandidate,
+  ): Int {
+    fun goalAuthoritativeOverPausedNonGoal(
+      goal: IdeStatusCandidate,
+      other: IdeStatusCandidate,
+    ): Boolean =
+      goal.isGoalAuthoritative &&
+        goal.selectionTier in LIVE_COHORT_TIERS &&
+        !other.isGoalAuthoritative &&
+        other.selectionTier == IdeStatusSelectionTier.PAUSED
+    val leftWins = goalAuthoritativeOverPausedNonGoal(left, right)
+    val rightWins = goalAuthoritativeOverPausedNonGoal(right, left)
+    return when {
+      leftWins -> -1
+      rightWins -> 1
+      else -> 0
+    }
+  }
 
   private fun compareRunSequence(
     left: IdeStatusCandidate,

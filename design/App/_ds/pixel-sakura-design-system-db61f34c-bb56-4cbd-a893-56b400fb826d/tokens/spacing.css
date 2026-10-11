@@ -1,0 +1,49 @@
+/* Pixel Sakura — Spacing, radii, shadows, layout tokens
+ * 4px base grid. Compact 4–8px radii. Borders do most of the work;
+ * shadows are subtle and warm. */
+
+:root {
+  /* ---- Spacing scale (4px base) ---- */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;   /* page gutter */
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- Radii (modern editorial — softer cards, crisp controls) ---- */
+  --radius-sm:   8px;   /* buttons, chips, inputs */
+  --radius-md:   14px;  /* cards, surfaces, media */
+  --radius-lg:   20px;  /* large feature blocks, modals */
+  --radius-pill: 999px;
+
+  /* ---- Border widths ---- */
+  --border-1: 1px;
+  --border-2: 2px;
+
+  /* ---- Shadows (deep black on dark + sakura glow accents) ---- */
+  --shadow-xs: 0 1px 2px rgba(var(--ps-shadow-rgb), 0.30);
+  --shadow-sm: 0 2px 8px rgba(var(--ps-shadow-rgb), 0.40);
+  --shadow-md: 0 10px 30px rgba(var(--ps-shadow-rgb), 0.50);
+  --shadow-lg: 0 24px 60px rgba(var(--ps-shadow-rgb), 0.60);
+  /* Inset hairline ring */
+  --ring-border: inset 0 0 0 1px var(--ps-border);
+
+  /* ---- Layout ---- */
+  --container-max: 1240px;  /* wide editorial container */
+  --container-article: 740px; /* comfortable reading measure */
+  --header-h: 68px;
+  --gutter: 32px;
+  --gutter-mobile: 16px;
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1); /* @kind other */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --dur-fast: 140ms; /* @kind other */
+  --dur-med: 260ms; /* @kind other */
+}

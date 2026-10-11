@@ -1,7 +1,10 @@
 package skillbill.engine.work
 
+import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -22,9 +25,59 @@ class OpenCiMonitorStatusTest {
   }
 
   @Test
+  fun `open ci monitor keeps monitor over a completed child phase id`() {
+    val step =
+      goalCurrentStep(
+        null,
+        "commit_push",
+        "monitor",
+        IdeStatusLifecycleState.ACTIVE,
+        GoalCurrentStepSignals(openCiMonitor = true, liveFinalizationStep = false),
+      )
+    assertEquals("monitor", step.id)
+    assertEquals("monitor", step.label)
+  }
+
+  @Test
+  fun `live finalization keeps monitor over a completed child phase id`() {
+    val step =
+      goalCurrentStep(
+        null,
+        "commit_push",
+        "monitor",
+        IdeStatusLifecycleState.ACTIVE,
+        GoalCurrentStepSignals(openCiMonitor = false, liveFinalizationStep = true),
+      )
+    assertEquals("monitor", step.id)
+    assertEquals("monitor", step.label)
+  }
+
+  @Test
+  fun `a live goal on monitor projects finalization when children are complete`() {
+    assertTrue(
+      goalProjectsLiveFinalizationStep(
+        projection(complete = 1, pending = 0, blocked = 0)
+          .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = "monitor"),
+        false,
+      ),
+    )
+  }
+
+  @Test
+  fun `a live goal on implement does not project finalization`() {
+    assertFalse(
+      goalProjectsLiveFinalizationStep(
+        projection(complete = 0, pending = 1, blocked = 0)
+          .copy(executionLiveness = ExecutionLiveness.LIVE, currentStep = "implement"),
+        false,
+      ),
+    )
+  }
+
+  @Test
   fun `a paused goal does not stay on ci monitor`() {
     assertFalse(
-      goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0, paused = true), false),
+      goalStaysOnOpenCiMonitor(projection(complete = 1, pending = 0, blocked = 0).copy(paused = true), false),
     )
   }
 
@@ -32,7 +85,6 @@ class OpenCiMonitorStatusTest {
     complete: Int,
     pending: Int,
     blocked: Int,
-    paused: Boolean = false,
   ): GoalRunnerStatusProjection =
     GoalRunnerStatusProjection(
       issueKey = "SKILL-415",
@@ -42,6 +94,7 @@ class OpenCiMonitorStatusTest {
       currentSubtaskId = null,
       currentStep = null,
       activeAgent = null,
-      paused = paused,
+      executionLiveness = ExecutionLiveness.UNKNOWN,
+      paused = false,
     )
 }

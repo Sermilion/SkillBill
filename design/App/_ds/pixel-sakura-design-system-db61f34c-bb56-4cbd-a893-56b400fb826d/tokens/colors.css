@@ -1,0 +1,116 @@
+/* Pixel Sakura — Color tokens · "Night Sakura" dark theme
+ * Modern gaming-editorial: warm near-black canvas, neon sakura-pink that
+ * glows, gold spark, mint success. Variable NAMES are kept stable so the
+ * component layer needs no rewiring; only values changed. */
+
+:root {
+  /* ---- Canvas & surfaces (warm purple-charcoal) ---- */
+  --ps-bg:        #0D0B11; /* page canvas */
+  --ps-bg-2:      #121017; /* alt sections */
+  --ps-surface:   #17141C; /* cards */
+  --ps-surface-2: #1F1B27; /* elevated / hover */
+  --ps-surface-3: #2A2434; /* pressed / inputs */
+  --ps-white:     #FFFFFF;
+
+  /* legacy paper names remapped to dark equivalents (kept for safety) */
+  --ps-cream-50:  var(--ps-bg);
+  --ps-cream-100: var(--ps-surface-2);
+
+  /* ---- Borders (hairlines on dark) ---- */
+  --ps-border:        #292233;
+  --ps-border-strong: #3C3349;
+
+  /* ---- Ink (text) ---- */
+  --ps-ink:        #F5F1F8; /* primary text */
+  --ps-ink-800:    #08070A; /* deepest surface — media letterbox / topbar */
+  --ps-slate:      #A79FB4; /* muted text */
+  --ps-slate-400:  #6E6678; /* faint / disabled */
+
+  /* ---- Sakura (neon brand pink) ---- */
+  --ps-sakura-50:  rgba(255, 77, 141, 0.10); /* faint fill */
+  --ps-sakura-100: rgba(255, 77, 141, 0.30); /* tint border */
+  --ps-sakura-300: #FF9CC0; /* light — links, on-dark text */
+  --ps-sakura-500: #FF4D8D; /* neon primary */
+  --ps-sakura-700: #FF6FA3; /* hover (brighter on dark) */
+  --ps-sakura-800: #FF85B2;
+  --ps-sakura-900: #ED3A7B; /* active (deeper) */
+
+  /* ---- Gold (electric spark / secondary accent) ---- */
+  --ps-gold-50:    rgba(245, 181, 68, 0.12);
+  --ps-gold-500:   #F5B544;
+  --ps-gold-600:   #FFCE5C;
+
+  /* ---- Danger ---- */
+  --ps-danger-50:  rgba(255, 106, 106, 0.12);
+  --ps-danger-500: #FF6B6B;
+  --ps-danger-600: #FF8585;
+
+  /* ---- Success (mint) ---- */
+  --ps-success-50:  rgba(46, 230, 166, 0.12);
+  --ps-success-500: #2EE6A6;
+
+  /* ---- Shadow ink (pure black on dark) ---- */
+  --ps-shadow-rgb: 0, 0, 0;
+
+  /* Text that sits ON a bright accent fill */
+  --ps-on-accent: #1A0B12;
+
+  /* ================= SEMANTIC ALIASES ================= */
+  --color-bg:            var(--ps-bg);
+  --color-bg-alt:        var(--ps-bg-2);
+  --color-surface:       var(--ps-surface);
+  --color-surface-subtle:var(--ps-surface-2);
+  --color-surface-raised:var(--ps-surface-2);
+  --color-surface-dark:  var(--ps-ink-800);
+  --color-border:        var(--ps-border);
+  --color-border-strong: var(--ps-border-strong);
+
+  --color-text:          var(--ps-ink);
+  --color-text-muted:    var(--ps-slate);
+  --color-text-disabled: var(--ps-slate-400);
+  --color-text-inverse:  var(--ps-white);
+  --color-on-accent:     var(--ps-on-accent);
+
+  --color-primary:       var(--ps-sakura-500);
+  --color-primary-hover: var(--ps-sakura-700);
+  --color-primary-active:var(--ps-sakura-900);
+  --color-link:          var(--ps-sakura-300);
+  --color-link-hover:    var(--ps-sakura-800);
+
+  --color-accent:        var(--ps-gold-500);
+  --color-accent-hover:  var(--ps-gold-600);
+
+  --color-danger:        var(--ps-danger-500);
+  --color-danger-hover:  var(--ps-danger-600);
+  --color-success:       var(--ps-success-500);
+
+  /* Chip / badge palettes */
+  --chip-type-bg:        var(--ps-sakura-50);
+  --chip-type-border:    var(--ps-sakura-100);
+  --chip-type-text:      var(--ps-sakura-300);
+  --chip-platform-border:rgba(245, 181, 68, 0.45);
+  --chip-platform-text:  var(--ps-gold-600);
+  --chip-topic-border:   var(--ps-border-strong);
+  --chip-topic-text:     var(--ps-ink);
+  --chip-neutral-border: var(--ps-border-strong);
+  --chip-neutral-text:   var(--ps-slate);
+
+  --badge-published-bg:     var(--ps-sakura-50);
+  --badge-published-border: var(--ps-sakura-100);
+  --badge-published-text:   var(--ps-sakura-300);
+  --badge-draft-bg:         var(--ps-surface-2);
+  --badge-draft-border:     var(--ps-border-strong);
+  --badge-draft-text:       var(--ps-slate);
+
+  /* Focus ring — bright sakura on dark */
+  --focus-ring:        var(--ps-sakura-700);
+  --focus-ring-width:  2px;
+  --focus-ring-offset: 2px;
+
+  /* Ambient glows & gradients (used sparingly) */
+  --glow-sakura: 0 0 24px rgba(255, 77, 141, 0.35);
+  --glow-sakura-strong: 0 0 0 1px rgba(255, 77, 141, 0.55), 0 10px 34px rgba(255, 77, 141, 0.30);
+  --grad-hero-glow: radial-gradient(120% 80% at 85% -10%, rgba(255, 77, 141, 0.16), transparent 60%),
+                    radial-gradient(90% 70% at 0% 0%, rgba(245, 181, 68, 0.07), transparent 55%); /* @kind other */
+  --media-tint: linear-gradient(180deg, transparent 38%, rgba(13, 11, 17, 0.55) 78%, rgba(13, 11, 17, 0.92));
+}

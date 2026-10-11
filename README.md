@@ -22,7 +22,7 @@ Install and authenticate your coding agent's CLI, then install Skill Bill:
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
-Choose your agents, platform packs, and telemetry level when prompted. The installer downloads a self-contained runtime, renders `/skill-bill` with the selected packs' review specialists as its internal sidecars, links it into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle. Installing over an older version removes the retired `bill-*` skills; see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills).
+Choose your agents and telemetry level when prompted. The installer always installs every manifest-discovered platform pack. The installer downloads a self-contained runtime, renders `/skill-bill` with all packs' review specialists as its internal sidecars, links it into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle. Installing over an older version removes the retired `bill-*` skills; see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills).
 
 Check the installation:
 

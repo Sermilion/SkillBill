@@ -1,0 +1,18 @@
+/* Pixel Sakura Design System — global CSS entry point.
+ * Consumers link THIS one file. It only @imports; no rules live here. */
+
+@import url("./tokens/fonts.css");
+@import url("./tokens/colors.css");
+@import url("./tokens/typography.css");
+@import url("./tokens/spacing.css");
+
+/* Element + component layer (server-render-ready CSS classes) */
+@import url("./css/base.css");
+@import url("./css/brand.css");
+@import url("./css/buttons.css");
+@import url("./css/chips.css");
+@import url("./css/forms.css");
+@import url("./css/cards.css");
+@import url("./css/tables.css");
+@import url("./css/article.css");
+@import url("./css/layout.css");

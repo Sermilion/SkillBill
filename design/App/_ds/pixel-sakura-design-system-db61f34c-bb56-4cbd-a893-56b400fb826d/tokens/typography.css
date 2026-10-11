@@ -1,0 +1,46 @@
+/* Pixel Sakura — Typography tokens · modern editorial
+ * Display: Space Grotesk (poster headlines, brand, big numbers) — gives the
+ *   brand a sharp, techy, gaming-media character.
+ * Text/UI: Inter (dense reading + controls).
+ * Mono: JetBrains Mono (code, slugs, metadata ticks). */
+
+:root {
+  /* ---- Families ---- */
+  --font-display: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Weights ---- */
+  --fw-regular: 400;   /* @kind font */
+  --fw-medium:  500;   /* @kind font */
+  --fw-semibold:600;   /* @kind font */
+  --fw-bold:    700;   /* @kind font */
+  --fw-extrabold: 700; /* @kind font */
+
+  /* ---- Type scale (size / line-height) ---- */
+  --fs-display:   64px; /* @kind font */
+  --lh-display:   1.02; /* @kind font */
+  --fs-article:   42px; --lh-article:   46px;  /* article title */
+  --fs-h1:        32px; --lh-h1:        38px;  /* page / section title */
+  --fs-h2:        26px; --lh-h2:        32px;  /* article H2 */
+  --fs-h3:        20px; --lh-h3:        28px;  /* article H3 / lead title */
+  --fs-card-title:18px; --lh-card-title:23px;  /* post card title */
+  --fs-body:      17px; --lh-body:      28px;  /* article body / reading */
+  --fs-ui:        15px; --lh-ui:        20px;  /* buttons, primary UI */
+  --fs-form:      14px; --lh-form:      20px;  /* form values, table cells */
+  --fs-small:     13px; --lh-small:     16px;  /* meta, labels, chips */
+  --fs-tiny:      12px; --lh-tiny:      16px;  /* fine print */
+
+  /* ---- Letter spacing ---- */
+  --ls-display: -0.03em; /* poster headlines @kind font */
+  --ls-tight:   -0.02em; /* large headlines @kind font */
+  --ls-normal:   0;      /* @kind font */
+  --ls-label:    0.14em; /* uppercase eyebrow labels @kind font */
+
+  /* ---- Semantic roles ---- */
+  --text-display-weight: var(--fw-bold);
+  --text-heading-weight: var(--fw-bold);
+  --text-cardtitle-weight: var(--fw-bold);
+  --text-label-weight: var(--fw-semibold);
+  --text-ui-weight: var(--fw-semibold);
+}

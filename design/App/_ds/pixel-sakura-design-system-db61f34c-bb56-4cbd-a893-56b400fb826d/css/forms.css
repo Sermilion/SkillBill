@@ -1,0 +1,75 @@
+/* Pixel Sakura — Forms (dark, modern admin). Sakura focus glow. */
+
+.ps-field { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-5); }
+
+.ps-label {
+  font-size: var(--fs-small);
+  font-weight: var(--text-label-weight);
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+.ps-label .ps-required { color: var(--color-primary); margin-left: 2px; }
+
+.ps-input, .ps-textarea, .ps-select {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--fs-form);
+  color: var(--color-text);
+  background: var(--color-surface-subtle);
+  border: var(--border-1) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+}
+.ps-input, .ps-select { height: 44px; padding: 0 var(--space-3); }
+.ps-textarea { min-height: 120px; padding: var(--space-3); line-height: var(--lh-body); resize: vertical; }
+
+.ps-input::placeholder, .ps-textarea::placeholder { color: var(--color-text-disabled); }
+
+.ps-input:hover, .ps-textarea:hover, .ps-select:hover { border-color: var(--ps-slate-400); }
+
+.ps-input:focus, .ps-textarea:focus, .ps-select:focus {
+  outline: none;
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--ps-sakura-50), var(--glow-sakura);
+}
+
+.ps-input:disabled, .ps-textarea:disabled, .ps-select:disabled {
+  background: var(--color-bg);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.ps-textarea--code { font-family: var(--font-mono); font-size: var(--fs-form); line-height: 1.7; }
+
+.ps-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A79FB4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: var(--space-8);
+}
+
+.ps-help { font-size: var(--fs-small); color: var(--color-text-muted); line-height: var(--lh-small); }
+.ps-error { font-size: var(--fs-small); color: var(--color-danger); line-height: var(--lh-small); font-weight: var(--fw-medium); }
+
+.ps-field--invalid .ps-input,
+.ps-field--invalid .ps-textarea,
+.ps-field--invalid .ps-select { border-color: var(--color-danger); }
+.ps-field--invalid .ps-input:focus,
+.ps-field--invalid .ps-textarea:focus,
+.ps-field--invalid .ps-select:focus { box-shadow: 0 0 0 3px var(--ps-danger-50); }
+
+.ps-check-group { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.ps-check {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font-size: var(--fs-form); color: var(--color-text); cursor: pointer;
+}
+.ps-check input[type="checkbox"], .ps-check input[type="radio"] {
+  width: 18px; height: 18px; accent-color: var(--color-primary); cursor: pointer; margin: 0;
+}
+
+.ps-input--number { width: 72px; text-align: center; }
+
+.ps-fieldset { border: 0; padding: 0; margin: 0 0 var(--space-5); }
+.ps-fieldset > legend { padding: 0; font-size: var(--fs-small); font-weight: var(--text-label-weight); color: var(--color-text-muted); margin-bottom: var(--space-2); }

@@ -289,7 +289,7 @@ internal fun runPrebuiltInstaller(
     Files.createDirectories(home.resolve(".skill-bill"))
   }
   val process = builder.start()
-  val input = "1\nclaude\nbase only\noff\n"
+  val input = "1\nclaude\noff\n"
   process.outputStream.bufferedWriter().use { writer -> writer.write(input) }
   val output = process.inputStream.bufferedReader().readText()
   val exitCode = process.waitFor()
