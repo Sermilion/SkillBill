@@ -117,7 +117,11 @@ fun FeatureTaskRuntimeSubtaskFinalisation.commitAndPush(
   if (commit !is WorkflowGitOperationResult.Ok) return blocked(restoring(commit.error, stageable, restoreState))
   val commitSha =
     commit.value.orEmpty().trim().takeIf(String::isNotBlank)
-      ?: return blocked(restoring("the finalisation commit returned an empty sha", stageable, restoreState))
+      ?: return if (stageable.isEmpty()) {
+        blocked(NOTHING_TO_COMMIT_REASON)
+      } else {
+        blocked(restoring("the finalisation commit returned an empty sha", stageable, restoreState))
+      }
   val recordFailure = recordCommit(commitSha, stageable)
   if (recordFailure != null) return FeatureTaskRuntimeSubtaskFinalisationBlocked(recordFailure)
   return finalizeCommittedSubtask(
@@ -198,6 +202,12 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
     ),
   )
 }
+
+internal const val NOTHING_TO_COMMIT_REASON: String =
+  "the subtask left no repository changes to commit: implement changed nothing and returned no `no_change` " +
+    "claim, so the no-change operator decision never opened. If the repository already satisfies the spec, " +
+    "close the issue as already satisfied; otherwise rerun the subtask so implement makes the change or " +
+    "returns a `no_change` claim"
 
 fun FeatureTaskRuntimeSubtaskFinalisation.blocked(reason: String) =
   FeatureTaskRuntimeSubtaskFinalisationBlocked(

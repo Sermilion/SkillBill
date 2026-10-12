@@ -27,6 +27,7 @@ import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunne
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -176,6 +177,31 @@ class PhaseStrategyCompositionTest {
     val actual = strategies.flatMap { strategy -> strategy.steps.map { it to strategy.policyFor(it) } }.toMap()
 
     assertEquals(EXPECTED_POLICIES, actual)
+  }
+
+  @Test
+  fun `every implement strategy tells implement how to return a no-change claim`() {
+    listOf(ImplementThenSimplifyStrategy(), ImplementThenSimplifyOpus55Strategy()).forEach { strategy ->
+      val implement =
+        strategy.promptSections(
+          "implement",
+          FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement")),
+        )
+      val simplify =
+        strategy.promptSections(
+          "simplify",
+          FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("simplify")),
+        )
+
+      assertTrue(
+        implement.taskDirective.contains(ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE),
+        "${strategy.strategyId} implement must carry the no-change claim directive",
+      )
+      assertTrue(
+        !simplify.taskDirective.contains("`no_change` argument"),
+        "${strategy.strategyId} simplify must not offer a no-change claim",
+      )
+    }
   }
 
   @Test
