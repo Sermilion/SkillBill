@@ -127,6 +127,7 @@ data class ParallelCodeReviewResult(
   val reportTruncated: Boolean = false,
   val rejectedCandidateCount: Int = 0,
   val analysisStageFailures: List<ParallelReviewAnalysisStageFailure> = emptyList(),
+  val routedSkill: String? = null,
 ) {
   val output: String
     get() = mergeResult.output

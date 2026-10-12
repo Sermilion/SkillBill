@@ -125,6 +125,7 @@ internal class VerifyOperationHarness : AutoCloseable {
             ParallelCodeReviewResult(
               mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
               lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+              routedSkill = DELEGATED_ROUTED_SKILL,
             ),
           )
         },
@@ -333,6 +334,7 @@ internal class VerifyOperationHarness : AutoCloseable {
     const val AGENT = "codex"
     const val REVIEW_REGISTER = "Verdict: approved\n"
     const val SKILL_SESSION_ID = "fvr-skill"
+    const val DELEGATED_ROUTED_SKILL = "bill-kotlin-code-review"
   }
 }
 

@@ -43,8 +43,8 @@ object FeatureVerifyWorkflowDefinition {
     requiredArtifactKeys = keys.toList(),
     projectedFieldsByArtifactKey = typedFields,
     forbiddenArtifactKeys = privateArtifactKeys,
-    maxUtf8Bytes = 64 * 1024,
-    maxCollectionItems = 512,
+    maxUtf8Bytes = Int.MAX_VALUE,
+    maxCollectionItems = Int.MAX_VALUE,
     repositoryCheckpointArtifactKey = "diff_projection",
   )
 

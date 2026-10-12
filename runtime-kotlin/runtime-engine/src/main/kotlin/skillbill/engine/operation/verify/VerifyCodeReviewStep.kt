@@ -17,6 +17,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
+import skillbill.review.attribution.GENERIC_REVIEW_SKILL_NAME
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -40,6 +41,7 @@ internal enum class VerifyReviewMode(val wireValue: String) {
 internal data class VerifyCodeReview(
   val verdict: FeatureTaskRuntimeVerdict,
   val findings: List<ParallelReviewMergedFinding>,
+  val routedSkill: String,
 )
 
 internal class VerifyCodeReviewStep(
@@ -97,7 +99,8 @@ internal class VerifyCodeReviewStep(
       } else {
         InlineReviewEnvelope.extractReviewVerdict(reviewed.output)
       }
-    return VerifyCodeReviewOutcome.Reviewed(VerifyCodeReview(verdict, findings))
+    val routedSkill = reviewed.routedSkill ?: GENERIC_REVIEW_SKILL_NAME
+    return VerifyCodeReviewOutcome.Reviewed(VerifyCodeReview(verdict, findings, routedSkill))
   }
 
   private fun delegatedSession(

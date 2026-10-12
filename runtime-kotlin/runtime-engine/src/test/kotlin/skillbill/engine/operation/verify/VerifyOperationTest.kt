@@ -155,6 +155,22 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `the imported review names the generic pack inline and the runner's routed pack delegated`() {
+    listOf(
+      "inline" to "bill-generic-code-review",
+      "delegated" to VerifyOperationHarness.DELEGATED_ROUTED_SKILL,
+    ).forEach { (mode, routedSkill) ->
+      VerifyOperationHarness().use { harness ->
+        val parked = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(mode = mode))
+        assertIs<OperationOutcome.Completed>(harness.confirm(parked.token), mode)
+
+        val imported = harness.telemetry.imports.single()
+        assertTrue("Routed to: $routedSkill\n" in imported, imported)
+      }
+    }
+  }
+
+  @Test
   fun `oversized criteria and receipts are stored whole and reach the verdict whole`() {
     VerifyOperationHarness().use { harness ->
       val criteria = (1..60).map { index -> "$index. Criterion $index ${"c".repeat(120)}" }
