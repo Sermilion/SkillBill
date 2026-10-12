@@ -137,6 +137,7 @@ internal class VerifyOperationHarness : AutoCloseable {
           clock,
           NoopRuntimeDiagnostics,
         ),
+        CheckedOutBranchSource { "main" },
       )
     val proposals = SqliteOperationProposalRepository(database)
     executor =
@@ -171,6 +172,8 @@ internal class VerifyOperationHarness : AutoCloseable {
   fun workflowStatus(workflowId: String): String? = column(workflowId, "workflow_status")
 
   fun currentStep(workflowId: String): String? = column(workflowId, "current_step_id")
+
+  fun issueKey(workflowId: String): String? = column(workflowId, "issue_key")
 
   fun snapshot(workflowId: String): WorkflowSnapshotView =
     (workflows.get(WorkflowFamilyKind.VERIFY, workflowId) as WorkflowGetResult.Ok).snapshot

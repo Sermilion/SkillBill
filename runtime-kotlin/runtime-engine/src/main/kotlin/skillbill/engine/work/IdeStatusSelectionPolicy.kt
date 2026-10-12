@@ -6,6 +6,7 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import java.time.Duration
 import java.time.Instant
 
@@ -162,6 +163,18 @@ object IdeStatusSelectionPolicy {
 
   fun lifecycleFromDurableStateWire(currentState: String): IdeStatusLifecycleState? =
     IdeStatusDurableWorkflowState.fromWire(currentState)?.let(::lifecycleFromDurableState)
+
+  fun lifecycleFromDurableStateWire(
+    family: IdeStatusWorkflowFamily,
+    currentState: String,
+  ): IdeStatusLifecycleState? =
+    if (family == IdeStatusWorkflowFamily.FEATURE_VERIFY &&
+      currentState == IdeStatusDurableWorkflowState.PENDING.wireValue
+    ) {
+      IdeStatusLifecycleState.TERMINAL
+    } else {
+      lifecycleFromDurableStateWire(currentState)
+    }
 }
 
 internal enum class IdeStatusDurableWorkflowState(val wireValue: String) {

@@ -35,6 +35,7 @@ internal object VerifyWorkflow {
   const val BASE_REVISION = "base_revision"
   const val HEAD_REVISION = "head_revision"
   const val REVIEW_MODE = "review_mode"
+  const val ISSUE_KEY = "issue_key"
   const val SUPERSEDED_BY = "superseded_by"
 
   const val CONTRACT_VERSION = "contract_version"

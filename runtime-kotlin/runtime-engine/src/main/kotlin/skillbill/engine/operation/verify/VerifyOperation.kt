@@ -9,6 +9,7 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.phaserun.IntakeIssueKeys
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
@@ -30,6 +31,7 @@ import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
@@ -37,6 +39,7 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.WorkflowContinueStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import java.nio.file.Path
 import java.time.Clock
 
 @Inject
@@ -49,6 +52,7 @@ class VerifyOperation(
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val branchSource: CheckedOutBranchSource,
 ) : SelfConfirmingOperation {
   override val id: String = "verify"
 
@@ -90,7 +94,13 @@ class VerifyOperation(
     target: VerifyTarget,
   ): OperationOutcome {
     val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
-    val openArgs = WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, currentStepId = VerifyWorkflow.EXTRACT_CRITERIA)
+    val issueKey = issueKeyOf(context, intake)
+    val openArgs =
+      WorkflowServiceOpenArgs(
+        WorkflowFamilyKind.VERIFY,
+        currentStepId = VerifyWorkflow.EXTRACT_CRITERIA,
+        issueKey = issueKey,
+      )
     val workflowId =
       when (val opened = workflows.open(openArgs)) {
         is WorkflowOpenResult.Ok -> opened.workflowId
@@ -105,7 +115,7 @@ class VerifyOperation(
         VerifyWorkflow.HEAD_REVISION to target.headRevision,
         VerifyWorkflow.COMPARISON_SCOPE to target.comparisonScope,
         VerifyWorkflow.REVIEW_MODE to mode.wireValue,
-      )
+      ) + listOfNotNull(issueKey?.let { VerifyWorkflow.ISSUE_KEY to it })
     val started =
       store.write(
         workflowId,
@@ -118,7 +128,7 @@ class VerifyOperation(
         mapOf(VerifyWorkflow.INPUT_CONTEXT to inputContext),
       )
     if (started is VerifyWrite.Rejected) return OperationOutcome.Failed(started.error)
-    registerWorkflowStatus(context, workflowId)
+    registerWorkflowStatus(context, workflowId, issueKey)
     return extractAndPark(context, workflowId, intake, target)
   }
 
@@ -203,6 +213,7 @@ class VerifyOperation(
     val criteriaArtifact = snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY]
     val criteria = VerifyCriteria.fromArtifact(criteriaArtifact)
     val intake = VerifyIntake.stored(inputContext)?.label.orEmpty()
+    val storedIssueKey = VerifyWorkflow.string(inputContext, VerifyWorkflow.ISSUE_KEY)
     val attempts = snapshot.steps.associate { step -> step.stepId to step.attemptCount }
     val run = VerifyRun(context, workflowId, snapshot.sessionId, intake, target, mode, criteria, clock.instant())
     if (snapshot.currentStepId in PARKED_STEPS) {
@@ -211,25 +222,38 @@ class VerifyOperation(
           "Verify workflow '$workflowId' has no extracted criteria to confirm; rerun operation verify.",
         )
       } else {
-        registerWorkflowStatus(context, workflowId)
+        registerWorkflowStatus(context, workflowId, storedIssueKey)
         confirmParked(run, attempts)
       }
     }
     refreshStaleCheckpoint(run, snapshot)?.let { failure -> return failure }
     val start = resumeStep(workflowId) { failure -> return failure }
-    registerWorkflowStatus(context, workflowId)
+    registerWorkflowStatus(context, workflowId, storedIssueKey)
     return sequence.run(run, start, attempts)
   }
 
   private fun registerWorkflowStatus(
     context: OperationContext,
     workflowId: String,
+    issueKey: String?,
   ) {
     statusPublisherFactory.registerWorkflow(
       repoRoot = context.repoRoot,
-      issueKey = null,
+      issueKey = issueKey,
       workflowId = workflowId,
     )
+  }
+
+  private fun issueKeyOf(
+    context: OperationContext,
+    intake: VerifyIntake,
+  ): String? {
+    val fromIntake =
+      when (intake) {
+        is VerifyIntake.SpecFile -> IntakeIssueKeys.ofSpecPath(Path.of(intake.value))
+        is VerifyIntake.Text -> IntakeIssueKeys.ofIntake(intake.value)
+      }
+    return fromIntake ?: branchSource.checkedOutBranch(context.repoRoot)?.let(IntakeIssueKeys::ofBranch)
   }
 
   private inline fun confirmableSnapshot(

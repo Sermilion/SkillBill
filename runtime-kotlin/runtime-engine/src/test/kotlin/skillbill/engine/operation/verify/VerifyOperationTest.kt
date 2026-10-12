@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class VerifyOperationTest {
@@ -264,6 +265,32 @@ class VerifyOperationTest {
 
       assertIs<OperationOutcome.Completed>(harness.confirm(parked.token))
       assertEquals(listOf(LINEAR), harness.telemetry.started.map { it.specSummary })
+    }
+  }
+
+  @Test
+  fun `an issue URL intake records its key on the workflow row and in the input context`() {
+    VerifyOperationHarness().use { harness ->
+      val parked =
+        assertIs<OperationOutcome.AwaitingConfirmation>(harness.invoke(OperationArguments(), instructions = LINEAR))
+
+      assertEquals("FP-1", harness.issueKey(parked.token))
+      val inputContext = harness.snapshot(parked.token).artifacts.getValue("input_context") as Map<*, *>
+      assertEquals("FP-1", inputContext["issue_key"])
+    }
+  }
+
+  @Test
+  fun `raw text on a branch without a key records no issue key`() {
+    VerifyOperationHarness().use { harness ->
+      val parked =
+        assertIs<OperationOutcome.AwaitingConfirmation>(
+          harness.invoke(OperationArguments(target = harness.range), instructions = "Greets the user by name."),
+        )
+
+      assertNull(harness.issueKey(parked.token))
+      val inputContext = harness.snapshot(parked.token).artifacts.getValue("input_context") as Map<*, *>
+      assertFalse("issue_key" in inputContext)
     }
   }
 

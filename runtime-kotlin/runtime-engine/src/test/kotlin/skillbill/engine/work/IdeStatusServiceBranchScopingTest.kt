@@ -555,6 +555,98 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
+  fun `verify registered on the checkout branch is selected without an issue key in the branch`() {
+    val fixture = gitRepoFixture("ide-status-verify-registered", branch = "chore/cleanup")
+    val database = registeredVerifyDatabase(testGoalRepositoryIdentity(fixture), registeredBranch = "chore/cleanup")
+
+    val result =
+      ideStatusService(database).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertNull(result.snapshot.problem)
+    assertEquals("w-verify", result.snapshot.workflowId)
+    assertEquals(IdeStatusWorkflowFamily.FEATURE_VERIFY, result.snapshot.workflowFamily)
+  }
+
+  @Test
+  fun `verify parked after presenting its criteria is reported as finished`() {
+    val fixture = gitRepoFixture("ide-status-verify-parked", branch = "chore/cleanup")
+    val database =
+      registeredVerifyDatabase(
+        testGoalRepositoryIdentity(fixture),
+        registeredBranch = "chore/cleanup",
+        state = "pending",
+      )
+
+    val result =
+      ideStatusService(database).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals("w-verify", result.snapshot.workflowId)
+    assertEquals(IdeStatusLifecycleState.TERMINAL, result.snapshot.lifecycleState)
+  }
+
+  @Test
+  fun `verify registered on another branch is not selected`() {
+    val fixture = gitRepoFixture("ide-status-verify-other-branch", branch = "chore/cleanup")
+    val database = registeredVerifyDatabase(testGoalRepositoryIdentity(fixture), registeredBranch = "chore/elsewhere")
+
+    val result =
+      ideStatusService(database).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
+  }
+
+  @Test
+  fun `verify registered in another repository is not selected`() {
+    val fixture = gitRepoFixture("ide-status-verify-other-repo-registration", branch = "chore/cleanup")
+    val database = registeredVerifyDatabase("repo-root-realpath-v1:/other-repo", registeredBranch = "chore/cleanup")
+
+    val result =
+      ideStatusService(database).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
+  }
+
+  private fun registeredVerifyDatabase(
+    identity: String,
+    registeredBranch: String,
+    state: String = "running",
+  ): TrackingDatabase {
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveRecord(WorkflowFamily.VERIFY, verifyRecord("w-verify", "2026-08-06T11:00:00Z"))
+    val work = listOf(workItem("w-verify", WorkItemKind.FEATURE_VERIFY, state, "2026-08-06T11:00:00Z"))
+    val statuses =
+      object : StandalonePhaseStatusRepository by TrackingDatabase(
+        work,
+        workflows,
+      ).unitOfWork().standalonePhaseStatuses {
+        override fun latestWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
+          IdeStatusWorkflowExecution(
+            repositoryIdentity = identity,
+            branchCorrelation = registeredBranch,
+            issueKey = null,
+            workflowId = "w-verify",
+            invocationId = "verify-invocation",
+            executionId = "verify-execution",
+            statusStoreId = "status-store",
+            runSequence = "1",
+            statusRevision = "1",
+            lifecycleState = "active",
+            startedAt = ideStatusObservedAt.minusSeconds(600),
+            updatedAt = ideStatusObservedAt,
+          ).takeIf { workflowId == "w-verify" }
+      }
+    return TrackingDatabase(work, workflows, statusRepository = statuses)
+  }
+
+  @Test
   fun `branch scoping hides work whose issue key is not in the checked-out branch`() {
     val fixture = gitRepoFixture("ide-status-branch-scope", branch = "feat/OTHER-9-unrelated")
     val identity = testGoalRepositoryIdentity(fixture)
