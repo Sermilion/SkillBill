@@ -8,10 +8,13 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Path
 
 class GhPullRequestIdentityLookup internal constructor(
+  private val includeMergeState: Boolean = false,
   private val gh: GhCommandRunner,
 ) : PullRequestIdentityLookup {
   @Inject
-  constructor() : this(ProcessGhCommandRunner())
+  constructor() : this(gh = ProcessGhCommandRunner())
+
+  constructor(includeMergeState: Boolean) : this(includeMergeState, ProcessGhCommandRunner())
 
   private val mapper: ObjectMapper by lazy { ObjectMapper() }
 
@@ -38,7 +41,7 @@ class GhPullRequestIdentityLookup internal constructor(
           "--state",
           "all",
           "--json",
-          "url,number,title,state,mergeable,mergeStateStatus",
+          if (includeMergeState) "$IDENTITY_FIELDS,$MERGE_STATE_FIELDS" else IDENTITY_FIELDS,
           "--limit",
           "1",
         ),
@@ -74,5 +77,10 @@ class GhPullRequestIdentityLookup internal constructor(
     val mergeable = entry.path("mergeable").asText()
     val mergeState = entry.path("mergeStateStatus").asText()
     return mergeable == "CONFLICTING" || mergeState == "DIRTY"
+  }
+
+  private companion object {
+    const val IDENTITY_FIELDS = "url,number,title,state"
+    const val MERGE_STATE_FIELDS = "mergeable,mergeStateStatus"
   }
 }

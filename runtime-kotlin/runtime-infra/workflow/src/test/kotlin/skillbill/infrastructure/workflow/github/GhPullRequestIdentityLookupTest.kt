@@ -14,7 +14,7 @@ class GhPullRequestIdentityLookupTest {
     mergeStateStatus: String,
   ): PullRequestIdentity {
     val lookup =
-      GhPullRequestIdentityLookup { _, _ ->
+      GhPullRequestIdentityLookup(includeMergeState = true) { _, _ ->
         GhCommandResult(
           exitCode = 0,
           stdout =
@@ -53,12 +53,27 @@ class GhPullRequestIdentityLookupTest {
         "--state",
         "all",
         "--json",
-        "url,number,title,state,mergeable,mergeStateStatus",
+        "url,number,title,state",
         "--limit",
         "1",
       ),
       calls.single(),
     )
+  }
+
+  @Test
+  fun `only a merge-state lookup asks GitHub for the expensive mergeability fields`() {
+    val calls = mutableListOf<List<String>>()
+    val lookup =
+      GhPullRequestIdentityLookup(includeMergeState = true) { _, args ->
+        calls += args
+        GhCommandResult(exitCode = 0, stdout = "[]")
+      }
+
+    lookup.lookup(repoRoot, "feat/SKILL-380")
+
+    val args = calls.single()
+    assertEquals("url,number,title,state,mergeable,mergeStateStatus", args[args.indexOf("--json") + 1])
   }
 
   @Test

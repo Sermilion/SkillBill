@@ -44,6 +44,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
@@ -85,7 +86,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun monitorStrategy(
-    pullRequestIdentityLookup: PullRequestIdentityLookup,
+    pullRequestIdentityLookup: MergeStatePullRequestIdentityLookup,
     pullRequestChecksLookup: PullRequestChecksLookup,
   ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 
