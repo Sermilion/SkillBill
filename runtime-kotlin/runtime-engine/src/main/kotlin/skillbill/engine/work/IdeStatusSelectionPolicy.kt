@@ -31,7 +31,7 @@ object IdeStatusSelectionPolicy {
     candidates: List<IdeStatusCandidate>,
     observedAt: Instant,
   ): IdeStatusCandidate? {
-    val retained = candidates.filter { retainedAt(it, observedAt) }
+    val retained = withoutSupersededVerifyRuns(candidates.filter { retainedAt(it, observedAt) })
     val freshLive = retained.filter { candidate -> inFreshLiveCohort(candidate, observedAt) }
     val cohort = freshLive.ifEmpty { retained }
     cohort
@@ -46,6 +46,20 @@ object IdeStatusSelectionPolicy {
         )
       }
     return cohort.sortedWith(comparator(observedAt)).firstOrNull()
+  }
+
+  private fun withoutSupersededVerifyRuns(candidates: List<IdeStatusCandidate>): List<IdeStatusCandidate> {
+    val latestVerifyRuns =
+      candidates
+        .filter { it.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY && it.execution != null }
+        .groupBy { it.execution?.statusStoreId to it.branchCorrelation }
+        .values
+        .map { runs -> runs.maxWith(::compareRunSequence) }
+    return candidates.filter { candidate ->
+      candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
+        candidate.execution == null ||
+        latestVerifyRuns.any { it === candidate }
+    }
   }
 
   private fun inFreshLiveCohort(

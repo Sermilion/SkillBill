@@ -321,6 +321,43 @@ class IdeStatusSelectionPolicyTest {
     assertEquals("w-future", IdeStatusSelectionPolicy.select(listOf(future), OBSERVED)?.workflowId)
   }
 
+  @Test
+  fun `a newer verify run on the branch supersedes an older one left running`() {
+    val abandoned = verifyRun("w-dead", IdeStatusLifecycleState.ACTIVE, runSequence = "36", "2026-08-06T11:50:00Z")
+    val finished = verifyRun("w-done", IdeStatusLifecycleState.TERMINAL, runSequence = "38", "2026-08-06T11:55:00Z")
+
+    assertEquals("w-done", IdeStatusSelectionPolicy.select(listOf(abandoned, finished), OBSERVED)?.workflowId)
+  }
+
+  @Test
+  fun `verify runs on different branches do not supersede each other`() {
+    val running = verifyRun("w-running", IdeStatusLifecycleState.ACTIVE, runSequence = "36", "2026-08-06T11:50:00Z")
+    val elsewhere =
+      verifyRun("w-elsewhere", IdeStatusLifecycleState.TERMINAL, runSequence = "38", "2026-08-06T11:55:00Z")
+        .copy(branchCorrelation = "feat/other")
+
+    assertEquals("w-running", IdeStatusSelectionPolicy.select(listOf(running, elsewhere), OBSERVED)?.workflowId)
+  }
+
+  private fun verifyRun(
+    workflowId: String,
+    lifecycle: IdeStatusLifecycleState,
+    runSequence: String,
+    updatedAt: String,
+  ): IdeStatusCandidate =
+    candidate("FP-1", lifecycle, workflowId, updatedAt).copy(
+      workflowFamily = IdeStatusWorkflowFamily.FEATURE_VERIFY,
+      branchCorrelation = "fix/FP-1-thing",
+      execution =
+        IdeStatusExecutionIdentity(
+          scope = IdeStatusExecutionScope.WORKFLOW,
+          executionId = "execution-$workflowId",
+          statusStoreId = "store",
+          runSequence = runSequence,
+          statusRevision = "1",
+        ),
+    )
+
   private fun candidate(
     issueKey: String,
     lifecycle: IdeStatusLifecycleState,
