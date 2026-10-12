@@ -293,8 +293,11 @@ class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
     completionRecorded: Boolean,
   ): IdeStatusLifecycleState {
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
     val candidateLifecycle =
-      if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL && projection?.hasUnfinishedSubtasks() == true) {
+      if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL &&
+        (projection?.hasUnfinishedSubtasks() == true || liveFinalization)
+      ) {
         IdeStatusLifecycleState.ACTIVE
       } else {
         candidate.lifecycleState
