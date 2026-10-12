@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
@@ -11,7 +10,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -43,19 +41,6 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
         ),
       ),
     )
-  }
-
-  internal fun commitPushChangedPaths(
-    request: FeatureTaskRuntimeRunFacts,
-    gitOperations: WorkflowGitOperations,
-    baseBranch: String,
-  ): ReadinessChangedPaths {
-    return when (
-      val changed = gitOperations.readinessChangedPathsAgainstBase(request.repoRoot, baseBranch)
-    ) {
-      is WorkflowGitNameListResult.Listed -> ReadinessChangedPaths(paths = changed.names, error = null)
-      is WorkflowGitNameListResult.Failed -> ReadinessChangedPaths(emptyList(), changed.error)
-    }
   }
 
   internal fun finalisationBranch(
@@ -120,8 +105,3 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   internal fun revalidated(envelope: Map<String, Any?>): NormalizedFeatureTaskRuntimePhaseOutput =
     NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
-
-internal data class ReadinessChangedPaths(
-  val paths: List<String>,
-  val error: String?,
-)

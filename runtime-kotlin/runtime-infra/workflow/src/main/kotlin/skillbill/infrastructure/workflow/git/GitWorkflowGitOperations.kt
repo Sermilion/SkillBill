@@ -20,7 +20,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitReleaseTagOperations
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations
 import java.nio.file.Path
 
@@ -34,7 +33,6 @@ class GitWorkflowGitOperations :
   CheckpointHistoryGitOperations by GitCheckpointHistoryOperations,
   GoalSubtaskReviewGitOperations by GitGoalSubtaskReviewOperations,
   RepositoryFingerprintGitOperations by GitRepositoryFingerprintOperations,
-  ReadinessTreeIdentityGitOperations by GitReadinessTreeIdentityOperations,
   RepositoryOwnedPathsGitOperations by GitRepositoryOwnedPathsOperations,
   RuntimePhaseFileManifestGitOperations by GitRuntimePhaseFileManifestOperations,
   ScopedStagingGitOperations by GitScopedStagingOperations,

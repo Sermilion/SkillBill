@@ -1,3 +1,9 @@
+## [2026-10-12] Validation owns checks, commit_push only publishes
+Context: SKILL-423 completed validation, then commit_push selected an Ubuntu CI dependency-install command and ran it on CachyOS. The operator required commit_push to commit and push without another gate.
+Decision: Delete local CI-command discovery and execution, readiness settlement and committed-head rebinding, and the PR readiness gate. Validation retains project-check discovery and repair. Commit_push stages, commits, pushes and records its receipt. PR retains branch and template checks, and monitor observes remote CI. Preserve legacy readiness artifact decoding so saved workflows remain readable, but ignore those artifacts during publication.
+Reason: A second gate duplicates validation and confuses CI runner setup with local project checks.
+Supersedes: Commit_push readiness selects project CI checks only, and SKILL-364 commit_push and PR readiness requirements.
+
 ## [2026-10-10] A review-fallback-only catalog is unrouted for build and records agent-validate (SKILL-415)
 Context: A generic-only install routed every goal child to the review fallback. The fallback has no `validation_gate`, so non-final BUILD children recorded pack-build with no command pair and creation threw before the first child existed (incident 2026-10-09).
 Decision: When the dominant pack is the review fallback and has no gate, the resolver reports it as unrouted. Creation for a BUILD request then plans the VALIDATION family with a null pack slug and declaration, so the selection facts pick `agent-validate`. Launch, run entry and repair diagnosis use the planned or recorded selection, not the requested BUILD.
@@ -204,6 +210,7 @@ Context: Validate-owned `validation_evidence` records pack gate commands only; c
 Decision: Add `readiness_evidence` as a sibling contract and workflow artifact (`FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_ARTIFACT_KEY`). Validate still owns pack collect-all execution; commit_push owns readiness settlement and persistence.
 Reason: Mixing PR/plugin readiness into validation evidence would break Issue 341 / 0AC-16 settlement and blur phase ownership.
 Revisit when: a single envelope can subsume both without a contract bump.
+Superseded by: Validation owns checks, commit_push only publishes (2026-10-12).
 
 ## [2026-09-19] SKILL-364 write-tree identity versus checkpoint fingerprint
 Context: `repositoryCheckpointFingerprint` hashes owned paths for validate receipts; commit readiness must ignore boundary `agent/history.md` and this run's `.skill-bill/run-evidence/<workflow-id>/` paths.
@@ -216,6 +223,7 @@ Context: A failed or missing selected check at commit_push must not reopen valid
 Decision: Readiness failures block commit_push with `needs_user_action`; resume retries readiness on the same dirty tree with `last_resumable_step=commit_push`.
 Reason: Validate already spent its repair budget; commit_push is the PR-readiness boundary.
 Revisit when: readiness gains its own bounded repair loop.
+Superseded by: Validation owns checks, commit_push only publishes (2026-10-12).
 
 ## [2026-09-18] commit_push does not launch an agent
 Context: Agents emitted two phase-output envelopes on `commit_push`, and the schema gate blocked a non-retrying phase. The only agent field the runtime consumed was a commit subject; staging, commit, push, and `commit_sha` were already runtime-owned.

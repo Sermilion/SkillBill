@@ -28,14 +28,12 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 class PrDescriptionStrategy(
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
-  private val readinessGate: PullRequestReadinessGate,
   private val templateFiles: PullRequestTemplateFiles,
 ) : PhaseStrategy() {
   private val policies =
@@ -115,17 +113,6 @@ class PrDescriptionStrategy(
     val resolved = context.resolvedBranch()
     val baseBranch = context.gitOperations.baseBranchOrDefault(context.request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    if (context.request.skeletonDefinition?.runStateKind != SkeletonRunStateKind.IN_MEMORY &&
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH in context.transitions.forwardPhaseIds
-    ) {
-      readinessGate
-        .blockedReason(
-          workflowId = context.request.workflowId,
-          repoRoot = context.request.repoRoot,
-          baseBranch = baseBranch,
-          gitOperations = context.gitOperations,
-        )?.let { reason -> return PhaseOutcome.blocked(reason) }
-    }
     val repoRoot = context.request.repoRoot
     val template = template(repoRoot)
     (template as? PullRequestTemplate.Ambiguous)?.let { ambiguous ->

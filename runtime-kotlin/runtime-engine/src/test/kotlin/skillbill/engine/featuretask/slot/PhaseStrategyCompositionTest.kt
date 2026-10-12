@@ -38,7 +38,6 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -59,7 +58,6 @@ import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanErr
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
-import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -135,7 +133,6 @@ class PhaseStrategyCompositionTest {
   private val prDescriptionStrategy =
     PrDescriptionStrategy(
       UnavailablePullRequestIdentityLookup,
-      PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
       LocalPullRequestTemplateFiles,
     )
 

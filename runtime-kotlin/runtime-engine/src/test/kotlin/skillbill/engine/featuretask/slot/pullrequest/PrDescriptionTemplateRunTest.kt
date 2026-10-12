@@ -5,6 +5,8 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
+import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -13,6 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PrDescriptionTemplateRunTest {
@@ -29,13 +32,18 @@ class PrDescriptionTemplateRunTest {
   }
 
   @Test
-  fun `the standalone pr prompt carries the found template without its checklist`() {
+  fun `standalone pr publishes without readiness evidence and carries the template without its checklist`() {
     val repoRoot = Files.createDirectories(root.resolve("standalone"))
     writeTemplate(repoRoot, TEMPLATE_PATH, TEMPLATE)
 
     val run = standalonePrRun(repoRoot, database, absent)
 
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(run.report, run.report.toString())
+    val completed = assertIs<FeatureTaskRuntimeRunReport.Completed>(run.report, run.report.toString())
+    val workflow =
+      database.read { unitOfWork ->
+        requireNotNull(unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, completed.workflowId))
+      }
+    assertNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE.value(workflow.artifacts))
     assertTemplatePrompt(run.prPrompts.single())
   }
 

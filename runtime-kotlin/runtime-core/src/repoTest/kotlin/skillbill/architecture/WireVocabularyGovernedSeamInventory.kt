@@ -71,8 +71,6 @@ internal object WireVocabularyGovernedSeamInventory {
             "workflow/taskruntime/model/validation/FeatureTaskRuntimeReadinessEvidence",
             "workflow/taskruntime/artifact/FeatureTaskRuntimeWorkflowArtifactWire",
             "workflow/taskruntime/model/validation/ReadinessEvidencePayloadKeys",
-            "engine/featuretask/validation/FeatureTaskRuntimeReadinessGateCoordinator",
-            "engine/featuretask/validation/ReadinessCheckSelection",
             "engine/featuretask/phase/record/FeatureTaskRuntimeGateProgressRecorder",
           ),
       ),

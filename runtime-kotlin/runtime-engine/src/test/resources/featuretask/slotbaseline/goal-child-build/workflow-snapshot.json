@@ -2553,14 +2553,6 @@
                 "status": "completed"
             }
         },
-        "feature_task_runtime_readiness_evidence": {
-            "base_ref_sha": "__NORMALIZED_SHA40__",
-            "check_results": [],
-            "contract_version": "0.1",
-            "head_sha": "__NORMALIZED_SHA40__",
-            "selected_checks": [],
-            "source_tree_sha": "__NORMALIZED_SHA40__"
-        },
         "feature_task_runtime_resolved_branch": {
             "baseline_owned_paths": [],
             "boundary_history_paths": [],

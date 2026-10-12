@@ -34,7 +34,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
@@ -187,8 +186,6 @@ internal interface PhaseQualityGateCycleContext :
 
   val qualityGateCycles: RuntimeQualityGateCycles
 
-  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
-
   val clock: Clock
 
   val diagnostics: RuntimeDiagnostics
@@ -211,8 +208,6 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
   val recorder: PhaseRunRecords
 
   val gitOperations: WorkflowGitOperations
-
-  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
 
   val clock: Clock
 
@@ -381,9 +376,6 @@ internal open class PhaseAttemptSettlementScope(
 
   internal open val qualityGateCycles: RuntimeQualityGateCycles
     get() = boundHost.qualityGateCycles
-
-  override val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
-    get() = boundHost.readinessGateCoordinator
 
   internal fun fanOut(stepId: String): PhaseRunFanOut = boundHost.fanOut(stepId)
 

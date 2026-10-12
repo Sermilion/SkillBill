@@ -28,7 +28,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -50,7 +49,6 @@ internal class FeatureTaskRuntimeRunLoopContext(
   override val specIntentProjectionResolver: SpecIntentProjectionResolver,
   override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   val qualityGateCycles: RuntimeQualityGateCycles,
-  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
 ) : PhaseRunLoopAttemptCollaborators {
@@ -92,7 +90,6 @@ internal class FeatureTaskRuntimeRunLoopContext(
           directSharedEvidenceResolver = sharedEvidenceResolver,
           directDiffResolver = diffResolver,
           directQualityGateCycles = qualityGateCycles,
-          directReadinessGateCoordinator = readinessGateCoordinator,
         ),
       ),
       run,
@@ -202,7 +199,6 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val specIntentProjectionResolver: SpecIntentProjectionResolver,
   private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   private val qualityGateCycles: RuntimeQualityGateCycles,
-  private val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   private val diffResolver: DiffResolverPort,
   private val implementationChecklistStore: FeatureTaskImplementationChecklistStore,
@@ -223,7 +219,6 @@ open class FeatureTaskRuntimeRunLoopEntry(
       specIntentProjectionResolver,
       lifecycleTelemetry,
       qualityGateCycles,
-      readinessGateCoordinator,
       sharedEvidenceResolver,
       diffResolver,
     )

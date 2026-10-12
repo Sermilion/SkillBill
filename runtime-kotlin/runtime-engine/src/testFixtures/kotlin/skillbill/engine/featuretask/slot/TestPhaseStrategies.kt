@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
@@ -21,7 +20,6 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -35,7 +33,6 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
-import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -50,7 +47,6 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -66,7 +62,6 @@ fun testPhaseStrategies(
   gitOperations: WorkflowGitOperations,
   reviewRunner: PhaseRunner? = null,
   pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
-  readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort = AbsentReadinessEvidence,
   delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
   pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
@@ -76,7 +71,6 @@ fun testPhaseStrategies(
   val prCanonical =
     PrDescriptionStrategy(
       pullRequestIdentityLookup,
-      PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
       LocalPullRequestTemplateFiles,
     )
   val prOpus = PrDescriptionOpus55Strategy(prCanonical)
@@ -160,15 +154,6 @@ fun goalPlanningPhaseStrategies(
         ),
     )
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
-}
-
-object AbsentReadinessEvidence : FeatureTaskRuntimeReadinessEvidencePort {
-  override fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence? = null
-
-  override fun persistReadinessEvidence(
-    workflowId: String,
-    evidence: FeatureTaskRuntimeReadinessEvidence,
-  ) = error("Absent readiness evidence cannot persist evidence.")
 }
 
 object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
