@@ -35,6 +35,7 @@ data class FeatureTaskRuntimeValidationGateRunRecord(
   val exitCode: Int? = null,
   val repositoryCheckpoint: String? = null,
   val executedChecksRecorded: Boolean = true,
+  val legacyUnverified: Boolean = false,
 ) {
   constructor(
     durationMs: Long,
@@ -66,12 +67,42 @@ data class FeatureTaskRuntimeValidationGateRunRecord(
 
   init {
     val reason =
-      executionViolation(durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint)
-        ?: checksViolation(outcome, exitCode, executedChecksRecorded, executedChecks)
+      if (legacyUnverified) {
+        legacyViolation(
+          durationMs,
+          executedWorkUnits,
+          isLegacyShape(command, exitCode, repositoryCheckpoint),
+          executedChecks,
+        )
+      } else {
+        executionViolation(durationMs, executedWorkUnits, command, exitCode, repositoryCheckpoint)
+          ?: checksViolation(outcome, exitCode, executedChecksRecorded, executedChecks)
+      }
     require(reason == null) { reason.orEmpty() }
   }
 
   companion object {
+    internal fun isLegacyShape(
+      command: String?,
+      exitCode: Int?,
+      repositoryCheckpoint: String?,
+    ): Boolean = command == null && exitCode == null && repositoryCheckpoint == null
+
+    internal fun legacyViolation(
+      durationMs: Long,
+      executedWorkUnits: Int,
+      legacyShape: Boolean,
+      executedChecks: List<String>,
+    ): String? =
+      when {
+        durationMs < 0 -> "Validation gate duration_ms must be >= 0, was $durationMs."
+        executedWorkUnits < 0 -> "Validation gate executed_work_units must be >= 0, was $executedWorkUnits."
+        !legacyShape ->
+          "A legacy unverified validation gate run must not carry command, exit code, or checkpoint."
+        executedChecks.any(String::isBlank) -> "Validation gate executed check identities must be non-blank."
+        else -> null
+      }
+
     internal fun executionViolation(
       durationMs: Long,
       executedWorkUnits: Int,
@@ -228,19 +259,30 @@ data class FeatureTaskRuntimeValidationGateProgress(
         val exitCode = map.gateProgressOptionalInt(ValidationEvidencePayloadKeys.EXIT_CODE)
         val repositoryCheckpoint = map.gateProgressOptionalString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT)
         val executedChecksRecorded = map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS)
+        val legacyUnverified =
+          FeatureTaskRuntimeValidationGateRunRecord.isLegacyShape(command, exitCode, repositoryCheckpoint)
         val reason =
-          FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
-            durationMs,
-            executedWorkUnits,
-            command,
-            exitCode,
-            repositoryCheckpoint,
-          ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
-            outcome,
-            exitCode,
-            executedChecksRecorded,
-            executedChecks,
-          )
+          if (legacyUnverified) {
+            FeatureTaskRuntimeValidationGateRunRecord.legacyViolation(
+              durationMs,
+              executedWorkUnits,
+              legacyShape = true,
+              executedChecks,
+            )
+          } else {
+            FeatureTaskRuntimeValidationGateRunRecord.executionViolation(
+              durationMs,
+              executedWorkUnits,
+              command,
+              exitCode,
+              repositoryCheckpoint,
+            ) ?: FeatureTaskRuntimeValidationGateRunRecord.checksViolation(
+              outcome,
+              exitCode,
+              executedChecksRecorded,
+              executedChecks,
+            )
+          }
         if (reason != null) {
           throw invalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: $reason",
@@ -248,7 +290,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
         }
         FeatureTaskRuntimeValidationGateRunRecord(
           durationMs, outcome, cacheMode, executedWorkUnits, executedChecks, command,
-          exitCode, repositoryCheckpoint, executedChecksRecorded,
+          exitCode, repositoryCheckpoint, executedChecksRecorded, legacyUnverified,
         )
       }
     }

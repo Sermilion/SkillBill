@@ -103,7 +103,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     onGateRunCount: (Int) -> Unit,
   ): ValidationGateCycleResult {
     val loaded = cycle.progressStore.load(cycle.request.workflowId)
-    val measurements = loaded?.gateRuns?.toMutableList() ?: mutableListOf()
+    val measurements = loaded?.gateRuns?.filterNot { it.legacyUnverified }?.toMutableList() ?: mutableListOf()
     val state = BuildGateCycleState(cycle, measurements, onGateRunCount)
 
     if (loaded?.repairWindowPhase == FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN) {
