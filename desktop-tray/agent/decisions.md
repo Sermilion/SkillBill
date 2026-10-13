@@ -67,3 +67,8 @@ Xwayland bounds with a global scale. On monitors stacked at different scales,
 these origins differ. Map the native click using current KScreen output
 geometry and AWT screen bounds. Xwayland pointer coordinates can be stale
 while the pointer is over a native Wayland panel.
+
+## [2026-10-13] Reconnect a failed database observer only on explicit refresh
+Context: A lost database watcher triggered timed reconnects and full invalidations. Reads also reopened failed sessions, so background failures repeatedly reset the desktop views.
+Decision: Keep the observer failure typed and the last successful view stale. Remove the timed reconnect loop and retain failed sessions until explicit refresh or a database change requests a new connection. Keep healthy observation driven by committed database changes and known lifecycle deadlines. Record the observer failure class and provider error code without logging database content.
+Reason: Database observation failure must not become periodic data refresh or a successful read with no working observer. Explicit refresh makes recovery visible and preserves a stable stale view between attempts.

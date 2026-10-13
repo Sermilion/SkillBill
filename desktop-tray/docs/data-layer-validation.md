@@ -113,7 +113,7 @@ The main composition has no work-command or executable discovery consumer.
 The retired names remain only in the architecture guard's rejection vocabulary;
 `cliOverride` and `pollSeconds` remain only in preference migration cleanup and
 its migration regression test.
-There is no polling setting or board polling loop. The remaining UI delays are
+There is no polling setting, board polling loop, or timed observer reconnect loop. A failed observer emits one typed stale result and stays failed until explicit refresh reconnects. Idle-failure coverage checks that no further queries, watcher registrations, or board emissions occur before that request. The remaining UI delays are
 hover behavior, tray availability, elapsed-time display and known data deadlines.
 Native host helpers remain in SKILL-424's scope.
 

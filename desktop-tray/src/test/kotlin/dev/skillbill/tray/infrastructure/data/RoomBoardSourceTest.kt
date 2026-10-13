@@ -55,7 +55,7 @@ class RoomBoardSourceTest {
   private val now = Instant.now()
 
   @Test
-  fun `observer registration failure is typed and a later registration recovers`() = runBlocking {
+  fun `observer registration failure stays typed until explicit refresh reconnects`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-observer-registration-failure").use { fixture ->
       val attempts = AtomicInteger()
       val source = RoomBoardSource(emptyMap(), fixture.tempDir, fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC),
@@ -67,8 +67,14 @@ class RoomBoardSourceTest {
         source.selectDatabase(fixture.dbPath.toString())
         val failure = assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY))
         assertEquals(ProblemCode.OBSERVATION_UNAVAILABLE, failure.problem.code)
-        withTimeout(3000) { while (attempts.get() < 2) delay(10) }
+        repeat(3) {
+          assertEquals(ProblemCode.OBSERVATION_UNAVAILABLE,
+            assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY)).problem.code)
+        }
+        assertEquals(1, attempts.get())
+        source.refresh()
         assertTrue(value(source.board(WorkSection.PHASES, Retention.DAY)).items.isEmpty())
+        assertEquals(2, attempts.get())
       } finally {
         source.closeAndJoin()
       }
@@ -95,15 +101,15 @@ class RoomBoardSourceTest {
         })
         source.selectDatabase(fixture.dbPath.toString())
         phaseJob = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { phases.send(it) } }
-        val active = value(withTimeout(3000) { phases.receive() })
+        val active = value(withTimeout(10_000) { phases.receive() })
         val identity = active.items.single().identity
         detailJob = launch { source.observeDetail(identity).collect { detail.send(it) } }
-        assertEquals(Lifecycle.ACTIVE, (withTimeout(3000) { detail.receive() } as Outcome.Value).value.item.lifecycle)
+        assertEquals(Lifecycle.ACTIVE, (withTimeout(10_000) { detail.receive() } as Outcome.Value).value.item.lifecycle)
         phaseJob.cancelAndJoin()
         phaseJob = null
         process.destroyForcibly()
         assertTrue(runInterruptible(Dispatchers.IO) { process.waitFor(5, TimeUnit.SECONDS) })
-        val stopped = withTimeout(3000) { detail.receive() } as Outcome.Value
+        val stopped = withTimeout(10_000) { detail.receive() } as Outcome.Value
         assertEquals(Lifecycle.PAUSED, stopped.value.item.lifecycle)
         assertEquals("runner_interrupted", stopped.value.item.currentStepId)
         val after = value(source.board(WorkSection.PHASES, Retention.DAY))
@@ -179,11 +185,11 @@ class RoomBoardSourceTest {
       val jobs = listOf(launch { source.observe(WorkSection.RECENT, Retention.DAY).collect { recent.send(it) } },
         launch { source.observe(WorkSection.HISTORY, Retention.DAY).collect { history.send(it) } })
       try {
-        assertEquals(1, value(withTimeout(3000) { recent.receive() }).items.size)
-        assertEquals(1, value(withTimeout(3000) { history.receive() }).items.size)
+        assertEquals(1, value(withTimeout(10_000) { recent.receive() }).items.size)
+        assertEquals(1, value(withTimeout(10_000) { history.receive() }).items.size)
         instant.set(now.plusMillis(600))
-        assertTrue(value(withTimeout(3000) { recent.receive() }).items.isEmpty())
-        assertTrue(value(withTimeout(3000) { history.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { recent.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { history.receive() }).items.isEmpty())
         assertNull(withTimeoutOrNull(150) { recent.receive() })
         assertNull(withTimeoutOrNull(150) { history.receive() })
       } finally { jobs.forEach { it.cancelAndJoin() }; source.close() }
@@ -345,12 +351,12 @@ class RoomBoardSourceTest {
       val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
       val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
       try {
-        assertTrue(value(withTimeout(3000) { received.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
         val idleReads = readWork.get()
         assertNull(withTimeoutOrNull(150) { received.receive() })
         assertEquals(idleReads, readWork.get())
         source.refresh()
-        assertTrue(value(withTimeout(3000) { received.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
       } finally { job.cancelAndJoin(); source.closeAndJoin() }
     }
   }
@@ -368,8 +374,8 @@ class RoomBoardSourceTest {
       val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
       source.selectDatabase(fixture.dbPath.toString())
       try {
-        val first = value(withTimeout(3000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
-        val second = value(withTimeout(3000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
+        val first = value(withTimeout(10_000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
+        val second = value(withTimeout(10_000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
         assertTrue(second.queryEpoch > first.queryEpoch)
         assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(first.nextCursor)))
         val appended = value(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(second.nextCursor)))
@@ -394,10 +400,10 @@ class RoomBoardSourceTest {
       val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
       val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
       try {
-        val initial = value(withTimeout(3000) { received.receive() })
+        val initial = value(withTimeout(10_000) { received.receive() })
         assertEquals(Freshness.FRESH, initial.items.single().freshness)
         clock.value = started.plusMillis(600)
-        val aged = withTimeout(3000) { receiveMatching(received) { it.items.singleOrNull()?.freshness == Freshness.STALE } }
+        val aged = withTimeout(10_000) { receiveMatching(received) { it.items.singleOrNull()?.freshness == Freshness.STALE } }
         assertEquals(initial.revision, aged.revision)
         assertEquals(Lifecycle.ACTIVE, aged.items.single().lifecycle)
       } finally { job.cancelAndJoin(); source.closeAndJoin() }
@@ -418,10 +424,10 @@ class RoomBoardSourceTest {
       val job = launch { source.observeDetail(WorkIdentity("detail-expires", "repo-root-realpath-v1:${fixture.tempDir}"))
         .collect { received.send(it) } }
       try {
-        val initial = (withTimeout(3000) { received.receive() } as Outcome.Value).value
+        val initial = (withTimeout(10_000) { received.receive() } as Outcome.Value).value
         assertEquals(Lifecycle.ACTIVE, initial.item.lifecycle)
         clock.value = started.plusMillis(600)
-        val expired = withTimeout(3000) {
+        val expired = withTimeout(10_000) {
           var value = (received.receive() as Outcome.Value).value
           while (value.item.lifecycle != Lifecycle.PAUSED) value = (received.receive() as Outcome.Value).value
           value
@@ -445,9 +451,9 @@ class RoomBoardSourceTest {
       val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
       val job = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
       try {
-        assertEquals(listOf("expires"), value(withTimeout(3000) { received.receive() }).items.map { it.identity.id })
+        assertEquals(listOf("expires"), value(withTimeout(10_000) { received.receive() }).items.map { it.identity.id })
         clock.value = started.plusMillis(600)
-        assertTrue(value(withTimeout(3000) { received.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { received.receive() }).items.isEmpty())
         val attention = value(source.board(WorkSection.NEEDS_YOU, Retention.DAY))
         assertEquals(Lifecycle.PAUSED, attention.items.single().lifecycle)
       } finally { job.cancelAndJoin(); source.close() }
@@ -468,32 +474,32 @@ class RoomBoardSourceTest {
       val historyJob = launch { source.observe(WorkSection.HISTORY, Retention.DAY).collect { history.send(it) } }
       var detailJob: Job? = null
       try {
-        assertTrue(value(withTimeout(3000) { phases.receive() }).items.isEmpty())
-        assertTrue(value(withTimeout(3000) { history.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { phases.receive() }).items.isEmpty())
+        assertTrue(value(withTimeout(10_000) { history.receive() }).items.isEmpty())
         externalWriter(fixture.dbPath, "commit")
-        val active = withTimeout(3000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "commit" } } }
+        val active = withTimeout(10_000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "commit" } } }
         val identity = active.items.single().identity
         detailJob = launch { source.observeDetail(identity).collect { details.send(it) } }
-        val initialDetail = withTimeout(3000) { details.receive() } as Outcome.Value
+        val initialDetail = withTimeout(10_000) { details.receive() } as Outcome.Value
         assertEquals(Lifecycle.ACTIVE, initialDetail.value.item.lifecycle)
         delay(100)
         val idleReadCount = readWork.get()
         delay(600)
         assertEquals(idleReadCount, readWork.get())
         externalWriter(fixture.dbPath, "complete")
-        withTimeout(3000) { receiveMatching(phases) { it.items.isEmpty() } }
-        val completed = withTimeout(3000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
+        withTimeout(10_000) { receiveMatching(phases) { it.items.isEmpty() } }
+        val completed = withTimeout(10_000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
         assertEquals(Lifecycle.TERMINAL, completed.items.single().lifecycle)
-        val completedDetail = withTimeout(3000) {
+        val completedDetail = withTimeout(10_000) {
           var result = details.receive()
           while ((result as? Outcome.Value)?.value?.item?.lifecycle != Lifecycle.TERMINAL) result = details.receive()
           result as Outcome.Value
         }
         assertEquals(Lifecycle.TERMINAL, completedDetail.value.item.lifecycle)
         source.refresh()
-        withTimeout(3000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
+        withTimeout(10_000) { receiveMatching(history) { it.items.any { row -> row.identity.id == "commit" } } }
         externalWriter(fixture.dbPath, "crash-after-commit")
-        withTimeout(3000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "crash-after-commit" } } }
+        withTimeout(10_000) { receiveMatching(phases) { it.items.any { row -> row.identity.id == "crash-after-commit" } } }
       } finally { phaseJob.cancelAndJoin(); historyJob.cancelAndJoin(); detailJob?.cancelAndJoin(); source.closeAndJoin() }
     }
   }

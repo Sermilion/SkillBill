@@ -263,7 +263,7 @@ class RoomBoardSource internal constructor(
     return when (result) {
       is PagingSource.LoadResult.Page -> Outcome.Value(result.data.single())
       is PagingSource.LoadResult.Error -> Outcome.Failure((result.throwable as BoardPageFailure).problem)
-      is PagingSource.LoadResult.Invalid -> staleCursor()
+      is PagingSource.LoadResult.Invalid -> observationProblem?.let { Outcome.Failure(it) } ?: staleCursor()
     }
   }
 
@@ -485,6 +485,7 @@ class RoomBoardSource internal constructor(
   }
 
   override suspend fun refresh() = mutex.withLock {
+    if (observationProblem != null || observer?.isActive != true) disposeSession()
     observationProblem = null
     invalidate()
   }
@@ -546,7 +547,7 @@ class RoomBoardSource internal constructor(
 
   private suspend fun ensureSession(runtime: RuntimeComponent) {
     val selected = requireNotNull(path)
-    if (room != null && currentFileMatches() && observationProblem == null && observer?.isActive == true) return
+    if (room != null && currentFileMatches() && (observationProblem != null || observer?.isActive == true)) return
     if (fileIdentity != null && !currentFileMatches()) generation++
     disposeSession()
     observationProblem = null
@@ -593,62 +594,48 @@ class RoomBoardSource internal constructor(
     val ready = CompletableDeferred<Unit>()
     val ownerSession = session
     observer = scope.launch {
-      var retryDelay = OBSERVER_RETRY_INITIAL_MS
-      var firstAttempt = true
       var deliveredRevisions = emptyMap<String, Long>()
-      while (isActive) {
-        var replaced = false
-        val initialRegistration = firstAttempt
-        val attemptReady = if (firstAttempt) ready else CompletableDeferred()
-        firstAttempt = false
-        try {
-          observeChanges(selected, attemptReady).collect { change ->
-            if (change.replaced) {
-              replaced = true
-              if (ownerSession == session) invalidate()
-              return@collect
-            }
-            val changedTopics = change.revisions.filter { (topic, revision) -> deliveredRevisions[topic] != revision }.keys
-            deliveredRevisions = change.revisions
-            if (change.resynchronize && change.topics.isEmpty()) {
-              if (ownerSession == session) {
-                observationProblem = null
-                if (!initialRegistration) invalidate()
-              }
-              retryDelay = OBSERVER_RETRY_INITIAL_MS
-              return@collect
-            }
-            val sections = buildSet {
-              add(WorkSection.NEEDS_YOU)
-              add(WorkSection.HISTORY)
-              add(WorkSection.RECENT)
-              if (DesktopReadSchema.GOALS_TOPIC in changedTopics) add(WorkSection.GOALS)
-              if (DesktopReadSchema.PHASES_TOPIC in changedTopics) add(WorkSection.PHASES)
-            }
-            invalidate(sections)
-          }
-          if (replaced) return@launch
-          error("Database change observation ended.")
-        } catch (error: CancellationException) {
-          throw error
-        } catch (error: Exception) {
-          if (!isObserverFailure(error)) {
-            if (initialRegistration) ready.completeExceptionally(error)
-            throw error
-          }
-          if (initialRegistration) ready.completeExceptionally(ObservationUnavailableException(error))
-          RuntimeDiagnostics.record("observation_unavailable")
-          if (ownerSession != session) return@launch
-          observationProblem = Problem(ProblemCode.OBSERVATION_UNAVAILABLE,
-            "Database change observation is unavailable. Reconnecting.", StorageFailure.OBSERVATION_UNAVAILABLE)
-          invalidate()
-          delay(retryDelay)
-          if (!currentFileMatches()) {
+      try {
+        observeChanges(selected, ready).collect { change ->
+          if (change.replaced) {
             if (ownerSession == session) invalidate()
-            return@launch
+            return@collect
           }
-          retryDelay = (retryDelay * 2).coerceAtMost(OBSERVER_RETRY_MAX_MS)
+          val changedTopics = change.revisions.filter { (topic, revision) -> deliveredRevisions[topic] != revision }.keys
+          deliveredRevisions = change.revisions
+          if (change.resynchronize && change.topics.isEmpty()) {
+            if (ownerSession == session) {
+              observationProblem = null
+            }
+            return@collect
+          }
+          val sections = buildSet {
+            add(WorkSection.NEEDS_YOU)
+            add(WorkSection.HISTORY)
+            add(WorkSection.RECENT)
+            if (DesktopReadSchema.GOALS_TOPIC in changedTopics) add(WorkSection.GOALS)
+            if (DesktopReadSchema.PHASES_TOPIC in changedTopics) add(WorkSection.PHASES)
+          }
+          invalidate(sections)
         }
+        if (currentFileMatches()) throw IOException("Database change observation ended.")
+      } catch (error: CancellationException) {
+        throw error
+      } catch (error: Exception) {
+        if (!isObserverFailure(error)) {
+          ready.completeExceptionally(error)
+          throw error
+        }
+        val sqliteFailure = generateSequence(error as Throwable) { it.cause }
+          .take(MAX_FAILURE_CAUSES).filterIsInstance<androidx.sqlite.SQLiteException>().firstOrNull()
+        val providerCode = sqliteFailure?.message?.substringBefore(',')?.removePrefix("Error code: ")?.toIntOrNull()
+        RuntimeDiagnostics.recordRequest("observation_unavailable_${error.javaClass.simpleName.lowercase()}",
+          providerCode?.let { mapOf("sqlite_error_code" to it) }.orEmpty())
+        if (ownerSession != session) return@launch
+        observationProblem = Problem(ProblemCode.OBSERVATION_UNAVAILABLE,
+          "Database change observation is unavailable. Refresh to reconnect.", StorageFailure.OBSERVATION_UNAVAILABLE)
+        invalidate()
+        ready.completeExceptionally(ObservationUnavailableException(error))
       }
     }
     try {
@@ -807,8 +794,6 @@ class RoomBoardSource internal constructor(
   private companion object {
     const val PAGE_SIZE = 10
     const val CANDIDATE_BUDGET = 40
-    const val OBSERVER_RETRY_INITIAL_MS = 250L
-    const val OBSERVER_RETRY_MAX_MS = 10_000L
     const val MAX_FAILURE_CAUSES = 16
   }
 }

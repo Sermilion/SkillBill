@@ -267,14 +267,7 @@ internal fun fileObservation(
         else -> databaseAccessFailure(normalized.toString(), operation, "file identity cannot be read", failure)
       }
     }
-  val key =
-    attributes.fileKey()?.toString()
-      ?: throw databaseAccessFailure(
-        normalized.toString(),
-        operation,
-        "stable file identity is unavailable",
-      )
-  return DatabaseFileObservation(normalized, key)
+  return DatabaseFileObservation(normalized, databaseFileIdentity(attributes))
 }
 
 internal fun Connection.databasePath(): Path {

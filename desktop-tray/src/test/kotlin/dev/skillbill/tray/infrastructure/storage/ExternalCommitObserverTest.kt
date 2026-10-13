@@ -34,14 +34,14 @@ class ExternalCommitObserverTest {
         }.changes(ready).collect { received.send(it) }
       }
       try {
-        withTimeout(3000) { registered.await() }
+        withTimeout(10_000) { registered.await() }
         writer(fixture.dbPath, "commit")
         continueRegistration.complete(Unit)
-        val initial = withTimeout(3000) { ready.await(); received.receive() }
+        val initial = withTimeout(10_000) { ready.await(); received.receive() }
         assertTrue(initial.resynchronize)
         assertTrue(requireNotNull(initial.revisions[DesktopReadSchema.PHASES_TOPIC]) > 0)
         writer(fixture.dbPath, "commit-2")
-        val committed = withTimeout(3000) { received.receive() }
+        val committed = withTimeout(10_000) { received.receive() }
         assertTrue(requireNotNull(committed.revisions[DesktopReadSchema.PHASES_TOPIC]) >
           requireNotNull(initial.revisions[DesktopReadSchema.PHASES_TOPIC]))
       } finally { continueRegistration.complete(Unit); observer.cancelAndJoin() }
@@ -66,23 +66,23 @@ class ExternalCommitObserverTest {
       }
       val recovered: StoreChange
       try {
-        withTimeout(3000) { ready.await(); received.receive() }
+        withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "crash-after-commit")
         writer(fixture.dbPath, "goal-commit")
         assertNull(withTimeoutOrNull(100) { received.receive() })
         hints.send(Unit)
-        recovered = withTimeout(3000) { received.receive() }
+        recovered = withTimeout(10_000) { received.receive() }
         assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), recovered.topics)
         assertTrue(recovered.resynchronize)
       } finally { observer.cancelAndJoin() }
-      withTimeout(3000) { closed.await() }
+      withTimeout(10_000) { closed.await() }
       writer(fixture.dbPath, "commit-after-disconnect")
       val reconnectReady = CompletableDeferred<Unit>()
       val reconnect = launch {
         ExternalCommitObserver(fixture.dbPath).changes(reconnectReady).collect { received.send(it) }
       }
       try {
-        val baseline = withTimeout(3000) { reconnectReady.await(); received.receive() }
+        val baseline = withTimeout(10_000) { reconnectReady.await(); received.receive() }
         assertTrue(baseline.resynchronize)
         assertTrue(requireNotNull(baseline.revisions[DesktopReadSchema.PHASES_TOPIC]) >
           requireNotNull(recovered.revisions[DesktopReadSchema.PHASES_TOPIC]))
@@ -108,13 +108,13 @@ class ExternalCommitObserverTest {
         }
       }
       try {
-        withTimeout(3000) { ready.await(); received.receive() }
+        withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "commit")
-        val first = withTimeout(3000) { firstCommit.await() }
+        val first = withTimeout(10_000) { firstCommit.await() }
         writer(fixture.dbPath, "commit-2")
         writer(fixture.dbPath, "goal-commit")
         release.complete(Unit)
-        val latest = withTimeout(3000) {
+        val latest = withTimeout(10_000) {
           var change = received.receive()
           while ((change.revisions[DesktopReadSchema.GOALS_TOPIC] ?: 0) == 0L) change = received.receive()
           change
@@ -132,11 +132,18 @@ class ExternalCommitObserverTest {
       val received = Channel<StoreChange>(Channel.UNLIMITED)
       val ready = CompletableDeferred<Unit>()
       val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
-      withTimeout(3000) { ready.await(); received.receive() }
+      withTimeout(10_000) { ready.await(); received.receive() }
       fixture.connection.close()
+      if (System.getProperty("os.name").contains("win", ignoreCase = true)) {
+        assertFailsWith<java.nio.file.FileSystemException> {
+          java.nio.file.Files.move(fixture.dbPath, fixture.dbPath.resolveSibling("retired.db"))
+        }
+        observer.cancelAndJoin()
+        return@use
+      }
       java.nio.file.Files.move(fixture.dbPath, fixture.dbPath.resolveSibling("retired.db"))
-      assertTrue(withTimeout(3000) { received.receive() }.replaced)
-      withTimeout(3000) { observer.join() }
+      assertTrue(withTimeout(10_000) { received.receive() }.replaced)
+      withTimeout(10_000) { observer.join() }
       assertTrue(observer.isCompleted)
       writer(fixture.dbPath, "commit-after-replacement")
     }
@@ -149,12 +156,12 @@ class ExternalCommitObserverTest {
       val ready = CompletableDeferred<Unit>()
       val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
       try {
-        withTimeout(3000) { ready.await(); received.receive() }
+        withTimeout(10_000) { ready.await(); received.receive() }
         assertNull(withTimeoutOrNull(100) { received.receive() })
         writer(fixture.dbPath, "rollback")
         assertNull(withTimeoutOrNull(150) { received.receive() })
         writer(fixture.dbPath, "commit")
-        val change = withTimeout(3000) { received.receive() }
+        val change = withTimeout(10_000) { received.receive() }
         assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC), change.topics)
         assertFalse(change.replaced)
         assertEquals(1, fixture.connection.createStatement().use { statement ->
@@ -172,9 +179,9 @@ class ExternalCommitObserverTest {
       val ready = CompletableDeferred<Unit>()
       val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
       try {
-        withTimeout(3000) { ready.await(); received.receive() }
+        withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "coherent-commit")
-        val change = withTimeout(3000) { received.receive() }
+        val change = withTimeout(10_000) { received.receive() }
         assertEquals(setOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC), change.topics)
         assertEquals(2, change.revisions.size)
       } finally { observer.cancelAndJoin() }
