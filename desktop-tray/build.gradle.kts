@@ -11,8 +11,11 @@ version = "0.1.0"
 
 kotlin { jvmToolchain(21) }
 
+// Compose packaging rejects some vendors' JDKs (Homebrew), so pin the bundled runtime to the
+// vendor CI releases with; the foojay resolver provisions it on machines that lack one.
 val desktopJavaHome = javaToolchains.launcherFor {
   languageVersion.set(JavaLanguageVersion.of(21))
+  vendor.set(JvmVendorSpec.ADOPTIUM)
 }.get().metadata.installationPath.asFile.absolutePath
 val desktopPackageVersion = System.getenv("RELEASE_VERSION")?.substringBefore('-') ?: "0.1.0"
 val macOSPackageVersion = desktopPackageVersion.takeUnless { it.startsWith("0.") } ?: "1.0.0"

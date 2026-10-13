@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 task_dir="$(mktemp -d)"
 trap 'rm -rf "$task_dir"' EXIT
-sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
+sed -n '/^build_source_desktop_app() {/,/^}/p; /^install_selected_desktop_app() {/,/^}/p; /^desktop_app_target_path() {/,/^}/p; /^desktop_app_executable_path() {/,/^}/p; /^desktop_app_legacy_executable_path() {/,/^}/p; /^desktop_app_running_pids() {/,/^}/p; /^stop_desktop_app() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/install-functions.sh"
 source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
@@ -24,6 +24,7 @@ resolve_desktop_app_release_asset() { err 'Source install queried release assets
 desktop_app_install_root() { printf '%s' "$task_dir/install"; }
 desktop_app_legacy_target_path() { printf '%s/SkillBill.app' "$2"; }
 install_desktop_app_launcher() { ln -sf "$3" "$task_dir/bin/skillbill-desktop"; }
+launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
 
 cat > "$task_dir/checkout/desktop-tray/gradlew" <<'BUILD'
 #!/usr/bin/env bash
@@ -43,6 +44,26 @@ app="$task_dir/install/Skill Bill.app/Contents/MacOS/Skill Bill"
 [[ "$("$app")" == 'source desktop app' ]]
 [[ "$(readlink "$task_dir/bin/skillbill-desktop")" == "$app" ]]
 [[ "$DESKTOP_APP_INSTALL_RESULT" == "installed at $task_dir/install/Skill Bill.app" ]]
+if [[ -e "$task_dir/launched" ]]; then
+  err 'Installer launched a desktop app that was not running.'
+  exit 1
+fi
+
+(exec -a "$app" sleep 60) &
+running_app=$!
+unrelated_app_dir="$task_dir/other/Skill Bill.app/Contents/MacOS"
+mkdir -p "$unrelated_app_dir"
+(exec -a "$unrelated_app_dir/Skill Bill" sleep 60) &
+unrelated_app=$!
+trap 'kill "$running_app" "$unrelated_app" 2>/dev/null || true; rm -rf "$task_dir"' EXIT
+sleep 0.5
+install_selected_desktop_app
+if kill -0 "$running_app" 2>/dev/null; then
+  err 'Installer left the previous desktop app running.'
+  exit 1
+fi
+kill -0 "$unrelated_app"
+[[ "$(cat "$task_dir/launched")" == "$app" ]]
 
 touch "$task_dir/checkout/desktop-tray/fail-build"
 if install_selected_desktop_app; then
@@ -53,4 +74,4 @@ fi
 [[ "$("$app")" == 'source desktop app' ]]
 [[ "$(readlink "$task_dir/bin/skillbill-desktop")" == "$app" ]]
 
-printf 'macOS desktop source install and failed-build preservation passed.\n'
+printf 'macOS desktop source install, running-app restart, and failed-build preservation passed.\n'

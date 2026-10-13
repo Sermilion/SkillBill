@@ -1574,6 +1574,45 @@ ENTRY
 }
 
 BUILT_DESKTOP_APP_SOURCE=""
+# Replacing the app bundle on disk does not affect a copy that is already running, so
+# the installer stops it and relaunches the new build. Matching the full executable
+# path keeps unrelated processes out of reach.
+desktop_app_running_pids() {
+  local executable pattern
+  command -v pgrep >/dev/null 2>&1 || return 0
+  for executable in "$@"; do
+    pattern="$(printf '%s' "$executable" | sed 's/[][\.*^$+?(){}|]/\\&/g')"
+    pgrep -f -- "^$pattern( |\$)" 2>/dev/null || true
+  done
+}
+
+stop_desktop_app() {
+  local pid attempt
+  kill -TERM "$@" 2>/dev/null || true
+  for attempt in $(seq 1 50); do
+    for pid in "$@"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        sleep 0.2
+        continue 2
+      fi
+    done
+    return 0
+  done
+  kill -KILL "$@" 2>/dev/null || true
+}
+
+launch_desktop_app() {
+  local os="$1" app_target="$2" executable="$3"
+  case "$os" in
+    macos)
+      open "$app_target"
+      ;;
+    *)
+      nohup "$executable" >/dev/null 2>&1 &
+      ;;
+  esac
+}
+
 build_source_desktop_app() {
   local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop-tray"
   if [[ ! -x "$desktop_dir/gradlew" ]]; then
@@ -1679,6 +1718,13 @@ install_selected_desktop_app() {
     return 1
   fi
 
+  local -a running_pids=()
+  local running_pid
+  while IFS= read -r running_pid; do
+    [[ -n "$running_pid" ]] && running_pids+=("$running_pid")
+  done < <(desktop_app_running_pids "$executable" \
+    "$(desktop_app_legacy_executable_path "$os" "$legacy_target")")
+
   mkdir -p "$install_root" || return 1
   staged_app="$install_root/.Skill Bill.installing.$$"
   backup_app="$install_root/.Skill Bill.previous.$$"
@@ -1716,6 +1762,14 @@ install_selected_desktop_app() {
   rm -rf "$backup_app"
   ok "Desktop tray app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
+  if [[ ${#running_pids[@]} -gt 0 ]]; then
+    stop_desktop_app "${running_pids[@]}"
+    if launch_desktop_app "$os" "$app_target" "$executable"; then
+      ok "Restarted the running desktop tray app."
+    else
+      warn "Stopped the previous desktop tray app but could not start the new one; open it from $app_target."
+    fi
+  fi
 }
 
 
