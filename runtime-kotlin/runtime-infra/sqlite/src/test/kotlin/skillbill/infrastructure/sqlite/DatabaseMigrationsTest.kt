@@ -65,6 +65,43 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `desktop launch migration coexists with activity revisions on previously installed version 54`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-desktop-v54").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-agent-activity-revisions'")
+        statement.executeUpdate("UPDATE schema_migrations SET version = 54 WHERE name = 'save-standalone-phase-launch'")
+        statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'activity'")
+        listOf("insert", "update", "delete").forEach { operation ->
+          statement.execute("DROP TRIGGER desktop_change_agent_activity_stamps_$operation")
+          statement.execute(
+            "CREATE TRIGGER desktop_change_agent_activity_stamps_$operation " +
+              "AFTER $operation ON agent_activity_stamps BEGIN " +
+              "UPDATE desktop_change_revisions SET revision = revision + 1 WHERE topic = 'phases'; END",
+          )
+        }
+        statement.execute("PRAGMA user_version = 54")
+      }
+    }
+    repeat(2) {
+      DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+        connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT launch_agent_id, launch_arguments_json FROM standalone_phase_status LIMIT 0").use {
+            assertEquals(2, it.metaData.columnCount)
+          }
+          statement.executeQuery("SELECT revision FROM desktop_change_revisions WHERE topic = 'activity'").use {
+            assertTrue(it.next())
+          }
+          statement.executeQuery("PRAGMA user_version").use {
+            assertTrue(it.next())
+            assertEquals(55, it.getInt(1))
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   fun `migration definitions are append-only and deterministic`() {
     val migrationDefinitions = DatabaseMigrations.migrations.map { migration -> migration.version to migration.name }
 
@@ -122,7 +159,8 @@ class DatabaseMigrationsTest {
         51 to "index-feature-task-workflow-issue-lookup",
         52 to "add-desktop-room-read-identity",
         53 to "bind-work-observations-and-accepted-results",
-        54 to "save-standalone-phase-launch",
+        54 to "separate-agent-activity-revisions",
+        55 to "save-standalone-phase-launch",
       ),
       migrationDefinitions,
     )

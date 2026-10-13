@@ -40,7 +40,7 @@ import java.time.Instant
 import java.util.Base64
 
 @Serializable
-private data class PageCursor(val generation: Long, val session: Long, val revision: Long, val section: WorkSection,
+private data class PageCursor(val generation: Long, val session: Long, val section: WorkSection,
   val observedAt: String, val retention: String, val filter: String, val historyFilter: HistoryFilter, val afterTime: String, val afterId: String,
   val storeId: String? = null, val storeRevision: Long? = null, val queryEpoch: Long = 0)
 
@@ -314,9 +314,8 @@ class RoomBoardSource internal constructor(
         val attemptMetrics = mutableListOf<String>()
         repeat(3) {
           accounting.attemptCount++
-          val before = revisionConnection!!.dataVersion()
-          val startObservation = existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
-          if (parsed != null && !rebase && (parsed.revision != before || parsed.storeId != startObservation.storeId ||
+          val startObservation = workObservation(runtime)
+          if (parsed != null && !rebase && (parsed.storeId != startObservation.storeId ||
               parsed.storeRevision != startObservation.revision)) return@safeRead staleCursor()
           val result = mutableListOf<WorkItem>()
           var next: WorkCandidateRow? = null
@@ -344,7 +343,7 @@ class RoomBoardSource internal constructor(
           }
           selectedRows += candidates.size
           accounting.selectedRows += candidates.size
-          if (before != revisionConnection!!.dataVersion()) return@repeat
+          if (startObservation != workObservation(runtime)) return@repeat
           val batches = candidates.chunked(CANDIDATE_PAGE_SIZE)
           val projectionStarted = monotonicNanos()
           val projections = try {
@@ -430,7 +429,7 @@ class RoomBoardSource internal constructor(
             if (earliest == null) pageDeadlines.remove(pageKey) else pageDeadlines[pageKey] = earliest
             deadlineRevision.update { it + 1 }
             val nextCursor = next?.takeIf { !exhausted }?.let { row ->
-              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session, before,
+              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session,
                 section, observedAt.toString(), retention.cliValue, filter, historyFilter, row.sort_time, row.id,
                 endObservation.storeId, endObservation.revision, queryEpoch)).encodeToByteArray())
             }
@@ -484,10 +483,10 @@ class RoomBoardSource internal constructor(
         catch (_: IllegalArgumentException) { return@safeRead staleCursor() }
       }
       if (parsed != null && (parsed.generation != generation || parsed.session != session ||
-        parsed.revision != revisionConnection!!.dataVersion() || parsed.id != identity.id ||
+        parsed.revision != workObservation(runtime).revision || parsed.id != identity.id ||
         parsed.repositoryIdentity != identity.repositoryIdentity || parsed.list != list)) return@safeRead staleCursor()
       repeat(3) {
-        val before = revisionConnection!!.dataVersion()
+        val before = workObservation(runtime).revision
         val loaded = existingSnapshot(runtime) {
           val result = runtime.ideStatusService.detail(WorkDetailRequest(identity.id, observedAt = clock.instant(), cursor = parsed?.runtimeCursor, pageSize = PAGE_SIZE, startOffset = startOffset, list = list?.let { WorkDetailList.valueOf(it.name) }))
           val options = result.item?.let { work ->
@@ -610,6 +609,9 @@ class RoomBoardSource internal constructor(
     WorkRunTarget(identity.id, identity.repositoryIdentity, Path.of(repositoryRoot), executionId, statusRevision, updatedAt, it)
   }
 
+  private fun workObservation(runtime: RuntimeComponent): WorkStoreObservation =
+    existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
+
   private fun <T : Any> existingSnapshot(runtime: RuntimeComponent, query: () -> T): T =
     runtime.databaseSession.readIfPresent { query() }
       ?: throw databaseMissing(requireNotNull(path).toString(), DatabaseAccessOperation.READ)
@@ -670,6 +672,10 @@ class RoomBoardSource internal constructor(
           deliveredRevisions = change.revisions
           if (change.initial) return@collect
           if (changedTopics.isEmpty() && !change.resynchronize) return@collect
+          if (changedTopics == setOf(DesktopReadSchema.ACTIVITY_TOPIC) && !change.resynchronize) {
+            invalidateDetails()
+            return@collect
+          }
           val sections = buildSet {
             add(WorkSection.NEEDS_YOU)
             add(WorkSection.HISTORY)
@@ -721,6 +727,10 @@ class RoomBoardSource internal constructor(
     mutableRefreshEvents.tryEmit(sections)
     sections.forEach { pagingSources.remove(it)?.second?.invalidate() }
     signals.update { current -> current.mapValues { (section, revision) -> if (section in sections) revision + 1 else revision } }
+  }
+
+  private fun invalidateDetails() {
+    detailSignals.update { current -> current.mapValues { (_, revision) -> revision + 1 } }
   }
 
   private fun currentFileMatches(): Boolean = path?.let { Files.exists(it) && fileIdentity == storeFileIdentity(it) } == true

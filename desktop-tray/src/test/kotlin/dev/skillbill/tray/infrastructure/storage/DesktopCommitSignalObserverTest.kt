@@ -12,6 +12,8 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.idestatus.model.AgentActivityStamp
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -40,7 +42,7 @@ class DesktopCommitSignalObserverTest {
         continueRegistration.complete(Unit)
         val initial = withTimeout(10_000) { ready.await(); received.receive() }
         assertTrue(initial.initial)
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), initial.revisions.keys)
+        assertEquals(signalTopics, initial.revisions.keys)
         assertEquals(1, fixture.connection.createStatement().use { statement ->
           statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
         })
@@ -76,7 +78,7 @@ class DesktopCommitSignalObserverTest {
         assertNull(withTimeoutOrNull(100) { received.receive() })
         hints.send(Unit)
         recovered = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), recovered.revisions.keys)
+        assertEquals(signalTopics, recovered.revisions.keys)
       } finally { observer.cancelAndJoin() }
       withTimeout(10_000) { closed.await() }
       writer(fixture.dbPath, "commit-after-disconnect")
@@ -87,7 +89,7 @@ class DesktopCommitSignalObserverTest {
       try {
         val baseline = withTimeout(10_000) { reconnectReady.await(); received.receive() }
         assertTrue(baseline.initial)
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), baseline.revisions.keys)
+        assertEquals(signalTopics, baseline.revisions.keys)
         assertEquals(2, fixture.connection.createStatement().use { statement ->
           statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
         })
@@ -161,7 +163,7 @@ class DesktopCommitSignalObserverTest {
         writer(fixture.dbPath, "unrelated-commit")
         assertNull(withTimeoutOrNull(150) { received.receive() })
         writer(fixture.dbPath, "commit")
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC),
+        assertEquals(signalTopics,
           withTimeout(10_000) { received.receive() }.revisions.keys)
       } finally { observer.cancelAndJoin() }
     }
@@ -180,7 +182,7 @@ class DesktopCommitSignalObserverTest {
         assertNull(withTimeoutOrNull(150) { received.receive() })
         writer(fixture.dbPath, "commit")
         val change = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), change.revisions.keys)
+        assertEquals(signalTopics, change.revisions.keys)
         assertEquals(1, fixture.connection.createStatement().use { statement ->
           statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
         })
@@ -199,11 +201,33 @@ class DesktopCommitSignalObserverTest {
         withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "coherent-commit")
         val change = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC), change.revisions.keys)
-        assertEquals(2, change.revisions.size)
+        assertEquals(signalTopics, change.revisions.keys)
+        assertTrue(DesktopReadSchema.TOPICS.all { topic -> requireNotNull(change.revisions[topic]) > 0 })
+        assertEquals(0, change.revisions[DesktopReadSchema.ACTIVITY_TOPIC])
       } finally { observer.cancelAndJoin() }
     }
   }
+
+  @Test
+  fun `agent activity commits change only the activity revision`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-activity-commit").use { fixture ->
+      val received = Channel<StoreChange>(Channel.UNLIMITED)
+      val ready = CompletableDeferred<Unit>()
+      val observer = launch { DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
+      try {
+        withTimeout(10_000) { ready.await(); received.receive() }
+        writer(fixture.dbPath, "commit")
+        val work = withTimeout(10_000) { received.receive() }
+        writer(fixture.dbPath, "activity")
+        val activity = withTimeout(10_000) { received.receive() }
+        assertEquals(work.revisions - DesktopReadSchema.ACTIVITY_TOPIC, activity.revisions - DesktopReadSchema.ACTIVITY_TOPIC)
+        assertTrue(requireNotNull(activity.revisions[DesktopReadSchema.ACTIVITY_TOPIC]) >
+          requireNotNull(work.revisions[DesktopReadSchema.ACTIVITY_TOPIC]))
+      } finally { observer.cancelAndJoin() }
+    }
+  }
+
+  private val signalTopics = DesktopReadSchema.TOPICS.toSet() + DesktopReadSchema.ACTIVITY_TOPIC
 
   private fun writer(path: Path, mode: String) {
     val process = ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
@@ -227,6 +251,12 @@ object ExternalRuntimeWriter {
       }).currentProcess()
     } else null
     try {
+      if (mode == "activity") {
+        factory.selfManagedWrite { unit ->
+          unit.agentActivityStamps.record("commit", AgentActivityStamp(now, AgentActivityLabel.STDOUT))
+        }
+        return
+      }
       factory.transaction { unit ->
         if (mode == "unrelated-commit") {
           val connection = unit::class.java.getDeclaredField("connection").apply { isAccessible = true }

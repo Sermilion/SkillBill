@@ -67,9 +67,6 @@ compose.desktop {
   application {
     mainClass = "dev.skillbill.tray.composition.MainKt"
     javaHome = desktopJavaHome
-    if (System.getProperty("os.name").contains("mac", true)) {
-      jvmArgs("-XstartOnFirstThread")
-    }
     nativeDistributions {
       modules("java.sql", "java.net.http", "java.management", "jdk.unsupported")
       targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,

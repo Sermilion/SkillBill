@@ -632,6 +632,29 @@ class RoomBoardSourceTest {
   }
 
   @Test
+  fun `agent activity commits refresh the selected detail without rereading board sections`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-activity-refresh").use { fixture ->
+      sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap()).transaction { unit ->
+        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "commit", now, "main"))
+      }
+      val source = RoomBoardSource(emptyMap(), fixture.tempDir, fixture.tempDir, Clock.systemUTC())
+      source.selectDatabase(fixture.dbPath.toString())
+      val phases = Channel<Outcome<Board>>(Channel.UNLIMITED)
+      val details = Channel<Outcome<Detail>>(Channel.UNLIMITED)
+      val phaseJob = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { phases.send(it) } }
+      var detailJob: Job? = null
+      try {
+        val active = value(withTimeout(10_000) { phases.receive() })
+        detailJob = launch { source.observeDetail(active.items.single().identity).collect { details.send(it) } }
+        assertIs<Outcome.Value<Detail>>(withTimeout(10_000) { details.receive() })
+        externalWriter(fixture.dbPath, "activity")
+        assertIs<Outcome.Value<Detail>>(withTimeout(10_000) { details.receive() })
+        assertNull(withTimeoutOrNull(500) { phases.receive() })
+      } finally { phaseJob.cancelAndJoin(); detailJob?.cancelAndJoin(); source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `exactly one full page has no continuation`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-exact-page-size").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())

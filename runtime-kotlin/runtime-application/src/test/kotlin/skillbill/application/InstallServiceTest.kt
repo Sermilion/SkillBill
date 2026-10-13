@@ -2,6 +2,7 @@ package skillbill.application
 
 import skillbill.application.install.InstallService
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseBusy
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.install.model.InstallAgentDefaultTarget
@@ -43,6 +44,7 @@ import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.selectedPlatformSlugs
+import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
 import skillbill.ports.install.apply.model.InstallApplyExecutionRequest
@@ -107,6 +109,7 @@ class InstallServiceTest {
         skillLinkPort = UnsupportedSkillLinkPort,
         installSelectionPersistencePort = NoopInstallSelectionPersistencePort,
         installPlanWireValidator = testInstallPlanWireValidator,
+        databaseSchemaPort = UnsupportedDatabaseSchemaPort,
       )
 
     service.planInstall(request)
@@ -315,6 +318,60 @@ class InstallServiceTest {
     assertEquals(emptyList(), selectionPort.writeRequests)
   }
 
+  @Test
+  fun `apply install migrates the existing database after a successful apply`() {
+    val home = Path.of("/tmp/skillbill-install-service-migrate-home")
+    val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-migrate-repo"), home))
+    val schemaPort = RecordingDatabaseSchemaPort()
+    val service =
+      serviceForApply(
+        result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
+        selectionPort = RecordingInstallSelectionPersistencePort(),
+        schemaPort = schemaPort,
+      )
+
+    val result = service.applyInstall(plan)
+
+    assertEquals(1, schemaPort.migrateCalls)
+    assertEquals(InstallApplyStatus.SUCCESS, result.status)
+  }
+
+  @Test
+  fun `apply install leaves the database alone when the apply failed`() {
+    val home = Path.of("/tmp/skillbill-install-service-failed-migrate-home")
+    val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-failed-migrate-repo"), home))
+    val schemaPort = RecordingDatabaseSchemaPort()
+    val service =
+      serviceForApply(
+        result = failedApplyResult(plan),
+        selectionPort = RecordingInstallSelectionPersistencePort(),
+        schemaPort = schemaPort,
+      )
+
+    service.applyInstall(plan)
+
+    assertEquals(0, schemaPort.migrateCalls)
+  }
+
+  @Test
+  fun `apply install reports a database migration failure as a warning and keeps the selection`() {
+    val home = Path.of("/tmp/skillbill-install-service-busy-home")
+    val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-busy-repo"), home))
+    val selectionPort = RecordingInstallSelectionPersistencePort()
+    val service =
+      serviceForApply(
+        result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
+        selectionPort = selectionPort,
+        schemaPort = FailingDatabaseSchemaPort(databaseBusy(IllegalStateException("database is locked"))),
+      )
+
+    val result = service.applyInstall(plan)
+
+    assertEquals(InstallApplyStatus.WARNING, result.status)
+    assertEquals(InstallApplyIssueKind.DATABASE_MIGRATION_FAILED, result.warnings.single().kind)
+    assertEquals(1, selectionPort.writeRequests.size)
+  }
+
   private fun platformManifest(
     repoRoot: Path,
     slug: String,
@@ -410,6 +467,7 @@ class InstallServiceTest {
     result: InstallApplyResult,
     selectionPort: InstallSelectionPersistencePort,
     wireValidator: InstallPlanWireValidator = testInstallPlanWireValidator,
+    schemaPort: DatabaseSchemaPort = RecordingDatabaseSchemaPort(),
   ): InstallService =
     InstallService(
       planningFactsPort = UnsupportedPlanningFactsPort,
@@ -422,6 +480,7 @@ class InstallServiceTest {
       skillLinkPort = UnsupportedSkillLinkPort,
       installSelectionPersistencePort = selectionPort,
       installPlanWireValidator = wireValidator,
+      databaseSchemaPort = schemaPort,
     )
 
   private fun successfulApplyResult(
@@ -643,6 +702,23 @@ class InstallServiceTest {
   ) : InstallApplyExecutionPort {
     override fun applyInstall(request: InstallApplyExecutionRequest): InstallApplyExecutionResult =
       InstallApplyExecutionResult(result)
+  }
+
+  private object UnsupportedDatabaseSchemaPort : DatabaseSchemaPort {
+    override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
+  }
+
+  private class RecordingDatabaseSchemaPort : DatabaseSchemaPort {
+    var migrateCalls = 0
+
+    override fun migrateExistingDatabase(): Boolean {
+      migrateCalls += 1
+      return true
+    }
+  }
+
+  private class FailingDatabaseSchemaPort(private val failure: SkillBillRuntimeException) : DatabaseSchemaPort {
+    override fun migrateExistingDatabase(): Boolean = throw failure
   }
 
   private object UnsupportedInstallReconcilePort : InstallReconcilePort {

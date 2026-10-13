@@ -33,6 +33,8 @@ import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningR
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
+import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
+import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -773,12 +775,12 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ),
     DatabaseMigration(
       version = 54,
+      name = "separate-agent-activity-revisions",
+      operation = ::separateAgentActivityRevisions,
+    ),
+    DatabaseMigration(
+      version = 55,
       name = "save-standalone-phase-launch",
-      operation = { connection ->
-        connection.createStatement().use { statement ->
-          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN launch_agent_id TEXT")
-          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN launch_arguments_json TEXT")
-        }
-      },
+      operation = ::saveStandalonePhaseLaunch,
     ),
   )

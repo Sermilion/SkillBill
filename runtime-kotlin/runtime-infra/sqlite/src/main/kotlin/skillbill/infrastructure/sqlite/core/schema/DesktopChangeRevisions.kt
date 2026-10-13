@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.core.schema
 
 import skillbill.contracts.persistence.DesktopReadSchema
 import java.sql.Connection
+import java.sql.Statement
 
 internal fun installDesktopReadCompatibility(connection: Connection) {
   connection.createStatement().use { statement ->
@@ -43,20 +44,40 @@ private fun installDesktopChangeRevisions(connection: Connection) {
     DesktopReadSchema.TOPICS.forEach { topic ->
       statement.execute("INSERT INTO ${DesktopReadSchema.REVISIONS_TABLE} VALUES ('$topic', 0)")
     }
-    topics.forEach { (table, affected) ->
-      listOf("INSERT", "UPDATE", "DELETE").forEach { operation ->
-        val updates =
-          affected.joinToString(" ") { topic ->
-            "UPDATE ${DesktopReadSchema.REVISIONS_TABLE} SET revision = revision + 1 WHERE topic = '$topic';"
-          }
-        statement.execute(
-          "CREATE TRIGGER desktop_change_${table}_${operation.lowercase()} " +
-            "AFTER $operation ON $table BEGIN $updates END",
-        )
-      }
-    }
+    topics.forEach { (table, affected) -> createRevisionTriggers(statement, table, affected) }
   }
 }
+
+internal fun separateAgentActivityRevisions(connection: Connection) {
+  connection.createStatement().use { statement ->
+    statement.execute(
+      "INSERT INTO ${DesktopReadSchema.REVISIONS_TABLE} VALUES ('${DesktopReadSchema.ACTIVITY_TOPIC}', 0)",
+    )
+    REVISION_TRIGGER_OPERATIONS.forEach { operation ->
+      statement.execute("DROP TRIGGER desktop_change_agent_activity_stamps_${operation.lowercase()}")
+    }
+    createRevisionTriggers(statement, "agent_activity_stamps", listOf(DesktopReadSchema.ACTIVITY_TOPIC))
+  }
+}
+
+private fun createRevisionTriggers(
+  statement: Statement,
+  table: String,
+  affected: List<String>,
+) {
+  REVISION_TRIGGER_OPERATIONS.forEach { operation ->
+    val updates =
+      affected.joinToString(" ") { topic ->
+        "UPDATE ${DesktopReadSchema.REVISIONS_TABLE} SET revision = revision + 1 WHERE topic = '$topic';"
+      }
+    statement.execute(
+      "CREATE TRIGGER desktop_change_${table}_${operation.lowercase()} " +
+        "AFTER $operation ON $table BEGIN $updates END",
+    )
+  }
+}
+
+private val REVISION_TRIGGER_OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
 private fun installDesktopReadIndexes(connection: Connection) {
   val columns =

@@ -41,7 +41,8 @@ internal class SQLiteWorkListRepository(
   override fun observation(): WorkStoreObservation =
     connection.createStatement().use { statement ->
       statement.executeQuery(
-        "SELECT store_id, (SELECT sum(revision) FROM ${DesktopReadSchema.REVISIONS_TABLE}) AS revision " +
+        "SELECT store_id, (SELECT sum(revision) FROM ${DesktopReadSchema.REVISIONS_TABLE} " +
+          "WHERE topic IN ($OBSERVED_TOPICS)) AS revision " +
           "FROM ${DesktopReadSchema.IDENTITY_TABLE} WHERE id = 1",
       ).use { rows ->
         if (!rows.next()) throw invalidWorkListRowError("Work store identity is missing.")
@@ -272,6 +273,8 @@ private fun invalid(
 }
 
 private const val MAX_EXACT_WORKFLOW_MATCHES = 3
+
+private val OBSERVED_TOPICS = DesktopReadSchema.TOPICS.joinToString { topic -> "'$topic'" }
 
 private val ISSUE_IDENTITY_SQL =
 """
