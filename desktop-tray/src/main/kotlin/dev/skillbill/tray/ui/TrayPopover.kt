@@ -44,7 +44,6 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
       Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent))).padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
         Image(androidx.compose.ui.res.painterResource("icons/skill-bill.svg"), "", Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
         Text("Skill Bill", Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-.3).sp)
-        Text(if (state.boardLoading) "loading work" else view.observationAgeSeconds?.let { "updated ${age(Duration.ofSeconds(it))} ago" } ?: "connecting", color = dim, fontFamily = mono, fontSize = 11.sp)
         IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
           Icon(Icons.Default.Close, contentDescription = "Close tray window", tint = dim, modifier = Modifier.size(16.dp))
         }
