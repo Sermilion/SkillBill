@@ -39,8 +39,8 @@ record does not claim interactive tray or window smoke coverage.
 | Bounded reads | Desktop selection returns ten candidates per page. Shared board projection examines at most forty candidates per page, with at most three coherence attempts. Goal status streams at most 100 subtasks, child outcomes, dependencies or ledger entries per batch. Each growing detail list has its own cursor. Nested subtask previews contain at most ten dependencies and one fallback agent. |
 | Ordering and cursor identity | Nanosecond ordering, deterministic paging, end of pagination, changed filters, changed database generations and same-path replacement have repository tests. |
 | Retained range | Controller tests load beyond five pages, refresh from the retained offset, and leave other detail lists unchanged. Sidebar and history use retained keyset anchors. |
-| External commit observation | An independent JVM writes through the runtime session factory. Subscribed live, history and exact selected detail update. A counted idle interval covers repository reads and observer revision reads; a coherent runtime transaction changes goal/control and phase topics together. Rollback remains silent. Registration barriers, coalesced topic revisions, controlled overflow after lost hints, reconnect and writer exit immediately after commit retain durable state. |
-| Resource lifetime | Replacing the database ends the old observer and releases its watcher and connection. Cancellation joins the observer worker before closing resources. Reads after source closure fail. |
+| External commit observation | An independent JVM writes through the runtime session factory. Subscribed live, history and exact selected detail update. A counted idle interval records no repository reads or emissions. A coherent runtime transaction changes goal/control and phase topics together. Rollback and unrelated table commits stay silent. Registration barriers, coalesced topic revisions, controlled overflow after lost hints, reconnect and writer exit immediately after commit retain durable state. |
+| Resource lifetime | Closing the selected store cancels its commit-signal watcher and Room connection. The observer opens no SQLite connection. Reads after source closure fail. |
 | Time-derived state | Controlled clocks prove freshness, lease and recent/history expiry without another write. Selected detail observes lease expiry without a board subscriber. Desktop reads pass their observation time into shared detail projection. Expired deadlines do not start an idle database query loop. Display ticks do not query SQLite. |
 | Retained-page deadlines | `RoomBoardSource` keeps deadlines by section and page cursor. `DashboardController` reports the retained cursor window after refresh and append, so evicted pages no longer schedule expiry reads. These repairs preserve the separate store, query, and identity deadline work still owned by SKILL-424 AC-34. |
 | Completed-only detail selection | `IdeStatusService` passes the completed-only selector into `goalSubtaskPage`, so validation detail pages are filtered by the persistence query before projection. |
@@ -48,15 +48,23 @@ record does not claim interactive tray or window smoke coverage.
 | Notifications | Controller and transition tests distinguish initial discovery from confirmed completion. History and reconnect do not replay completion; repeated observations deduplicate transitions. Settings authorize delivery again when the native callback sends. |
 | Preferences | DataStore tests cover one-time migration, concurrent field updates, restart preservation and corruption without resetting the existing file. |
 
-File and WAL events are change hints. The observer checks `data_version` and
-transactional revision topics, including settlements, after an event or overflow.
-Registration precedes the initial query. A commit before that query is visible
-in its snapshot; a later commit changes the observer's revision. Reconnect opens
-a new observer baseline and reads current state. The loss regression suppresses native hints and injects overflow at the
-watch adapter boundary. It does not claim to overflow an operating-system queue.
-Resynchronization reads both phase and goal revision topics, and reconnect sees
-a commit made while disconnected. This recovery uses no application commit-message
-delivery and survives a writer's exit after commit.
+`SQLiteDatabaseSessionFactory` compares the desktop work revisions inside each
+write transaction. After a successful commit, it takes a per-store lock and
+atomically replaces a sibling signal file with a generation token and the
+latest full revision snapshot when a work topic changed. The lock prevents a
+delayed writer from replacing a newer snapshot. The tray watches only that file.
+It never watches the database, WAL, or shared memory files. The signal watcher
+opens no SQLite connection. `RoomBoardSource` keeps
+its existing read-only connection for query snapshot fences. Room queries still
+read the committed database state.
+
+The watcher registers before it reads the signal baseline. A commit before that
+baseline is covered by the initial repository query. A later commit changes the
+published revisions. Overflow rereads the whole snapshot, so coalesced events
+still identify every changed topic. Reconnect starts from a new baseline and
+reads current database state. The external writer test exits immediately after
+publishing its committed change. The controlled overflow test exercises the
+watch adapter, not an operating-system queue.
 
 The phase-query plan and projected candidate counts measure different work.
 They do not claim a constant number of SQLite virtual-machine steps for arbitrary
@@ -67,16 +75,17 @@ search text or every possible goal/control distribution.
 The reference is `/home/sermilion/StudioProjects/readian-android`.
 
 - `core/data/.../db/room/RoomInvalidationPagingSource.kt` connects committed
-  invalidation to PagingSource lifetime. Here runtime-owned revision topics and
-  filesystem events bridge other processes, and affected section PagingSources
-  invalidate. Room's in-process tracker cannot observe these external writers.
+  invalidation to PagingSource lifetime. Here the runtime's revision snapshot
+  in a sidecar signal file bridges other processes, and affected section
+  PagingSources invalidate. Room's in-process tracker cannot observe these
+  external writers.
 - `core/data/.../subscriptions/repository/ReadianTopicsRepository.kt` maps stored
   data at the repository boundary. Here shared runtime services project candidate
   identities before `RuntimeWorkMapper` produces desktop models.
 - `core/data/.../db/room/ReadianRoomDatabaseProvider.kt` and the JVM platform
   builder separate database construction and closure from presentation. Here
-  infrastructure owns Room and an independent revision connection, bound to a
-  database generation and observation session.
+  infrastructure owns Room and the signal watcher, bound to a database
+  generation and observation session.
 - `core/datastore/.../settings/AppSettingsStore.kt` publishes typed settings and
   uses atomic `updateData` field changes. The desktop keeps those mechanics and
   migrates existing JVM preferences once.
@@ -124,12 +133,12 @@ Section 5 of `docs/architecture-guidelines.md` was applied to the runtime diff.
 | Rule | Result and owner |
 | --- | --- |
 | A1 | Clean. Engine control admission depends on ports and shared status; SQLite owns schema, drivers and transactions. Desktop infrastructure consumes the generated runtime graph. |
-| A2 | Clean. `DesktopReadSchema` has runtime migration/read validation and desktop Room/observer consumers. Work detail pagination models serve engine projection and desktop mapping. Existing ports carry bounded queries implemented in SQLite. |
+| A2 | Clean. `DesktopReadSchema` has runtime migration/read validation and desktop Room consumers. `DesktopCommitSignal` is read by `runtime-infra:sqlite` and `desktop-tray`. Work detail pagination models serve engine projection and desktop mapping. Existing ports carry bounded queries implemented in SQLite. |
 | A3 | Clean. RuntimeComponent remains the composition root. New WorkControlService constructor dependencies are private. SQLite factory thread state belongs to the factory and clears in finally. |
 | A4 | Clean. Bounded workflow, phase and reason lookups extend the owning persistence ports. No vendor object enters their signatures. |
 | A5 | Clean. Existing pause and stop operations accept an expected durable parent identity. Duplicate exact-operation wrappers were removed. The retired CLI data path and decoder tests were deleted. |
-| A6 | Clean. Settlement JSON paths use SharedPayloadKeys. DesktopReadSchema owns shared revision names and Room identity. Enum wire tokens use their owners. |
-| A7 | Clean. Schema and storage refusals use typed runtime failures. Control rejection is a result. JDBC result codes classify database failures; no error-message branch or swallowed cancellation was added. Desktop refusals emit bounded diagnostics. |
+| A6 | Clean. Settlement JSON paths use SharedPayloadKeys. DesktopReadSchema owns shared revision names and Room identity; DesktopCommitSignal owns the sidecar suffix and revision separator. Enum wire tokens use their owners. |
+| A7 | Clean. Schema and storage refusals use typed runtime failures. Control rejection is a result. JDBC result codes classify database failures; no error-message branch or swallowed cancellation was added. Failed sidecar publication records a warning after commit and leaves the committed result intact. |
 | A8 | Clean. Runtime ambient effects keep their existing injected owners. Desktop composition supplies environment and home; repository tests supply clocks and disposable paths. |
 | A9, A10 | Clean. Control admission and its models form a work/control responsibility. Persistence tests remain with SQLite. The desktop exercises the real shared control boundary. |
 | A11, A12 | Clean. Helpers are private or internal. Public models remain in model packages. The new shared boundaries expose typed values rather than raw payload maps. |

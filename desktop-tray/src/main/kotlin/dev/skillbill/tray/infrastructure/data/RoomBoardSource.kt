@@ -82,7 +82,7 @@ class RoomBoardSource internal constructor(
   private val monotonicNanos: () -> Long = System::nanoTime,
   private val recordReadWork: () -> Unit = {},
   private val observeChanges: (Path, CompletableDeferred<Unit>) -> Flow<StoreChange> = { selected, ready ->
-    ExternalCommitObserver(selected, recordReadWork).changes(ready)
+    DesktopCommitSignalObserver(selected).changes(ready)
   },
 ) : WorkBoardRepository, WorkDetailRepository, WorkControlRepository, WorkStoreSession {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -597,25 +597,19 @@ class RoomBoardSource internal constructor(
       var deliveredRevisions = emptyMap<String, Long>()
       try {
         observeChanges(selected, ready).collect { change ->
-          if (change.replaced) {
-            if (ownerSession == session) invalidate()
-            return@collect
-          }
           val changedTopics = change.revisions.filter { (topic, revision) -> deliveredRevisions[topic] != revision }.keys
           deliveredRevisions = change.revisions
-          if (change.resynchronize && change.topics.isEmpty()) {
-            if (ownerSession == session) {
-              observationProblem = null
-            }
-            return@collect
-          }
+          if (change.initial) return@collect
+          if (changedTopics.isEmpty() && !change.resynchronize) return@collect
           val sections = buildSet {
             add(WorkSection.NEEDS_YOU)
             add(WorkSection.HISTORY)
             add(WorkSection.RECENT)
-            if (DesktopReadSchema.GOALS_TOPIC in changedTopics) add(WorkSection.GOALS)
-            if (DesktopReadSchema.PHASES_TOPIC in changedTopics) add(WorkSection.PHASES)
+            val topics = if (change.resynchronize) DesktopReadSchema.TOPICS.toSet() else changedTopics
+            if (DesktopReadSchema.GOALS_TOPIC in topics) add(WorkSection.GOALS)
+            if (DesktopReadSchema.PHASES_TOPIC in topics) add(WorkSection.PHASES)
           }
+          if (ownerSession == session) observationProblem = null
           invalidate(sections)
         }
         if (currentFileMatches()) throw IOException("Database change observation ended.")

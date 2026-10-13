@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite
 import me.tatarka.inject.annotations.Inject
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.databaseBusy
@@ -23,6 +24,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.nio.file.Files
 import java.nio.file.Path
+import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
@@ -91,33 +93,54 @@ class SQLiteDatabaseSessionFactory(
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
     repeat(DatabaseRuntime.SELF_MANAGED_WRITE_BUSY_ATTEMPTS - 1) {
-      val outcome = runCatching { withWriteDatabase { openDb -> block(unitOfWork(openDb)) } }
-      val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
+      val outcome =
+        runCatching {
+          withWriteDatabase { openDb ->
+            val (result, workChanged) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
+            if (workChanged) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+            result
+          }
+        }
+      val error = outcome.exceptionOrNull()
+      if (error == null) {
+        return outcome.getOrThrow()
+      }
       error.rethrowIfCooperativeCancellationOrInterruption()
       if (!error.isSqliteBusy()) throw error
     }
-    return translatingBusyFailures { withWriteDatabase { openDb -> block(unitOfWork(openDb)) } }
+    return translatingBusyFailures {
+      withWriteDatabase { openDb ->
+        val (result, workChanged) = withDesktopTopicSignal(openDb.connection) { block(unitOfWork(openDb)) }
+        if (workChanged) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+        result
+      }
+    }
   }
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     activeWrite.get()?.let { return block(it) }
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        openDb.connection.inDatabaseTransaction(
-          DatabaseTransactionSpec(
-            dbPath = openDb.dbPath,
-            beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
-            operation = DatabaseAccessOperation.WRITE,
-            diagnostics = diagnostics,
-          ),
-        ) {
-          activeWrite.set(unitOfWork(openDb, transactionActive = true))
-          try {
-            block(requireNotNull(activeWrite.get()))
-          } finally {
-            activeWrite.remove()
+        val (transactionResult, changedRevisions) =
+          openDb.connection.inDatabaseTransaction(
+            DatabaseTransactionSpec(
+              dbPath = openDb.dbPath,
+              beginMode = DatabaseTransactionBeginMode.IMMEDIATE,
+              operation = DatabaseAccessOperation.WRITE,
+              diagnostics = diagnostics,
+            ),
+          ) {
+            withDesktopTopicSignal(this) {
+              activeWrite.set(unitOfWork(openDb, transactionActive = true))
+              try {
+                block(requireNotNull(activeWrite.get()))
+              } finally {
+                activeWrite.remove()
+              }
+            }
           }
-        }
+        if (changedRevisions) publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
+        transactionResult
       }
     }
   }
@@ -129,26 +152,52 @@ class SQLiteDatabaseSessionFactory(
     if (activeWrite.get() != null) return FencedTransactionResult.ChangedTarget
     return translatingBusyFailures {
       withWriteDatabase { openDb ->
-        openDb.connection.inDatabaseTransaction(
-          DatabaseTransactionSpec(
-            openDb.dbPath,
-            DatabaseTransactionBeginMode.IMMEDIATE,
-            DatabaseAccessOperation.WRITE,
-            diagnostics,
-          ),
-          commitWhen = { it is FencedTransactionResult.Committed },
-        ) {
-          val unit = unitOfWork(openDb, transactionActive = true)
-          activeWrite.set(unit)
-          try {
-            fencedResult(unit, expected, block)
-          } finally {
-            activeWrite.remove()
+        val (transactionResult, changedRevisions) =
+          openDb.connection.inDatabaseTransaction(
+            DatabaseTransactionSpec(
+              openDb.dbPath,
+              DatabaseTransactionBeginMode.IMMEDIATE,
+              DatabaseAccessOperation.WRITE,
+              diagnostics,
+            ),
+            commitWhen = { it.first is FencedTransactionResult.Committed<*> },
+          ) {
+            withDesktopTopicSignal(this) {
+              val unit = unitOfWork(openDb, transactionActive = true)
+              activeWrite.set(unit)
+              try {
+                fencedResult(unit, expected, block)
+              } finally {
+                activeWrite.remove()
+              }
+            }
           }
+        if (transactionResult is FencedTransactionResult.Committed<*> && changedRevisions) {
+          publishDesktopCommitSignal(openDb.dbPath, openDb.connection, diagnostics)
         }
+        transactionResult
       }
     }
   }
+
+  private fun <T> withDesktopTopicSignal(
+    connection: Connection,
+    block: Connection.() -> T,
+  ): Pair<T, Boolean> {
+    val before = connection.desktopTopicRevisions()
+    val result = connection.block()
+    val after = connection.desktopTopicRevisions()
+    return result to (after != before)
+  }
+
+  private fun Connection.desktopTopicRevisions(): Map<String, Long> =
+    prepareStatement("SELECT topic, revision FROM ${DesktopReadSchema.REVISIONS_TABLE}").use { statement ->
+      statement.executeQuery().use { rows ->
+        buildMap {
+          while (rows.next()) put(rows.getString(1), rows.getLong(2))
+        }
+      }
+    }
 
   private fun <T> fencedResult(
     unit: UnitOfWork,

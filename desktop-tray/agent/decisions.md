@@ -9,6 +9,12 @@ Context: Runtime writers use independent SQLite sessions. Room's in-process trac
 Decision: Register the filesystem watcher before baseline reads. Treat file/WAL events and overflow as hints, then check data version, file identity, and runtime-owned revision topics. Own and close the observer's read-only connection with its session.
 Reason: SQLite confirms commit and coherent topic changes. This excludes rollback notifications and recovers committed state after event loss, reconnect, replacement, or writer exit without periodic database polling or a service daemon.
 
+## [2026-10-13] Signal committed work changes outside SQLite
+Context: Room's desktop query Flow cannot hear writes from another process's JDBC connection. Watching SQLite and WAL files also opened another database connection and could fail during WAL recovery.
+Decision: After a runtime transaction changes the desktop work revision topics, SQLite takes a per-store lock and atomically replaces a small sidecar signal file beside the selected database. The file carries a generation token and the latest topic revisions. The desktop watches only that file and invalidates the matching Room-backed Flow queries. Registration and reconnect start with a fresh baseline. Overflow rereads the latest revisions. Rollbacks and unrelated table commits emit nothing.
+Reason: The runtime transaction confirms committed state before publishing. The sidecar contains only topic revision numbers. Room stays read-only and owns no tracking table or trigger.
+Supersedes: Confirm external commits through durable revisions (2026-10-12).
+
 ## [2026-10-12] Fence results and baseline every observation session
 Context: Cancellation alone cannot exclude delayed reads or notification callbacks after a database change. Reconnect discovery can contain completions that occurred while disconnected.
 Decision: Bind asynchronous result admission and notification authorization to the originating store epoch. Establish a silent transition baseline after all required live/recent sections arrive in a new observation session.

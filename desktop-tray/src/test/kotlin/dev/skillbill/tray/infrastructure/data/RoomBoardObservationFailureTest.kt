@@ -5,7 +5,7 @@ import dev.skillbill.tray.domain.Board
 import dev.skillbill.tray.domain.ProblemCode
 import dev.skillbill.tray.domain.Retention
 import dev.skillbill.tray.domain.WorkSection
-import dev.skillbill.tray.infrastructure.storage.ExternalCommitObserver
+import dev.skillbill.tray.infrastructure.storage.DesktopCommitSignalObserver
 import dev.skillbill.tray.infrastructure.storage.StoreChange
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
@@ -39,11 +39,11 @@ class RoomBoardObservationFailureTest {
         Clock.fixed(Instant.now(), ZoneOffset.UTC), recordReadWork = { reads.incrementAndGet() },
         observeChanges = { selected, ready ->
           if (attempts.incrementAndGet() == 1) flow {
-            emit(StoreChange(resynchronize = true))
+            emit(StoreChange(initial = true))
             ready.complete(Unit)
             disconnect.await()
             throw IOException("watch disconnected")
-          } else ExternalCommitObserver(selected).changes(ready)
+          } else DesktopCommitSignalObserver(selected).changes(ready)
         })
       source.selectDatabase(fixture.dbPath.toString())
       val subscription = launch {

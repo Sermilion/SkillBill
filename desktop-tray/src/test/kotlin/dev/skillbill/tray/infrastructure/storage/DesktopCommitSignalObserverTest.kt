@@ -12,12 +12,13 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.goalrunner.model.GoalRunnerControlState
+import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
-class ExternalCommitObserverTest {
+class DesktopCommitSignalObserverTest {
   @Test
   fun `a commit during watcher registration is present in the first observation`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-registration-commit").use { fixture ->
@@ -26,8 +27,8 @@ class ExternalCommitObserverTest {
       val received = Channel<StoreChange>(Channel.UNLIMITED)
       val ready = CompletableDeferred<Unit>()
       val observer = launch {
-        ExternalCommitObserver(fixture.dbPath) { path ->
-          val watch = NativeStoreWatch(path)
+        DesktopCommitSignalObserver(fixture.dbPath) { path ->
+          val watch = NativeCommitSignalWatch(path)
           registered.complete(Unit)
           try { continueRegistration.await(); watch }
           catch (failure: Throwable) { watch.close(); throw failure }
@@ -38,35 +39,16 @@ class ExternalCommitObserverTest {
         writer(fixture.dbPath, "commit")
         continueRegistration.complete(Unit)
         val initial = withTimeout(10_000) { ready.await(); received.receive() }
-        assertTrue(initial.resynchronize)
-        assertTrue(requireNotNull(initial.revisions[DesktopReadSchema.PHASES_TOPIC]) > 0)
+        assertTrue(initial.initial)
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), initial.revisions.keys)
+        assertEquals(1, fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
+        })
         writer(fixture.dbPath, "commit-2")
         val committed = withTimeout(10_000) { received.receive() }
         assertTrue(requireNotNull(committed.revisions[DesktopReadSchema.PHASES_TOPIC]) >
           requireNotNull(initial.revisions[DesktopReadSchema.PHASES_TOPIC]))
       } finally { continueRegistration.complete(Unit); observer.cancelAndJoin() }
-    }
-  }
-
-  @Test
-  fun `commits are detected when the filesystem watcher emits no hints`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-missed-commit-hint").use { fixture ->
-      val received = Channel<StoreChange>(Channel.UNLIMITED)
-      val ready = CompletableDeferred<Unit>()
-      val observer = launch {
-        ExternalCommitObserver(fixture.dbPath, watchFactory = {
-          object : StoreWatch {
-            override suspend fun awaitHint() = awaitCancellation()
-            override fun close() = Unit
-          }
-        }).changes(ready).collect { received.send(it) }
-      }
-      try {
-        withTimeout(10_000) { ready.await(); received.receive() }
-        writer(fixture.dbPath, "missed-hint-commit")
-        val change = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC), change.topics)
-      } finally { observer.cancelAndJoin() }
     }
   }
 
@@ -78,8 +60,8 @@ class ExternalCommitObserverTest {
       val ready = CompletableDeferred<Unit>()
       val closed = CompletableDeferred<Unit>()
       val observer = launch {
-        ExternalCommitObserver(fixture.dbPath) { path ->
-          val native = NativeStoreWatch(path)
+        DesktopCommitSignalObserver(fixture.dbPath) { path ->
+          val native = NativeCommitSignalWatch(path)
           object : StoreWatch {
             override suspend fun awaitHint(): StoreWatchHint { hints.receive(); return StoreWatchHint.OVERFLOW }
             override fun close() { native.close(); closed.complete(Unit) }
@@ -91,28 +73,24 @@ class ExternalCommitObserverTest {
         withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "crash-after-commit")
         writer(fixture.dbPath, "goal-commit")
-        val observedTopics = mutableSetOf<String>()
-        var latest: StoreChange? = withTimeoutOrNull(100) { received.receive() }
-        latest?.let { observedTopics += it.topics }
+        assertNull(withTimeoutOrNull(100) { received.receive() })
         hints.send(Unit)
-        while (observedTopics != setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC)) {
-          latest = withTimeout(10_000) { received.receive() }
-          observedTopics += requireNotNull(latest).topics
-        }
-        recovered = requireNotNull(latest)
-        assertTrue(recovered.resynchronize)
+        recovered = withTimeout(10_000) { received.receive() }
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), recovered.revisions.keys)
       } finally { observer.cancelAndJoin() }
       withTimeout(10_000) { closed.await() }
       writer(fixture.dbPath, "commit-after-disconnect")
       val reconnectReady = CompletableDeferred<Unit>()
       val reconnect = launch {
-        ExternalCommitObserver(fixture.dbPath).changes(reconnectReady).collect { received.send(it) }
+        DesktopCommitSignalObserver(fixture.dbPath).changes(reconnectReady).collect { received.send(it) }
       }
       try {
         val baseline = withTimeout(10_000) { reconnectReady.await(); received.receive() }
-        assertTrue(baseline.resynchronize)
-        assertTrue(requireNotNull(baseline.revisions[DesktopReadSchema.PHASES_TOPIC]) >
-          requireNotNull(recovered.revisions[DesktopReadSchema.PHASES_TOPIC]))
+        assertTrue(baseline.initial)
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), baseline.revisions.keys)
+        assertEquals(2, fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
+        })
       } finally { reconnect.cancelAndJoin() }
     }
   }
@@ -126,8 +104,8 @@ class ExternalCommitObserverTest {
       val ready = CompletableDeferred<Unit>()
       var blocked = false
       val observer = launch {
-        ExternalCommitObserver(fixture.dbPath).changes(ready).collect { change ->
-          if (change.topics.isNotEmpty() && !blocked) {
+        DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { change ->
+          if (!change.initial && change.revisions.isNotEmpty() && !blocked) {
             blocked = true
             firstCommit.complete(change)
             release.await()
@@ -154,25 +132,38 @@ class ExternalCommitObserverTest {
   }
 
   @Test
-  fun `replacement ends observation and releases its watcher and read connection`() = runBlocking {
-    establishTemporarySchemaReadiness("desktop-observer-replacement").use { fixture ->
+  fun `database file changes do not act as commit signals`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-observer-database-files").use { fixture ->
       val received = Channel<StoreChange>(Channel.UNLIMITED)
       val ready = CompletableDeferred<Unit>()
-      val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
-      withTimeout(10_000) { ready.await(); received.receive() }
-      fixture.connection.close()
-      if (System.getProperty("os.name").contains("win", ignoreCase = true)) {
-        assertFailsWith<java.nio.file.FileSystemException> {
-          java.nio.file.Files.move(fixture.dbPath, fixture.dbPath.resolveSibling("retired.db"))
-        }
+      val observer = launch { DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
+      try {
+        withTimeout(10_000) { ready.await(); received.receive() }
+        Files.writeString(fixture.dbPath.resolveSibling("${fixture.dbPath.fileName}-wal"), "test")
+        assertNull(withTimeoutOrNull(150) { received.receive() })
+        writer(fixture.dbPath, "commit")
+        assertTrue(withTimeout(10_000) { received.receive() }.revisions.isNotEmpty())
+      } finally {
         observer.cancelAndJoin()
-        return@use
+        Files.deleteIfExists(fixture.dbPath.resolveSibling("${fixture.dbPath.fileName}-wal"))
       }
-      java.nio.file.Files.move(fixture.dbPath, fixture.dbPath.resolveSibling("retired.db"))
-      assertTrue(withTimeout(10_000) { received.receive() }.replaced)
-      withTimeout(10_000) { observer.join() }
-      assertTrue(observer.isCompleted)
-      writer(fixture.dbPath, "commit-after-replacement")
+    }
+  }
+
+  @Test
+  fun `unrelated runtime commits do not invalidate work flows`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-unrelated-commit").use { fixture ->
+      val received = Channel<StoreChange>(Channel.UNLIMITED)
+      val ready = CompletableDeferred<Unit>()
+      val observer = launch { DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
+      try {
+        withTimeout(10_000) { ready.await(); received.receive() }
+        writer(fixture.dbPath, "unrelated-commit")
+        assertNull(withTimeoutOrNull(150) { received.receive() })
+        writer(fixture.dbPath, "commit")
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC),
+          withTimeout(10_000) { received.receive() }.revisions.keys)
+      } finally { observer.cancelAndJoin() }
     }
   }
 
@@ -181,7 +172,7 @@ class ExternalCommitObserverTest {
     establishTemporarySchemaReadiness("desktop-external-writer").use { fixture ->
       val received = Channel<StoreChange>(Channel.UNLIMITED)
       val ready = CompletableDeferred<Unit>()
-      val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
+      val observer = launch { DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
       try {
         withTimeout(10_000) { ready.await(); received.receive() }
         assertNull(withTimeoutOrNull(100) { received.receive() })
@@ -189,8 +180,7 @@ class ExternalCommitObserverTest {
         assertNull(withTimeoutOrNull(150) { received.receive() })
         writer(fixture.dbPath, "commit")
         val change = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC), change.topics)
-        assertFalse(change.replaced)
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), change.revisions.keys)
         assertEquals(1, fixture.connection.createStatement().use { statement ->
           statement.executeQuery("SELECT COUNT(*) FROM standalone_phase_status").use { it.next(); it.getInt(1) }
         })
@@ -204,12 +194,12 @@ class ExternalCommitObserverTest {
     establishTemporarySchemaReadiness("desktop-coherent-external-writer").use { fixture ->
       val received = Channel<StoreChange>(Channel.UNLIMITED)
       val ready = CompletableDeferred<Unit>()
-      val observer = launch { ExternalCommitObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
+      val observer = launch { DesktopCommitSignalObserver(fixture.dbPath).changes(ready).collect { received.send(it) } }
       try {
         withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "coherent-commit")
         val change = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC), change.topics)
+        assertEquals(setOf(DesktopReadSchema.GOALS_TOPIC, DesktopReadSchema.PHASES_TOPIC), change.revisions.keys)
         assertEquals(2, change.revisions.size)
       } finally { observer.cancelAndJoin() }
     }
@@ -238,6 +228,15 @@ object ExternalRuntimeWriter {
     } else null
     try {
       factory.transaction { unit ->
+        if (mode == "unrelated-commit") {
+          val connection = unit::class.java.getDeclaredField("connection").apply { isAccessible = true }
+            .get(unit) as java.sql.Connection
+          connection.createStatement().use { statement ->
+            statement.execute("CREATE TABLE unrelated_desktop_signal_probe (id TEXT PRIMARY KEY)")
+            statement.execute("INSERT INTO unrelated_desktop_signal_probe VALUES ('committed')")
+          }
+          return@transaction
+        }
         if (mode == "goal-commit" || mode == "coherent-commit") {
           unit.goalRunnerControls.persistControlState(mode, GoalRunnerControlState(pauseRequested = true))
           if (mode == "goal-commit") return@transaction

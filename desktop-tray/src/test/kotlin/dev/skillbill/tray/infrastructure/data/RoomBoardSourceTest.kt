@@ -3,7 +3,7 @@ package dev.skillbill.tray.infrastructure.data
 import dev.skillbill.tray.application.Outcome
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
-import dev.skillbill.tray.infrastructure.storage.ExternalCommitObserver
+import dev.skillbill.tray.infrastructure.storage.DesktopCommitSignalObserver
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
@@ -61,7 +61,7 @@ class RoomBoardSourceTest {
       val source = RoomBoardSource(emptyMap(), fixture.tempDir, fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC),
         observeChanges = { selected, ready ->
           if (attempts.incrementAndGet() == 1) flow { throw IOException("watch registration failed") }
-          else ExternalCommitObserver(selected).changes(ready)
+          else DesktopCommitSignalObserver(selected).changes(ready)
         })
       try {
         source.selectDatabase(fixture.dbPath.toString())

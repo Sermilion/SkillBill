@@ -81,13 +81,15 @@ service still materializes some growing collections before paging them.
 Generation-bound cursors reject stale appends and details after a path change or
 same-path replacement. Failed reads retain prior data with a stale indication.
 
-A filesystem watcher registers before the first read and opens an independent
-read-only connection. File and WAL events are hints. `PRAGMA data_version` and
-runtime-owned revision topics confirm committed changes. Rollback does not
-advance a topic. Watch overflow performs the same revision check. An unrelated
-table commit does not requery a work section. Replacement cancels the old
-session. An observer failure reports an error; a later data request can reopen
-the session, but there is no autonomous acknowledged reconnect protocol yet.
+The runtime publishes changed work revision topics to a small sidecar file only
+after its transaction commits. The file carries a generation token and the
+latest revision snapshot. Writers serialize publication so a delayed writer
+cannot replace a newer snapshot. The desktop watches only that file. It does not
+watch the database, WAL, or shared memory files, and the signal watcher opens no
+SQLite connection. Room's separate read-only snapshot connection still checks
+query coherence. Rollbacks and unrelated table commits publish nothing.
+Registration and reconnect read a fresh baseline; watcher overflow rereads the latest signal.
+An observer failure leaves the last view stale until explicit refresh reconnects.
 Lease and retention deadlines schedule one invalidation at the known boundary.
 Elapsed-duration display ticks without database reads.
 
