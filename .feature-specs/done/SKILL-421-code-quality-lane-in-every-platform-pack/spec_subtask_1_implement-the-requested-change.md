@@ -1,6 +1,6 @@
 # SKILL-421 Subtask 1 - Implement the requested change
 
-Parent spec: [.feature-specs/SKILL-421-code-quality-lane-in-every-platform-pack/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-421-code-quality-lane-in-every-platform-pack/spec.md](spec.md)
 Issue key: SKILL-421
 
 ## Scope
@@ -15,7 +15,7 @@ The lane keeps SKILL-413's finding discipline, report section, and telemetry cat
 
 ## Problem
 
-SKILL-413 landed a generic code-quality lane that composition appends to routed reviews. Only `platform-packs/generic/platform.yaml` declares it. Other packs have no owned specialist, and Kotlin's optional idioms sidecar is not automatically included in every worker launch. Pack authors and operators cannot inspect a platform-specific code-quality lane alongside the pack's other specialists.
+SKILL-413 landed a generic code-quality lane that composition appends to routed reviews. Only `../../../platform-packs/generic/platform.yaml` declares it. Other packs have no owned specialist, and Kotlin's optional idioms sidecar is not automatically included in every worker launch. Pack authors and operators cannot inspect a platform-specific code-quality lane alongside the pack's other specialists.
 
 The current composition already supports a graph-owned universal area taking precedence over the fallback. This change uses that ownership model and closes authoring, registration, delivery, and validation gaps without building a second review composition mechanism.
 
@@ -97,11 +97,11 @@ Failure findings and code-quality findings remain separate during deduplication.
 
 ## Constraints and settled decisions
 
-This spec supersedes SKILL-413's generic-only lane ownership and its non-goal of adding specialists to non-generic packs. It preserves SKILL-413's additive behavior and finding discipline. Implementation records that supersession in the owning `agent/decisions.md` and verifies retained SKILL-413 criteria after the change.
+This spec supersedes SKILL-413's generic-only lane ownership and its non-goal of adding specialists to non-generic packs. It preserves SKILL-413's additive behavior and finding discipline. Implementation records that supersession in the owning `../../../agent/decisions.md` and verifies retained SKILL-413 criteria after the change.
 
 Use existing nearest-owner composition and universal fallback handling. Delete obsolete generic-only assumptions in tests or docs instead of keeping contradictory assertions. Do not widen architecture exceptions, substance-audit exemptions, or source-generation permissions to ship the new rubrics.
 
-Apply `docs/runtime-command-guidance.md`, `docs/skill-source-generation.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, and `docs/observability-policy.md`. Pack behavior stays manifest-owned. Runtime declarations and wire vocabulary keep one owner. Kotlin comments follow repository restrictions. Required schema changes land in canonical contracts first and fail loudly at parse seams.
+Apply `../../../docs/runtime-command-guidance.md`, `docs/skill-source-generation.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, and `docs/observability-policy.md`. Pack behavior stays manifest-owned. Runtime declarations and wire vocabulary keep one owner. Kotlin comments follow repository restrictions. Required schema changes land in canonical contracts first and fail loudly at parse seams.
 
 Base branch is `main`, which contains the SKILL-380 and SKILL-413 merges. This request creates requirements only and does not start implementation or create a decomposition manifest. Planning preserves current SKILL-418 work and the SKILL-419/SKILL-420 QA specs.
 
@@ -159,7 +159,7 @@ This plan covers the existing single subtask. AC-001 through AC-013 refer to the
 
 Serves AC-004, AC-006, AC-008, and AC-013.
 
-Update `ParallelCodeReviewRunnerPlanning.prepare`, `ParallelCodeReviewRunnerLanePlanRecording.selectLaunchesForResume`, and `recordPlannedLanes` under `runtime-kotlin/runtime-application`. Read recorded lane ownership before compiling replacement assignments. For an accepted review, preserve the recorded code-quality owner for both completed and incomplete lanes, resolve that exact owner's authorized rubric, and prevent a newly declared local lane from launching alongside it. New reviews use current manifest ownership. Keep revision, packet digest, selected-lane coverage, path, hunk, and lane-decision checks in `ReviewPreparationService.validateAgainstPacket`.
+Update `ParallelCodeReviewRunnerPlanning.prepare`, `ParallelCodeReviewRunnerLanePlanRecording.selectLaunchesForResume`, and `recordPlannedLanes` under `../../../runtime-kotlin/runtime-application`. Read recorded lane ownership before compiling replacement assignments. For an accepted review, preserve the recorded code-quality owner for both completed and incomplete lanes, resolve that exact owner's authorized rubric, and prevent a newly declared local lane from launching alongside it. New reviews use current manifest ownership. Keep revision, packet digest, selected-lane coverage, path, hunk, and lane-decision checks in `ReviewPreparationService.validateAgainstPacket`.
 
 Use existing runtime-owned persistence and ports. Apply the same ownership rule to the durable inline rubric projection introduced in step 2. An unavailable recorded owner must fail through a checked typed boundary rather than substitute generic or a new local owner. No compatibility mapping is supported by the digest, so this plan chooses preservation.
 
@@ -175,7 +175,7 @@ Factor an application-owned projection from the existing preparation path in `Pa
 
 Use `FileSystemReviewRubricResolver` through its existing port. Deliver the complete declared `content.md` plus only selected governed add-ons. Preserve containment checks and the 256 KiB bound. Inline and delegated delivery must identify the same surviving owner and include embedded language guidance. Keep delegated compiler identity checks and the full bodies in `ParallelCodeReviewRunnerParentPrompt`. Do not invoke `ParallelCodeReviewRunner`'s delegated execution path for inline review; its inline rejection remains valid.
 
-Feed the projection into `InlineReviewStrategy.kt` and `InlineReviewDirective.compose`, `StandaloneReviewStrategies.kt`'s `standaloneDirective` and `launchInline`, and `VerifyCodeReviewStep.run` with `VerifyStepSequence.gatherDiff`. Wire explicit dependencies in `RuntimeFeatureTaskSlotProvides.kt` and `RuntimeOperationProvides.kt` under `runtime-kotlin/runtime-core`. Preserve Opus strategy parity, one inline traversal, workflow mutation policy, standalone report-only behavior, and verify's read-only evaluator isolation.
+Feed the projection into `InlineReviewStrategy.kt` and `InlineReviewDirective.compose`, `StandaloneReviewStrategies.kt`'s `standaloneDirective` and `launchInline`, and `VerifyCodeReviewStep.run` with `VerifyStepSequence.gatherDiff`. Wire explicit dependencies in `RuntimeFeatureTaskSlotProvides.kt` and `RuntimeOperationProvides.kt` under `../../../runtime-kotlin/runtime-core`. Preserve Opus strategy parity, one inline traversal, workflow mutation policy, standalone report-only behavior, and verify's read-only evaluator isolation.
 
 Verify's diff artifact supplies checkpoint, comparison scope, and changed paths, not a raw patch. Obtain authorized changed-content evidence through the existing evidence ports before projecting rubrics. Assumption for implement to confirm: those ports can serve all three inline callers with their existing comparison scopes. Do not parse the path artifact as diff text or grant workers unrestricted filesystem discovery.
 
@@ -195,7 +195,7 @@ Write independent platform guidance rather than rename generic text. Go covers e
 
 Incorporate relevant examples from Kotlin's existing `code-quality-idioms.md` into the Kotlin and KMP owned rubrics, including nullable-string `orEmpty()`, immutable `emptyList()`, appropriate scope functions, cohesive data classes, and sealed lifecycle state. State preservation of validation, errors, resource closing, and serialized values. Do not create a companion-delivery mechanism or rely on an optional sidecar.
 
-Update each pack's `platform.yaml` through `declared_code_review_areas`, `declared_files.areas`, `area_metadata.focus`, required `lane_conditions.code-quality`, and its specialist pointer to `orchestration/review-orchestrator/specialist-contract.md`. Add matching entries in `code-review/bill-<slug>-code-review/native-agents/agents.yaml`, retaining bundle version `0.1`, `compose: governed-content`, and both review evidence tools. Match manifest-derived native descriptions exactly, including contract-required separator punctuation.
+Update each pack's `platform.yaml` through `declared_code_review_areas`, `declared_files.areas`, `area_metadata.focus`, required `lane_conditions.code-quality`, and its specialist pointer to `../../../orchestration/review-orchestrator/specialist-contract.md`. Add matching entries in `code-review/bill-<slug>-code-review/native-agents/agents.yaml`, retaining bundle version `0.1`, `compose: governed-content`, and both review evidence tools. Match manifest-derived native descriptions exactly, including contract-required separator punctuation.
 
 Update baseline `code-review/bill-<slug>-code-review/content.md` routing prose to describe local required quality separately from reachable-failure lanes. Preserve existing failure-lane selection bounds and routing signals. Ordinary full packs have ten failure areas plus quality. KMP retains seven local failure areas and three inherited Kotlin failure areas, with its own quality owner. Specialists stay unlisted sidecars and native-agent inputs; the dispatcher remains `/skill-bill` only.
 
@@ -255,11 +255,11 @@ Test obligations: extend `FileSystemReviewNativeAgentPreflightTest.kt` using its
 
 Serves AC-001, AC-002, AC-005, AC-008, AC-011, AC-012, and AC-013.
 
-Update `README.md`, `docs/capabilities.md`, `docs/external-platform-packs.md`, `orchestration/review-orchestrator/review-skill-structure-standard.md`, `platform-pack-substance-standard.md` in the same directory, and `orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md`. Describe ten failure areas plus required local quality, KMP's local override, legacy optional fallback and omission, full launch-provided language guidance, and unlisted installation. Replace stale generic-only statements. Align the touched substance-standard description with the audit rather than retain its obsolete quality-check-source requirement.
+Update `../../../README.md`, `docs/capabilities.md`, `docs/external-platform-packs.md`, `orchestration/review-orchestrator/review-skill-structure-standard.md`, `platform-pack-substance-standard.md` in the same directory, and `orchestration/shell-content-contract/SCAFFOLD_PAYLOAD.md`. Describe ten failure areas plus required local quality, KMP's local override, legacy optional fallback and omission, full launch-provided language guidance, and unlisted installation. Replace stale generic-only statements. Align the touched substance-standard description with the audit rather than retain its obsolete quality-check-source requirement.
 
 Update expected resources owned by `AuthoringRenderSnapshotTest.kt`: `snapshots/scaffold/bill-kotlin-code-review.render.txt`, `bill-kmp-code-review.render.txt`, and `snapshots/native-agents/bill-kmp-code-review.agents.yaml` under the skills module's test resources. Change the KMP UI snapshot only if its output actually changes. Provider-specific outputs, generated pointers, staging files, and generated `SKILL.md` wrappers remain uncommitted; `content.md` remains authoritative.
 
-Test obligations: the existing render snapshot and bundle parity tests catch missing registration in generated authorized outputs. Documentation-only prose adds no new test. The write_history phase records SKILL-421's supersession of generic-only ownership in `orchestration/review-orchestrator/agent/decisions.md`; implement supplies the outcome for that phase without doing its history work.
+Test obligations: the existing render snapshot and bundle parity tests catch missing registration in generated authorized outputs. Documentation-only prose adds no new test. The write_history phase records SKILL-421's supersession of generic-only ownership in `../../../orchestration/review-orchestrator/agent/decisions.md`; implement supplies the outcome for that phase without doing its history work.
 
 ### 10. Hand off execution and evidence to the owning later phases
 
@@ -267,7 +267,7 @@ Serves all acceptance criteria, with installation evidence for AC-007 and AC-013
 
 Implement produces the planned repository end states and focused regression tests. Before authoring each test, state its named realistic bug from the obligations above. Extend existing boundary tests; avoid sibling literal variants, implementation-structure assertions, and tests for trivial glue. Preserve real past-bug regressions and governed parity coverage. Review and validation may repair production wiring, test setup, formatting, and lint as required; this plan creates no restriction that prevents those repairs.
 
-Validate executes applicable focused tests from steps 1 through 9, then the required runtime full `./gradlew check`, `npx --yes agnix --strict .`, and `scripts/validate_agent_configs` through its governed gate. Planning and implement do not execute tests, compile/build proof, or full checks under this briefing's phase ownership. Build proof stays with the build owner if scheduled by the runtime. The parent runtime owns installation refresh and inspection of exact installed owner/content, native preflight, and stale-link removal. No child installation command is planned.
+Validate executes applicable focused tests from steps 1 through 9, then the required runtime full `./gradlew check`, `npx --yes agnix --strict .`, and `../../../scripts/validate_agent_configs` through its governed gate. Planning and implement do not execute tests, compile/build proof, or full checks under this briefing's phase ownership. Build proof stays with the build owner if scheduled by the runtime. The parent runtime owns installation refresh and inspection of exact installed owner/content, native preflight, and stale-link removal. No child installation command is planned.
 
 Audit performs full per-criterion inspection. Review uses branch-diff scope and applies architecture rule IDs A1 through A12 and G1 through G7 alongside Design Principles, Code Principles, observability, and source-generation contracts. Keep pack behavior manifest-owned, vocabulary single-owned, adapters behind ports, and persistence runtime-owned. Delete obsolete assumptions. Do not loosen guards, baselines, thresholds, exemptions, or file limits. Add no Kotlin line/block comments or KDoc outside interfaces and their members.
 

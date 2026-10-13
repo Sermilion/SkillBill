@@ -8,7 +8,7 @@ The lane keeps SKILL-413's finding discipline, report section, and telemetry cat
 
 ## Problem
 
-SKILL-413 landed a generic code-quality lane that composition appends to routed reviews. Only `platform-packs/generic/platform.yaml` declares it. Other packs have no owned specialist, and Kotlin's optional idioms sidecar is not automatically included in every worker launch. Pack authors and operators cannot inspect a platform-specific code-quality lane alongside the pack's other specialists.
+SKILL-413 landed a generic code-quality lane that composition appends to routed reviews. Only `../../../platform-packs/generic/platform.yaml` declares it. Other packs have no owned specialist, and Kotlin's optional idioms sidecar is not automatically included in every worker launch. Pack authors and operators cannot inspect a platform-specific code-quality lane alongside the pack's other specialists.
 
 The current composition already supports a graph-owned universal area taking precedence over the fallback. This change uses that ownership model and closes authoring, registration, delivery, and validation gaps without building a second review composition mechanism.
 
@@ -90,11 +90,11 @@ Failure findings and code-quality findings remain separate during deduplication.
 
 ## Constraints and settled decisions
 
-This spec supersedes SKILL-413's generic-only lane ownership and its non-goal of adding specialists to non-generic packs. It preserves SKILL-413's additive behavior and finding discipline. Implementation records that supersession in the owning `agent/decisions.md` and verifies retained SKILL-413 criteria after the change.
+This spec supersedes SKILL-413's generic-only lane ownership and its non-goal of adding specialists to non-generic packs. It preserves SKILL-413's additive behavior and finding discipline. Implementation records that supersession in the owning `../../../agent/decisions.md` and verifies retained SKILL-413 criteria after the change.
 
 Use existing nearest-owner composition and universal fallback handling. Delete obsolete generic-only assumptions in tests or docs instead of keeping contradictory assertions. Do not widen architecture exceptions, substance-audit exemptions, or source-generation permissions to ship the new rubrics.
 
-Apply `docs/runtime-command-guidance.md`, `docs/skill-source-generation.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, and `docs/observability-policy.md`. Pack behavior stays manifest-owned. Runtime declarations and wire vocabulary keep one owner. Kotlin comments follow repository restrictions. Required schema changes land in canonical contracts first and fail loudly at parse seams.
+Apply `../../../docs/runtime-command-guidance.md`, `docs/skill-source-generation.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, and `docs/observability-policy.md`. Pack behavior stays manifest-owned. Runtime declarations and wire vocabulary keep one owner. Kotlin comments follow repository restrictions. Required schema changes land in canonical contracts first and fail loudly at parse seams.
 
 Base branch is `main`, which contains the SKILL-380 and SKILL-413 merges. This request creates requirements only and does not start implementation or create a decomposition manifest. Planning preserves current SKILL-418 work and the SKILL-419/SKILL-420 QA specs.
 
