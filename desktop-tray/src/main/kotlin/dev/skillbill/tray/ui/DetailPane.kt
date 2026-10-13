@@ -76,12 +76,6 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         Text(if (blocked || item.lifecycle == Lifecycle.FAILED) detail.featureTitle ?: "${if (standalone) "Phase ${item.phaseId.orEmpty()}" else "Workflow"} ${item.lifecycle.name.lowercase()}" else displayFeatureTitle(detail.featureTitle ?: item.summary), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         Text("${FileName(item.repositoryRoot)} · ${displayPath(item.repositoryRoot)} · ${item.branch ?: "no branch"}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         listOfNotNull(problem, state.actionProblem).forEach { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
-        val refreshing = state.detailLoadStates.values.any { it == ListLoadState.REFRESHING }
-        val appending = state.detailLoadStates.values.any { it == ListLoadState.APPENDING }
-        if (refreshing || appending) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          CircularProgressIndicator(Modifier.size(12.dp), color = mint, strokeWidth = 2.dp)
-          if (appending) Text("Loading more details...", color = muted, style = MaterialTheme.typography.bodySmall)
-        }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
