@@ -28,8 +28,10 @@ import skillbill.engine.goalrunner.status.requestPause
 import skillbill.engine.goalrunner.status.requestPauseByIssueKey
 import skillbill.engine.goalrunner.status.resume
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.GoalPlanningStatusSummary
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
@@ -61,7 +63,8 @@ class WorkflowGoalRunnerManifestStore
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
     private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   ) : GoalRunnerManifestStore,
-    GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort) {
+    GoalRunnerManifestPurgeCommands by WorkflowGoalRunnerPurgePersistence(database, repositoryEnclosingRootPort),
+    GoalRunnerStatusManifestQueries by WorkflowGoalRunnerStatusManifestQueries(database, repositoryEnclosingRootPort) {
     private val engine: WorkflowEngine = WorkflowEngine()
     private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
     private val projectionPersistence =
@@ -142,6 +145,21 @@ class WorkflowGoalRunnerManifestStore
         issueKey,
         repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
       )
+
+    override fun planningStatusFromSummary(
+      parentWorkflowId: String,
+      summary: GoalPlanningStatusSummary,
+      blockedSubtaskId: Int?,
+      blockedReason: String?,
+    ): GoalPlanningStatusSnapshot =
+      database.read { unit ->
+        planningStatusSnapshot(
+          summary,
+          unit.goalPlanningPreparations.hasPreparedSharedPreplan(parentWorkflowId),
+          blockedSubtaskId,
+          blockedReason,
+        )
+      }
 
     override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? =
       controls.requestPause(

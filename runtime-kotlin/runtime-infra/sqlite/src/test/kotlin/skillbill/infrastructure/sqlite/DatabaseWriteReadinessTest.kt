@@ -10,12 +10,15 @@ import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseWriteReadinessGate
+import skillbill.infrastructure.sqlite.core.schema.databaseFileIdentity
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
 import java.sql.DriverManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -39,6 +42,33 @@ private class CountingReadinessGate(private val onEstablish: () -> Unit) {
 
 @Execution(ExecutionMode.SAME_THREAD)
 class DatabaseWriteReadinessTest {
+  @Test
+  fun `file identity falls back to creation time when the filesystem has no file key`() {
+    val creationTime = FileTime.fromMillis(1234)
+    val attributes =
+      object : BasicFileAttributes {
+        override fun lastModifiedTime() = creationTime
+
+        override fun lastAccessTime() = creationTime
+
+        override fun creationTime() = creationTime
+
+        override fun isRegularFile() = true
+
+        override fun isDirectory() = false
+
+        override fun isSymbolicLink() = false
+
+        override fun isOther() = false
+
+        override fun size() = 0L
+
+        override fun fileKey(): Any? = null
+      }
+
+    assertEquals("creation-time:1234", databaseFileIdentity(attributes))
+  }
+
   @Test
   fun `warm readiness cache avoids duplicate schema establishment work`() {
     var executions = 0
@@ -152,7 +182,7 @@ class DatabaseWriteReadinessTest {
   }
 
   @Test
-  fun `unreadable database file surfaces read ACCESS database failure from ensureReady`() {
+  fun `unreadable database file surfaces read CORRUPT database failure from ensureReady`() {
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-unreadable")
     val dbPath = tempDir.resolve("metrics.db")
     Files.writeString(dbPath, "not-a-sqlite-database")
@@ -163,7 +193,7 @@ class DatabaseWriteReadinessTest {
       assertFailsWith<SkillBillRuntimeException> {
         gate.ensureReady(dbPath)
       }
-    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertEquals(DatabaseFailureCode.CORRUPT, error.code)
     assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.READ.wireValue} failed for '"))
     assertEquals(0, establishments)
   }

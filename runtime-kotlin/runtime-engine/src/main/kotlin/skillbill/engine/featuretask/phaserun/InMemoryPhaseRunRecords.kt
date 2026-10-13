@@ -42,6 +42,7 @@ internal class InMemoryPhaseRunRecords(
 ) : PhaseRunRecords,
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses() {
   private val phaseRecords = LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>()
+  val acceptedOutputs = mutableMapOf<String, String>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
   private val buildGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
@@ -95,7 +96,10 @@ internal class InMemoryPhaseRunRecords(
     return RequiredPhaseWrite.Acknowledged
   }
 
-  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request)
+  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
+    request.normalizedOutput?.output?.value?.let { acceptedOutputs[request.phaseId] = it }
+    return recordPhaseState(request)
+  }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean = true
 

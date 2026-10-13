@@ -8,8 +8,8 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryBusyTranslationTest {
   @Test
@@ -22,20 +22,15 @@ class SQLiteDatabaseSessionFactoryBusyTranslationTest {
         environment = emptyMap(),
       )
 
+    val raised = SQLiteException("[SQLITE_BUSY] private driver details", SQLiteErrorCode.SQLITE_BUSY)
     val thrown =
       assertFailsWith<SkillBillRuntimeException> {
-        database.transaction {
-          throw SQLiteException(
-            "[SQLITE_BUSY] The database file is locked (database is locked)",
-            SQLiteErrorCode.SQLITE_BUSY,
-          )
-        }
+        database.transaction { throw raised }
       }
     assertEquals(DatabaseFailureCode.BUSY, thrown.code)
 
-    val cause = thrown.cause
-    assertTrue(thrown.message.orEmpty().contains("[SQLITE_BUSY]"), thrown.message.orEmpty())
-    assertEquals(cause?.message, thrown.message)
+    assertSame(raised, thrown.cause)
+    assertFalse(thrown.message.orEmpty().contains("private driver details"))
   }
 
   @Test

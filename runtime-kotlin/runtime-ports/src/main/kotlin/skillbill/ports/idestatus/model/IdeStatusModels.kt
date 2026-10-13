@@ -1,33 +1,13 @@
 package skillbill.ports.idestatus.model
-
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.idestatus.model.boundedIdeStatusActivity
-import skillbill.workflow.model.WorkflowStatus
 import java.time.Instant
-
-enum class IdeStatusWorkflowFamily(val wireValue: String) {
-  FEATURE_TASK_RUNTIME("feature-task-runtime"),
-  FEATURE_VERIFY("feature-verify"),
-  FEATURE_GOAL("feature-goal"),
-}
-
-enum class IdeStatusLifecycleState(val wireValue: String) {
-  ACTIVE("active"),
-  PAUSED(WorkflowStatus.PAUSED.wireValue),
-  BLOCKED(WorkflowStatus.BLOCKED.wireValue),
-  FAILED(WorkflowStatus.FAILED.wireValue),
-  TERMINAL("terminal"),
-  IDLE("idle"),
-}
-
-enum class IdeStatusFreshness(val wireValue: String) {
-  FRESH("fresh"),
-  STALE("stale"),
-  UNKNOWN("unknown"),
-}
 
 const val IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH: Int = 512
 

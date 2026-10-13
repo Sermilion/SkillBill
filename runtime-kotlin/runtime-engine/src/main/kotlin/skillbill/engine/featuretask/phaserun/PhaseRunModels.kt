@@ -50,6 +50,7 @@ sealed interface PhaseRunResult {
     val value: String?,
     val specBundle: PhaseRunSpecBundle? = null,
     val completedOutputs: List<String> = emptyList(),
+    val acceptedOutput: String? = null,
   ) : PhaseRunResult
 
   data class Blocked(

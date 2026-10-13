@@ -9,17 +9,11 @@ import dev.skillbill.tray.domain.WorkIdentity
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
-import dev.skillbill.tray.infrastructure.cli.ProcessRunner
-import dev.skillbill.tray.infrastructure.cli.ProcessResult
-import java.time.Duration
+import java.awt.SystemTray
 
 class NativeServicesImpl : NativeServices {
-  override suspend fun hasSystemTray(): Boolean {
-    if (!os().contains("linux")) return true
-    return when (val result = ProcessRunner(timeout = Duration.ofSeconds(2)).run(listOf("gdbus", "call", "--session", "--dest", "org.freedesktop.DBus", "--object-path", "/org/freedesktop/DBus", "--method", "org.freedesktop.DBus.GetNameOwner", "org.kde.StatusNotifierWatcher"))) {
-      is ProcessResult.Success -> true
-      else -> false.also { dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("status_notifier_watcher_unavailable") }
-    }
+  override suspend fun hasSystemTray(): Boolean = SystemTray.isSupported().also { supported ->
+    if (!supported) RuntimeDiagnostics.record("system_tray_unavailable")
   }
 
   override fun notify(title: String, body: String, identity: WorkIdentity, onClick: (WorkIdentity) -> Unit) = notifyAuthorized(title, body, identity, { send -> send() }, onClick)
@@ -30,7 +24,7 @@ class NativeServicesImpl : NativeServices {
         NotificationManager.initialize()
         authorizeAndSend { notification(title = title.take(120), message = body.take(240), onActivated = { onClick(identity) }).send() }
       } catch (_: Exception) {
-        dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("notification_failed")
+        RuntimeDiagnostics.record("notification_failed")
       }
     }, "skillbill-notification").apply { isDaemon = true }.start()
   }
@@ -42,7 +36,7 @@ class NativeServicesImpl : NativeServices {
       setXdgAutostart(enabled)
     }
   } catch (_: Exception) {
-    dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("login_start_failed")
+    RuntimeDiagnostics.record("login_start_failed")
     false
   }
 
@@ -52,7 +46,7 @@ class NativeServicesImpl : NativeServices {
     val launcher = System.getenv("APPIMAGE") ?: System.getProperty("jpackage.app-path")
     val app = launcher?.let { Path.of(it) }
     if (app == null || !Files.isExecutable(app)) {
-      dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("xdg_launcher_unavailable")
+      RuntimeDiagnostics.record("xdg_launcher_unavailable")
       return false
     }
     return try {
@@ -61,7 +55,7 @@ class NativeServicesImpl : NativeServices {
       Files.writeString(path, "[Desktop Entry]\nType=Application\nName=Skill Bill\nExec=\"$escaped\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
       true
     } catch (_: Exception) {
-      dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record("xdg_autostart_write_failed")
+      RuntimeDiagnostics.record("xdg_autostart_write_failed")
       false
     }
   }

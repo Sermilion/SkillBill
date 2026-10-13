@@ -7,6 +7,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.WorkOwnerExitObserver
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
@@ -65,7 +66,7 @@ internal fun processBootIdentity(diagnostics: RuntimeDiagnostics): String {
 @Inject
 class JdkFeatureTaskRuntimeWorkerSupervisor(
   private val diagnostics: RuntimeDiagnostics,
-) : FeatureTaskRuntimeWorkerSupervisor {
+) : FeatureTaskRuntimeWorkerSupervisor, WorkOwnerExitObserver {
   override fun currentProcess(): FeatureTaskRuntimeProcessIdentity {
     val handle = ProcessHandle.current()
     return FeatureTaskRuntimeProcessIdentity(
@@ -85,6 +86,33 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
         FeatureTaskRuntimeProcessInspection.Unsupported(it.message ?: "Local process identity is unavailable.")
       },
     )
+
+  override fun observe(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    onExit: () -> Unit,
+  ): AutoCloseable? {
+    when (inspect(ownership)) {
+      FeatureTaskRuntimeProcessInspection.NotRunning,
+      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
+      -> {
+        onExit()
+        return null
+      }
+      is FeatureTaskRuntimeProcessInspection.Unsupported -> return null
+      FeatureTaskRuntimeProcessInspection.ExactLive -> Unit
+    }
+    val handle = ProcessHandle.of(ownership.pid).orElse(null)
+    if (handle == null || processBirthToken(handle) != ownership.processBirthToken) {
+      onExit()
+      return null
+    }
+    return if (handle.pid() == ProcessHandle.current().pid()) {
+      null
+    } else {
+      val completion = handle.onExit().thenRun(onExit)
+      AutoCloseable { completion.cancel(false) }
+    }
+  }
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -196,7 +224,7 @@ private class HeartbeatLoop(
         scheduleNext(plan.retryDelaySeconds)
         return
       } catch (error: SkillBillRuntimeException) {
-        if (error.code != DatabaseFailureCode.ACCESS && error.code != DatabaseFailureCode.BUSY) throw error
+        if (error.code !in DATABASE_RETRYABLE_FAILURES) throw error
         reportFailure(error)
         scheduleNext(plan.retryDelaySeconds)
         return
@@ -231,5 +259,13 @@ private class HeartbeatLoop(
 
   private companion object {
     const val NANOS_PER_SECOND = 1_000_000_000L
+    val DATABASE_RETRYABLE_FAILURES =
+      setOf(
+        DatabaseFailureCode.ACCESS,
+        DatabaseFailureCode.BUSY,
+        DatabaseFailureCode.MISSING,
+        DatabaseFailureCode.INCOMPATIBLE_SCHEMA,
+        DatabaseFailureCode.CORRUPT,
+      )
   }
 }

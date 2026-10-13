@@ -1,9 +1,9 @@
 package skillbill.engine.work.model
 
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import java.nio.file.Path
 import java.time.Instant

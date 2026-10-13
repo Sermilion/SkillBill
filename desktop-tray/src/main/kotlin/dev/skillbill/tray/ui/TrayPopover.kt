@@ -44,7 +44,7 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
       Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent))).padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
         Image(androidx.compose.ui.res.painterResource("icons/skill-bill.svg"), "", Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)))
         Text("Skill Bill", Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-.3).sp)
-        Text(if (state.boardLoading) "loading work" else view.pollAgeSeconds?.let { "polled ${age(Duration.ofSeconds(it))} ago" } ?: "connecting", color = dim, fontFamily = mono, fontSize = 11.sp)
+        Text(if (state.boardLoading) "loading work" else view.observationAgeSeconds?.let { "updated ${age(Duration.ofSeconds(it))} ago" } ?: "connecting", color = dim, fontFamily = mono, fontSize = 11.sp)
         IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
           Icon(Icons.Default.Close, contentDescription = "Close tray window", tint = dim, modifier = Modifier.size(16.dp))
         }
@@ -64,7 +64,7 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
           Row(Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             Text(tab, color = if (selected) ink else muted, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
             Text(rows.size.toString(), Modifier.background(if (selected) mint.copy(alpha = .12f) else surface3, RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 3.dp), color = if (selected) amber else dim, fontFamily = mono, fontWeight = FontWeight.Medium, fontSize = 10.5.sp)
-            if (rows.any(::needsAttention)) Box(Modifier.size(6.dp).background(orange, RoundedCornerShape(50)))
+            if (rows.any { it.needsAttention() }) Box(Modifier.size(6.dp).background(orange, RoundedCornerShape(50)))
           }
           Box(Modifier.fillMaxWidth().height(2.dp).background(if (selected) mint else Color.Transparent))
         }
@@ -87,7 +87,7 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
         item { DesignLabel("Finished in the last hour", Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) }
         items(view.finishedPhases, key = { it.identity }) { item -> PopoverWorkRow(item, false, now, state.stale) { model.select(item.identity); openMain() } }
       }
-      item { PageFooter(hasMore, state.boardLoading, model::loadMoreBoard) }
+      if (hasMore) item { PageFooter(hasMore, state.boardLoading, model::loadMoreBoard) }
     }
     HorizontalDivider(color = border)
     Row(Modifier.fillMaxWidth().background(sidebar).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -111,7 +111,7 @@ private fun PopoverStat(label: String, value: Int, color: Color, modifier: Modif
 @Composable
 internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, stale: Boolean, select: () -> Unit) {
   val color = lifecycleColor(item.lifecycle)
-  val attention = needsAttention(item)
+  val attention = item.needsAttention()
   Row(Modifier.fillMaxWidth().background(if (attention) color.copy(alpha = .07f) else if (selected) mint.copy(alpha = .06f) else Color.Transparent).clickable(onClick = select).height(IntrinsicSize.Min)) {
     Box(Modifier.width(2.dp).fillMaxHeight().background(if (attention) color else if (selected) mint else Color.Transparent))
     Column(Modifier.weight(1f).padding(start = 14.dp, end = 16.dp, top = 10.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

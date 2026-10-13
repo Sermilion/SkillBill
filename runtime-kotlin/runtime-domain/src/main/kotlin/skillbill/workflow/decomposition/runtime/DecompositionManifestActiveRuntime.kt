@@ -5,8 +5,19 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 
 fun DecompositionManifest.isActiveGoalRuntime(): Boolean =
-  status.decompositionStatus() !in
-    setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED) &&
-    subtasks.any { subtask ->
-      subtask.status.decompositionStatus() !in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
-    }
+  isActiveGoalRuntime(
+    status,
+    subtasks.any {
+      it.status.decompositionStatus() !in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+    },
+  )
+
+fun isActiveGoalRuntime(
+  manifestStatus: String,
+  hasUnsettledSubtasks: Boolean,
+): Boolean =
+  manifestStatus.decompositionStatus() !in
+    setOf(
+      DecompositionStatus.COMPLETE,
+      DecompositionStatus.SKIPPED,
+    ) && hasUnsettledSubtasks

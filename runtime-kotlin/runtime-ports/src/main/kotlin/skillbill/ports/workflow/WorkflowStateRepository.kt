@@ -1,11 +1,16 @@
 package skillbill.ports.workflow
 
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
+import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
+import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
+import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.mapToRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -82,7 +87,37 @@ interface FeatureTaskExecutionLookupRepository {
   ): Boolean
 }
 
-interface FeatureTaskWorkflowStateRepository : FeatureTaskExecutionLookupRepository {
+interface FeatureTaskWorkflowReadRepository {
+  fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot?
+
+  fun readGoalStatusChildPage(
+    normalizedIssueKey: String,
+    offset: Int,
+    limit: Int,
+    subtaskIds: Set<Int>? = null,
+  ): List<WorkflowStateSnapshot>
+
+  fun readGoalAttemptLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<GoalAttemptLedgerStatusEntry>
+
+  fun readFeatureTaskArtifacts(
+    workflowId: String,
+    families: Set<DurableWorkflowArtifactFamily>,
+  ): DurableWorkflowArtifacts?
+
+  fun readFeatureTaskWorkflowHeader(workflowId: String): FeatureTaskRuntimeWorkflowHeader?
+
+  fun readFeatureTaskPhaseLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): FeatureTaskRuntimePhaseLedgerPage?
+}
+
+interface FeatureTaskWorkflowStateRepository : FeatureTaskExecutionLookupRepository, FeatureTaskWorkflowReadRepository {
   fun terminalizeLegacyProseFeatureTaskWorkflow(row: WorkflowStateRecord)
 
   fun saveFeatureTaskWorkflow(

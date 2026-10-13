@@ -1,6 +1,6 @@
 package dev.skillbill.tray.infrastructure.macos
 
-import dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics
+import dev.skillbill.tray.infrastructure.RuntimeDiagnostics
 import dev.skillbill.tray.presentation.TrayStateKind
 import java.nio.file.Files
 

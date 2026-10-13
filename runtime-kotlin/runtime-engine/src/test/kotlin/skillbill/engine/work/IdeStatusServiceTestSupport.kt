@@ -61,7 +61,10 @@ import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPla
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
+import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.WorkBoardCandidateQuery
+import skillbill.ports.work.model.WorkBoardCandidateRow
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -306,6 +309,7 @@ internal fun ideStatusService(
     manifestStore = manifestStore,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
+    workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
   )
 }
 
@@ -524,8 +528,32 @@ internal class TrackingDatabase(
       override val dbPath: Path = Path.of("/fake/ide-status.db")
       override val workflowStates = workflows
       override val workList: WorkListRepository =
-        object : WorkListRepository {
+        object : WorkListRepository by EmptyWorkListRepository {
+          override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> {
+            val phases = statusRepository?.readBoardCandidates(query.finishedFrom, query.observedAt).orEmpty()
+            val phaseRows =
+              latestPhaseExecutions(phases).map {
+                val priority =
+                  if (it.lifecycleState in setOf("terminal", "completed", "success", "failed")) {
+                    "0"
+                  } else {
+                    "1"
+                  }
+                WorkBoardCandidateRow(it.invocationId, "$priority\n${it.startedAt}\n${it.invocationId}")
+              }
+            val workRows =
+              work.filter { row -> phases.none { it.workflowId == row.workflowId } }.map {
+                val priority = if (it.currentState in setOf("completed", "failed", "abandoned")) "0" else "1"
+                WorkBoardCandidateRow(it.workflowId, "$priority\n${it.startedAt}\n${it.workflowId}")
+              }
+            return (phaseRows + workRows).distinctBy { it.id }.sortedByDescending { it.key }
+              .filter { row -> query.afterKey?.let { row.key < it } != false }.take(query.limit)
+          }
+
           override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+
+          override fun findByWorkflowId(workflowId: String): List<WorkItem> =
+            work.filter { it.workflowId == workflowId }
         }
       override val standalonePhaseStatuses = statusRepository ?: super.standalonePhaseStatuses
       override val goalRunnerControls = controls

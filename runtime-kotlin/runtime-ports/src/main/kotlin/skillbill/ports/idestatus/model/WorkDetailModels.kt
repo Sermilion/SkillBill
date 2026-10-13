@@ -2,6 +2,10 @@ package skillbill.ports.idestatus.model
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.IdeStatusDisplayGroup
+import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.work.model.WorkGoalDependency
+import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import java.time.Instant
 
@@ -12,11 +16,15 @@ enum class WorkDetailProblemCode(val wireValue: String) {
   INVALID_REPOSITORY_IDENTITY("invalid_repository_identity"),
 }
 
+enum class WorkDetailList { SUBTASKS, PHASES, VALIDATION, EXECUTIONS, DEPENDENCIES }
+
 data class WorkDetailRequest(
   val id: String,
   val observedAt: Instant? = null,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val cursor: String? = null,
+  val startOffset: Int = 0,
+  val list: WorkDetailList? = null,
 ) {
   init {
     require(id.isNotBlank()) { "id is required." }
@@ -29,6 +37,8 @@ data class WorkDetailResult(
   val problem: WorkDetailProblem? = null,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val nextCursor: String? = null,
+  val observation: WorkStoreObservation? = null,
+  val listCursors: Map<WorkDetailList, String> = emptyMap(),
 )
 
 data class WorkDetailProblem(
@@ -50,6 +60,17 @@ data class WorkDetailItem(
   val pageOffset: Int = 0,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val hasMore: Boolean = false,
+  val moreLists: Set<WorkDetailList> = emptySet(),
+  val observation: WorkStoreObservation? = null,
+  val liveSection: WorkLiveSection? = null,
+  val controlEligible: Boolean = false,
+  val requiresAttention: Boolean = false,
+  val dependencies: List<WorkGoalDependency> = emptyList(),
+  val freshnessDeadline: Instant? = null,
+  val displayGroup: IdeStatusDisplayGroup? = null,
+  val displayPriority: Int = 5,
+  val exactPauseReason: String? = null,
+  val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
 data class WorkDetailRuntimeStatus(
@@ -80,4 +101,7 @@ data class WorkExecutionInstance(
   val updatedAt: Instant,
   val finishedAt: Instant?,
   val result: String?,
+  val restoration: ExecutionReasonRestoration? = null,
 )
+
+enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

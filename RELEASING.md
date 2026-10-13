@@ -23,6 +23,8 @@ archive plus its `.sha256` sidecar to the GitHub Release for that tag:
 
 - self-contained runtime images for **CLI** and **MCP**
   (`runtime-cli-<version>-<os>-<arch>.zip`, `runtime-mcp-<version>-<os>-<arch>.zip`)
+- the desktop tray app distribution
+  (`skill-bill-desktop-<version>-<os>-<arch>.tar.gz`)
 
 The `<os>-<arch>` token is the canonical set `macos-arm64` / `windows-x64` /
 `linux-x64`, so downstream installers can resolve the correct asset by host. Each
@@ -32,6 +34,24 @@ mounts its native artifacts and compares the included root `LICENSE` bytes; it
 also verifies the adjacent checksum after the licensed artifact is finalized.
 The Linux skills archive includes the root `LICENSE` directly and is checked the
 same way.
+
+macOS app metadata uses version `1.0.0` while Skill Bill releases are `0.x`,
+because Apple's jpackage bundler rejects app versions with a zero major number.
+The desktop archive filename still carries the exact Skill Bill release version.
+
+After each runtime release publishes, the workflow deletes assets from every
+older runtime release, including prereleases. Their release pages and notes stay
+available, and plugin releases keep their own downloads. Only the newest
+published runtime release keeps downloads. Ordinary pushes to `main` do not
+build the tray app. Pull requests that touch `desktop-tray` or `runtime-kotlin`
+run the cross-platform build and publish a downloadable snapshot; cleanup keeps
+the newest successful complete snapshot set.
+
+The installer asks whether to install the desktop app. It downloads the matching
+host archive from the newest published runtime release and verifies its checksum.
+The app remains unchanged when the user skips it. A release without a desktop
+archive still completes the Skill Bill runtime install and reports that the app
+is unavailable for that release or host.
 
 Builds run on host-matched runners because jlink and jpackage cannot
 cross-compile: macOS arm64 on the **self-hosted Apple Silicon Mac mini**
@@ -66,6 +86,8 @@ Both paths reuse the same build matrix and the same fail-closed release-policy
 validator as a stable release. Every staging label is immutable evidence for
 one asset set: the workflow refuses an existing release or staging tag instead
 of replacing assets, so use a fresh prerelease label for every new matrix run.
+When a newer runtime release publishes, the retention step removes the earlier
+staging assets while leaving their release records in place.
 The workflow creates a draft, uploads and confirms the complete expected asset
 set, then publishes it; a failed upload therefore cannot make a partial stable
 release public.
@@ -75,8 +97,8 @@ release public.
 ### SKILL-32 Python Runtime Retirement
 
 Skill Bill now uses packaged Kotlin as the only normal CLI and MCP runtime.
-Rollback is to install the previous Skill Bill release, not to select a Python
-runtime.
+To roll back, check out and install the previous Skill Bill release from source.
+The release workflow removes downloads from older runtime releases.
 
 Removed environment variables:
 

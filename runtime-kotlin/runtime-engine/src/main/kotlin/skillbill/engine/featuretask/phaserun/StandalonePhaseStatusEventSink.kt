@@ -51,6 +51,7 @@ class StandalonePhaseStatusEventSink(
             state = "terminal",
             finishedAt = clock.instant(),
             terminalResult = result.value,
+            acceptedResult = result.acceptedOutput ?: result.value,
           )
         is PhaseRunResult.Blocked ->
           persist(
@@ -116,6 +117,7 @@ class StandalonePhaseStatusEventSink(
     state: String,
     finishedAt: Instant?,
     terminalResult: String?,
+    acceptedResult: String? = terminalResult,
   ) {
     val current = registered ?: return
     val result =
@@ -132,6 +134,7 @@ class StandalonePhaseStatusEventSink(
             updatedAt = clock.instant(),
             finishedAt = finishedAt,
             terminalResult = terminalResult?.takeIf(String::isNotBlank),
+            acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
           ),
         )
       }

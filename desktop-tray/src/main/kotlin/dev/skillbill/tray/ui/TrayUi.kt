@@ -55,36 +55,35 @@ internal fun LabeledPanel(title: String, rows: List<Pair<String, String>>) {
 
 @Composable
 fun HistoryWindow(state: DashboardState, model: DashboardModel, onClose: () -> Unit) {
+  DisposableEffect(model) { model.observeHistory(true); onDispose { model.observeHistory(false) } }
   val now by tickingNow()
-  var filter by remember { mutableStateOf("All") }
+  val filter = state.settings.historyFilter
   val scroll = rememberLazyListState()
-  val hasMore = state.board?.nextCursor != null
-  LoadNextPageOnScroll(scroll, hasMore, state.boardLoading, model::loadMoreBoard)
-  val cutoff = now.minus(state.settings.retention.duration)
-  val items = state.board?.items.orEmpty().filter { it.finishedAt?.let { time -> !time.isBefore(cutoff) } == true }.sortedByDescending { it.finishedAt }.filter {
-    filter == "All" || (filter == "Goals" && it.family == WorkFamily.FEATURE_GOAL) || (filter == "Phases" && it.isPhase())
-  }
+  val hasMore = state.sections[WorkSection.HISTORY]?.nextCursor != null
+  val loadState = state.sectionLoadStates[WorkSection.HISTORY] ?: if (WorkSection.HISTORY in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
+  LoadNextPageOnScroll(scroll, hasMore, loadState == ListLoadState.APPENDING, { model.loadMore(WorkSection.HISTORY) })
+  val items = state.sections[WorkSection.HISTORY]?.items.orEmpty()
   Column(Modifier.width(520.dp).height(600.dp).background(canvas).padding(18.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) { Text("History", Modifier.weight(1f), color = ink, style = MaterialTheme.typography.titleLarge); TextButton(onClick = onClose) { Text("Close") } }
-    Row { listOf("All", "Goals", "Phases").forEach { TextButton(onClick = { filter = it }) { Text(it, color = if (filter == it) mint else muted) } } }
+    Row { HistoryFilter.entries.forEach { choice -> TextButton(onClick = { model.updateSettings(state.settings.copy(historyFilter = choice)) }) { Text(choice.name.lowercase().replaceFirstChar(Char::titlecase), color = if (filter == choice) mint else muted) } } }
     Text("Finished within ${state.settings.retention.cliValue}", color = muted)
-    if (state.boardLoading) Text("Loading history...", color = muted)
+    state.sectionProblems[WorkSection.HISTORY]?.let { Text(it.summary, color = amber) }
+    if (loadState == ListLoadState.INITIAL_LOADING) Text("Loading history...", color = muted)
     LazyColumn(Modifier.weight(1f), state = scroll) {
       items(items, key = { it.identity }) { PopoverWorkRow(it, state.selected == it.identity, now, state.stale) { model.select(it.identity); onClose() } }
-      item { PageFooter(hasMore, state.boardLoading, model::loadMoreBoard) }
+      if (hasMore) item { PageFooter(hasMore, loadState == ListLoadState.APPENDING, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(WorkSection.HISTORY) } }
     }
   }
 }
 
 @Composable
-fun SettingsWindow(settings: AppSettings, onChange: (AppSettings) -> Unit, problem: Problem?, onClose: () -> Unit) {
-  var cli by remember(settings.cliOverride) { mutableStateOf(settings.cliOverride.orEmpty()) }
+fun SettingsWindow(settings: AppSettings, onChange: (AppSettings) -> Unit, problem: Problem?, effectiveDatabasePath: String? = null, onClose: () -> Unit) {
+  var database by remember(settings.databasePath) { mutableStateOf(settings.databasePath.orEmpty()) }
   Column(Modifier.width(460.dp).heightIn(max = 680.dp).background(canvas).padding(20.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) { Text("Settings", Modifier.weight(1f), color = ink, style = MaterialTheme.typography.titleLarge); TextButton(onClick = onClose) { Text("Close") } }
     problem?.let { Text(it.summary, color = amber, style = MaterialTheme.typography.bodySmall) }
-    OutlinedTextField(cli, { cli = it }, Modifier.fillMaxWidth(), label = { Text("Skill Bill CLI path override") }, singleLine = true)
-    Text("Check every", color = ink)
-    Row { listOf(5, 15, 30, 60).forEach { value -> FilterChip(settings.pollSeconds == value, { onChange(settings.copy(pollSeconds = value)) }, label = { Text("${value}s") }) } }
+    OutlinedTextField(database, { database = it }, Modifier.fillMaxWidth(), label = { Text("Database path, blank uses runtime default") }, singleLine = true)
+    effectiveDatabasePath?.let { Text("Current database: $it", color = muted, style = MaterialTheme.typography.bodySmall) }
     Text("History retention", color = ink)
     Row { Retention.entries.forEach { value -> FilterChip(settings.retention == value, { onChange(settings.copy(retention = value)) }, label = { Text(value.cliValue) }) } }
     Text("Notifications", color = ink)
@@ -93,7 +92,7 @@ fun SettingsWindow(settings: AppSettings, onChange: (AppSettings) -> Unit, probl
       Switch(settings.notifications[key] ?: defaultNotifications.getValue(key), { enabled -> onChange(settings.copy(notifications = settings.notifications + (key to enabled))) })
     } }
     Row(verticalAlignment = Alignment.CenterVertically) { Text("Start at login", Modifier.weight(1f), color = ink); Switch(settings.startAtLogin, { onChange(settings.copy(startAtLogin = it)) }) }
-    Button(onClick = { onChange(settings.copy(cliOverride = cli.ifBlank { null })) }) { Text("Save settings") }
+    Button(onClick = { onChange(settings.copy(databasePath = database.ifBlank { null })) }) { Text("Save settings") }
   }
 }
 
@@ -116,10 +115,7 @@ internal fun phaseElapsedText(item: WorkItem, now: Instant, stale: Boolean): Str
   val end = item.finishedAt ?: if (!stale && item.freshness == Freshness.FRESH && item.lifecycle == Lifecycle.ACTIVE) now else item.updatedAt
   return age(Duration.between(start, end).coerceNonNegative())
 }
-internal fun needsAttention(item: WorkItem) = item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.FAILED || item.pauseReasonCode == "awaiting_operator_decision"
 internal fun FileName(path: String) = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\')
-internal fun shellQuote(path: String): String = if (System.getProperty("os.name").startsWith("Windows", true)) "\"${path.replace("\"", "\\\"")}\"" else "'${path.replace("'", "'\\''")}'"
-
 @Composable
 internal fun tickingNow(): State<Instant> {
   val now = remember { mutableStateOf(Instant.now()) }

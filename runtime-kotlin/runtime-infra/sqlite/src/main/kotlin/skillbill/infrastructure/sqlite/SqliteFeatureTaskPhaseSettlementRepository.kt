@@ -4,6 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import java.time.Instant
 
 @Inject
 class SqliteFeatureTaskPhaseSettlementRepository(
@@ -25,6 +27,17 @@ class SqliteFeatureTaskPhaseSettlementRepository(
     phaseId: String,
   ): List<FeatureTaskPhaseSettlement> =
     databaseSessionFactory.read { it.featureTaskPhaseSettlements.history(workflowId, phaseId) }
+
+  override fun findReasonAtOrBefore(
+    workflowId: String,
+    phaseId: String,
+    startedAt: Instant,
+    recordedAt: Instant,
+    storedReason: String,
+  ): FeatureTaskPhaseSettlementReasonLookup =
+    databaseSessionFactory.read {
+      it.featureTaskPhaseSettlements.findReasonAtOrBefore(workflowId, phaseId, startedAt, recordedAt, storedReason)
+    }
 
   override fun delete(
     workflowId: String,

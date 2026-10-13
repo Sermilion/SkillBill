@@ -27,7 +27,7 @@ fun auditGapIterationCount(ledger: List<FeatureTaskRuntimePhaseLedgerEntry>?): I
   return ledger.count(::isAuditGapRound)
 }
 
-private fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean =
+internal fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean =
   when (entry.action) {
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE ->
       entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID ||

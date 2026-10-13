@@ -2,11 +2,11 @@ package skillbill.engine.work
 
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
+import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
-import skillbill.ports.idestatus.model.IdeStatusExecutionScope
-import skillbill.ports.idestatus.model.IdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals

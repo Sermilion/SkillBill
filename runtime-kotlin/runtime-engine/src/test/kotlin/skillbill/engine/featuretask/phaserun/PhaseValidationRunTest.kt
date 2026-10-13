@@ -86,6 +86,21 @@ class PhaseValidationRunTest {
   }
 
   @Test
+  fun `accepted standalone output remains exact beyond the display summary limit`() {
+    val full = "Validation findings. ".repeat(50) + "Final required action."
+    val launcher = launcher { full }
+    val result =
+      assertIs<PhaseRunResult.Completed>(
+        entry(launcher, mutableListOf(), emptyList(), manifests = emptyList()).run(validationRequest()),
+      )
+    val stored = database.read { it.standalonePhaseStatuses.readByInvocation(result.invocationId) }
+
+    assertEquals(full, result.acceptedOutput)
+    assertEquals(full, stored?.acceptedResult)
+    database.assertNoDurableWorkflowState()
+  }
+
+  @Test
   fun `repeated validation discovers checks afresh even with declared pack commands`() {
     val gateRequests = mutableListOf<ValidationGateRunRequest>()
     val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }

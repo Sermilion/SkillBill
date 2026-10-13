@@ -90,7 +90,15 @@ class GoalStatusCommand(
       try {
         goalRunnerStatusService.status(inputs.goalStatusRequest(options, repositoryEnclosingRootPort))
       } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.code == DatabaseFailureCode.ACCESS)
+        error.rethrowUnless(
+          error.code in
+            setOf(
+              DatabaseFailureCode.ACCESS,
+              DatabaseFailureCode.MISSING,
+              DatabaseFailureCode.INCOMPATIBLE_SCHEMA,
+              DatabaseFailureCode.CORRUPT,
+            ),
+        )
         if (!options.monitorOnly) throw error
         val reason = databaseAccessCondition(error)
         val payload = databaseUnavailableGoalStatusCliMap(issueKey, reason)

@@ -2,7 +2,12 @@ package skillbill.infrastructure.sqlite
 
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
+import skillbill.error.core.DatabaseAccessOperation
+import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
+import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
+import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.lang.reflect.Proxy
 import java.nio.file.Path
@@ -20,6 +25,34 @@ import kotlin.test.assertTrue
 
 @Execution(ExecutionMode.SAME_THREAD)
 class ConnectionTransactionsRollbackTest {
+  @Test
+  fun `a changed target outcome rolls back writes before returning the refusal`() {
+    val path = createTempDirectory("skillbill-fenced-rollback").resolve("rollback.db")
+    DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+      connection.createStatement().use { it.execute("CREATE TABLE admission_probe (id INTEGER)") }
+      val outcome =
+        connection.inDatabaseTransaction<FencedTransactionResult<Unit>>(
+          DatabaseTransactionSpec(
+            path,
+            DatabaseTransactionBeginMode.IMMEDIATE,
+            DatabaseAccessOperation.WRITE,
+            SqliteTestDiagnostics,
+          ),
+          commitWhen = { it is FencedTransactionResult.Committed },
+        ) {
+          createStatement().use { it.execute("INSERT INTO admission_probe VALUES (1)") }
+          FencedTransactionResult.ChangedTarget
+        }
+      assertEquals(FencedTransactionResult.ChangedTarget, outcome)
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT COUNT(*) FROM admission_probe").use { rows ->
+          assertTrue(rows.next())
+          assertEquals(0, rows.getInt(1))
+        }
+      }
+    }
+  }
+
   @Test
   fun `dual failure keeps the primary message and attaches rollback as suppressed`() {
     val primary = IllegalStateException("primary-probe-failure")

@@ -229,12 +229,59 @@ make_skills_bundle() {
   printf '%s' "$sha" >"$out_dir/$bundle_name.sha256"
 }
 
+make_desktop_bundle() {
+  local token="$1" out_dir="$2" work archive sha executable
+  work="$(mktemp -d)"
+  WORK_TMPDIRS+=("$work")
+  case "$token" in
+    macos-arm64|macos-x64)
+      executable="$work/Skill Bill.app/Contents/MacOS/Skill Bill"
+      ;;
+    windows-x64)
+      executable="$work/Skill Bill/bin/Skill Bill.bat"
+      ;;
+    *)
+      executable="$work/Skill Bill/bin/Skill Bill"
+      ;;
+  esac
+  mkdir -p "$(dirname "$executable")"
+  cp "$REPO_ROOT/LICENSE" "$work/LICENSE"
+  cat > "$executable" <<'APP'
+#!/usr/bin/env bash
+exit 0
+APP
+  chmod +x "$executable"
+  archive="skill-bill-desktop-0.0.0-smoke-${token}.tar.gz"
+  tar -czf "$out_dir/$archive" -C "$work" .
+  sha="$(cd "$out_dir" && sha256sum "$archive" 2>/dev/null || shasum -a 256 "$archive")"
+  printf '%s' "$sha" >"$out_dir/$archive.sha256"
+}
+
+desktop_app_target() {
+  local fake_home="$1"
+  case "$TOKEN" in
+    macos-arm64|macos-x64) printf '%s/Applications/Skill Bill.app' "$fake_home" ;;
+    windows-x64) printf '%s/AppData/Local/SkillBill/Desktop/Skill Bill' "$fake_home" ;;
+    *) printf '%s/.local/share/skillbill/desktop/Skill Bill' "$fake_home" ;;
+  esac
+}
+
+desktop_app_executable() {
+  local app_target="$1"
+  case "$TOKEN" in
+    macos-arm64|macos-x64) printf '%s/Contents/MacOS/Skill Bill' "$app_target" ;;
+    windows-x64) printf '%s/bin/Skill Bill.bat' "$app_target" ;;
+    *) printf '%s/bin/Skill Bill' "$app_target" ;;
+  esac
+}
+
 setup_release_dir() {
   local token="$1" stub_src="$2"
   RELEASE_DIR="$(mktemp -d)"
   make_runtime_zip "$token" "runtime-cli" "runtime-cli" "$stub_src" "$RELEASE_DIR"
   make_runtime_zip "$token" "runtime-mcp" "runtime-mcp" "$stub_src" "$RELEASE_DIR"
   make_skills_bundle "$RELEASE_DIR"
+  make_desktop_bundle "$token" "$RELEASE_DIR"
 }
 
 seed_selection_json() {
@@ -256,6 +303,8 @@ run_install() {
   done
   env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
+    XDG_DATA_HOME="$fake_home/.local/share" \
+    LOCALAPPDATA="$fake_home/AppData/Local" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
     SKILL_BILL_BIN_DIR="$fake_home/.local/bin" \
@@ -384,6 +433,13 @@ case "$url" in
     "assets":[{"name":"skill-bill-intellij-plugin-9.9.9.zip"}]
   },
   {
+    "tag_name":"v0.5.0-rc.1",
+    "prerelease":true,
+    "draft":false,
+    "html_url":"https://github.com/Sermilion/skill-bill/releases/tag/v0.5.0-rc.1",
+    "assets":[{"name":"skill-bill-skills-0.5.0-rc.1.tar.gz"}]
+  },
+  {
     "tag_name":"v0.4.0",
     "prerelease":false,
     "draft":false,
@@ -393,7 +449,18 @@ case "$url" in
 ]
 JSON
     ;;
-  https://api.github.com/repos/Sermilion/skill-bill/releases/tags/*)
+  https://api.github.com/repos/Sermilion/skill-bill/releases/tags/v0.5.0-rc.1)
+    cat <<'JSON'
+{
+  "tag_name":"v0.5.0-rc.1",
+  "prerelease":true,
+  "draft":false,
+  "html_url":"https://github.com/Sermilion/skill-bill/releases/tag/v0.5.0-rc.1",
+  "assets":[{"name":"skill-bill-skills-0.5.0-rc.1.tar.gz"}]
+}
+JSON
+    ;;
+  https://api.github.com/repos/Sermilion/skill-bill/releases/tags/v0.4.0)
     cat <<'JSON'
 {
   "tag_name":"v0.4.0",
@@ -644,9 +711,40 @@ if [[ "$GATE_OUTPUT" == *"Agents:"* ]]; then
 else
   fail "fresh-machine install did not complete: $GATE_OUTPUT"
 fi
+assert_file_absent "default desktop choice does not install the optional app" \
+  "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
-echo "--- scenario 9: plugin-v* release newest still resolves the runtime tag ---"
+echo "--- scenario 9: explicit desktop app install is checksum-verified and user-scoped ---"
+FAKE_HOME="$(mktemp -d)"
+seed_selection_json "$FAKE_HOME"
+run_install "$FAKE_HOME" --install-desktop-app
+DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
+DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
+assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
+if [[ "$TOKEN" == "windows-x64" ]]; then
+  [[ -f "$FAKE_HOME/.local/bin/skillbill-desktop.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+else
+  [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
+  [[ -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+fi
+if [[ "$TOKEN" == "linux-x64" ]]; then
+  [[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+fi
+
+echo ""
+echo "--- scenario 10: explicit no preserves an existing desktop app during upgrade ---"
+DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
+DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
+mkdir -p "$(dirname "$DESKTOP_EXECUTABLE")"
+printf 'existing app\n' > "$DESKTOP_EXECUTABLE"
+run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app
+[[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] && \
+  pass "declining the optional app keeps the existing desktop install" || \
+  fail "declining the optional app changed the existing desktop install"
+
+echo ""
+echo "--- scenario 11: newest runtime prerelease wins while plugin releases are skipped ---"
 PLUGIN_SHIM_DIR="$(make_plugin_tag_curl_shim)"
 PLUGIN_CURL_LOG="$PLUGIN_SHIM_DIR/curl.log"
 : >"$PLUGIN_CURL_LOG"
@@ -662,11 +760,11 @@ PLUGIN_TAG_OUTPUT="$(
     </dev/null
 )"
 
-if [[ "$PLUGIN_TAG_OUTPUT" == *"release installer v0.4.0."* &&
-  "$PLUGIN_TAG_OUTPUT" == *"release_args: [--release] [v0.4.0]"* ]]; then
-  pass "installer-tag resolution picked the runtime tag over the newer plugin-v* release"
+if [[ "$PLUGIN_TAG_OUTPUT" == *"release installer v0.5.0-rc.1."* &&
+  "$PLUGIN_TAG_OUTPUT" == *"release_args: [--release] [v0.5.0-rc.1]"* ]]; then
+  pass "installer-tag resolution picked the newest runtime prerelease over the plugin release"
 else
-  fail "installer-tag resolution did not pick v0.4.0: $PLUGIN_TAG_OUTPUT"
+  fail "installer-tag resolution did not pick v0.5.0-rc.1: $PLUGIN_TAG_OUTPUT"
 fi
 
 # The asset-listing path resolves the tag and then queries /releases/tags/<tag>;
@@ -690,8 +788,8 @@ WORK_TMPDIRS+=("$PLUGIN_ASSET_DIR")
 ) >/dev/null 2>&1 || true
 
 PLUGIN_ASSET_URLS="$(cat "$PLUGIN_CURL_LOG")"
-if [[ "$PLUGIN_ASSET_URLS" == *"/releases/tags/v0.4.0"* ]]; then
-  pass "release-asset listing queried the runtime tag"
+if [[ "$PLUGIN_ASSET_URLS" == *"/releases/tags/v0.5.0-rc.1"* ]]; then
+  pass "release-asset listing queried the newest runtime prerelease"
 else
   fail "release-asset listing did not query /releases/tags/v0.4.0: $PLUGIN_ASSET_URLS"
 fi
@@ -710,10 +808,10 @@ else
   fail "asset download used the latest-release redirect: $PLUGIN_ASSET_URLS"
 fi
 
-if [[ "$PLUGIN_ASSET_URLS" == *"/releases/download/v0.4.0/"* ]]; then
-  pass "asset download pinned the resolved runtime tag"
+if [[ "$PLUGIN_ASSET_URLS" == *"/releases/download/v0.5.0-rc.1/"* ]]; then
+  pass "asset download pinned the resolved runtime prerelease"
 else
-  fail "asset download did not pin v0.4.0: $PLUGIN_ASSET_URLS"
+  fail "asset download did not pin v0.5.0-rc.1: $PLUGIN_ASSET_URLS"
 fi
 
 echo ""

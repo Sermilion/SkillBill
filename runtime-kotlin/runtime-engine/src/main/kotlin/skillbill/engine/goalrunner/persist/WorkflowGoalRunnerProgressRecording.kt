@@ -2,6 +2,8 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.contracts.workflow.identity.status.WorkStatusArtifactKeys
 import skillbill.engine.goalrunner.execution.support.maxHistorySequence
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -14,9 +16,10 @@ import skillbill.goalrunner.ledger.backwardEdgeCountsFromLedger
 import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.goalrunner.ledger.progressEventFrom
-import skillbill.goalrunner.ledger.summarizeAttemptLedgerFromEntries
+import skillbill.goalrunner.ledger.summarizeAttemptLedgerStatusEntries
 import skillbill.goalrunner.ledger.toProgressEvent
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
+import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -26,6 +29,7 @@ import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -75,7 +79,7 @@ private class SequencedHistoryArtifact(
 
 private val PROGRESS_POLL_ARTIFACT_KEYS =
   setOf(
-    "progress_event",
+    WorkStatusArtifactKeys.PROGRESS_EVENT,
     DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label(),
     DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT.label(),
   )
@@ -90,8 +94,8 @@ internal class WorkflowGoalRunnerProgressRecording(
   GoalRunnerAttemptLedgerStore {
   override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
     database.read { unitOfWork ->
-      val family = workflowFamilyFor(unitOfWork.workflowStates, workflowId) ?: return@read null
-      val record = unitOfWork.workflowStates.get(family, workflowId) ?: return@read null
+      val family = WorkflowFamily.TASK_RUNTIME
+      val record = unitOfWork.workflowStates.readGoalStatusSnapshot(workflowId) ?: return@read null
       workflowSnapshotValidator.validate(record, family.definition.workflowName)
       val steps = record.steps
       val artifacts = record.artifacts.filterKeys(PROGRESS_POLL_ARTIFACT_KEYS::contains)
@@ -286,29 +290,54 @@ internal class WorkflowGoalRunnerProgressRecording(
     }
 
   override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
+    attemptLedgerSummary(issueKey, null)
+
+  override fun readAttemptLedgerSummaryForSubtasks(
+    issueKey: String,
+    subtaskIds: Set<Int>,
+  ): GoalRunnerAttemptLedgerSummary = attemptLedgerSummary(issueKey, subtaskIds)
+
+  private fun attemptLedgerSummary(
+    issueKey: String,
+    subtaskIds: Set<Int>?,
+  ): GoalRunnerAttemptLedgerSummary =
     database.read { unitOfWork ->
       val normalizedIssueKey = normalizeRequiredIssueKey(issueKey)
+      val backwardEdgeToken = GoalAttemptLedgerAction.BACKWARD_EDGE_ENTRY.wireValue
       val entries =
-        buildList {
-          unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
-            FeatureTaskWorkflowMode.RUNTIME,
-            normalizedIssueKey,
-          ).forEach { row ->
-            val snapshot = row.toSnapshot()
-            val artifacts = snapshot.artifacts
-            if (
-              DurableWorkflowArtifacts.fromMap(artifacts).goalContinuation()?.issueKey != normalizedIssueKey
-            ) {
-              return@forEach
+        sequence {
+          var childOffset = 0
+          do {
+            val children =
+              unitOfWork.workflowStates.readGoalStatusChildPage(
+                normalizedIssueKey,
+                childOffset,
+                WorkPaginationLimits.MAX_PAGE_SIZE,
+              )
+            children.forEach { child ->
+              var ledgerOffset = 0
+              do {
+                val page =
+                  unitOfWork.workflowStates.readGoalAttemptLedgerPage(
+                    child.workflowId,
+                    ledgerOffset,
+                    WorkPaginationLimits.MAX_PAGE_SIZE,
+                  )
+                yieldAll(
+                  page.filter { entry ->
+                    val backwardEdge =
+                      entry.action == backwardEdgeToken
+                    subtaskIds == null || !backwardEdge ||
+                      entry.subtaskId in subtaskIds
+                  },
+                )
+                ledgerOffset += page.size
+              } while (page.size == WorkPaginationLimits.MAX_PAGE_SIZE)
             }
-            (DurableWorkflowArtifactFamily.GOAL_ATTEMPT_LEDGER.value(artifacts) as? List<*>)
-              .orEmpty()
-              .forEach { item ->
-                (item as? Map<*, *>)?.let(::add)
-              }
-          }
+            childOffset += children.size
+          } while (children.size == WorkPaginationLimits.MAX_PAGE_SIZE)
         }
-      summarizeAttemptLedgerFromEntries(entries)
+      summarizeAttemptLedgerStatusEntries(entries.asIterable())
     }
 
   private fun appendSequencedHistoryArtifact(

@@ -108,7 +108,7 @@ class GoalPlanningPreparationStoreTest {
     val dbPath = tempDir.resolve("metrics.db")
     val database =
       sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap())
-    database.read { Unit }
+    database.transaction { Unit }
 
     DriverManager.getConnection("jdbc:sqlite:$dbPath").use { writer ->
       writer.createStatement().use { it.execute("BEGIN IMMEDIATE") }

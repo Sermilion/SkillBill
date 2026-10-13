@@ -12,13 +12,13 @@ import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.composenativetray.tray.api.Tray
 import dev.skillbill.tray.application.DashboardController
 import dev.skillbill.tray.domain.*
-import dev.skillbill.tray.infrastructure.PreferencesSettingsStore
+import dev.skillbill.tray.infrastructure.DataStoreSettingsStore
 import dev.skillbill.tray.infrastructure.NativeServicesImpl
 import dev.skillbill.tray.infrastructure.TrayPopoverPlacement
 import dev.skillbill.tray.infrastructure.trayIconAnchor
 import dev.skillbill.tray.infrastructure.NativeTrayHost
 import dev.skillbill.tray.infrastructure.TrayIconRenderer
-import dev.skillbill.tray.infrastructure.cli.CliBoardSource
+import dev.skillbill.tray.infrastructure.data.RoomBoardSource
 import dev.skillbill.tray.ui.HistoryWindow
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.domain.scaledWindowPixels
@@ -30,6 +30,7 @@ import dev.skillbill.tray.ui.TrayPopover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 fun main() {
   val uiScale = resolveDesktopUiScale()
@@ -38,12 +39,17 @@ fun main() {
     var historyVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
     var trayPopoverVisible by remember { mutableStateOf(false) }
+    var trayPopoverOpening by remember { mutableStateOf(false) }
     val trayPopoverWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(380).dp, uiScale.scaledWindowPixels(590).dp))
     val uiScope = rememberCoroutineScope()
     val native = remember { NativeServicesImpl() }
     val trayPlacement = remember { TrayPopoverPlacement() }
+    val workData = remember {
+      RoomBoardSource(System.getenv(), java.nio.file.Path.of(System.getProperty("user.home")), java.nio.file.Path.of(""))
+    }
     val model = remember {
-      DashboardController(CliBoardSource(), PreferencesSettingsStore(), native) { uiScope.launch(Dispatchers.Main) { mainVisible = true } }
+      DashboardController(workData, workData, workData, workData,
+        DataStoreSettingsStore(java.nio.file.Path.of(System.getProperty("user.home"), ".skill-bill", "desktop-settings.json")), native) { uiScope.launch(Dispatchers.Main) { mainVisible = true } }
     }
     val state by model.state.collectAsState()
     val windowIcon = androidx.compose.ui.res.painterResource("icons/skill-bill.svg")
@@ -89,7 +95,7 @@ fun main() {
           action == 2001 -> historyVisible = true
           action == 2002 -> model.refresh()
           action == 2003 -> settingsVisible = true
-          action == 2004 -> { model.close(); exitApplication() }
+          action == 2004 -> { uiScope.launch { model.closeAndJoin(); exitApplication() } }
         }
       }, model::trayUnavailable, { trayPopoverVisible = false })
     else Tray(
@@ -100,13 +106,25 @@ fun main() {
       },
       tooltip = if (isLinux) dev.skillbill.tray.presentation.presentTrayHover(state) else tooltip,
       primaryAction = {
-        val anchor = trayIconAnchor()
-        uiScope.launch {
-          model.trayAvailable()
+        if (!trayPopoverOpening) {
+          val anchor = trayIconAnchor()
           if (!trayPopoverVisible) {
-            trayPopoverWindowState.position = trayPlacement.position(trayPopoverWindowState.size, anchor, uiScale, uiScale.scaledWindowPixels(16))
+            trayPopoverOpening = true
+            uiScope.launch {
+              try {
+                model.trayAvailable()
+                trayPopoverWindowState.position = withContext(Dispatchers.IO) {
+                  trayPlacement.position(trayPopoverWindowState.size, anchor, uiScale.scaledWindowPixels(16))
+                }
+                trayPopoverVisible = true
+              } finally {
+                trayPopoverOpening = false
+              }
+            }
+          } else {
+            model.trayAvailable()
+            trayPopoverVisible = false
           }
-          trayPopoverVisible = !trayPopoverVisible
         }
       },
     )
@@ -120,7 +138,7 @@ fun main() {
       resizable = false,
       state = trayPopoverWindowState,
     ) {
-      SkillBillTheme(uiScale) { TrayPopover(model, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { historyVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }) { model.close(); exitApplication() } }
+      SkillBillTheme(uiScale) { TrayPopover(model, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { historyVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }) { uiScope.launch { model.closeAndJoin(); exitApplication() } } }
     }
 
     val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
@@ -141,7 +159,7 @@ fun main() {
     }
     if (settingsVisible) Window(onCloseRequest = { settingsVisible = false }, title = "Skill Bill Settings", resizable = false, state = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(460).dp, uiScale.scaledWindowPixels(680).dp))) {
       val current by model.state.collectAsState()
-      SkillBillTheme(uiScale) { SettingsWindow(current.settings, model::updateSettings, current.settingsProblem) { settingsVisible = false } }
+      SkillBillTheme(uiScale) { SettingsWindow(current.settings, model::updateSettings, current.settingsProblem, current.databasePath) { settingsVisible = false } }
     }
   }
 }

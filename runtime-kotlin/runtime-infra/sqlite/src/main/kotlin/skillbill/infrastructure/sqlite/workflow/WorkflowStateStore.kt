@@ -3,11 +3,14 @@ package skillbill.infrastructure.sqlite.workflow
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskExecutionLookupStore
+import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskPhaseReadStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskRuntimeWorkerStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskWorkflowRowStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
+import skillbill.infrastructure.sqlite.workflow.featuretask.GoalStatusReadStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.child.GoalChildWorkflowStore
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.FeatureTaskExecutionLookupRepository
@@ -16,10 +19,14 @@ import skillbill.ports.workflow.FeatureTaskWorkflowStateRepository
 import skillbill.ports.workflow.GoalChildWorkflowStateRepository
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
+import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.sql.Connection
@@ -182,6 +189,40 @@ internal class FeatureTaskWorkflowStateStore(
   GoalChildWorkflowStateRepository by GoalChildWorkflowStore(connection),
   FeatureTaskRuntimeWorkerRepository by FeatureTaskRuntimeWorkerStore(connection, diagnostics, transactionActive) {
   private val rows = FeatureTaskWorkflowRowStore(connection, clock, workflowSnapshotValidator)
+  private val phaseReads = FeatureTaskPhaseReadStore(connection)
+
+  private val goalStatusReads = GoalStatusReadStore(connection)
+
+  override fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot? = goalStatusReads.snapshot(workflowId)
+
+  override fun readGoalStatusChildPage(
+    normalizedIssueKey: String,
+    offset: Int,
+    limit: Int,
+    subtaskIds: Set<Int>?,
+  ): List<WorkflowStateSnapshot> = goalStatusReads.childPage(normalizedIssueKey, offset, limit, subtaskIds)
+
+  override fun readGoalAttemptLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): List<GoalAttemptLedgerStatusEntry> = goalStatusReads.ledgerPage(workflowId, offset, limit)
+
+  override fun readFeatureTaskArtifacts(
+    workflowId: String,
+    families: Set<DurableWorkflowArtifactFamily>,
+  ): DurableWorkflowArtifacts? = phaseReads.artifacts(workflowId, families)
+
+  override fun readFeatureTaskWorkflowHeader(workflowId: String): FeatureTaskRuntimeWorkflowHeader? =
+    phaseReads.header(
+      workflowId,
+    )
+
+  override fun readFeatureTaskPhaseLedgerPage(
+    workflowId: String,
+    offset: Int,
+    limit: Int,
+  ): FeatureTaskRuntimePhaseLedgerPage? = phaseReads.ledgerPage(workflowId, offset, limit)
 
   override fun terminalizeLegacyProseFeatureTaskWorkflow(row: WorkflowStateRecord) =
     rows.terminalizeLegacyProseFeatureTaskWorkflow(row)

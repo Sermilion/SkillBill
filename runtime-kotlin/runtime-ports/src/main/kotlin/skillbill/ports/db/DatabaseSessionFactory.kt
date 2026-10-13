@@ -1,5 +1,7 @@
 package skillbill.ports.db
 
+import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
 
@@ -13,6 +15,18 @@ interface DatabaseSessionFactory {
   fun <T> readIfPresent(block: (UnitOfWork) -> T): T? = if (databaseExists()) read(block) else null
 
   fun <T> transaction(block: (UnitOfWork) -> T): T
+
+  fun <T> transactionFenced(
+    expected: DatabaseFileObservation,
+    block: (UnitOfWork) -> T,
+  ): FencedTransactionResult<T> =
+    transaction { unit ->
+      if (unit.databaseFileObservation != expected) {
+        FencedTransactionResult.ChangedTarget
+      } else {
+        FencedTransactionResult.Committed(block(unit))
+      }
+    }
 
   fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T
 }

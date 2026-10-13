@@ -146,6 +146,11 @@ class WorkflowGoalRunnerOutcomeStore
     override fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> =
       reconcile.authoritativeOutcomes(issueKey)
 
+    override fun authoritativeOutcomesForSubtasks(
+      issueKey: String,
+      subtaskIds: Set<Int>,
+    ): Map<Int, GoalRunnerStoredOutcome> = reconcile.authoritativeOutcomesForSubtasks(issueKey, subtaskIds)
+
     override fun reconcileAuthoritativeOutcomes(
       issueKey: String,
       activeWorkflowIds: Set<String>,
@@ -178,6 +183,11 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
       progressRecording.readAttemptLedgerSummary(issueKey)
+
+    override fun readAttemptLedgerSummaryForSubtasks(
+      issueKey: String,
+      subtaskIds: Set<Int>,
+    ): GoalRunnerAttemptLedgerSummary = progressRecording.readAttemptLedgerSummaryForSubtasks(issueKey, subtaskIds)
   }
 
 internal class WorkflowGoalRunnerTerminalBridge(
@@ -345,6 +355,15 @@ internal class WorkflowGoalRunnerReconcileBridge(
         gate,
         repoRoot,
       )
+    }
+
+  fun authoritativeOutcomesForSubtasks(
+    issueKey: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> =
+    database.read {
+        unitOfWork ->
+      outcomeReconcile.authoritativeOutcomesForSubtasks(unitOfWork.workflowStates, issueKey, subtaskIds)
     }
 
   fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome> =

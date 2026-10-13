@@ -60,10 +60,29 @@ interface GoalRunnerWorkflowOutcomeStore :
 
 interface GoalRunnerAttemptLedgerStore {
   fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary
+
+  fun readAttemptLedgerSummaryForSubtasks(
+    issueKey: String,
+    subtaskIds: Set<Int>,
+  ): GoalRunnerAttemptLedgerSummary =
+    readAttemptLedgerSummary(issueKey).let { summary ->
+      summary.copy(
+        cumulativeFixIterations =
+          summary.cumulativeFixIterations.filterKeys {
+              key ->
+            key.substringBefore(':').toIntOrNull() in subtaskIds
+          },
+      )
+    }
 }
 
 interface GoalRunnerWorkflowOutcomeMutationStore {
   fun authoritativeOutcomes(issueKey: String): Map<Int, GoalRunnerStoredOutcome>
+
+  fun authoritativeOutcomesForSubtasks(
+    issueKey: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerStoredOutcome> = authoritativeOutcomes(issueKey).filterKeys(subtaskIds::contains)
 
   fun reconcileAuthoritativeOutcomes(
     issueKey: String,

@@ -115,7 +115,7 @@ internal fun readKwinXwaylandScale(path: Path): Float? {
         else -> null
       }
     }
-  }.onFailure { scaleDiagnostic("scale_config_read_failed") }.getOrNull()
+  }.onFailure { RuntimeDiagnostics.record("scale_config_read_failed") }.getOrNull()
 }
 
 internal fun readKdeOutputScale(path: Path): Float? {
@@ -125,7 +125,7 @@ internal fun readKdeOutputScale(path: Path): Float? {
 
   val root = runCatching {
     Json.parseToJsonElement(Files.readString(path))
-  }.onFailure { scaleDiagnostic("scale_config_read_failed") }.getOrNull() as? JsonArray ?: return null
+  }.onFailure { RuntimeDiagnostics.record("scale_config_read_failed") }.getOrNull() as? JsonArray ?: return null
 
   val outputScales = root
     .sectionData("outputs")
@@ -196,7 +196,7 @@ private fun JsonObject.boolean(key: String): Boolean? =
 private fun JsonObject.array(key: String): JsonArray? = this[key] as? JsonArray
 
 private fun JsonPrimitive.contentOrNull(): String? =
-  runCatching { jsonPrimitive.content }.onFailure { scaleDiagnostic("scale_config_read_failed") }.getOrNull()
+  runCatching { jsonPrimitive.content }.onFailure { RuntimeDiagnostics.record("scale_config_read_failed") }.getOrNull()
 
 private fun parseUiScale(value: String?): Float? {
   val rawValue = value?.trim().orEmpty()
@@ -248,8 +248,4 @@ private fun currentAwtDensity(): Float = runCatching {
       .scaleX
       .toFloat()
   }
-}.onFailure { scaleDiagnostic("awt_density_unavailable") }.getOrDefault(DEFAULT_DENSITY)
-
-private fun scaleDiagnostic(category: String) {
-  dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics.record(category)
-}
+}.onFailure { RuntimeDiagnostics.record("awt_density_unavailable") }.getOrDefault(DEFAULT_DENSITY)

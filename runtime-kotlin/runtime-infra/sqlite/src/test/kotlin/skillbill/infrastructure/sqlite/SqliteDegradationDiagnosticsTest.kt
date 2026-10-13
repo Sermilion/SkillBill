@@ -44,7 +44,7 @@ class SqliteDegradationDiagnosticsTest {
   }
 
   @Test
-  fun `readUserVersion raises read ACCESS database failure when pragma fails`() {
+  fun `readUserVersion raises read CORRUPT database failure when pragma fails`() {
     val dbPath = Files.createTempFile("skillbill-user-version", ".db")
     Files.writeString(dbPath, "not-a-sqlite-database")
 
@@ -52,7 +52,7 @@ class SqliteDegradationDiagnosticsTest {
       assertFailsWith<SkillBillRuntimeException> {
         DatabaseIdentity.readUserVersion(dbPath)
       }
-    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertEquals(DatabaseFailureCode.CORRUPT, error.code)
     assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.READ.wireValue} failed for '"))
   }
 

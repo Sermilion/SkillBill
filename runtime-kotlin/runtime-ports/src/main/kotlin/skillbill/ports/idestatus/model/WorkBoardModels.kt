@@ -1,6 +1,10 @@
 package skillbill.ports.idestatus.model
 
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
+import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.idestatus.model.IdeStatusDisplayGroup
+import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.work.model.WorkStoreObservation
 import java.time.Duration
 import java.time.Instant
 
@@ -35,11 +39,23 @@ data class WorkBoardRequest(
   val cursor: String? = null,
 )
 
+enum class WorkLiveSection { NEEDS_YOU, GOALS, PHASES }
+
 data class WorkBoardItem(
   val snapshot: IdeStatusSnapshot,
   val repositoryRoot: String,
   val finishedAt: Instant? = null,
   val finishedAtSource: WorkBoardCompletionSource? = null,
+  val controlLease: GoalRunnerExecutionLease? = null,
+  val observation: WorkStoreObservation? = null,
+  val freshnessDeadline: Instant? = null,
+  val liveSection: WorkLiveSection? = null,
+  val controlEligible: Boolean = false,
+  val requiresAttention: Boolean = false,
+  val displayGroup: IdeStatusDisplayGroup? = null,
+  val displayPriority: Int = 5,
+  val exactPauseReason: String? = null,
+  val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
 data class WorkBoardDiagnostic(
@@ -57,4 +73,6 @@ data class WorkBoardResult(
   val absentDatabase: Boolean = false,
   val pageSize: Int = WorkPaginationLimits.DEFAULT_PAGE_SIZE,
   val nextCursor: String? = null,
+  val observation: WorkStoreObservation? = null,
+  val candidatesExamined: Int = 0,
 )

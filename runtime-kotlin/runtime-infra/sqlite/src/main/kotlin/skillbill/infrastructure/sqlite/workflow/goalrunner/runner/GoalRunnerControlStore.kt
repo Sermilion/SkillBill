@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -115,6 +117,25 @@ internal class GoalRunnerControlStore(
     selectJson(parentWorkflowId, "out_of_band_acceptances_json")
       ?.let(::decodeAcceptances)
       .orEmpty()
+
+  override fun outOfBandAcceptancesForSubtasks(
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerOutOfBandAcceptance> {
+    require(subtaskIds.size <= WorkPaginationLimits.MAX_PAGE_SIZE)
+    if (subtaskIds.isEmpty()) return emptyMap()
+    return connection.prepareStatement(
+      """
+      SELECT json_group_array(json(value)) FROM goal_runner_controls,
+        json_each(out_of_band_acceptances_json)
+      WHERE parent_workflow_id = ?
+        AND json_extract(value, '$.${SharedPayloadKeys.SUBTASK_ID}') IN (${subtaskIds.joinToString { "?" }})
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(listOf(parentWorkflowId) + subtaskIds)
+      statement.executeQuery().use { rows -> if (rows.next()) decodeAcceptances(rows.getString(1)) else emptyMap() }
+    }
+  }
 
   override fun persistOutOfBandAcceptance(
     parentWorkflowId: String,

@@ -10,7 +10,7 @@ private const val BUSY_MESSAGE = "[SQLITE_BUSY] The database file is locked (dat
 
 class InlineReviewPreparationDispositionTest {
   @Test
-  fun `a typed busy failure is retryable and keeps its persisted block reason text`() {
+  fun `a typed busy failure is retryable and persists its bounded public reason`() {
     val error = databaseBusy(IllegalStateException(BUSY_MESSAGE))
 
     assertEquals(
@@ -19,7 +19,8 @@ class InlineReviewPreparationDispositionTest {
     )
     val reason = InlineReviewPreparation.goalReviewPreparationFailure("reservation", error)
     assertTrue(reason.startsWith("Goal-subtask review reservation failed"), reason)
-    assertTrue(reason.endsWith(": $BUSY_MESSAGE"), reason)
+    assertTrue(reason.endsWith(": ${error.message}"), reason)
+    assertTrue(!reason.contains(BUSY_MESSAGE), reason)
   }
 
   @Test

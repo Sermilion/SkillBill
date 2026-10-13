@@ -16,6 +16,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.time.Instant
 
@@ -87,36 +88,37 @@ internal data class SubtaskAgentAttribution(
 internal fun agentAttributionFromPhaseState(
   phaseQuery: FeatureTaskRuntimePhaseQuery,
   workflowId: String,
+  includeParticipatingAgents: Boolean = true,
 ): SubtaskAgentAttribution {
-  val ledger =
-    phaseQuery.loadPhaseLedger(workflowId)
-      .orEmpty()
-      .sortedBy { it.sequenceNumber }
+  val participating = linkedMapOf<String, Int>()
+  var finalizing: FeatureTaskRuntimePhaseLedgerEntry? = null
+  phaseQuery.visitPhaseLedger(workflowId) { entry ->
+    val agent = entry.resolvedAgentId?.takeIf(String::isRuntimeAgentId)
+    if (agent != null) {
+      if (includeParticipatingAgents) {
+        participating[agent] = minOf(participating[agent] ?: Int.MAX_VALUE, entry.sequenceNumber)
+      }
+      if (entry.action in
+        setOf(
+          FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+          FeatureTaskRuntimePhaseLedgerAction.BLOCKED,
+        ) &&
+        entry.sequenceNumber >= (finalizing?.sequenceNumber ?: -1)
+      ) {
+        finalizing = entry
+      }
+    }
+  }
   val records = phaseQuery.loadPhaseRecords(workflowId).orEmpty()
-
-  val participating = LinkedHashSet<String>()
-  ledger.forEach { entry ->
-    entry.resolvedAgentId?.takeIf(String::isRuntimeAgentId)
-      ?.let(participating::add)
+  val participants = participating.entries.sortedBy { it.value }.map { it.key }.toMutableSet()
+  if (includeParticipatingAgents) {
+    records.values.forEach { record ->
+      record.resolvedAgentId.takeIf(String::isRuntimeAgentId)?.let(participants::add)
+    }
   }
-  records.values.forEach { record ->
-    record.resolvedAgentId.takeIf(String::isRuntimeAgentId)
-      ?.let(participating::add)
-  }
-
-  val finalizingFromLedger =
-    ledger.lastOrNull { entry ->
-      (
-        entry.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE ||
-          entry.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED
-      ) &&
-        entry.resolvedAgentId?.isRuntimeAgentId() == true
-    }?.resolvedAgentId
-  val finalizingAgentId = finalizingFromLedger ?: terminalRecordAgentId(records)
-
   return SubtaskAgentAttribution(
-    finalizingAgentId = finalizingAgentId,
-    participatingAgentIds = participating.toList(),
+    finalizingAgentId = finalizing?.resolvedAgentId ?: terminalRecordAgentId(records),
+    participatingAgentIds = participants.toList(),
   )
 }
 

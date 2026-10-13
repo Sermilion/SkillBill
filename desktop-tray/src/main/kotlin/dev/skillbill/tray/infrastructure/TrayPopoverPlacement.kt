@@ -4,10 +4,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
 import dev.nucleusframework.composenativetray.utils.TrayClickTracker
-import dev.skillbill.tray.infrastructure.cli.RuntimeDiagnostics
-import dev.skillbill.tray.domain.DesktopUiScaleConfiguration
-import dev.skillbill.tray.infrastructure.cli.ProcessRunner
-import dev.skillbill.tray.infrastructure.cli.ProcessResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -16,13 +12,19 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.boolean
-import java.time.Duration
 import java.awt.GraphicsEnvironment
 import java.awt.MouseInfo
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Toolkit
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
+
+private const val KDE_LAYOUT_QUERY_TIMEOUT_MILLIS = 1_000L
+private const val KDE_LAYOUT_OUTPUT_TIMEOUT_MILLIS = 250L
 
 fun trayIconAnchor(): Point {
   val pointer = MouseInfo.getPointerInfo()
@@ -32,15 +34,10 @@ fun trayIconAnchor(): Point {
   return pointer.location
 }
 
-class TrayPopoverPlacement(
-  private val layoutRunner: ProcessRunner = ProcessRunner(maxStdoutBytes = 256 * 1024, timeout = Duration.ofSeconds(2)),
-) {
-  suspend fun position(size: DpSize, nativeAnchor: Point, scale: DesktopUiScaleConfiguration, gap: Int): WindowPosition {
+class TrayPopoverPlacement {
+  fun position(size: DpSize, nativeAnchor: Point, gap: Int): WindowPosition {
     val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration }
-    val anchor = if (System.getProperty("os.name").contains("linux", true) &&
-      !System.getenv("WAYLAND_DISPLAY").isNullOrBlank() && System.getenv("XDG_CURRENT_DESKTOP").orEmpty().contains("KDE", true)) {
-      kdeAnchor(nativeAnchor, screens.map { it.bounds }, scale)
-    } else nativeAnchor
+    val anchor = awtTrayAnchor(nativeAnchor, screens.map { it.bounds }, System.getenv())
     val screen = screens.firstOrNull { it.bounds.contains(anchor) }
       ?: MouseInfo.getPointerInfo().device.defaultConfiguration.also {
         RuntimeDiagnostics.record("tray_icon_screen_unavailable")
@@ -54,15 +51,58 @@ class TrayPopoverPlacement(
       "tray_window_anchored native=$nativeAnchor anchor=$anchor work_area=$workArea position=$position")
     return WindowPosition(position.x.dp, position.y.dp)
   }
+}
 
-  private suspend fun kdeAnchor(raw: Point, screens: List<Rectangle>, scale: DesktopUiScaleConfiguration): Point {
-    val result = layoutRunner.run(listOf("kscreen-doctor", "--json"))
-    if (result !is ProcessResult.Success) {
-      RuntimeDiagnostics.record("tray_kde_layout_unavailable")
-      return raw
+private fun awtTrayAnchor(raw: Point, screens: List<Rectangle>, environment: Map<String, String>): Point {
+  val desktop = listOfNotNull(environment["XDG_CURRENT_DESKTOP"], environment["DESKTOP_SESSION"])
+    .joinToString(" ").lowercase()
+  if (!environment["XDG_SESSION_TYPE"].equals("wayland", ignoreCase = true) ||
+    ("kde" !in desktop && "plasma" !in desktop)) return raw
+  val layout = queryKdeDisplayLayout() ?: return raw
+  val configHome = environment["XDG_CONFIG_HOME"]?.takeIf(String::isNotBlank)?.let(Path::of)
+    ?: Paths.get(System.getProperty("user.home"), ".config")
+  val xwaylandScale = readKwinXwaylandScale(configHome.resolve("kwinrc"))
+  if (xwaylandScale == null) {
+    RuntimeDiagnostics.record("tray_kde_xwayland_scale_unavailable")
+    return raw
+  }
+  return try {
+    mapKdeTrayAnchor(raw, layout, screens, xwaylandScale)
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_anchor_mapping_failed")
+    raw
+  }
+}
+
+private fun queryKdeDisplayLayout(): String? {
+  val process = try {
+    ProcessBuilder("kscreen-doctor", "-j").redirectError(ProcessBuilder.Redirect.DISCARD).start()
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+    return null
+  }
+  val output = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().use { it.readText() } }
+  return try {
+    if (!process.waitFor(KDE_LAYOUT_QUERY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+      RuntimeDiagnostics.record("tray_kde_layout_query_timeout")
+      null
+    } else if (process.exitValue() != 0) {
+      RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+      null
+    } else {
+      output.get(KDE_LAYOUT_OUTPUT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).takeIf(String::isNotBlank)
+        ?: run { RuntimeDiagnostics.record("tray_kde_layout_query_failed"); null }
     }
-    return runCatching { mapKdeTrayAnchor(raw, result.output, screens, scale.contentDensity ?: 1f) }
-      .onFailure { RuntimeDiagnostics.record("tray_kde_layout_invalid") }.getOrDefault(raw)
+  } catch (failure: InterruptedException) {
+    Thread.currentThread().interrupt()
+    RuntimeDiagnostics.record("tray_kde_layout_query_interrupted")
+    null
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+    null
+  } finally {
+    process.destroyForcibly()
+    output.cancel(true)
   }
 }
 

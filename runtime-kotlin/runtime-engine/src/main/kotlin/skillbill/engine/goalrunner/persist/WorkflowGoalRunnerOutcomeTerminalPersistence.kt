@@ -15,6 +15,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -43,8 +44,7 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     measuredCommitSha: () -> String?,
   ): GoalRunnerStoredOutcome? {
     val candidate =
-      workflowFamilyFor(workflowStates, workflowId)
-        ?.let { family -> workflowStates.get(family, workflowId)?.let { snapshot -> family to snapshot } }
+      workflowStates.readGoalStatusSnapshot(workflowId)?.let { snapshot -> WorkflowFamily.TASK_RUNTIME to snapshot }
     return candidate?.let { (family, snapshot) ->
       engine.snapshotView(family.definition, snapshot)
       val artifacts = snapshot.artifacts

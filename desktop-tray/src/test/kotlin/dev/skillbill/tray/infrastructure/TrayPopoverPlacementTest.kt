@@ -11,8 +11,10 @@ class TrayPopoverPlacementTest {
     val layout = """{"outputs":[{"enabled":true,"connected":true,"pos":{"x":0,"y":0},"size":{"width":5120,"height":1440},"scale":1},{"enabled":true,"connected":true,"pos":{"x":0,"y":1440},"size":{"width":7680,"height":2160},"scale":1.5}]}"""
     val screens = listOf(Rectangle(0, 2160, 7680, 2160), Rectangle(0, 0, 7680, 2160))
     assertEquals(Point(4488, 4284), mapKdeTrayAnchor(Point(4488, 3564), layout, screens, 1.5f))
+    assertEquals(Point(4533, 4310), mapKdeTrayAnchor(Point(4533, 3590), layout, screens, 1.5f))
     assertEquals(Point(1500, 2100), mapKdeTrayAnchor(Point(1000, 1400), layout, screens, 1.5f))
     assertEquals(Point(4203, 3375), anchoredTrayPosition(Point(4488, 4284), screens.first(), 570, 885, 24))
+    assertEquals(Point(4248, 3401), anchoredTrayPosition(Point(4533, 4310), screens.first(), 570, 885, 24))
   }
 
   @Test

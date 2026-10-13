@@ -3,6 +3,7 @@ package skillbill.ports.persistence
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
+import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
@@ -24,6 +25,7 @@ import java.nio.file.Path
 
 interface UnitOfWork : GoalRunnerPersistenceSession {
   val dbPath: Path
+  val databaseFileObservation: DatabaseFileObservation? get() = null
   override val reviews: ReviewRepository
   val learnings: LearningRepository
   val lifecycleTelemetry: LifecycleTelemetryRepository

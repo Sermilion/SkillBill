@@ -25,6 +25,11 @@ interface GoalRunnerControlRepository {
 
   fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance>
 
+  fun outOfBandAcceptancesForSubtasks(
+    parentWorkflowId: String,
+    subtaskIds: Set<Int>,
+  ): Map<Int, GoalRunnerOutOfBandAcceptance> = outOfBandAcceptances(parentWorkflowId).filterKeys(subtaskIds::contains)
+
   fun persistOutOfBandAcceptance(
     parentWorkflowId: String,
     acceptance: GoalRunnerOutOfBandAcceptance,

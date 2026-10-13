@@ -1,0 +1,100 @@
+name: Desktop tray snapshot cleanup
+
+on:
+  workflow_run:
+    workflows: [Desktop tray CI]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: desktop-tray-snapshot-cleanup
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep the newest complete PR snapshot
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prefix = "desktop-tray-snapshot-";
+            const expectedNames = [
+              "desktop-tray-snapshot-ubuntu-latest",
+              "desktop-tray-snapshot-macos-latest",
+              "desktop-tray-snapshot-windows-latest",
+            ];
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner,
+              repo,
+              workflow_id: "desktop-tray-ci.yml",
+              event: "pull_request",
+              status: "success",
+              per_page: 100,
+            });
+            runs.sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at));
+
+            const activeRunStates = ["in_progress", "queued", "waiting", "requested", "pending"];
+            const activeRuns = await Promise.all(activeRunStates.map((status) =>
+              github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner,
+                repo,
+                workflow_id: "desktop-tray-ci.yml",
+                event: "pull_request",
+                status,
+                per_page: 100,
+              })
+            ));
+            const activeRunIds = new Set(activeRuns.flat().map((run) => run.id));
+
+            let latestCompleteRun = null;
+            let latestCompleteArtifacts = [];
+            for (const run of runs) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              const available = artifacts.filter((artifact) => !artifact.expired);
+              if (expectedNames.every((name) => available.some((artifact) => artifact.name === name))) {
+                latestCompleteRun = run;
+                latestCompleteArtifacts = available;
+                break;
+              }
+            }
+
+            const allArtifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            if (!latestCompleteRun) {
+              for (const artifact of allArtifacts.filter((item) =>
+                item.name.startsWith(prefix) && !activeRunIds.has(artifact.workflow_run?.id)
+              )) {
+                await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+                core.info(`Deleted incomplete desktop snapshot ${artifact.name} (${artifact.id}).`);
+              }
+              core.info(activeRunIds.size
+                ? "No complete successful PR snapshot remains; keeping artifacts from active runs."
+                : "No complete successful PR snapshot remains.");
+              return;
+            }
+            const keepIds = new Set(latestCompleteArtifacts.map((artifact) => artifact.id));
+            const oldSnapshots = allArtifacts.filter((artifact) =>
+              artifact.name.startsWith(prefix) &&
+              !keepIds.has(artifact.id) &&
+              !activeRunIds.has(artifact.workflow_run?.id)
+            );
+            for (const artifact of oldSnapshots) {
+              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+              core.info(`Deleted old desktop snapshot ${artifact.name} (${artifact.id}).`);
+            }
+            core.info(`Kept the complete snapshot from PR run ${latestCompleteRun.id}.`);

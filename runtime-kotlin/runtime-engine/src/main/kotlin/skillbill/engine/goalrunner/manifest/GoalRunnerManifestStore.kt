@@ -9,7 +9,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.model.GoalRunnerStatusManifestPage
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.GoalPlanningStatusSummary
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
@@ -19,6 +21,21 @@ import skillbill.ports.persistence.model.GoalPurgeTableCounts
 import skillbill.ports.persistence.model.GoalPurgeTarget
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
+
+interface GoalRunnerStatusManifestQueries {
+  fun statusManifestPage(
+    parentWorkflowId: String,
+    issueKey: String,
+    offset: Int,
+    limit: Int,
+    repoRoot: Path?,
+  ): GoalRunnerStatusManifestPage?
+
+  fun statusParentWorkflowId(
+    issueKey: String,
+    repoRoot: Path?,
+  ): String?
+}
 
 interface GoalRunnerManifestQueries {
   fun loadByIssueKey(
@@ -154,6 +171,19 @@ interface GoalRunnerManifestStateWrites {
     blockedReason: String? = null,
   ): GoalPlanningStatusSnapshot?
 
+  fun planningStatusFromSummary(
+    parentWorkflowId: String,
+    summary: GoalPlanningStatusSummary,
+    blockedSubtaskId: Int?,
+    blockedReason: String?,
+  ): GoalPlanningStatusSnapshot? =
+    planningStatus(
+      parentWorkflowId,
+      summary.firstMissingIds,
+      blockedSubtaskId,
+      blockedReason,
+    )
+
   fun save(state: GoalRunnerManifestState): GoalRunnerManifestState
 
   fun saveRuntimeState(state: GoalRunnerManifestState): GoalRunnerManifestState
@@ -213,6 +243,7 @@ interface GoalRunnerManifestPurgeCommands {
 
 interface GoalRunnerManifestStore :
   GoalRunnerManifestQueries,
+  GoalRunnerStatusManifestQueries,
   GoalRunnerManifestExecutionCommands,
   GoalRunnerManifestControlWrites,
   GoalRunnerManifestStateWrites,

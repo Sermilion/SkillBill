@@ -6,6 +6,10 @@ import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.sql.SQLException
 
+internal fun databaseFileIdentity(attributes: BasicFileAttributes): String =
+  attributes.fileKey()?.toString()
+    ?: "creation-time:${attributes.creationTime().toMillis()}"
+
 internal data class DatabaseIdentity(
   internal val absolutePath: String,
   internal val userVersion: Int,
@@ -27,7 +31,7 @@ internal data class DatabaseIdentity(
       return DatabaseIdentity(
         absolutePath = normalized.toString(),
         userVersion = userVersion,
-        fileIdentity = fileIdentity(attrs),
+        fileIdentity = databaseFileIdentity(attrs),
         fileSizeBytes = attrs.size(),
       )
     }
@@ -53,9 +57,5 @@ internal data class DatabaseIdentity(
         throw databaseAccessError(path, DatabaseAccessOperation.READ, error)
       }
     }
-
-    private fun fileIdentity(attributes: BasicFileAttributes): String =
-      attributes.fileKey()?.toString()
-        ?: "creation-time:${attributes.creationTime().toMillis()}"
   }
 }

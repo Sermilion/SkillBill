@@ -3,10 +3,12 @@ package skillbill.engine.work
 import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusSelectionTier
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
-import skillbill.ports.idestatus.model.IdeStatusExecutionScope
-import skillbill.ports.idestatus.model.IdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
+import skillbill.idestatus.model.IdeStatusDurableWorkflowState
+import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusFreshness
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusPolicy
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import java.time.Duration
 import java.time.Instant
 
@@ -162,21 +164,8 @@ object IdeStatusSelectionPolicy {
       IdeStatusLifecycleState.IDLE -> IdeStatusSelectionTier.IDLE
     }
 
-  internal fun lifecycleFromDurableState(currentState: IdeStatusDurableWorkflowState): IdeStatusLifecycleState =
-    when (currentState) {
-      IdeStatusDurableWorkflowState.RUNNING, IdeStatusDurableWorkflowState.PENDING -> IdeStatusLifecycleState.ACTIVE
-      IdeStatusDurableWorkflowState.PAUSED -> IdeStatusLifecycleState.PAUSED
-      IdeStatusDurableWorkflowState.BLOCKED -> IdeStatusLifecycleState.BLOCKED
-      IdeStatusDurableWorkflowState.FAILED -> IdeStatusLifecycleState.FAILED
-      IdeStatusDurableWorkflowState.COMPLETED,
-      IdeStatusDurableWorkflowState.ABANDONED,
-      IdeStatusDurableWorkflowState.COMPLETE,
-      IdeStatusDurableWorkflowState.SKIPPED,
-      -> IdeStatusLifecycleState.TERMINAL
-    }
-
   fun lifecycleFromDurableStateWire(currentState: String): IdeStatusLifecycleState? =
-    IdeStatusDurableWorkflowState.fromWire(currentState)?.let(::lifecycleFromDurableState)
+    IdeStatusPolicy.workflowLifecycle(currentState)
 
   fun lifecycleFromDurableStateWire(
     family: IdeStatusWorkflowFamily,
@@ -189,21 +178,4 @@ object IdeStatusSelectionPolicy {
     } else {
       lifecycleFromDurableStateWire(currentState)
     }
-}
-
-internal enum class IdeStatusDurableWorkflowState(val wireValue: String) {
-  PENDING("pending"),
-  RUNNING("running"),
-  PAUSED("paused"),
-  BLOCKED("blocked"),
-  FAILED("failed"),
-  COMPLETED("completed"),
-  ABANDONED("abandoned"),
-  COMPLETE("complete"),
-  SKIPPED("skipped"),
-  ;
-
-  companion object {
-    fun fromWire(value: String): IdeStatusDurableWorkflowState? = entries.firstOrNull { it.wireValue == value }
-  }
 }

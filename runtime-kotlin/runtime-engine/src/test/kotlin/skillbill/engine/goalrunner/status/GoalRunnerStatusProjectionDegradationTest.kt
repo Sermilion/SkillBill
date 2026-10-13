@@ -32,6 +32,7 @@ import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.decomposition.withWorkflowId
@@ -103,6 +104,12 @@ class GoalRunnerStatusProjectionDegradationTest {
       }
     val ledgerFailingStates =
       object : WorkflowStateRepository by InMemoryWorkflowStates() {
+        override fun readFeatureTaskPhaseLedgerPage(
+          workflowId: String,
+          offset: Int,
+          limit: Int,
+        ): FeatureTaskRuntimePhaseLedgerPage? = error("ledger unavailable")
+
         override fun getFeatureTaskWorkflowAsMode(
           workflowId: String,
           mode: FeatureTaskWorkflowMode,

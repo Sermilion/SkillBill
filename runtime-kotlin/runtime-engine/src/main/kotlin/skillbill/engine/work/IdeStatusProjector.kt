@@ -19,19 +19,20 @@ import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusLifecycleState
+import skillbill.idestatus.model.IdeStatusPolicy
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentModel
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.idestatus.model.IdeStatusExecutionIdentity
-import skillbill.ports.idestatus.model.IdeStatusExecutionScope
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReason
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusPlanning
 import skillbill.ports.idestatus.model.IdeStatusProgress
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -49,6 +50,16 @@ internal data class IdeStatusProjectionContext(
   val branchCorrelation: String?,
   val observedAt: Instant,
   val repoRoot: Path,
+)
+
+internal data class IdeStatusProjection(
+  val snapshot: IdeStatusSnapshot,
+  val exactPauseReason: String?,
+)
+
+private data class GoalPauseReasonProjection(
+  val bounded: IdeStatusPauseReason?,
+  val exactText: String?,
 )
 
 private data class ChildOptionalContext(
@@ -75,14 +86,19 @@ class IdeStatusProjector(
   internal fun project(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
-  ): IdeStatusSnapshot {
-    candidate.standaloneStatus?.let { return projectStandalonePhase(context, it) }
+  ): IdeStatusProjection {
+    candidate.standaloneStatus?.let { record ->
+      return IdeStatusProjection(
+        projectStandalonePhase(context, record),
+        resolveExecutionReason(record, context.unitOfWork).text,
+      )
+    }
     return when (candidate.workflowFamily) {
       IdeStatusWorkflowFamily.FEATURE_GOAL -> projectGoal(candidate, context)
       IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ->
         goalBackedRuntimeSnapshot(candidate, context) ?: projectRuntime(candidate, context)
       IdeStatusWorkflowFamily.FEATURE_VERIFY ->
-        projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY)
+        IdeStatusProjection(projectWorkflowFamily(candidate, context, WorkflowFamily.VERIFY), null)
     }
   }
 
@@ -112,7 +128,7 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
     record: StandalonePhaseStatusRecord,
   ): IdeStatusSnapshot {
-    val lifecycle = lifecycleFromStandaloneState(record.lifecycleState)
+    val lifecycle = IdeStatusPolicy.standaloneLifecycle(record.lifecycleState)
     val execution =
       IdeStatusExecutionIdentity(
         scope = IdeStatusExecutionScope.STANDALONE_PHASE,
@@ -138,24 +154,16 @@ class IdeStatusProjector(
       activeDurationAsOf = record.activeDurationAsOf,
       updatedAt = record.updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(record.updatedAt, context.observedAt),
-      summary = record.terminalResult ?: "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+      summary =
+        resolveExecutionReason(record, context.unitOfWork).text
+          ?: "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
     )
   }
-
-  private fun lifecycleFromStandaloneState(state: String): IdeStatusLifecycleState =
-    when (state) {
-      "active", "running" -> IdeStatusLifecycleState.ACTIVE
-      "paused", "runner_interrupted" -> IdeStatusLifecycleState.PAUSED
-      "blocked" -> IdeStatusLifecycleState.BLOCKED
-      "failed" -> IdeStatusLifecycleState.FAILED
-      "terminal", "completed", "success" -> IdeStatusLifecycleState.TERMINAL
-      else -> IdeStatusLifecycleState.FAILED
-    }
 
   private fun goalBackedRuntimeSnapshot(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
-  ): IdeStatusSnapshot? {
+  ): IdeStatusProjection? {
     val issueKey = candidate.issueKey ?: return null
     val manifestState = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot) ?: return null
     val projection =
@@ -188,10 +196,10 @@ class IdeStatusProjector(
   private fun projectGoal(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
-  ): IdeStatusSnapshot {
+  ): IdeStatusProjection {
     val issueKey =
       candidate.issueKey
-        ?: return incompatible(candidate, context, "Goal work is missing an issue key.")
+        ?: return IdeStatusProjection(incompatible(candidate, context, "Goal work is missing an issue key."), null)
     val projection =
       goalRunnerStatusService.status(
         GoalRunnerStatusRequest(
@@ -209,7 +217,7 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
     issueKey: String,
     projection: GoalRunnerStatusProjection?,
-  ): IdeStatusSnapshot {
+  ): IdeStatusProjection {
     val completionRecorded =
       context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null &&
         projection?.hasUnfinishedSubtasks() != true
@@ -220,7 +228,7 @@ class IdeStatusProjector(
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
-    val freshness = IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt)
+    val pauseReason = goalPauseReason(lifecycle, projection, childContext)
     val step =
       goalCurrentStep(
         planningStep,
@@ -233,41 +241,43 @@ class IdeStatusProjector(
         ),
       )
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
-    return IdeStatusSnapshot(
-      repositoryIdentity = context.repositoryIdentity,
-      branchCorrelation = context.branchCorrelation,
-      issueKey = issueKey,
-      workflowId = candidate.workflowId,
-      workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
-      execution = candidate.execution,
-      lifecycleState = lifecycle,
-      currentStep = step,
-      progress = projection?.toIdeStatusProgress(),
-      startedAt = candidate.startedAt,
-      currentSubtask = goalCurrentSubtask(projection, context),
-      currentModel = childContext.currentModel,
-      planning = planning,
-      currentPhaseExecution = childContext.currentPhaseExecution.takeIf { planningStep == null },
-      pauseRequested = goalPauseRequested(projection),
-      pausedAt = goalPausedAt(projection, lifecycle),
-      pauseReason = goalPauseReason(lifecycle, projection, childContext),
-      activeDurationMs = projection?.recordedActiveDurationMs(),
-      activeDurationAsOf = projection?.liveActiveDurationAnchor(),
-      lastAgentActivityAt = activityAt,
-      lastAgentActivityLabel = activityLabel,
-      updatedAt = candidate.updatedAt,
-      freshness = freshness,
-      summary =
-        planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
-          ?.let { goalPlanningSummary(issueKey, it) }
-          ?: goalSummary(
-            issueKey,
-            lifecycle,
-            step.label,
-            projection?.blockedCount ?: 0,
-            childContext.operatorDecisionPause,
-          ),
-    )
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = context.repositoryIdentity,
+        branchCorrelation = context.branchCorrelation,
+        issueKey = issueKey,
+        workflowId = candidate.workflowId,
+        workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
+        execution = candidate.execution,
+        lifecycleState = lifecycle,
+        currentStep = step,
+        progress = projection?.toIdeStatusProgress(),
+        startedAt = candidate.startedAt,
+        currentSubtask = goalCurrentSubtask(projection, context),
+        currentModel = childContext.currentModel,
+        planning = planning,
+        currentPhaseExecution = childContext.currentPhaseExecution.takeIf { planningStep == null },
+        pauseRequested = goalPauseRequested(projection),
+        pausedAt = goalPausedAt(projection, lifecycle),
+        pauseReason = pauseReason.bounded,
+        activeDurationMs = projection?.recordedActiveDurationMs(),
+        activeDurationAsOf = projection?.liveActiveDurationAnchor(),
+        lastAgentActivityAt = activityAt,
+        lastAgentActivityLabel = activityLabel,
+        updatedAt = candidate.updatedAt,
+        freshness = IdeStatusFreshnessClassifier.classify(candidate.updatedAt, context.observedAt),
+        summary =
+          planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
+            ?.let { goalPlanningSummary(issueKey, it) }
+            ?: goalSummary(
+              issueKey,
+              lifecycle,
+              step.label,
+              projection?.blockedCount ?: 0,
+              childContext.operatorDecisionPause,
+            ),
+      )
+    return IdeStatusProjection(snapshot, pauseReason.exactText)
   }
 
   private fun goalPlanningStep(
@@ -334,21 +344,29 @@ class IdeStatusProjector(
     lifecycle: IdeStatusLifecycleState,
     projection: GoalRunnerStatusProjection?,
     childContext: ChildOptionalContext,
-  ): IdeStatusPauseReason? {
+  ): GoalPauseReasonProjection {
     childContext.operatorDecisionPause?.let { pause ->
       if (lifecycle == IdeStatusLifecycleState.PAUSED || lifecycle == IdeStatusLifecycleState.BLOCKED) {
-        return IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason)
+        return GoalPauseReasonProjection(
+          IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason),
+          pause.reason,
+        )
       }
     }
     if (lifecycle == IdeStatusLifecycleState.BLOCKED) {
       val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason
-      return reason?.takeIf(String::isNotBlank)?.let {
-        IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it)
-      }
+      val exact = reason?.takeIf(String::isNotBlank)
+      return GoalPauseReasonProjection(
+        exact?.let { IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it) },
+        exact,
+      )
     }
-    if (lifecycle != IdeStatusLifecycleState.PAUSED) return null
-    return IdeStatusPauseReasonCode.fromWire(projection?.pauseReason)
-      ?.let { code -> IdeStatusPauseReason.of(code, null) }
+    if (lifecycle != IdeStatusLifecycleState.PAUSED) return GoalPauseReasonProjection(null, null)
+    val durableReason = projection?.pauseReason
+    val bounded =
+      IdeStatusPauseReasonCode.fromWire(durableReason)
+        ?.let { code -> IdeStatusPauseReason.of(code, null) }
+    return GoalPauseReasonProjection(bounded, durableReason)
   }
 
   private fun childOptionalContext(
@@ -387,60 +405,59 @@ class IdeStatusProjector(
   private fun projectRuntime(
     candidate: IdeStatusCandidate,
     context: IdeStatusProjectionContext,
-  ): IdeStatusSnapshot {
-    val snapshot =
-      context.unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, candidate.workflowId)
-        ?: return incompatible(candidate, context, "Runtime workflow snapshot is missing.")
+  ): IdeStatusProjection {
     val status =
       featureTaskRuntimeStatusService.status(
         FeatureTaskRuntimeStatusRequest(
           workflowId = candidate.workflowId,
         ),
-      )
+      ) ?: return IdeStatusProjection(incompatible(candidate, context, "Runtime workflow snapshot is missing."), null)
     val stepId =
-      status?.currentPhaseId?.takeIf(String::isNotBlank)
-        ?: snapshot.currentStepId.takeIf(String::isNotBlank)
-        ?: "unknown"
+      status.currentPhaseId?.takeIf(String::isNotBlank)
+        ?: context.unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(candidate.workflowId)?.currentStepId
+          ?.takeIf(String::isNotBlank) ?: "unknown"
     val stepLabel =
       WorkflowFamily.TASK_RUNTIME.definition.stepLabels[stepId]
         ?: stepId.replace('_', ' ').replaceFirstChar { it.titlecase() }
-    val phaseTotal = status?.phases?.size?.takeIf { it > 0 }
+    val phaseTotal = status.phases.size.takeIf { it > 0 }
     val progress =
       phaseTotal?.let {
         IdeStatusProgress(completed = status.completeCount, total = it)
       }
-    val startedAt = snapshot.startedAt ?: candidate.startedAt
+    val startedAt = candidate.startedAt
     val updatedAt = candidate.updatedAt
     val (activityAt, activityLabel) = agentActivityFields(context.unitOfWork, candidate.workflowId)
-    return IdeStatusSnapshot(
-      repositoryIdentity = context.repositoryIdentity,
-      branchCorrelation = context.branchCorrelation,
-      issueKey = candidate.issueKey,
-      workflowId = candidate.workflowId,
-      workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
-      execution = candidate.execution,
-      lifecycleState = candidate.lifecycleState,
-      currentStep = IdeStatusStep(id = stepId, label = stepLabel),
-      progress = progress,
-      startedAt = startedAt,
-      currentModel = status?.phases?.firstOrNull { it.phaseId == stepId }?.toIdeStatusCurrentModel(),
-      currentPhaseExecution = status?.currentPhaseExecution?.takeIf { it.phaseId == stepId },
-      pauseReason =
-        status?.operatorDecisionPause?.let { pause ->
-          IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason)
-        },
-      lastAgentActivityAt = activityAt,
-      lastAgentActivityLabel = activityLabel,
-      updatedAt = updatedAt,
-      freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
-      summary =
-        familySummary(
-          IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
-          candidate.issueKey,
-          candidate.lifecycleState,
-          stepLabel,
-        ),
-    )
+    val snapshot =
+      IdeStatusSnapshot(
+        repositoryIdentity = context.repositoryIdentity,
+        branchCorrelation = context.branchCorrelation,
+        issueKey = candidate.issueKey,
+        workflowId = candidate.workflowId,
+        workflowFamily = IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+        execution = candidate.execution,
+        lifecycleState = candidate.lifecycleState,
+        currentStep = IdeStatusStep(id = stepId, label = stepLabel),
+        progress = progress,
+        startedAt = startedAt,
+        currentModel = status.phases.firstOrNull { it.phaseId == stepId }?.toIdeStatusCurrentModel(),
+        currentPhaseExecution = status.currentPhaseExecution?.takeIf { it.phaseId == stepId },
+        pauseReason =
+          status.operatorDecisionPause?.let { pause ->
+            IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, pause.reason)
+          },
+        lastAgentActivityAt = activityAt,
+        lastAgentActivityLabel = activityLabel,
+        updatedAt = updatedAt,
+        freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
+        summary =
+          familySummary(
+            IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+            candidate.issueKey,
+            candidate.lifecycleState,
+            stepLabel,
+          ),
+      )
+    return IdeStatusProjection(snapshot, status.operatorDecisionPause?.reason)
   }
 
   private fun projectWorkflowFamily(

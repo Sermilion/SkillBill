@@ -63,7 +63,7 @@ class WorkExecutionHistoryTest {
         leaseExpiresAt = Instant.EPOCH,
         terminalResult = stored,
       )
-    assertEquals("Phase output reported status 'blocked'. $reason", restoredExecutionReason(record, unit))
+    assertEquals("Phase output reported status 'blocked'. $reason", resolveExecutionReason(record, unit).text)
     assertEquals(stored, record.terminalResult)
     assertEquals(0, database.writeCalls)
   }

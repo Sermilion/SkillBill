@@ -2,8 +2,10 @@ package dev.skillbill.tray.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -34,17 +36,33 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
   if (detail == null) return
   val state by model.state.collectAsState()
   val scroll = rememberScrollState()
-  LoadNextPageOnScroll(scroll, detail.nextCursor != null, state.detailLoading, model::loadMoreDetail)
   val item = detail.item
+  val subtaskKeys = detail.subtasks.map { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" } +
+    listOfNotNull("${item.identity.repositoryIdentity}:${item.identity.id}:goal-finish".takeIf { detail.goalFinishPipeline.isNotEmpty() })
+  val dependencyKeys = detail.dependencies.map { "${item.identity.repositoryIdentity}:${item.identity.id}:dependency:${it.subtaskId}:${it.dependency.subtaskId}" } +
+    listOf("${item.identity.repositoryIdentity}:${item.identity.id}:dependency-header", "${item.identity.repositoryIdentity}:${item.identity.id}:dependency-footer")
+  val executionKeys = detail.executionHistory.map { "${item.identity.repositoryIdentity}:${item.identity.id}:execution:${it.invocationId}:${it.executionId}" }
+  val validationKeys = detail.validation.map { record ->
+    "${item.identity.repositoryIdentity}:${item.identity.id}:validation:${record.subtaskId}:" +
+      record.evidence.joinToString("|") { "${it.command}:${it.exitCode}" }
+  } +
+    "${item.identity.repositoryIdentity}:${item.identity.id}:validation-header"
+  val subtaskScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "subtasks", subtaskKeys)
+  val dependencyScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "dependencies", dependencyKeys)
+  val executionScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "executions", executionKeys)
+  val validationScroll = rememberAnchoredListState(item.identity, item.databaseGeneration, "validation", validationKeys)
   val clipboard = LocalClipboardManager.current
   val fresh = effectiveFreshness(item, boardStale, state.detailExtrasStale) == Freshness.FRESH
   val current = state.board?.items?.singleOrNull { it.identity == item.identity }
   val total = item.progressTotal ?: detail.subtasks.size.takeIf { it > 0 }
   val timing = state.displayDurations[item.identity]
-  val frozen = boardStale || item.freshness == Freshness.STALE
+  val frozen = !fresh
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
   val blocked = item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED
-  val blockReason = item.pauseReason ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result ?: item.summary
+  val blockReason = item.exactPauseReason
+    ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
+    ?: item.pauseReason
+    ?: item.summary
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen, timing?.subtaskMs)
   Column(modifier.background(canvas)) {
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
@@ -58,32 +76,30 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         Text(if (blocked || item.lifecycle == Lifecycle.FAILED) detail.featureTitle ?: "${if (standalone) "Phase ${item.phaseId.orEmpty()}" else "Workflow"} ${item.lifecycle.name.lowercase()}" else displayFeatureTitle(detail.featureTitle ?: item.summary), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         Text("${FileName(item.repositoryRoot)} · ${displayPath(item.repositoryRoot)} · ${item.branch ?: "no branch"}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         listOfNotNull(problem, state.actionProblem).forEach { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
-        if (state.detailLoading) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          CircularProgressIndicator(Modifier.size(12.dp), color = mint, strokeWidth = 2.dp)
-          Text("Loading more details...", color = muted, style = MaterialTheme.typography.bodySmall)
-        }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               ReasonTooltip(blockReason, Modifier.weight(1f), color = amber, fontSize = 13.sp, lineHeight = 19.sp)
               DesignButton("Copy reason") { clipboard.setText(AnnotatedString(blockReason)) }
             }
-            if (item.lifecycle == Lifecycle.BLOCKED) item.issueKey?.let { TerminalCommand("skill-bill $it resume") { command -> clipboard.setText(AnnotatedString(command)) } }
           }
         }
       }
-      if (current != null && !boardStale && current.freshness == Freshness.FRESH && eligibleForControl(current)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (current != null && !boardStale && current.freshness == Freshness.FRESH && current.eligibleForControl()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         DesignButton(if (current.pauseRequested) "Pause requested" else "Pause after current subtask", enabled = !current.pauseRequested) { model.perform("pause", item.identity) }
         DesignButton("Stop goal", danger = true) { model.perform("stop", item.identity) }
       }
     }
     HorizontalDivider(color = border)
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-      DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.subtasks.count { it.status in setOf("complete", "completed") }} complete · ${detail.subtasks.count { it.status == "pending" }} pending", Modifier.weight(1f), item.currentSubtaskId != null)
+      DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
       MetricDivider()
       DetailMetric(if (standalone) "Step" else "Phase", if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel, item.phaseExecution?.label() ?: "", Modifier.weight(1f))
       MetricDivider()
-      DetailMetric(if (standalone) "Phase elapsed" else "Goal active", if (standalone) phaseElapsedText(item, now, boardStale) else durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, frozen, timing?.goalMs), item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "", Modifier.weight(1f))
+      val elapsed = if (standalone) phaseElapsedText(item, now, frozen) else
+        durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, frozen, timing?.goalMs)
+      DetailMetric(if (standalone) "Phase elapsed" else "Goal active", elapsed,
+        item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "", Modifier.weight(1f))
       if (!standalone) {
         MetricDivider()
         DetailMetric("Subtask active", subtaskTime, if (frozen) "last known duration" else if (item.lifecycle == Lifecycle.ACTIVE) "ticking" else "", Modifier.weight(1f))
@@ -100,8 +116,8 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
           Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             detail.subtasks.forEach { task -> Box(Modifier.weight(1f).height(5.dp).background(subtaskColor(task.status, task.id.toString() == item.currentSubtaskId), RoundedCornerShape(2.dp))) }
           }
-          Column {
-            detail.subtasks.forEach { task ->
+          LazyColumn(state = subtaskScroll, modifier = Modifier.heightIn(max = 420.dp)) {
+            items(detail.subtasks, key = { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" }) { task ->
               val active = task.id.toString() == item.currentSubtaskId && item.lifecycle == Lifecycle.ACTIVE
               val pending = task.status == "pending"
               val taskInk = ink.copy(alpha = if (pending && !active) .55f else 1f)
@@ -121,19 +137,37 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
               }
               HorizontalDivider(color = border)
             }
-            if (detail.goalFinishPipeline.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            this.item(key = "${item.identity.repositoryIdentity}:${item.identity.id}:goal-finish") { if (detail.goalFinishPipeline.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
               Text("—", Modifier.width(18.dp), color = dim, fontFamily = mono, fontSize = 11.sp)
               WorkDot(Lifecycle.IDLE, Modifier.padding(top = 5.dp))
               Column(Modifier.weight(1f)) {
                 Text("Goal finish", color = ink.copy(alpha = .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                 FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { detail.goalFinishPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) } }
               }
-            }
+            } }
           }
+          PageFooter(detail.cursors[DetailList.SUBTASKS] != null, state.detailLoadStates[DetailList.SUBTASKS] == ListLoadState.APPENDING,
+            state.detailLoadStates[DetailList.SUBTASKS] == ListLoadState.APPEND_FAILED) { model.loadMoreDetail(DetailList.SUBTASKS) }
         } else if (detail.stepPipeline.isNotEmpty()) {
           DesignLabel("Phase pipeline")
           FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { detail.stepPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) } }
         }
+        if (detail.dependencies.isNotEmpty() || detail.cursors[DetailList.DEPENDENCIES] != null) {
+          LazyColumn(state = dependencyScroll, modifier = Modifier.heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            this.item(key = "${item.identity.repositoryIdentity}:${item.identity.id}:dependency-header") { DesignLabel("Dependencies") }
+            items(detail.dependencies, key = { "${item.identity.repositoryIdentity}:${item.identity.id}:dependency:${it.subtaskId}:${it.dependency.subtaskId}" }) { entry ->
+              val flags = listOfNotNull(if (entry.dependency.optional) "optional" else null,
+                if (entry.dependency.skipped) "skipped" else null).joinToString(" · ")
+              val suffix = if (flags.isEmpty()) "" else " · $flags"
+              Text("#${entry.subtaskId} depends on #${entry.dependency.subtaskId}$suffix", color = dim, fontFamily = mono, fontSize = 11.sp)
+            }
+            this.item(key = "${item.identity.repositoryIdentity}:${item.identity.id}:dependency-footer") { PageFooter(detail.cursors[DetailList.DEPENDENCIES] != null,
+              state.detailLoadStates[DetailList.DEPENDENCIES] == ListLoadState.APPENDING,
+              state.detailLoadStates[DetailList.DEPENDENCIES] == ListLoadState.APPEND_FAILED) { model.loadMoreDetail(DetailList.DEPENDENCIES) } }
+          }
+        }
+        PageFooter(detail.cursors[DetailList.PHASES] != null, state.detailLoadStates[DetailList.PHASES] == ListLoadState.APPENDING,
+          state.detailLoadStates[DetailList.PHASES] == ListLoadState.APPEND_FAILED) { model.loadMoreDetail(DetailList.PHASES) }
         val event = detail.latestActivity.event
         val edit = detail.latestActivity.edit
         val activity = buildList {
@@ -145,18 +179,22 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (standalone) "Phase activity" else "Goal activity")
           activity.forEach { (label, value) -> DesignKv(label, value) }
-          detail.executionHistory.forEachIndexed { index, instance ->
-            HorizontalDivider(color = border)
-            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+          LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(detail.executionHistory, key = { "${item.identity.repositoryIdentity}:${item.identity.id}:execution:${it.invocationId}:${it.executionId}" }) { instance ->
+              val index = detail.executionHistory.indexOf(instance)
+              HorizontalDivider(color = border)
+              Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
               Text("Run ${detail.executionHistory.size - index} · ${if (standalone) instance.lifecycleState else "Invocation"} · ${formatInstant(instance.startedAt, "d MMM HH:mm:ss")}${if (index == 0) " · latest run" else ""}", color = ink, fontFamily = body, fontSize = 12.sp)
               SelectionContainer { Text(instance.invocationId, color = muted, fontFamily = mono, fontSize = 11.sp) }
               SelectionContainer { Text("Execution ${instance.executionId}", color = dim, fontFamily = mono, fontSize = 11.sp) }
               Text("${if (instance.finishedAt != null) "Finished" else "Last update"} ${formatInstant(instance.finishedAt ?: instance.updatedAt, "d MMM HH:mm:ss")}", color = muted, fontSize = 11.sp)
               instance.result?.let { reason -> ReasonTooltip(reason) }
+              }
             }
           }
         }
-        PageFooter(detail.nextCursor != null, state.detailLoading, model::loadMoreDetail)
+        PageFooter(detail.cursors[DetailList.EXECUTIONS] != null, state.detailLoadStates[DetailList.EXECUTIONS] == ListLoadState.APPENDING,
+          state.detailLoadStates[DetailList.EXECUTIONS] == ListLoadState.APPEND_FAILED) { model.loadMoreDetail(DetailList.EXECUTIONS) }
       }
       Box(Modifier.width(1.dp).fillMaxHeight().background(border))
       Column(Modifier.width(290.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -175,9 +213,12 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         }
         MetadataPanel("Attempts and fixes", attempts)
         if (detail.validation.isNotEmpty()) {
-          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            DesignLabel("Validation")
-            detail.validation.forEach { record ->
+          LazyColumn(state = validationScroll, modifier = Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            this.item(key = "${item.identity.repositoryIdentity}:${item.identity.id}:validation-header") { DesignLabel("Validation") }
+            items(detail.validation, key = { record ->
+              "${item.identity.repositoryIdentity}:${item.identity.id}:validation:${record.subtaskId}:" +
+                record.evidence.joinToString("|") { "${it.command}:${it.exitCode}" }
+            }) { record ->
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 WorkDot(if (record.passed == true) Lifecycle.TERMINAL else if (record.passed == false) Lifecycle.FAILED else Lifecycle.IDLE)
                 Text("Subtask ${record.subtaskId}", Modifier.width(72.dp), color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp)
@@ -185,13 +226,9 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
               }
             }
           }
+          PageFooter(detail.cursors[DetailList.VALIDATION] != null, state.detailLoadStates[DetailList.VALIDATION] == ListLoadState.APPENDING,
+            state.detailLoadStates[DetailList.VALIDATION] == ListLoadState.APPEND_FAILED) { model.loadMoreDetail(DetailList.VALIDATION) }
           HorizontalDivider(color = border)
-        }
-        item.issueKey?.let {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DesignLabel("From the terminal")
-            TerminalCommand("skill-bill goal status $it --repo-root ${shellQuote(item.repositoryRoot)}") { command -> clipboard.setText(AnnotatedString(command)) }
-          }
         }
       }
     }
@@ -234,22 +271,45 @@ private fun MetadataPanel(title: String, rows: List<Pair<String, String>>) {
   HorizontalDivider(color = border)
 }
 
-@Composable
-private fun TerminalCommand(command: String, copy: (String) -> Unit) {
-  Row(Modifier.fillMaxWidth().height(34.dp).background(titlebar, RoundedCornerShape(8.dp)).border(1.dp, strongBorder, RoundedCornerShape(8.dp)).padding(start = 12.dp, end = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text(command, Modifier.weight(1f), color = ink, fontFamily = mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    Box(Modifier.height(24.dp).background(raised, RoundedCornerShape(8.dp)).border(1.dp, strongBorder, RoundedCornerShape(8.dp)).clickable { copy(command) }.padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
-      Text("Copy", color = ink, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-    }
-  }
-}
-
 private fun subtaskColor(status: String, active: Boolean): Color = when {
   active -> green
   status == "complete" || status == "completed" -> green
   status == "blocked" -> orange
   status == "failed" -> red
   else -> surface3
+}
+
+@Composable
+private fun rememberAnchoredListState(
+  identity: WorkIdentity,
+  generation: Long,
+  listKind: String,
+  keys: List<String>,
+): LazyListState {
+  val state = remember(identity, generation, listKind) { LazyListState() }
+  var anchor by remember(identity, generation, listKind) { mutableStateOf<Pair<String, Int>?>(null) }
+  var previousKeys by remember(identity, generation, listKind) { mutableStateOf(keys) }
+  LaunchedEffect(state) {
+    snapshotFlow {
+      state.layoutInfo.visibleItemsInfo.firstOrNull()?.let { info ->
+        (info.key as? String)?.let { it to state.firstVisibleItemScrollOffset }
+      }
+    }.collect { visible -> anchor = visible }
+  }
+  LaunchedEffect(keys) {
+    val saved = anchor
+    if (saved != null) {
+      val restoredKey = if (saved.first in keys) saved.first else {
+        val oldIndex = previousKeys.indexOf(saved.first).coerceAtLeast(0)
+        previousKeys.drop(oldIndex + 1).firstOrNull { it in keys }
+          ?: previousKeys.take(oldIndex).asReversed().firstOrNull { it in keys }
+      }
+      val index = keys.indexOf(restoredKey)
+      if (index >= 0) state.scrollToItem(index, saved.second)
+    }
+    previousKeys = keys
+  }
+  return state
 }
 
 private fun formatInstant(value: Instant, pattern: String) = DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault()).format(value)

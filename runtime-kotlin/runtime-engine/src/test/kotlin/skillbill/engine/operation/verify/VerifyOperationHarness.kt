@@ -17,7 +17,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
-import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
+import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -131,13 +131,7 @@ internal class VerifyOperationHarness : AutoCloseable {
         },
         NoopRuntimeDiagnostics,
         clock,
-        StandalonePhaseStatusPublisherFactory(
-          database,
-          TestRepositoryEnclosingRoot,
-          CheckedOutBranchSource { "main" },
-          clock,
-          NoopRuntimeDiagnostics,
-        ),
+        testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
         CheckedOutBranchSource { "main" },
       )
     val proposals = SqliteOperationProposalRepository(database)

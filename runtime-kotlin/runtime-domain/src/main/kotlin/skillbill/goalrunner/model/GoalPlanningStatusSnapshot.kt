@@ -10,14 +10,28 @@ fun planningStatusSnapshot(
   blockedReason: String?,
 ): GoalPlanningStatusSnapshot {
   val missing = orderedSubtaskIds.filterNot { it in plannedIds }
-  val state = planningState(shared, plannedIds, missing, blockedReason)
-  val wave = if (state.isPlanningInFlight()) missing.take(GOAL_PLANNING_WAVE_CAP) else emptyList()
-  val resumeAt = wave.minOrNull() ?: missing.firstOrNull()
+  return planningStatusSnapshot(
+    GoalPlanningStatusSummary(orderedSubtaskIds.size, plannedIds.size, missing.take(GOAL_PLANNING_WAVE_CAP)),
+    shared,
+    blockedSubtaskId,
+    blockedReason,
+  )
+}
+
+fun planningStatusSnapshot(
+  summary: GoalPlanningStatusSummary,
+  shared: Boolean,
+  blockedSubtaskId: Int?,
+  blockedReason: String?,
+): GoalPlanningStatusSnapshot {
+  val state = planningState(shared, summary.preparedCount, summary.firstMissingIds, blockedReason)
+  val wave = if (state.isPlanningInFlight()) summary.firstMissingIds.take(GOAL_PLANNING_WAVE_CAP) else emptyList()
+  val resumeAt = wave.minOrNull() ?: summary.firstMissingIds.firstOrNull()
   return GoalPlanningStatusSnapshot(
     state = state,
     sharedPreplanPrepared = shared,
-    plannedSubtaskCount = plannedIds.size,
-    totalSubtaskCount = orderedSubtaskIds.size,
+    plannedSubtaskCount = summary.preparedCount,
+    totalSubtaskCount = summary.totalCount,
     currentPlanningSubtaskId = blockedSubtaskId ?: resumeAt,
     planningWaveSubtaskIds = wave,
     reason = planningReason(state, resumeAt, blockedReason),
@@ -26,7 +40,7 @@ fun planningStatusSnapshot(
 
 private fun planningState(
   shared: Boolean,
-  plannedIds: List<Int>,
+  plannedCount: Int,
   missing: List<Int>,
   blockedReason: String?,
 ): GoalPlanningStatusState =
@@ -34,7 +48,7 @@ private fun planningState(
     blockedReason != null -> GoalPlanningStatusState.BLOCKED
     !shared -> GoalPlanningStatusState.NOT_STARTED
     missing.isEmpty() -> GoalPlanningStatusState.PREPARED
-    plannedIds.isEmpty() -> GoalPlanningStatusState.PREPLANNED
+    plannedCount == 0 -> GoalPlanningStatusState.PREPLANNED
     else -> GoalPlanningStatusState.PARTIALLY_PLANNED
   }
 

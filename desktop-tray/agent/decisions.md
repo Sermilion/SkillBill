@@ -1,3 +1,31 @@
+## [2026-10-12] Read work through the runtime store
+Context: SKILL-423 replaces CLI work-data requests with an in-process view of the runtime-owned database.
+Decision: Room opens an existing compatible store read-only. Shared runtime services project lifecycle and identity facts, admit exact-target controls, and own migrations. DataStore stores app preferences.
+Reason: Reads must not start commands, create or repair workflow state, or establish a second schema authority. Reusing runtime policy avoids a desktop lifecycle mirror and duplicate runtime graph.
+Alternatives considered: CLI fallback would restore executable discovery and output parsing dependencies. Destructive ORM migration and a private workflow copy violate runtime ownership.
+
+## [2026-10-12] Confirm external commits through durable revisions
+Context: Runtime writers use independent SQLite sessions. Room's in-process tracker alone cannot establish committed-write observation across desktop processes.
+Decision: Register the filesystem watcher before baseline reads. Treat file/WAL events and overflow as hints, then check data version, file identity, and runtime-owned revision topics. Own and close the observer's read-only connection with its session.
+Reason: SQLite confirms commit and coherent topic changes. This excludes rollback notifications and recovers committed state after event loss, reconnect, replacement, or writer exit without periodic database polling or a service daemon.
+
+## [2026-10-13] Signal committed work changes outside SQLite
+Context: Room's desktop query Flow cannot hear writes from another process's JDBC connection. Watching SQLite and WAL files also opened another database connection and could fail during WAL recovery.
+Decision: After a runtime transaction changes the desktop work revision topics, SQLite takes a per-store lock and atomically replaces a small sidecar signal file beside the selected database. The file carries a generation token and the latest topic revisions. The desktop watches only that file and invalidates the matching Room-backed Flow queries. Registration and reconnect start with a fresh baseline. Overflow rereads the latest revisions. Rollbacks and unrelated table commits emit nothing.
+Reason: The runtime transaction confirms committed state before publishing. The sidecar contains only topic revision numbers. Room stays read-only and owns no tracking table or trigger.
+Supersedes: Confirm external commits through durable revisions (2026-10-12).
+
+## [2026-10-12] Fence results and baseline every observation session
+Context: Cancellation alone cannot exclude delayed reads or notification callbacks after a database change. Reconnect discovery can contain completions that occurred while disconnected.
+Decision: Bind asynchronous result admission and notification authorization to the originating store epoch. Establish a silent transition baseline after all required live/recent sections arrive in a new observation session.
+Reason: Old-store results must never replace current rows or trigger notifications. Reconnect establishes current facts; only later confirmed transitions may notify, subject to the current toggle and durable identity.
+
+## [2026-10-12] Preserve working data behavior for the SKILL-424 architecture handoff
+Context: The operator transferred seven remaining repair obligations to SKILL-424 AC-28 through AC-34 and retained eleven active data-layer criteria in SKILL-423.
+Decision: Integrate the data layer into existing controller/windows with the required consumer changes. Preserve implemented bounded queries, paging, and ownership behavior while SKILL-424 owns remaining refinements and final KMP, generated DI, ViewModel, navigation, and native integration work.
+Reason: The reduced scope supplies working data behavior without requiring the full application rewrite first. Placeholder modules, duplicate graphs, and a temporary backend would create work the final owners must undo.
+Revisit when: SKILL-424 relocates these implementations into its final module and presentation owners.
+
 ## [2026-10-11] Keep the desktop build independent
 Context: SKILL-418 requires a JDK 21 Compose Desktop app without changing the runtime or plugin build graphs.
 Decision: Give desktop-tray its own Gradle settings, wrapper, dependency catalog, packaging tasks, and path-filtered CI workflow.
@@ -7,11 +35,13 @@ Reason: The spec requires desktop checks and installers to run independently and
 Context: The app displays work across repositories and can pause or stop an active goal. Runs can share an issue key, and responses can arrive after selection or settings change.
 Decision: Read board/detail contract 1.0 through the CLI, reject incompatible envelopes, identify selections by work and repository identity, and discard obsolete response generations. Mutations schedule a board refresh.
 Reason: The spec forbids direct SQLite access and status derivation in the app. The next board poll establishes whether a mutation took effect; issue-key matching alone could display a different run.
+Superseded by: Read work through the runtime store (2026-10-12)
 
 ## [2026-10-11] Retain process ownership after logical timeout
 Context: CLI requests need bounded UI latency and output while the spec forbids killing processes, including during shutdown.
 Decision: Use distinct one-slot runners for polling, detail, pause, and stop. A logical timeout returns a safe failure while daemon drain/reap owners retain the slot until natural exit.
 Reason: Releasing a slot at timeout would let repeated refreshes accumulate children. Sharing the poll runner with a mutation can confuse their results, a failure already observed in the IntelliJ plugin.
+Superseded by: Read work through the runtime store (2026-10-12)
 
 ## [2026-10-11] Adapt native tray capabilities per platform
 Context: The chosen StatusNotifierItem backend has an alpha popup API and cannot supply the required macOS template/count treatment. Stock GNOME can have no tray watcher.
@@ -43,3 +73,8 @@ Xwayland bounds with a global scale. On monitors stacked at different scales,
 these origins differ. Map the native click using current KScreen output
 geometry and AWT screen bounds. Xwayland pointer coordinates can be stale
 while the pointer is over a native Wayland panel.
+
+## [2026-10-13] Reconnect a failed database observer only on explicit refresh
+Context: A lost database watcher triggered timed reconnects and full invalidations. Reads also reopened failed sessions, so background failures repeatedly reset the desktop views.
+Decision: Keep the observer failure typed and the last successful view stale. Remove the timed reconnect loop and retain failed sessions until explicit refresh or a database change requests a new connection. Keep healthy observation driven by committed database changes and known lifecycle deadlines. Record the observer failure class and provider error code without logging database content.
+Reason: Database observation failure must not become periodic data refresh or a successful read with no working observer. Explicit refresh makes recovery visible and preserves a stable stale view between attempts.
