@@ -53,7 +53,7 @@ internal class ExternalCommitObserver(
       worker = launch(Dispatchers.IO) {
         try {
           while (isActive) {
-            activeWatch.awaitHint()
+            withTimeoutOrNull(500) { activeWatch.awaitHint() }
             val replaced = try {
               !Files.exists(path) || storeFileIdentity(path) != identity
             } catch (_: java.nio.file.NoSuchFileException) {

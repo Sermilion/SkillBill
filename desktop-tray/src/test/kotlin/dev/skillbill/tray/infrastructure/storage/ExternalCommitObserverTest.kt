@@ -49,6 +49,28 @@ class ExternalCommitObserverTest {
   }
 
   @Test
+  fun `commits are detected when the filesystem watcher emits no hints`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-missed-commit-hint").use { fixture ->
+      val received = Channel<StoreChange>(Channel.UNLIMITED)
+      val ready = CompletableDeferred<Unit>()
+      val observer = launch {
+        ExternalCommitObserver(fixture.dbPath, watchFactory = {
+          object : StoreWatch {
+            override suspend fun awaitHint() = awaitCancellation()
+            override fun close() = Unit
+          }
+        }).changes(ready).collect { received.send(it) }
+      }
+      try {
+        withTimeout(10_000) { ready.await(); received.receive() }
+        writer(fixture.dbPath, "missed-hint-commit")
+        val change = withTimeout(10_000) { received.receive() }
+        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC), change.topics)
+      } finally { observer.cancelAndJoin() }
+    }
+  }
+
+  @Test
   fun `overflow recovers lost hints and reconnect reads commits made while disconnected`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-lost-commit-hints").use { fixture ->
       val hints = Channel<Unit>(Channel.CONFLATED)
@@ -69,10 +91,15 @@ class ExternalCommitObserverTest {
         withTimeout(10_000) { ready.await(); received.receive() }
         writer(fixture.dbPath, "crash-after-commit")
         writer(fixture.dbPath, "goal-commit")
-        assertNull(withTimeoutOrNull(100) { received.receive() })
+        val observedTopics = mutableSetOf<String>()
+        var latest: StoreChange? = withTimeoutOrNull(100) { received.receive() }
+        latest?.let { observedTopics += it.topics }
         hints.send(Unit)
-        recovered = withTimeout(10_000) { received.receive() }
-        assertEquals(setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC), recovered.topics)
+        while (observedTopics != setOf(DesktopReadSchema.PHASES_TOPIC, DesktopReadSchema.GOALS_TOPIC)) {
+          latest = withTimeout(10_000) { received.receive() }
+          observedTopics += requireNotNull(latest).topics
+        }
+        recovered = requireNotNull(latest)
         assertTrue(recovered.resynchronize)
       } finally { observer.cancelAndJoin() }
       withTimeout(10_000) { closed.await() }
