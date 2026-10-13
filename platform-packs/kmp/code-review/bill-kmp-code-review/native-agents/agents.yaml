@@ -4,6 +4,10 @@ agents:
     description: "Android & Kotlin Multiplatform architecture specialist — Gradle module boundaries and dependency direction, Hilt or Koin scope ownership, ViewModel lifecycle ownership, repository, use-case, and sync-engine authority, WorkManager ownership, and offline single-source-of-truth."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-kmp-code-review-code-quality
+    description: "Android & Kotlin Multiplatform code quality specialist — Android and multiplatform Kotlin idioms, Compose state cohesion, readable Flow operations, and expect/actual organization."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-kmp-code-review-platform-correctness
     description: "Android & Kotlin Multiplatform platform correctness specialist — KMP expect/actual, source-set, target-runtime, and native-boundary correctness."
     compose: governed-content

@@ -47,6 +47,18 @@ class ParallelCodeReviewRunner(
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   private val nativeAgentPreflight: ReviewNativeAgentPreflightPort,
 ) {
+  fun resolveInlineCodeQualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
+    when (val planned = planning.resolveInlineCodeQualityRubric(request)) {
+      is ParallelCodeReviewPlanned.Failed -> planned
+      is ParallelCodeReviewPlanned.Ready -> {
+        ParallelCodeReviewPlanned.Ready(
+          planned.value?.let { rubric ->
+            "Selected code-quality specialist: ${rubric.rubricId}\n\n${rubric.body}"
+          },
+        )
+      }
+    }
+
   fun run(originalRequest: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome {
     requireDelegatedMode(originalRequest)
     earlyEmptyDelta(originalRequest)?.let { return it }

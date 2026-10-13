@@ -35,8 +35,22 @@ internal fun appendAddonUsage(
   skillRelativeDir: String,
   addonSlug: String,
   pointerName: String,
-): String =
-  appendPointerLikeEntry(
+): String {
+  val reviewFields =
+    if (skillRelativeDir.startsWith("code-review/")) {
+      buildString {
+        appendLine("      activation: { any_path: [\"**\"] }")
+        if (skillRelativeDir.endsWith("-code-review")) {
+          val areas = declaredReviewAreas(text)
+          if (areas.isNotEmpty()) {
+            appendLine("      specialist_areas: [${areas.joinToString(", ", transform = ::yamlScalar)}]")
+          }
+        }
+      }
+    } else {
+      ""
+    }
+  return appendPointerLikeEntry(
     PointerLikeEntryAppendRequest(
       text = text,
       blockName = "addon_usage",
@@ -45,11 +59,11 @@ internal fun appendAddonUsage(
       renderBlock = {
         "  $skillRelativeDir:\n" +
           "    - slug: ${yamlScalar(addonSlug)}\n" +
-          "      entrypoint: ${yamlScalar(pointerName)}\n"
+          "      entrypoint: ${yamlScalar(pointerName)}\n" + reviewFields
       },
       renderEntry = {
         "    - slug: ${yamlScalar(addonSlug)}\n" +
-          "      entrypoint: ${yamlScalar(pointerName)}\n"
+          "      entrypoint: ${yamlScalar(pointerName)}\n" + reviewFields
       },
       existingEntryPattern =
         Regex(
@@ -58,6 +72,7 @@ internal fun appendAddonUsage(
         ),
     ),
   )
+}
 
 internal fun appendPointerLikeEntry(request: PointerLikeEntryAppendRequest): String {
   val blockRange =

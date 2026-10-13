@@ -3,11 +3,16 @@ package skillbill.application.review.parallel.planning
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ReviewRubricProjection
 import skillbill.application.review.model.ReviewWorkerKind.GENERIC
+import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.reviewevidence.model.ReviewChangedFileEvidence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.error.shellcontent.reviewAggregationIntegrityError
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewOwnedFileEvidence
 import skillbill.ports.review.preparation.ReviewRubricResolver
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
+import skillbill.review.model.ReviewRunLane
+import skillbill.review.plan.ReviewAddonSelectionPolicy
 import skillbill.review.plan.ReviewCrossRootLaneReconciliation
 import skillbill.review.plan.ReviewLaneInclusionPolicy
 import skillbill.review.plan.ReviewLaunchPlanPolicy
@@ -18,58 +23,80 @@ import skillbill.review.plan.model.ReviewReconciledLane
 import skillbill.review.plan.model.ReviewRootLanes
 import skillbill.review.plan.model.ReviewRoutingChangedFile
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 
 @Inject
 class ParallelCodeReviewRunnerRubricPlanning(
   private val reviewRubricResolver: ReviewRubricResolver,
   private val installedPackCatalog: InstalledPlatformPackCatalogPort,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun installedManifests(): List<PlatformManifest> = installedPackCatalog.manifests()
 
   internal fun resolvePlannedRubrics(
     evidence: ReviewDiffEvidence,
-    routedManifests: List<PlatformManifest>,
-    manifests: List<PlatformManifest>,
-    ownedPathsBySlug: Map<String, Set<String>>,
+    routing: ParallelCodeReviewStackDetection,
+    acceptedLanes: List<ReviewRunLane> = emptyList(),
+    qualityOnly: Boolean = false,
   ): List<PlannedReviewRubric> =
-    if (routedManifests.isEmpty()) {
-      resolveWithoutRoutedManifests(evidence)
+    if (routing.routed.isEmpty()) {
+      resolveWithoutRoutedManifests(evidence, routing.manifests, acceptedLanes, qualityOnly)
     } else {
-      resolveWithRoutedManifests(evidence, routedManifests, manifests, ownedPathsBySlug)
+      resolveWithRoutedManifests(evidence, routing, acceptedLanes, qualityOnly)
     }
 
-  private fun resolveWithoutRoutedManifests(evidence: ReviewDiffEvidence): List<PlannedReviewRubric> {
+  private fun resolveWithoutRoutedManifests(
+    evidence: ReviewDiffEvidence,
+    manifests: List<PlatformManifest>,
+    acceptedLanes: List<ReviewRunLane>,
+    qualityOnly: Boolean,
+  ): List<PlannedReviewRubric> {
     val installed = installedPackCatalog.manifests()
-    if (installed.isEmpty()) return horizontalPlannedRubrics(evidence)
+    if (installed.isEmpty()) {
+      if (qualityOnly) {
+        recordMissingQualityOwner("no_installed_packs")
+        return emptyList()
+      }
+      return preserveAcceptedQualityOwner(horizontalPlannedRubrics(evidence), evidence, manifests, acceptedLanes)
+    }
     val routing =
       ReviewStackRouting.route(
         installed,
         evidence.files.map { ReviewRoutingChangedFile(it.path, it.changedContent) },
       )
     return if (routing.routedSlugs.isEmpty()) {
-      horizontalPlannedRubrics(evidence)
+      if (qualityOnly) {
+        recordMissingQualityOwner("no_routed_pack")
+        return emptyList()
+      }
+      preserveAcceptedQualityOwner(horizontalPlannedRubrics(evidence), evidence, manifests, acceptedLanes)
     } else {
       resolveWithRoutedManifests(
         evidence,
-        installed.filter { it.slug in routing.routedSlugs },
-        installed,
-        routing.ownedPathsBySlug,
+        ParallelCodeReviewStackDetection(
+          installed.filter { it.slug in routing.routedSlugs },
+          manifests.ifEmpty { installed },
+          routing.ownedPathsBySlug,
+        ),
+        acceptedLanes,
+        qualityOnly,
       )
     }
   }
 
   private fun resolveWithRoutedManifests(
     evidence: ReviewDiffEvidence,
-    routedManifests: List<PlatformManifest>,
-    manifests: List<PlatformManifest>,
-    ownedPathsBySlug: Map<String, Set<String>>,
+    routing: ParallelCodeReviewStackDetection,
+    acceptedLanes: List<ReviewRunLane>,
+    qualityOnly: Boolean,
   ): List<PlannedReviewRubric> {
+    val manifests = routing.manifests
     val depthOffsets =
       ReviewCrossRootLaneReconciliation
-        .compositionDepthOffsets(routedManifests.map { it.slug }, manifests)
+        .compositionDepthOffsets(routing.routed.map { it.slug }, manifests)
     val rootLanes =
-      routedManifests.map { root ->
-        val rootOwnedPaths = ownedPathsBySlug[root.slug].orEmpty()
+      routing.routed.map { root ->
+        val rootOwnedPaths = routing.ownedPathsBySlug[root.slug].orEmpty()
         val rootFiles = evidence.files.filter { it.path in rootOwnedPaths }
         val selectedAreas = ReviewLaunchPlanPolicy.composedAreas(root.slug, manifests)
         val lanes =
@@ -87,10 +114,74 @@ class ParallelCodeReviewRunnerRubricPlanning(
         ReviewRootLanes(depthOffsets[root.slug] ?: 0, lanes)
       }
     val exclusion = ReviewPerAreaFallbackExclusion.partition(rootLanes, manifests)
-    return ReviewCrossRootLaneReconciliation
-      .reconcile(exclusion.roots, exclusion.excludedFallbackLanesByArea)
-      .filter { it.lane.ownedPaths.isNotEmpty() }
-      .map { reconciled -> toPlannedRubric(evidence, reconciled, manifests) }
+    val reconciled =
+      ReviewCrossRootLaneReconciliation.reconcile(exclusion.roots, exclusion.excludedFallbackLanesByArea)
+    if (reconciled.none { it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS }) {
+      recordMissingQualityOwner("no_manifest_declared_owner")
+    }
+    val current =
+      reconciled
+        .filter { it.lane.ownedPaths.isNotEmpty() && (!qualityOnly || it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS) }
+        .map { toPlannedRubric(evidence, it, manifests) }
+    return preserveAcceptedQualityOwner(current, evidence, manifests, acceptedLanes)
+  }
+
+  private fun recordMissingQualityOwner(reason: String) {
+    diagnostics.warning(
+      "seam=review_code_quality_owner value_used=omitted value_expected=local_or_generic_fallback reason=$reason",
+    )
+  }
+
+  private fun preserveAcceptedQualityOwner(
+    planned: List<PlannedReviewRubric>,
+    evidence: ReviewDiffEvidence,
+    manifests: List<PlatformManifest>,
+    acceptedLanes: List<ReviewRunLane>,
+  ): List<PlannedReviewRubric> {
+    val accepted = acceptedLanes.lastOrNull { it.area in UNIVERSAL_CODE_REVIEW_AREAS } ?: return planned
+    val current = planned.singleOrNull { it.descriptor.area == accepted.area }
+    if (current?.descriptor?.skillName == accepted.laneSkillName) return planned
+    val owner =
+      manifests.singleOrNull { it.slug == accepted.packSlug }
+        ?: throw reviewAggregationIntegrityError(
+          "accepted lane owner '${accepted.packSlug}/${accepted.laneSkillName}' is unavailable",
+          listOf(accepted.laneSkillName),
+        )
+    if (accepted.area !in owner.declaredCodeReviewAreas) {
+      throw reviewAggregationIntegrityError(
+        "accepted lane owner '${accepted.packSlug}/${accepted.laneSkillName}' no longer declares '${accepted.area}'",
+        listOf(accepted.laneSkillName),
+      )
+    }
+    val paths = current?.descriptor?.ownedPaths ?: evidence.files.map { it.path }
+    val descriptor =
+      (
+        current?.descriptor ?: ReviewLaunchLane(
+          skillName = accepted.laneSkillName,
+          packSlug = accepted.packSlug,
+          area = accepted.area,
+          depth = accepted.depth,
+          originLayerChain = accepted.originLayerChain,
+          required = accepted.required,
+          addOns = emptyList(),
+          orderIndex = accepted.orderIndex,
+          inclusionReason = "accepted review owner",
+        )
+      ).copy(
+        skillName = accepted.laneSkillName,
+        packSlug = accepted.packSlug,
+        area = accepted.area,
+        depth = accepted.depth,
+        originLayerChain = accepted.originLayerChain,
+        originLayerChains = listOf(accepted.originLayerChain),
+        required = accepted.required,
+        addOns = ReviewAddonSelectionPolicy.select(owner, accepted.laneSkillName).map { it.slug },
+        orderIndex = accepted.orderIndex,
+        ownedPaths = paths.distinct().sorted(),
+        changedHunkIds = evidence.hunks.filter { it.path in paths }.map { it.hunkId },
+      )
+    val preserved = toPlannedRubric(evidence, ReviewReconciledLane(descriptor, listOf(descriptor)), manifests)
+    return planned.filterNot { it.descriptor.area == accepted.area } + preserved
   }
 
   private fun toPlannedRubric(

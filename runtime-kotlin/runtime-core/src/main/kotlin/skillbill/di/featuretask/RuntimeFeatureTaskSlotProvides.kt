@@ -112,8 +112,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner), inlineReviewRunner),
-        PhaseStrategyRegistration(InlineReviewOpus55Strategy(opusInlineReviewRunner), opusInlineReviewRunner),
+        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner, reviewRunner), inlineReviewRunner),
+        PhaseStrategyRegistration(
+          InlineReviewOpus55Strategy(opusInlineReviewRunner, reviewRunner),
+          opusInlineReviewRunner,
+        ),
         PhaseStrategyRegistration(
           DelegatedReviewStrategy(delegatedReviewRunner, reviewRunner),
           delegatedReviewRunner,
@@ -122,9 +125,12 @@ internal interface RuntimeFeatureTaskSlotProvides {
           DelegatedReviewOpus55Strategy(opusDelegatedReviewRunner, reviewRunner),
           opusDelegatedReviewRunner,
         ),
-        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(standaloneInlineRunner), standaloneInlineRunner),
         PhaseStrategyRegistration(
-          InlineStandaloneReviewOpus55Strategy(opusStandaloneInlineRunner),
+          InlineStandaloneReviewStrategy(standaloneInlineRunner, reviewRunner),
+          standaloneInlineRunner,
+        ),
+        PhaseStrategyRegistration(
+          InlineStandaloneReviewOpus55Strategy(opusStandaloneInlineRunner, reviewRunner),
           opusStandaloneInlineRunner,
         ),
         PhaseStrategyRegistration(

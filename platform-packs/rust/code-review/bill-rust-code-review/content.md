@@ -19,7 +19,12 @@ Review Rust changes against the repository's edition, MSRV, Cargo workspace, fea
 - Review `unsafe`, FFI, raw pointers, auth, parsing, and dependency trust through the security lane as well as the owning behavior lane.
 - Check ownership and borrowing choices for semantic bugs, accidental cloning, invalid lifetime assumptions, lock scope, and API constraints rather than asking whether the code compiles.
 
+
+Every routed Rust composition includes the required local `code-quality` specialist `bill-rust-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Crate/workspace layout, dependency direction, trait ownership, public abstractions, or Cargo feature topology -> `architecture` specialist.
 - Allocation, cloning, boxing, locking, atomics, serialization, async scheduling, or repeated I/O -> `performance` specialist.

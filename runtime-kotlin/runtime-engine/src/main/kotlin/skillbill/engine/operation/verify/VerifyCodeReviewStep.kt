@@ -1,8 +1,11 @@
 package skillbill.engine.operation.verify
 
+import me.tatarka.inject.annotations.Inject
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.slot.PhaseStepSession
@@ -23,8 +26,20 @@ import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 /** The multi-agent review the delegated mode runs; production wires `ParallelCodeReviewRunner.run`. */
-fun interface VerifyDelegatedReviewer {
+interface VerifyDelegatedReviewer {
   fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome
+
+  fun qualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?>
+}
+
+@Inject
+class ParallelVerifyReviewer(
+  private val reviewRunner: ParallelCodeReviewRunner,
+) : VerifyDelegatedReviewer {
+  override fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome = reviewRunner.run(request)
+
+  override fun qualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
+    reviewRunner.resolveInlineCodeQualityRubric(request)
 }
 
 internal enum class VerifyReviewMode(val wireValue: String) {
@@ -55,15 +70,35 @@ internal class VerifyCodeReviewStep(
     priorValues: Map<String, String>,
   ): VerifyCodeReviewOutcome {
     val target = ReviewTarget.Scoped(ParallelReviewScope.BRANCH, baseRevision, headRevision)
-    val directive = VerifyPromptSections.codeReviewDirective(baseRevision, headRevision, target)
     val agentId = context.invokedAgentId.orEmpty()
+    val input = GoalSubtaskReviewInput(baseRevision, headRevision, trackedDelta = "", ownedUntrackedPatches = "")
+    val request = delegatedReviewRequest(agentId, context.repoRoot, target, input)
+    val qualityRubric =
+      if (mode == VerifyReviewMode.INLINE) {
+        when (val prepared = delegatedReviewer.qualityRubric(request)) {
+          is ParallelCodeReviewPlanned.Failed -> return VerifyCodeReviewOutcome.Failed(prepared.failure.message)
+          is ParallelCodeReviewPlanned.Ready -> prepared.value
+        }
+      } else {
+        null
+      }
+    val directive =
+      buildString {
+        append(VerifyPromptSections.codeReviewDirective(baseRevision, headRevision, target))
+        qualityRubric?.let {
+          appendLine()
+          appendLine()
+          appendLine("## Selected local code-quality rubric")
+          appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
+          append(it)
+        }
+      }
     var delegated: ParallelCodeReviewRunOutcome? = null
     val session =
       when (mode) {
         VerifyReviewMode.INLINE -> null
         VerifyReviewMode.DELEGATED -> {
-          val input = GoalSubtaskReviewInput(baseRevision, headRevision, trackedDelta = "", ownedUntrackedPatches = "")
-          delegatedSession(context, agentId, target, input) { outcome -> delegated = outcome }
+          delegatedSession(request) { outcome -> delegated = outcome }
         }
       }
     val stepName = VerifyPromptSections.CODE_REVIEW_STEP
@@ -71,13 +106,12 @@ internal class VerifyCodeReviewStep(
     (delegated as? ParallelCodeReviewRunOutcome.PlanningFailed)?.let { planning ->
       return VerifyCodeReviewOutcome.Failed(planning.failure.message)
     }
-    val settled =
-      when (step) {
-        is OperationStepResult.Failed -> return VerifyCodeReviewOutcome.Failed(step.reason)
-        is OperationStepResult.Refused -> return VerifyCodeReviewOutcome.Refused(step.refusal)
-        is OperationStepResult.Settled -> step
-      }
-    return reviewOutcome(agentId, (delegated as? ParallelCodeReviewRunOutcome.Reviewed)?.result, settled)
+    return when (step) {
+      is OperationStepResult.Failed -> VerifyCodeReviewOutcome.Failed(step.reason)
+      is OperationStepResult.Refused -> VerifyCodeReviewOutcome.Refused(step.refusal)
+      is OperationStepResult.Settled ->
+        reviewOutcome(agentId, (delegated as? ParallelCodeReviewRunOutcome.Reviewed)?.result, step)
+    }
   }
 
   private fun reviewOutcome(
@@ -104,20 +138,16 @@ internal class VerifyCodeReviewStep(
   }
 
   private fun delegatedSession(
-    context: OperationContext,
-    agentId: String,
-    target: ReviewTarget,
-    input: GoalSubtaskReviewInput,
+    request: ParallelCodeReviewRequest,
     onOutcome: (ParallelCodeReviewRunOutcome) -> Unit,
   ): PhaseStepSession =
     PhaseStepSession { launch ->
-      val request = delegatedReviewRequest(agentId, context.repoRoot, target, input)
       val outcome = delegatedReviewer.review(request.copy(timeout = launch.skillRunRequest.timeout))
       onOutcome(outcome)
       when (outcome) {
         is ParallelCodeReviewRunOutcome.PlanningFailed ->
-          UnsupportedAgentRunLaunch(SupportedAgent.fromWire(agentId), outcome.failure.message)
-        is ParallelCodeReviewRunOutcome.Reviewed -> reviewedLaunchFacts(agentId, outcome.result)
+          UnsupportedAgentRunLaunch(SupportedAgent.fromWire(request.agent1Id), outcome.failure.message)
+        is ParallelCodeReviewRunOutcome.Reviewed -> reviewedLaunchFacts(request.agent1Id, outcome.result)
       }
     }
 

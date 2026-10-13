@@ -43,6 +43,7 @@ class PlatformPackManifestPolicyTest {
           "    - \"build.gradle\"",
           "  tie_breakers:",
           "    - \"Prefer Java\"",
+          "  path: [\"pom.xml\", \"build.gradle\"]",
           "",
           "declared_code_review_areas: []",
           "",
@@ -50,6 +51,7 @@ class PlatformPackManifestPolicyTest {
           "  baseline: \"code-review/bill-java-code-review/content.md\"",
           "  areas: {}",
           "area_metadata: {}",
+          "lane_conditions: {}",
         ) + expectedPointerLines()
       ).joinToString("\n") + "\n"
 
@@ -110,6 +112,7 @@ class PlatformPackManifestPolicyTest {
         "    - \"pom.xml\"",
         "    - \"build.gradle\"",
         "  tie_breakers: []",
+        "  path: [\"pom.xml\", \"build.gradle\"]",
         "",
         "declared_code_review_areas: []",
         "",
@@ -117,6 +120,7 @@ class PlatformPackManifestPolicyTest {
         "  baseline: \"code-review/bill-java-code-review/content.md\"",
         "  areas: {}",
         "area_metadata: {}",
+        "lane_conditions: {}",
       ) + expectedPointerLines() +
         listOf(
           "",

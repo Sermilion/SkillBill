@@ -8,6 +8,10 @@ agents:
     description: "Kotlin architecture specialist — Kotlin use-case and transaction ownership, injected CoroutineScope lifecycles, internal visibility, and Gradle module boundaries."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-kotlin-code-review-code-quality
+    description: "Kotlin code quality specialist — Kotlin/JVM null and collection handling, sealed lifecycle state, coroutine structure, and backend framework conventions."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-kotlin-code-review-performance
     description: "Kotlin performance specialist — Kotlin runBlocking and dispatcher starvation, Flow backpressure, eager collections, and ORM hydration costs."
     compose: governed-content

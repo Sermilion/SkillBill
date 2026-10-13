@@ -16,6 +16,7 @@ internal fun appendCodeReviewArea(
   updated = appendAreaToList(updated, area)
   updated = appendAreaToDeclaredFiles(updated, area, relativeContentPath)
   updated = appendAreaMetadata(updated, area, areaFocus)
+  updated = appendAreaLaneCondition(updated, area)
   if (updated != original) {
     manifestPath.toFile().writeText(updated)
   }

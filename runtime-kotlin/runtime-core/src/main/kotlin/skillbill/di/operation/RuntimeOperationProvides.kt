@@ -16,6 +16,7 @@ import skillbill.engine.operation.prreviewfix.PrReviewFixOperation
 import skillbill.engine.operation.release.ReleaseOperation
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckOperation
 import skillbill.engine.operation.updatecheck.UpdateCheckOperation
+import skillbill.engine.operation.verify.ParallelVerifyReviewer
 import skillbill.engine.operation.verify.ServiceVerifyTelemetry
 import skillbill.engine.operation.verify.VerifyDelegatedReviewer
 import skillbill.engine.operation.verify.VerifyOperation
@@ -79,7 +80,7 @@ internal interface RuntimeOperationProvides {
 
   @Provides
   fun verifyDelegatedReviewer(reviewRunner: ParallelCodeReviewRunner): VerifyDelegatedReviewer =
-    VerifyDelegatedReviewer(reviewRunner::run)
+    ParallelVerifyReviewer(reviewRunner)
 
   @Provides
   fun operationProposalRepository(database: DatabaseSessionFactory): OperationProposalRepository =

@@ -12,7 +12,12 @@ internal-for: skill-bill
 - If a local SPM package is consumed by an iOS Xcode workspace/project, keep it in the iOS review even when the package itself has no UIKit or SwiftUI import.
 - Otherwise, select the adjacent stack whose declared signals dominate; `Package.swift` alone is not sufficient to classify a repository as iOS.
 
+
+Every routed iOS composition includes the required local `code-quality` specialist `bill-ios-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Swift module/package boundaries, DI registrations, `Provider` protocols, or SPM ownership crossings -> `architecture` specialist.
 - Hot reducers, SwiftUI recomputation, image/PDF decoding, or large import loops -> `performance` specialist.

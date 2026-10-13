@@ -14,6 +14,7 @@ data class PlatformPackManifestRenderRequest(
   val areaMetadata: Map<String, String> = emptyMap(),
   val baselineLayers: List<CodeReviewBaselineLayer> = emptyList(),
   val notes: String? = null,
+  val routingPathSignals: List<String> = defaultRoutingPathSignals(strongSignals),
 )
 
 data class PlatformPackManifestContentRenderRequest(
@@ -27,4 +28,13 @@ data class PlatformPackManifestContentRenderRequest(
   val packRoot: FileLocation,
   val baselineSkillPath: FileLocation,
   val specialistSkillPaths: Map<String, FileLocation>,
+  val routingPathSignals: List<String> = defaultRoutingPathSignals(routingSignals),
 )
+
+private fun defaultRoutingPathSignals(signals: List<String>): List<String> =
+  signals.filter { signal ->
+    signal.startsWith(".") || signal.startsWith("*/") || signal.contains('/') ||
+      signal.matches(
+        Regex("[A-Za-z0-9_.-]+\\.(kt|kts|java|go|swift|php|py|rs|ts|tsx|js|jsx|toml|yaml|yml|json|xml|gradle)"),
+      )
+  }.ifEmpty { signals.take(1) }

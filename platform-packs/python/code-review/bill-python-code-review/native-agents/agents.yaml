@@ -8,6 +8,10 @@ agents:
     description: "Python architecture specialist — Python imports, package and entry-point ownership, composition roots, and dependency lifetimes."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-python-code-review-code-quality
+    description: "Python code quality specialist — Python data modelling, context managers, readable comprehensions, focused functions, and detected framework conventions."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-python-code-review-performance
     description: "Python performance specialist — Python ORM evaluation, I/O, memory, GIL-aware executors, bounded concurrency, and async latency."
     compose: governed-content

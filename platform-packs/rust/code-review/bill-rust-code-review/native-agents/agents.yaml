@@ -8,6 +8,10 @@ agents:
     description: "Rust architecture specialist — Rust crate and workspace boundaries, trait ownership, dependency direction, and feature architecture."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-rust-code-review-code-quality
+    description: "Rust code quality specialist — Rust ownership, enums, iterators, pattern matching, error composition, and avoiding unnecessary clones or indirection."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-rust-code-review-performance
     description: "Rust performance specialist — Rust allocation, cloning, locking, async scheduling, I/O, and hot-path behavior."
     compose: governed-content

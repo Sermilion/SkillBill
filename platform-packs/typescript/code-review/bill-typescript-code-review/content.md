@@ -19,7 +19,12 @@ Review TypeScript against the repository's `tsconfig`, package manager, module s
 - Send untrusted input and runtime validation to security and API contracts as well as the behavior-owning lane.
 - Treat `any`, unchecked assertions, non-null assertions, disabled strictness, and ignored diagnostics as risk signals only when they bypass a reachable contract.
 
+
+Every routed TypeScript composition includes the required local `code-quality` specialist `bill-typescript-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Package/module boundaries, dependency direction, project references, or public abstractions -> `architecture` specialist.
 - Event-loop work, allocation, bundles, rendering, repeated I/O, or hot paths -> `performance` specialist.

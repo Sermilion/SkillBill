@@ -126,8 +126,7 @@ class InlineReviewDirectiveTest {
   ): String =
     InlineReviewDirective.compose(
       target = target,
-      baseRevision = NORMALIZED_SHA,
-      headRevision = NORMALIZED_SHA,
+      revisions = NORMALIZED_SHA to NORMALIZED_SHA,
       specPath = Path.of(SlotBaselineFullRunCapture.SPEC_REFERENCE),
       agentAddonsSection = agentAddonsSection,
     )

@@ -276,7 +276,12 @@ fun parallelCodeReviewRunnerOf(
       sharedEvidenceResolver = sharedEvidenceResolver,
       sharedEvidenceLocatorReader = sharedEvidenceLocatorReader,
       specIntentProjectionResolver = specIntentProjectionResolver,
-      rubricPlanning = ParallelCodeReviewRunnerRubricPlanning(reviewRubricResolver, installedPackCatalog),
+      rubricPlanning =
+        ParallelCodeReviewRunnerRubricPlanning(
+          reviewRubricResolver,
+          installedPackCatalog,
+          NoopRuntimeDiagnostics,
+        ),
       lanePlanRecording = ParallelCodeReviewRunnerLanePlanRecording(persistence, clock),
       repositoryEnclosingRootPort = repositoryEnclosingRootPort,
       reviewLearningsResolver =

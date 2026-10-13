@@ -58,14 +58,9 @@ class ParallelCodeReviewRunnerLanePlanRecording(
   internal fun selectLaunchesForResume(
     reviewRunId: String?,
     launches: List<ReviewSpecialistLaunchRequest>,
+    existing: List<ReviewRunLane> = recordedLanes(reviewRunId),
   ): List<ReviewSpecialistLaunchRequest> {
-    if (reviewRunId == null || launches.isEmpty()) return launches
-    val existing =
-      runtimeOwnedPersistence.requiredRead(
-        seam = "ParallelCodeReviewRunner.selectLaunchesForResume",
-        expected = "runtime-owned review lane dispositions",
-      ) { unitOfWork -> unitOfWork.reviews.fetchReviewRunLanes(reviewRunId) }
-    if (existing.isEmpty()) return launches
+    if (reviewRunId == null || launches.isEmpty() || existing.isEmpty()) return launches
     val completeNames =
       existing
         .filter { it.reviewDisposition == ReviewLaneReviewDisposition.COMPLETE }
@@ -80,13 +75,9 @@ class ParallelCodeReviewRunnerLanePlanRecording(
     reviewRunId: String?,
     plannedRubrics: List<PlannedReviewRubric>,
     launches: List<ReviewSpecialistLaunchRequest>,
+    existing: List<ReviewRunLane> = recordedLanes(reviewRunId),
   ) {
     if (reviewRunId == null || launches.isEmpty()) return
-    val existing =
-      runtimeOwnedPersistence.requiredRead(
-        seam = "ParallelCodeReviewRunner.recordPlannedLanes.read",
-        expected = "runtime-owned review lane dispositions",
-      ) { unitOfWork -> unitOfWork.reviews.fetchReviewRunLanes(reviewRunId) }
     val preservedComplete =
       existing.filter {
         it.reviewDisposition == ReviewLaneReviewDisposition.COMPLETE
@@ -123,5 +114,13 @@ class ParallelCodeReviewRunnerLanePlanRecording(
       seam = "ParallelCodeReviewRunner.recordPlannedLanes.write",
       expected = "runtime-owned review lane plan",
     ) { unitOfWork -> unitOfWork.reviews.replaceReviewRunLanes(reviewRunId, merged) }
+  }
+
+  internal fun recordedLanes(reviewRunId: String?): List<ReviewRunLane> {
+    if (reviewRunId == null) return emptyList()
+    return runtimeOwnedPersistence.requiredRead(
+      seam = "ParallelCodeReviewRunner.recordedLanes",
+      expected = "runtime-owned review lane dispositions",
+    ) { unitOfWork -> unitOfWork.reviews.fetchReviewRunLanes(reviewRunId) }
   }
 }

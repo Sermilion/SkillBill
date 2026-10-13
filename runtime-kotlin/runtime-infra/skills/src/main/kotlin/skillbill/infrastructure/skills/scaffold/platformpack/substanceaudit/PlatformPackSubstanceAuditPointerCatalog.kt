@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import java.nio.file.Path
 import kotlin.io.path.relativeTo
 
@@ -76,18 +77,36 @@ internal fun auditPackAreaCoverageViolations(
   rawViolations: MutableList<SubstanceViolation>,
 ) {
   val missingAreas = APPROVED_CODE_REVIEW_AREAS - context.effectiveAreas.getValue(pack.slug)
-  if (missingAreas.isEmpty()) return
-  rawViolations +=
-    packViolation(
-      PackViolationArgs(
-        pack = pack.slug,
-        role = "effective-area-coverage",
-        files = listOf("platform-packs/${pack.slug}/platform.yaml"),
-        measured = missingAreas.sorted().joinToString(","),
-        target = "all-approved-areas",
-        rule = "maintained pack must effectively cover every approved review area",
-      ),
-    )
+  if (missingAreas.isNotEmpty()) {
+    rawViolations +=
+      packViolation(
+        PackViolationArgs(
+          pack = pack.slug,
+          role = "effective-area-coverage",
+          files = listOf("platform-packs/${pack.slug}/platform.yaml"),
+          measured = missingAreas.sorted().joinToString(","),
+          target = "all-approved-areas",
+          rule = "maintained pack must effectively cover every approved review area",
+        ),
+      )
+  }
+  val missingQuality =
+    (UNIVERSAL_CODE_REVIEW_AREAS - pack.declaredCodeReviewAreas.toSet()) +
+      (UNIVERSAL_CODE_REVIEW_AREAS - pack.declaredFiles.areas.keys)
+  if (missingQuality.isNotEmpty()) {
+    rawViolations +=
+      packViolation(
+        PackViolationArgs(
+          pack = pack.slug,
+          role = "local-code-quality-ownership",
+          files = listOf("platform-packs/${pack.slug}/platform.yaml"),
+          measured = missingQuality.distinct().sorted().joinToString(","),
+          target = "locally-declared-code-quality-source",
+          rule =
+            "every manifest-discovered maintained pack must declare and own the universal code-quality lane locally",
+        ),
+      )
+  }
 }
 
 internal fun auditPackSpecialistViolations(

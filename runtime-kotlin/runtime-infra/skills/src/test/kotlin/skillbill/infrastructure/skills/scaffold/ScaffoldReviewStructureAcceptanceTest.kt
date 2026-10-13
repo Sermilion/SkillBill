@@ -2,11 +2,13 @@ package skillbill.infrastructure.skills.scaffold
 
 import org.yaml.snakeyaml.Yaml
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
+import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.PlatformPackSubstanceAudit
 import skillbill.infrastructure.skills.scaffold.rendering.canonicalSeverityCloser
 import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import skillbill.infrastructure.skills.scaffold.validation.review.ReviewSkillStructureValidator
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -32,7 +34,7 @@ class ScaffoldReviewStructureAcceptanceTest {
       assertNativeAgents(pack)
       val violations = ReviewSkillStructureValidator.violations(pack)
       assertEquals(emptyList(), violations, violations.joinToString("\n"))
-      APPROVED_CODE_REVIEW_AREAS.forEach { area ->
+      (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).forEach { area ->
         val content =
           Files.readString(
             pack.resolve("code-review/bill-java-code-review-$area/content.md"),
@@ -42,8 +44,13 @@ class ScaffoldReviewStructureAcceptanceTest {
           listOf("Focus", "Ignore", "Applicability", "Project-Specific Rules"),
           content.lineSequence().filter { it.startsWith("## ") }.map { it.removePrefix("## ") }.toList(),
         )
-        assertContains(content, "### Review Rules")
-        assertContains(content, "Verify `Java")
+        if (area == "code-quality") {
+          assertContains(content, "TODO rule 1 (idioms)")
+          assertContains(content, "even when no behavioral failure is reachable")
+        } else {
+          assertContains(content, "### Review Rules")
+          assertContains(content, "Verify `Java")
+        }
         assertContains(content, canonicalSeverityCloser(area))
         assertEquals(
           canonicalSeverityCloser(area),
@@ -53,6 +60,8 @@ class ScaffoldReviewStructureAcceptanceTest {
         if (area == "ui") assertUiDeferrals(content)
         if (area == "ux-accessibility") assertAccessibilityDeferrals(content)
       }
+      val substance = PlatformPackSubstanceAudit.audit(repo)
+      assertTrue(substance.violations.any { it.pack == "java" && it.areaOrRole.startsWith("code-quality:") })
     }
 
   private fun assertRenderedSharedContract(repo: Path) {
@@ -100,7 +109,7 @@ class ScaffoldReviewStructureAcceptanceTest {
     assertTrue(!content.contains("Calibrate severity and verify each finding's preconditions"))
     assertTrue(!content.contains("attributed to their specialist lane through merge"))
     assertTrue(!content.contains("Deduplicate overlapping findings without losing evidence"))
-    APPROVED_CODE_REVIEW_AREAS.forEach { area ->
+    (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).forEach { area ->
       assertContains(content, "-> `$area` specialist.")
     }
   }
@@ -109,11 +118,18 @@ class ScaffoldReviewStructureAcceptanceTest {
     val agentsFile = pack.resolve("code-review/bill-java-code-review/native-agents/agents.yaml")
     val agents = (Yaml().load<Any>(Files.readString(agentsFile)) as Map<*, *>)["agents"] as List<*>
     val descriptions = agents.filterIsInstance<Map<*, *>>().associate { it["name"] to it["description"] }
-    APPROVED_CODE_REVIEW_AREAS.forEach { area ->
+    (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).forEach { area ->
       val description = descriptions["bill-java-code-review-$area"] as String
+      val focus =
+        if (area == "code-quality") {
+          "Java language idioms, helper clarity, cohesive state, duplication, dead code, naming, and " +
+            "behavior-preserving rewrites across pom.xml, build.gradle, src/main/java signals; " +
+            "report Minor findings only, capped at five"
+        } else {
+          "Java ${defaultAreaFocus(area)} across pom.xml, build.gradle, src/main/java signals"
+        }
       assertEquals(
-        "Java ${area.replace('-', ' ')} specialist — " +
-          "Java ${defaultAreaFocus(area)} across pom.xml, build.gradle, src/main/java signals.",
+        "Java ${area.replace('-', ' ')} specialist — $focus.",
         description,
       )
     }
@@ -129,7 +145,7 @@ class ScaffoldReviewStructureAcceptanceTest {
           "target" to "orchestration/review-orchestrator/specialist-contract.md",
         ),
       )
-    APPROVED_CODE_REVIEW_AREAS.forEach { area ->
+    (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).forEach { area ->
       assertEquals(expected, pointers["code-review/bill-java-code-review-$area"])
     }
   }

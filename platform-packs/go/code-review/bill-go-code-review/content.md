@@ -35,7 +35,12 @@ Add other specialists only when the changed files justify them.
 - If tests changed materially, include `bill-go-code-review-testing`
 - Maximum 10 specialist reviews
 
+
+Every routed Go composition includes the required local `code-quality` specialist `bill-go-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - `go.mod`, `internal/`, import direction, constructors, composition roots, interface ownership, component lifecycles, or goroutine scope ownership -> `architecture` specialist.
 - Channel send/receive/close ownership, `select`, context cancellation, `errors.Is`, typed nils, copying, aliasing, defer/panic/recover, races, or deadlocks -> `platform-correctness` specialist.

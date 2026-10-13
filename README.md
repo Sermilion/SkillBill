@@ -260,7 +260,7 @@ Platform packs live under `platform-packs/<slug>/`. Their manifests declare rout
 
 | Pack | Scope |
 | --- | --- |
-| `generic` | Review fallback for unsupported, documentation-only, and unresolved paths; no full quality gate |
+| `generic` | Review fallback for unsupported, documentation-only, and unresolved paths; supplies the code-quality lane only when no routed pack owns one |
 | `go` | Go modules and workspaces, services, libraries, and CLIs |
 | `ios` | Native iOS, Swift, SwiftUI/UIKit, and Xcode/SPM projects |
 | `kotlin` | Kotlin/JVM and the baseline review layer for KMP |
@@ -270,7 +270,7 @@ Platform packs live under `platform-packs/<slug>/`. Their manifests declare rout
 | `rust` | Rust crates and Cargo workspaces |
 | `typescript` | TypeScript and TSX applications, libraries, and services |
 
-The ten review areas are `architecture`, `performance`, `platform-correctness`, `security`, `testing`, `api-contracts`, `persistence`, `reliability`, `ui`, and `ux-accessibility`. KMP declares seven of its own and takes `performance`, `testing`, and `api-contracts` from Kotlin. KMP has its own quality gate with no Kotlin fallback. The other shipped packs each declare all ten review areas.
+The ten failure-review areas are `architecture`, `performance`, `platform-correctness`, `security`, `testing`, `api-contracts`, `persistence`, `reliability`, `ui`, and `ux-accessibility`. Every shipped pack also owns a required `code-quality` lane; KMP's local lane takes precedence over Kotlin's baseline lane. Legacy packs can use generic code-quality as a fallback when installed. If neither owner is available, review keeps its compatibility behavior and records the omission. These specialists install as unlisted sidecars and native-agent inputs, while `/skill-bill` remains the only listed skill. KMP declares seven failure areas of its own and takes `performance`, `testing`, and `api-contracts` from Kotlin. KMP has its own quality gate with no Kotlin fallback. The other shipped packs each declare all ten failure areas.
 
 Concrete path ownership takes precedence over the generic review fallback. Content signals break ties between equal positive path matches. The fallback owner is manifest-declared and replaceable; declaring more than one fails validation.
 

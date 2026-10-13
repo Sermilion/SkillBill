@@ -8,9 +8,11 @@ import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
+import skillbill.application.review.model.ReviewRubricProjection
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID
 import skillbill.application.review.parallel.runner.ParallelCodeReviewCompiledLaunches
 import skillbill.application.review.parallel.runner.ParallelCodeReviewInitialRun
+import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.review.parallel.runner.PlanningPrepareArgs
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerLanePlanRecording
 import skillbill.application.review.spec.SpecIntentProjectionResolver
@@ -21,6 +23,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.SharedReviewEvidenceResolution
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.application.reviewevidence.model.ReviewDiffEvidenceParseResult
 import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort
@@ -46,6 +49,7 @@ import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
@@ -63,6 +67,44 @@ class ParallelCodeReviewRunnerPlanning(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val reviewLearningsResolver: ReviewLearningsResolver,
 ) {
+  internal fun resolveInlineCodeQualityRubric(
+    request: ParallelCodeReviewRequest,
+  ): ParallelCodeReviewPlanned<ReviewRubricProjection?> {
+    val revisions =
+      when (val resolved = resolveReviewRevisions(request)) {
+        is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
+        is DiffResolution.Resolved -> resolved.value
+      }
+    val diff =
+      when (val resolved = resolveDiff(request, revisions, allowEmpty = true)) {
+        is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
+        is DiffResolution.Resolved -> resolved.value
+      }
+    return if (diff.isBlank()) ParallelCodeReviewPlanned.Ready(null) else resolveInlineCodeQualityRubric(diff)
+  }
+
+  private fun resolveInlineCodeQualityRubric(diff: String): ParallelCodeReviewPlanned<ReviewRubricProjection?> {
+    val evidence =
+      when (val parsed = ReviewDiffEvidence.parseOrRejection(diff)) {
+        is ReviewDiffEvidenceParseResult.Parsed -> parsed.evidence
+        is ReviewDiffEvidenceParseResult.Rejected ->
+          return DiffResolution.Unresolved(parsed.reason).toPlanningFailed()
+      }
+    val detection =
+      when (val detected = detectStack(evidence)) {
+        is ParallelCodeReviewPlanned.Failed -> return detected
+        is ParallelCodeReviewPlanned.Ready -> detected.value
+      }
+    val qualityRubrics =
+      rubricPlanning.resolvePlannedRubrics(
+        evidence,
+        detection,
+        qualityOnly = true,
+      ).filter { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS }
+    require(qualityRubrics.size <= 1) { "Inline review resolved more than one code-quality owner." }
+    return ParallelCodeReviewPlanned.Ready(qualityRubrics.singleOrNull()?.rubric)
+  }
+
   internal fun prepareInitialRun(
     originalRequest: ParallelCodeReviewRequest,
   ): ParallelCodeReviewPlanned<ParallelCodeReviewInitialRun> {
@@ -230,12 +272,12 @@ class ParallelCodeReviewRunnerPlanning(
     ) {
       throw reviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
     }
+    val acceptedLanes = lanePlanRecording.recordedLanes(args.request.reviewRunId)
     val plannedRubrics =
       rubricPlanning.resolvePlannedRubrics(
         args.evidence,
-        args.routedManifests,
-        args.manifests,
-        args.ownedPathsBySlug,
+        ParallelCodeReviewStackDetection(args.routedManifests, args.manifests, args.ownedPathsBySlug),
+        acceptedLanes,
       )
     val (baseRevision, headRevision) = args.revisions
     val commitSequence =
@@ -271,8 +313,8 @@ class ParallelCodeReviewRunnerPlanning(
         specialistContract = reviewSpecialistContractProvider.authoritativeContract(),
         hunkLocatorReader = sharedEvidenceLocatorReader,
       )
-    val selected = lanePlanRecording.selectLaunchesForResume(args.request.reviewRunId, compiled)
-    lanePlanRecording.recordPlannedLanes(args.request.reviewRunId, plannedRubrics, selected)
+    val selected = lanePlanRecording.selectLaunchesForResume(args.request.reviewRunId, compiled, acceptedLanes)
+    lanePlanRecording.recordPlannedLanes(args.request.reviewRunId, plannedRubrics, selected, acceptedLanes)
     lanePlanRecording.recordSpecIntent(args.request.reviewRunId, specIntentResolution)
     return ParallelCodeReviewPlanned.Ready(
       ParallelCodeReviewCompiledLaunches(

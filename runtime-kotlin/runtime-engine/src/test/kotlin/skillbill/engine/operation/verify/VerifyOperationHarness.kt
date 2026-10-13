@@ -2,6 +2,7 @@ package skillbill.engine.operation.verify
 
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.realPlanningProjectionValidator
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
@@ -49,6 +50,8 @@ import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewMergeResult
+import skillbill.review.model.ParallelReviewMergedFinding
+import skillbill.review.model.ParallelReviewSeverity
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -69,6 +72,8 @@ internal class VerifyOperationHarness : AutoCloseable {
   val runner = VerifyScriptedRunner()
   val telemetry = RecordingVerifyTelemetry()
   val delegatedReviews = mutableListOf<ParallelCodeReviewRequest>()
+  var reviewFindings: List<ParallelReviewMergedFinding> = emptyList()
+  var inlineQualityRubric: String? = null
   private val git = GitWorkflowGitOperations()
   private val clock = Clock.systemUTC()
   private val database =
@@ -119,15 +124,20 @@ internal class VerifyOperationHarness : AutoCloseable {
         git,
         UnusedPullRequests,
         telemetry,
-        { request ->
-          delegatedReviews += request
-          ParallelCodeReviewRunOutcome.Reviewed(
-            ParallelCodeReviewResult(
-              mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
-              lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
-              routedSkill = DELEGATED_ROUTED_SKILL,
-            ),
-          )
+        object : VerifyDelegatedReviewer {
+          override fun review(request: ParallelCodeReviewRequest): ParallelCodeReviewRunOutcome {
+            delegatedReviews += request
+            return ParallelCodeReviewRunOutcome.Reviewed(
+              ParallelCodeReviewResult(
+                mergeResult = ParallelReviewMergeResult(findings = reviewFindings, formattedOutput = REVIEW_REGISTER),
+                lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+                routedSkill = DELEGATED_ROUTED_SKILL,
+              ),
+            )
+          }
+
+          override fun qualityRubric(request: ParallelCodeReviewRequest) =
+            ParallelCodeReviewPlanned.Ready(inlineQualityRubric)
         },
         NoopRuntimeDiagnostics,
         clock,
@@ -330,6 +340,17 @@ internal class VerifyOperationHarness : AutoCloseable {
     const val SKILL_SESSION_ID = "fvr-skill"
     const val DELEGATED_ROUTED_SKILL = "bill-kotlin-code-review"
   }
+
+  fun localQualityFinding() =
+    ParallelReviewMergedFinding(
+      fNumber = "F-001",
+      agentIds = listOf(AGENT),
+      severity = ParallelReviewSeverity.MINOR,
+      confidence = "High",
+      location = "src/main/kotlin/Greeter.kt:1",
+      description = "A repeated conversion obscures the domain value.",
+      specialistSkillNames = listOf("bill-kotlin-code-review-code-quality"),
+    )
 }
 
 internal class VerifyScriptedRunner : PhaseRunner {

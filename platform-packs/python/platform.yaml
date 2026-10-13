@@ -33,6 +33,7 @@ declared_code_review_areas:
   - testing
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-python-code-review/content.md
@@ -47,6 +48,7 @@ declared_files:
     testing: code-review/bill-python-code-review-testing/content.md
     ui: code-review/bill-python-code-review-ui/content.md
     ux-accessibility: code-review/bill-python-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-python-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "Python runtime validation, framework request/response contracts, serialization, and compatibility"
@@ -68,6 +70,8 @@ area_metadata:
     focus: "Python-owned admin, templates, notebooks, reports, dashboards, forms, state, and desktop rendering"
   ux-accessibility:
     focus: "Python-owned semantics, forms, focus and keyboard flow, feedback, localization, notebooks, and reports"
+  code-quality:
+    focus: "Python data modelling, context managers, readable comprehensions, focused functions, and detected framework conventions"
 
 lane_conditions:
   architecture: { required: true }
@@ -80,8 +84,7 @@ lane_conditions:
   reliability: { content: ["retry", "timeout", "queue", "shutdown"] }
   ui: { content: ["template", "dashboard", "widget", "form"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - sh
@@ -171,3 +174,5 @@ pointers:
   code-review/bill-python-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-python-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

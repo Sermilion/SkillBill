@@ -8,6 +8,10 @@ agents:
     description: "PHP architecture specialist — PHP Composer and PSR-4 boundaries, composition roots, container and worker lifetimes, transactions, generators, and fibers."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-php-code-review-code-quality
+    description: "PHP code quality specialist — PHP type and value handling, focused classes, generators, and Symfony or Laravel conventions."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-php-code-review-performance
     description: "PHP performance specialist — PHP PDO and ORM query cost, serializers and templates, streaming, OPcache, autoload state, worker memory, and fiber blocking."
     compose: governed-content

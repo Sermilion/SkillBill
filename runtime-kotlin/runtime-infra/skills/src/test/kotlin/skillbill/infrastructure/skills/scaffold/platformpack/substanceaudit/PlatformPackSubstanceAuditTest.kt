@@ -181,6 +181,23 @@ class PlatformPackSubstanceAuditTest {
   }
 
   @Test
+  fun `maintained pack audit rejects removed local quality declaration and source`() {
+    val root = Files.createTempDirectory("substance-missing-local-quality")
+    seedConformingPlatformPack(root, "maintained")
+    val baseline = root.resolve("platform-packs/maintained/code-review/bill-maintained-code-review/content.md")
+    Files.writeString(
+      baseline,
+      Files.readString(baseline) + "\nThe required local `code-quality` specialist owns maintenance review.\n",
+    )
+
+    val report = PlatformPackSubstanceAudit.audit(root)
+
+    val violation = report.violations.single { it.areaOrRole == "local-code-quality-ownership" }
+    assertEquals("code-quality", violation.measured)
+    assertEquals("locally-declared-code-quality-source", violation.target)
+  }
+
+  @Test
   fun `cyclic required composition contributes no inherited branch coverage`() {
     val root = Files.createTempDirectory("substance-cycle")
     seedConformingPlatformPack(root, "first")

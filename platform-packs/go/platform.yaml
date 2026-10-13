@@ -33,6 +33,7 @@ declared_code_review_areas:
   - testing
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-go-code-review/content.md
@@ -47,6 +48,7 @@ declared_files:
     testing: code-review/bill-go-code-review-testing/content.md
     ui: code-review/bill-go-code-review-ui/content.md
     ux-accessibility: code-review/bill-go-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-go-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "net/http and applicable RPC validation, cancellation, JSON/protobuf evolution, response ordering, idempotency, and compatibility"
@@ -68,6 +70,8 @@ area_metadata:
     focus: "Go-owned HTML templates and components, forms, htmx fragment ownership, repository-defined view states, interactive CLI and TUI output"
   ux-accessibility:
     focus: "Accessible names, error association, conditional focus restoration, keyboard flow, semantics, live feedback, localization, and terminal interaction"
+  code-quality:
+    focus: "Go language constructs, clear helpers, cohesive state, error handling, ownership, and standard-library choices"
 
 lane_conditions:
   architecture: { required: true }
@@ -80,8 +84,7 @@ lane_conditions:
   reliability: { content: ["retry", "deadline", "shutdown", "queue"] }
   ui: { content: ["template", "htmx", "tui", "form"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - go
@@ -167,3 +170,5 @@ pointers:
   code-review/bill-go-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-go-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

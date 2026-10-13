@@ -12,12 +12,13 @@ fun renderPlatformPackManifest(request: PlatformPackManifestRenderRequest): Stri
   lines += "contract_version: ${yamlScalar(PLATFORM_PACK_SHELL_CONTRACT_VERSION)}"
   lines += "display_name: ${yamlScalar(request.displayName)}"
   lines += ""
-  appendRoutingSignals(lines, request.strongSignals, request.tieBreakers)
+  appendRoutingSignals(lines, request.strongSignals, request.tieBreakers, request.routingPathSignals)
   lines += ""
   appendDeclaredCodeReviewAreas(lines, request.declaredCodeReviewAreas)
   lines += ""
   appendDeclaredFiles(lines, request.baselineContentPath, request.declaredCodeReviewAreas, request.declaredAreaFiles)
   appendAreaMetadata(lines, request.declaredCodeReviewAreas, request.areaMetadata)
+  appendLaneConditions(lines, request.declaredCodeReviewAreas)
   appendPointers(
     lines,
     request.baselineContentPath,
@@ -50,6 +51,7 @@ fun renderPlatformPackManifestContent(request: PlatformPackManifestContentRender
         },
       areaMetadata = request.specialistAreaMetadata,
       baselineLayers = request.baselineLayers,
+      routingPathSignals = request.routingPathSignals,
     ),
   )
 
@@ -57,6 +59,7 @@ private fun appendRoutingSignals(
   lines: MutableList<String>,
   strongSignals: List<String>,
   tieBreakers: List<String>,
+  pathSignals: List<String>,
 ) {
   lines += "routing_signals:"
   lines += "  strong:"
@@ -66,6 +69,23 @@ private fun appendRoutingSignals(
   } else {
     lines += "  tie_breakers:"
     tieBreakers.forEach { lines += "    - ${yamlScalar(it)}" }
+  }
+  if (pathSignals.isNotEmpty()) {
+    lines += "  path: [${pathSignals.joinToString(", ", transform = ::yamlScalar)}]"
+  }
+}
+
+private fun appendLaneConditions(
+  lines: MutableList<String>,
+  declaredAreas: List<String>,
+) {
+  if (declaredAreas.isEmpty()) {
+    lines += "lane_conditions: {}"
+    return
+  }
+  lines += "lane_conditions:"
+  declaredAreas.forEach { area ->
+    lines += "  $area: { required: true }"
   }
 }
 

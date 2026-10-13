@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview.opus
 
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -25,8 +26,9 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 class InlineReviewOpus55Strategy(
   runner: PhaseRunner,
+  qualityRubricResolver: ParallelCodeReviewRunner? = null,
 ) : PhaseStrategyStatusProjection() {
-  private val canonical = InlineReviewStrategy(runner)
+  private val canonical = InlineReviewStrategy(runner, qualityRubricResolver)
 
   override val slot: PhaseSlot = canonical.slot
   override val strategyId: String = ID

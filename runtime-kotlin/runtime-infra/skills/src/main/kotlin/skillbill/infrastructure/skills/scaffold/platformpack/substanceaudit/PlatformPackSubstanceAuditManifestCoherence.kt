@@ -97,7 +97,7 @@ internal fun metric(
   inherited: Boolean,
 ): SpecialistMetric {
   val bullets = governedRuleBullets(Files.readString(path))
-  val substantive = bullets.filter { isSubstantive(it, pack) }
+  val substantive = bullets.filter { isSubstantive(it, pack, area) }
   return SpecialistMetric(
     pack,
     area,
@@ -131,10 +131,12 @@ internal fun governedRuleBullets(text: String): List<String> {
 internal fun isSubstantive(
   rule: String,
   pack: String,
-): Boolean =
-  OBLIGATION.containsMatchIn(
-    rule,
-  ) && FAILURE.containsMatchIn(rule) && hasEvidence(rule, pack)
+  area: String,
+): Boolean {
+  if (!OBLIGATION.containsMatchIn(rule) || !hasEvidence(rule, pack)) return false
+  if (area != "code-quality") return FAILURE.containsMatchIn(rule)
+  return QUALITY_MAINTENANCE_COST.containsMatchIn(rule)
+}
 
 internal fun hasEvidence(
   rule: String,

@@ -41,6 +41,9 @@ internal fun appendAreaToList(
   return text.replaceRange(match.range, "declared_code_review_areas:\n$body$insertion")
 }
 
+internal fun declaredReviewAreas(text: String): List<String> =
+  AREAS_LIST_PATTERN.find(text)?.groupValues?.get(1)?.lineSequence()?.mapNotNull(::yamlListScalar)?.toList().orEmpty()
+
 internal fun appendAreaToDeclaredFiles(
   text: String,
   area: String,
@@ -96,3 +99,18 @@ internal fun detectListIndent(listBody: String): String =
   listBody.lineSequence().firstOrNull { it.trimStart().startsWith("- ") }?.let { line ->
     line.substring(0, line.indexOf('-'))
   }.orEmpty()
+
+internal fun appendAreaLaneCondition(
+  text: String,
+  area: String,
+): String {
+  val emptyConditions = Regex("^lane_conditions:[ \\t]*\\{[ \\t]*}[ \\t]*$", RegexOption.MULTILINE)
+  val entry = "  $area: { required: true }\n"
+  if (emptyConditions.containsMatchIn(text)) {
+    return text.replace(emptyConditions, "lane_conditions:\n${entry.trimEnd()}")
+  }
+  val range = topLevelBlockRange(text, "lane_conditions") ?: return text
+  val block = text.substring(range)
+  if (Regex("^  ${Regex.escape(area)}:", RegexOption.MULTILINE).containsMatchIn(block)) return text
+  return text.replaceRange(range.last + 1, range.last + 1, entry)
+}

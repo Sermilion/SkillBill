@@ -32,7 +32,12 @@ Add other specialists only when the changed files justify them.
 - If tests changed materially, include `bill-php-code-review-testing`
 - Maximum 10 specialist reviews
 
+
+Every routed PHP composition includes the required local `code-quality` specialist `bill-php-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Composer `autoload.psr-4`, namespaces, service providers, Symfony `services.yaml`, container lifetimes, module APIs, outbox code, generators, or async/Fiber boundaries -> `architecture` specialist.
 - `==` versus `===`, `empty()`, `isset()`, `array_key_exists()`, `match`, `Throwable`, references, decoded arrays, mutable statics, worker resets, or `Fiber` suspension -> `platform-correctness` specialist.

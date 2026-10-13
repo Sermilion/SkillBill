@@ -12,6 +12,16 @@ durable config document as `external_addon_sources`. Each entry is
 The `platform` field inside the manifest is the slug authority and must match
 the pack directory name.
 
+New full-pack scaffolds include a required local `code-quality` specialist.
+That rubric is delivered in the review launch with the specialist's language
+and framework guidance. A legacy custom pack without a local owner uses the
+installed generic code-quality specialist when one is available. If neither
+owner is installed, review keeps its compatibility behavior and records the
+omission. Local pack specialists install as unlisted sidecars and native-agent
+inputs; `/skill-bill` remains the only listed skill. Replacing a bundled slug
+replaces the entire pack, so registration does not fill missing local quality
+files from the bundled version.
+
 ## Config path precedence
 
 1. `SKILL_BILL_CONFIG_PATH` when set (supports `~` expansion)

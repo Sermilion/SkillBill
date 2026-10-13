@@ -49,6 +49,7 @@ internal fun areaReviewContent(
   area: String,
   stackLabel: String,
 ): String {
+  if (area == "code-quality") return codeQualityReviewContent(summary, stackLabel)
   val areaLabel = area.replace("-", " ")
   return buildString {
     appendLine("## Focus")
@@ -70,6 +71,70 @@ internal fun areaReviewContent(
     appendLine(canonicalSeverityCloser(area))
   }
 }
+
+private fun codeQualityReviewContent(
+  summary: String,
+  stackLabel: String,
+): String =
+  buildString {
+    appendLine("## Focus")
+    appendLine()
+    appendLine(summary)
+    appendLine()
+    appendLine("## Ignore")
+    appendLine()
+    appendLine("- Behavioral failures owned by the failure specialists.")
+    appendLine("- Findings already enforced by the repository's formatter, linter, compiler, or static analysis.")
+    appendLine("- Style preferences without a concrete maintenance cost and a behavior-preserving rewrite.")
+    appendLine()
+    appendLine("## Applicability")
+    appendLine()
+    appendLine(
+      "Use this required lane for every routed $stackLabel review, even when no behavioral failure is reachable. " +
+        "Zero findings is valid.",
+    )
+    appendLine()
+    appendLine("## Project-Specific Rules")
+    appendLine()
+    appendLine("### Idioms and helper clarity rules")
+    appendLine()
+    appendLine(
+      "- TODO rule 1 (idioms): require a concrete `$stackLabel` mechanism for language and framework idioms, " +
+        "naming the changed construct and the maintenance cost.",
+    )
+    appendLine(
+      "- TODO rule 2 (helpers): require a concrete `$stackLabel` mechanism for clarifying repeated operations " +
+        "without adding indirection.",
+    )
+    appendLine()
+    appendLine("### Cohesive state and duplication rules")
+    appendLine()
+    appendLine(
+      "- TODO rule 3 (state): require a concrete `$stackLabel` mechanism for keeping related state values " +
+        "cohesive without changing behavior.",
+    )
+    appendLine(
+      "- TODO rule 4 (duplication): require a concrete `$stackLabel` mechanism for removing redundant branches " +
+        "or duplicated transformations without changing validation or errors.",
+    )
+    appendLine()
+    appendLine("### Dead code, responsibility, and naming rules")
+    appendLine()
+    appendLine(
+      "- TODO rule 5 (responsibility): require a concrete `$stackLabel` mechanism for identifying dead code " +
+        "or oversized responsibilities and their maintenance cost.",
+    )
+    appendLine(
+      "- TODO rule 6 (naming): require a concrete `$stackLabel` mechanism for names that clarify ownership " +
+        "and preserve serialized values and public contracts.",
+    )
+    appendLine(
+      "- Identify each changed-code location, its concrete maintenance cost, and a behavior-preserving rewrite. " +
+        "Preserve validation, errors, resource closing, and serialized values.",
+    )
+    appendLine("- Report no more than five findings across the whole review.")
+    appendLine(canonicalSeverityCloser("code-quality"))
+  }
 
 private fun StringBuilder.appendAreaReviewIgnoreSection(
   areaLabel: String,
@@ -247,6 +312,10 @@ internal fun baselineReviewContent(summary: String): String =
     appendLine()
     appendLine("## Diff-Signal Routing Table")
     appendLine()
+    appendLine(
+      "- Changed stack-owned code with maintainability concerns requires its local lane regardless of a " +
+        "reachable failure -> `code-quality` specialist.",
+    )
     appendLine("- Module boundaries, dependency declarations, or ownership crossings -> `architecture` specialist.")
     appendLine("- Hot paths, blocking calls, allocation sites, or resource use -> `performance` specialist.")
     appendLine("- Lifecycle, concurrency, state-machine, or runtime API changes -> `platform-correctness` specialist.")

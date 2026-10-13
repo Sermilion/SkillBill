@@ -38,19 +38,19 @@ class ComposedReviewLaunchPlanTest {
         "security" to "bill-kmp-code-review-security",
         "testing" to "bill-kotlin-code-review-testing",
         "api-contracts" to "bill-kotlin-code-review-api-contracts",
-        "code-quality" to "bill-generic-code-review-code-quality",
+        "code-quality" to "bill-kmp-code-review-code-quality",
       ),
       plan.lanes.associate { it.area to it.skillName },
     )
   }
 
   @Test
-  fun `kotlin composed plan includes generic code-quality lane`() {
+  fun `kotlin composed plan includes its owned code-quality lane`() {
     val manifests = manifests("kotlin", "generic")
     val areas = ReviewLaunchPlanPolicy.composedAreas("kotlin", manifests)
     val plan = ReviewLaunchPlanPolicy.flatten("kotlin", manifests, areas)
 
-    assertEquals("bill-generic-code-review-code-quality", plan.lanes.last().skillName)
+    assertEquals("bill-kotlin-code-review-code-quality", plan.lanes.last().skillName)
     assertEquals("code-quality", plan.lanes.last().area)
   }
 

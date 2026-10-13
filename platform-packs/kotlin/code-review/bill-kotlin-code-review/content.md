@@ -17,7 +17,12 @@ Review Kotlin libraries, CLIs, backend services, and the shared Kotlin baseline 
 
 Always keep the `architecture` and `platform-correctness` specialists as the baseline. Backend signals include Ktor or Spring entry points, server configuration, Exposed, jOOQ, Hibernate/JPA, JDBC, R2DBC, Flyway, Liquibase, queues, consumers, schedulers, caches, metrics, and tracing.
 
+
+Every routed Kotlin composition includes the required local `code-quality` specialist `bill-kotlin-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Module ownership, dependency direction, DI scope, use-case ownership, Gradle boundaries, or coroutine-scope ownership -> `architecture` specialist.
 - Hot paths, `runBlocking`, blocking JDBC, dispatcher use, eager collections, Flow buffering, N+1 access, or serialization-triggered lazy loads -> `performance` specialist.

@@ -8,6 +8,10 @@ agents:
     description: "iOS architecture specialist — Swift module boundaries, dependency injection, and SPM package ownership."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-ios-code-review-code-quality
+    description: "iOS code quality specialist — Swift value modelling, optional handling, enums, focused extensions, SwiftUI state, and task ownership."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-ios-code-review-performance
     description: "iOS performance specialist — SwiftUI recomputation, ImageIO downsampling, and import-loop memory pressure."
     compose: governed-content

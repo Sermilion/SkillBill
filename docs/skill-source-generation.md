@@ -195,17 +195,17 @@ sidecar hosting another sidecar), and sibling co-location is exactly what a
 router flow needs: the parent's installed directory holds the routed entry
 sidecar and the specialist sidecars it reads as siblings, all resolvable as
 "a file next to this `SKILL.md`" with no per-agent path knowledge. The
-code-review family is the worked example: 84 review-pack skills — eight stack
-entries plus their 77 specialists — all carry `internal-for: skill-bill`
-and all install as siblings inside `skill-bill/`. The stack entry skills
-do **not** become parents of their specialists.
-
-The maintained manifest-derived totals are 85 review sidecars and 77
-provider-neutral specialist agents. KMP accounts for one review entry, seven
-physical specialists, and seven neutral agents; its three inherited review
-lanes reuse Kotlin rather than duplicating Kotlin source or native-agent
-declarations. Quality checks have no pack sidecars; their commands live in each
-dominant pack's `validation_gate`.
+code-review family has nine manifest-declared review entries, 96 physical
+specialists, and 96 provider-neutral logical specialist agents. All 105 review
+skill sidecars carry `internal-for: skill-bill` and install as siblings inside
+`skill-bill/`. The eight non-generic packs account for eight entries and 85
+specialists, or 93 sidecars. A standard full non-KMP pack has one entry and
+eleven specialists. KMP has one entry and eight local specialists, including
+its own code-quality specialist; performance, testing, and api-contracts still
+come from Kotlin. Both quality sources may install, while KMP composition
+selects its own lane once. The stack entry skills do **not** become parents of
+their specialists. Quality checks have no pack sidecars; their commands live
+in each dominant pack's `validation_gate`.
 
 ### Selection-aware sidecars for platform-pack internals (PD3)
 
@@ -215,11 +215,12 @@ its pack is selected** (`PlatformPackSelection`: `NONE`/`SELECTED`/`ALL`). The
 staging sidecar discovery consults the install plan's selected pack skills
 (which already carry each skill's `sourceDir` and parsed `internalFor`) rather
 than re-scanning `platform-packs/` independently of selection. The parent's
-content hash folds exactly the selected sidecars, so changing platform selection
-re-stages the parent and cache reuse stays correct. With `NONE` of a parent's
-internal packs selected, the parent stages byte-identically to a repo with no
-internal pack skills — unselected packs contribute no sidecar and no hash
-bytes. `ALL` selection stages every opted-in internal sidecar.
+content hash folds exactly the resolved selected sidecars, so changing platform
+selection re-stages the parent and cache reuse stays correct. A requested
+`NONE` still resolves the declared generic review fallback when it is available
+and the parent skill is installed. Without that fallback, unselected packs
+contribute no sidecar or hash bytes. `ALL` selection stages every opted-in
+internal sidecar.
 
 ### Baseline co-presence guard (PD8)
 
@@ -283,18 +284,27 @@ keep retired names such as `bill-feature-verify` and `bill-code-check`.
 
 The code-review family is the platform-pack worked example. Every manifest-discovered
 review-pack skill is internal — all entries under
-`platform-packs/{go,ios,kotlin,kmp,php,python,rust,typescript}/code-review/`: eight stack entry skills
-(`bill-ios-code-review`, `bill-kotlin-code-review`, `bill-kmp-code-review`,
+`platform-packs/{generic,go,ios,kotlin,kmp,php,python,rust,typescript}/code-review/`: nine stack entry skills
+(`bill-generic-code-review`, `bill-ios-code-review`, `bill-kotlin-code-review`, `bill-kmp-code-review`,
 `bill-go-code-review`, `bill-php-code-review`, `bill-python-code-review`, `bill-rust-code-review`,
-`bill-typescript-code-review`) plus their area specialists. Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript declare all ten areas; KMP covers Android and Kotlin Multiplatform, declaring seven areas (`architecture`, `platform-correctness`, `security`, `persistence`, `reliability`, `ui`, `ux-accessibility`) and composing the remaining three (`performance`, `testing`, `api-contracts`) from Kotlin. All carry
+`bill-typescript-code-review`) plus their area specialists. Each full pack
+declares ten failure areas and one locally owned `code-quality` area, for
+eleven specialists. KMP covers Android and Kotlin Multiplatform, declaring seven
+local failure areas plus local `code-quality`, for eight physical specialists;
+it composes three additional failure areas (`performance`, `testing`,
+`api-contracts`) from Kotlin. All carry
 `internal-for: skill-bill` and install as siblings inside
-`skill-bill/`'s staged directory; the eight stack entries do **not** become
+`skill-bill/`'s staged directory; the nine stack entries do **not** become
 parents of their specialists (PD2 flatten rule). After install with all packs
 selected, the agent skill list shows only `skill-bill` and none of those
 internal sidecars. The review phase (`/skill-bill phase:review`) reads the
 dominant pack's entry sidecar, which reads its
-specialist rubric sidecars as siblings. With only the Kotlin pack selected,
-the Kotlin entry plus its ten specialists stage; other packs contribute nothing (PD3). The KMP pack declares
+specialist rubric sidecars as siblings. A Kotlin-only request selects Kotlin.
+Because KMP declares Kotlin as a required baseline, dependent-pack expansion
+also selects KMP. The available manifest-declared generic review fallback is
+included with the parent skill. These packs stage
+12, 9, and 12 review sidecars respectively, for 33 total. Kotlin's pack-only
+contribution is 12. The KMP pack declares
 `bill-kotlin-code-review` as a required baseline layer, so selecting KMP without
 Kotlin fails install planning with the typed baseline-co-presence error (PD8).
 Quality checks have no pack skill sidecars. A dominant pack's `validation_gate`

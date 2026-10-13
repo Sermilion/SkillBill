@@ -32,6 +32,7 @@ declared_code_review_areas:
   - testing
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-rust-code-review/content.md
@@ -46,6 +47,7 @@ declared_files:
     testing: code-review/bill-rust-code-review-testing/content.md
     ui: code-review/bill-rust-code-review-ui/content.md
     ux-accessibility: code-review/bill-rust-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-rust-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "Rust trait, FFI, serde, wire-format, and compatibility contracts"
@@ -67,6 +69,8 @@ area_metadata:
     focus: "Rust wasm, server-rendered, desktop GUI, terminal UI, and interactive output"
   ux-accessibility:
     focus: "Rust UI semantics, keyboard and focus behavior, feedback, localization, and assistive access"
+  code-quality:
+    focus: "Rust ownership, enums, iterators, pattern matching, error composition, and avoiding unnecessary clones or indirection"
 
 lane_conditions:
   architecture: { required: true }
@@ -79,8 +83,7 @@ lane_conditions:
   reliability: { content: ["retry", "timeout", "shutdown", "backpressure"] }
   ui: { content: ["wasm", "egui", "tui", "render"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - cargo
@@ -163,3 +166,5 @@ pointers:
   code-review/bill-rust-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-rust-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

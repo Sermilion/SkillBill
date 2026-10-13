@@ -19,18 +19,19 @@ class PlatformPackSubstanceAuditRepoTest {
     assertEquals(PLATFORM_PACK_SUBSTANCE_CONTRACT_VERSION, first.contractVersion)
     assertTrue(first.packs.isNotEmpty())
     assertTrue(first.violations.isEmpty(), first.violations.joinToString("\n") { it.format() })
+    assertTrue(first.auditErrors.isEmpty(), first.auditErrors.joinToString("\n"))
     assertTrue(first.packs.all { it.qualityCheckFile == null })
-    assertEquals(
-      setOf("go", "ios", "kotlin", "php", "python", "rust", "typescript"),
-      first.packs.filter { it.physicalAreas.toSet() == APPROVED_CODE_REVIEW_AREAS }.map { it.pack }.toSet(),
-    )
+    assertTrue(first.packs.all { "code-quality" in it.physicalAreas })
     assertEquals(
       APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS,
       first.packs.single { it.pack == "generic" }.physicalAreas.toSet(),
     )
     val kmp = first.packs.single { it.pack == "kmp" }
-    assertEquals(7, kmp.physicalAreas.size)
+    assertEquals(8, kmp.physicalAreas.size)
     assertEquals(3, kmp.inheritedAreas.size)
-    assertEquals(APPROVED_CODE_REVIEW_AREAS, (kmp.physicalAreas + kmp.inheritedAreas).toSet())
+    assertEquals(
+      APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS,
+      (kmp.physicalAreas + kmp.inheritedAreas).toSet(),
+    )
   }
 }

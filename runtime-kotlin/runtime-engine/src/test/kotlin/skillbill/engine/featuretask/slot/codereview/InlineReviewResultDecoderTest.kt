@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.review.model.ParallelReviewSeverity
+import skillbill.review.parallel.ParallelReviewFindingParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -29,6 +30,28 @@ class InlineReviewResultDecoderTest {
     assertEquals("remaining defect", finding.description)
     assertTrue(result.lane1.success)
     assertNull(failedLaneReason(result))
+    val retained = ParallelReviewFindingParser.parse(result.output)
+    assertEquals(ParallelReviewSeverity.BLOCKER, retained.findings.single().severity)
+    assertTrue(retained.rejections.isEmpty())
+  }
+
+  @Test
+  fun `inline output keeps merged local quality attribution and verdict visible`() {
+    val specialist = "bill-kotlin-code-review-code-quality"
+    val result =
+      InlineReviewResultDecoder.decode(
+        "codex",
+        reviewStepOutput(
+          "#### Code Quality (non-blocking)\n" +
+            "- [F-001] Minor | High | specialist=$specialist | src/main/App.kt:4 | repeated helper obscures parsing\n" +
+            "verdict: approved",
+        ),
+      )
+
+    assertEquals(ParallelReviewSeverity.MINOR, result.mergeResult.findings.single().severity)
+    assertTrue("#### Code Quality (non-blocking)" in result.output)
+    assertTrue("specialist=$specialist" in result.output)
+    assertTrue(result.output.endsWith("verdict: approved"))
   }
 
   @Test
