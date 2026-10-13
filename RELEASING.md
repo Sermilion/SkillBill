@@ -35,6 +35,10 @@ also verifies the adjacent checksum after the licensed artifact is finalized.
 The Linux skills archive includes the root `LICENSE` directly and is checked the
 same way.
 
+macOS app metadata uses version `1.0.0` while Skill Bill releases are `0.x`,
+because Apple's jpackage bundler rejects app versions with a zero major number.
+The desktop archive filename still carries the exact Skill Bill release version.
+
 After each runtime release publishes, the workflow deletes assets from every
 older runtime release, including prereleases. Their release pages and notes stay
 available, and plugin releases keep their own downloads. Only the newest

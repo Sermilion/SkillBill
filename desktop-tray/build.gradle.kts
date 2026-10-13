@@ -14,6 +14,8 @@ kotlin { jvmToolchain(21) }
 val desktopJavaHome = javaToolchains.launcherFor {
   languageVersion.set(JavaLanguageVersion.of(21))
 }.get().metadata.installationPath.asFile.absolutePath
+val desktopPackageVersion = System.getenv("RELEASE_VERSION")?.substringBefore('-') ?: "0.1.0"
+val macOSPackageVersion = desktopPackageVersion.takeUnless { it.startsWith("0.") } ?: "1.0.0"
 
 configurations.configureEach {
   exclude(group = "dev.nucleusframework", module = "nucleus.decorated-window-tao")
@@ -74,10 +76,11 @@ compose.desktop {
         org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
         org.jetbrains.compose.desktop.application.dsl.TargetFormat.Rpm)
       packageName = "Skill Bill"
-      packageVersion = System.getenv("RELEASE_VERSION")?.substringBefore('-') ?: "0.1.0"
+      packageVersion = desktopPackageVersion
       macOS {
         bundleID = "dev.skillbill.tray"
-        packageBuildVersion = "1.0.0"
+        packageVersion = macOSPackageVersion
+        packageBuildVersion = macOSPackageVersion
       }
       windows { menuGroup = "Skill Bill" }
       linux { appCategory = "Development" }
