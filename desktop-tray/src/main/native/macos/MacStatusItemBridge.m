@@ -88,7 +88,7 @@ JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusIte
   onMain(^{
     if (statusItem != nil) return;
     statusTarget = [SkillBillStatusTarget new];
-    statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    statusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength] retain];
     if (statusItem == nil) {
       failed = YES;
       return;
@@ -100,13 +100,13 @@ JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusIte
     statusItem.button.image = image;
     [image release];
     statusItem.button.menu = nil;
-    rightClickMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskRightMouseDown handler:^NSEvent *(NSEvent *event) {
+    rightClickMonitor = [[NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskRightMouseDown handler:^NSEvent *(NSEvent *event) {
       if (statusItem == nil || event.window != statusItem.button.window) return event;
       NSPoint point = [statusItem.button convertPoint:event.locationInWindow fromView:nil];
       if (!NSPointInRect(point, statusItem.button.bounds)) return event;
       [contextMenu popUpMenuPositioningItem:nil at:statusItem.button.bounds.origin inView:statusItem.button];
       return nil;
-    }];
+    }] retain];
     appResignObserver = [[NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidResignActiveNotification object:NSApp queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *notification) {
       JNIEnv *callbackEnv = NULL;
       BOOL attached = NO;
@@ -170,9 +170,15 @@ JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusIte
 
 JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusItemBridge_nativeDispose(JNIEnv *env, jclass klass) {
   onMain(^{
-    if (statusItem != nil) [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
+    if (statusItem != nil) {
+      [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
+      [statusItem release];
+    }
     statusItem = nil;
-    if (rightClickMonitor != nil) [NSEvent removeMonitor:rightClickMonitor];
+    if (rightClickMonitor != nil) {
+      [NSEvent removeMonitor:rightClickMonitor];
+      [rightClickMonitor release];
+    }
     rightClickMonitor = nil;
     [contextMenu release];
     contextMenu = nil;
