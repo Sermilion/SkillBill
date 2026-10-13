@@ -95,10 +95,8 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
       MetricDivider()
       DetailMetric(if (standalone) "Step" else "Phase", if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel, item.phaseExecution?.label() ?: "", Modifier.weight(1f))
       MetricDivider()
-      val elapsed = if (standalone) phaseElapsedText(item, now, frozen) else
-        durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, frozen, timing?.goalMs)
-      DetailMetric(if (standalone) "Phase elapsed" else "Goal active", elapsed,
-        item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "", Modifier.weight(1f))
+      val duration = detailDuration(item, now, frozen, timing?.goalMs)
+      DetailMetric(duration.label, duration.value, duration.note, Modifier.weight(1f))
       if (!standalone) {
         MetricDivider()
         DetailMetric("Subtask active", subtaskTime, if (frozen) "last known duration" else if (item.lifecycle == Lifecycle.ACTIVE) "ticking" else "", Modifier.weight(1f))
@@ -313,6 +311,21 @@ private fun rememberAnchoredListState(
 
 private fun formatInstant(value: Instant, pattern: String) = DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault()).format(value)
 private fun displayPath(path: String) = path.replace(System.getProperty("user.home"), "~")
+
+internal data class DetailDuration(val label: String, val value: String, val note: String)
+
+internal fun detailDuration(item: WorkItem, now: Instant, stale: Boolean, frozen: Long? = null): DetailDuration {
+  val finished = item.finishedAt
+  if (finished != null) {
+    val value = item.startedAt?.let { age(Duration.between(it, finished).coerceNonNegative()) } ?: "not available"
+    return DetailDuration("Total duration", value, "finished ${formatInstant(finished, "d MMM HH:mm")}")
+  }
+  val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
+  val value = if (standalone) phaseElapsedText(item, now, stale) else
+    durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale, frozen)
+  return DetailDuration(if (standalone) "Phase elapsed" else "Goal active", value,
+    item.startedAt?.let { "since ${formatInstant(it, "d MMM HH:mm")}" } ?: "")
+}
 
 internal fun detailTitle(detail: Detail): String {
   detail.featureTitle?.takeIf { it.isNotBlank() }?.let { return displayFeatureTitle(it) }

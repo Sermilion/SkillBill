@@ -36,6 +36,34 @@ class MainWindowTest {
   }
 
   @Test
+  fun `finished goals and phases show fixed total duration even when stale active counters are missing`() {
+    val finish = Instant.parse("2026-10-13T10:00:00Z")
+    for (scope in listOf(ExecutionScope.WORKFLOW, ExecutionScope.STANDALONE_PHASE)) {
+      val work = item("finished", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL).copy(
+        scope = scope, freshness = Freshness.STALE, startedAt = finish.minusSeconds(3660),
+        finishedAt = finish, updatedAt = finish.plusSeconds(600), activeDurationMs = null,
+      )
+      val metric = detailDuration(work, finish.plusSeconds(3600), stale = true)
+      assertEquals("Total duration", metric.label)
+      assertEquals("1h 1m", metric.value)
+      assertTrue(metric.note.startsWith("finished "))
+      assertEquals(metric, detailDuration(work, finish.plusSeconds(7200), stale = true, frozen = 90_000))
+      assertEquals("not available", detailDuration(work.copy(startedAt = null), finish, stale = true).value)
+    }
+  }
+
+  @Test
+  fun `running goal keeps its active duration instead of total elapsed time`() {
+    val now = Instant.parse("2026-10-13T10:00:00Z")
+    val work = item("running", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL).copy(
+      startedAt = now.minusSeconds(3600), activeDurationMs = 120_000, activeDurationAsOf = now,
+    )
+    val metric = detailDuration(work, now, stale = false)
+    assertEquals("Goal active", metric.label)
+    assertEquals("2m 0s", metric.value)
+  }
+
+  @Test
   fun `history entries beyond the first four remain reachable through the sidebar scrollbar`() = runBlocking {
     val history = (0 until 20).map { item("entry-$it", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL) }
     val empty = Board(Instant.EPOCH, dev.skillbill.tray.domain.Retention.WEEK, emptyList())
