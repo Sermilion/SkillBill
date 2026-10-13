@@ -697,8 +697,10 @@ print_install_plan() {
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
   if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -eq 1 ]]; then
     info "Desktop tray app: download and install the latest matching release build."
-  else
+  elif [[ "$DESKTOP_APP_SELECTION_EXPLICIT" -eq 1 || "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Desktop tray app: skip unless selected."
+  else
+    info "Desktop tray app: optional prompt at the end of the install, default no."
   fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
