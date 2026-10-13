@@ -33,6 +33,7 @@ import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningR
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
+import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.applyLegacyGoalRunnerControlLedgerMigration
 
@@ -770,5 +771,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
           )
         }
       },
+    ),
+    DatabaseMigration(
+      version = 54,
+      name = "separate-agent-activity-revisions",
+      operation = ::separateAgentActivityRevisions,
     ),
   )

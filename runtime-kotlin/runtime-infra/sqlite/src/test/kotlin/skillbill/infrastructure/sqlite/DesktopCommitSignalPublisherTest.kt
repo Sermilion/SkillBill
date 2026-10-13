@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import java.nio.file.Files
 import java.sql.Connection
@@ -66,6 +68,28 @@ class DesktopCommitSignalPublisherTest {
         }
       }
       assertEquals(committed, Files.readString(signal))
+    }
+  }
+
+  @Test
+  fun `agent activity commits publish the activity revision without changing the work observation`() {
+    establishTemporarySchemaReadiness("desktop-commit-signal-activity").use { fixture ->
+      val database = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      val signal = desktopCommitSignalPath(fixture.dbPath)
+      val before = database.read { unit -> unit.workList.observation() }
+
+      database.selfManagedWrite { unit ->
+        unit.agentActivityStamps.record(
+          "wfl-activity",
+          AgentActivityStamp(Instant.parse("2026-10-13T00:00:00Z"), AgentActivityLabel.STDOUT),
+        )
+      }
+
+      val committed = Files.readString(signal)
+      assertTrue(committed.contains("goals=0"))
+      assertTrue(committed.contains("phases=0"))
+      assertTrue(committed.contains("activity=1"))
+      assertEquals(before, database.read { unit -> unit.workList.observation() })
     }
   }
 }

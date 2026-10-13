@@ -122,6 +122,7 @@ class DatabaseMigrationsTest {
         51 to "index-feature-task-workflow-issue-lookup",
         52 to "add-desktop-room-read-identity",
         53 to "bind-work-observations-and-accepted-results",
+        54 to "separate-agent-activity-revisions",
       ),
       migrationDefinitions,
     )

@@ -42,8 +42,3 @@ internal fun storeFileIdentity(path: Path): String {
   val attributes = Files.readAttributes(path, BasicFileAttributes::class.java)
   return "${attributes.fileKey()}:${attributes.creationTime()}"
 }
-
-internal fun SQLiteConnection.dataVersion(): Long = prepare("PRAGMA data_version").use { statement ->
-  check(statement.step())
-  statement.getLong(0)
-}

@@ -157,7 +157,7 @@ internal class DesktopCommitSignalObserver(
         if (topic == DesktopCommitSignal.GENERATION_LABEL) {
           if (generation != null || value.isBlank()) return null
           generation = value
-        } else if (topic in DesktopReadSchema.TOPICS) {
+        } else if (topic in DesktopReadSchema.TOPICS || topic == DesktopReadSchema.ACTIVITY_TOPIC) {
           val revision = value.toLongOrNull()?.takeIf { it >= 0 } ?: return null
           if (put(topic, revision) != null) return null
         }

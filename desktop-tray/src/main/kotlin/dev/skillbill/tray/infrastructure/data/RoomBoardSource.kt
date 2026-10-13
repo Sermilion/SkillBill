@@ -38,7 +38,7 @@ import java.time.Instant
 import java.util.Base64
 
 @Serializable
-private data class PageCursor(val generation: Long, val session: Long, val revision: Long, val section: WorkSection,
+private data class PageCursor(val generation: Long, val session: Long, val section: WorkSection,
   val observedAt: String, val retention: String, val filter: String, val historyFilter: HistoryFilter, val afterTime: String, val afterId: String,
   val storeId: String? = null, val storeRevision: Long? = null, val queryEpoch: Long = 0)
 
@@ -301,9 +301,8 @@ class RoomBoardSource internal constructor(
         val attemptMetrics = mutableListOf<String>()
         repeat(3) {
           accounting.attemptCount++
-          val before = revisionConnection!!.dataVersion()
-          val startObservation = existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
-          if (parsed != null && !rebase && (parsed.revision != before || parsed.storeId != startObservation.storeId ||
+          val startObservation = workObservation(runtime)
+          if (parsed != null && !rebase && (parsed.storeId != startObservation.storeId ||
               parsed.storeRevision != startObservation.revision)) return@safeRead staleCursor()
           var afterTime = parsed?.afterTime
           var afterId = parsed?.afterId
@@ -385,10 +384,9 @@ class RoomBoardSource internal constructor(
           val attemptNumber = attemptMetrics.size + 1
           val attemptRows = selectedRows - attemptRowsBefore
           val attemptProjected = projectedItems - attemptProjectedBefore
-          attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected,selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore},coherent=${before == revisionConnection!!.dataVersion()}"
-          val after = revisionConnection!!.dataVersion()
-          val endObservation = existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
-          if (before == after && startObservation == endObservation && committedObservation == startObservation && currentFileMatches()) {
+          attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected,selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore}"
+          val endObservation = workObservation(runtime)
+          if (startObservation == endObservation && committedObservation == startObservation && currentFileMatches()) {
             val retainedObservation = ActiveRetention(
               retention, filter, historyFilter, queryEpoch, generation, session, endObservation.storeId, endObservation.revision,
             )
@@ -412,7 +410,7 @@ class RoomBoardSource internal constructor(
             if (earliest == null) pageDeadlines.remove(pageKey) else pageDeadlines[pageKey] = earliest
             deadlineRevision.update { it + 1 }
             val nextCursor = next?.takeIf { !exhausted }?.let { row ->
-              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session, after,
+              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session,
                 section, observedAt.toString(), retention.cliValue, filter, historyFilter, row.sort_time, row.id,
                 endObservation.storeId, endObservation.revision, queryEpoch)).encodeToByteArray())
             }
@@ -466,12 +464,13 @@ class RoomBoardSource internal constructor(
         catch (_: IllegalArgumentException) { return@safeRead staleCursor() }
       }
       if (parsed != null && (parsed.generation != generation || parsed.session != session ||
-        parsed.revision != revisionConnection!!.dataVersion() || parsed.id != identity.id ||
+        parsed.revision != workObservation(runtime).revision || parsed.id != identity.id ||
         parsed.repositoryIdentity != identity.repositoryIdentity || parsed.list != list)) return@safeRead staleCursor()
       repeat(3) {
-        val before = revisionConnection!!.dataVersion()
+        val before = workObservation(runtime).revision
         val result = existingSnapshot(runtime) { runtime.ideStatusService.detail(WorkDetailRequest(identity.id, observedAt = clock.instant(), cursor = parsed?.runtimeCursor, pageSize = PAGE_SIZE, startOffset = startOffset, list = list?.let { WorkDetailList.valueOf(it.name) })) }
-        if (before == revisionConnection!!.dataVersion() && currentFileMatches()) {
+        val after = workObservation(runtime).revision
+        if (before == after && currentFileMatches()) {
           val item = result.item ?: return@safeRead Outcome.Failure(Problem(ProblemCode.fromWire(result.problem?.code?.wireValue ?: "unknown_work_item"), "This work item is no longer available."))
           fun token(selected: DetailList?): String? = (if (selected == null) result.nextCursor else result.listCursors[WorkDetailList.valueOf(selected.name)])?.let { runtimeCursor ->
             Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(DetailCursor(generation,
@@ -545,6 +544,9 @@ class RoomBoardSource internal constructor(
     }
   }
 
+  private fun workObservation(runtime: RuntimeComponent): WorkStoreObservation =
+    existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
+
   private fun <T : Any> existingSnapshot(runtime: RuntimeComponent, query: () -> T): T =
     runtime.databaseSession.readIfPresent { query() }
       ?: throw databaseMissing(requireNotNull(path).toString(), DatabaseAccessOperation.READ)
@@ -605,6 +607,10 @@ class RoomBoardSource internal constructor(
           deliveredRevisions = change.revisions
           if (change.initial) return@collect
           if (changedTopics.isEmpty() && !change.resynchronize) return@collect
+          if (changedTopics == setOf(DesktopReadSchema.ACTIVITY_TOPIC) && !change.resynchronize) {
+            invalidateDetails()
+            return@collect
+          }
           val sections = buildSet {
             add(WorkSection.NEEDS_YOU)
             add(WorkSection.HISTORY)
@@ -656,6 +662,10 @@ class RoomBoardSource internal constructor(
     mutableRefreshEvents.tryEmit(sections)
     sections.forEach { pagingSources.remove(it)?.second?.invalidate() }
     signals.update { current -> current.mapValues { (section, revision) -> if (section in sections) revision + 1 else revision } }
+  }
+
+  private fun invalidateDetails() {
+    detailSignals.update { current -> current.mapValues { (_, revision) -> revision + 1 } }
   }
 
   private fun currentFileMatches(): Boolean = path?.let { Files.exists(it) && fileIdentity == storeFileIdentity(it) } == true

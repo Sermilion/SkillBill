@@ -94,6 +94,9 @@ private fun desktopCommitSignalPayload(
       DesktopReadSchema.TOPICS.forEach { topic ->
         add("$topic${DesktopCommitSignal.REVISION_SEPARATOR}${revisions.getValue(topic)}")
       }
+      revisions[DesktopReadSchema.ACTIVITY_TOPIC]?.let { revision ->
+        add("${DesktopReadSchema.ACTIVITY_TOPIC}${DesktopCommitSignal.REVISION_SEPARATOR}$revision")
+      }
     }
   return lines.joinToString(separator = "\n", postfix = "\n")
 }

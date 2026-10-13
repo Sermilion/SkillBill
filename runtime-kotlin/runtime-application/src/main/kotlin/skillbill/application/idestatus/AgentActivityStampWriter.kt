@@ -164,7 +164,7 @@ class AgentActivityStampWriter(
     }
 
   private companion object {
-    const val DEBOUNCE_WINDOW_MILLIS: Long = 250L
+    const val DEBOUNCE_WINDOW_MILLIS: Long = 2_000L
     const val MAX_TRACKED_WORKFLOWS: Int = 512
     const val MAX_DIAGNOSTIC_CAUSE_LENGTH: Int = 256
     const val INITIAL_TRACKED_WORKFLOWS: Int = 16
