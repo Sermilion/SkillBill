@@ -21,6 +21,8 @@ interface WorkDetailRepository {
 interface WorkControlRepository {
   suspend fun pause(item: WorkItem): Outcome<Unit>
   suspend fun stop(item: WorkItem): Outcome<Unit>
+  suspend fun cancel(item: WorkItem): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Cancellation is unavailable."))
+  suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Launching is unavailable."))
 }
 
 interface WorkStoreSession {
@@ -60,6 +62,7 @@ data class DashboardState(
   val detail: Detail? = null,
   val detailProblem: Problem? = null,
   val actionProblem: Problem? = null,
+  val actionsInProgress: Set<WorkIdentity> = emptySet(),
   val displayDurations: Map<WorkIdentity, DisplayDurations> = emptyMap(),
   val detailExtrasStale: Boolean = false,
   val trayProblem: Problem? = null,

@@ -44,6 +44,8 @@ data class StandalonePhaseStatusRegistration(
   val leaseGeneration: Long,
   val leaseExpiresAt: Instant,
   val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
+  val launchAgentId: String? = null,
+  val launchArguments: List<String>? = null,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -96,6 +98,8 @@ data class StandalonePhaseStatusRecord(
   val terminalResult: String?,
   val acceptedResult: String? = null,
   val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
+  val launchAgentId: String? = null,
+  val launchArguments: List<String>? = null,
 )
 
 data class StandalonePhaseExecutionQuery(

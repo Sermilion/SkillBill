@@ -26,6 +26,7 @@ private fun StringBuilder.appendHoverCategory(label: String, items: List<WorkIte
       Lifecycle.ACTIVE -> "#3FB950"
       Lifecycle.BLOCKED -> "#E2703C"
       Lifecycle.FAILED -> "#F0555B"
+      Lifecycle.CANCELED -> "#B59AF4"
       else -> "#9C9CA6"
     }
     val identifier = item.issueKey ?: item.phaseId ?: item.currentStepId

@@ -55,6 +55,67 @@ class RoomBoardSourceTest {
   private val now = Instant.now()
 
   @Test
+  fun `detail accepts its snapshot when a writer commits while observation time resolves`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-detail-concurrent-writer").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "selected", now, "main")) }
+      var armed = false
+      val writes = AtomicInteger()
+      val clock = object : Clock() {
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId): Clock = this
+        override fun instant(): Instant {
+          if (armed) factory.transaction {
+            it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "writer-${writes.incrementAndGet()}", now, "main"))
+          }
+          return now
+        }
+      }
+      val source = RoomBoardSource(emptyMap(), fixture.tempDir, fixture.tempDir, clock)
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val selected = value(source.board(WorkSection.PHASES, Retention.WEEK)).items.single()
+        armed = true
+        val detail = assertIs<Outcome.Value<Detail>>(source.detail(selected.identity)).value
+        assertEquals(selected.identity, detail.item.identity)
+        assertEquals(1, writes.get())
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
+  fun `history publishes a coherent snapshot when an unrelated writer commits after projection`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-history-concurrent-writer").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      val finished = now.minusSeconds(30)
+      factory.transaction { unit ->
+        val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "finished", finished.minusSeconds(10), "main"))
+        unit.standalonePhaseStatuses.update(StandalonePhaseStatusUpdate(record.executionId, record.statusRevision,
+          record.leaseOwner, record.leaseGeneration, "terminal", "review", null, finished, finishedAt = finished, terminalResult = "completed"))
+      }
+      val ticks = AtomicInteger()
+      val writes = AtomicInteger()
+      val source = RoomBoardSource(emptyMap(), fixture.tempDir, fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC),
+        monotonicNanos = {
+          if (ticks.incrementAndGet() % 4 == 0) {
+            val id = "writer-${writes.incrementAndGet()}"
+            factory.transaction { it.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), id, now, "main")) }
+          }
+          System.nanoTime()
+        })
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val history = value(source.board(WorkSection.HISTORY, Retention.WEEK))
+        assertEquals(listOf("finished"), history.items.map { it.identity.id })
+        assertEquals(1, writes.get())
+        val live = value(source.board(WorkSection.PHASES, Retention.WEEK))
+        assertTrue(live.revision!! > history.revision!!)
+        assertTrue(live.items.any { it.identity.id == "writer-1" })
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `history skips legacy verification rows without repository identity and retains readable siblings`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-history-missing-identity").use { fixture ->
       val finished = now.minusSeconds(30)

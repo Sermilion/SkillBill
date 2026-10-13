@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -126,7 +127,7 @@ private fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Un
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
         Text(FileName(item.repositoryRoot), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(listOfNotNull(item.issueKey ?: item.phaseId, item.currentStepLabel).joinToString(" · "), color = if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(listOfNotNull(item.issueKey ?: item.phaseId, if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.currentStepLabel).joinToString(" · "), color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
       if (item.progressTotal != null) Text("${item.progressCompleted ?: 0}/${item.progressTotal}", color = if (selected) amber else dim, style = MaterialTheme.typography.labelSmall)
     }
@@ -151,6 +152,7 @@ internal fun lifecycleColor(lifecycle: Lifecycle) = when (lifecycle) {
   Lifecycle.ACTIVE -> green
   Lifecycle.BLOCKED -> orange
   Lifecycle.FAILED -> red
+  Lifecycle.CANCELED -> Color(0xFFB59AF4)
   Lifecycle.TERMINAL -> muted
   else -> muted
 }

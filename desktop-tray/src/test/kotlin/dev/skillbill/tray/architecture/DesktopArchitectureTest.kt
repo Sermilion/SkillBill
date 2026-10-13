@@ -49,7 +49,7 @@ class DesktopArchitectureTest {
   }
 
   @Test
-  fun `domain application and presentation avoid process adapters`() {
+  fun `work data avoids process adapters and explicit run actions use the runtime launch port`() {
     val sources = productionSources()
     assertApprovedNativeDisplayQuery(sources)
     val workDataSources = sources.filter { it.path.startsWith("src/main/kotlin/dev/skillbill/tray/") }
@@ -59,6 +59,13 @@ class DesktopArchitectureTest {
         assertFalse(referencesProcessAdapter(source.text), source.path)
       }
     }
+    val launchConsumers = sources.filter { "import skillbill.ports.work.WorkRunLauncher" in it.text }
+    assertTrue(launchConsumers.map { it.path.substringAfter("/src/main/kotlin/") }.toSet() == setOf(
+      "skillbill/engine/work/control/WorkRunActions.kt",
+      "skillbill/infrastructure/launcher/work/DetachedWorkRunLauncher.kt",
+      "skillbill/di/core/RuntimeContext.kt",
+      "skillbill/di/core/RuntimeWorkControlProvides.kt",
+    ), "Run launch ownership changed: ${launchConsumers.map { it.path }}")
     assertNoReachableWorkDataProcessAdapter(sources)
   }
 
@@ -86,6 +93,11 @@ class DesktopArchitectureTest {
     while (pending.isNotEmpty()) {
       val (function, trace) = pending.removeFirst()
       if (!visited.add(function)) continue
+      if (function.name == "start" && "WorkRunLauncher" in function.memberOwners) {
+        assertTrue(function.path.endsWith("/skillbill/ports/work/WorkRunLauncher.kt") ||
+          function.path.endsWith("/skillbill/infrastructure/launcher/work/DetachedWorkRunLauncher.kt"), trace.joinToString(" -> "))
+        continue
+      }
       assertFalse(function.calls.any { it in forbiddenWorkDataProcessAdapters }, function.path + ":" + function.name)
       assertFalse(function.launchesCommand && !isApprovedNativeDisplayQuery(function), trace.joinToString(" -> "))
       function.calls.forEach { name ->

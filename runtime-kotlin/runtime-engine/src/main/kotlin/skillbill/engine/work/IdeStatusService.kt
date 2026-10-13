@@ -629,7 +629,7 @@ class IdeStatusService(
     }
 
   private fun isFinished(snapshot: IdeStatusSnapshot): Boolean =
-    snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL ||
+    snapshot.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED) ||
       snapshot.lifecycleState == IdeStatusLifecycleState.FAILED
 
   private fun repositoryIdentityFor(
@@ -818,7 +818,7 @@ class IdeStatusService(
     val issueKey = candidate.issueKey
     if (issueKey == null ||
       candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
-      candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL
+      candidate.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED)
     ) {
       return false
     }

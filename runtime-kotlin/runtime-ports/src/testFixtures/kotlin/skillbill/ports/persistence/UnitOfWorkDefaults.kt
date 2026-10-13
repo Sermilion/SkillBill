@@ -64,6 +64,16 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun latestStandaloneExecution(workflowId: String): StandalonePhaseStatusRecord? = null
 
+      override fun requestCancellation(
+        record: StandalonePhaseStatusRecord,
+        at: Instant,
+      ): StandalonePhaseStatusUpdateResult = StandalonePhaseStatusUpdateResult.MISSING
+
+      override fun cancel(
+        record: StandalonePhaseStatusRecord,
+        at: Instant,
+      ): StandalonePhaseStatusUpdateResult = StandalonePhaseStatusUpdateResult.MISSING
+
       override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
         StandalonePhaseStatusUpdateResult.MISSING
     }

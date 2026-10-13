@@ -31,6 +31,7 @@ data class PhaseRunRequest(
   val specSource: SpecSource = SpecSource.LOCAL,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
+  val launchArguments: List<String>? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }

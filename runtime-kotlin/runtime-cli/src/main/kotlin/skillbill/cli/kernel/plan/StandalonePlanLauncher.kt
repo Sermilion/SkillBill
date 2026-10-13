@@ -33,7 +33,7 @@ class StandalonePlanLauncher(
     invokedAgentId: String,
     options: StandalonePlanOptions = StandalonePlanOptions(),
   ): StandalonePlanResult =
-    planRun.run(issueKey, intake, repoRoot) { specPath ->
+    planRun.run(issueKey, intake, repoRoot, invokedAgentId) { specPath ->
       FeatureTaskRuntimeRunInput(
         issueKey = issueKey,
         specPath = specPath,

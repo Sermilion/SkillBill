@@ -117,6 +117,7 @@ import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import java.util.Collections
 import kotlin.time.Duration
 import kotlin.time.TimeSource
@@ -563,6 +564,12 @@ private fun recordingLifecycleTelemetry(recorder: ReviewRecorder): LifecycleTele
       record: GoalFinishedRecord,
       level: String,
     ) = Unit
+
+    override fun cancelGoalIssue(
+      parentWorkflowId: String,
+      issueKey: String,
+      canceledAt: Instant,
+    ): Boolean = false
 
     override fun goalIssueFinished(
       record: GoalIssueFinishedRecord,

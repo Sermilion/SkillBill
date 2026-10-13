@@ -38,7 +38,14 @@ class PhaseRunEntry(
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
     val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
-    val publisher = statusPublisherFactory.forPhase(request.repoRoot, request.definitionId, invocationId)
+    val publisher =
+      statusPublisherFactory.forPhase(
+        request.repoRoot,
+        request.definitionId,
+        invocationId,
+        request.invokedAgentId,
+        request.launchArguments,
+      )
     val statusRequest = request.copy(eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher))
     return runCatching { runInternal(statusRequest, invocationId) }
       .onSuccess(publisher::settle)

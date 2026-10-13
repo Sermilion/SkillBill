@@ -12,6 +12,7 @@ import skillbill.ports.process.InstallerScriptFetchPort
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.time.RuntimeTimingPort
+import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.time.Duration
 
@@ -25,6 +26,7 @@ data class WorkflowOpsContext(val workflowGitOperations: WorkflowGitOperations? 
 
 data class OptionalCallbacks(
   val agentRunLauncher: AgentRunLauncher? = null,
+  val workRunLauncher: WorkRunLauncher? = null,
   val runtimeDiagnostics: RuntimeDiagnostics? = null,
   val goalPullRequestPort: GoalPullRequestPort? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup? = null,

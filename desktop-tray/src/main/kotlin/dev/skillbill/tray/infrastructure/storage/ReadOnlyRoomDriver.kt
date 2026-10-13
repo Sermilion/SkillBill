@@ -4,9 +4,7 @@ import androidx.room3.Room
 import androidx.room3.RoomDatabase
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteDriver
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import androidx.sqlite.driver.bundled.SQLITE_OPEN_FULLMUTEX
-import androidx.sqlite.driver.bundled.SQLITE_OPEN_READONLY
+import org.sqlite.SQLiteConfig
 import dev.skillbill.tray.infrastructure.RuntimeDiagnostics
 import kotlinx.coroutines.Dispatchers
 import java.nio.file.Path
@@ -14,22 +12,23 @@ import java.nio.file.Files
 import java.nio.file.attribute.BasicFileAttributes
 
 internal class ReadOnlyRoomDriver : SQLiteDriver {
-  private val driver = BundledSQLiteDriver()
-
-  override fun open(fileName: String): SQLiteConnection =
-    driver.open(fileName, SQLITE_OPEN_READONLY or SQLITE_OPEN_FULLMUTEX).also { connection ->
+  override fun open(fileName: String): SQLiteConnection {
+    val config = SQLiteConfig().apply { setReadOnly(true) }
+    val jdbc = jdbcOperation { config.createConnection("jdbc:sqlite:$fileName") }
+    val connection = JdbcRoomConnection(jdbc)
+    try {
+      connection.prepare("PRAGMA query_only = ON").use { it.step() }
+      return connection
+    } catch (failure: Throwable) {
       try {
-        connection.prepare("PRAGMA query_only = ON").use { it.step() }
-      } catch (failure: Throwable) {
-        try {
-          connection.close()
-        } catch (closeFailure: Throwable) {
-          failure.addSuppressed(closeFailure)
-          RuntimeDiagnostics.record("room_driver_connection_close_failed")
-        }
-        throw failure
+        connection.close()
+      } catch (closeFailure: Throwable) {
+        failure.addSuppressed(closeFailure)
+        RuntimeDiagnostics.record("room_driver_connection_close_failed")
       }
+      throw failure
     }
+  }
 }
 
 internal fun openWorkRoomDatabase(path: Path): WorkRoomDatabase =

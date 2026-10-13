@@ -6,7 +6,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
-const val IDE_STATUS_CONTRACT_VERSION: String = "0.3"
+const val IDE_STATUS_CONTRACT_VERSION: String = "0.4"
 const val WORK_BOARD_CONTRACT_VERSION: String = "1.1"
 const val WORK_DETAIL_CONTRACT_VERSION: String = "1.1"
 

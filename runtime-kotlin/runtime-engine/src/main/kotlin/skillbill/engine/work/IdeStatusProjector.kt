@@ -303,6 +303,7 @@ class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
     completionRecorded: Boolean,
   ): IdeStatusLifecycleState {
+    if (candidate.lifecycleState == IdeStatusLifecycleState.CANCELED) return IdeStatusLifecycleState.CANCELED
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
     val candidateLifecycle =
       if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL &&
@@ -373,7 +374,14 @@ class IdeStatusProjector(
     childWorkflowId: String?,
     lifecycle: IdeStatusLifecycleState,
   ): ChildOptionalContext {
-    if (lifecycle == IdeStatusLifecycleState.TERMINAL) return ChildOptionalContext.EMPTY
+    if (lifecycle in
+      setOf(
+        IdeStatusLifecycleState.TERMINAL,
+        IdeStatusLifecycleState.CANCELED,
+      )
+    ) {
+      return ChildOptionalContext.EMPTY
+    }
     val workflowId = childWorkflowId?.takeIf(String::isNotBlank) ?: return ChildOptionalContext.EMPTY
     val degraded =
       "IDE status omitted optional child context for workflow '$workflowId': " +

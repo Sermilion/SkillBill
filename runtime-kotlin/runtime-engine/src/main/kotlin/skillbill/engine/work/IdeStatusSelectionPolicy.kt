@@ -160,7 +160,7 @@ object IdeStatusSelectionPolicy {
       IdeStatusLifecycleState.PAUSED -> IdeStatusSelectionTier.PAUSED
       IdeStatusLifecycleState.BLOCKED -> IdeStatusSelectionTier.BLOCKED
       IdeStatusLifecycleState.FAILED -> IdeStatusSelectionTier.FAILED
-      IdeStatusLifecycleState.TERMINAL -> IdeStatusSelectionTier.RECENTLY_TERMINAL
+      IdeStatusLifecycleState.CANCELED, IdeStatusLifecycleState.TERMINAL -> IdeStatusSelectionTier.RECENTLY_TERMINAL
       IdeStatusLifecycleState.IDLE -> IdeStatusSelectionTier.IDLE
     }
 

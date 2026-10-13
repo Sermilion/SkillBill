@@ -23,6 +23,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -62,6 +63,13 @@ internal class GoalRunnerControlCoordinator(
       if (unitOfWork.goalRunnerControls.controlState(
           parentWorkflowId,
         ).executionLease?.ownerToken != expectedOwnerToken
+      ) {
+        return@transaction false
+      }
+      if (unitOfWork.workflowStates.get(
+          WorkflowFamily.TASK_RUNTIME,
+          parentWorkflowId,
+        )?.workflowStatus == WorkflowStatus.ABANDONED
       ) {
         return@transaction false
       }
@@ -302,6 +310,7 @@ internal fun GoalRunnerControlCoordinator.resume(parentWorkflowId: String): Goal
     val parent =
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId)
         ?: return@transaction null
+    if (parent.workflowStatus == WorkflowStatus.ABANDONED) return@transaction null
     val existing = unitOfWork.goalRunnerControls.controlState(parentWorkflowId)
     val resumed =
       if (existing.paused || existing.pauseRequested) {

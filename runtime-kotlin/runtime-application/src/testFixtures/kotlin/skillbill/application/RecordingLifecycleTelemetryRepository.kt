@@ -24,6 +24,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
+import java.time.Instant
 
 private object QualityCheckLifecycleTelemetryNoop : QualityCheckLifecycleTelemetryRepository {
   override fun qualityCheckStarted(
@@ -71,6 +72,12 @@ private object GoalLifecycleTelemetryNoop : GoalLifecycleTelemetryRepository {
     record: GoalFinishedRecord,
     level: String,
   ) = Unit
+
+  override fun cancelGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    canceledAt: Instant,
+  ): Boolean = false
 
   override fun goalIssueFinished(
     record: GoalIssueFinishedRecord,

@@ -183,6 +183,7 @@ internal fun goalSummary(
     }
     IdeStatusLifecycleState.PAUSED -> "Goal $issueKey is paused."
     IdeStatusLifecycleState.FAILED -> "Goal $issueKey failed."
+    IdeStatusLifecycleState.CANCELED -> "Goal $issueKey was canceled."
     IdeStatusLifecycleState.TERMINAL -> "Goal $issueKey is complete."
     IdeStatusLifecycleState.ACTIVE -> "Goal $issueKey is active on $stepLabel."
     IdeStatusLifecycleState.IDLE -> "Goal $issueKey is idle."
@@ -200,6 +201,7 @@ internal fun familySummary(
     IdeStatusLifecycleState.PAUSED -> "$subject is paused at $stepLabel."
     IdeStatusLifecycleState.BLOCKED -> "$subject is blocked at $stepLabel."
     IdeStatusLifecycleState.FAILED -> "$subject failed at $stepLabel."
+    IdeStatusLifecycleState.CANCELED -> "$subject was canceled."
     IdeStatusLifecycleState.TERMINAL -> "$subject is terminal."
     IdeStatusLifecycleState.IDLE -> "No matching Skill Bill work for this repository."
   }

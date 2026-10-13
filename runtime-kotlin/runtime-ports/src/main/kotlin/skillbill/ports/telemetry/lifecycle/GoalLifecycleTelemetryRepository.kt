@@ -4,8 +4,15 @@ import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
+import java.time.Instant
 
 interface GoalLifecycleTelemetryRepository {
+  fun cancelGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    canceledAt: Instant,
+  ): Boolean
+
   fun goalStarted(
     record: GoalStartedRecord,
     level: String,

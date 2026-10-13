@@ -15,7 +15,7 @@ internal class BoardPagingSource(
     if (invalid || params is LoadParams.Prepend) return LoadResult.Invalid()
     return when (val result = query(params.key, params is LoadParams.Refresh)) {
       is Outcome.Failure -> LoadResult.Error(BoardPageFailure(result.problem))
-      is Outcome.Value -> if (invalid) LoadResult.Invalid() else LoadResult.Page(
+      is Outcome.Value -> if (invalid && params !is LoadParams.Refresh) LoadResult.Invalid() else LoadResult.Page(
         data = listOf(result.value), prevKey = params.key, nextKey = result.value.nextCursor)
     }
   }

@@ -14,6 +14,40 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class DashboardControllerTest {
   @Test
+  fun `startup selects loaded live work while another live section refreshes`() = runBlocking {
+    val preferred = item("live")
+    val releaseAttention = CompletableDeferred<Unit>()
+    val refreshEvents = kotlinx.coroutines.flow.MutableSharedFlow<Set<WorkSection>>()
+    val source = FakeSource(
+      boardCall = { error("Expected a section read") },
+      sectionCall = { section ->
+        if (section == WorkSection.NEEDS_YOU) releaseAttention.await()
+        Outcome.Value(board(Retention.DAY, if (section == WorkSection.GOALS) listOf(preferred) else emptyList()))
+      },
+      detailCall = { Outcome.Value(detail(preferred)) },
+      refreshEvents = refreshEvents,
+    )
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+    try {
+      kotlinx.coroutines.withTimeout(3000) {
+        while (WorkSection.GOALS !in model.state.value.sections || WorkSection.PHASES !in model.state.value.sections ||
+          refreshEvents.subscriptionCount.value == 0) delay(10)
+      }
+      refreshEvents.emit(setOf(WorkSection.GOALS))
+      kotlinx.coroutines.withTimeout(3000) {
+        while (model.state.value.sectionLoadStates[WorkSection.GOALS] != ListLoadState.REFRESHING) delay(10)
+      }
+      releaseAttention.complete(Unit)
+      kotlinx.coroutines.withTimeout(3000) { while (model.state.value.detail?.item?.identity != preferred.identity) delay(10) }
+      assertEquals(ListLoadState.REFRESHING, model.state.value.sectionLoadStates[WorkSection.GOALS])
+      assertFalse(model.state.value.detailLoading)
+    } finally {
+      releaseAttention.complete(Unit)
+      model.closeAndJoin()
+    }
+  }
+
+  @Test
   fun `idle startup waits for live sections then selects latest history and preserves an explicit selection`() = runBlocking {
     val latest = item("latest").copy(lifecycle = Lifecycle.TERMINAL, finishedAt = Instant.parse("2026-10-11T09:00:00Z"))
     val older = item("older").copy(lifecycle = Lifecycle.TERMINAL, finishedAt = latest.finishedAt!!.minusSeconds(60))
@@ -526,6 +560,42 @@ class DashboardControllerTest {
   }
 
   @Test
+  fun `resume uses the selected detail revision and prevents duplicate actions while starting`() = runBlocking {
+    val boardItem = item("paused").copy(lifecycle = Lifecycle.PAUSED, freshness = Freshness.STALE)
+    val latest = boardItem.copy(updatedAt = boardItem.updatedAt.plusSeconds(1), statusRevision = "2")
+    val entered = CompletableDeferred<Pair<WorkItem, String?>>()
+    val release = CompletableDeferred<Unit>()
+    val calls = AtomicInteger()
+    val source = FakeSource(
+      boardCall = { Outcome.Value(board(it, listOf(boardItem))) },
+      detailCall = { Outcome.Value(detail(latest).copy(runOptions = RunOptions(true, true, "Resume", null, listOf("codex"), null))) },
+      launchAction = { item, agent ->
+        calls.incrementAndGet()
+        entered.complete(item to agent)
+        release.await()
+        Outcome.Value(Unit)
+      },
+    )
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+    try {
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
+      model.select(boardItem.identity)
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.detail?.runOptions == null) delay(10) }
+      model.perform("launch:codex", boardItem.identity)
+      assertEquals(latest to "codex", kotlinx.coroutines.withTimeout(2000) { entered.await() })
+      assertTrue(boardItem.identity in model.state.value.actionsInProgress)
+      model.perform("launch:codex", boardItem.identity)
+      model.perform("cancel", boardItem.identity)
+      assertEquals(1, calls.get())
+      release.complete(Unit)
+      kotlinx.coroutines.withTimeout(2000) { while (boardItem.identity in model.state.value.actionsInProgress) delay(10) }
+    } finally {
+      release.complete(Unit)
+      model.close()
+    }
+  }
+
+  @Test
   fun `notification activation selects the identity that changed`() = runBlocking {
     val initial = item("workflow")
     val blocked = initial.copy(lifecycle = Lifecycle.BLOCKED, updatedAt = initial.updatedAt.plusSeconds(1))
@@ -585,12 +655,14 @@ private class FakeSource(
   private val detailCall: suspend (WorkIdentity) -> Outcome<Detail> = { Outcome.Failure(Problem(ProblemCode.UNKNOWN_WORK_ITEM, "missing")) },
   private val pauseAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
   private val stopAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
+  private val launchAction: suspend (WorkItem, String?) -> Outcome<Unit> = { _, _ -> Outcome.Value(Unit) },
   private val boardPageCall: (suspend (Retention, String?) -> Outcome<Board>)? = null,
   private val detailPageCall: (suspend (WorkIdentity, String?) -> Outcome<Detail>)? = null,
   private val sectionCall: (suspend (WorkSection) -> Outcome<Board>)? = null,
   private val sectionPageCall: (suspend (WorkSection, Retention, String?, HistoryFilter) -> Outcome<Board>)? = null,
   private val boundedDetailCall: (suspend (WorkIdentity, String?, DetailList?, Int) -> Outcome<Detail>)? = null,
   private val selectAction: suspend (String?) -> Unit = {},
+  override val refreshEvents: kotlinx.coroutines.flow.Flow<Set<WorkSection>> = kotlinx.coroutines.flow.emptyFlow(),
 ) : WorkBoardRepository, WorkDetailRepository, WorkControlRepository, WorkStoreSession {
   private val revision = kotlinx.coroutines.flow.MutableStateFlow(0L)
   var retainedPages: BoardRetention? = null
@@ -612,7 +684,6 @@ private class FakeSource(
   override fun observeDetail(identity: WorkIdentity) = kotlinx.coroutines.flow.flow {
     revision.collect { emit(detail(identity)) }
   }
-  override val refreshEvents = kotlinx.coroutines.flow.emptyFlow<Set<WorkSection>>()
   override suspend fun detail(identity: WorkIdentity, cursor: String?, list: DetailList?, startOffset: Int) = boundedDetailCall?.invoke(identity, cursor, list, startOffset) ?: detailPageCall?.invoke(identity, cursor) ?: detailCall(identity)
   override suspend fun refresh() { revision.value++ }
   override fun close() = Unit
@@ -620,6 +691,7 @@ private class FakeSource(
 
   override suspend fun pause(item: WorkItem) = pauseAction(item)
   override suspend fun stop(item: WorkItem) = stopAction(item)
+  override suspend fun launch(item: WorkItem, agentId: String?) = launchAction(item, agentId)
 }
 
 private open class QuietNative : NativeServices {

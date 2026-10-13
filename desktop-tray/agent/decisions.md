@@ -78,3 +78,8 @@ while the pointer is over a native Wayland panel.
 Context: A lost database watcher triggered timed reconnects and full invalidations. Reads also reopened failed sessions, so background failures repeatedly reset the desktop views.
 Decision: Keep the observer failure typed and the last successful view stale. Remove the timed reconnect loop and retain failed sessions until explicit refresh or a database change requests a new connection. Keep healthy observation driven by committed database changes and known lifecycle deadlines. Record the observer failure class and provider error code without logging database content.
 Reason: Database observation failure must not become periodic data refresh or a successful read with no working observer. Explicit refresh makes recovery visible and preserves a stable stale view between attempts.
+
+## [2026-10-13] Launch runs through runtime admission
+Context: Resume and Run again now start work from an explicit desktop action. Reading work still uses Room and shared runtime projections.
+Decision: WorkRunActions validates the selected database, execution revision, process owner, recorded branch, and launch arguments before calling WorkRunLauncher. The desktop cannot use this port directly. Cancellation stays in the runtime and preserves history.
+Reason: Starting work needs a process boundary. The desktop architecture guard continues to forbid CLI read proxies and process adapters in desktop code. It checks the full graph up to the runtime launch port and limits that port to the admission owner, its infrastructure implementation, and DI.

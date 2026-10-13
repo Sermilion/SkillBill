@@ -9,7 +9,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import java.time.Instant
 
-interface StandalonePhaseStatusRepository {
+interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepository {
   fun register(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord
 
   fun registerWorkflow(request: IdeStatusWorkflowRegistration): IdeStatusWorkflowExecution?

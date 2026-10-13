@@ -116,6 +116,7 @@ abstract class RuntimeComponent(
     RuntimeScaffoldValidationProvides,
     RuntimeInstallerProvides,
     RuntimeOptionalCallbackProvides,
+    RuntimeWorkControlProvides,
     RuntimeDiagnosticsProvides {
   private val resolvedRuntimeContext: RuntimeContext by lazy {
     RuntimeBootstrapBindings.runtimeContext(inputRuntimeContext)

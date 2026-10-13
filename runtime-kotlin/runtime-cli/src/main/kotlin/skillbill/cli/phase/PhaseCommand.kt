@@ -96,6 +96,7 @@ class PhaseCommand(
             definitionId = invocation.definitionId,
             repoRoot = repoRoot,
             invokedAgentId = invokedAgentId,
+            launchArguments = listOf("phase", invocation.definitionId) + rest + listOf("--agent", invokedAgentId),
             intake = invocation.intake,
             codeReviewMode = invocation.mode?.let(RequestedReviewMode::parse),
             reviewInvocation = ReviewInvocation(target = invocation.target),

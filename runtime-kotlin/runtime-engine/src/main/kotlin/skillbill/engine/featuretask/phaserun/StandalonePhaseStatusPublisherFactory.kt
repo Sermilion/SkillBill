@@ -20,8 +20,12 @@ class StandalonePhaseStatusPublisherFactory(
     repoRoot: Path,
     phaseId: String,
     invocationId: String,
+    agentId: String? = null,
+    launchArguments: List<String>? = null,
   ): StandalonePhaseStatusEventSink {
-    val registration = registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey = null)
+    val registration =
+      registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey = null)
+        .copy(launchAgentId = agentId, launchArguments = launchArguments)
     return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics)
   }
 
@@ -29,9 +33,13 @@ class StandalonePhaseStatusPublisherFactory(
     repoRoot: Path,
     issueKey: String,
     phaseId: String,
+    agentId: String? = null,
+    launchArguments: List<String>? = null,
   ): StandalonePhaseStatusEventSink {
     val invocationId = "plan-${UUID.randomUUID()}"
-    val base = registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey)
+    val base =
+      registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey)
+        .copy(launchAgentId = agentId, launchArguments = launchArguments)
     return StandalonePhaseStatusEventSink(
       database,
       { workflowId -> base.copy(workflowId = workflowId) },

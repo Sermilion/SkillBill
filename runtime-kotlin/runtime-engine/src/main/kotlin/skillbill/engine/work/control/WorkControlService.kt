@@ -9,6 +9,8 @@ import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkControlTarget
+import skillbill.engine.work.control.model.WorkRunOptions
+import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.idestatus.model.WorkBoardRequest
@@ -20,36 +22,71 @@ class WorkControlService(
   private val database: DatabaseSessionFactory,
   private val status: IdeStatusService,
   private val controls: GoalRunnerStatusService,
+  private val cancellation: WorkCancellation,
+  private val runs: WorkRunActions,
 ) {
+  fun options(target: WorkRunTarget): WorkRunOptions? =
+    database.read { unit ->
+      matchingRun(status, target)?.let { runs.options(it, unit) }
+    }
+
+  fun request(
+    target: WorkRunTarget,
+    action: WorkControlAction,
+    agentId: String? = null,
+  ): WorkControlResult =
+    when (action) {
+      WorkControlAction.CANCEL -> cancellation.cancel(target)
+      WorkControlAction.LAUNCH -> runs.launch(target, agentId)
+      WorkControlAction.PAUSE, WorkControlAction.STOP ->
+        WorkControlResult.Rejected(
+          WorkControlRejection.INELIGIBLE_TARGET,
+        )
+    }
+
   fun request(
     target: WorkControlTarget,
     action: WorkControlAction,
     storeIsCurrent: () -> Boolean = { true },
   ): WorkControlResult {
-    if (action == WorkControlAction.STOP) {
-      var rejection: WorkControlResult.Rejected? = null
-      val result =
-        controls.stop(
-          target.issueKey,
-          target.repositoryRoot,
-          target.workflowId,
-          target.databaseFileObservation,
-        ) {
-          rejection = validate(target, action, storeIsCurrent)
-          rejection == null
-        }
-      rejection?.let { return it }
-      return when (result.status) {
-        GoalRunnerStopStatus.NOT_FOUND -> WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
-        GoalRunnerStopStatus.IDENTITY_MISMATCH -> WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH)
-        GoalRunnerStopStatus.CHANGED_TARGET -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
-        GoalRunnerStopStatus.TERMINATION_INCOMPLETE ->
-          WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
-        else -> WorkControlResult.Accepted
-      }
+    if (action !in setOf(WorkControlAction.PAUSE, WorkControlAction.STOP)) {
+      return WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
     }
+    return if (action == WorkControlAction.STOP) stop(target, storeIsCurrent) else pause(target, storeIsCurrent)
+  }
+
+  private fun stop(
+    target: WorkControlTarget,
+    storeIsCurrent: () -> Boolean,
+  ): WorkControlResult {
+    var rejection: WorkControlResult.Rejected? = null
+    val result =
+      controls.stop(
+        target.issueKey,
+        target.repositoryRoot,
+        target.workflowId,
+        target.databaseFileObservation,
+      ) {
+        rejection = validate(target, WorkControlAction.STOP, storeIsCurrent)
+        rejection == null
+      }
+    rejection?.let { return it }
+    return when (result.status) {
+      GoalRunnerStopStatus.NOT_FOUND -> WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
+      GoalRunnerStopStatus.IDENTITY_MISMATCH -> WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH)
+      GoalRunnerStopStatus.CHANGED_TARGET -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
+      GoalRunnerStopStatus.TERMINATION_INCOMPLETE ->
+        WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
+      else -> WorkControlResult.Accepted
+    }
+  }
+
+  private fun pause(
+    target: WorkControlTarget,
+    storeIsCurrent: () -> Boolean,
+  ): WorkControlResult {
     val operation: (UnitOfWork) -> WorkControlResult = {
-      val rejection = validate(target, action, storeIsCurrent)
+      val rejection = validate(target, WorkControlAction.PAUSE, storeIsCurrent)
       rejection ?: when (controls.pause(target.issueKey, target.repositoryRoot, target.workflowId).status) {
         GoalRunnerPauseStatus.NOT_FOUND -> WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
         else -> WorkControlResult.Accepted

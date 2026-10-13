@@ -3,7 +3,7 @@ package dev.skillbill.tray.domain
 import java.time.Instant
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 
-enum class Lifecycle { ACTIVE, PAUSED, BLOCKED, FAILED, TERMINAL, IDLE }
+enum class Lifecycle { ACTIVE, PAUSED, BLOCKED, FAILED, TERMINAL, CANCELED, IDLE }
 enum class Freshness { FRESH, STALE, UNKNOWN }
 enum class WorkFamily { FEATURE_GOAL, FEATURE_TASK_RUNTIME, FEATURE_VERIFY }
 enum class ExecutionScope { WORKFLOW, STANDALONE_PHASE }
@@ -103,6 +103,7 @@ data class Detail(
   val cursors: Map<DetailList, String> = emptyMap(),
   val dependencies: List<SubtaskDependency> = emptyList(),
   val freshnessDeadline: Instant? = null,
+  val runOptions: RunOptions? = null,
 )
 
 data class DetailAttempts(
@@ -253,3 +254,12 @@ data class ExecutionInstance(
 )
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)
+
+data class RunOptions(
+  val canCancel: Boolean,
+  val canLaunch: Boolean,
+  val launchLabel: String,
+  val agentId: String?,
+  val agentChoices: List<String>,
+  val unavailableReason: String?,
+)

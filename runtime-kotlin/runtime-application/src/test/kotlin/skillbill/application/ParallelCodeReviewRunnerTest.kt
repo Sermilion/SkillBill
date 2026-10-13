@@ -111,6 +111,7 @@ import java.io.IOException
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -1573,6 +1574,12 @@ private object NoopReviewLifecycleTelemetry : LifecycleTelemetryRepository {
     record: GoalFinishedRecord,
     level: String,
   ) = Unit
+
+  override fun cancelGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    canceledAt: Instant,
+  ): Boolean = false
 
   override fun goalIssueFinished(
     record: GoalIssueFinishedRecord,

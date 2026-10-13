@@ -9,6 +9,7 @@ junit = "5.12.2"
 ksp = "2.3.12"
 room = "3.0.3"
 sqlite = "2.7.1"
+sqlite-jdbc = "3.53.0.0"
 datastore = "1.2.1"
 paging = "3.5.2"
 
@@ -30,6 +31,7 @@ nucleus-autolaunch = { module = "dev.nucleusframework:nucleus.autolaunch", versi
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 room-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room" }
-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+sqlite-api = { module = "androidx.sqlite:sqlite", version.ref = "sqlite" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "datastore" }
 paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }

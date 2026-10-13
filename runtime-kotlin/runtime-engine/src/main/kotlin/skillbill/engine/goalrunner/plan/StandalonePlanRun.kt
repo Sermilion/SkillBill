@@ -87,6 +87,7 @@ class StandalonePlanRun(
     issueKey: String,
     suppliedIntake: String?,
     repoRoot: Path,
+    agentId: String? = null,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
     val publisher =
@@ -94,6 +95,8 @@ class StandalonePlanRun(
         repoRoot = repoRoot,
         issueKey = issueKey,
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+        agentId = agentId,
+        launchArguments = agentId?.let { listOf("phase", "plan", suppliedIntake ?: issueKey, "--agent", it) },
       )
     return runCatching {
       runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->

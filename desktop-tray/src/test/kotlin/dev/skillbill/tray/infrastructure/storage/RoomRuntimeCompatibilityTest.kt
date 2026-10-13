@@ -7,6 +7,9 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import java.sql.Connection
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import org.sqlite.SQLiteConfig
 
 class RoomRuntimeCompatibilityTest {
   @Test
@@ -24,6 +27,50 @@ class RoomRuntimeCompatibilityTest {
         assertFails { connection.prepare("DELETE FROM schema_migrations").use { it.step() } }
       }
       assertEquals(before, snapshot(fixture.connection))
+    }
+  }
+
+  @Test
+  fun `Room keeps reading after short lived runtime connections close`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-room-shared-native-library").use { fixture ->
+      fixture.connection.close()
+      val room = openWorkRoomDatabase(fixture.dbPath)
+      try {
+        repeat(30) {
+          assertEquals(DesktopReadSchema.VERSION, room.migrations().latest()?.version)
+          SQLiteConfig().createConnection("jdbc:sqlite:${fixture.dbPath}").use { writer ->
+            writer.createStatement().use { it.execute("PRAGMA user_version = ${DesktopReadSchema.VERSION}") }
+          }
+        }
+        assertEquals(DesktopReadSchema.VERSION, room.migrations().latest()?.version)
+      } finally { room.close() }
+    }
+  }
+
+  @Test
+  fun `Room cached statements retain metadata and rebound values after reset`() {
+    establishTemporarySchemaReadiness("desktop-room-cached-statement").use { fixture ->
+      ReadOnlyRoomDriver().open(fixture.dbPath.toString()).use { connection ->
+        connection.prepare("SELECT ? AS value, ? AS optional").use { statement ->
+          assertEquals(2, statement.getColumnCount())
+          assertEquals("value", statement.getColumnName(0))
+          statement.bindLong(1, 41)
+          statement.bindNull(2)
+          assertTrue(statement.step())
+          assertEquals(41L, statement.getLong(0))
+          assertTrue(statement.isNull(1))
+          assertFalse(statement.step())
+          assertFalse(statement.step())
+          statement.reset()
+          statement.clearBindings()
+          assertEquals(2, statement.getColumnCount())
+          statement.bindLong(1, 42)
+          statement.bindText(2, "updated")
+          assertTrue(statement.step())
+          assertEquals(42L, statement.getLong(0))
+          assertEquals("updated", statement.getText(1))
+        }
+      }
     }
   }
 

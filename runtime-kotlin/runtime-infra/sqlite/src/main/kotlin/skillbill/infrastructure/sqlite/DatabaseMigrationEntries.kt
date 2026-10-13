@@ -771,4 +771,14 @@ internal val databaseMigrations: List<DatabaseMigration> =
         }
       },
     ),
+    DatabaseMigration(
+      version = 54,
+      name = "save-standalone-phase-launch",
+      operation = { connection ->
+        connection.createStatement().use { statement ->
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN launch_agent_id TEXT")
+          statement.execute("ALTER TABLE standalone_phase_status ADD COLUMN launch_arguments_json TEXT")
+        }
+      },
+    ),
   )

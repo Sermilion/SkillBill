@@ -21,7 +21,7 @@ data class WorkControlTarget(
   val databaseFileObservation: DatabaseFileObservation? = null,
 )
 
-enum class WorkControlAction { PAUSE, STOP }
+enum class WorkControlAction { PAUSE, STOP, CANCEL, LAUNCH }
 
 enum class WorkControlRejection {
   UNKNOWN_TARGET,
@@ -30,10 +30,14 @@ enum class WorkControlRejection {
   NOT_FOUND,
   OWNERSHIP_MISMATCH,
   TERMINATION_INCOMPLETE,
+  AGENT_REQUIRED,
+  BRANCH_CHANGED,
 }
 
 sealed interface WorkControlResult {
   data object Accepted : WorkControlResult
+
+  data class LaunchFailed(val reason: String) : WorkControlResult
 
   data class Rejected(val reason: WorkControlRejection) : WorkControlResult
 }

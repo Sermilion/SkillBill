@@ -15,6 +15,7 @@ enum class IdeStatusLifecycleState(val wireValue: String) {
   BLOCKED(WorkflowStatus.BLOCKED.wireValue),
   FAILED(WorkflowStatus.FAILED.wireValue),
   TERMINAL("terminal"),
+  CANCELED("canceled"),
   IDLE("idle"),
 }
 
@@ -83,6 +84,7 @@ object IdeStatusPolicy {
       "paused", "runner_interrupted" -> IdeStatusLifecycleState.PAUSED
       "blocked" -> IdeStatusLifecycleState.BLOCKED
       "failed" -> IdeStatusLifecycleState.FAILED
+      "canceled" -> IdeStatusLifecycleState.CANCELED
       "terminal", "completed", "success" -> IdeStatusLifecycleState.TERMINAL
       else -> IdeStatusLifecycleState.FAILED
     }
@@ -94,7 +96,8 @@ object IdeStatusPolicy {
         IdeStatusDurableWorkflowState.PAUSED -> IdeStatusLifecycleState.PAUSED
         IdeStatusDurableWorkflowState.BLOCKED -> IdeStatusLifecycleState.BLOCKED
         IdeStatusDurableWorkflowState.FAILED -> IdeStatusLifecycleState.FAILED
-        IdeStatusDurableWorkflowState.COMPLETED, IdeStatusDurableWorkflowState.ABANDONED,
+        IdeStatusDurableWorkflowState.ABANDONED -> IdeStatusLifecycleState.CANCELED
+        IdeStatusDurableWorkflowState.COMPLETED,
         IdeStatusDurableWorkflowState.COMPLETE, IdeStatusDurableWorkflowState.SKIPPED,
         -> IdeStatusLifecycleState.TERMINAL
       }

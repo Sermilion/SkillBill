@@ -18,6 +18,8 @@ import skillbill.di.core.*
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.engine.work.control.model.WorkControlAction
 import skillbill.engine.work.control.model.WorkControlResult
+import skillbill.engine.work.control.model.WorkRunTarget
+import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlTarget
 import skillbill.error.core.databaseIncompatible
 import skillbill.error.core.databaseMissing
@@ -155,28 +157,39 @@ class RoomBoardSource internal constructor(
   override fun observe(section: WorkSection, retention: Retention, filter: String, historyFilter: HistoryFilter, anchor: String?): Flow<Outcome<Board>> {
     val queryEpoch = queryEpochs.incrementAndGet()
     latestQueryEpochs[section] = queryEpoch
-    return signals.map { it.getValue(section) }.distinctUntilChanged().transformLatest {
-      val result = loadPage(section, retention, anchor, filter, historyFilter, refresh = true, queryEpoch = queryEpoch)
-      emit(result)
-      if (result is Outcome.Failure) return@transformLatest
-      var deadlineVersion = deadlineRevision.value
-      while (currentCoroutineContext().isActive) {
-        val nextDeadline = mutex.withLock { deadlines[section]?.values?.minOrNull() }
-        if (nextDeadline == null) {
-          deadlineVersion = deadlineRevision.first { it != deadlineVersion }
-          continue
+    return channelFlow {
+      var timer: Job? = null
+      try {
+        signals.map { it.getValue(section) }.distinctUntilChanged().collect {
+          timer?.cancelAndJoin()
+          val result = loadPage(section, retention, anchor, filter, historyFilter, refresh = true, queryEpoch = queryEpoch)
+          send(result)
+          if (result is Outcome.Value) timer = launch { awaitBoardDeadline(section) }
         }
-        val remaining = java.time.Duration.between(clock.instant(), nextDeadline)
-        val wait = (remaining.toMillis() + if (remaining.nano % 1_000_000 == 0) 0 else 1).coerceAtLeast(1)
-        val changed = withTimeoutOrNull(wait) { deadlineRevision.first { it != deadlineVersion } }
-        if (changed != null) {
-          deadlineVersion = changed
-          continue
-        }
-        invalidate(if (section in setOf(WorkSection.GOALS, WorkSection.PHASES)) setOf(section, WorkSection.NEEDS_YOU) else setOf(section))
-        return@transformLatest
+      } finally {
+        timer?.cancel()
       }
     }.flowOn(Dispatchers.IO)
+  }
+
+  private suspend fun awaitBoardDeadline(section: WorkSection) {
+    var deadlineVersion = deadlineRevision.value
+    while (currentCoroutineContext().isActive) {
+      val nextDeadline = mutex.withLock { deadlines[section]?.values?.minOrNull() }
+      if (nextDeadline == null) {
+        deadlineVersion = deadlineRevision.first { it != deadlineVersion }
+        continue
+      }
+      val remaining = java.time.Duration.between(clock.instant(), nextDeadline)
+      val wait = (remaining.toMillis() + if (remaining.nano % 1_000_000 == 0) 0 else 1).coerceAtLeast(1)
+      val changed = withTimeoutOrNull(wait) { deadlineRevision.first { it != deadlineVersion } }
+      if (changed != null) {
+        deadlineVersion = changed
+        continue
+      }
+      invalidate(if (section in setOf(WorkSection.GOALS, WorkSection.PHASES)) setOf(section, WorkSection.NEEDS_YOU) else setOf(section))
+      return
+    }
   }
 
   override suspend fun board(section: WorkSection, retention: Retention, cursor: String?, filter: String, historyFilter: HistoryFilter): Outcome<Board> = loadPage(section, retention, cursor, filter, historyFilter, refresh = false)
@@ -305,49 +318,57 @@ class RoomBoardSource internal constructor(
           val startObservation = existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
           if (parsed != null && !rebase && (parsed.revision != before || parsed.storeId != startObservation.storeId ||
               parsed.storeRevision != startObservation.revision)) return@safeRead staleCursor()
-          var afterTime = parsed?.afterTime
-          var afterId = parsed?.afterId
           val result = mutableListOf<WorkItem>()
           var next: WorkCandidateRow? = null
-          var exhausted = false
           val attemptRowsBefore = selectedRows
           val attemptProjectedBefore = projectedItems
           val attemptSelectionBefore = selectionNanos
           val attemptProjectionBefore = projectionNanos
-          var attemptRowsSelected = 0
           var earliest: Instant? = null
           var committedObservation: WorkStoreObservation? = startObservation
-          while (result.size < PAGE_SIZE && !exhausted && attemptRowsSelected < CANDIDATE_BUDGET) {
-            val selectionStarted = monotonicNanos()
-            val rows = try {
-              val query = candidateQuery(section, cutoff.toString(), observedAt.toString(),
-                afterTime, afterId, filter, CANDIDATE_PAGE_SIZE, historyFilter)
-              val shape = Triple(session, section, historyFilter)
-              val plan = accessPlans.getOrPut(shape) { queryPlan(query.sql) }
-              accounting.accessPlanIndexSearches = plan.first
-              accounting.accessPlanScans = plan.second
-              room!!.candidates().candidates(query.roomQuery)
-            } finally {
-              val elapsed = (monotonicNanos() - selectionStarted).coerceAtLeast(0)
-              selectionNanos += elapsed
-              accounting.selectionNanos += elapsed
-              selectionStatements++
-              accounting.selectionStatements++
+          val selectionStarted = monotonicNanos()
+          val candidates = try {
+            val query = candidateQuery(section, cutoff.toString(), observedAt.toString(),
+              parsed?.afterTime, parsed?.afterId, filter, CANDIDATE_BUDGET, historyFilter)
+            val shape = Triple(session, section, historyFilter)
+            val plan = accessPlans.getOrPut(shape) { queryPlan(query.sql) }
+            accounting.accessPlanIndexSearches = plan.first
+            accounting.accessPlanScans = plan.second
+            room!!.candidates().candidates(query.roomQuery)
+          } finally {
+            val elapsed = (monotonicNanos() - selectionStarted).coerceAtLeast(0)
+            selectionNanos += elapsed
+            accounting.selectionNanos += elapsed
+            selectionStatements++
+            accounting.selectionStatements++
+          }
+          selectedRows += candidates.size
+          accounting.selectedRows += candidates.size
+          if (before != revisionConnection!!.dataVersion()) return@repeat
+          val batches = candidates.chunked(CANDIDATE_PAGE_SIZE)
+          val projectionStarted = monotonicNanos()
+          val projections = try {
+            existingSnapshot(runtime) {
+              buildList {
+                var accepted = 0
+                for (rows in batches) {
+                  accounting.projectionSubmitted += rows.size
+                  val projection = runtime.ideStatusService.projectBoardSelection(rows.map { it.id }, WorkBoardRequest(
+                    WorkBoardWindow.entries.single { it.wireValue == retention.cliValue }, observedAt, CANDIDATE_PAGE_SIZE))
+                  add(projection)
+                  if (projection.items.any { it.snapshot.problem != null }) break
+                  accepted += projection.items.count { belongs(it.toDomain(), section, cutoff, observedAt) }
+                  if (accepted >= PAGE_SIZE) break
+                }
+              }
             }
-            selectedRows += rows.size
-            accounting.selectedRows += rows.size
-            attemptRowsSelected += rows.size
-            if (rows.isEmpty()) { exhausted = true; break }
-            val projectionStarted = monotonicNanos()
-            accounting.projectionSubmitted += rows.size
-            val projection = try {
-              existingSnapshot(runtime) { runtime.ideStatusService.projectBoardSelection(rows.map { it.id }, WorkBoardRequest(
-                WorkBoardWindow.entries.single { it.wireValue == retention.cliValue }, observedAt, CANDIDATE_PAGE_SIZE)) }
-            } finally {
-              val elapsed = (monotonicNanos() - projectionStarted).coerceAtLeast(0)
-              projectionNanos += elapsed
-              accounting.projectionNanos += elapsed
-            }
+          } finally {
+            val elapsed = (monotonicNanos() - projectionStarted).coerceAtLeast(0)
+            projectionNanos += elapsed
+            accounting.projectionNanos += elapsed
+          }
+          for ((index, projection) in projections.withIndex()) {
+            val rows = batches[index]
             projection.diagnostics.map { it.reason }.distinct().forEach { reason ->
               RuntimeDiagnostics.record("work_data_${reason.wireValue}")
               attemptMetrics += reason.wireValue
@@ -360,11 +381,7 @@ class RoomBoardSource internal constructor(
               if (earliest == null || deadline < earliest) earliest = deadline
             }
             val projected = projection.items.map { it.toDomain().copy(databaseGeneration = generation) }.associateBy { it.identity.id }
-            var consumed = 0
             for (row in rows) {
-              consumed++
-              afterTime = row.sort_time
-              afterId = row.id
               next = row
               val item = projected[row.id]
               if (item != null && belongs(item, section, cutoff, observedAt)) {
@@ -380,15 +397,16 @@ class RoomBoardSource internal constructor(
               }
               if (result.size == PAGE_SIZE) break
             }
-            exhausted = consumed == rows.size && rows.size < CANDIDATE_PAGE_SIZE
+            if (result.size == PAGE_SIZE) break
           }
+          val exhausted = next == candidates.lastOrNull() && candidates.size < CANDIDATE_BUDGET
+          val coherent = projections.all { it.observation == startObservation }
           val attemptNumber = attemptMetrics.size + 1
           val attemptRows = selectedRows - attemptRowsBefore
           val attemptProjected = projectedItems - attemptProjectedBefore
-          attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected,selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore},coherent=${before == revisionConnection!!.dataVersion()}"
-          val after = revisionConnection!!.dataVersion()
-          val endObservation = existingSnapshot(runtime) { runtime.databaseSession.read { it.workList.observation() } }
-          if (before == after && startObservation == endObservation && committedObservation == startObservation && currentFileMatches()) {
+          attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected,selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore},coherent=$coherent"
+          val endObservation = committedObservation ?: startObservation
+          if (coherent && committedObservation == startObservation && currentFileMatches()) {
             val retainedObservation = ActiveRetention(
               retention, filter, historyFilter, queryEpoch, generation, session, endObservation.storeId, endObservation.revision,
             )
@@ -412,7 +430,7 @@ class RoomBoardSource internal constructor(
             if (earliest == null) pageDeadlines.remove(pageKey) else pageDeadlines[pageKey] = earliest
             deadlineRevision.update { it + 1 }
             val nextCursor = next?.takeIf { !exhausted }?.let { row ->
-              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session, after,
+              Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(PageCursor(generation, session, before,
                 section, observedAt.toString(), retention.cliValue, filter, historyFilter, row.sort_time, row.id,
                 endObservation.storeId, endObservation.revision, queryEpoch)).encodeToByteArray())
             }
@@ -470,8 +488,17 @@ class RoomBoardSource internal constructor(
         parsed.repositoryIdentity != identity.repositoryIdentity || parsed.list != list)) return@safeRead staleCursor()
       repeat(3) {
         val before = revisionConnection!!.dataVersion()
-        val result = existingSnapshot(runtime) { runtime.ideStatusService.detail(WorkDetailRequest(identity.id, observedAt = clock.instant(), cursor = parsed?.runtimeCursor, pageSize = PAGE_SIZE, startOffset = startOffset, list = list?.let { WorkDetailList.valueOf(it.name) })) }
-        if (before == revisionConnection!!.dataVersion() && currentFileMatches()) {
+        val loaded = existingSnapshot(runtime) {
+          val result = runtime.ideStatusService.detail(WorkDetailRequest(identity.id, observedAt = clock.instant(), cursor = parsed?.runtimeCursor, pageSize = PAGE_SIZE, startOffset = startOffset, list = list?.let { WorkDetailList.valueOf(it.name) }))
+          val options = result.item?.let { work ->
+            val domain = work.snapshot.toDomain(work.repositoryRoot, work.finishedAt, work.finishedAtSource?.wireValue)
+              .copy(databaseFileObservation = work.databaseFileObservation)
+            domain.runTarget()?.let(runtime.workControlService::options)
+          }
+          result to options
+        }
+        val result = loaded.first
+        if (currentFileMatches()) {
           val item = result.item ?: return@safeRead Outcome.Failure(Problem(ProblemCode.fromWire(result.problem?.code?.wireValue ?: "unknown_work_item"), "This work item is no longer available."))
           fun token(selected: DetailList?): String? = (if (selected == null) result.nextCursor else result.listCursors[WorkDetailList.valueOf(selected.name)])?.let { runtimeCursor ->
             Base64.getUrlEncoder().withoutPadding().encodeToString(Json.encodeToString(DetailCursor(generation,
@@ -481,7 +508,9 @@ class RoomBoardSource internal constructor(
           val mapped = item.toDomain(result.observedAt, token(null)).let { it.copy(
             item = it.item.copy(databaseGeneration = generation), cursors = cursors) }
           if (mapped.item.identity != identity) return@safeRead staleCursor()
-          return@safeRead Outcome.Value(mapped)
+          return@safeRead Outcome.Value(mapped.copy(runOptions = loaded.second?.let {
+            RunOptions(it.canCancel, it.canLaunch, it.launchLabel, it.agentId, it.agentChoices, it.unavailableReason)
+          }))
         }
       }
       Outcome.Failure(Problem(ProblemCode.BUSY, "Detail changed during this read. Retry.", StorageFailure.BUSY))
@@ -537,12 +566,48 @@ class RoomBoardSource internal constructor(
         currentFileMatches() && item.databaseGeneration == generation
       }) {
           WorkControlResult.Accepted -> Outcome.Value(Unit)
+          is WorkControlResult.LaunchFailed -> Outcome.Failure(Problem(ProblemCode.UNKNOWN, result.reason))
           is WorkControlResult.Rejected -> {
             RuntimeDiagnostics.record("goal_control_${result.reason.name.lowercase()}")
             Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "This goal changed or cannot accept this control. Refresh before retrying.", StorageFailure.STALE_QUERY))
           }
       }
     }
+  }
+
+  override suspend fun cancel(item: WorkItem): Outcome<Unit> = runAction(item, null, true)
+  override suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> = runAction(item, agentId, false)
+
+  private suspend fun runAction(item: WorkItem, agentId: String?, cancel: Boolean): Outcome<Unit> = mutex.withLock {
+    safeRead {
+      val runtime = requireNotNull(component)
+      ensureSession(runtime)
+      if (!currentFileMatches() || item.databaseGeneration != generation) return@safeRead staleCursor()
+      val target = item.runTarget() ?: return@safeRead staleCursor()
+      val result = if (cancel) runtime.workControlService.request(target, WorkControlAction.CANCEL) else runtime.workControlService.request(target, WorkControlAction.LAUNCH, agentId)
+      when (result) {
+        WorkControlResult.Accepted -> Outcome.Value(Unit)
+        is WorkControlResult.LaunchFailed -> {
+          RuntimeDiagnostics.record("run_launch_failed")
+          Outcome.Failure(Problem(ProblemCode.UNKNOWN, result.reason))
+        }
+        is WorkControlResult.Rejected -> {
+          RuntimeDiagnostics.record("run_action_${result.reason.name.lowercase()}")
+          val message = when (result.reason) {
+            WorkControlRejection.AGENT_REQUIRED -> "Choose an agent to start this run."
+            WorkControlRejection.BRANCH_CHANGED -> "Check out this run's recorded branch before starting it again."
+            WorkControlRejection.TERMINATION_INCOMPLETE -> "The runner has not stopped yet. Refresh and retry cancellation."
+            WorkControlRejection.OWNERSHIP_MISMATCH -> "The runner's identity could not be confirmed. Refresh before retrying."
+            else -> "This run changed or cannot accept this action. Refresh before retrying."
+          }
+          Outcome.Failure(Problem(ProblemCode.STALE_TARGET, message))
+        }
+      }
+    }
+  }
+
+  private fun WorkItem.runTarget(): WorkRunTarget? = databaseFileObservation?.let {
+    WorkRunTarget(identity.id, identity.repositoryIdentity, Path.of(repositoryRoot), executionId, statusRevision, updatedAt, it)
   }
 
   private fun <T : Any> existingSnapshot(runtime: RuntimeComponent, query: () -> T): T =
@@ -670,7 +735,7 @@ class RoomBoardSource internal constructor(
         ownerRegistrations = ownerObservations.values.flatMap { it.values },
       )
     generation++
-    invalidate()
+    if (teardown.room != null || teardown.observer != null || teardown.revisionConnection != null) invalidate()
     withContext(Dispatchers.IO + NonCancellable) {
       runCatching { teardown.observer?.cancelAndJoin() }
         .onFailure { RuntimeDiagnostics.record("room_observer_teardown_failed") }
@@ -727,6 +792,11 @@ class RoomBoardSource internal constructor(
   } catch (error: Exception) {
     val causes = generateSequence(error as Throwable?) { it.cause }.take(MAX_FAILURE_CAUSES).toList()
     causes.firstOrNull { it is CancellationException }?.let { throw it }
+    causes.filterIsInstance<androidx.sqlite.SQLiteException>().firstOrNull()?.let { providerFailure ->
+      val providerCode = providerFailure.message?.substringBefore(',')?.removePrefix("Error code: ")?.toIntOrNull()
+      RuntimeDiagnostics.recordRequest("room_read_provider_failure",
+        providerCode?.let { mapOf("sqlite_error_code" to it) }.orEmpty())
+    }
     val code = causes.firstNotNullOfOrNull { cause ->
       when (cause) {
         is ObservationUnavailableException -> "observation_unavailable"

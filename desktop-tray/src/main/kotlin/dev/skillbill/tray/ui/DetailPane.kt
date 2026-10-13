@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.application.*
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.presentation.effectiveFreshness
+import dev.skillbill.tray.presentation.phasePipeline
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -37,6 +38,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
   val state by model.state.collectAsState()
   val scroll = rememberScrollState()
   val item = detail.item
+  val pipeline = phasePipeline(detail)
   val planning = item.planningState?.let { it != "prepared" } == true
   val subtaskKeys = detail.subtasks.map { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" } +
     listOfNotNull("${item.identity.repositoryIdentity}:${item.identity.id}:goal-finish".takeIf { detail.goalFinishPipeline.isNotEmpty() })
@@ -68,7 +70,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          StatusChip(item.lifecycle.name.lowercase(), lifecycleColor(item.lifecycle), item.lifecycle)
+          StatusChip(if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.lifecycle.name.lowercase(), lifecycleColor(item.lifecycle), item.lifecycle)
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
           StatusChip(if (item.family == WorkFamily.FEATURE_GOAL) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
@@ -85,9 +87,8 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
           }
         }
       }
-      if (current != null && !boardStale && current.freshness == Freshness.FRESH && current.eligibleForControl()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        DesignButton(if (current.pauseRequested) "Pause requested" else "Pause after current subtask", enabled = !current.pauseRequested) { model.perform("pause", item.identity) }
-        DesignButton("Stop goal", danger = true) { model.perform("stop", item.identity) }
+      if (current != null && !boardStale) {
+        RunActionButtons(detail, model, item.identity in state.actionsInProgress)
       }
     }
     HorizontalDivider(color = border)
@@ -127,8 +128,8 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
                   val validation = detail.validation.firstOrNull { it.subtaskId == task.id }
                   Text(listOfNotNull(task.status, task.commitSha?.take(7), if (active) item.phaseExecution?.let { "${it.phaseId} ${it.label()}" } else null, if (active) item.currentModel else null, if (active) item.currentEffort else null, validation?.passed?.let { if (it) "validation passed" else "validation failed" }, task.dependencies.takeIf { pending && it.isNotEmpty() }?.joinToString { "after #${it.subtaskId}" }).joinToString(" · "), color = if (active) blue else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
                   task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
-                  if (active && detail.phases.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    detail.phases.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == item.currentPhaseId, phase.attemptCount) }
+                  if (active && pipeline.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    pipeline.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == (item.currentPhaseId ?: detail.currentPhase), phase.attemptCount) }
                   }
                 }
                 if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)

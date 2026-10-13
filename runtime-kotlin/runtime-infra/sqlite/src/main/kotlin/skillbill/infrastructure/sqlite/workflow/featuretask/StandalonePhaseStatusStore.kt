@@ -1,5 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
+import skillbill.contracts.JsonCodec
+import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -58,8 +60,9 @@ internal class StandalonePhaseStatusStore(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
-        lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
+        launch_agent_id, launch_arguments_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -84,6 +87,8 @@ internal class StandalonePhaseStatusStore(
           request.processOwner?.bootIdentity,
           request.processOwner?.pid,
           request.processOwner?.processBirthToken,
+          request.launchAgentId,
+          request.launchArguments?.let(JsonCodec::valueToJsonString),
         ),
       )
       statement.executeUpdate()
@@ -223,27 +228,46 @@ internal class StandalonePhaseStatusStore(
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
+  override fun requestCancellation(
+    record: StandalonePhaseStatusRecord,
+    at: Instant,
+  ): StandalonePhaseStatusUpdateResult = operatorCancellation(record, at, false)
+
+  override fun cancel(
+    record: StandalonePhaseStatusRecord,
+    at: Instant,
+  ): StandalonePhaseStatusUpdateResult = operatorCancellation(record, at, true)
+
+  private fun operatorCancellation(
+    record: StandalonePhaseStatusRecord,
+    at: Instant,
+    finished: Boolean,
+  ): StandalonePhaseStatusUpdateResult =
+    connection.inNestedWriteTransaction(diagnostics, transactionActive) {
+      updateInTransaction(
+        StandalonePhaseStatusUpdate(
+          record.executionId, record.statusRevision, record.leaseOwner, record.leaseGeneration,
+          if (finished) "canceled" else "paused", if (finished) "canceled" else "cancel_requested",
+          if (finished) "Canceled by you." else "Cancellation requested.", at,
+          finishedAt = at.takeIf { finished }, activeDurationMs = record.activeDurationMs,
+          terminalResult = "Canceled by you.".takeIf { finished },
+          acceptedResult = "Canceled by you.".takeIf { finished },
+        ),
+        operatorCancellation = true,
+      )
+    }
+
   override fun update(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult =
     connection.inNestedWriteTransaction(diagnostics, transactionActive) {
       updateInTransaction(request)
     }
 
-  private fun updateInTransaction(request: StandalonePhaseStatusUpdate): StandalonePhaseStatusUpdateResult {
+  private fun updateInTransaction(
+    request: StandalonePhaseStatusUpdate,
+    operatorCancellation: Boolean = false,
+  ): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(request.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
-    val leaseExpired =
-      current.lifecycleState !in TERMINAL_STATES &&
-        !current.leaseExpiresAt.isAfter(clock.instant())
-    val rejected =
-      when {
-        !isAllowedTransition(current, request) -> StandalonePhaseStatusUpdateResult.TERMINAL_REGRESSION
-        current.statusRevision != request.expectedRevision -> StandalonePhaseStatusUpdateResult.STALE_REVISION
-        current.leaseOwner != request.leaseOwner ||
-          current.leaseGeneration != request.leaseGeneration ||
-          leaseExpired ->
-          StandalonePhaseStatusUpdateResult.STALE_LEASE
-        current.lifecycleState in TERMINAL_STATES -> StandalonePhaseStatusUpdateResult.IDEMPOTENT
-        else -> null
-      }
+    val rejected = updateRejection(current, request, operatorCancellation)
     if (rejected != null) return rejected
     val nextRevision = incrementDecimal(current.statusRevision)
     val updated =
@@ -252,7 +276,7 @@ internal class StandalonePhaseStatusStore(
         UPDATE standalone_phase_status SET
           status_revision = ?, lifecycle_state = ?, current_step = ?, current_activity = ?,
           updated_at = ?, finished_at = ?, active_duration_ms = COALESCE(?, active_duration_ms),
-          active_duration_as_of = COALESCE(?, active_duration_as_of),
+          active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
           terminal_result = ?, accepted_result = ?
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
@@ -266,6 +290,7 @@ internal class StandalonePhaseStatusStore(
             request.updatedAt.toString(),
             request.finishedAt?.toString(),
             request.activeDurationMs,
+            request.lifecycleState in TERMINAL_STATES,
             request.activeDurationAsOf?.toString(),
             request.terminalResult,
             request.acceptedResult,
@@ -447,10 +472,36 @@ internal class StandalonePhaseStatusStore(
     return parsed
   }
 
+  private fun updateRejection(
+    current: StandalonePhaseStatusRecord,
+    request: StandalonePhaseStatusUpdate,
+    operatorCancellation: Boolean,
+  ): StandalonePhaseStatusUpdateResult? {
+    val leaseExpired =
+      current.lifecycleState !in TERMINAL_STATES &&
+        !current.leaseExpiresAt.isAfter(clock.instant())
+    return when {
+      !isAllowedTransition(current, request, operatorCancellation) ->
+        StandalonePhaseStatusUpdateResult.TERMINAL_REGRESSION
+      current.statusRevision != request.expectedRevision -> StandalonePhaseStatusUpdateResult.STALE_REVISION
+      current.leaseOwner != request.leaseOwner ||
+        current.leaseGeneration != request.leaseGeneration ||
+        leaseExpired && !operatorCancellation ->
+        StandalonePhaseStatusUpdateResult.STALE_LEASE
+      current.lifecycleState in TERMINAL_STATES && !operatorCancellation ->
+        StandalonePhaseStatusUpdateResult.IDEMPOTENT
+      else -> null
+    }
+  }
+
   private fun isAllowedTransition(
     current: StandalonePhaseStatusRecord,
     request: StandalonePhaseStatusUpdate,
+    operatorCancellation: Boolean,
   ): Boolean {
+    if (operatorCancellation && current.lifecycleState !in setOf("terminal", "completed", "success", "canceled")) {
+      return true
+    }
     if (current.lifecycleState == "paused" && current.currentStep == "runner_interrupted" &&
       request.lifecycleState !in setOf("paused", "failed")
     ) {
@@ -517,7 +568,30 @@ internal class StandalonePhaseStatusStore(
       terminalResult = getString("terminal_result"),
       acceptedResult = getString("accepted_result"),
       processOwner = readProcessOwner(),
+      launchAgentId = getString("launch_agent_id"),
+      launchArguments = readLaunchArguments(),
     )
+
+  private fun ResultSet.readLaunchArguments(): List<String>? {
+    val raw = getString("launch_arguments_json") ?: return null
+    val values =
+      try {
+        JsonCodec.parseValue(raw) as? List<*>
+      } catch (failure: MalformedJsonTextError) {
+        throw invalidIdeStatusSchemaError(
+          "standalone-status",
+          "launch_arguments_json",
+          "Invalid launch arguments: ${failure.message}",
+          failure,
+        )
+      }
+    if (values == null || values.size > MAX_LAUNCH_ARGUMENTS || values.any { !validLaunchArgument(it) }) {
+      throw invalidIdeStatusSchemaError("standalone-status", "launch_arguments_json", "Invalid launch arguments.")
+    }
+    return values.filterIsInstance<String>()
+  }
+
+  private fun validLaunchArgument(value: Any?): Boolean = value is String && value.length <= MAX_LAUNCH_ARGUMENT_LENGTH
 
   private fun ResultSet.readProcessOwner(): FeatureTaskRuntimeProcessIdentity? {
     val host = getString("owner_host_identity")
@@ -548,11 +622,13 @@ internal class StandalonePhaseStatusStore(
   }
 
   private companion object {
+    const val MAX_LAUNCH_ARGUMENTS = 128
+    const val MAX_LAUNCH_ARGUMENT_LENGTH = 16384
     const val MONITOR_PHASE_ID = "monitor"
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     val LIVE_STATES = setOf("active", "paused", "blocked")
-    val TERMINAL_STATES = setOf("terminal", "failed", "blocked")
-    val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed")
+    val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
+    val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed", "canceled")
     val LIVE_RETENTION: Duration = Duration.ofHours(24)
     val SETTLED_RETENTION: Duration = Duration.ofHours(6)
     val UPDATE_STATUS_REGISTRY_SQL =

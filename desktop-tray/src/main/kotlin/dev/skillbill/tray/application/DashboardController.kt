@@ -304,7 +304,7 @@ class DashboardController(
   private fun selectDefaultItem() {
     val state = mutable.value
     if (state.selected != null || LIVE_SECTIONS.any {
-      it !in state.sections || it in state.sectionLoading || it in state.sectionProblems
+      it !in state.sections || it in state.sectionProblems
     }) return
     val live = LIVE_SECTIONS.firstNotNullOfOrNull { state.sections[it]?.items?.firstOrNull() }
     if (live != null) {
@@ -585,19 +585,34 @@ class DashboardController(
   override fun trayAvailable() { mutable.update { it.copy(trayProbeComplete = true, trayProblem = null) } }
 
   override fun perform(action: String, identity: WorkIdentity) {
-    if (action !in setOf("pause", "stop")) return
+    val actionName = action.substringBefore(':')
+    if (actionName !in setOf("pause", "stop", "cancel", "launch")) return
+    val agentId = action.substringAfter(':', "").takeIf(String::isNotBlank)
     val job = synchronized(this) {
       val current = mutable.value
-      val item = current.board?.items?.singleOrNull { it.identity == identity } ?: return
+      val boardItem = current.board?.items?.singleOrNull { it.identity == identity } ?: return
+      val selectedDetail = current.detail?.takeIf { it.item.identity == identity }
+      val item = if (actionName in setOf("cancel", "launch")) selectedDetail?.item ?: return else boardItem
       val generation = storeGeneration ?: return
-      if (switchingStore || identity in controlJobs || current.stale || item.freshness != Freshness.FRESH ||
-        !item.eligibleForControl() || action == "pause" && item.pauseRequested || item.databaseGeneration != generation) return
+      val options = selectedDetail?.runOptions
+      val eligible = when (actionName) {
+        "cancel" -> options?.canCancel == true
+        "launch" -> options?.canLaunch == true
+        else -> item.freshness == Freshness.FRESH && item.eligibleForControl() &&
+          !(actionName == "pause" && item.pauseRequested)
+      }
+      if (switchingStore || identity in controlJobs || current.stale || !eligible || item.databaseGeneration != generation) return
       val epoch = storeEpoch
       val controlJob = scope.launch(start = CoroutineStart.LAZY) {
         val owner = currentCoroutineContext().job
         try {
           if (!isCurrentControl(identity, owner, epoch, generation)) return@launch
-          val result = if (action == "pause") controls.pause(item) else controls.stop(item)
+          val result = when (actionName) {
+            "pause" -> controls.pause(item)
+            "cancel" -> controls.cancel(item)
+            "launch" -> controls.launch(item, agentId)
+            else -> controls.stop(item)
+          }
           val published = synchronized(this@DashboardController) {
             if (!isCurrentControlLocked(identity, owner, epoch, generation)) false
             else {
@@ -609,14 +624,21 @@ class DashboardController(
           boards.refresh()
         } finally {
           synchronized(this@DashboardController) {
-            if (controlJobs[identity] === owner) controlJobs.remove(identity)
+            if (controlJobs[identity] === owner) {
+              controlJobs.remove(identity)
+              mutable.update { it.copy(actionsInProgress = it.actionsInProgress - identity) }
+            }
           }
         }
       }
+      mutable.update { it.copy(actionsInProgress = it.actionsInProgress + identity, actionProblem = null) }
       controlJobs[identity] = controlJob
       controlJob.invokeOnCompletion {
         synchronized(this@DashboardController) {
-          if (controlJobs[identity] === controlJob) controlJobs.remove(identity)
+          if (controlJobs[identity] === controlJob) {
+            controlJobs.remove(identity)
+            mutable.update { it.copy(actionsInProgress = it.actionsInProgress - identity) }
+          }
         }
       }
       controlJob

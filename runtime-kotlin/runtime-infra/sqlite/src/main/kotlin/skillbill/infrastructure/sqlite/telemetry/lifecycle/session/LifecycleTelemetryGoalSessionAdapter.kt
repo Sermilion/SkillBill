@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 
+import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalFinishedSaveOutcome
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueIdentity
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueSegmentStart
@@ -21,12 +22,33 @@ import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
 import java.sql.Connection
+import java.time.Instant
 
 internal class LifecycleTelemetryGoalSessionAdapter(
   private val connection: Connection,
   private val runtimeVersion: String,
   private val diagnostics: RuntimeDiagnostics,
 ) : GoalLifecycleTelemetryRepository {
+  override fun cancelGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    canceledAt: Instant,
+  ): Boolean {
+    val changed =
+      connection.prepareStatement(
+        "UPDATE goal_issue_progress SET status = 'abandoned', finished_at = ?, state_entered_at = ?, " +
+          "state_entered_at_estimated = 0 WHERE parent_workflow_id = ? AND issue_key = ? " +
+          "AND COALESCE(status, '') NOT IN ('completed', 'abandoned')",
+      ).use { statement ->
+        statement.bindAll(canceledAt.toString(), canceledAt.toString(), parentWorkflowId, issueKey)
+        statement.executeUpdate() == 1
+      }
+    diagnostics.info(
+      "seam=goal-cancellation outcome=${if (changed) "canceled" else "refused"} workflow=$parentWorkflowId",
+    )
+    return changed
+  }
+
   override fun goalStarted(
     record: GoalStartedRecord,
     level: String,
