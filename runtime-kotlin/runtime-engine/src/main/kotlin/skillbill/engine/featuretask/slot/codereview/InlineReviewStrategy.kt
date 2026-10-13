@@ -1,9 +1,11 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
@@ -31,6 +33,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergeResult
+import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
@@ -42,8 +45,9 @@ import java.nio.file.Path
 
 class InlineReviewStrategy(
   runner: PhaseRunner,
+  qualityRubricResolver: ParallelCodeReviewRunner? = null,
 ) : PhaseStrategyStatusProjection() {
-  private val codeReview = CodeReviewSlot(runner, InlineReviewPass)
+  private val codeReview = CodeReviewSlot(runner, InlineReviewPass(qualityRubricResolver))
 
   override val slot: PhaseSlot = PhaseSlot.CODE_REVIEW
   override val strategyId: String = ID
@@ -90,7 +94,9 @@ class InlineReviewStrategy(
   }
 }
 
-internal object InlineReviewPass : CodeReviewPass {
+internal class InlineReviewPass(
+  private val qualityRubricResolver: ParallelCodeReviewRunner?,
+) : CodeReviewPass {
   override val policy =
     PhaseStepPolicy(
       mutating = false,
@@ -114,13 +120,25 @@ internal object InlineReviewPass : CodeReviewPass {
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
   ): ParallelCodeReviewRunOutcome {
+    val qualityRubric =
+      qualityRubricResolver?.let { resolver ->
+        when (
+          val resolved =
+            resolver.resolveInlineCodeQualityRubric(
+              delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, run.reviewTarget, input),
+            )
+        ) {
+          is ParallelCodeReviewPlanned.Failed -> return ParallelCodeReviewRunOutcome.PlanningFailed(resolved.failure)
+          is ParallelCodeReviewPlanned.Ready -> resolved.value
+        }
+      }
     val composed =
       InlineReviewDirective.compose(
         target = run.reviewTarget,
-        baseRevision = input.reviewBaseSha,
-        headRevision = input.currentHeadSha,
+        revisions = input.reviewBaseSha to input.currentHeadSha,
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
+        qualityRubric = qualityRubric,
       )
     val directive =
       if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
@@ -139,11 +157,12 @@ internal object InlineReviewPass : CodeReviewPass {
 object InlineReviewDirective {
   fun compose(
     target: ReviewTarget,
-    baseRevision: String,
-    headRevision: String,
+    revisions: Pair<String, String>,
     specPath: Path?,
     agentAddonsSection: String,
+    qualityRubric: String? = null,
   ): String {
+    val (baseRevision, headRevision) = revisions
     val prompt =
       buildString {
         target.openingLines(baseRevision, headRevision).forEach(::appendLine)
@@ -173,6 +192,12 @@ object InlineReviewDirective {
         append(CodeReviewDirectives.review)
         appendLine()
         append(CodeReviewDirectives.inlineReview)
+        qualityRubric?.let {
+          appendLine()
+          appendLine("## Selected local code-quality rubric")
+          appendLine("Use the full owner rubric below. Attribute its findings with the exact specialist identity.")
+          appendLine(it)
+        }
         appendLine()
         appendLine(
           "Emit the bounded authoring evidence record as leading prose before the findings register and final " +
@@ -211,8 +236,14 @@ internal object InlineReviewResultDecoder {
         ParallelReviewLaneResult(agentId = agentId, findings = parsed.findings),
         ParallelReviewLaneResult(agentId = agentId, findings = emptyList()),
       )
+    val outputWithQualitySection =
+      inlineOutputWithNormalizedRegister(
+        stdout,
+        ParallelReviewMerger.formattedOutput(merged.findings, includeAgentLabels = false),
+        parsed,
+      )
     return ParallelCodeReviewResult(
-      mergeResult = merged.copy(formattedOutput = stdout.ifBlank { "Review completed." }),
+      mergeResult = merged.copy(formattedOutput = outputWithQualitySection.ifBlank { "Review completed." }),
       lane1 =
         ParallelReviewLaneStatus(
           agentId = agentId,
@@ -227,6 +258,43 @@ internal object InlineReviewResultDecoder {
         ),
     )
   }
+
+  private fun inlineOutputWithNormalizedRegister(
+    rawOutput: String,
+    mergedOutput: String,
+    parsed: ParallelReviewParseResult,
+  ): String {
+    val lines = rawOutput.lines()
+    val registerPositions = (parsed.admittedLinePositions + parsed.rejections.map { it.linePosition }).toSet()
+    val verdictIndex = lines.indexOfLast { isTerminalVerdict(it) }
+    val verdict = lines.getOrNull(verdictIndex)
+    val authoringProse =
+      lines.mapIndexedNotNull { index, line ->
+        if (index + 1 in registerPositions || index == verdictIndex || isRegisterSectionHeader(line)) null else line
+      }.joinToString("\n").trim()
+    return listOf(authoringProse, mergedOutput.trim(), verdict)
+      .filterNotNull()
+      .filter(String::isNotBlank)
+      .joinToString("\n\n")
+  }
+
+  private fun isTerminalVerdict(line: String): Boolean {
+    val token = line.trim()
+    return token.startsWith("verdict:", ignoreCase = true) ||
+      token.equals("approved", ignoreCase = true) ||
+      token.equals("changes_requested", ignoreCase = true) ||
+      token.equals("needs_fix", ignoreCase = true)
+  }
+
+  private fun isRegisterSectionHeader(line: String): Boolean =
+    line.trim() in
+      setOf(
+        "#### Code Quality (non-blocking)",
+        "Actionable",
+        "Refuted",
+        "Unresolved",
+        "Out of scope",
+      )
 
   private fun failedResult(
     agentId: String,

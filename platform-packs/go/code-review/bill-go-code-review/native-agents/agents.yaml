@@ -8,6 +8,10 @@ agents:
     description: "Go architecture specialist — Package and module dependency direction, interface ownership, composition roots, component lifecycles, and goroutine scope ownership."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-go-code-review-code-quality
+    description: "Go code quality specialist — Go language constructs, clear helpers, cohesive state, error handling, ownership, and standard-library choices."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-go-code-review-performance
     description: "Go performance specialist — Measured pprof and benchmark evidence, allocations, retention, lock contention, scheduler pressure, batching, and bounded resources."
     compose: governed-content

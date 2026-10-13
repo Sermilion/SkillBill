@@ -36,21 +36,21 @@ Use this lane for changed code in any routed language when the concern is idiom 
 
 ### Idiom and helper rules
 
-- **`CQ-01` Idiomatic constructs.** Prefer a language or standard-library operation over hand-rolled code when the rewrite preserves behavior; flag duplicate conversion or empty-value logic that can fail on a boundary case such as nullable `orEmpty()` handling or an allocated `emptyList()` result.
-- **`CQ-02` Scope-function clarity.** Use `let`, `run`, `also`, or `apply` only when the receiver and result stay clear; flag nested chains that hide a side effect or return value and can cause incorrect behavior.
-- **`CQ-03` Repository rules.** Follow applicable project guidance and configured language conventions; reject a generic-style recommendation that conflicts with `AGENTS.md` or `detekt`, because it can fail project checks and duplicate tooling findings.
+- **`CQ-01` Idiomatic constructs.** Prefer a language or standard-library operation over hand-rolled code when the rewrite preserves behavior; flag duplicate conversion or empty-value logic that adds unnecessary branching, such as nullable `orEmpty()` handling or an allocated `emptyList()` result. Keep null handling and mutability unchanged.
+- **`CQ-02` Scope-function clarity.** Use `let`, `run`, `also`, or `apply` only when the receiver and result stay clear; flag nested chains that hide a side effect or return value. Preserve evaluation order and the same result.
+- **`CQ-03` Repository rules.** Follow applicable project guidance and configured language conventions; reject a generic-style recommendation that conflicts with `AGENTS.md` or `detekt`, because conflicting advice adds unnecessary repair work and duplicates tooling findings.
 
 ### State and lifecycle rules
 
-- **`CQ-04` Cohesive state.** Group values into one data class or other state type when callers read or update them as one unit; flag scattered fields that can disagree and break an invariant.
-- **`CQ-05` Lifecycle states.** Replace mutually exclusive lifecycle boolean clusters with a sealed type or enum when combinations describe impossible states; flag combinations that can authorize an invalid transition or leave cleanup incomplete in `when` branches.
-- **`CQ-06` Calibration examples.** Treat the named PR #3110 fields in `CustomFreeTextViewModel` and `VisitDetailViewModel` as examples for review judgment, not changed-code findings; reporting unchanged calibration code creates a false finding.
+- **`CQ-04` Cohesive state.** Group values into one data class or other state type when callers read or update them as one unit; flag scattered fields that make callers trace one state across unrelated declarations. Preserve valid states and `data class` serialization.
+- **`CQ-05` Lifecycle states.** Replace mutually exclusive lifecycle boolean clusters with a sealed type or enum when combinations describe impossible states; flag combinations that obscure valid transitions or resource cleanup in `when` branches. Preserve all valid transitions.
+- **`CQ-06` Calibration examples.** Treat the named PR #3110 fields in `CustomFreeTextViewModel` and `VisitDetailViewModel` as examples for review judgment, not changed-code findings; reporting unchanged calibration code adds unnecessary review effort. Keep their `onSavedEntry` and `persist` behavior as calibration only.
 
 ### Structure and correctness rules
 
-- **`CQ-07` Duplication and branches.** Flag repeated logic or redundant branches only when one concrete rewrite removes divergence; describe the regression risk when copies drift across an `if` branch or equivalent path.
-- **`CQ-08` Dead code.** Reject unused declarations or unreachable branches when repository evidence shows they have no caller; name the invalid result or stale behavior a dead `when` branch can leave behind.
-- **`CQ-09` Unit size and naming.** Flag an oversized function or unclear name when it obscures a specific responsibility, data flow, resource owner, or invariant; propose a focused extraction that prevents a resource leak or missed error path.
-- **`CQ-10` Contract and data evidence.** Verify a suggested simplification against callers, API contracts, persisted data, and resource ownership; reject rewrites that drop validation, change `serialized values`, or leak a resource.
-- **`CQ-11` Tooling boundary.** Do not repeat a configured formatter or linter finding as code quality; duplicate `ktfmt` or `detekt` reports can hide a real failure and create inconsistent repair advice.
+- **`CQ-07` Duplication and branches.** Flag repeated logic or redundant branches only when one concrete rewrite removes divergence; describe the maintenance cost when copies drift across an `if` branch or equivalent path. Preserve branch outcomes and evaluation order.
+- **`CQ-08` Dead code.** Reject unused declarations or unreachable branches when repository evidence shows they have no caller; explain how a dead `when` branch misstates supported states. Retain every reachable branch and public entry point.
+- **`CQ-09` Unit size and naming.** Flag an oversized function or unclear name when it obscures a specific responsibility, data flow, resource owner, or invariant; propose a focused extraction that clarifies resource ownership or error handling around `try` and `finally`. Preserve cleanup and exceptions.
+- **`CQ-10` Contract and data evidence.** Verify a suggested simplification against callers, API contracts, persisted data, and resource ownership; reject rewrites that obscure validation, change `serialized values`, or move resource ownership away from its caller.
+- **`CQ-11` Tooling boundary.** Do not repeat a configured formatter or linter finding as code quality; duplicate `ktfmt` or `detekt` reports hide the tool-owned repair and add unnecessary review effort. Keep the configured tool authoritative.
 - Report every code-quality finding as Minor; never Blocker or Major.

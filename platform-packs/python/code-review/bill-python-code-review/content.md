@@ -17,7 +17,12 @@ Review Python applications, libraries, CLIs, services, APIs, persistence code, p
 
 Always keep the `architecture` and `platform-correctness` specialists as the baseline. Add other specialists only when their diff signals apply, and include `testing` whenever tests change materially.
 
+
+Every routed Python composition includes the required local `code-quality` specialist `bill-python-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Package layout, import direction, dependency injection, service boundaries, framework coupling, or library/application seams -> `architecture` specialist.
 - Hot paths, N+1 queries, repeated I/O, import-time work, memory growth, streaming, batching, or async blocking -> `performance` specialist.

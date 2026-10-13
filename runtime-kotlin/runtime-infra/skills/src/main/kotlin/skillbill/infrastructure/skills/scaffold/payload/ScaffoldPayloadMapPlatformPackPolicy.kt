@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.scaffold.payload
 import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.PLATFORM_PACK_PRESET_DESCRIPTORS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.displayNameFromSlug
 import skillbill.scaffold.policy.model.PlatformPackDefaults
 import skillbill.scaffold.policy.model.PlatformPackSelection
@@ -10,7 +11,7 @@ import skillbill.scaffold.policy.model.PlatformPackSelection
 internal fun resolvePlatformPackSelection(payload: Map<String, Any?>): PlatformPackSelection {
   rejectLegacyPlatformPackSelector(payload, "skeleton_mode")
   rejectLegacyPlatformPackSelector(payload, "specialist_areas")
-  return PlatformPackSelection(selectedAreas = APPROVED_CODE_REVIEW_AREAS.sorted())
+  return PlatformPackSelection(selectedAreas = (APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).sorted())
 }
 
 private fun rejectLegacyPlatformPackSelector(

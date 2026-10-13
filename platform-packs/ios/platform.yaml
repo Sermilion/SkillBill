@@ -39,6 +39,7 @@ declared_code_review_areas:
   - "testing"
   - "ui"
   - "ux-accessibility"
+  - code-quality
 
 declared_files:
   baseline: "code-review/bill-ios-code-review/content.md"
@@ -53,6 +54,7 @@ declared_files:
     testing: "code-review/bill-ios-code-review-testing/content.md"
     ui: "code-review/bill-ios-code-review-ui/content.md"
     ux-accessibility: "code-review/bill-ios-code-review-ux-accessibility/content.md"
+    code-quality: code-review/bill-ios-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "REST/Codable decoding and Apollo GraphQL schema/cache compatibility"
@@ -74,6 +76,8 @@ area_metadata:
     focus: "SwiftUI state ownership, navigation, rendering identity, and deployment-version fallbacks"
   ux-accessibility:
     focus: "VoiceOver semantics, Dynamic Type, localization completeness, and task completion"
+  code-quality:
+    focus: "Swift value modelling, optional handling, enums, focused extensions, SwiftUI state, and task ownership"
 
 lane_conditions:
   architecture: { required: true }
@@ -86,8 +90,7 @@ lane_conditions:
   reliability: { content: ["BGTaskScheduler", "background", "retry", "URLSession"] }
   ui: { content: ["SwiftUI", "UIView", "NavigationStack", "View"] }
   ux-accessibility: { content: ["accessibility", "VoiceOver", "Dynamic Type", "focus"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - swift
@@ -260,3 +263,5 @@ pointers:
   code-review/bill-ios-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-ios-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

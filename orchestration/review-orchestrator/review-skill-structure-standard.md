@@ -51,7 +51,20 @@ described in `specialist-contract.md`, not to any specialist skeleton.
 
 ### Code-Quality Lane
 
-The code-quality lane reports every finding as `Minor`, with no `Blocker` or `Major` ratings, and reports at most five findings per review. It is exempt from the reachable-failure rule that applies to other lanes. Its final rule is exactly `- Report every code-quality finding as Minor; never Blocker or Major.`
+Every shipped platform pack owns a local `code-quality` specialist. A routed
+composition selects that owner; generic supplies the fallback only when no routed
+pack owns the area. KMP's local specialist takes precedence over the Kotlin
+baseline specialist.
+
+The code-quality lane reports every finding as `Minor`, with no `Blocker` or
+`Major` ratings, and reports at most five findings across the whole review. It is
+exempt from the reachable-failure rule that applies to other lanes. Each finding
+names a changed-code location, a concrete maintenance cost, and a
+behavior-preserving rewrite. Its guidance covers language and framework idioms,
+helper clarity, cohesive state, duplication, redundant branches, dead code,
+responsibility size, and naming. It follows repository conventions and skips
+matters already enforced by configured formatters and linters. Its final rule is
+exactly `- Report every code-quality finding as Minor; never Blocker or Major.`
 
 ### Lane-Specific Consequence Examples
 

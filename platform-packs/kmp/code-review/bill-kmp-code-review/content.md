@@ -15,7 +15,12 @@ Treat the generated flattened Review Composition plan as authoritative. Launch i
 - Otherwise, select the adjacent Kotlin pack when no multiplatform boundary is present.
 - Exclude generated, vendored, and non-stack files from routing dominance.
 
+
+Every routed Android & Kotlin Multiplatform composition includes the required local `code-quality` specialist `bill-kmp-code-review-code-quality`; it gives maintainability advice without requiring a reachable failure. Failure specialists retain their existing routing signals and bounds.
+
 ## Diff-Signal Routing Table
+
+- Changed stack-owned code with maintainability concerns requires its local lane regardless of a reachable failure -> `code-quality` specialist.
 
 - Gradle module boundaries, `build.gradle.kts` dependency direction, Hilt or Koin scope ownership, `ViewModel` ownership of long-lived work, repository, use-case, or sync-engine authority, `WorkManager` enqueue ownership, or offline single-source-of-truth writes -> `architecture` specialist.
 - `expect`/`actual`, `commonMain`, `androidMain`, `iosMain`, source-set dependencies, or target-boundary declarations -> `platform-correctness` specialist.

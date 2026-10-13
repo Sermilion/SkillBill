@@ -34,6 +34,7 @@ private fun usageInvalid(message: String): ParallelCodeReviewPlanned.Failed =
 internal fun ParallelCodeReviewRunnerPlanning.resolveDiff(
   request: ParallelCodeReviewRequest,
   revisions: Pair<String, String>,
+  allowEmpty: Boolean = false,
 ): DiffResolution<String> {
   if (request.suppliedDiff != null) {
     return DiffResolution.Resolved(request.suppliedDiff)
@@ -44,7 +45,7 @@ internal fun ParallelCodeReviewRunnerPlanning.resolveDiff(
       is DiffResolution.Unresolved -> return read
       is DiffResolution.Resolved -> read.value
     }
-  if (diffText.isBlank() && request.scope != ParallelReviewScope.WORKTREE_FROM_BASE) {
+  if (!allowEmpty && diffText.isBlank() && request.scope != ParallelReviewScope.WORKTREE_FROM_BASE) {
     return DiffResolution.Unresolved("Diff is empty for scope '${request.scope.name.lowercase()}'.")
   }
   return DiffResolution.Resolved(diffText)

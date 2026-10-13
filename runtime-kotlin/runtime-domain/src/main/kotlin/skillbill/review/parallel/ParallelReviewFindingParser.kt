@@ -61,6 +61,7 @@ object ParallelReviewFindingParser {
     val normalizedText = normalizeRegisterText(text)
     val lines = normalizedText.lines()
     val admitted = mutableListOf<ParallelReviewRawFinding>()
+    val admittedLinePositions = mutableListOf<Int>()
     val rejections = mutableListOf<ParallelReviewFindingRejection>()
     val citationDiagnostics = mutableListOf<ReviewFindingCitationDiagnosticWithFinding>()
     val matchedPositions = mutableSetOf<Int>()
@@ -68,7 +69,10 @@ object ParallelReviewFindingParser {
       val position = linePositionOfFindingToken(normalizedText, match)
       matchedPositions += position
       val outcome = parseMatch(match)
-      outcome.finding?.let { admitted += it }
+      outcome.finding?.let {
+        admitted += it
+        admittedLinePositions += position
+      }
       citationDiagnostics += outcome.citationDiagnostics
       outcome.reason?.let { reason ->
         rejections +=
@@ -96,6 +100,7 @@ object ParallelReviewFindingParser {
       rejections = rejections.sortedBy(ParallelReviewFindingRejection::linePosition),
       candidateCount = candidateCount,
       citationDiagnostics = citationDiagnostics,
+      admittedLinePositions = admittedLinePositions,
     )
   }
 

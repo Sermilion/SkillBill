@@ -29,6 +29,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
@@ -216,7 +217,8 @@ class PlatformPackScaffoldParityTest {
         Files.readString(repo.resolve("platform-packs/java/code-review/bill-java-code-review/content.md")),
         "internal-for: skill-bill",
       )
-      APPROVED_CODE_REVIEW_AREAS.sorted().forEach { area ->
+      val areas = APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS
+      areas.sorted().forEach { area ->
         assertTrue(
           Files.isRegularFile(repo.resolve("platform-packs/java/code-review/bill-java-code-review-$area/content.md")),
           "Missing generated specialist content.md for $area",
@@ -232,16 +234,23 @@ class PlatformPackScaffoldParityTest {
       }
       assertComposedSourceBundle(
         repo.resolve("platform-packs/java/code-review/bill-java-code-review/native-agents/agents.yaml"),
-        APPROVED_CODE_REVIEW_AREAS.associate { area ->
+        areas.associate { area ->
+          val focus =
+            if (area == "code-quality") {
+              "Java language idioms, helper clarity, cohesive state, duplication, dead code, naming, and " +
+                "behavior-preserving rewrites across pom.xml, build.gradle, src/main/java signals; " +
+                "report Minor findings only, capped at five"
+            } else {
+              "Java ${defaultAreaFocus(area)} across pom.xml, build.gradle, src/main/java signals"
+            }
           "bill-java-code-review-$area" to
-            "Java ${area.replace('-', ' ')} specialist — " +
-            "Java ${defaultAreaFocus(area)} across pom.xml, build.gradle, src/main/java signals."
+            "Java ${area.replace('-', ' ')} specialist — $focus."
         },
       )
       assertDistinctProviderAgents(repo)
       val pack = loadPlatformPack(repo.resolve("platform-packs/java"))
-      assertEquals(APPROVED_CODE_REVIEW_AREAS.sorted(), pack.declaredCodeReviewAreas.sorted())
-      APPROVED_CODE_REVIEW_AREAS.forEach { area ->
+      assertEquals(areas.sorted(), pack.declaredCodeReviewAreas.sorted())
+      areas.forEach { area ->
         assertEquals(
           repo.resolve("platform-packs/java/code-review/bill-java-code-review-$area/content.md"),
           pack.declaredFiles.areas.getValue(area).toPath(),
@@ -272,7 +281,11 @@ class PlatformPackScaffoldParityTest {
           repo,
         )
 
-      assertEquals(APPROVED_CODE_REVIEW_AREAS.size + 1, packContents.size, packContents.toString())
+      assertEquals(
+        APPROVED_CODE_REVIEW_AREAS.size + UNIVERSAL_CODE_REVIEW_AREAS.size + 1,
+        packContents.size,
+        packContents.toString(),
+      )
       packContents.forEach { content ->
         assertContains(Files.readString(content), "internal-for: $PACK_SIDECAR_PARENT_SKILL", message = "$content")
       }

@@ -32,9 +32,10 @@ Every payload MUST include:
 - `kind` — one of:
   - `"horizontal"` — placed under `skills/<name>/content.md`.
   - `"platform-pack"` — creates a new `platform-packs/<slug>/` root with a
-    baseline `code-review` skill, approved specialist stubs, and a freshly
-    rendered `platform.yaml` (quality-check commands belong in optional
-    `validation_gate`, not a second pack skill).
+    baseline `code-review` skill, ten approved failure-specialist stubs, a
+    required local code-quality specialist stub, and a freshly rendered
+    `platform.yaml` (quality-check commands belong in optional
+    `validation_gate`, not a review specialist).
   - `"add-on"` — placed at `platform-packs/<platform>/addons/<name>.md` (flat; no
     sub-directory) unless `addon_location_path` is provided.
   - `"agent-addon"` — creates `agent-addons/<slug>/agent-addon.yaml` and
@@ -266,6 +267,13 @@ definition from the shared contract and must not define their own severity
 vocabulary. Existing packs can be migrated under the review-skill structure
 standard; this payload contract describes the newly scaffolded shape.
 
+The code-quality stub uses the same four H2 sections, but its final rule is
+exactly `- Report every code-quality finding as Minor; never Blocker or Major.`
+It names the shared five-finding review cap and asks authors to replace the
+starter prompts with language and framework guidance. Its rules identify
+maintenance costs and behavior-preserving rewrites without requiring a reachable
+failure.
+
 ### Add-on
 
 Normal add-on authoring is a two-step source workflow: create the skeleton,
@@ -302,17 +310,22 @@ outside the desktop app must register the source themselves.
 
 ## Platform-pack substance promotion
 
-Platform-pack scaffolds deliberately emit TODO-bearing specialist prompts for
+Platform-pack scaffolds deliberately emit TODO-bearing failure-specialist prompts for
 ten mechanism-plus-consequence rules across state/lifecycle/ordering,
 contract/data/security, and resource/toolchain/operational failure clusters.
+They also emit a required local code-quality stub with prompts for platform
+idioms, state, duplication, dead code, responsibility, and naming. Authors must
+replace these prompts with concrete maintenance rules before promotion.
 Quality-check commands belong in the optional `validation_gate`; the scaffolder
 does not emit a quality-check skill. These prompts make the required authoring
 work explicit, but TODO is forbidden by the maintained-repository substance
 audit. A newly generated pack must be filled with concrete platform evidence
 before it can be promoted into the maintained set.
-Promotion uses the normal exemption-free repository gate: every effective
+Promotion uses the normal exemption-free repository gate: every failure
 specialist needs at least three platform-specific failure-mode clusters and ten
-evidence-bearing rules with zero forbidden placeholders; pack-wide shared
+evidence-bearing rules with zero forbidden placeholders. The local code-quality
+specialist needs ten evidence-bearing maintenance rules across its three concern
+clusters, with concrete costs and behavior-preserving rewrites; pack-wide shared
 normalized five-word sequences must be at most 35%, and corresponding authored
 rubrics at most 65% similar. A pack that can win quality-check routing must
 declare its own `validation_gate`. Discovery and enforcement remain

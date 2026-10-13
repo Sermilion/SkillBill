@@ -86,14 +86,19 @@ object ParallelReviewMerger {
     return ParallelReviewMergeResult(findings, formattedOutput(findings))
   }
 
-  fun formattedOutput(findings: List<ParallelReviewMergedFinding>): String {
+  fun formattedOutput(
+    findings: List<ParallelReviewMergedFinding>,
+    includeAgentLabels: Boolean = true,
+  ): String {
     val (codeQualityFindings, failureFindings) =
       findings.partition { finding ->
         isCodeQualityFinding(finding.agentIds, finding.specialistSkillNames)
       }
     val failureOutput =
       if (failureFindings.none(ParallelReviewMergedFinding::hasRecordedVerdict)) {
-        failureFindings.joinToString("\n") { finding -> formatFinding(finding) }
+        failureFindings.joinToString("\n") { finding ->
+          formatFinding(finding, includeAgentLabels = includeAgentLabels)
+        }
       } else {
         val grouped =
           failureFindings.groupBy { finding ->
@@ -108,7 +113,11 @@ object ParallelReviewMerger {
             first = false
             append(outcome.header)
             append('\n')
-            append(items.joinToString("\n") { finding -> formatFinding(finding) })
+            append(
+              items.joinToString("\n") { finding ->
+                formatFinding(finding, includeAgentLabels = includeAgentLabels)
+              },
+            )
           }
         }
       }
@@ -172,6 +181,7 @@ object ParallelReviewMerger {
   private fun formatFinding(
     finding: ParallelReviewMergedFinding,
     codeQuality: Boolean = false,
+    includeAgentLabels: Boolean = true,
   ): String {
     val agentLabel = finding.agentIds.joinToString(", ")
     val specialistAttribution = if (codeQuality) codeQualityAttribution(finding) else ""
@@ -198,7 +208,7 @@ object ParallelReviewMerger {
       }
     val claimLine =
       "- [${finding.fNumber}] " +
-        (if (codeQuality) "" else "[$agentLabel] ") +
+        (if (codeQuality || !includeAgentLabels) "" else "[$agentLabel] ") +
         "${finding.severity.displayName} | ${finding.confidence} | " +
         "$specialistAttribution$commitAttribution$structuredLocation | ${finding.description}$provenance"
     val structuredFields = verdictFields(finding)

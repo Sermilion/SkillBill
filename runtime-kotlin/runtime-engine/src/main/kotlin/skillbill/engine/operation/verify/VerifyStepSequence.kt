@@ -377,8 +377,9 @@ internal class VerifyStepSequence(
   private fun registerLine(finding: ParallelReviewMergedFinding): String {
     val severity =
       if (finding.severity == ParallelReviewSeverity.NIT) ParallelReviewSeverity.MINOR else finding.severity
+    val specialists = finding.specialistSkillNames.distinct().sorted().joinToString(",")
     return "- [${finding.fNumber}] ${severity.displayName} | ${finding.confidence} | ${finding.location} | " +
-      finding.description
+      finding.description + specialists.takeIf { it.isNotEmpty() }?.let { " | specialist=$it" }.orEmpty()
   }
 
   private fun storedVerdict(artifacts: Map<String, Any?>): String {

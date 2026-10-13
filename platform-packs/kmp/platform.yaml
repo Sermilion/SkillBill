@@ -44,6 +44,7 @@ declared_code_review_areas:
   - reliability
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-kmp-code-review/content.md
@@ -55,7 +56,7 @@ declared_files:
     reliability: code-review/bill-kmp-code-review-reliability/content.md
     ui: code-review/bill-kmp-code-review-ui/content.md
     ux-accessibility: code-review/bill-kmp-code-review-ux-accessibility/content.md
-
+    code-quality: code-review/bill-kmp-code-review-code-quality/content.md
 
 validation_gate:
   full_gate_command:
@@ -109,7 +110,6 @@ validation_gate:
   suppression_markers:
     - "@Suppress"
     - "@file:Suppress"
-
 area_metadata:
   architecture:
     focus: "Gradle module boundaries and dependency direction, Hilt or Koin scope ownership, ViewModel lifecycle ownership, repository, use-case, and sync-engine authority, WorkManager ownership, and offline single-source-of-truth"
@@ -125,6 +125,8 @@ area_metadata:
     focus: "KMP Compose UI correctness and framework usage"
   ux-accessibility:
     focus: "KMP user experience, Compose semantics, and accessibility"
+  code-quality:
+    focus: "Android and multiplatform Kotlin idioms, Compose state cohesion, readable Flow operations, and expect/actual organization"
 
 lane_conditions:
   architecture:
@@ -143,7 +145,7 @@ lane_conditions:
     content: ["compose", "@Composable", "navigation"]
   ux-accessibility:
     content: ["semantics", "contentDescription", "accessibility", "focusRequester"]
-
+  code-quality: { required: true }
 code_review_composition:
   baseline_layers:
     - platform: kotlin
@@ -319,6 +321,8 @@ pointers:
   code-review/bill-kmp-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-kmp-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }
 
 required_rubric_companions:
   ui:

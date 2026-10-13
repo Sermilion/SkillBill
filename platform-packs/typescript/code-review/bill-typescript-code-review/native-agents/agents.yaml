@@ -8,6 +8,10 @@ agents:
     description: "TypeScript architecture specialist — TypeScript workspaces, project references, package exports, build graphs, dependency direction, runtime partitions, and lifecycle ownership."
     compose: governed-content
     tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
+  - name: bill-typescript-code-review-code-quality
+    description: "TypeScript code quality specialist — TypeScript discriminated unions, narrowing, async control flow, module structure, and detected UI or server frameworks."
+    compose: governed-content
+    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
   - name: bill-typescript-code-review-performance
     description: "TypeScript performance specialist — Node/browser event loops, promise fan-out, streams and backpressure, allocation, bundles, rendering, hydration, and retained resources."
     compose: governed-content

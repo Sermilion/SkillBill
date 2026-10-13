@@ -217,7 +217,7 @@ parsed `internalFor`) rather than re-scanning `platform-packs/` independently
 of selection. The parent's content hash folds exactly the selected sidecars.
 
 After a scratch install with all packs selected, `skill-bill`'s staged
-directory contains `SKILL.md` plus 84 sibling sidecars — and no agent
+directory contains `SKILL.md` plus 105 review skill sidecars — and no agent
 `skills_dir` symlink exists for any manifest-discovered review sidecar:
 
 ```
@@ -225,30 +225,35 @@ directory contains `SKILL.md` plus 84 sibling sidecars — and no agent
   → ~/.skill-bill/installed-skills/skill-bill-<content-hash>/
       SKILL.md                              rendered governed wrapper — the listed entry
       content.md                            authored source, copied verbatim
+      bill-generic-code-review.md           sidecar: generic fallback entry
+      ... (11 generic specialists total, including code-quality)
       bill-ios-code-review.md               sidecar: iOS stack entry (selected)
       bill-ios-code-review-api-contracts.md sidecar: iOS specialist
-      ... (10 iOS specialists total)
+      ... (11 iOS specialists total, including code-quality)
       bill-go-code-review.md                sidecar: Go stack entry (selected)
-      ... (10 Go specialists total)
+      ... (11 Go specialists total, including code-quality)
       bill-kotlin-code-review.md            sidecar: Kotlin stack entry (selected)
-      ... (10 Kotlin specialists total)
+      ... (11 Kotlin specialists total, including code-quality)
       bill-kmp-code-review.md               sidecar: KMP stack entry (selected)
-      ... (7 KMP specialists; 3 effective lanes compose from Kotlin)
+      ... (8 KMP specialists including code-quality; 3 effective lanes compose from Kotlin)
       bill-php-code-review.md               sidecar: PHP stack entry (selected)
-      ... (10 PHP specialists total)
+      ... (11 PHP specialists total, including code-quality)
       bill-python-code-review.md            sidecar: Python stack entry (selected)
-      ... (10 Python specialists total)
+      ... (11 Python specialists total, including code-quality)
       bill-rust-code-review.md              sidecar: Rust stack entry (selected)
-      ... (10 Rust specialists total)
+      ... (11 Rust specialists total, including code-quality)
       bill-typescript-code-review.md        sidecar: TypeScript stack entry (selected)
-      ... (10 TypeScript specialists total)
+      ... (11 TypeScript specialists total, including code-quality)
       platform-packs → …                    symlink for pack pointer resolution
 ```
 
-With only the Kotlin pack selected, its entry and ten review specialists stage; other packs contribute
-nothing. With no review packs selected, `skill-bill` stages
-byte-identically to a repo with no internal pack skills (inertness). `ALL`
-selection stages every opted-in review sidecar. SKILL-105 applies the same
+With a Kotlin selection request, install selects Kotlin, then adds KMP because
+KMP declares Kotlin as a required baseline. The available manifest-declared
+generic review fallback is included with the parent skill, for 33 review
+sidecars: Kotlin's 12, KMP's 9, and generic's 12. A requested `NONE` still
+stages generic's 12 sidecars when the fallback and parent skill are available; without the fallback,
+unselected packs contribute no sidecar or hash bytes. `ALL` selection stages
+every opted-in review sidecar. SKILL-105 applies the same
 selection-aware review sidecar model. Quality checks do not use pack sidecars:
 the selected dominant pack declares its collect-all and
 cache-bypassing collect-all argv in `validation_gate`, and
@@ -283,6 +288,7 @@ read sibling bill-kotlin-code-review.md            [internal sidecar]
   │  selection table (signal → area) and spawns specialists
   │
   ├── read sibling bill-kotlin-code-review-architecture.md   [internal sidecar]
+  ├── read sibling bill-kotlin-code-review-code-quality.md    [required local lane]
   ├── read sibling bill-kotlin-code-review-security.md       [internal sidecar]
   ├── read sibling bill-kotlin-code-review-testing.md        [internal sidecar]
   └── ... per the signal table
@@ -291,6 +297,10 @@ read sibling bill-kotlin-code-review.md            [internal sidecar]
   each specialist's rubric executes; findings merge into the
   review summary, risk register, and verdict
 ```
+
+The generic review entry provides the fallback code-quality owner when a legacy
+custom pack has no local owner. Shipped packs read their own code-quality
+sidecar, including KMP, which selects its local lane over Kotlin's baseline.
 
 For a KMP diff, the routed entry is `bill-kmp-code-review.md`, which also reads
 `bill-kotlin-code-review.md` as its baseline layer sidecar before its own
@@ -301,13 +311,17 @@ standalone `skills_dir` path (PD5).
 
 ### Selection-shaped variance at a glance
 
-| Selection | Sidecars staged inside `skill-bill/` |
+| Requested selection | Resolved review sidecars staged inside `skill-bill/` |
 |---|---|
-| `ALL` | 85 (8 stack entries + 77 specialists) |
-| Kotlin only | 11 (`bill-kotlin-code-review.md` + 10 specialists) |
-| KMP only | fails — Kotlin is a required baseline (PD8) |
-| KMP + Kotlin | 19 (`bill-kmp-code-review` + 7 KMP specialists, `bill-kotlin-code-review` + 10 Kotlin specialists) |
-| None | 0; `skill-bill` stages inert (byte-identical to no pack internals) |
+| `ALL` | 105 (9 entries + 96 specialists) |
+| Kotlin | 33 (Kotlin + dependent KMP + generic fallback) |
+| KMP | fails without Kotlin because Kotlin is a required baseline (PD8) |
+| KMP + Kotlin | 33 (KMP + Kotlin + generic fallback) |
+| `NONE` | 12 from generic when the fallback is available; 0 when no fallback is available |
+
+Pack-only contributions are 12 for Kotlin and 21 for KMP plus Kotlin. Install
+policy adds the generic fallback's 12 sidecars to either resolved selection.
+Explicit KMP without Kotlin retains the baseline co-presence failure.
 
 ### File map additions (platform-pack side)
 
@@ -317,5 +331,5 @@ standalone `skills_dir` path (PD5).
 | Selection-aware sidecar discovery | `.../install/staging/InternalSkillSidecars.kt` (consults `InstallPlanSkill.sourceDir`) |
 | Baseline co-presence guard | `.../install/plan/InstallPlanPolicy.kt`, `MissingBaselinePlatformSelectionError` in `ShellContentContractErrors.kt` |
 | Pack-internal README catalog exemption | `.../scaffold/runtime/RepoValidationRuntime.kt` (`validateReadme`) |
-| Authored pack source (unchanged paths) | `platform-packs/{go,ios,kotlin,kmp,php,python,rust,typescript}/code-review/<skill>/content.md` |
+| Authored pack source (unchanged paths) | `platform-packs/{generic,go,ios,kotlin,kmp,php,python,rust,typescript}/code-review/<skill>/content.md` |
 | Tests | `InternalSkillStagingTest`, `InternalSkillClassificationTest`, `InstallPlanInternalSkillDiscoveryTest`, `MissingBaselinePlatformSelectionTest`, `RepoValidationRuntimeTest` |

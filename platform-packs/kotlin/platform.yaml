@@ -32,6 +32,7 @@ declared_code_review_areas:
   - reliability
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-kotlin-code-review/content.md
@@ -46,6 +47,7 @@ declared_files:
     reliability: code-review/bill-kotlin-code-review-reliability/content.md
     ui: code-review/bill-kotlin-code-review-ui/content.md
     ux-accessibility: code-review/bill-kotlin-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-kotlin-code-review-code-quality/content.md
 
 area_metadata:
   architecture:
@@ -68,6 +70,8 @@ area_metadata:
     focus: "Kotlin Compose Desktop state and lifecycle, Swing or JavaFX thread interop, server rendering, and CLI or TUI behavior"
   ux-accessibility:
     focus: "Kotlin desktop semantics and focus, semantic server output, terminal accessibility, keyboard use, and localization"
+  code-quality:
+    focus: "Kotlin/JVM null and collection handling, sealed lifecycle state, coroutine structure, and backend framework conventions"
 
 lane_conditions:
   architecture: { required: true }
@@ -80,8 +84,7 @@ lane_conditions:
   reliability: { content: ["retry", "timeout", "shutdown", "supervisor"] }
   ui: { content: ["compose", "swing", "javafx", "render"] }
   ux-accessibility: { content: ["semantics", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - ./gradlew
@@ -185,3 +188,5 @@ pointers:
   code-review/bill-kotlin-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-kotlin-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

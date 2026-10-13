@@ -69,6 +69,27 @@ class ReviewLaunchPlanPolicyTest {
   }
 
   @Test
+  fun `kmp and kotlin select their local code quality owner without generic lanes`() {
+    val kotlin = pack("kotlin", KOTLIN_AREAS + "code-quality")
+    val kmp = pack("kmp", KMP_AREAS + "code-quality", layers = listOf(layer("kotlin")))
+    val generic =
+      pack("generic", listOf("security", "code-quality"))
+        .copy(fallbackCapabilities = setOf("code-review"))
+    val manifests = listOf(kmp, kotlin, generic)
+
+    val selected = ReviewLaunchPlanPolicy.composedAreas("kmp", manifests)
+    val plan = ReviewLaunchPlanPolicy.flatten("kmp", manifests, selected)
+
+    assertEquals("bill-kmp-code-review-code-quality", plan.lanes.single { it.area == "code-quality" }.skillName)
+    assertTrue(plan.lanes.none { it.packSlug == "generic" })
+    assertEquals(
+      ReviewLaunchPlanPolicy.flatten("kotlin", manifests, ReviewLaunchPlanPolicy.composedAreas("kotlin", manifests))
+        .lanes.single { it.area == "code-quality" }.skillName,
+      "bill-kotlin-code-review-code-quality",
+    )
+  }
+
+  @Test
   fun `generic root owns one quality lane and missing fallback is optional`() {
     val generic =
       pack(

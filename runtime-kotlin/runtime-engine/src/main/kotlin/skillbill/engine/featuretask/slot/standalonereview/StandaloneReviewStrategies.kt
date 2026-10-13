@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.standalonereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
@@ -62,7 +63,10 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.time.Duration.Companion.minutes
 
-open class InlineStandaloneReviewStrategy(runner: PhaseRunner) : StandaloneReviewStrategy(runner, null) {
+open class InlineStandaloneReviewStrategy(
+  runner: PhaseRunner,
+  qualityRubricResolver: ParallelCodeReviewRunner? = null,
+) : StandaloneReviewStrategy(runner, null, qualityRubricResolver) {
   override val strategyId: String = ID
 
   companion object {
@@ -84,6 +88,7 @@ open class DelegatedStandaloneReviewStrategy(
 abstract class StandaloneReviewStrategy(
   private val runner: PhaseRunner,
   private val reviewRunner: ParallelCodeReviewRunner?,
+  private val qualityRubricResolver: ParallelCodeReviewRunner? = reviewRunner,
 ) : PhaseStrategyStatusProjection() {
   override val slot: PhaseSlot = PhaseSlot.STANDALONE_REVIEW
   override val steps: List<String> = listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS)
@@ -146,11 +151,38 @@ abstract class StandaloneReviewStrategy(
     val reviewInput = GoalSubtaskReviewInput(headSha, headSha, "", "")
     val invocation = run.request.reviewInvocation
     val reviewRunId = invocation?.reviewRunId ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
-    val directive = standaloneDirective(run, target, headSha)
-    val prompt = PhaseStepPromptSource { PhaseStepPromptSections(taskDirective = directive) }
-    prepareReport(binding, iteration, reviewRunId, prompt, reviewInput)?.let { return it }
+    val qualityRubric =
+      qualityRubricResolver?.let { resolver ->
+        when (
+          val resolved =
+            resolver.resolveInlineCodeQualityRubric(
+              delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, target, reviewInput),
+            )
+        ) {
+          is ParallelCodeReviewPlanned.Failed ->
+            return block(binding, iteration, resolved.failure.message)
+          is ParallelCodeReviewPlanned.Ready -> resolved.value
+        }
+      }
+    val directive = standaloneDirective(run, target, headSha, qualityRubric)
+    return runPreparedReview(
+      run,
+      binding,
+      iteration,
+      StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive),
+    )
+  }
+
+  private fun runPreparedReview(
+    run: PhaseRun,
+    binding: PhaseReviewStepBinding,
+    iteration: Int,
+    facts: StandaloneReviewLaunchInput,
+  ): PhaseOutcome {
+    val prompt = PhaseStepPromptSource { PhaseStepPromptSections(taskDirective = facts.directive) }
+    prepareReport(binding, iteration, facts.reviewRunId, prompt, facts.input)?.let { return it }
     binding.reviewLaunched(iteration)
-    val output = launch(run, binding, StandaloneReviewLaunchInput(target, reviewInput, reviewRunId, directive))
+    val output = launch(run, binding, facts)
     val result =
       output.result
         ?: failedResult(run.resolvedAgent.resolvedAgentId, output.failureReason ?: "review did not produce a result")
@@ -165,7 +197,7 @@ abstract class StandaloneReviewStrategy(
         reportTruncated = output.truncated || result.reportTruncated,
       )
     binding.retainReviewOutput(iteration, raw)
-    return finishReport(binding, iteration, reviewRunId, retainedResult, output)
+    return finishReport(binding, iteration, facts.reviewRunId, retainedResult, output)
   }
 
   private fun prepareReport(
@@ -283,6 +315,7 @@ abstract class StandaloneReviewStrategy(
     run: PhaseRun,
     target: ReviewTarget,
     head: String,
+    qualityRubric: String?,
   ): String =
     buildString {
       target.openingLines("$head^", head).forEach(::appendLine)
@@ -295,6 +328,12 @@ abstract class StandaloneReviewStrategy(
           "or launch another review command.",
       )
       appendLine("A changes_requested verdict is a valid completed report. The runtime will not repair findings.")
+      qualityRubric?.let {
+        appendLine()
+        appendLine("## Selected local code-quality rubric")
+        appendLine("Use this complete owner rubric and attribute its findings with the exact specialist identity.")
+        appendLine(it)
+      }
       if (run.launchAssignment?.profile == PhaseModelProfile.OPUS_5_5) {
         val extra =
           when (strategyId) {

@@ -8,6 +8,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatform
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path
@@ -62,7 +63,7 @@ class PlatformPackCompositionTest {
     assertEquals(CodeReviewCompositionScope.SameReviewScope, layer.scope)
     assertEquals(true, layer.required)
     assertEquals(CodeReviewCompositionMode.KmpBaseline, layer.mode)
-    assertEquals(APPROVED_CODE_REVIEW_AREAS, kotlin.declaredCodeReviewAreas.toSet())
+    assertEquals(APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS, kotlin.declaredCodeReviewAreas.toSet())
     assertEquals(
       setOf(
         "architecture",
@@ -72,6 +73,7 @@ class PlatformPackCompositionTest {
         "reliability",
         "ui",
         "ux-accessibility",
+        "code-quality",
       ),
       kmp.declaredCodeReviewAreas.toSet(),
     )

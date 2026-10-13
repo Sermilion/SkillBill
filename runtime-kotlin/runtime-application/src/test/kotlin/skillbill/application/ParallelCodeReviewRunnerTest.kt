@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
@@ -121,6 +122,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -723,6 +725,48 @@ class ParallelCodeReviewParentFindingTest {
 }
 
 class ParallelCodeReviewSuppliedDiffTest {
+  @Test
+  fun `inline rubric resolution accepts empty and mode only deltas without preparing workers`() {
+    val pack = sparseReviewPack("kotlin", "code-quality", mapOf("architecture" to listOf("src/")))
+    val recorder = ReviewRecorder()
+    val rubricBody = "Kotlin scope functions and cohesive state."
+    val runner =
+      reviewHarness(
+        ReviewHarnessConfig(
+          listOf(pack),
+          diff = "",
+          rubricBody = { specialist ->
+            check(specialist == "bill-kotlin-code-review-code-quality")
+            rubricBody
+          },
+        ),
+        recorder,
+      )
+    val request = harnessRequest(codeReviewMode = CodeReviewExecutionMode.INLINE)
+
+    val empty =
+      assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+        runner.resolveInlineCodeQualityRubric(request),
+      )
+    assertNull(empty.value)
+
+    val modeOnly =
+      """
+      diff --git a/src/Main.kt b/src/Main.kt
+      old mode 100644
+      new mode 100755
+      """.trimIndent()
+    val resolved =
+      assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+        runner.resolveInlineCodeQualityRubric(request.copy(suppliedDiff = modeOnly)),
+      )
+    assertEquals(
+      "Selected code-quality specialist: bill-kotlin-code-review-code-quality\n\n$rubricBody",
+      resolved.value,
+    )
+    assertTrue(recorder.parentLaunches.isEmpty())
+  }
+
   @Test
   fun `a huge changed file leaves the sibling required lane selected and the parent composed`() {
     val pack =

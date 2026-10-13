@@ -19,6 +19,13 @@ internal val FAILURE =
       "incorrect|unsafe|consequence|regression|exposure|starvation|timeout)\\w*",
     RegexOption.IGNORE_CASE,
   )
+internal val QUALITY_MAINTENANCE_COST =
+  Regex(
+    "\\b(maintenance|harder to follow|harder to reason|obscure|obscures|hide|hidden|drift|" +
+      "misstate|misstates|trace|tracing|clarif|indirection|unnecessary|invalid combination|" +
+      "ownership|ambiguous|ambiguity|effort)\\w*",
+    RegexOption.IGNORE_CASE,
+  )
 internal val CLUSTERS =
   listOf(
     Regex("state|lifecycle|concurr|order|race|deadlock", RegexOption.IGNORE_CASE),

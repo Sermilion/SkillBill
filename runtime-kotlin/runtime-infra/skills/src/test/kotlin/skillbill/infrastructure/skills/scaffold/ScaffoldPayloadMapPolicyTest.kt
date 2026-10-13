@@ -15,6 +15,7 @@ import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_CODE_REVIEW_AREA
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_PACK
+import skillbill.scaffold.policy.UNIVERSAL_CODE_REVIEW_AREAS
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -89,7 +90,7 @@ class ScaffoldPayloadMapPolicyTest {
   @Test
   fun `resolvePlatformPackSelection returns all approved areas when no selector is provided`() {
     val selection = resolvePlatformPackSelection(emptyMap())
-    assertEquals(APPROVED_CODE_REVIEW_AREAS.sorted(), selection.selectedAreas)
+    assertEquals((APPROVED_CODE_REVIEW_AREAS + UNIVERSAL_CODE_REVIEW_AREAS).sorted(), selection.selectedAreas)
   }
 
   @Test

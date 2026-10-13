@@ -21,14 +21,16 @@ areas are reachable through an acyclic chain of required baseline layers. A laye
 contributes coverage only when its target pack exists, its declared baseline skill
 matches the layer skill, and that target's effective graph supplies the area.
 Optional, missing, mismatched, and cyclic layers supply no required coverage. A
-maintained pack must effectively cover every approved area applicable to its
-declared composition; composition may not claim coverage that the graph cannot
-supply.
+maintained pack must effectively cover every approved failure area applicable to
+its declared composition. Maintained repository packs also own a local
+`code-quality` declaration and source; inherited quality does not satisfy that
+ownership rule. The structural loader still accepts legacy custom packs without a
+local owner so they can use the installed generic fallback.
 
 ## Specialist depth
 
-Each physical specialist must contain at least ten substantive enforceable rules
-and represent all three failure-mode clusters:
+Each physical failure specialist must contain at least ten substantive
+enforceable rules and represent all three failure-mode clusters:
 
 1. state, lifecycle, concurrency, or ordering failures;
 2. contract, data, validation, authorization, or security failures;
@@ -41,19 +43,20 @@ backticked or command-form named API, language construct, framework, build tool,
 configuration surface, or toolchain command. The pack name alone is not evidence.
 Each represented cluster must contain concrete platform evidence.
 
+The `code-quality` specialist also needs at least ten substantive rules, but its
+rules name a concrete maintenance cost and a behavior-preserving rewrite instead
+of requiring a reachable failure. Its three concern clusters cover state and
+lifecycle cohesion, contracts and value handling, and resources and responsibility
+size. Every rule names a language construct, framework, or repository convention.
+Renaming generic prose does not count as platform guidance.
+
 The tokens `TODO`, `FIXME`, `TBD`, and `XXX` are forbidden, as are generic
 `mechanism`, `API`, `example`, or `command` placeholders and prose that asks an
 author to fill or replace content. A placeholder-bearing file fails regardless of
 its other metrics.
 
-## Quality-check depth
-
-A maintained pack must declare its own quality-check file. Review composition never
-supplies or substitutes quality behavior. The authored checker must
-cover all seven facets: repository command discovery; concrete tools or commands;
-scoped execution; failure ownership; priority-ordered fixes; targeted reruns with
-full-suite escalation; and explicit blocker reporting. Each facet is reported
-separately so shallow guidance cannot pass by naming a generic check command.
+Quality-check commands belong to each pack's optional `validation_gate`; they are
+not review specialists and do not require authored quality-check skill files.
 
 ## Deterministic normalization and duplication
 

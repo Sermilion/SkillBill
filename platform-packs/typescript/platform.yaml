@@ -32,6 +32,7 @@ declared_code_review_areas:
   - testing
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-typescript-code-review/content.md
@@ -46,6 +47,7 @@ declared_files:
     testing: code-review/bill-typescript-code-review-testing/content.md
     ui: code-review/bill-typescript-code-review-ui/content.md
     ux-accessibility: code-review/bill-typescript-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-typescript-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "erased TypeScript declarations, runtime schemas, JavaScript consumers, HTTP/RPC/events, serialization, idempotency, and version skew"
@@ -67,6 +69,8 @@ area_metadata:
     focus: "detected DOM/TSX frameworks, state and effects, typed events and forms, async races, rendering, routing, hydration, cleanup, and recovery"
   ux-accessibility:
     focus: "framework-rendered semantics, accessible names, focus and keyboard behavior, live feedback, localization, direction, zoom, motion, and assistive technology"
+  code-quality:
+    focus: "TypeScript discriminated unions, narrowing, async control flow, module structure, and detected UI or server frameworks"
 
 lane_conditions:
   architecture: { required: true }
@@ -79,8 +83,7 @@ lane_conditions:
   reliability: { content: ["retry", "abortsignal", "shutdown", "queue"] }
   ui: { path: [".tsx", "*.tsx"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - sh
@@ -165,3 +168,5 @@ pointers:
   code-review/bill-typescript-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-typescript-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

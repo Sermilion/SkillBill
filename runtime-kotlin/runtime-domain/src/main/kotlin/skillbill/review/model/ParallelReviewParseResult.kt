@@ -5,4 +5,5 @@ data class ParallelReviewParseResult(
   val rejections: List<ParallelReviewFindingRejection> = emptyList(),
   val candidateCount: Int = 0,
   val citationDiagnostics: List<ReviewFindingCitationDiagnosticWithFinding> = emptyList(),
+  val admittedLinePositions: List<Int> = emptyList(),
 )

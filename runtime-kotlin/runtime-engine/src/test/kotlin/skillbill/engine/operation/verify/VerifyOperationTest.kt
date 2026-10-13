@@ -171,6 +171,38 @@ class VerifyOperationTest {
   }
 
   @Test
+  fun `verify receipt and telemetry import retain local code quality attribution`() {
+    VerifyOperationHarness().use { harness ->
+      harness.reviewFindings = listOf(harness.localQualityFinding())
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose(mode = "delegated")).token
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      val specialist = "bill-kotlin-code-review-code-quality"
+      val receipt = harness.snapshot(token).artifacts.getValue("code_review_receipt")
+      assertTrue(specialist in receipt.toString(), receipt.toString())
+      assertTrue("specialist=$specialist" in harness.telemetry.imports.single())
+    }
+  }
+
+  @Test
+  fun `inline verify receives the selected complete quality rubric in its launch`() {
+    VerifyOperationHarness().use { harness ->
+      val rubric =
+        "Selected code-quality specialist: bill-kotlin-code-review-code-quality\n" +
+          "Kotlin/JVM scope functions and cohesive sealed lifecycle state."
+      harness.inlineQualityRubric = rubric
+      val token = assertIs<OperationOutcome.AwaitingConfirmation>(harness.propose()).token
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(token))
+
+      val directive = harness.runner.input(VerifyPromptSections.CODE_REVIEW_STEP).directive
+      assertTrue(rubric in directive, directive)
+      assertTrue("exact specialist identity" in directive)
+    }
+  }
+
+  @Test
   fun `oversized criteria and receipts are stored whole and reach the verdict whole`() {
     VerifyOperationHarness().use { harness ->
       val criteria = (1..60).map { index -> "$index. Criterion $index ${"c".repeat(120)}" }

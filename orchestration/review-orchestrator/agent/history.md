@@ -1,3 +1,15 @@
+## [2026-10-13] SKILL-421 code-quality lane in every platform pack
+Areas: orchestration/review-orchestrator, orchestration/shell-content-contract, platform-packs/generic, platform-packs/go, platform-packs/ios, platform-packs/kmp, platform-packs/kotlin, platform-packs/php, platform-packs/python, platform-packs/rust, platform-packs/typescript, runtime-kotlin/runtime-application, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-core, runtime-kotlin/runtime-infra/skills, docs
+- Added language and framework rubrics, required manifest registrations and provider-neutral native-agent declarations for all eight non-generic packs. Generic remains the fallback; KMP owns quality locally while retaining its inherited failure lanes.
+- Followed existing nearest-owner composition and cross-root reconciliation. Exactly one quality owner supplies the lane; failure-lane ownership, routing and ordering retain their existing rules.
+- Shared review preparation delivers the selected owner's full rubric to inline, standalone and verify reviews through the existing resolver. Accepted review assignments survive resume; an unresolved recorded owner fails with a typed error. reusable
+- Preserved Minor severity, the aggregate five-finding cap and a separate quality section after failures. Inline output and verify receipts retain specialist attribution and the existing telemetry categories.
+- Full-pack scaffolding emits local required quality and complete lane conditions. Maintained-pack auditing checks local ownership and substantive maintenance guidance; unfinished starters still fail promotion. reusable
+- Updated pack documentation, composition coverage, native declarations and authorized render snapshots. content.md remains authoritative; specialists stay unlisted sidecars and native-agent inputs.
+- Limits: legacy custom packs retain installed fallback or recorded omission; horizontal no-pack behavior stays unchanged. No wire-schema bump. Refresh and inspection of the active installed runtime remain parent-owned prerequisites, including AC-007 and AC-013 installation evidence.
+Feature flag: N/A
+Acceptance criteria: 13/13 implemented
+
 ## [2026-10-09] SKILL-413 subtask 1 code-quality lane and universal composition
 Areas: orchestration/review-orchestrator, orchestration/contracts, runtime-kotlin/runtime-domain/review/plan, runtime-kotlin/runtime-domain/scaffold/policy, runtime-kotlin/runtime-infra/skills, platform-packs/generic, platform-packs/kotlin
 - Added the generic code-quality specialist with language-derived idioms, cohesive state and structure guidance, project-convention precedence, concrete rewrites, Minor-only severity, a five-finding cap and no auto-fixing.

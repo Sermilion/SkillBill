@@ -31,6 +31,7 @@ declared_code_review_areas:
   - testing
   - ui
   - ux-accessibility
+  - code-quality
 
 declared_files:
   baseline: code-review/bill-php-code-review/content.md
@@ -45,6 +46,7 @@ declared_files:
     testing: code-review/bill-php-code-review-testing/content.md
     ui: code-review/bill-php-code-review-ui/content.md
     ux-accessibility: code-review/bill-php-code-review-ux-accessibility/content.md
+    code-quality: code-review/bill-php-code-review-code-quality/content.md
 area_metadata:
   api-contracts:
     focus: "PHP Symfony, Laravel, and PSR request validation, serialization, errors, webhooks, idempotency, and client compatibility"
@@ -66,6 +68,8 @@ area_metadata:
     focus: "PHP Blade, Twig, Livewire, Inertia, Filament, and Symfony Form state, escaping, identity, and hydration correctness"
   ux-accessibility:
     focus: "PHP-rendered labels, errors, keyboard and focus behavior, landmarks, live updates, localization, and progressive enhancement"
+  code-quality:
+    focus: "PHP type and value handling, focused classes, generators, and Symfony or Laravel conventions"
 
 lane_conditions:
   architecture: { required: true }
@@ -78,8 +82,7 @@ lane_conditions:
   reliability: { content: ["retry", "queue", "timeout", "worker"] }
   ui: { content: ["Blade", "Twig", "Livewire", "Form"] }
   ux-accessibility: { content: ["aria-", "focus", "keyboard", "localization"] }
-
-
+  code-quality: { required: true }
 validation_gate:
   full_gate_command:
     - composer
@@ -163,3 +166,5 @@ pointers:
   code-review/bill-php-code-review-ux-accessibility:
     - name: specialist-contract.md
       target: orchestration/review-orchestrator/specialist-contract.md
+  code-review/bill-php-code-review-code-quality:
+    - { name: specialist-contract.md, target: orchestration/review-orchestrator/specialist-contract.md }

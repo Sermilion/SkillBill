@@ -232,7 +232,14 @@ internal fun specialistFocus(
   displayName: String,
   area: String,
   routingSignals: List<String>,
-): String = "$displayName ${defaultAreaFocus(area)} across ${routingSignals.joinToString(", ")} signals"
+): String =
+  if (area == "code-quality") {
+    "$displayName language idioms, helper clarity, cohesive state, duplication, dead code, naming, and " +
+      "behavior-preserving rewrites across ${routingSignals.joinToString(", ")} signals; report Minor findings only, " +
+      "capped at five"
+  } else {
+    "$displayName ${defaultAreaFocus(area)} across ${routingSignals.joinToString(", ")} signals"
+  }
 
 internal fun planCodeReviewArea(
   payload: Map<String, Any?>,
