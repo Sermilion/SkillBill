@@ -1,29 +1,18 @@
 package dev.skillbill.tray.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.unit.dp
 import dev.skillbill.tray.application.*
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
-import dev.skillbill.tray.presentation.presentPopover
-import dev.skillbill.tray.presentation.effectiveFreshness
 import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.Instant
@@ -50,29 +39,6 @@ internal fun LabeledPanel(title: String, rows: List<Pair<String, String>>) {
   Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(raised, RoundedCornerShape(8.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
     Text(title, color = mint, style = MaterialTheme.typography.labelMedium)
     rows.forEach { (label, value) -> Row(Modifier.fillMaxWidth()) { Text(label, Modifier.width(130.dp), color = muted, style = MaterialTheme.typography.labelSmall); Text(value, Modifier.weight(1f), color = ink, style = MaterialTheme.typography.bodySmall) } }
-  }
-}
-
-@Composable
-fun HistoryWindow(state: DashboardState, model: DashboardModel, onClose: () -> Unit) {
-  DisposableEffect(model) { model.observeHistory(true); onDispose { model.observeHistory(false) } }
-  val now by tickingNow()
-  val filter = state.settings.historyFilter
-  val scroll = rememberLazyListState()
-  val hasMore = state.sections[WorkSection.HISTORY]?.nextCursor != null
-  val loadState = state.sectionLoadStates[WorkSection.HISTORY] ?: if (WorkSection.HISTORY in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
-  LoadNextPageOnScroll(scroll, hasMore, loadState == ListLoadState.APPENDING, { model.loadMore(WorkSection.HISTORY) })
-  val items = state.sections[WorkSection.HISTORY]?.items.orEmpty()
-  Column(Modifier.width(520.dp).height(600.dp).background(canvas).padding(18.dp)) {
-    Row(verticalAlignment = Alignment.CenterVertically) { Text("History", Modifier.weight(1f), color = ink, style = MaterialTheme.typography.titleLarge); TextButton(onClick = onClose) { Text("Close") } }
-    Row { HistoryFilter.entries.forEach { choice -> TextButton(onClick = { model.updateSettings(state.settings.copy(historyFilter = choice)) }) { Text(choice.name.lowercase().replaceFirstChar(Char::titlecase), color = if (filter == choice) mint else muted) } } }
-    Text("Finished within ${state.settings.retention.cliValue}", color = muted)
-    state.sectionProblems[WorkSection.HISTORY]?.let { Text(it.summary, color = amber) }
-    if (loadState == ListLoadState.INITIAL_LOADING) Text("Loading history...", color = muted)
-    LazyColumn(Modifier.weight(1f), state = scroll) {
-      items(items, key = { it.identity }) { PopoverWorkRow(it, state.selected == it.identity, now, state.stale) { model.select(it.identity); onClose() } }
-      if (hasMore) item { PageFooter(hasMore, loadState == ListLoadState.APPENDING, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(WorkSection.HISTORY) } }
-    }
   }
 }
 

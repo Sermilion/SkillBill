@@ -85,7 +85,6 @@ interface DashboardModel {
   fun refresh()
   fun loadMoreBoard()
   fun loadMore(section: WorkSection)
-  fun observeHistory(enabled: Boolean)
   fun filter(value: String)
   fun loadMoreDetail(list: DetailList)
   fun select(identity: WorkIdentity)

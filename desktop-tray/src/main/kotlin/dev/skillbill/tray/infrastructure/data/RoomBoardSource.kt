@@ -348,6 +348,10 @@ class RoomBoardSource internal constructor(
               projectionNanos += elapsed
               accounting.projectionNanos += elapsed
             }
+            projection.diagnostics.map { it.reason }.distinct().forEach { reason ->
+              RuntimeDiagnostics.record("work_data_${reason.wireValue}")
+              attemptMetrics += reason.wireValue
+            }
             projectedItems += projection.items.size
             accounting.projectionReturned += projection.items.size
             if (projection.items.any { it.snapshot.problem != null }) return@safeRead failure("incompatible_record")
@@ -770,7 +774,8 @@ class RoomBoardSource internal constructor(
       "missing_database" -> "The selected database does not exist. Choose an existing runtime store."
       "busy" -> "The database is busy. Retry after the writer finishes."
       "corrupt_database" -> "The selected database is corrupt. Restore it through the runtime's supported recovery route."
-      "incompatible_database", "incompatible_record" -> "The database is incompatible with this app. Update the runtime and apply its supported migrations before reconnecting."
+      "incompatible_record" -> "A saved workflow record could not be read. Check the runtime diagnostics for the affected workflow."
+      "incompatible_database" -> "The database is incompatible with this app. Update the runtime and apply its supported migrations before reconnecting."
       "observation_unavailable" -> "Database change observation is unavailable. Reconnect and retry."
       else -> "The selected database could not be read. Check its path and access permissions."
     }

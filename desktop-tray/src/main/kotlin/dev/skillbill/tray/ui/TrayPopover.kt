@@ -35,7 +35,7 @@ import java.time.Duration
 import java.time.Instant
 
 @Composable
-fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain: () -> Unit, openHistory: () -> Unit, openSettings: () -> Unit, onQuit: () -> Unit) {
+fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain: () -> Unit, openSettings: () -> Unit, onQuit: () -> Unit) {
   val state by model.state.collectAsState()
   val now by tickingNow()
   val view = presentPopover(state, now)
@@ -92,7 +92,6 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
     HorizontalDivider(color = border)
     Row(Modifier.fillMaxWidth().background(sidebar).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
       Text("Open Skill Bill", Modifier.weight(1f).clickable(onClick = openMain), color = amber, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-      Text("History", Modifier.clickable(onClick = openHistory), color = dim, fontFamily = mono, fontSize = 11.5.sp)
       Text("Refresh", Modifier.clickable(onClick = model::refresh), color = dim, fontFamily = mono, fontSize = 11.5.sp)
       Text("Settings", Modifier.clickable(onClick = openSettings), color = dim, fontFamily = mono, fontSize = 11.5.sp)
       Text("Quit", Modifier.clickable(onClick = onQuit), color = dim, fontFamily = mono, fontSize = 11.5.sp)

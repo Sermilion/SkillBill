@@ -258,6 +258,7 @@ class IdeStatusService(
     require(ids.size <= request.pageSize)
     val observedAt = request.observedAt ?: clock.instant()
     return database.read { unitOfWork ->
+      val diagnostics = mutableListOf<WorkBoardDiagnostic>()
       val items =
         ids.distinct().mapNotNull { id ->
           val found = selectedMatch(id, unitOfWork)
@@ -266,7 +267,8 @@ class IdeStatusService(
           val identity = standalone?.repositoryIdentity ?: work?.repositoryIdentity
           val root = identity?.let(::decodeRepositoryRoot)
           if (identity == null || root == null) {
-            throw invalidWorkListRowError("Selected work candidate has no usable repository identity.")
+            diagnostics += repositoryIdentityDiagnostic(identity, workflowId = id)
+            return@mapNotNull null
           }
           val candidates =
             collectCandidates(
@@ -286,6 +288,7 @@ class IdeStatusService(
         observedAt,
         request.finishedWithin,
         items,
+        diagnostics,
         pageSize = request.pageSize,
         observation = unitOfWork.workList.observation(),
       )

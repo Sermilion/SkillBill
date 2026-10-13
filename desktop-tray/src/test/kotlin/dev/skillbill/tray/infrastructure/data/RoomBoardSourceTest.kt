@@ -55,6 +55,42 @@ class RoomBoardSourceTest {
   private val now = Instant.now()
 
   @Test
+  fun `history skips legacy verification rows without repository identity and retains readable siblings`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-history-missing-identity").use { fixture ->
+      val finished = now.minusSeconds(30)
+      fixture.connection.prepareStatement(
+        "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, started_at, updated_at, state_entered_at, finished_at) VALUES (?, 'completed', ?, ?, ?, ?)",
+      ).use { statement ->
+        repeat(12) { index ->
+          statement.setString(1, "legacy-verify-$index")
+          for (column in 2..5) statement.setString(column, now.minusSeconds(5).toString())
+          statement.executeUpdate()
+        }
+      }
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "readable-history", finished.minusSeconds(10), "main"))
+        unit.standalonePhaseStatuses.update(StandalonePhaseStatusUpdate(record.executionId, record.statusRevision,
+          record.leaseOwner, record.leaseGeneration, "terminal", "review", null, finished, finishedAt = finished, terminalResult = "completed"))
+      }
+      val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val board = value(source.board(WorkSection.HISTORY, Retention.WEEK))
+        assertEquals(listOf("readable-history"), board.items.map { it.identity.id })
+        assertTrue("missing_repository_identity" in board.diagnostics)
+        assertNull(board.nextCursor)
+        fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT COUNT(*) FROM feature_verify_workflows").use { rows ->
+            assertTrue(rows.next())
+            assertEquals(12, rows.getInt(1))
+          }
+        }
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `observer registration failure stays typed until explicit refresh reconnects`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-observer-registration-failure").use { fixture ->
       val attempts = AtomicInteger()

@@ -19,7 +19,6 @@ import dev.skillbill.tray.infrastructure.trayIconAnchor
 import dev.skillbill.tray.infrastructure.NativeTrayHost
 import dev.skillbill.tray.infrastructure.TrayIconRenderer
 import dev.skillbill.tray.infrastructure.data.RoomBoardSource
-import dev.skillbill.tray.ui.HistoryWindow
 import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.domain.scaledWindowPixels
 import dev.skillbill.tray.ui.DesignWindow
@@ -36,7 +35,6 @@ fun main() {
   val uiScale = resolveDesktopUiScale()
   nucleusApplication(backend = NucleusBackend.Awt) {
     var mainVisible by remember { mutableStateOf(true) }
-    var historyVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
     var trayPopoverVisible by remember { mutableStateOf(false) }
     var trayPopoverOpening by remember { mutableStateOf(false) }
@@ -92,7 +90,6 @@ fun main() {
           action in 0..7 -> projected?.goals?.getOrNull(action)?.let { model.select(it.identity); mainVisible = true }
           action in 1000..1007 -> projected?.phases?.getOrNull(action - 1000)?.let { model.select(it.identity); mainVisible = true }
           action == 2000 -> mainVisible = true
-          action == 2001 -> historyVisible = true
           action == 2002 -> model.refresh()
           action == 2003 -> settingsVisible = true
           action == 2004 -> { uiScope.launch { model.closeAndJoin(); exitApplication() } }
@@ -138,7 +135,7 @@ fun main() {
       resizable = false,
       state = trayPopoverWindowState,
     ) {
-      SkillBillTheme(uiScale) { TrayPopover(model, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { historyVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }) { uiScope.launch { model.closeAndJoin(); exitApplication() } } }
+      SkillBillTheme(uiScale) { TrayPopover(model, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }) { uiScope.launch { model.closeAndJoin(); exitApplication() } } }
     }
 
     val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
@@ -150,12 +147,9 @@ fun main() {
       }
       SkillBillTheme(uiScale) {
         DesignWindow(mainWindowState, hideMain) {
-          MainWindow(model, { historyVisible = true }, { settingsVisible = true })
+          MainWindow(model, { settingsVisible = true })
         }
       }
-    }
-    if (historyVisible) Window(onCloseRequest = { historyVisible = false }, title = "Skill Bill History", resizable = true, state = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(520).dp, uiScale.scaledWindowPixels(600).dp))) {
-      SkillBillTheme(uiScale) { HistoryWindow(model.state.collectAsState().value, model) { historyVisible = false } }
     }
     if (settingsVisible) Window(onCloseRequest = { settingsVisible = false }, title = "Skill Bill Settings", resizable = false, state = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(460).dp, uiScale.scaledWindowPixels(680).dp))) {
       val current by model.state.collectAsState()

@@ -58,7 +58,6 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
   val timing = state.displayDurations[item.identity]
   val frozen = !fresh
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
-  val blocked = item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED
   val blockReason = item.exactPauseReason
     ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
     ?: item.pauseReason
@@ -73,7 +72,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
           StatusChip(if (item.family == WorkFamily.FEATURE_GOAL) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
-        Text(if (blocked || item.lifecycle == Lifecycle.FAILED) detail.featureTitle ?: "${if (standalone) "Phase ${item.phaseId.orEmpty()}" else "Workflow"} ${item.lifecycle.name.lowercase()}" else displayFeatureTitle(detail.featureTitle ?: item.summary), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
+        Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         Text("${FileName(item.repositoryRoot)} · ${displayPath(item.repositoryRoot)} · ${item.branch ?: "no branch"}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         listOfNotNull(problem, state.actionProblem).forEach { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
@@ -314,6 +313,19 @@ private fun rememberAnchoredListState(
 
 private fun formatInstant(value: Instant, pattern: String) = DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault()).format(value)
 private fun displayPath(path: String) = path.replace(System.getProperty("user.home"), "~")
+
+internal fun detailTitle(detail: Detail): String {
+  detail.featureTitle?.takeIf { it.isNotBlank() }?.let { return displayFeatureTitle(it) }
+  val item = detail.item
+  val title = if (item.scope == ExecutionScope.STANDALONE_PHASE) {
+    item.phaseId?.takeIf { it.isNotBlank() }?.replace('_', ' ')?.replace('-', ' ')?.replaceFirstChar(Char::uppercase) ?: "Standalone phase"
+  } else when (item.family) {
+    WorkFamily.FEATURE_GOAL -> "Goal"
+    WorkFamily.FEATURE_VERIFY -> "Verification"
+    else -> "Feature work"
+  }
+  return item.issueKey?.let { "$title · $it" } ?: title
+}
 
 private fun displayFeatureTitle(value: String): String =
   if (Regex("[a-z0-9]+(?:-[a-z0-9]+)+").matches(value)) value.replace('-', ' ').replaceFirstChar(Char::uppercase) else value

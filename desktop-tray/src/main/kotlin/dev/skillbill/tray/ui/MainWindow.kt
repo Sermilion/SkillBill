@@ -2,6 +2,8 @@ package dev.skillbill.tray.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,10 +24,9 @@ import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.application.DashboardModel
 import dev.skillbill.tray.application.ListLoadState
 import dev.skillbill.tray.domain.*
-import java.time.Instant
 
 @Composable
-fun MainWindow(model: DashboardModel, onHistory: () -> Unit, onSettings: () -> Unit) {
+fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
   val state by model.state.collectAsState()
   val now by tickingNow()
   val sidebarScroll = rememberLazyListState()
@@ -33,9 +34,7 @@ fun MainWindow(model: DashboardModel, onHistory: () -> Unit, onSettings: () -> U
   val attention = state.sections[WorkSection.NEEDS_YOU]?.items.orEmpty()
   val goals = state.sections[WorkSection.GOALS]?.items.orEmpty()
   val phases = state.sections[WorkSection.PHASES]?.items.orEmpty()
-  LaunchedEffect(state.board?.items, state.selected) {
-    if (state.selected == null) (goals.firstOrNull() ?: attention.firstOrNull() ?: phases.firstOrNull())?.let { model.select(it.identity) }
-  }
+  val history = state.sections[WorkSection.HISTORY]?.items.orEmpty()
   Row(Modifier.fillMaxSize().background(canvas)) {
     Column(Modifier.width(250.dp).fillMaxHeight().background(sidebar)) {
       BasicTextField(filter, model::filter,
@@ -46,27 +45,54 @@ fun MainWindow(model: DashboardModel, onHistory: () -> Unit, onSettings: () -> U
           field()
         } },
       )
-      LazyColumn(Modifier.weight(1f), state = sidebarScroll) {
-        listOf(Triple("Needs you", attention, WorkSection.NEEDS_YOU), Triple("Goals running", goals, WorkSection.GOALS), Triple("Standalone phases", phases, WorkSection.PHASES)).forEach { (title, rows, section) ->
-          val hasMore = state.sections[section]?.nextCursor != null
-          val loadState = state.sectionLoadStates[section] ?: if (section in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
-          val sectionLoading = loadState == ListLoadState.INITIAL_LOADING || loadState == ListLoadState.APPENDING
-          item { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
-          if (rows.isEmpty() && section in state.sections) item { Text(if (filter.isBlank()) "No ${title.lowercase()}" else "No matching work", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
-          if (rows.isNotEmpty()) item {
-            val visibleRows = when (title) { "Needs you" -> 3; "Goals running" -> 4; else -> 2 }
-            val sectionScroll = rememberLazyListState()
-            LoadNextPageOnScroll(sectionScroll, hasMore, sectionLoading) { model.loadMore(section) }
-            LazyColumn(Modifier.fillMaxWidth().height((minOf(rows.size, visibleRows) * 47).dp), state = sectionScroll) {
-              items(rows, key = { it.identity }) { item -> SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) } }
+      Box(Modifier.weight(1f)) {
+        LazyColumn(Modifier.fillMaxSize().padding(end = 8.dp), state = sidebarScroll) {
+          listOf(Triple("Needs you", attention, WorkSection.NEEDS_YOU), Triple("Goals running", goals, WorkSection.GOALS), Triple("Standalone phases", phases, WorkSection.PHASES), Triple("History", history, WorkSection.HISTORY)).forEach { (title, rows, section) ->
+            val hasMore = state.sections[section]?.nextCursor != null
+            val loadState = state.sectionLoadStates[section] ?: if (section in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
+            val sectionLoading = loadState in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING, ListLoadState.APPENDING)
+            item { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
+            if (section == WorkSection.HISTORY) item {
+              Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                HistoryFilter.entries.forEach { choice ->
+                  TextButton(onClick = { model.updateSettings(state.settings.copy(historyFilter = choice)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp)) {
+                    Text(choice.name.lowercase().replaceFirstChar(Char::titlecase), color = if (state.settings.historyFilter == choice) amber else muted,
+                      fontFamily = body, fontSize = 11.sp)
+                  }
+                }
+              }
+              Text("Finished within ${state.settings.retention.cliValue}", Modifier.padding(start = 16.dp, bottom = 6.dp), color = dim, style = MaterialTheme.typography.bodySmall)
             }
+            state.sectionProblems[section]?.let { problem -> item {
+              Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(problem.summary, color = amber, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = model::refresh) { Text("Retry", color = amber) }
+              }
+            } }
+            if (loadState in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING)) item {
+              Text(if (loadState == ListLoadState.REFRESHING) "Updating..." else "Loading...", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
+            }
+            if (rows.isEmpty() && section in state.sections) item { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
+            if (section == WorkSection.HISTORY) {
+              items(rows, key = { "history:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
+                SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) }
+              }
+            } else if (rows.isNotEmpty()) item {
+              val visibleRows = when (section) { WorkSection.NEEDS_YOU -> 3; WorkSection.GOALS -> 4; else -> 2 }
+              val sectionScroll = rememberLazyListState()
+              LoadNextPageOnScroll(sectionScroll, hasMore, sectionLoading) { model.loadMore(section) }
+              LazyColumn(Modifier.fillMaxWidth().height((minOf(rows.size, visibleRows) * 47).dp), state = sectionScroll) {
+                items(rows, key = { it.identity }) { item -> SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) } }
+              }
+            }
+            if (hasMore) item { PageFooter(hasMore, sectionLoading, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(section) } }
           }
-          if (hasMore) item { PageFooter(hasMore, loadState == ListLoadState.APPENDING, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(section) } }
         }
+        VerticalScrollbar(rememberScrollbarAdapter(sidebarScroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
       }
       HorizontalDivider(color = border)
-      Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text("History", Modifier.clickable(onClick = onHistory), color = dim, fontFamily = mono, fontSize = 11.sp)
+      Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.End) {
         Text("Settings", Modifier.clickable(onClick = onSettings), color = dim, fontFamily = mono, fontSize = 11.sp)
       }
     }
@@ -85,7 +111,7 @@ fun MainWindow(model: DashboardModel, onHistory: () -> Unit, onSettings: () -> U
       if (state.detail != null) {
         DetailPane(state.detail, state.detailProblem, model, Modifier.weight(1f).fillMaxWidth(), now, state.stale)
       } else {
-        EmptyDetail(state.detailLoading || state.boardLoading, state.problem != null, state.detailProblem?.summary, onSettings, model::refresh, Modifier.weight(1f), listOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES).any { state.sections[it]?.nextCursor != null })
+        EmptyDetail(state.detailLoading || state.boardLoading, state.problem != null, state.detailProblem?.summary, onSettings, model::refresh, Modifier.weight(1f), listOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.HISTORY).any { state.sections[it]?.nextCursor != null })
       }
 
     }
@@ -112,7 +138,7 @@ private fun EmptyDetail(loading: Boolean, failed: Boolean, detailProblem: String
   Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
     Column(Modifier.widthIn(max = 380.dp).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(if (detailProblem != null) "Work detail unavailable" else if (failed) "Couldn't load your work" else if (loading) "Loading your work" else if (hasMore) "More work is available" else "All quiet", color = ink, style = MaterialTheme.typography.titleLarge)
-      Text(detailProblem ?: if (failed) "Check the database path in Settings, then try refreshing." else if (loading) "Fetching goals and standalone phases." else "Running goals and standalone phases appear in the sidebar. Select one to see its progress.", color = muted, style = MaterialTheme.typography.bodyMedium)
+      Text(detailProblem ?: if (failed) "Check the database path in Settings, then try refreshing." else if (loading) "Fetching goals, standalone phases, and history." else "Select a goal, standalone phase, or history item in the sidebar to see its details.", color = muted, style = MaterialTheme.typography.bodyMedium)
       if (failed || detailProblem != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = onRefresh) { Text("Refresh") }
         OutlinedButton(onClick = onSettings) { Text("Settings") }
