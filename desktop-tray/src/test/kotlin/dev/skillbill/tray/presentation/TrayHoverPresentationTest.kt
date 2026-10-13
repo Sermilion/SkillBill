@@ -24,6 +24,7 @@ class TrayHoverPresentationTest {
     )
     val stale = effectiveFreshness(item, boardStale = false, detailExtrasStale = true) == Freshness.STALE
     assertEquals("2m 0s", durationText(30_000, now.minusSeconds(30), item, now, stale, frozen = 120_000))
+    assertEquals("30s", durationText(30_000, now.minusSeconds(30), item, now, stale))
 
     val phase = item.copy(scope = ExecutionScope.STANDALONE_PHASE)
     assertEquals("1m 30s", phaseElapsedText(phase, now, stale))

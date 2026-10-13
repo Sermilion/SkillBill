@@ -47,11 +47,11 @@ build the tray app. Pull requests that touch `desktop-tray` or `runtime-kotlin`
 run the cross-platform build and publish a downloadable snapshot; cleanup keeps
 the newest successful complete snapshot set.
 
-The installer asks whether to install the desktop app. It downloads the matching
-host archive from the newest published runtime release and verifies its checksum.
-The app remains unchanged when the user skips it. A release without a desktop
-archive still completes the Skill Bill runtime install and reports that the app
-is unavailable for that release or host.
+The installer installs the desktop app automatically. Local checkouts build it
+from source. Standalone installers download the matching host archive from the
+selected runtime release and verify its checksum. `--no-desktop-app` skips this
+step. A release without a desktop archive completes the runtime install and
+reports the missing desktop package.
 
 Builds run on host-matched runners because jlink and jpackage cannot
 cross-compile: macOS arm64 on the **self-hosted Apple Silicon Mac mini**

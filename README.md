@@ -70,6 +70,8 @@ cd SkillBill
 
 Source builds require JDK 21 or newer. Set `SKILL_BILL_JAVA_HOME` if the installer cannot find a suitable JDK. Unsupported prebuilt hosts fall back to the source path and need its prerequisites. Use `bash install.sh --release <tag>` to select a published release; `--from-source` ignores release selection.
 
+The installer also installs the desktop app automatically. Local checkouts build it from source; standalone installs download a matching release build when available. Use `--no-desktop-app` to skip it. `./uninstall.sh` removes the desktop app and its launcher along with Skill Bill.
+
 Runtime files and rendered skills live under `~/.skill-bill/`. User configuration lives at `~/.config/skill-bill/config.json` and survives reinstalling. `SKILL_BILL_CONFIG_PATH` overrides that location. See [Getting Started](docs/getting-started.md) for install paths and troubleshooting.
 
 </details>

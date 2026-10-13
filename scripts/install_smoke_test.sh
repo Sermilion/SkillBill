@@ -492,6 +492,8 @@ CURL
   printf '%s' "$work"
 }
 
+bash "$REPO_ROOT/scripts/desktop_source_install_smoke_test.sh"
+
 echo "=== install smoke test ==="
 echo ""
 
@@ -543,6 +545,12 @@ else
   fail "interactive install still prompts for platforms"
 fi
 
+assert_file_exists "blank interactive defaults install the desktop app" "$(desktop_app_target "$FAKE_HOME")"
+if [[ "$INTERACTIVE_OUTPUT" == *"Install the desktop tray app?"* ]]; then
+  fail "interactive install still prompts for the desktop app"
+fi
+pass "interactive install has no desktop app prompt"
+
 echo ""
 echo "--- scenario 3: piped install EOF defaults ---"
 FAKE_HOME="$(mktemp -d)"
@@ -560,6 +568,8 @@ if [[ "$PIPED_OUTPUT" == *"Platforms:      all"* ]]; then
 else
   fail "piped EOF platform summary unexpected"
 fi
+
+assert_file_exists "piped EOF defaults install the desktop app" "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
 echo "--- scenario 4: replay of a base-only install ---"
@@ -711,14 +721,14 @@ if [[ "$GATE_OUTPUT" == *"Agents:"* ]]; then
 else
   fail "fresh-machine install did not complete: $GATE_OUTPUT"
 fi
-assert_file_absent "default desktop choice does not install the optional app" \
+assert_file_exists "fresh-machine defaults install the desktop app" \
   "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
-echo "--- scenario 9: explicit desktop app install is checksum-verified and user-scoped ---"
+echo "--- scenario 9: replay automatically installs the checksum-verified desktop app ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"
-run_install "$FAKE_HOME" --install-desktop-app
+run_install "$FAKE_HOME"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
@@ -740,8 +750,26 @@ mkdir -p "$(dirname "$DESKTOP_EXECUTABLE")"
 printf 'existing app\n' > "$DESKTOP_EXECUTABLE"
 run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app
 [[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] && \
-  pass "declining the optional app keeps the existing desktop install" || \
-  fail "declining the optional app changed the existing desktop install"
+  pass "explicitly skipping the app keeps the existing desktop install" || \
+  fail "explicitly skipping the app changed the existing desktop install"
+
+env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
+  HOME="$FAKE_HOME" \
+  XDG_DATA_HOME="$FAKE_HOME/.local/share" \
+  LOCALAPPDATA="$FAKE_HOME/AppData/Local" \
+  SKILL_BILL_BIN_DIR="$FAKE_HOME/.local/bin" \
+  SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD=1 \
+  bash "$REPO_ROOT/uninstall.sh"
+assert_file_absent "uninstall removes the desktop app" "$DESKTOP_APP"
+if [[ "$TOKEN" == "windows-x64" ]]; then
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/skillbill-desktop.cmd"
+else
+  assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/skillbill-desktop"
+  [[ ! -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] || fail "uninstall left a dangling desktop launcher"
+fi
+if [[ "$TOKEN" == "linux-x64" ]]; then
+  assert_file_absent "uninstall removes the Linux desktop entry" "$FAKE_HOME/.local/share/applications/skillbill.desktop"
+fi
 
 echo ""
 echo "--- scenario 11: newest runtime prerelease wins while plugin releases are skipped ---"

@@ -315,10 +315,10 @@ private fun displayPath(path: String) = path.replace(System.getProperty("user.ho
 internal data class DetailDuration(val label: String, val value: String, val note: String)
 
 internal fun detailDuration(item: WorkItem, now: Instant, stale: Boolean, frozen: Long? = null): DetailDuration {
-  val finished = item.finishedAt
+  val finished = item.finishedAt?.takeIf { item.lifecycle != Lifecycle.ACTIVE && item.liveSection == null }
   if (finished != null) {
-    val value = item.startedAt?.let { age(Duration.between(it, finished).coerceNonNegative()) } ?: "not available"
-    return DetailDuration("Total duration", value, "finished ${formatInstant(finished, "d MMM HH:mm")}")
+    val value = item.activeDurationMs?.let { age(Duration.ofMillis(it)) } ?: "not available"
+    return DetailDuration("Total run time", value, "finished ${formatInstant(finished, "d MMM HH:mm")}")
   }
   val standalone = item.scope == ExecutionScope.STANDALONE_PHASE
   val value = if (standalone) phaseElapsedText(item, now, stale) else

@@ -28,8 +28,7 @@ INSTALL_SOURCE="auto"
 RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
 CLEAN_INSTALL=0
-DESKTOP_APP_INSTALL_REQUESTED=0
-DESKTOP_APP_SELECTION_EXPLICIT=0
+DESKTOP_APP_INSTALL_REQUESTED=1
 DESKTOP_APP_INSTALL_RESULT="not selected"
 RELEASE_REPO="${SKILL_BILL_RELEASE_REPO:-Sermilion/skill-bill}"
 # Memoized result of resolve_latest_runtime_release_tag. The tag is consumed once per
@@ -94,6 +93,8 @@ Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection] [--
 
 By default a local checkout builds and installs from source. A standalone
 downloaded installer uses checksum-verified prebuilt release images.
+The desktop app builds from source for local checkouts and downloads a matching
+release build for standalone installs.
 
 Options:
   --from-source            Force building the runtime from source with Gradle.
@@ -103,9 +104,8 @@ Options:
   --reuse-last-selection   Reuse the latest successful agent, telemetry,
                            and MCP choices from ~/.skill-bill. All platform
                            packs are installed on every run.
-  --install-desktop-app   Install the latest matching desktop tray app after
-                           the Skill Bill runtime install.
-  --no-desktop-app        Skip the optional desktop tray app install.
+  --install-desktop-app   Install the desktop app. This is the default.
+  --no-desktop-app        Skip the desktop app install.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -129,12 +129,10 @@ parse_args() {
         ;;
       --install-desktop-app)
         DESKTOP_APP_INSTALL_REQUESTED=1
-        DESKTOP_APP_SELECTION_EXPLICIT=1
         shift
         ;;
       --no-desktop-app)
         DESKTOP_APP_INSTALL_REQUESTED=0
-        DESKTOP_APP_SELECTION_EXPLICIT=1
         shift
         ;;
       --clean)
@@ -696,11 +694,13 @@ print_install_plan() {
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
   if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -eq 1 ]]; then
-    info "Desktop tray app: download and install the latest matching release build."
-  elif [[ "$DESKTOP_APP_SELECTION_EXPLICIT" -eq 1 || "$REUSE_LAST_SELECTION" -eq 1 ]]; then
-    info "Desktop tray app: skip unless selected."
+    if [[ "$INSTALL_SOURCE" == "source" ]]; then
+      info "Desktop tray app: build and install from this checkout."
+    else
+      info "Desktop tray app: download and install the latest matching release build."
+    fi
   else
-    info "Desktop tray app: optional prompt at the end of the install, default no."
+    info "Desktop tray app: skipped with --no-desktop-app."
   fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
@@ -1421,7 +1421,7 @@ resolve_desktop_app_release_asset() {
         ;;
     esac
   done <<< "$names"
-  [[ -n "$RESOLVED_DESKTOP_APP_ASSET" ]]
+  return 0
 }
 
 desktop_host_path() {
@@ -1573,6 +1573,24 @@ ENTRY
   fi
 }
 
+BUILT_DESKTOP_APP_SOURCE=""
+build_source_desktop_app() {
+  local os="$1" desktop_dir="$RUNTIME_KOTLIN_DIR/../desktop-tray"
+  if [[ ! -x "$desktop_dir/gradlew" ]]; then
+    warn "Desktop app source is missing from this checkout: $desktop_dir"
+    DESKTOP_APP_INSTALL_RESULT="source missing"
+    return 1
+  fi
+  ensure_build_jvm || return 1
+  info "Building desktop tray app from source."
+  if ! (cd "$desktop_dir" && ./gradlew --no-daemon -q createDistributable); then
+    warn "Could not build the desktop app from source; keeping the existing app install."
+    DESKTOP_APP_INSTALL_RESULT="build failed"
+    return 1
+  fi
+  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/build/compose/binaries/main/app")"
+}
+
 install_selected_desktop_app() {
   if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -ne 1 ]]; then
     DESKTOP_APP_INSTALL_RESULT="not selected"
@@ -1581,59 +1599,66 @@ install_selected_desktop_app() {
 
   local os token archive work_dir extract_dir app_source app_target legacy_target executable install_root staged_app backup_app
   os="$(host_os)"
-  if ! token="$(host_token)" || ! resolve_desktop_app_release_asset; then
-    warn "No desktop tray build is published for this host; the Skill Bill install can still continue."
-    DESKTOP_APP_INSTALL_RESULT="not available for $os"
-    return 0
-  fi
-  if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
-    warn "The selected release has no desktop tray build for $token; the Skill Bill install can still continue."
-    DESKTOP_APP_INSTALL_RESULT="not available for $token"
-    return 0
-  fi
-
-  init_prebuilt_work_dir
-  work_dir="$(prebuilt_work_dir)"
-  info "Fetching optional desktop tray app for $token."
-  if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
-    warn "Could not download and verify the desktop tray app; keeping the existing app install."
-    DESKTOP_APP_INSTALL_RESULT="download failed"
-    return 1
-  fi
-
-  extract_dir="$work_dir/extract-desktop"
-  mkdir -p "$extract_dir" || return 1
-  local member normalized_member
-  while IFS= read -r member; do
-    normalized_member="${member#./}"
-    [[ -n "$normalized_member" ]] || continue
-    if [[ "$normalized_member" == /* || "$normalized_member" == *"/../"* || "$normalized_member" == ../* || "$normalized_member" == */.. ]]; then
-      err "Desktop archive contains an unsafe path: $member"
-      DESKTOP_APP_INSTALL_RESULT="archive rejected"
+  if [[ "$INSTALL_SOURCE" == "source" ]]; then
+    build_source_desktop_app "$os" || return 1
+    app_source="$BUILT_DESKTOP_APP_SOURCE"
+  else
+    if ! token="$(host_token)"; then
+      warn "No desktop tray release target is supported for this host."
+      DESKTOP_APP_INSTALL_RESULT="not available for $os"
+      return 0
+    fi
+    if ! resolve_desktop_app_release_asset; then
+      warn "Could not query desktop release assets; keeping the existing app install."
+      DESKTOP_APP_INSTALL_RESULT="release lookup failed"
       return 1
     fi
-    case "$normalized_member" in
-      LICENSE|"Skill Bill"|"Skill Bill"/*|"Skill Bill.app"|"Skill Bill.app"/*)
-        ;;
-      *)
-        err "Desktop archive contains an unexpected path: $member"
+    if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
+      warn "The selected release has no desktop tray build for $token; the Skill Bill install can still continue."
+      DESKTOP_APP_INSTALL_RESULT="not available for $token"
+      return 0
+    fi
+
+    init_prebuilt_work_dir
+    work_dir="$(prebuilt_work_dir)"
+    info "Fetching desktop tray app for $token."
+    if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
+      warn "Could not download and verify the desktop tray app; keeping the existing app install."
+      DESKTOP_APP_INSTALL_RESULT="download failed"
+      return 1
+    fi
+
+    extract_dir="$work_dir/extract-desktop"
+    mkdir -p "$extract_dir" || return 1
+    local member normalized_member
+    while IFS= read -r member; do
+      normalized_member="${member#./}"
+      [[ -n "$normalized_member" ]] || continue
+      if [[ "$normalized_member" == /* || "$normalized_member" == *"/../"* || "$normalized_member" == ../* || "$normalized_member" == */.. ]]; then
+        err "Desktop archive contains an unsafe path: $member"
         DESKTOP_APP_INSTALL_RESULT="archive rejected"
         return 1
-        ;;
-    esac
-  done < <(tar -tzf "$archive")
-  if ! tar -xzf "$archive" -C "$extract_dir"; then
-    err "Could not extract the desktop tray archive."
-    DESKTOP_APP_INSTALL_RESULT="extract failed"
-    return 1
-  fi
+      fi
+      case "$normalized_member" in
+        LICENSE|"Skill Bill"|"Skill Bill"/*|"Skill Bill.app"|"Skill Bill.app"/*)
+          ;;
+        *)
+          err "Desktop archive contains an unexpected path: $member"
+          DESKTOP_APP_INSTALL_RESULT="archive rejected"
+          return 1
+          ;;
+      esac
+    done < <(tar -tzf "$archive")
+    if ! tar -xzf "$archive" -C "$extract_dir"; then
+      err "Could not extract the desktop tray archive."
+      DESKTOP_APP_INSTALL_RESULT="extract failed"
+      return 1
+    fi
 
-  case "$os" in
-    macos) app_source="$extract_dir/Skill Bill.app" ;;
-    *) app_source="$extract_dir/Skill Bill" ;;
-  esac
+    app_source="$(desktop_app_target_path "$os" "$extract_dir")"
+  fi
   if [[ ! -d "$app_source" ]]; then
-    err "Desktop archive does not contain the expected app directory for $os."
+    err "Desktop distribution does not contain the expected app directory for $os."
     DESKTOP_APP_INSTALL_RESULT="archive rejected"
     return 1
   fi
@@ -1644,7 +1669,7 @@ install_selected_desktop_app() {
   local source_executable
   source_executable="$(desktop_app_executable_path "$os" "$app_source")"
   if [[ ! -f "$source_executable" ]]; then
-    err "Desktop archive is missing its app launcher: $source_executable"
+    err "Desktop distribution is missing its app launcher: $source_executable"
     DESKTOP_APP_INSTALL_RESULT="archive rejected"
     return 1
   fi
@@ -1971,34 +1996,6 @@ prompt_for_telemetry_preference() {
   done
 }
 
-prompt_for_desktop_app_install() {
-  if [[ "$DESKTOP_APP_SELECTION_EXPLICIT" -eq 1 ]]; then
-    return 0
-  fi
-  if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
-    DESKTOP_APP_INSTALL_REQUESTED=0
-    info "Skipping optional desktop tray app with --reuse-last-selection. Use --install-desktop-app to include it."
-    return 0
-  fi
-
-  local input normalized
-  echo ""
-  info "The desktop tray app is optional and downloads the latest published desktop build."
-  printf "${CYAN}▸${NC} Install the desktop tray app? [y/N]: "
-  if ! read_prompt_input input; then
-    input=""
-  fi
-  normalized="$(printf '%s' "$(trim_string "$input")" | tr '[:upper:]' '[:lower:]')"
-  case "$normalized" in
-    y|yes)
-      DESKTOP_APP_INSTALL_REQUESTED=1
-      ;;
-    *)
-      DESKTOP_APP_INSTALL_REQUESTED=0
-      ;;
-  esac
-}
-
 replay_last_install_selection() {
   local output
   local error_output
@@ -2259,7 +2256,6 @@ run_full_install() {
     prompt_for_agent_selection
     prompt_for_telemetry_preference
   fi
-  prompt_for_desktop_app_install
   install_runtime_launchers
   build_runtime_install_args
 
@@ -2277,7 +2273,7 @@ run_full_install() {
   apply_external_addon_overlay
   apply_runtime_install
   if ! install_selected_desktop_app; then
-    warn "The Skill Bill runtime install is complete, but the optional desktop app step did not finish."
+    warn "The Skill Bill runtime install is complete, but the desktop app step did not finish."
   fi
 
   printf "${GREEN}━━━ Installation complete ━━━${NC}\n"
@@ -2311,7 +2307,7 @@ run_full_install() {
   if [[ "$TELEMETRY_LEVEL" != "off" ]]; then
     info "Telemetry uses the default Skill Bill relay automatically. Override it with SKILL_BILL_TELEMETRY_PROXY_URL or ~/.skill-bill/config.json."
   fi
-  info "Run './install.sh' again to change agent, telemetry, MCP, or desktop app choices."
+  info "Run './install.sh' again to change agent, telemetry, or MCP choices."
   info "Next step:       open your agent and run /skill-bill"
   echo ""
 }

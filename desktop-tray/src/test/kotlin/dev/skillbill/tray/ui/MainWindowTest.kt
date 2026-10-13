@@ -36,19 +36,20 @@ class MainWindowTest {
   }
 
   @Test
-  fun `finished goals and phases show fixed total duration even when stale active counters are missing`() {
+  fun `finished goals and phases show recorded run time without counting idle gaps`() {
     val finish = Instant.parse("2026-10-13T10:00:00Z")
     for (scope in listOf(ExecutionScope.WORKFLOW, ExecutionScope.STANDALONE_PHASE)) {
       val work = item("finished", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL).copy(
         scope = scope, freshness = Freshness.STALE, startedAt = finish.minusSeconds(3660),
-        finishedAt = finish, updatedAt = finish.plusSeconds(600), activeDurationMs = null,
+        finishedAt = finish, updatedAt = finish.plusSeconds(600), activeDurationMs = 120_000,
       )
       val metric = detailDuration(work, finish.plusSeconds(3600), stale = true)
-      assertEquals("Total duration", metric.label)
-      assertEquals("1h 1m", metric.value)
+      assertEquals("Total run time", metric.label)
+      assertEquals("2m 0s", metric.value)
       assertTrue(metric.note.startsWith("finished "))
       assertEquals(metric, detailDuration(work, finish.plusSeconds(7200), stale = true, frozen = 90_000))
-      assertEquals("not available", detailDuration(work.copy(startedAt = null), finish, stale = true).value)
+      assertEquals("2m 0s", detailDuration(work.copy(startedAt = null), finish, stale = true).value)
+      assertEquals("not available", detailDuration(work.copy(activeDurationMs = null), finish, stale = true).value)
     }
   }
 

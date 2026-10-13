@@ -75,7 +75,7 @@ internal fun PhaseExecution.label(): String = when (kind) {
   PhaseExecutionKind.BOUNDED_EDGE -> total?.let { "$count/$it" } ?: "edge $count"
   PhaseExecutionKind.ATTEMPT -> "attempt $count"
 }
-internal fun durationText(value: Long?, asOf: Instant?, item: WorkItem, now: Instant, boardStale: Boolean, frozen: Long? = null): String = (if (boardStale) frozen else value?.let { displayedDuration(it, asOf, now, item.freshness, item.lifecycle == Lifecycle.ACTIVE) })?.let { age(Duration.ofMillis(it)) } ?: "not available"
+internal fun durationText(value: Long?, asOf: Instant?, item: WorkItem, now: Instant, boardStale: Boolean, frozen: Long? = null): String = (if (boardStale) frozen ?: value else value?.let { displayedDuration(it, asOf, now, item.freshness, item.lifecycle == Lifecycle.ACTIVE) })?.let { age(Duration.ofMillis(it)) } ?: "not available"
 internal fun phaseElapsedText(item: WorkItem, now: Instant, stale: Boolean): String {
   val start = item.startedAt ?: return "not available"
   val end = item.finishedAt ?: if (!stale && item.freshness == Freshness.FRESH && item.lifecycle == Lifecycle.ACTIVE) now else item.updatedAt
