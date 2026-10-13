@@ -28,6 +28,9 @@ INSTALL_SOURCE="auto"
 RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
 CLEAN_INSTALL=0
+DESKTOP_APP_INSTALL_REQUESTED=0
+DESKTOP_APP_SELECTION_EXPLICIT=0
+DESKTOP_APP_INSTALL_RESULT="not selected"
 RELEASE_REPO="${SKILL_BILL_RELEASE_REPO:-Sermilion/skill-bill}"
 # Memoized result of resolve_latest_runtime_release_tag. The tag is consumed once per
 # asset plus once per .sha256 sibling and by both list_release_asset_names callers, so
@@ -87,7 +90,7 @@ MCP_REGISTRATION="register"
 
 usage() {
   cat <<USAGE
-Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection]
+Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection] [--install-desktop-app|--no-desktop-app]
 
 By default a local checkout builds and installs from source. A standalone
 downloaded installer uses checksum-verified prebuilt release images.
@@ -96,10 +99,13 @@ Options:
   --from-source            Force building the runtime from source with Gradle.
                            Ignores --release. Requires a JDK.
   --release TAG            Install a specific release tag instead of the latest
-                           stable release. Ignored with --from-source.
+                           published runtime release. Ignored with --from-source.
   --reuse-last-selection   Reuse the latest successful agent, telemetry,
-                           and MCP choices from ~/.skill-bill.
-                           All platform packs are installed on every run.
+                           and MCP choices from ~/.skill-bill. All platform
+                           packs are installed on every run.
+  --install-desktop-app   Install the latest matching desktop tray app after
+                           the Skill Bill runtime install.
+  --no-desktop-app        Skip the optional desktop tray app install.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -119,6 +125,16 @@ parse_args() {
         ;;
       --reuse-last-selection)
         REUSE_LAST_SELECTION=1
+        shift
+        ;;
+      --install-desktop-app)
+        DESKTOP_APP_INSTALL_REQUESTED=1
+        DESKTOP_APP_SELECTION_EXPLICIT=1
+        shift
+        ;;
+      --no-desktop-app)
+        DESKTOP_APP_INSTALL_REQUESTED=0
+        DESKTOP_APP_SELECTION_EXPLICIT=1
         shift
         ;;
       --clean)
@@ -178,13 +194,11 @@ resolve_install_source() {
   fi
 }
 
-# Resolve the newest runtime release tag from the GitHub Releases list.
-# The GitHub "latest release" endpoint cannot be used because it returns the most
-# recently published release of any kind, which a plugin-v* release would win. Only plain
-# vMAJOR.MINOR.PATCH tags are considered, and the winner is the highest version
-# rather than the first list entry.
+# Resolve the newest runtime release tag, including prereleases.
+# The API lists recent releases first, so skip plugin releases and use the first
+# versioned runtime tag.
 resolve_latest_runtime_release_tag() {
-  local api_url json tags tag key best best_key
+  local api_url json tags tag best
   if [[ -n "$RESOLVED_LATEST_RUNTIME_TAG" ]]; then
     printf '%s' "$RESOLVED_LATEST_RUNTIME_TAG"
     return 0
@@ -197,17 +211,11 @@ resolve_latest_runtime_release_tag() {
   tags="$(printf '%s' "$json" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
     | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')"
   best=""
-  best_key=""
   while IFS= read -r tag; do
     [[ -n "$tag" ]] || continue
-    key="$(printf '%s' "${tag#v}" \
-      | awk -F. 'NF==3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
-          printf "%010d.%010d.%010d", $1, $2, $3
-        }')"
-    [[ -n "$key" ]] || continue
-    if [[ -z "$best_key" || "$key" > "$best_key" ]]; then
-      best_key="$key"
+    if [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
       best="$tag"
+      break
     fi
   done <<< "$tags"
   if [[ -z "$best" ]]; then
@@ -498,7 +506,7 @@ verify_sha256() {
 
 # List the asset filenames available for the target release. Offline
 # (SKILL_BILL_RELEASE_DIR) → directory listing; otherwise → GitHub Releases API
-# (pinned RELEASE_TAG or latest stable). Prints one name per line.
+# (pinned RELEASE_TAG or newest published runtime tag). Prints one name per line.
 list_release_asset_names() {
   if [[ -n "$SKILL_BILL_RELEASE_DIR" ]]; then
     if [[ ! -d "$SKILL_BILL_RELEASE_DIR" ]]; then
@@ -684,9 +692,14 @@ print_install_plan() {
   echo ""
   printf "${CYAN}━━━ What this installer will change ━━━${NC}\n"
   echo ""
-  info "Cleanup: after both runtime candidates pass parity, re-runs ./uninstall.sh while preserving copied source and durable databases."
+  info "Cleanup: after both runtime candidates pass parity, re-runs ./uninstall.sh while preserving copied source, durable databases, and the current desktop app."
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
+  if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -eq 1 ]]; then
+    info "Desktop tray app: download and install the latest matching release build."
+  else
+    info "Desktop tray app: skip unless selected."
+  fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
   echo ""
@@ -719,7 +732,7 @@ migrate_legacy_config_to_durable_path() {
 # Every install starts from a clean slate: removes agent symlinks, native
 # subagent symlinks, MCP registrations, runtime launchers, and wipes
 # ~/.skill-bill/ (including the installed-skills staging cache, runtime
-# binaries, while preserving persistent state DBs). This guarantees that
+# binaries, while preserving the desktop app and persistent state DBs). This guarantees that
 # generator changes — which the staging-cache content hash does not see —
 # actually land on the next install without deleting durable workflow state.
 #
@@ -748,7 +761,7 @@ run_pre_install_uninstall() {
   # installed-skills/.
   # This flag is ONLY set for the install-driven pre-install uninstall; an
   # explicit ./uninstall.sh (flag unset) still fully removes ~/.skill-bill.
-  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 bash "$uninstall_script"
+  SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 SKILL_BILL_PRESERVE_DESKTOP_APP=1 bash "$uninstall_script"
 }
 
 locate_packaged_runtime_bin() {
@@ -1386,6 +1399,299 @@ install_runtime_launchers() {
 
 
 
+# Resolve and install the desktop package independently of runtime-image selection.
+RESOLVED_DESKTOP_APP_ASSET=""
+resolve_desktop_app_release_asset() {
+  local token names name
+  if ! token="$(host_token)"; then
+    return 1
+  fi
+  if ! names="$(list_release_asset_names)"; then
+    return 1
+  fi
+
+  RESOLVED_DESKTOP_APP_ASSET=""
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    case "$name" in
+      skill-bill-desktop-*-"$token".tar.gz)
+        RESOLVED_DESKTOP_APP_ASSET="$name"
+        ;;
+    esac
+  done <<< "$names"
+  [[ -n "$RESOLVED_DESKTOP_APP_ASSET" ]]
+}
+
+desktop_host_path() {
+  local path="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -u "$path"
+  else
+    printf '%s' "$path"
+  fi
+}
+
+desktop_app_install_root() {
+  local os="$1"
+  if [[ -n "${SKILL_BILL_DESKTOP_APP_DIR:-}" ]]; then
+    desktop_host_path "$SKILL_BILL_DESKTOP_APP_DIR"
+    return 0
+  fi
+  case "$os" in
+    macos)
+      printf '%s' "$HOME/Applications"
+      ;;
+    linux)
+      printf '%s' "${XDG_DATA_HOME:-$HOME/.local/share}/skillbill/desktop"
+      ;;
+    windows)
+      if [[ -n "${LOCALAPPDATA:-}" ]]; then
+        desktop_host_path "$LOCALAPPDATA/SkillBill/Desktop"
+      else
+        printf '%s' "$HOME/AppData/Local/SkillBill/Desktop"
+      fi
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+desktop_app_target_path() {
+  local os="$1" install_root="$2"
+  case "$os" in
+    macos)
+      printf '%s/Skill Bill.app' "$install_root"
+      ;;
+    *)
+      printf '%s/Skill Bill' "$install_root"
+      ;;
+  esac
+}
+
+desktop_app_legacy_target_path() {
+  local os="$1" install_root="$2"
+  case "$os" in
+    macos)
+      printf '%s/SkillBill.app' "$install_root"
+      ;;
+    *)
+      printf '%s/SkillBill' "$install_root"
+      ;;
+  esac
+}
+
+desktop_app_executable_path() {
+  local os="$1" app_target="$2"
+  case "$os" in
+    macos)
+      printf '%s/Contents/MacOS/Skill Bill' "$app_target"
+      ;;
+    windows)
+      printf '%s/bin/Skill Bill.bat' "$app_target"
+      ;;
+    *)
+      printf '%s/bin/Skill Bill' "$app_target"
+      ;;
+  esac
+}
+
+desktop_app_legacy_executable_path() {
+  local os="$1" app_target="$2"
+  case "$os" in
+    macos)
+      printf '%s/Contents/MacOS/SkillBill' "$app_target"
+      ;;
+    windows)
+      printf '%s/bin/SkillBill.bat' "$app_target"
+      ;;
+    *)
+      printf '%s/bin/SkillBill' "$app_target"
+      ;;
+  esac
+}
+
+desktop_quoted_exec_path() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+install_desktop_app_launcher() {
+  local os="$1" app_target="$2" executable="$3"
+  local launcher_path launcher_temp windows_executable legacy_executable
+  mkdir -p "$RUNTIME_LAUNCHER_BIN_DIR" || return 1
+
+  if [[ "$os" == "windows" ]]; then
+    launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop.cmd"
+    if [[ -e "$launcher_path" ]] && ! grep -q '^REM Managed by Skill Bill install.sh$' "$launcher_path"; then
+      err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
+      return 1
+    fi
+    if command -v cygpath >/dev/null 2>&1; then
+      windows_executable="$(cygpath -w "$executable")"
+    else
+      windows_executable="${executable//\//\\}"
+    fi
+    launcher_temp="$launcher_path.tmp.$$"
+    {
+      printf '@echo off\r\n'
+      printf 'REM Managed by Skill Bill install.sh\r\n'
+      printf '"%s" %%*\r\n' "$windows_executable"
+    } > "$launcher_temp" || return 1
+    mv -f "$launcher_temp" "$launcher_path" || return 1
+    return 0
+  fi
+
+  launcher_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop"
+  legacy_executable="$(desktop_app_legacy_executable_path "$os" "$(desktop_app_legacy_target_path "$os" "$(dirname "$app_target")")")"
+  if [[ -e "$launcher_path" || -L "$launcher_path" ]]; then
+    if [[ ! -L "$launcher_path" || ( "$(readlink "$launcher_path")" != "$executable" && "$(readlink "$launcher_path")" != "$legacy_executable" ) ]]; then
+      err "Refusing to overwrite an unrelated desktop launcher: $launcher_path"
+      return 1
+    fi
+  fi
+  ln -sfn "$executable" "$launcher_path" || return 1
+
+  if [[ "$os" == "linux" ]]; then
+    local applications_dir desktop_file quoted_launcher
+    applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    desktop_file="$applications_dir/skillbill.desktop"
+    quoted_launcher="$(desktop_quoted_exec_path "$launcher_path")"
+    mkdir -p "$applications_dir" || return 1
+    cat > "$desktop_file" <<ENTRY
+[Desktop Entry]
+Name=Skill Bill
+Type=Application
+Exec=$quoted_launcher
+Terminal=false
+Categories=Development;
+ENTRY
+  fi
+}
+
+install_selected_desktop_app() {
+  if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -ne 1 ]]; then
+    DESKTOP_APP_INSTALL_RESULT="not selected"
+    return 0
+  fi
+
+  local os token archive work_dir extract_dir app_source app_target legacy_target executable install_root staged_app backup_app
+  os="$(host_os)"
+  if ! token="$(host_token)" || ! resolve_desktop_app_release_asset; then
+    warn "No desktop tray build is published for this host; the Skill Bill install can still continue."
+    DESKTOP_APP_INSTALL_RESULT="not available for $os"
+    return 0
+  fi
+  if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
+    warn "The selected release has no desktop tray build for $token; the Skill Bill install can still continue."
+    DESKTOP_APP_INSTALL_RESULT="not available for $token"
+    return 0
+  fi
+
+  init_prebuilt_work_dir
+  work_dir="$(prebuilt_work_dir)"
+  info "Fetching optional desktop tray app for $token."
+  if ! archive="$(fetch_release_asset "$RESOLVED_DESKTOP_APP_ASSET")" || ! verify_sha256 "$archive"; then
+    warn "Could not download and verify the desktop tray app; keeping the existing app install."
+    DESKTOP_APP_INSTALL_RESULT="download failed"
+    return 1
+  fi
+
+  extract_dir="$work_dir/extract-desktop"
+  mkdir -p "$extract_dir" || return 1
+  local member normalized_member
+  while IFS= read -r member; do
+    normalized_member="${member#./}"
+    [[ -n "$normalized_member" ]] || continue
+    if [[ "$normalized_member" == /* || "$normalized_member" == *"/../"* || "$normalized_member" == ../* || "$normalized_member" == */.. ]]; then
+      err "Desktop archive contains an unsafe path: $member"
+      DESKTOP_APP_INSTALL_RESULT="archive rejected"
+      return 1
+    fi
+    case "$normalized_member" in
+      LICENSE|"Skill Bill"|"Skill Bill"/*|"Skill Bill.app"|"Skill Bill.app"/*)
+        ;;
+      *)
+        err "Desktop archive contains an unexpected path: $member"
+        DESKTOP_APP_INSTALL_RESULT="archive rejected"
+        return 1
+        ;;
+    esac
+  done < <(tar -tzf "$archive")
+  if ! tar -xzf "$archive" -C "$extract_dir"; then
+    err "Could not extract the desktop tray archive."
+    DESKTOP_APP_INSTALL_RESULT="extract failed"
+    return 1
+  fi
+
+  case "$os" in
+    macos) app_source="$extract_dir/Skill Bill.app" ;;
+    *) app_source="$extract_dir/Skill Bill" ;;
+  esac
+  if [[ ! -d "$app_source" ]]; then
+    err "Desktop archive does not contain the expected app directory for $os."
+    DESKTOP_APP_INSTALL_RESULT="archive rejected"
+    return 1
+  fi
+  install_root="$(desktop_app_install_root "$os")" || return 1
+  app_target="$(desktop_app_target_path "$os" "$install_root")"
+  legacy_target="$(desktop_app_legacy_target_path "$os" "$install_root")"
+  executable="$(desktop_app_executable_path "$os" "$app_target")"
+  local source_executable
+  source_executable="$(desktop_app_executable_path "$os" "$app_source")"
+  if [[ ! -f "$source_executable" ]]; then
+    err "Desktop archive is missing its app launcher: $source_executable"
+    DESKTOP_APP_INSTALL_RESULT="archive rejected"
+    return 1
+  fi
+  if [[ "$os" != "windows" && ! -x "$source_executable" ]]; then
+    err "Desktop app launcher is not executable: $source_executable"
+    DESKTOP_APP_INSTALL_RESULT="archive rejected"
+    return 1
+  fi
+
+  mkdir -p "$install_root" || return 1
+  staged_app="$install_root/.Skill Bill.installing.$$"
+  backup_app="$install_root/.Skill Bill.previous.$$"
+  rm -rf "$staged_app" "$backup_app"
+  if ! cp -R "$app_source" "$staged_app"; then
+    err "Could not stage the desktop tray app under $install_root."
+    DESKTOP_APP_INSTALL_RESULT="install failed"
+    return 1
+  fi
+  if [[ -e "$app_target" || -L "$app_target" ]]; then
+    if ! mv "$app_target" "$backup_app"; then
+      rm -rf "$staged_app"
+      err "Could not move the previous desktop app out of the way."
+      DESKTOP_APP_INSTALL_RESULT="install failed"
+      return 1
+    fi
+  fi
+  if ! mv "$staged_app" "$app_target"; then
+    [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
+    rm -rf "$staged_app"
+    err "Could not install the desktop tray app under $app_target."
+    DESKTOP_APP_INSTALL_RESULT="install failed"
+    return 1
+  fi
+  if ! install_desktop_app_launcher "$os" "$app_target" "$executable"; then
+    rm -rf "$app_target"
+    [[ ! -e "$backup_app" ]] || mv "$backup_app" "$app_target"
+    err "The desktop app files were installed, but its launcher could not be installed."
+    DESKTOP_APP_INSTALL_RESULT="launcher failed"
+    return 1
+  fi
+  if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
+    rm -rf "$legacy_target"
+  fi
+  rm -rf "$backup_app"
+  ok "Desktop tray app installed at $app_target"
+  DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
+}
+
+
 
 
 
@@ -1663,6 +1969,34 @@ prompt_for_telemetry_preference() {
   done
 }
 
+prompt_for_desktop_app_install() {
+  if [[ "$DESKTOP_APP_SELECTION_EXPLICIT" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
+    DESKTOP_APP_INSTALL_REQUESTED=0
+    info "Skipping optional desktop tray app with --reuse-last-selection. Use --install-desktop-app to include it."
+    return 0
+  fi
+
+  local input normalized
+  echo ""
+  info "The desktop tray app is optional and downloads the latest published desktop build."
+  printf "${CYAN}▸${NC} Install the desktop tray app? [y/N]: "
+  if ! read_prompt_input input; then
+    input=""
+  fi
+  normalized="$(printf '%s' "$(trim_string "$input")" | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in
+    y|yes)
+      DESKTOP_APP_INSTALL_REQUESTED=1
+      ;;
+    *)
+      DESKTOP_APP_INSTALL_REQUESTED=0
+      ;;
+  esac
+}
+
 replay_last_install_selection() {
   local output
   local error_output
@@ -1923,6 +2257,7 @@ run_full_install() {
     prompt_for_agent_selection
     prompt_for_telemetry_preference
   fi
+  prompt_for_desktop_app_install
   install_runtime_launchers
   build_runtime_install_args
 
@@ -1939,6 +2274,9 @@ run_full_install() {
 
   apply_external_addon_overlay
   apply_runtime_install
+  if ! install_selected_desktop_app; then
+    warn "The Skill Bill runtime install is complete, but the optional desktop app step did not finish."
+  fi
 
   printf "${GREEN}━━━ Installation complete ━━━${NC}\n"
   echo ""
@@ -1948,6 +2286,7 @@ run_full_install() {
   info "Launchers:       $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "Telemetry:       $TELEMETRY_LEVEL"
   info "MCP:             $MCP_REGISTRATION"
+  info "Desktop app:     $DESKTOP_APP_INSTALL_RESULT"
   if [[ "$REUSE_LAST_SELECTION" -eq 1 ]]; then
     info "Selections:      reused latest successful install selection"
   fi
@@ -1970,7 +2309,7 @@ run_full_install() {
   if [[ "$TELEMETRY_LEVEL" != "off" ]]; then
     info "Telemetry uses the default Skill Bill relay automatically. Override it with SKILL_BILL_TELEMETRY_PROXY_URL or ~/.skill-bill/config.json."
   fi
-  info "Run './install.sh' again to reinstall with different agent, telemetry, or MCP choices."
+  info "Run './install.sh' again to change agent, telemetry, MCP, or desktop app choices."
   info "Next step:       open your agent and run /skill-bill"
   echo ""
 }

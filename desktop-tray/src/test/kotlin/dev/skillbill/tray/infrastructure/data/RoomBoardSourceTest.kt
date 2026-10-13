@@ -421,7 +421,8 @@ class RoomBoardSourceTest {
       val source = source(fixture.tempDir, clock)
       source.selectDatabase(fixture.dbPath.toString())
       val received = Channel<Outcome<Detail>>(Channel.UNLIMITED)
-      val job = launch { source.observeDetail(WorkIdentity("detail-expires", "repo-root-realpath-v1:${fixture.tempDir}"))
+      val identity = WorkIdentity("detail-expires", "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}")
+      val job = launch { source.observeDetail(identity)
         .collect { received.send(it) } }
       try {
         val initial = (withTimeout(10_000) { received.receive() } as Outcome.Value).value

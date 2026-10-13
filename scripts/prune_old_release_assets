@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$#" -ne 2 ]]; then
+  echo "Usage: scripts/prune_old_release_assets <owner/repo> <latest-runtime-tag>" >&2
+  exit 2
+fi
+
+repository="$1"
+latest_runtime_tag="$2"
+release_tags="$(gh release list --repo "$repository" --limit 1000 --json tagName,isDraft,createdAt --jq 'sort_by(.createdAt) | reverse | .[] | select(.isDraft == false) | .tagName')"
+latest_from_github="$(printf '%s\n' "$release_tags" | grep -E '^(v)?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' | head -n1 || true)"
+
+if [[ -z "$latest_from_github" ]]; then
+  echo "No published runtime release found; keeping existing downloads."
+  exit 0
+fi
+
+if [[ "$latest_from_github" != "$latest_runtime_tag" ]]; then
+  echo "Keeping downloads for newest runtime release $latest_from_github; $latest_runtime_tag is not the newest release."
+  exit 0
+fi
+
+while IFS= read -r tag; do
+  [[ -n "$tag" ]] || continue
+  [[ "$tag" != "$latest_runtime_tag" ]] || continue
+  [[ "$tag" =~ ^(v)?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || continue
+
+  assets="$(gh release view "$tag" --repo "$repository" --json assets --jq '.assets[].name')"
+  while IFS= read -r asset; do
+    [[ -n "$asset" ]] || continue
+    gh release delete-asset "$tag" "$asset" --repo "$repository" --yes
+    printf 'Deleted %s from %s.\n' "$asset" "$tag"
+  done <<< "$assets"
+done <<< "$release_tags"

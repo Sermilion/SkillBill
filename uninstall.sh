@@ -14,7 +14,7 @@ RUNTIME_MCP_INSTALL_DIR="$RUNTIME_INSTALL_ROOT/runtime-mcp"
 RUNTIME_CLI_BIN="$RUNTIME_CLI_INSTALL_DIR/bin/runtime-cli"
 RUNTIME_MCP_BIN="$RUNTIME_MCP_INSTALL_DIR/bin/runtime-mcp"
 RUNTIME_LAUNCHER_BIN_DIR="${SKILL_BILL_BIN_DIR:-$HOME/.local/bin}"
-DESKTOP_APP_DEFAULT_NAME="SkillBill"
+DESKTOP_APP_DEFAULT_NAME="Skill Bill"
 DESKTOP_APP_INSTALL_DIR="${SKILL_BILL_DESKTOP_APP_DIR:-}"
 
 RED='\033[0;31m'
@@ -134,7 +134,11 @@ default_desktop_app_install_dir() {
   local os="$1"
   case "$os" in
     macos)
-      printf '%s' "/Applications"
+      if [[ -d "$HOME/Applications/$DESKTOP_APP_DEFAULT_NAME.app" || -d "$HOME/Applications/SkillBill.app" ]]; then
+        printf '%s' "$HOME/Applications"
+      else
+        printf '%s' "/Applications"
+      fi
       ;;
     linux)
       printf '%s' "${XDG_DATA_HOME:-$HOME/.local/share}/skillbill/desktop"
@@ -276,14 +280,43 @@ desktop_app_executable_path() {
   esac
 }
 
+legacy_desktop_app_target_path() {
+  local os="$1" install_root="$2"
+  case "$os" in
+    macos)
+      printf '%s/SkillBill.app' "$install_root"
+      ;;
+    *)
+      printf '%s/SkillBill' "$install_root"
+      ;;
+  esac
+}
+
+legacy_desktop_app_executable_path() {
+  local os="$1" app_target="$2"
+  case "$os" in
+    macos)
+      printf '%s/Contents/MacOS/SkillBill' "$app_target"
+      ;;
+    windows)
+      printf '%s/bin/SkillBill.bat' "$app_target"
+      ;;
+    *)
+      printf '%s/bin/SkillBill' "$app_target"
+      ;;
+  esac
+}
+
 remove_desktop_launcher() {
   local os="$1"
   local app_target="$2"
   local expected_target
+  local legacy_target
   local link_path
   local actual_target
 
   expected_target="$(desktop_app_executable_path "$os" "$app_target")"
+  legacy_target="$(legacy_desktop_app_executable_path "$os" "$(legacy_desktop_app_target_path "$os" "$(dirname "$app_target")")")"
   case "$os" in
     windows)
       link_path="$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop.cmd"
@@ -303,7 +336,7 @@ remove_desktop_launcher() {
         return 0
       fi
       actual_target="$(readlink "$link_path")"
-      if [[ "$actual_target" != "$expected_target" ]]; then
+      if [[ "$actual_target" != "$expected_target" && "$actual_target" != "$legacy_target" ]]; then
         warn "  skipped $link_path (points outside this desktop install)"
         SKIPPED_TARGETS+=("$link_path")
         return 0
@@ -319,7 +352,7 @@ remove_linux_desktop_entry() {
   local desktop_file="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skillbill.desktop"
   local icon_file="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/512x512/apps/skillbill.png"
 
-  if [[ -f "$desktop_file" ]] && grep -q '^Name=SkillBill$' "$desktop_file"; then
+  if [[ -f "$desktop_file" ]] && grep -q -E '^Name=(Skill Bill|SkillBill)$' "$desktop_file"; then
     rm -f "$desktop_file"
     REMOVED_TARGETS+=("$desktop_file")
     ok "  removed Linux desktop entry"
@@ -334,9 +367,11 @@ remove_linux_desktop_entry() {
 remove_desktop_app() {
   local os
   local app_target
+  local legacy_target
 
   os="$(desktop_host_os)"
   app_target="$(desktop_app_install_path "$os")"
+  legacy_target="$(legacy_desktop_app_target_path "$os" "$(dirname "$app_target")")"
 
   info "Removing desktop app install for $os: $app_target"
   remove_desktop_launcher "$os" "$app_target"
@@ -349,6 +384,11 @@ remove_desktop_app() {
     ok "  removed desktop app"
   else
     info "  no desktop app install found"
+  fi
+  if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
+    rm -rf "$legacy_target"
+    REMOVED_TARGETS+=("$legacy_target")
+    ok "  removed legacy desktop app"
   fi
 }
 
@@ -517,7 +557,7 @@ remove_skill_target() {
 remove_from_agent_dir() {
   local label="$1"
   local target_dir="$2"
-  local output
+  local output=""
   local status=0
   local skill_name
   local args=()
@@ -568,7 +608,11 @@ echo ""
 printf "${CYAN}━━━ Skill Bill Uninstaller ━━━${NC}\n"
 echo ""
 
-remove_desktop_app
+if [[ "${SKILL_BILL_PRESERVE_DESKTOP_APP:-}" == "1" ]]; then
+  info "Keeping the installed desktop app during this Skill Bill upgrade."
+else
+  remove_desktop_app
+fi
 
 build_kotlin_runtime_distribution
 build_skill_names
@@ -612,7 +656,7 @@ remove_codex_agents_tomls() {
   # directories. Manifest-driven: walks platform-packs/<slug>/**/codex-agents/*.toml
   # and removes any matching filename in $HOME/.codex/agents and
   # $HOME/.agents/agents. Idempotent.
-  local output
+  local output=""
   if ! output="$(run_runtime_cli install unlink-codex-agents \
     --platform-packs "$PLATFORM_PACKS_DIR" \
     --skills "$SKILLS_DIR")"; then
@@ -634,7 +678,7 @@ remove_claude_agent_mds() {
   # Uninstall Claude native subagent markdown symlinks from every discovered config root's agents/
   # directory (~/.claude/agents plus ~/.claude-<name>/agents and CLAUDE_CONFIG_DIR/agents). The
   # runtime resolver fans the unlink across all roots; install historically never removed these.
-  local output
+  local output=""
   if ! output="$(run_runtime_cli install unlink-claude-agents \
     --platform-packs "$PLATFORM_PACKS_DIR" \
     --skills "$SKILLS_DIR")"; then
@@ -662,7 +706,7 @@ remove_junie_agent_mds() {
   # Uninstall Junie native subagent markdown symlinks from ~/.junie/agents.
   # The source discovery walks governed platform-pack and skill junie-agents/*.md
   # definitions and is independent from other agent setup choices.
-  local output
+  local output=""
   if ! output="$(run_runtime_cli install unlink-junie-agents \
     --platform-packs "$PLATFORM_PACKS_DIR" \
     --skills "$SKILLS_DIR")"; then
@@ -687,7 +731,7 @@ remove_cursor_agent_mds() {
   # Uninstall Cursor native subagent markdown symlinks from ~/.cursor/agents.
   # The source discovery walks governed platform-pack and skill cursor-agents/*.md
   # definitions and is independent from other agent setup choices.
-  local output
+  local output=""
   if ! output="$(run_runtime_cli install unlink-cursor-agents \
     --platform-packs "$PLATFORM_PACKS_DIR" \
     --skills "$SKILLS_DIR")"; then

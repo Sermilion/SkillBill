@@ -6,12 +6,9 @@ on:
       - "desktop-tray/**"
       - "runtime-kotlin/**"
       - ".github/workflows/desktop-tray-ci.yml"
-  push:
-    branches: [main]
-    paths:
-      - "desktop-tray/**"
-      - "runtime-kotlin/**"
-      - ".github/workflows/desktop-tray-ci.yml"
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,5 +38,22 @@ jobs:
           sudo apt-get install --yes build-essential pkg-config libsystemd-dev
       - name: Run desktop checks
         run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache)
+      - name: Print jpackage diagnostics after a failed build
+        if: failure()
+        shell: bash
+        run: |
+          for error_log in desktop-tray/build/compose/logs/createDistributable/*-err.txt; do
+            [[ -f "$error_log" ]] || continue
+            echo "jpackage error log: $error_log"
+            cat "$error_log"
+          done
       - name: Smoke packaged work data without CLI discovery
         run: python desktop-tray/scripts/packaged-data-smoke.py
+      - name: Upload desktop snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-tray-snapshot-${{ matrix.os }}
+          path: desktop-tray/build/compose/binaries/main/app/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90

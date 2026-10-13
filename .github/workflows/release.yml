@@ -70,6 +70,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Linux tray build dependencies
+        if: matrix.host_token == 'linux-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config libsystemd-dev
+
       # Derive RELEASE_VERSION from the pushed tag (v0.2.0 → 0.2.0) or the
       # staging_version input (workflow_dispatch). Gradle reads this env var in
       # build.gradle.kts so every artifact name embeds the correct version.
@@ -99,6 +105,10 @@ jobs:
           cd runtime-kotlin
           ./gradlew --no-configuration-cache :runtime-cli:runtimeZip :runtime-mcp:runtimeZip
 
+      - name: Build desktop tray distribution
+        shell: bash
+        run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache --no-configuration-cache)
+
       - name: Bundle skills archive
         if: matrix.host_token == 'linux-x64'
         shell: bash
@@ -106,6 +116,26 @@ jobs:
           archive="skill-bill-skills-${RELEASE_VERSION}.tar.gz"
           tar -czf "$archive" LICENSE skills/ platform-packs/ orchestration/ uninstall.sh
           sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Bundle desktop tray archive
+        shell: bash
+        env:
+          HOST_TOKEN: ${{ matrix.host_token }}
+        run: |
+          set -euo pipefail
+          app_dir="desktop-tray/build/compose/binaries/main/app"
+          [[ -d "$app_dir" ]] || { echo "Missing desktop distribution: $app_dir." >&2; exit 1; }
+          stage_dir="$(mktemp -d)"
+          trap 'rm -rf "$stage_dir"' EXIT
+          cp -R "$app_dir/." "$stage_dir/"
+          cp LICENSE "$stage_dir/LICENSE"
+          archive="skill-bill-desktop-${RELEASE_VERSION}-${HOST_TOKEN}.tar.gz"
+          tar -czf "$archive" -C "$stage_dir" .
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$archive" > "${archive}.sha256"
+          else
+            shasum -a 256 "$archive" > "${archive}.sha256"
+          fi
 
       - name: Verify packaged licenses and checksums
         shell: bash
@@ -115,6 +145,7 @@ jobs:
           artifacts=(
             "runtime-kotlin/runtime-cli/build/runtime-image/runtime-cli-${RELEASE_VERSION}-${host_token}.zip"
             "runtime-kotlin/runtime-mcp/build/runtime-image/runtime-mcp-${RELEASE_VERSION}-${host_token}.zip"
+            "skill-bill-desktop-${RELEASE_VERSION}-${host_token}.tar.gz"
           )
           case "${host_token}" in
             macos-arm64|windows-x64)
@@ -173,6 +204,9 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
 
     steps:
       - name: Check out repository
@@ -272,10 +306,13 @@ jobs:
           artifact_names=(
             "runtime-cli-${release_version}-macos-arm64.zip"
             "runtime-mcp-${release_version}-macos-arm64.zip"
+            "skill-bill-desktop-${release_version}-macos-arm64.tar.gz"
             "runtime-cli-${release_version}-windows-x64.zip"
             "runtime-mcp-${release_version}-windows-x64.zip"
+            "skill-bill-desktop-${release_version}-windows-x64.tar.gz"
             "runtime-cli-${release_version}-linux-x64.zip"
             "runtime-mcp-${release_version}-linux-x64.zip"
+            "skill-bill-desktop-${release_version}-linux-x64.tar.gz"
             "skill-bill-skills-${release_version}.tar.gz"
           )
           asset_names=()
@@ -397,3 +434,38 @@ jobs:
           else
             gh release edit "${RELEASE_TAG}" --repo "${{ github.repository }}" --draft=false
           fi
+
+      - name: Delete downloads from older runtime releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag || steps.staging_meta.outputs.tag }}
+        run: scripts/prune_old_release_assets "${GITHUB_REPOSITORY}" "${RELEASE_TAG}"
+
+      - name: Remove release build artifacts from Actions storage
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prefix = "release-assets-";
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner,
+              repo,
+              workflow_id: "release.yml",
+              status: "completed",
+              per_page: 100,
+            });
+            const completedRunIds = new Set(runs.map((run) => run.id));
+            completedRunIds.add(context.runId);
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            for (const artifact of artifacts) {
+              if (!artifact.name.startsWith(prefix) || !completedRunIds.has(artifact.workflow_run?.id)) {
+                continue;
+              }
+              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+              core.info(`Deleted ${artifact.name} from completed release build ${artifact.workflow_run.id}.`);
+            }
