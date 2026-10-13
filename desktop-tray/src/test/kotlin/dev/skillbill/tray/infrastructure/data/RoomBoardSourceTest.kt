@@ -55,7 +55,7 @@ class RoomBoardSourceTest {
   private val now = Instant.now()
 
   @Test
-  fun `keyless retries appear once in attention and preserve previous blocked and canceled attempts in history`() = runBlocking {
+  fun `keyless retries have one sidebar entry and retain older attempts in detail`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-keyless-retries").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
       factory.transaction { unit ->
@@ -75,10 +75,20 @@ class RoomBoardSourceTest {
         source.selectDatabase(fixture.dbPath.toString())
         assertEquals(setOf("latest", "other"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY))
           .items.map { it.identity.id }.toSet())
-        val history = value(source.board(WorkSection.HISTORY, Retention.DAY))
-        assertEquals(setOf("older", "canceled"), history.items.map { it.identity.id }.toSet())
-        assertEquals(Lifecycle.CANCELED, history.items.single { it.identity.id == "canceled" }.lifecycle)
+        assertTrue(value(source.board(WorkSection.HISTORY, Retention.DAY)).items.isEmpty())
+        assertTrue(value(source.board(WorkSection.RECENT, Retention.DAY)).items.isEmpty())
         assertTrue(value(source.board(WorkSection.PHASES, Retention.DAY)).items.isEmpty())
+        factory.transaction { unit ->
+          val latest = assertNotNull(unit.standalonePhaseStatuses.readByInvocation("latest"))
+          unit.standalonePhaseStatuses.cancel(latest, now.minusSeconds(1))
+        }
+        val history = value(source.board(WorkSection.HISTORY, Retention.DAY))
+        assertEquals(listOf("latest"), history.items.map { it.identity.id })
+        assertEquals(Lifecycle.CANCELED, history.items.single().lifecycle)
+        assertEquals(listOf("latest"), value(source.board(WorkSection.RECENT, Retention.DAY)).items.map { it.identity.id })
+        assertEquals(listOf("other"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY)).items.map { it.identity.id })
+        val detail = assertIs<Outcome.Value<Detail>>(source.detail(history.items.single().identity)).value
+        assertEquals(setOf("older", "canceled", "latest"), detail.executionHistory.map { it.invocationId }.toSet())
       } finally { source.closeAndJoin() }
     }
   }

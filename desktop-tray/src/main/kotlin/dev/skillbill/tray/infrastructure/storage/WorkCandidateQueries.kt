@@ -47,8 +47,6 @@ EXISTS (
             OR (newer.run_sequence = s.run_sequence AND newer.invocation_id > s.invocation_id))
       )
   """.trimIndent()
-  val history = section in setOf(WorkSection.HISTORY, WorkSection.RECENT)
-  val phaseFinishedAt = if (history) "COALESCE(s.finished_at, CASE WHEN $superseded THEN s.updated_at END)" else "s.finished_at"
   val sql = """
     WITH observation(at) AS (SELECT ?), candidates AS (
       SELECT g.parent_workflow_id AS id, g.first_started_at AS started_at,
@@ -111,11 +109,11 @@ EXISTS (
         SELECT x.execution_id FROM ide_status_workflow_execution x WHERE x.workflow_id = w.workflow_id
         ORDER BY length(x.run_sequence) DESC, x.run_sequence DESC LIMIT 1)
       UNION ALL
-      SELECT s.invocation_id, s.started_at, $phaseFinishedAt,
+      SELECT s.invocation_id, s.started_at, s.finished_at,
              s.lifecycle_state, 'phase',
              COALESCE(s.issue_key, ''), s.repository_identity, s.lease_expires_at, s.branch_correlation
       FROM standalone_phase_status s
-      ${if (history) "" else "WHERE NOT $superseded"}
+      WHERE NOT $superseded
     ), eligible AS (
       SELECT id, ${instantOrderingKey(ordering)} AS sort_time, NULLIF(deadline, '') AS deadline
       FROM candidates
