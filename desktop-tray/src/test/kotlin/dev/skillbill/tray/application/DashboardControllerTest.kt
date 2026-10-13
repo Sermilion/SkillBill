@@ -14,6 +14,118 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class DashboardControllerTest {
   @Test
+  fun `idle startup waits for live sections then selects latest history and preserves an explicit selection`() = runBlocking {
+    val latest = item("latest").copy(lifecycle = Lifecycle.TERMINAL, finishedAt = Instant.parse("2026-10-11T09:00:00Z"))
+    val older = item("older").copy(lifecycle = Lifecycle.TERMINAL, finishedAt = latest.finishedAt!!.minusSeconds(60))
+    val history = kotlinx.coroutines.flow.MutableStateFlow(listOf(latest, older))
+    val releasePhases = CompletableDeferred<Unit>()
+    val selections = java.util.concurrent.CopyOnWriteArrayList<WorkIdentity>()
+    val source = FakeSource(
+      boardCall = { error("Expected a section read") },
+      sectionCall = { section ->
+        if (section == WorkSection.PHASES) releasePhases.await()
+        Outcome.Value(board(Retention.DAY, if (section == WorkSection.HISTORY) history.value else emptyList()))
+      },
+      detailCall = { identity -> Outcome.Value(detail(history.value.single { it.identity == identity })) },
+    )
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) { selections += it }
+    try {
+      kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
+      assertEquals(null, model.state.value.selected)
+      releasePhases.complete(Unit)
+      kotlinx.coroutines.withTimeout(3000) { while (model.state.value.detail?.item?.identity != latest.identity) delay(10) }
+      assertTrue(selections.isEmpty())
+      model.select(older.identity)
+      kotlinx.coroutines.withTimeout(3000) { while (model.state.value.detail?.item?.identity != older.identity) delay(10) }
+      val newer = latest.copy(identity = WorkIdentity("newer", latest.identity.repositoryIdentity), finishedAt = latest.finishedAt!!.plusSeconds(60))
+      history.value = listOf(newer, latest, older)
+      model.refresh()
+      kotlinx.coroutines.withTimeout(3000) { while (model.state.value.sections[WorkSection.HISTORY]?.items?.firstOrNull()?.identity != newer.identity) delay(10) }
+      assertEquals(older.identity, model.state.value.selected)
+      assertEquals(listOf(older.identity), selections)
+    } finally {
+      releasePhases.complete(Unit)
+      model.closeAndJoin()
+    }
+  }
+
+  @Test
+  fun `live work takes priority over history and failed live reads cannot establish an idle default`() = runBlocking {
+    for (section in listOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, null)) {
+      val historical = item("history").copy(lifecycle = Lifecycle.TERMINAL)
+      val preferred = item("live")
+      val source = FakeSource(
+        boardCall = { error("Expected a section read") },
+        sectionCall = { current ->
+          if (section == null && current == WorkSection.GOALS) Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "Unreadable goals"))
+          else Outcome.Value(board(Retention.DAY, when (current) {
+            WorkSection.HISTORY -> listOf(historical)
+            section -> listOf(preferred)
+            else -> emptyList()
+          }))
+        },
+        detailCall = { Outcome.Value(detail(preferred)) },
+      )
+      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+      try {
+        kotlinx.coroutines.withTimeout(3000) {
+          while (model.state.value.sectionLoading.isNotEmpty() ||
+            section != null && model.state.value.selected == null) delay(10)
+        }
+        assertEquals(if (section == null) null else preferred.identity, model.state.value.selected)
+      } finally { model.closeAndJoin() }
+    }
+  }
+
+  @Test
+  fun `changing history filter clears old rows and cannot append the previous filter cursor`() = runBlocking {
+    val first = item("all-history")
+    val goal = item("goal-history")
+    val olderGoal = item("older-goal")
+    val filterStarted = CompletableDeferred<Unit>()
+    val releaseFilter = CompletableDeferred<Unit>()
+    val appendCursors = java.util.concurrent.CopyOnWriteArrayList<String>()
+    val source = FakeSource(
+      boardCall = { error("Expected a section request") },
+      sectionPageCall = { section, retention, cursor, filter ->
+        when {
+          section != WorkSection.HISTORY -> Outcome.Value(board(retention, emptyList()))
+          filter == HistoryFilter.ALL -> Outcome.Value(board(retention, listOf(first)).copy(nextCursor = "all-next"))
+          cursor == null -> {
+            filterStarted.complete(Unit)
+            releaseFilter.await()
+            Outcome.Value(board(retention, listOf(goal)).copy(nextCursor = "goals-next"))
+          }
+          else -> {
+            appendCursors += cursor
+            assertEquals("goals-next", cursor)
+            Outcome.Value(board(retention, listOf(olderGoal)))
+          }
+        }
+      },
+    )
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+    try {
+      kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
+      model.updateSettings(model.state.value.settings.copy(historyFilter = HistoryFilter.GOALS))
+      kotlinx.coroutines.withTimeout(3000) { filterStarted.await() }
+      assertEquals(null, model.state.value.sections[WorkSection.HISTORY])
+      model.loadMore(WorkSection.HISTORY)
+      assertTrue(appendCursors.isEmpty())
+      releaseFilter.complete(Unit)
+      kotlinx.coroutines.withTimeout(3000) { while (model.state.value.sections[WorkSection.HISTORY]?.historyFilter != HistoryFilter.GOALS) delay(10) }
+      model.loadMore(WorkSection.HISTORY)
+      kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY in model.state.value.sectionLoading) delay(10) }
+      assertEquals(listOf(goal, olderGoal), model.state.value.sections[WorkSection.HISTORY]?.items)
+      assertEquals(listOf("goals-next"), appendCursors)
+      assertEquals(null, model.state.value.sectionProblems[WorkSection.HISTORY])
+    } finally {
+      releaseFilter.complete(Unit)
+      model.closeAndJoin()
+    }
+  }
+
+  @Test
   fun `empty live section stays ready during an explicit background refresh`() = runBlocking {
     val initialStarted = CompletableDeferred<Unit>()
     val releaseInitial = CompletableDeferred<Unit>()
@@ -75,7 +187,6 @@ class DashboardControllerTest {
     val model = DashboardController(source, source, source, source, MemorySettings(), native) {}
     try {
       kotlinx.coroutines.withTimeout(3000) { while (model.state.value.boardLoading || WorkSection.RECENT !in model.state.value.sections) delay(10) }
-      model.observeHistory(true)
       kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
       assertTrue(notifications.isEmpty())
       values[WorkSection.GOALS] = board(Retention.DAY, emptyList())
@@ -255,40 +366,43 @@ class DashboardControllerTest {
   }
 
   @Test
-  fun `board stops after one page and loads the next page only on demand`() = runBlocking {
-    val releaseSecond = CompletableDeferred<Unit>()
-    val secondStarted = CompletableDeferred<Unit>()
-    val first = item("first")
-    val second = item("second")
-    val source = FakeSource(
-      boardCall = { error("Expected a paginated request") },
-      boardPageCall = { retention, cursor ->
-        if (cursor == null) Outcome.Value(board(retention, listOf(first)).copy(nextCursor = "next")) else {
-          assertEquals("next", cursor)
-          secondStarted.complete(Unit)
-          releaseSecond.await()
-          Outcome.Value(board(retention, listOf(second)))
-        }
-      },
-    )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
-    try {
-      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
-      delay(50)
-      assertTrue(!secondStarted.isCompleted)
-      model.loadMoreBoard()
-      model.loadMoreBoard()
-      kotlinx.coroutines.withTimeout(2000) { secondStarted.await() }
-      assertEquals(listOf(first), model.state.value.board?.items)
-      assertTrue(WorkSection.GOALS in model.state.value.sectionLoading)
-      assertTrue(!model.state.value.boardLoading)
-      releaseSecond.complete(Unit)
-      kotlinx.coroutines.withTimeout(2000) { while (WorkSection.GOALS in model.state.value.sectionLoading) delay(10) }
-      assertEquals(listOf(first, second), model.state.value.board?.items)
-      assertEquals(null, model.state.value.problem)
-    } finally {
-      releaseSecond.complete(Unit)
-      model.close()
+  fun `goal and history lists stop after one page and load the next page only on demand`() = runBlocking {
+    for (section in listOf(WorkSection.GOALS, WorkSection.HISTORY)) {
+      val releaseSecond = CompletableDeferred<Unit>()
+      val secondStarted = CompletableDeferred<Unit>()
+      val first = item("first")
+      val second = item("second")
+      val source = FakeSource(
+        boardCall = { error("Expected a paginated request") },
+        sectionPageCall = { current, retention, cursor, _ ->
+          if (current != section) Outcome.Value(board(retention, emptyList()))
+          else if (cursor == null) Outcome.Value(board(retention, listOf(first)).copy(nextCursor = "next")) else {
+            assertEquals("next", cursor)
+            secondStarted.complete(Unit)
+            releaseSecond.await()
+            Outcome.Value(board(retention, listOf(second)))
+          }
+        },
+      )
+      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+      try {
+        kotlinx.coroutines.withTimeout(2000) { while (section !in model.state.value.sections || model.state.value.boardLoading) delay(10) }
+        assertTrue(!secondStarted.isCompleted)
+        model.loadMore(section)
+        model.loadMore(section)
+        kotlinx.coroutines.withTimeout(2000) { secondStarted.await() }
+        assertEquals(listOf(first), model.state.value.sections[section]?.items)
+        assertTrue(section in model.state.value.sectionLoading)
+        assertTrue(!model.state.value.boardLoading)
+        releaseSecond.complete(Unit)
+        kotlinx.coroutines.withTimeout(2000) { while (section in model.state.value.sectionLoading) delay(10) }
+        assertEquals(listOf(first, second), model.state.value.sections[section]?.items)
+        assertEquals(null, model.state.value.sections[section]?.nextCursor)
+        assertEquals(null, model.state.value.problem)
+      } finally {
+        releaseSecond.complete(Unit)
+        model.closeAndJoin()
+      }
     }
   }
 
@@ -474,6 +588,7 @@ private class FakeSource(
   private val boardPageCall: (suspend (Retention, String?) -> Outcome<Board>)? = null,
   private val detailPageCall: (suspend (WorkIdentity, String?) -> Outcome<Detail>)? = null,
   private val sectionCall: (suspend (WorkSection) -> Outcome<Board>)? = null,
+  private val sectionPageCall: (suspend (WorkSection, Retention, String?, HistoryFilter) -> Outcome<Board>)? = null,
   private val boundedDetailCall: (suspend (WorkIdentity, String?, DetailList?, Int) -> Outcome<Detail>)? = null,
   private val selectAction: suspend (String?) -> Unit = {},
 ) : WorkBoardRepository, WorkDetailRepository, WorkControlRepository, WorkStoreSession {
@@ -486,7 +601,7 @@ private class FakeSource(
     revision.collect { emit(board(section, retention, filter = filter, historyFilter = historyFilter)) }
   }
   override suspend fun board(section: WorkSection, retention: Retention, cursor: String?, filter: String, historyFilter: HistoryFilter): Outcome<Board> {
-    val result = sectionCall?.invoke(section) ?: if (section == WorkSection.GOALS) boardPageCall?.invoke(retention, cursor) ?: boardCall(retention)
+    val result = sectionPageCall?.invoke(section, retention, cursor, historyFilter) ?: sectionCall?.invoke(section) ?: if (section == WorkSection.GOALS) boardPageCall?.invoke(retention, cursor) ?: boardCall(retention)
     else Outcome.Value(Board(Instant.parse("2026-10-11T10:00:00Z"), retention, emptyList()))
     return when (result) {
       is Outcome.Failure -> result

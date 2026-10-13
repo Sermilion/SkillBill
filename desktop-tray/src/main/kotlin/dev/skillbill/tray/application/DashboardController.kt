@@ -37,7 +37,6 @@ class DashboardController(
   private val transitions = TransitionTracker()
   private val refreshRequests = Channel<Unit>(Channel.CONFLATED)
   private val settingsMutex = Mutex()
-  @Volatile private var historyEnabled = false
   private val detailMutex = Mutex()
   private var selectionJob: Job? = null
   private var detailAppendJob: Job? = null
@@ -92,7 +91,7 @@ class DashboardController(
               mutable.update { it.copy(board = null, sections = emptyMap(), selected = null, detail = null,
                 problem = null, detailProblem = null, actionProblem = null, displayDurations = emptyMap(), boardLoading = true,
                 detailLoading = false, detailListLoading = emptySet(), detailExtrasStale = false,
-                sectionLoading = (LIVE_SECTIONS + WorkSection.RECENT + if (historyEnabled) listOf(WorkSection.HISTORY) else emptyList()).toSet(),
+                sectionLoading = OBSERVED_SECTIONS.toSet(),
                 sectionLoadStates = emptyMap(), sectionProblems = emptyMap(), stale = false,
                 detailLoadStates = emptyMap()) }
             }
@@ -103,8 +102,15 @@ class DashboardController(
           ready = true
           if (changedRetention) { pages.clear(); pageWindows.clear(); anchors.clear() }
           if (changedPath || changedRetention) restartSubscriptions()
-          else if (previous.historyFilter != settings.historyFilter && historyEnabled) {
-            subscriptions.remove(WorkSection.HISTORY)?.cancel()
+          else if (previous.historyFilter != settings.historyFilter) {
+            sectionGenerations.merge(WorkSection.HISTORY, 1L, Long::plus)
+            mutable.update { state -> state.copy(sections = state.sections - WorkSection.HISTORY,
+              sectionProblems = state.sectionProblems - WorkSection.HISTORY,
+              sectionLoading = state.sectionLoading + WorkSection.HISTORY,
+              sectionLoadStates = state.sectionLoadStates + (WorkSection.HISTORY to ListLoadState.INITIAL_LOADING)) }
+            subscriptions.remove(WorkSection.HISTORY)?.cancelAndJoin()
+            appendJobs.remove(WorkSection.HISTORY)?.cancelAndJoin()
+            appends.remove(WorkSection.HISTORY)
             pages.remove(WorkSection.HISTORY)
             pageWindows.remove(WorkSection.HISTORY)
             anchors.remove(WorkSection.HISTORY)
@@ -139,9 +145,7 @@ class DashboardController(
     queryGeneration++
     subscriptions.values.forEach(Job::cancel)
     subscriptions.clear()
-    val sections = listOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT) +
-      if (historyEnabled) listOf(WorkSection.HISTORY) else emptyList()
-    sections.forEach(::subscribe)
+    OBSERVED_SECTIONS.forEach(::subscribe)
   }
 
   private fun subscribe(section: WorkSection) {
@@ -253,7 +257,7 @@ class DashboardController(
       storeGeneration = board.generation
       restartSubscriptions()
       mutable.update { it.copy(sections = emptyMap(), board = null, boardLoading = true,
-        sectionLoading = (LIVE_SECTIONS + WorkSection.RECENT + if (historyEnabled) listOf(WorkSection.HISTORY) else emptyList()).toSet(),
+        sectionLoading = OBSERVED_SECTIONS.toSet(),
         selected = null, detail = null, detailLoading = false, detailListLoading = emptySet(), detailExtrasStale = false,
         displayDurations = emptyMap(), actionProblem = null, sectionLoadStates = emptyMap(), detailLoadStates = emptyMap(),
         sectionProblems = emptyMap(), problem = null, stale = false, detailProblem = null) }
@@ -276,6 +280,7 @@ class DashboardController(
         stale = (state.sectionProblems - section).keys.any { it in LIVE_SECTIONS },
         displayDurations = live.associate { item -> item.identity to DisplayDurations(item.activeDurationMs, item.currentSubtaskId, item.subtaskActiveDurationMs) })
     }
+    selectDefaultItem()
     baselineSections.remove(section)
     if (section != WorkSection.HISTORY && baselineSections.isEmpty()) synchronized(transitions) {
       mutable.value.board?.let { combined ->
@@ -294,6 +299,21 @@ class DashboardController(
 
       }
     }
+  }
+
+  private fun selectDefaultItem() {
+    val state = mutable.value
+    if (state.selected != null || LIVE_SECTIONS.any {
+      it !in state.sections || it in state.sectionLoading || it in state.sectionProblems
+    }) return
+    val live = LIVE_SECTIONS.firstNotNullOfOrNull { state.sections[it]?.items?.firstOrNull() }
+    if (live != null) {
+      selectItem(live.identity)
+      return
+    }
+    if (LIVE_SECTIONS.any { state.sections[it]?.nextCursor != null } ||
+      WorkSection.HISTORY in state.sectionLoading || WorkSection.HISTORY in state.sectionProblems) return
+    state.sections[WorkSection.HISTORY]?.items?.firstOrNull()?.let { selectItem(it.identity) }
   }
 
   private fun sectionFailure(section: WorkSection, problem: Problem, append: Boolean = false) {
@@ -323,7 +343,11 @@ class DashboardController(
   override fun loadMoreBoard() { LIVE_SECTIONS.forEach(::loadMore) }
 
   override fun loadMore(section: WorkSection) {
-    if (mutable.value.sections[section]?.nextCursor == null) return
+    val state = mutable.value
+    val board = state.sections[section] ?: return
+    if (board.nextCursor == null || section in state.sectionLoading ||
+      board.finishedWithin != state.settings.retention ||
+      section == WorkSection.HISTORY && board.historyFilter != state.settings.historyFilter) return
     val lock = locks.getValue(section)
     if (!appends.add(section)) return
     val query = queryGeneration
@@ -375,12 +399,6 @@ class DashboardController(
     appendJob.start()
   }
 
-  override fun observeHistory(enabled: Boolean) {
-    historyEnabled = enabled
-    if (enabled && ready && subscriptions[WorkSection.HISTORY]?.isActive != true) subscribe(WorkSection.HISTORY)
-    if (!enabled) subscriptions.remove(WorkSection.HISTORY)?.cancel()
-  }
-
   override fun filter(value: String) {
     if (mutable.value.filter == value) return
     mutable.update { it.copy(filter = value) }
@@ -392,6 +410,11 @@ class DashboardController(
 
   override fun select(identity: WorkIdentity) {
     onSelect(identity)
+    selectItem(identity)
+  }
+
+  @Synchronized
+  private fun selectItem(identity: WorkIdentity) {
     synchronized(detailWindows) { detailWindows.clear() }
     mutable.update { it.copy(selected = identity, detail = null, detailProblem = null, detailLoading = true,
       detailLoadStates = DetailList.entries.associateWith { ListLoadState.INITIAL_LOADING }) }
@@ -445,7 +468,8 @@ class DashboardController(
     previousSelection?.cancel()
     val epoch = storeEpoch
     selectionJob = scope.launch {
-      previousSelection?.join()
+      previousSelection?.let { previous -> withContext(NonCancellable) { previous.join() } }
+      currentCoroutineContext().ensureActive()
       details.observeDetail(identity).collect { observed ->
         detailMutex.withLock {
           if (epoch != storeEpoch || mutable.value.selected != identity) return@withLock
@@ -623,6 +647,7 @@ class DashboardController(
 
   private companion object {
     val LIVE_SECTIONS = listOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)
+    val OBSERVED_SECTIONS = LIVE_SECTIONS + WorkSection.RECENT + WorkSection.HISTORY
     const val MAX_PAGES = 5
     const val PAGE_SIZE = 10
   }

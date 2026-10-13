@@ -153,11 +153,12 @@ JNIEXPORT void JNICALL Java_dev_skillbill_tray_infrastructure_macos_MacStatusIte
     [menu addItem:phaseGroup];
     [phaseGroup release];
     [menu addItem:NSMenuItem.separatorItem];
-    NSArray *labels = @[@"Open Skill Bill", @"History", @"Refresh now", @"Settings", @"Quit"];
+    NSArray *labels = @[@"Open Skill Bill", @"Refresh now", @"Settings", @"Quit"];
+    NSArray *actions = @[@2000, @2002, @2003, @2004];
     for (NSInteger i = 0; i < labels.count; i++) {
       NSMenuItem *entry = [[NSMenuItem alloc] initWithTitle:labels[i] action:@selector(activate:) keyEquivalent:@""];
       entry.target = statusTarget;
-      entry.representedObject = @(2000 + i);
+      entry.representedObject = actions[i];
       [menu addItem:entry];
       [entry release];
     }
