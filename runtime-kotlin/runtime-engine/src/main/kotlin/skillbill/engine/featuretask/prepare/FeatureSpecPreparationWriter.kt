@@ -48,9 +48,6 @@ class FeatureSpecPreparationWriter(
     }
     val specDirectory = repoRoot.resolve(".feature-specs/$issueKey-$featureName")
     val parentSpecPath = existingParentSpecPath ?: specDirectory.resolve("spec.md")
-    if (existingParentSpecPath != null) {
-      requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
-    }
     val parentSpecRelativePath = repoRelativePath(repoRoot, parentSpecPath)
     return writePreparedFeature(
       repoRoot = repoRoot,

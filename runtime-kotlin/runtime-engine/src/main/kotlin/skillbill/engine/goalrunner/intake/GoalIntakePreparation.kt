@@ -18,6 +18,8 @@ import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.review.spec.GovernedSpecSectionParser
+import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import java.nio.file.Path
 
@@ -50,7 +52,9 @@ class GoalIntakePreparation(
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)?.let { return it }
     val suppliedIntake = request.intake?.takeIf(String::isNotBlank) ?: return null
     val specPath = existingSpecPath(suppliedIntake, request.issueKey, request.repoRoot)
-    val intake = specPath?.let(fileStore::readText) ?: suppliedIntake
+    val specText = specPath?.let(fileStore::readText)
+    val preservedSpecPath = specPath?.takeIf { specText != null && hasAcceptanceList(specText) }
+    val intake = specText?.let { if (preservedSpecPath == null) asProse(it) else it } ?: suppliedIntake
     val featureName =
       specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second }
         ?: newWorkFeatureName(GoalIntake.parse(suppliedIntake))
@@ -62,7 +66,7 @@ class GoalIntakePreparation(
         if (!branch.ok) invalidIntake("base_branch", branch.error)
         gitOperations.baseBranchOrDefault(request.repoRoot, branch.value)
       }
-    val criteria = acceptanceCriteria(intake)
+    val criteria = acceptanceCriteria(specText ?: intake)
     val constraints = listOf(TRACKER_RESOLUTION)
     specWriter.write(
       request.repoRoot,
@@ -94,7 +98,7 @@ class GoalIntakePreparation(
             ),
           ),
       ),
-      existingParentSpecPath = specPath,
+      existingParentSpecPath = preservedSpecPath,
     )
     return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
   }
@@ -178,6 +182,12 @@ class GoalIntakePreparation(
     field: String,
     reason: String,
   ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = field, reason = reason)
+
+  private fun hasAcceptanceList(specText: String): Boolean =
+    GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }.isNotEmpty()
+
+  private fun asProse(specText: String): String =
+    specText.lines().joinToString("\n") { line -> if (line.isBlank()) ">" else "> $line" }
 
   private fun acceptanceCriteria(intake: String): List<String> {
     val lines = intake.lines()
