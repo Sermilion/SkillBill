@@ -50,12 +50,12 @@ fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
       )
       Box(Modifier.weight(1f)) {
         LazyColumn(Modifier.fillMaxSize().padding(end = 8.dp), state = sidebarScroll) {
-          listOf(Triple("Needs you", attention, WorkSection.NEEDS_YOU), Triple("Goals running", goals, WorkSection.GOALS), Triple("Standalone phases", phases, WorkSection.PHASES), Triple("History", history, WorkSection.HISTORY)).forEach { (title, rows, section) ->
+          listOf(Triple("Needs you", attention, WorkSection.NEEDS_YOU), Triple("Standalone phases", phases, WorkSection.PHASES), Triple("Goal runs", goals, WorkSection.GOALS), Triple("History", history, WorkSection.HISTORY)).forEach { (title, rows, section) ->
             val hasMore = state.sections[section]?.nextCursor != null
             val loadState = state.sectionLoadStates[section] ?: if (section in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
             val sectionLoading = loadState in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING, ListLoadState.APPENDING)
-            item { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
-            if (section == WorkSection.HISTORY) item {
+            item(key = "$section:header") { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
+            if (section == WorkSection.HISTORY) item(key = "$section:filters") {
               Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 HistoryFilter.entries.forEach { choice ->
                   TextButton(onClick = { model.updateSettings(state.settings.copy(historyFilter = choice)) },
@@ -67,29 +67,23 @@ fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
               }
               Text("Finished within ${state.settings.retention.cliValue}", Modifier.padding(start = 16.dp, bottom = 6.dp), color = dim, style = MaterialTheme.typography.bodySmall)
             }
-            state.sectionProblems[section]?.let { problem -> item {
+            state.sectionProblems[section]?.let { problem -> item(key = "$section:problem") {
               Column(Modifier.padding(horizontal = 16.dp)) {
                 Text(problem.summary, color = amber, style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = model::refresh) { Text("Retry", color = amber) }
               }
             } }
-            if (loadState == ListLoadState.INITIAL_LOADING) item {
+            if (loadState == ListLoadState.INITIAL_LOADING) item(key = "$section:loading") {
               Text("Loading...", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
             }
-            if (rows.isEmpty() && section in state.sections) item { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
-            if (section == WorkSection.HISTORY) {
-              items(rows, key = { "history:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
-                SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) }
-              }
-            } else if (rows.isNotEmpty()) item {
-              val visibleRows = when (section) { WorkSection.NEEDS_YOU -> 3; WorkSection.GOALS -> 4; else -> 2 }
-              val sectionScroll = rememberLazyListState()
-              LoadNextPageOnScroll(sectionScroll, hasMore, sectionLoading) { model.loadMore(section) }
-              LazyColumn(Modifier.fillMaxWidth().height((minOf(rows.size, visibleRows) * 47).dp), state = sectionScroll) {
-                items(rows, key = { it.identity }) { item -> SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) } }
-              }
+            if (rows.isEmpty() && section in state.sections) item(key = "$section:empty") { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
+            items(rows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
+              SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) }
             }
-            if (hasMore) item { PageFooter(hasMore, sectionLoading, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(section) } }
+            if (hasMore) item(key = "$section:footer") {
+              LoadNextPageOnScroll(sidebarScroll, hasMore && loadState != ListLoadState.APPEND_FAILED, sectionLoading, "$section:footer") { model.loadMore(section) }
+              PageFooter(hasMore, sectionLoading, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(section) }
+            }
           }
         }
         VerticalScrollbar(rememberScrollbarAdapter(sidebarScroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight())

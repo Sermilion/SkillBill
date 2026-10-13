@@ -74,7 +74,7 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
     state.problem?.let { Text(it.summary, Modifier.fillMaxWidth().background(orange.copy(alpha = .12f)).padding(12.dp), color = amber, fontFamily = body, fontSize = 11.sp) }
     val scroll = rememberLazyListState()
     val hasMore = state.board?.nextCursor != null
-    LoadNextPageOnScroll(scroll, hasMore, state.boardLoading, model::loadMoreBoard)
+    LoadNextPageOnScroll(scroll, hasMore, state.boardLoading, load = model::loadMoreBoard)
     LazyColumn(Modifier.weight(1f), state = scroll) {
       if (rows.isEmpty()) item {
         Text(if (state.boardLoading) "Loading your work..." else "No live ${state.settings.lastPopoverTab.lowercase()}", Modifier.padding(16.dp), color = muted, fontFamily = body, fontSize = 12.sp)

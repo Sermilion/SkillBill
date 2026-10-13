@@ -10,12 +10,14 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
-internal fun LoadNextPageOnScroll(scroll: LazyListState, hasMore: Boolean, loading: Boolean, load: () -> Unit) {
-  LaunchedEffect(scroll, hasMore, loading) {
+internal fun LoadNextPageOnScroll(scroll: LazyListState, hasMore: Boolean, loading: Boolean, boundaryKey: String? = null, load: () -> Unit) {
+  LaunchedEffect(scroll, boundaryKey, hasMore, loading) {
     if (hasMore && !loading) snapshotFlow {
-      scroll.isScrollInProgress && scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let {
-        it >= scroll.layoutInfo.totalItemsCount - 2
-      } == true
+      scroll.isScrollInProgress && if (boundaryKey != null) {
+        scroll.layoutInfo.visibleItemsInfo.any { it.key == boundaryKey }
+      } else {
+        scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let { it >= scroll.layoutInfo.totalItemsCount - 2 } == true
+      }
     }.distinctUntilChanged().collect { if (it) load() }
   }
 }
