@@ -1,13 +1,12 @@
 package skillbill.infrastructure.sqlite.core.schema
 
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.model.EnvironmentContext
 import java.nio.file.Path
 import java.nio.file.Paths
 
 internal object DatabasePaths {
-  const val DB_ENVIRONMENT_KEY: String = "SKILL_BILL_REVIEW_DB"
-
   fun defaultDbPath(userHome: Path): Path = userHome.resolve(".skill-bill").resolve("review-metrics.db")
 
   fun resolveDbPath(
@@ -15,7 +14,7 @@ internal object DatabasePaths {
     environment: Map<String, String>,
     userHome: Path,
   ): Path {
-    val candidate = cliValue ?: environment[DB_ENVIRONMENT_KEY]
+    val candidate = cliValue ?: environment[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH]
     return if (candidate != null) {
       expandUserPath(candidate = candidate, userHome = userHome)
     } else {

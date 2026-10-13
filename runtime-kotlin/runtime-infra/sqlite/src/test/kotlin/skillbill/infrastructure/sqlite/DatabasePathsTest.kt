@@ -1,8 +1,8 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,7 +18,7 @@ class DatabasePathsTest {
     val resolved =
       DatabaseRuntime.resolveDbPath(
         cliValue = "./custom/metrics.db",
-        environment = mapOf(DatabasePaths.DB_ENVIRONMENT_KEY to "/tmp/env-metrics.db"),
+        environment = mapOf(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH to "/tmp/env-metrics.db"),
         userHome = Path.of("/tmp/home"),
       )
 
@@ -30,7 +30,7 @@ class DatabasePathsTest {
     val resolved =
       DatabaseRuntime.resolveDbPath(
         cliValue = null,
-        environment = mapOf(DatabasePaths.DB_ENVIRONMENT_KEY to "~/metrics.db"),
+        environment = mapOf(RuntimeDatabaseEnvironmentKeys.DATABASE_PATH to "~/metrics.db"),
         userHome = Path.of("/tmp/home"),
       )
 

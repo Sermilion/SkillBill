@@ -5,7 +5,8 @@ import java.nio.file.Path
 data class WorkRunLaunchRequest(
   val repositoryRoot: Path,
   val databasePath: Path,
-  val arguments: List<String>,
+  val agentId: String,
+  val prompt: String,
   val ownershipKey: String,
 )
 

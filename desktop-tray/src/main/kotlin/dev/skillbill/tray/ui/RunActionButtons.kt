@@ -24,6 +24,7 @@ internal fun RunActionButtons(detail: Detail, model: DashboardModel, busy: Boole
   val item = detail.item
   val options = detail.runOptions
   var chooseAgent by remember(item.identity) { mutableStateOf(false) }
+  var selectedAgent by remember(item.identity, options?.agentId) { mutableStateOf(options?.agentId) }
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       if (item.freshness == Freshness.FRESH && item.eligibleForControl()) {
@@ -33,14 +34,17 @@ internal fun RunActionButtons(detail: Detail, model: DashboardModel, busy: Boole
         DesignButton("Stop goal", enabled = !busy, danger = true) { model.perform("stop", item.identity) }
       }
       if (options?.canLaunch == true) Box {
-        DesignButton(if (busy) "Working..." else options.launchLabel, enabled = !busy) {
-          if (options.agentId == null) chooseAgent = true else model.perform("launch", item.identity)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          DesignButton(if (busy) "Working..." else options.launchLabel, enabled = !busy) {
+            if (selectedAgent == null) chooseAgent = true else model.perform("launch:$selectedAgent", item.identity)
+          }
+          DesignButton(selectedAgent?.let { "Agent: $it" } ?: "Choose agent", enabled = !busy) { chooseAgent = true }
         }
         DropdownMenu(expanded = chooseAgent, onDismissRequest = { chooseAgent = false }) {
           options.agentChoices.forEach { agent ->
-            DropdownMenuItem(text = { Text("${options.launchLabel} with $agent") }, onClick = {
+            DropdownMenuItem(text = { Text(agent) }, onClick = {
               chooseAgent = false
-              model.perform("launch:$agent", item.identity)
+              selectedAgent = agent
             })
           }
         }
@@ -53,7 +57,7 @@ internal fun RunActionButtons(detail: Detail, model: DashboardModel, busy: Boole
     }
     options?.unavailableReason?.let { Text(it, color = muted, fontSize = 11.sp) }
     if (options?.canLaunch == true) {
-      Text(options.agentId?.let { "Agent: $it" } ?: "Choose an agent when starting", color = muted, fontSize = 11.sp)
+      Text("Starts the installed agent harness", color = muted, fontSize = 11.sp)
     }
   }
 }

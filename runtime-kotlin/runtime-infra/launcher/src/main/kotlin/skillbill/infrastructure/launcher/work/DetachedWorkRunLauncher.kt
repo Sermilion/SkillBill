@@ -1,6 +1,11 @@
 package skillbill.infrastructure.launcher.work
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.infrastructure.launcher.agentrun.AgentRunCommand
+import skillbill.infrastructure.launcher.agentrun.workRunHarnessCommand
+import skillbill.install.model.AGENT_LAUNCHER_CLIS
+import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkRunLauncher
@@ -22,17 +27,22 @@ class DetachedWorkRunLauncher(
   private val diagnostics: RuntimeDiagnostics,
 ) : WorkRunLauncher {
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+    val agent =
+      SupportedAgent.entries.firstOrNull { it.id == request.agentId }
+        ?: return refuse("The selected agent is not supported.")
     val executable =
-      resolveExecutable()
-        ?: return refuse("The Skill Bill runtime is not installed. Install it before starting a run.")
-    return startInstalled(executable, request)
+      resolveExecutable(agent)
+        ?: return refuse("The ${agent.id} harness is not installed or is not on PATH.")
+    val built = workRunHarnessCommand(request, agent, environment.environment)
+    return startInstalled(built.copy(command = listOf(executable.toString()) + built.command.drop(1)), request)
   }
 
   private fun startInstalled(
-    executable: Path,
+    built: AgentRunCommand,
     request: WorkRunLaunchRequest,
   ): WorkRunLaunchResult {
     val directory = environment.userHome.resolve(".skill-bill/desktop/runs")
+    var input: Path? = null
     var channel: FileChannel? = null
     var handedOff = false
     return try {
@@ -52,15 +62,13 @@ class DetachedWorkRunLauncher(
         return refuse("A run is already starting or running for this work.")
       }
       val log = directory.resolve("${UUID.randomUUID()}.log")
-      val process =
-        ProcessBuilder(
-          launchCommand(executable, request),
-        ).directory(request.repositoryRoot.toFile())
-          .redirectInput(ProcessBuilder.Redirect.from(Path.of(if (isWindows()) "NUL" else "/dev/null").toFile()))
-          .redirectErrorStream(true).redirectOutput(log.toFile())
-          .apply { environment().putAll(this@DetachedWorkRunLauncher.environment.environment) }
-          .start()
+      input =
+        built.stdinText?.let { prompt ->
+          Files.createTempFile(directory, "prompt-", ".txt").also { Files.writeString(it, prompt) }
+        }
+      val process = startProcess(built, request, input, log)
       val ownedChannel = channel
+      val ownedInput = input
       process.onExit().whenComplete { finished, error ->
         try {
           if (error != null || finished?.exitValue() != 0) {
@@ -71,6 +79,7 @@ class DetachedWorkRunLauncher(
             lock.release()
           } finally {
             ownedChannel.close()
+            ownedInput?.let(Files::deleteIfExists)
           }
         }
       }
@@ -88,15 +97,30 @@ class DetachedWorkRunLauncher(
       diagnostics.warning("seam=work-run.launch outcome=interrupted", failure)
       WorkRunLaunchResult.Refused("Starting the runner was interrupted.")
     } finally {
-      if (!handedOff) channel?.close()
+      if (!handedOff) {
+        channel?.close()
+        input?.let(Files::deleteIfExists)
+      }
     }
   }
 
-  private fun launchCommand(
-    executable: Path,
+  private fun startProcess(
+    built: AgentRunCommand,
     request: WorkRunLaunchRequest,
-  ): List<String> {
-    val command = listOf(executable.toString(), "--db", request.databasePath.toString()) + request.arguments
+    input: Path?,
+    log: Path,
+  ): Process =
+    ProcessBuilder(launchCommand(built.command))
+      .directory(request.repositoryRoot.toFile())
+      .redirectInput(ProcessBuilder.Redirect.from((input ?: Path.of(if (isWindows()) "NUL" else "/dev/null")).toFile()))
+      .redirectErrorStream(true).redirectOutput(log.toFile())
+      .apply {
+        environment().putAll(this@DetachedWorkRunLauncher.environment.environment)
+        environment().putAll(built.environment)
+        environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
+      }.start()
+
+  private fun launchCommand(command: List<String>): List<String> {
     val scopeLauncher =
       if (environment.environment["XDG_RUNTIME_DIR"].isNullOrBlank()) {
         null
@@ -109,20 +133,14 @@ class DetachedWorkRunLauncher(
     } ?: command
   }
 
-  private fun resolveExecutable(): Path? {
-    val home = environment.userHome
-    val installed =
-      home.resolve(
-        ".skill-bill/runtime/runtime-cli/bin/${if (isWindows()) "runtime-cli.bat" else "runtime-cli"}",
-      )
-    if (Files.isRegularFile(installed) && Files.isExecutable(installed)) return installed
-    val candidates =
-      listOf(home.resolve(".local/bin/skill-bill")) +
+  private fun resolveExecutable(agent: SupportedAgent): Path? {
+    val directories =
+      listOf(environment.userHome.resolve(".local/bin")) +
         environment.environment["PATH"].orEmpty().split(if (isWindows()) ';' else ':')
-          .filter(String::isNotBlank).map { Path.of(it).resolve("skill-bill") }
-    return candidates.firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }?.also {
-      diagnostics.info("seam=work-run.launch outcome=launcher_fallback executable=$it")
-    }
+          .filter(String::isNotBlank).map(Path::of)
+    val executables = requireNotNull(AGENT_LAUNCHER_CLIS[agent]).executables
+    return executables.flatMap { name -> directories.map { it.resolve(name) } }
+      .firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }
   }
 
   private companion object {

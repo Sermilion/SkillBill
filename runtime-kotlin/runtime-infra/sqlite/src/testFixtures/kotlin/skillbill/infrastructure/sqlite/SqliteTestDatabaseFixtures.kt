@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
 import skillbill.infrastructure.sqlite.core.schema.DatabasePaths
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
@@ -18,7 +19,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 object SqliteTestDatabasePaths {
-  const val DB_ENVIRONMENT_KEY: String = DatabasePaths.DB_ENVIRONMENT_KEY
+  const val DB_ENVIRONMENT_KEY: String = RuntimeDatabaseEnvironmentKeys.DATABASE_PATH
 
   fun defaultDbPath(userHome: Path): Path = DatabasePaths.defaultDbPath(userHome)
 }

@@ -83,3 +83,8 @@ Reason: Database observation failure must not become periodic data refresh or a 
 Context: Resume and Run again now start work from an explicit desktop action. Reading work still uses Room and shared runtime projections.
 Decision: WorkRunActions validates the selected database, execution revision, process owner, recorded branch, and launch arguments before calling WorkRunLauncher. The desktop cannot use this port directly. Cancellation stays in the runtime and preserves history.
 Reason: Starting work needs a process boundary. The desktop architecture guard continues to forbid CLI read proxies and process adapters in desktop code. It checks the full graph up to the runtime launch port and limits that port to the admission owner, its infrastructure implementation, and DI.
+
+## [2026-10-13] Start the installed agent harness from desktop controls
+Context: The operator wants Resume and Run again to start the installed headless agent, such as Claude Code or Codex, rather than start the Skill Bill CLI directly.
+Decision: Keep admission and cancellation in the shared runtime. The launch adapter resolves the selected harness locally and uses the existing native command builders with a briefing for the installed skill. It makes no provider API requests. The recorded agent is the default, and the operator can choose another harness. Standalone rows show their start time and short invocation ID so older blocked runs are distinct from newer active runs.
+Reason: The installed harness owns authentication and skill execution. The app starts that executable and keeps run identity visible.

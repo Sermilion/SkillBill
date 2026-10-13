@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.application.DashboardModel
 import dev.skillbill.tray.application.ListLoadState
 import dev.skillbill.tray.domain.*
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
@@ -127,7 +129,16 @@ private fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Un
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
         Text(FileName(item.repositoryRoot), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(listOfNotNull(item.issueKey ?: item.phaseId, if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.currentStepLabel).joinToString(" · "), color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val status = if (item.scope == ExecutionScope.STANDALONE_PHASE || item.lifecycle == Lifecycle.CANCELED) {
+          item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
+        } else null
+        val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
+        Text(listOfNotNull(item.issueKey ?: item.phaseId, status, step).joinToString(" · "), color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (item.scope == ExecutionScope.STANDALONE_PHASE) {
+          val started = item.startedAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ofPattern("d MMM HH:mm"))
+          val invocation = item.invocationId?.removePrefix("phr-")?.take(8)
+          Text(listOfNotNull(started, invocation).joinToString(" · "), color = dim, fontFamily = mono, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
       }
       if (item.progressTotal != null) Text("${item.progressCompleted ?: 0}/${item.progressTotal}", color = if (selected) amber else dim, style = MaterialTheme.typography.labelSmall)
     }

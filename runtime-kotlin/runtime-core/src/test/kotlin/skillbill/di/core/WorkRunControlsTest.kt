@@ -28,6 +28,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -76,7 +77,7 @@ class WorkRunControlsTest {
   }
 
   @Test
-  fun `run again retains recorded agent and arguments and refuses stale targets or a changed branch`() {
+  fun `run again keeps recorded intake allows another harness and refuses stale targets or a changed branch`() {
     establishTemporarySchemaReadiness("repeat-phase").use { fixture ->
       Files.createDirectory(fixture.tempDir.resolve(".git"))
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
@@ -108,7 +109,10 @@ class WorkRunControlsTest {
           null,
         ),
       )
-      assertEquals(arguments, launched.single().arguments)
+      assertEquals("codex", launched.single().agentId)
+      assertContains(launched.single().prompt, "/skill-bill phase:monitor")
+      assertContains(launched.single().prompt, "https://example.test/pr/42")
+      assertContains(launched.single().prompt, "Selected agent: codex")
       assertEquals(fixture.dbPath, launched.single().databasePath)
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/other\n")
       assertEquals(

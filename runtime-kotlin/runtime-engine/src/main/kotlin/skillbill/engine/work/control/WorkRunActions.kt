@@ -50,7 +50,7 @@ class WorkRunActions(
       val options = options(item, unit)
       if (!options.canLaunch) return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
       val agent =
-        options.agentId ?: agentId?.takeIf { it in options.agentChoices }
+        (agentId ?: options.agentId)?.takeIf { it in options.agentChoices }
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.AGENT_REQUIRED)
       val branch = item.snapshot.branchCorrelation
       if (!branch.isNullOrBlank() && branch != "HEAD" && branches.checkedOutBranch(target.repositoryRoot) != branch) {
@@ -65,7 +65,8 @@ class WorkRunActions(
           WorkRunLaunchRequest(
             target.repositoryRoot,
             unit.dbPath,
-            arguments,
+            agent,
+            launchPrompt(item, arguments, agent),
             item.snapshot.workflowId ?: "${target.repositoryIdentity}:$branch:${phase?.phaseId}",
           ),
         )
@@ -141,7 +142,14 @@ class WorkRunActions(
     agent: String,
   ): List<String>? {
     phase.launchArguments?.let { saved ->
-      return saved.takeIf { it.take(2) == listOf("phase", phase.phaseId) }
+      return saved.takeIf { it.take(2) == listOf("phase", phase.phaseId) }?.let { arguments ->
+        val agentFlag = arguments.indexOf("--agent")
+        if (agentFlag >= 0 && agentFlag + 1 < arguments.size) {
+          arguments.toMutableList().apply { this[agentFlag + 1] = agent }
+        } else {
+          arguments + listOf("--agent", agent)
+        }
+      }
     }
     return when {
       phase.workflowId != null && phase.phaseId == SkeletonDefinition.PLAN.id ->
@@ -157,6 +165,26 @@ class WorkRunActions(
       else -> null
     }
   }
+
+  private fun launchPrompt(
+    item: WorkDetailItem,
+    arguments: List<String>,
+    agent: String,
+  ): String =
+    buildString {
+      appendLine("Use the installed skill-bill skill for this explicit operator request.")
+      if (arguments.firstOrNull() == "phase") {
+        appendLine("Invoke /skill-bill phase:${arguments[1]} with the recorded intake and options below.")
+      } else {
+        appendLine("Resume the existing goal with /skill-bill ${item.snapshot.issueKey}.")
+      }
+      appendLine("Request arguments as JSON: ${JsonCodec.valueToJsonString(arguments)}")
+      appendLine("Selected agent: $agent")
+      appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
+      appendLine("Repository: ${item.repositoryRoot}")
+      appendLine("Keep the recorded branch ${item.snapshot.branchCorrelation ?: "HEAD"} and existing PR.")
+      append("Read durable state before continuing. Do not create another branch or PR for this work.")
+    }
 
   private fun recordedAgent(
     item: WorkDetailItem,
