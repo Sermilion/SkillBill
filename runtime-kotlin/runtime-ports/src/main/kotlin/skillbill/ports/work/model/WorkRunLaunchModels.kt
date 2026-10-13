@@ -15,3 +15,13 @@ sealed interface WorkRunLaunchResult {
 
   data class Refused(val reason: String) : WorkRunLaunchResult
 }
+
+data class WorkRunStopRequest(val databasePath: Path, val ownershipKey: String)
+
+sealed interface WorkRunStopResult {
+  data object Stopped : WorkRunStopResult
+
+  data object NotRunning : WorkRunStopResult
+
+  data class Refused(val reason: String) : WorkRunStopResult
+}

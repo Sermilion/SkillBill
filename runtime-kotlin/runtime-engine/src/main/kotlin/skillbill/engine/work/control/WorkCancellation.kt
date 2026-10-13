@@ -8,18 +8,23 @@ import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.engine.work.observation.workerOwnership
+import skillbill.engine.work.supersededPhase
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunStopRequest
+import skillbill.ports.work.model.WorkRunStopResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
@@ -33,6 +38,7 @@ class WorkCancellation(
   private val goals: GoalRunnerStatusService,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
+  private val launcher: WorkRunLauncher,
 ) {
   fun cancel(target: WorkRunTarget): WorkControlResult {
     val item =
@@ -80,7 +86,10 @@ class WorkCancellation(
     goal: Boolean,
     interrupted: Interruption,
   ): WorkControlResult {
-    val operation = operation@{ _: UnitOfWork ->
+    val operation = operation@{ unit: UnitOfWork ->
+      if (!stopGoalHarness(goal, target, unit)) {
+        return@operation WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
+      }
       val current =
         status.detail(WorkDetailRequest(target.id)).item
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
@@ -103,6 +112,16 @@ class WorkCancellation(
       FencedTransactionResult.ChangedTarget -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       is FencedTransactionResult.Committed -> result.value
     }
+  }
+
+  private fun stopGoalHarness(
+    goal: Boolean,
+    target: WorkRunTarget,
+    unit: UnitOfWork,
+  ): Boolean {
+    if (!goal) return true
+    val item = status.detail(WorkDetailRequest(target.id)).item ?: return false
+    return launcher.stop(WorkRunStopRequest(unit.dbPath, workRunOwnershipKey(item, null))) !is WorkRunStopResult.Refused
   }
 
   private fun ownerChanged(
@@ -148,30 +167,37 @@ class WorkCancellation(
       val worker =
         phase?.workerOwnership()
           ?: workflowId?.let(unit.workflowStates::getFeatureTaskRuntimeWorkerOwnership)
-      if (worker == null) {
-        return@transactionFenced if (item.snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
-          Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
-        } else {
-          Interruption.Unowned
-        }
+      if (worker == null && item.snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
+        return@transactionFenced Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
       }
-      when (supervisor.inspect(worker)) {
-        FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
-        FeatureTaskRuntimeProcessInspection.ExactLive -> {
-          val reserved =
-            if (phase != null) {
-              unit.standalonePhaseStatuses.requestCancellation(phase, clock.instant()) ==
-                StandalonePhaseStatusUpdateResult.ACCEPTED
-            } else {
-              unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
-                worker.workflowId,
-                worker.ownerToken,
-                worker.generation,
-              )
-            }
-          if (reserved) Interruption.Reserved(worker) else Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
+      val inspection = worker?.let(supervisor::inspect) ?: FeatureTaskRuntimeProcessInspection.NotRunning
+      val interruption =
+        when (inspection) {
+          FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
+          FeatureTaskRuntimeProcessInspection.ExactLive -> {
+            requireNotNull(worker)
+            val reserved =
+              if (phase != null) {
+                unit.standalonePhaseStatuses.requestCancellation(phase, clock.instant()) ==
+                  StandalonePhaseStatusUpdateResult.ACCEPTED
+              } else {
+                unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+                  worker.workflowId,
+                  worker.ownerToken,
+                  worker.generation,
+                )
+              }
+            if (reserved) Interruption.Reserved(worker) else Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
+          }
+          else -> Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
         }
-        else -> Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
+      if (interruption is Interruption.Refused) return@transactionFenced interruption
+      if (supersededPhase(phase, unit, clock.instant())) return@transactionFenced interruption
+      val stopped = launcher.stop(WorkRunStopRequest(unit.dbPath, workRunOwnershipKey(item, phase)))
+      if (stopped is WorkRunStopResult.Refused) {
+        Interruption.Refused(WorkControlRejection.TERMINATION_INCOMPLETE)
+      } else {
+        interruption
       }
     }
 
@@ -273,3 +299,9 @@ internal fun matchingRun(
       it.snapshot.execution?.statusRevision == target.statusRevision &&
       it.snapshot.updatedAt == target.updatedAt
   }
+
+internal fun workRunOwnershipKey(
+  item: WorkDetailItem,
+  phase: StandalonePhaseStatusRecord?,
+): String =
+  item.snapshot.workflowId ?: "${item.snapshot.repositoryIdentity}:${item.snapshot.branchCorrelation}:${phase?.phaseId}"

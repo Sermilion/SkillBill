@@ -28,7 +28,9 @@ import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.time.Clock
 
 @Inject
 class WorkRunActions(
@@ -38,6 +40,7 @@ class WorkRunActions(
   private val branches: CheckedOutBranchSource,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val launcher: WorkRunLauncher,
+  private val clock: Clock,
 ) {
   fun launch(
     target: WorkRunTarget,
@@ -67,10 +70,11 @@ class WorkRunActions(
             unit.dbPath,
             agent,
             launchPrompt(item, arguments, agent),
-            item.snapshot.workflowId ?: "${target.repositoryIdentity}:$branch:${phase?.phaseId}",
+            workRunOwnershipKey(item, phase),
           ),
         )
       if (result is WorkRunLaunchResult.Refused) return@operation WorkControlResult.LaunchFailed(result.reason)
+      restartCanceled(item, unit)
       if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL) {
         goals.resume(requireNotNull(item.snapshot.issueKey), target.repositoryRoot)
       }
@@ -82,6 +86,27 @@ class WorkRunActions(
     }
   }
 
+  private fun restartCanceled(
+    item: WorkDetailItem,
+    unit: UnitOfWork,
+  ) {
+    if (item.snapshot.lifecycleState != IdeStatusLifecycleState.CANCELED) return
+    val workflowId = item.snapshot.workflowId ?: return
+    val now = clock.instant()
+    if (item.snapshot.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL) {
+      check(unit.lifecycleTelemetry.restartCanceledGoalIssue(workflowId, requireNotNull(item.snapshot.issueKey), now))
+    }
+    listOfNotNull(workflowId, item.goalStatus?.currentChildWorkflowId).distinct().forEach { id ->
+      val workflow = unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, id)
+      if (workflow?.workflowStatus == WorkflowStatus.ABANDONED) {
+        unit.workflowStates.save(
+          WorkflowFamily.TASK_RUNTIME,
+          workflow.copy(workflowStatus = WorkflowStatus.PAUSED, finishedAt = null, updatedAt = now),
+        )
+      }
+    }
+  }
+
   internal fun options(
     item: WorkDetailItem,
     unit: UnitOfWork,
@@ -90,16 +115,17 @@ class WorkRunActions(
     val phase = snapshot.execution?.invocationId?.let(unit.standalonePhaseStatuses::readByInvocation)
     val worker = workerOwnership(phase, snapshot.workflowId, unit)
     val liveWorker = worker != null && supervisor.inspect(worker) != FeatureTaskRuntimeProcessInspection.NotRunning
-    val completed = snapshot.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED)
+    val completed = snapshot.lifecycleState == IdeStatusLifecycleState.TERMINAL
+    val canceled = snapshot.lifecycleState == IdeStatusLifecycleState.CANCELED
     val agent = phase?.launchAgentId ?: recordedAgent(item, unit)
     val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
         item.goalStatus?.executionLiveness == ExecutionLiveness.LIVE
     return WorkRunOptions(
-      !completed,
+      !completed && !canceled,
       !completed && !live && supported,
-      if (phase != null && phase.workflowId == null) "Run again" else "Resume",
+      launchLabel(canceled, phase),
       agent?.takeIf { it in SupportedAgent.supportedIds },
       SupportedAgent.supportedIds,
       when {
@@ -110,6 +136,11 @@ class WorkRunActions(
       },
     )
   }
+
+  private fun launchLabel(
+    canceled: Boolean,
+    phase: StandalonePhaseStatusRecord?,
+  ): String = if (canceled || phase != null && phase.workflowId == null) "Run again" else "Resume"
 
   private fun workerOwnership(
     phase: StandalonePhaseStatusRecord?,

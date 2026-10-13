@@ -79,6 +79,12 @@ private object GoalLifecycleTelemetryNoop : GoalLifecycleTelemetryRepository {
     canceledAt: Instant,
   ): Boolean = false
 
+  override fun restartCanceledGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    restartedAt: Instant,
+  ): Boolean = false
+
   override fun goalIssueFinished(
     record: GoalIssueFinishedRecord,
     level: String,

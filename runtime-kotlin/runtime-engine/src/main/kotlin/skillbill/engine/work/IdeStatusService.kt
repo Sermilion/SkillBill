@@ -310,7 +310,7 @@ class IdeStatusService(
     diagnostics: MutableList<WorkBoardDiagnostic>,
   ): WorkBoardItem? {
     val item = projectBoardItem(candidate, context, work)
-    if (!isFinished(item.snapshot)) return item
+    if (item.finishedAt == null && !isFinished(item.snapshot)) return item
     val finishedAt = item.finishedAt
     if (finishedAt == null) {
       diagnostics +=
@@ -352,17 +352,19 @@ class IdeStatusService(
       } else {
         null to null
       }
+    val superseded = supersededPhase(candidate.standaloneStatus, context.unitOfWork, context.observedAt)
+    val finishedAt = completion.first ?: candidate.standaloneStatus?.updatedAt?.takeIf { superseded }
     return WorkBoardItem(
       snapshot,
       context.repoRoot.toString(),
-      completion.first,
+      finishedAt,
       completion.second,
       context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).executionLease,
       context.unitOfWork.workList.observation(),
       snapshot.updatedAt.plus(IdeStatusFreshnessClassifier.FRESH_WINDOW).plusNanos(1),
-      workLiveSection(snapshot, completion.first),
-      workControlEligible(snapshot),
-      workRequiresAttention(snapshot),
+      workLiveSection(snapshot, finishedAt).takeUnless { superseded },
+      workControlEligible(snapshot) && !superseded,
+      workRequiresAttention(snapshot) && !superseded,
       workDisplayGroup(snapshot, completion.first),
       workDisplayPriority(snapshot, completion.first),
       projection.exactPauseReason,

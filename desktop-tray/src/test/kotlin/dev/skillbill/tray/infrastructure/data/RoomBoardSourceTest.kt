@@ -55,6 +55,35 @@ class RoomBoardSourceTest {
   private val now = Instant.now()
 
   @Test
+  fun `keyless retries appear once in attention and preserve previous blocked and canceled attempts in history`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-keyless-retries").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        val first = registration(fixture.tempDir.toString(), "older", now.minusSeconds(60), "main")
+          .copy(issueKey = null, lifecycleState = "blocked")
+        unit.standalonePhaseStatuses.register(first)
+        val canceled = unit.standalonePhaseStatuses.register(first.copy(invocationId = "canceled", executionId = "execution-canceled",
+          startedAt = now.minusSeconds(40), lifecycleState = "paused"))
+        unit.standalonePhaseStatuses.cancel(canceled, now.minusSeconds(20))
+        unit.standalonePhaseStatuses.register(first.copy(invocationId = "latest", executionId = "execution-latest",
+          startedAt = now.minusSeconds(10)))
+        unit.standalonePhaseStatuses.register(first.copy(invocationId = "other", executionId = "execution-other",
+          branchCorrelation = "other"))
+      }
+      val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        assertEquals(setOf("latest", "other"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY))
+          .items.map { it.identity.id }.toSet())
+        val history = value(source.board(WorkSection.HISTORY, Retention.DAY))
+        assertEquals(setOf("older", "canceled"), history.items.map { it.identity.id }.toSet())
+        assertEquals(Lifecycle.CANCELED, history.items.single { it.identity.id == "canceled" }.lifecycle)
+        assertTrue(value(source.board(WorkSection.PHASES, Retention.DAY)).items.isEmpty())
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `detail accepts its snapshot when a writer commits while observation time resolves`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-detail-concurrent-writer").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())

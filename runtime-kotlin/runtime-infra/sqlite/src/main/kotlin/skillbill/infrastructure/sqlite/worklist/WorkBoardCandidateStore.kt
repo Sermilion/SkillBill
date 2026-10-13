@@ -30,13 +30,13 @@ internal fun readWorkBoardCandidates(
       SELECT workflow_id, started_at, workflow_status IN ('completed', 'failed', 'abandoned'), finished_at
       FROM feature_verify_workflows
       UNION ALL
-      SELECT invocation_id, started_at, lifecycle_state IN ('terminal', 'completed', 'success', 'failed'), finished_at
+      SELECT invocation_id, started_at, lifecycle_state IN ('terminal', 'completed', 'success', 'failed', 'canceled'), finished_at
       FROM standalone_phase_status s
       WHERE NOT EXISTS (
         SELECT 1 FROM standalone_phase_status newer
         WHERE newer.repository_identity = s.repository_identity AND newer.phase_id = s.phase_id
-          AND COALESCE(upper(newer.issue_key), newer.workflow_id, newer.invocation_id) =
-            COALESCE(upper(s.issue_key), s.workflow_id, s.invocation_id)
+          AND COALESCE(upper(newer.issue_key), newer.workflow_id, newer.branch_correlation) =
+            COALESCE(upper(s.issue_key), s.workflow_id, s.branch_correlation)
           AND (length(newer.run_sequence) > length(s.run_sequence)
             OR (length(newer.run_sequence) = length(s.run_sequence) AND newer.run_sequence > s.run_sequence)
             OR (newer.run_sequence = s.run_sequence AND newer.invocation_id > s.invocation_id))

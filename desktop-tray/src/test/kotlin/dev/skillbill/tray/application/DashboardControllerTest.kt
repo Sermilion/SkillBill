@@ -566,8 +566,10 @@ class DashboardControllerTest {
     val entered = CompletableDeferred<Pair<WorkItem, String?>>()
     val release = CompletableDeferred<Unit>()
     val calls = AtomicInteger()
+    var registered = false
+    val active = latest.copy(lifecycle = Lifecycle.ACTIVE, updatedAt = latest.updatedAt.plusSeconds(1))
     val source = FakeSource(
-      boardCall = { Outcome.Value(board(it, listOf(boardItem))) },
+      boardCall = { Outcome.Value(board(it, listOf(if (registered) active else boardItem))) },
       detailCall = { Outcome.Value(detail(latest).copy(runOptions = RunOptions(true, true, "Resume", null, listOf("codex"), null))) },
       launchAction = { item, agent ->
         calls.incrementAndGet()
@@ -588,11 +590,64 @@ class DashboardControllerTest {
       model.perform("cancel", boardItem.identity)
       assertEquals(1, calls.get())
       release.complete(Unit)
+      delay(100)
+      assertTrue(boardItem.identity in model.state.value.actionsInProgress)
+      registered = true
+      source.refresh()
       kotlinx.coroutines.withTimeout(2000) { while (boardItem.identity in model.state.value.actionsInProgress) delay(10) }
     } finally {
       release.complete(Unit)
       model.close()
     }
+  }
+
+  @Test
+  fun `confirmed cancellation removes attention immediately and stale section replays cannot restore it`() = runBlocking {
+    val blocked = item("blocked").copy(lifecycle = Lifecycle.BLOCKED)
+    val source = FakeSource(boardCall = { error("Expected sections") },
+      sectionCall = { section -> Outcome.Value(board(Retention.DAY,
+        if (section == WorkSection.NEEDS_YOU) listOf(blocked) else emptyList())) },
+      detailCall = { Outcome.Value(detail(blocked).copy(runOptions = RunOptions(true, true, "Run again", "codex", listOf("codex"), null))) })
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+    try {
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.detail?.runOptions == null) delay(10) }
+      model.perform("cancel", blocked.identity)
+      kotlinx.coroutines.withTimeout(2000) {
+        while (model.state.value.sections[WorkSection.NEEDS_YOU]?.items?.isNotEmpty() != false) delay(10)
+      }
+      source.refresh()
+      delay(100)
+      assertTrue(model.state.value.sections.getValue(WorkSection.NEEDS_YOU).items.isEmpty())
+    } finally { model.closeAndJoin() }
+  }
+
+  @Test
+  fun `run again stays pending until a new standalone invocation appears and selects that attempt`() = runBlocking {
+    val old = item("old").copy(scope = ExecutionScope.STANDALONE_PHASE, phaseId = "monitor",
+      issueKey = null, lifecycle = Lifecycle.CANCELED, startedAt = Instant.parse("2026-10-11T09:00:00Z"))
+    val next = old.copy(identity = WorkIdentity("new", old.identity.repositoryIdentity), lifecycle = Lifecycle.BLOCKED,
+      startedAt = old.startedAt!!.plusSeconds(60), updatedAt = old.updatedAt.plusSeconds(60))
+    var registered = false
+    val source = FakeSource(boardCall = { error("Expected sections") },
+      sectionCall = { section -> Outcome.Value(board(Retention.DAY, when {
+        section == WorkSection.HISTORY -> listOf(old)
+        registered && section == WorkSection.NEEDS_YOU -> listOf(next)
+        else -> emptyList()
+      })) },
+      detailCall = { identity -> Outcome.Value(detail(if (identity == next.identity) next else old)
+        .copy(runOptions = RunOptions(false, true, "Run again", "codex", listOf("codex"), null))) })
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(),
+      java.time.Clock.fixed(old.startedAt!!.plusSeconds(30), java.time.ZoneOffset.UTC)) {}
+    try {
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.detail?.runOptions == null) delay(10) }
+      model.perform("launch:codex", old.identity)
+      kotlinx.coroutines.withTimeout(2000) { while (old.identity !in model.state.value.actionsInProgress) delay(10) }
+      delay(100)
+      assertTrue(old.identity in model.state.value.actionsInProgress)
+      registered = true
+      source.refresh()
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.selected != next.identity) delay(10) }
+    } finally { model.closeAndJoin() }
   }
 
   @Test
@@ -655,6 +710,7 @@ private class FakeSource(
   private val detailCall: suspend (WorkIdentity) -> Outcome<Detail> = { Outcome.Failure(Problem(ProblemCode.UNKNOWN_WORK_ITEM, "missing")) },
   private val pauseAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
   private val stopAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
+  private val cancelAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
   private val launchAction: suspend (WorkItem, String?) -> Outcome<Unit> = { _, _ -> Outcome.Value(Unit) },
   private val boardPageCall: (suspend (Retention, String?) -> Outcome<Board>)? = null,
   private val detailPageCall: (suspend (WorkIdentity, String?) -> Outcome<Detail>)? = null,
@@ -691,6 +747,7 @@ private class FakeSource(
 
   override suspend fun pause(item: WorkItem) = pauseAction(item)
   override suspend fun stop(item: WorkItem) = stopAction(item)
+  override suspend fun cancel(item: WorkItem) = cancelAction(item)
   override suspend fun launch(item: WorkItem, agentId: String?) = launchAction(item, agentId)
 }
 

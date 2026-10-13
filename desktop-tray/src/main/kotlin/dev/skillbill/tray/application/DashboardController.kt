@@ -31,6 +31,7 @@ class DashboardController(
   private val anchors = ConcurrentHashMap<WorkSection, String>()
   private val sectionGenerations = ConcurrentHashMap<WorkSection, Long>()
   private val locks = WorkSection.entries.associateWith { Mutex() }
+  private val canceledItems = mutableMapOf<WorkIdentity, WorkItem>()
   private val controlJobs = mutableMapOf<WorkIdentity, Job>()
   private val appends = ConcurrentHashMap.newKeySet<WorkSection>()
   private val appendJobs = ConcurrentHashMap<WorkSection, Job>()
@@ -81,6 +82,7 @@ class DashboardController(
             appends.clear()
             storeSession.selectDatabase(settings.databasePath)
             synchronized(this@DashboardController) {
+              canceledItems.clear()
               storeGeneration = null
               synchronized(transitions) { transitions.clear() }
               observationSession = null
@@ -243,6 +245,7 @@ class DashboardController(
     }
     if (storeGeneration != null && storeGeneration != board.generation) {
       storeEpoch++
+      canceledItems.clear()
       controlJobs.values.forEach(Job::cancel)
       synchronized(transitions) { transitions.clear() }
       baselineSections.clear()
@@ -264,7 +267,15 @@ class DashboardController(
     }
     storeGeneration = board.generation
     mutable.update { state ->
-      val sections = state.sections + (section to board)
+      val incoming = board.items.map { item ->
+        val canceled = canceledItems[item.identity]
+        if (canceled != null && item.updatedAt <= canceled.updatedAt) canceled else {
+          canceledItems.remove(item.identity)
+          item
+        }
+      }
+      val reconciled = board.copy(items = incoming.filter { section !in LIVE_SECTIONS || it.lifecycle != Lifecycle.CANCELED })
+      val sections = state.sections + (section to reconciled)
       val live = LIVE_SECTIONS.flatMap { sections[it]?.items.orEmpty() }.distinctBy { it.identity }
       val recent = sections[WorkSection.RECENT]?.items.orEmpty()
       val loading = state.sectionLoading - section
@@ -590,7 +601,8 @@ class DashboardController(
     val agentId = action.substringAfter(':', "").takeIf(String::isNotBlank)
     val job = synchronized(this) {
       val current = mutable.value
-      val boardItem = current.board?.items?.singleOrNull { it.identity == identity } ?: return
+      val boardItem = current.board?.items?.singleOrNull { it.identity == identity }
+        ?: current.detail?.item?.takeIf { it.identity == identity } ?: return
       val selectedDetail = current.detail?.takeIf { it.item.identity == identity }
       val item = if (actionName in setOf("cancel", "launch")) selectedDetail?.item ?: return else boardItem
       val generation = storeGeneration ?: return
@@ -603,6 +615,8 @@ class DashboardController(
       }
       if (switchingStore || identity in controlJobs || current.stale || !eligible || item.databaseGeneration != generation) return
       val epoch = storeEpoch
+      val knownAttempts = current.board?.items.orEmpty().map { it.identity }.toSet()
+      val launchRequestedAt = clock.instant()
       val controlJob = scope.launch(start = CoroutineStart.LAZY) {
         val owner = currentCoroutineContext().job
         try {
@@ -621,7 +635,12 @@ class DashboardController(
             }
           }
           if (!published || !isCurrentControl(identity, owner, epoch, generation)) return@launch
+          if (result is Outcome.Value) {
+            if (actionName == "cancel") confirmCancellation(item)
+            if (actionName == "launch") synchronized(this@DashboardController) { canceledItems.remove(identity) }
+          }
           boards.refresh()
+          if (result is Outcome.Value && actionName == "launch") followLaunch(item, knownAttempts, launchRequestedAt)
         } finally {
           synchronized(this@DashboardController) {
             if (controlJobs[identity] === owner) {
@@ -644,6 +663,51 @@ class DashboardController(
       controlJob
     }
     job.start()
+  }
+
+  private suspend fun confirmCancellation(item: WorkItem) {
+    val canceled = item.copy(lifecycle = Lifecycle.CANCELED, finishedAt = clock.instant(), updatedAt = clock.instant(),
+      requiresAttention = false, liveSection = null, controlEligible = false)
+    synchronized(this) {
+      canceledItems[item.identity] = canceled
+      mutable.update { state ->
+        val sections = state.sections.mapValues { (section, board) ->
+          board.copy(items = board.items.map { if (it.identity == item.identity) canceled else it }
+            .filter { section !in LIVE_SECTIONS || it.identity != item.identity })
+        }
+        state.copy(sections = sections, board = state.board?.copy(items = state.board.items.map {
+          if (it.identity == item.identity) canceled else it
+        }))
+      }
+    }
+    val confirmed = details.detail(item.identity)
+    if (confirmed is Outcome.Value) synchronized(this) {
+      if (mutable.value.selected == item.identity) mutable.update { it.copy(detail = confirmed.value) }
+    }
+  }
+
+  private suspend fun followLaunch(item: WorkItem, knownAttempts: Set<WorkIdentity>, requestedAt: Instant) {
+    val successor = withTimeoutOrNull(120_000) {
+      state.map { current -> current.board?.items?.firstOrNull { candidate ->
+        candidate.identity.repositoryIdentity == item.identity.repositoryIdentity && candidate.branch == item.branch &&
+          candidate.phaseId == item.phaseId && candidate.issueKey == item.issueKey &&
+          if (item.scope == ExecutionScope.STANDALONE_PHASE) {
+            candidate.identity !in knownAttempts && candidate.startedAt?.let { started ->
+              started >= requestedAt && (item.startedAt?.let { started > it } ?: (candidate.updatedAt > item.updatedAt))
+            } == true
+          } else {
+            candidate.identity == item.identity && candidate.updatedAt > item.updatedAt &&
+              (candidate.executionId != item.executionId || candidate.lifecycle in setOf(Lifecycle.ACTIVE, Lifecycle.TERMINAL))
+          }
+      } }.filterNotNull().first()
+    }
+    if (successor != null) {
+      if (mutable.value.selected == item.identity) selectItem(successor.identity)
+    } else {
+      recordProblem("launch_registration_timeout")
+      mutable.update { it.copy(actionProblem = Problem(ProblemCode.UNKNOWN,
+        "The harness started but has not registered a new attempt yet. Check its output before trying again.")) }
+    }
   }
 
   private fun isCurrentControl(identity: WorkIdentity, job: Job, epoch: Long, generation: Long): Boolean =

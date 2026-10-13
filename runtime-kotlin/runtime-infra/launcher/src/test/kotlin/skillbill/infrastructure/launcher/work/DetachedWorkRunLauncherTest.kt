@@ -6,6 +6,8 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
+import skillbill.ports.work.model.WorkRunStopRequest
+import skillbill.ports.work.model.WorkRunStopResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -15,6 +17,36 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class DetachedWorkRunLauncherTest {
+  @Test
+  fun `cancellation after an app restart stops the saved harness and its child instead of allowing another attempt`() {
+    val home = Files.createTempDirectory("cancel-native-harness")
+    executable(
+      home,
+      """
+      #!/bin/sh
+      cat
+      trap 'wait; exit 0' TERM
+      sleep 30 &
+      printf '%s' "${'$'}!" > child-pid
+      wait
+      touch unexpected-retry
+      """.trimIndent(),
+    )
+    val request = WorkRunLaunchRequest(home, home.resolve("metrics.db"), "claude", "Resume monitor", "work")
+    val first = launcher(home)
+    assertIs<WorkRunLaunchResult.Started>(first.start(request))
+    await { Files.exists(home.resolve("child-pid")) }
+    val child = ProcessHandle.of(Files.readString(home.resolve("child-pid")).toLong()).orElseThrow()
+    val reopened = launcher(home)
+    assertIs<WorkRunLaunchResult.Refused>(reopened.start(request))
+    assertIs<WorkRunStopResult.Stopped>(reopened.stop(WorkRunStopRequest(request.databasePath, request.ownershipKey)))
+    await { !child.isAlive }
+    assertFalse(Files.exists(home.resolve("unexpected-retry")))
+    assertIs<WorkRunStopResult.NotRunning>(
+      reopened.stop(WorkRunStopRequest(request.databasePath, request.ownershipKey)),
+    )
+  }
+
   @Test
   fun `launches use the selected installed harness even when runtime cli is present`() {
     val home = Files.createTempDirectory("native-work-launch")

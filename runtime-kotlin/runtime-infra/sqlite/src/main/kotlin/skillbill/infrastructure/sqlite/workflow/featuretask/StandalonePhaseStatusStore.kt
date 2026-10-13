@@ -153,7 +153,8 @@ internal class StandalonePhaseStatusStore(
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM standalone_phase_status " +
         "WHERE repository_identity = ? AND phase_id = ? " +
-        "AND COALESCE(upper(issue_key), workflow_id, invocation_id) = ? AND ${instantAtOrBeforeSql("started_at")} " +
+        "AND COALESCE(upper(issue_key), workflow_id, branch_correlation) = ? " +
+        "AND ${instantAtOrBeforeSql("started_at")} " +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
     ).use { statement ->
       statement.bindAll(

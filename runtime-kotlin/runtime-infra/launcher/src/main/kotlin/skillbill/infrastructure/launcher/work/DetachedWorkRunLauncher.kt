@@ -11,13 +11,11 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
+import skillbill.ports.work.model.WorkRunStopRequest
+import skillbill.ports.work.model.WorkRunStopResult
 import java.io.IOException
-import java.nio.channels.FileChannel
-import java.nio.channels.OverlappingFileLockException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
-import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -34,40 +32,69 @@ class DetachedWorkRunLauncher(
       resolveExecutable(agent)
         ?: return refuse("The ${agent.id} harness is not installed or is not on PATH.")
     val built = workRunHarnessCommand(request, agent, environment.environment)
-    return startInstalled(built.copy(command = listOf(executable.toString()) + built.command.drop(1)), request)
+    val ownership = ownership()
+    return try {
+      ownership.admitted(
+        request.databasePath,
+        request.ownershipKey,
+        { refuse("A run is already starting or running for this work.") },
+      ) { owner ->
+        if (ownership.running(owner)) {
+          refuse("A run is already starting or running for this work.")
+        } else {
+          startInstalled(built.copy(command = listOf(executable.toString()) + built.command.drop(1)), request, owner)
+        }
+      }
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=work-run.launch outcome=ownership_failed", failure)
+      refuse("The harness ownership could not be read or saved.")
+    }
   }
+
+  override fun stop(request: WorkRunStopRequest): WorkRunStopResult =
+    try {
+      ownership().admitted(
+        request.databasePath,
+        request.ownershipKey,
+        { WorkRunStopResult.Refused("The harness launch is still being admitted. Try Cancel again.") },
+      ) {
+        ownership().stop(it)
+      }
+    } catch (failure: IOException) {
+      diagnostics.warning("seam=work-run.cancel outcome=ownership_failed", failure)
+      WorkRunStopResult.Refused("The harness ownership could not be read or stopped.")
+    } catch (failure: InterruptedException) {
+      Thread.currentThread().interrupt()
+      diagnostics.warning("seam=work-run.cancel outcome=interrupted", failure)
+      WorkRunStopResult.Refused("Stopping the harness was interrupted.")
+    }
+
+  private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
   private fun startInstalled(
     built: AgentRunCommand,
     request: WorkRunLaunchRequest,
+    owner: Path,
   ): WorkRunLaunchResult {
     val directory = environment.userHome.resolve(".skill-bill/desktop/runs")
     var input: Path? = null
-    var channel: FileChannel? = null
     var handedOff = false
     return try {
       Files.createDirectories(directory)
-      val digest =
-        MessageDigest.getInstance("SHA-256")
-          .digest((request.databasePath.toString() + request.ownershipKey).toByteArray())
-          .joinToString("") { "%02x".format(it) }
-      channel = FileChannel.open(directory.resolve("$digest.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-      val lock =
-        try {
-          channel.tryLock()
-        } catch (_: OverlappingFileLockException) {
-          null
-        }
-      if (lock == null) {
-        return refuse("A run is already starting or running for this work.")
-      }
       val log = directory.resolve("${UUID.randomUUID()}.log")
       input =
         built.stdinText?.let { prompt ->
           Files.createTempFile(directory, "prompt-", ".txt").also { Files.writeString(it, prompt) }
         }
-      val process = startProcess(built, request, input, log)
-      val ownedChannel = channel
+      val command = launchCommand(built.command)
+      val process = startProcess(built.copy(command = command), request, input, log)
+      val unit = command.firstOrNull { it.startsWith("--unit=") }?.removePrefix("--unit=")?.plus(".scope")
+      try {
+        ownership().save(owner, process, unit)
+      } catch (failure: IOException) {
+        ownership().stopStarted(process, unit)
+        throw failure
+      }
       val ownedInput = input
       process.onExit().whenComplete { finished, error ->
         try {
@@ -76,10 +103,16 @@ class DetachedWorkRunLauncher(
           }
         } finally {
           try {
-            lock.release()
-          } finally {
-            ownedChannel.close()
+            ownership().admitted(
+              request.databasePath,
+              request.ownershipKey,
+              { diagnostics.info("seam=work-run.launch outcome=owner_cleanup_deferred") },
+            ) {
+              ownership().clear(it, process.pid())
+            }
             ownedInput?.let(Files::deleteIfExists)
+          } catch (failure: IOException) {
+            diagnostics.warning("seam=work-run.launch outcome=owner_cleanup_failed", failure)
           }
         }
       }
@@ -98,7 +131,6 @@ class DetachedWorkRunLauncher(
       WorkRunLaunchResult.Refused("Starting the runner was interrupted.")
     } finally {
       if (!handedOff) {
-        channel?.close()
         input?.let(Files::deleteIfExists)
       }
     }
@@ -110,7 +142,7 @@ class DetachedWorkRunLauncher(
     input: Path?,
     log: Path,
   ): Process =
-    ProcessBuilder(launchCommand(built.command))
+    ProcessBuilder(built.command)
       .directory(request.repositoryRoot.toFile())
       .redirectInput(ProcessBuilder.Redirect.from((input ?: Path.of(if (isWindows()) "NUL" else "/dev/null")).toFile()))
       .redirectErrorStream(true).redirectOutput(log.toFile())

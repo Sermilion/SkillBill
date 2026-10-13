@@ -13,6 +13,12 @@ interface GoalLifecycleTelemetryRepository {
     canceledAt: Instant,
   ): Boolean
 
+  fun restartCanceledGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    restartedAt: Instant,
+  ): Boolean
+
   fun goalStarted(
     record: GoalStartedRecord,
     level: String,

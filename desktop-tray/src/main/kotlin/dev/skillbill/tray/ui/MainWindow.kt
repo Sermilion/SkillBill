@@ -50,11 +50,13 @@ fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
       )
       Box(Modifier.weight(1f)) {
         LazyColumn(Modifier.fillMaxSize().padding(end = 8.dp), state = sidebarScroll) {
+          val shown = mutableSetOf<WorkIdentity>()
           listOf(Triple("Needs you", attention, WorkSection.NEEDS_YOU), Triple("Standalone phases", phases, WorkSection.PHASES), Triple("Goal runs", goals, WorkSection.GOALS), Triple("History", history, WorkSection.HISTORY)).forEach { (title, rows, section) ->
+            val visibleRows = rows.filter { shown.add(it.identity) }
             val hasMore = state.sections[section]?.nextCursor != null
             val loadState = state.sectionLoadStates[section] ?: if (section in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
             val sectionLoading = loadState in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING, ListLoadState.APPENDING)
-            item(key = "$section:header") { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
+            item(key = "$section:header") { DesignLabel("$title · ${visibleRows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
             if (section == WorkSection.HISTORY) item(key = "$section:filters") {
               Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 HistoryFilter.entries.forEach { choice ->
@@ -76,8 +78,8 @@ fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
             if (loadState == ListLoadState.INITIAL_LOADING) item(key = "$section:loading") {
               Text("Loading...", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
             }
-            if (rows.isEmpty() && section in state.sections) item(key = "$section:empty") { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
-            items(rows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
+            if (visibleRows.isEmpty() && section in state.sections) item(key = "$section:empty") { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
+            items(visibleRows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
               SidebarWorkRow(item, state.selected == item.identity) { model.select(item.identity) }
             }
             if (hasMore) item(key = "$section:footer") {

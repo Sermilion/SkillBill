@@ -23,6 +23,8 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkRunLauncher
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
+import skillbill.ports.work.model.WorkRunStopRequest
+import skillbill.ports.work.model.WorkRunStopResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -39,21 +41,43 @@ class WorkRunControlsTest {
   @Test
   fun `canceling an interrupted phase moves it into history and rejects late owner updates`() {
     establishTemporarySchemaReadiness("canceled-phase").use { fixture ->
-      val component = component(fixture.tempDir, fixture.dbPath)
+      val launched = mutableListOf<WorkRunLaunchRequest>()
+      val stopped = mutableListOf<WorkRunStopRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest): WorkRunStopResult {
+            stopped += request
+            return WorkRunStopResult.NotRunning
+          }
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launched += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("retry.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
       val registered =
         component.databaseSession.transaction {
-          it.standalonePhaseStatuses.register(registration(fixture.tempDir))
+          it.standalonePhaseStatuses.register(registration(fixture.tempDir).copy(branchCorrelation = "HEAD"))
         }
       val target = target(component)
       assertEquals(WorkControlResult.Accepted, component.cancelRun(target))
+      assertEquals(fixture.dbPath, stopped.single().databasePath)
+      assertEquals("${registered.repositoryIdentity}:HEAD:monitor", stopped.single().ownershipKey)
       val canceled = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("interrupted")).item)
       assertEquals(IdeStatusLifecycleState.CANCELED, canceled.snapshot.lifecycleState)
       assertNotNull(canceled.finishedAt)
       assertNull(canceled.liveSection)
       assertFalse(canceled.requiresAttention)
+      val options = assertNotNull(component.workControlService.options(target(component)))
+      assertTrue(options.canLaunch)
+      assertFalse(options.canCancel)
+      assertEquals("Run again", options.launchLabel)
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
+      assertEquals(1, launched.size)
       assertEquals(
-        WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET),
-        component.launchRun(target(component), "codex"),
+        IdeStatusLifecycleState.CANCELED,
+        component.ideStatusService.detail(WorkDetailRequest("interrupted")).item?.snapshot?.lifecycleState,
       )
       val late =
         component.databaseSession.transaction {
@@ -77,6 +101,81 @@ class WorkRunControlsTest {
   }
 
   @Test
+  fun `keyless phase retries keep only the latest attempt in live work and retain older blocked attempts`() {
+    establishTemporarySchemaReadiness("phase-retry-group").use { fixture ->
+      val component = component(fixture.tempDir, fixture.dbPath)
+      component.databaseSession.transaction { unit ->
+        val first = registration(fixture.tempDir).copy(lifecycleState = "blocked")
+        unit.standalonePhaseStatuses.register(first)
+        unit.standalonePhaseStatuses.register(
+          first.copy(
+            invocationId = "newest",
+            executionId = "newest-execution",
+            startedAt = first.startedAt.plusSeconds(1),
+            lifecycleState = "paused",
+          ),
+        )
+        unit.standalonePhaseStatuses.register(
+          first.copy(
+            invocationId = "other-branch",
+            executionId = "other-execution",
+            branchCorrelation = "other",
+          ),
+        )
+      }
+      val board =
+        component.ideStatusService.projectBoardSelection(
+          listOf("interrupted", "newest", "other-branch"),
+          WorkBoardRequest(),
+        )
+      val old = board.items.single { it.snapshot.execution?.invocationId == "interrupted" }
+      assertNull(old.liveSection)
+      assertFalse(old.requiresAttention)
+      assertNotNull(old.finishedAt)
+      assertEquals(IdeStatusLifecycleState.BLOCKED, old.snapshot.lifecycleState)
+      assertEquals(2, board.items.count { it.liveSection != null })
+      val history = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("newest")).item)
+      assertEquals(setOf("newest", "interrupted"), history.executionHistory.map { it.invocationId }.toSet())
+    }
+  }
+
+  @Test
+  fun `canceling an older historical attempt does not stop the harness for a newer invocation`() {
+    establishTemporarySchemaReadiness("cancel-old-phase").use { fixture ->
+      val stopped = mutableListOf<WorkRunStopRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun start(request: WorkRunLaunchRequest) = WorkRunLaunchResult.Refused("Unused")
+
+          override fun stop(request: WorkRunStopRequest): WorkRunStopResult {
+            stopped += request
+            return WorkRunStopResult.Stopped
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction { unit ->
+        val old = registration(fixture.tempDir).copy(lifecycleState = "blocked")
+        unit.standalonePhaseStatuses.register(old)
+        unit.standalonePhaseStatuses.register(
+          old.copy(
+            invocationId = "newer",
+            executionId = "newer-execution",
+            startedAt = old.startedAt.plusSeconds(1),
+            lifecycleState = "active",
+            leaseExpiresAt = Instant.now().plusSeconds(60),
+          ),
+        )
+      }
+      assertEquals(WorkControlResult.Accepted, component.cancelRun(target(component)))
+      assertTrue(stopped.isEmpty())
+      assertEquals(
+        IdeStatusLifecycleState.ACTIVE,
+        component.ideStatusService.detail(WorkDetailRequest("newer")).item?.snapshot?.lifecycleState,
+      )
+    }
+  }
+
+  @Test
   fun `run again keeps recorded intake allows another harness and refuses stale targets or a changed branch`() {
     establishTemporarySchemaReadiness("repeat-phase").use { fixture ->
       Files.createDirectory(fixture.tempDir.resolve(".git"))
@@ -84,6 +183,8 @@ class WorkRunControlsTest {
       val launched = mutableListOf<WorkRunLaunchRequest>()
       val launcher =
         object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
           override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
             launched += request
             return WorkRunLaunchResult.Started(fixture.tempDir.resolve("run.log"))
@@ -159,7 +260,17 @@ class WorkRunControlsTest {
           statement.executeUpdate()
         }
       }
-      val component = component(fixture.tempDir, fixture.dbPath)
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launches += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("goal.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
       component.databaseSession.transaction { unit ->
         unit.goalRunnerControls.persistControlState(
           "old-goal",
@@ -185,6 +296,18 @@ class WorkRunControlsTest {
       assertNull(canceled.liveSection)
       assertNotNull(canceled.finishedAt)
       assertFalse(canceled.requiresAttention)
+      val restart =
+        target.copy(
+          updatedAt = canceled.snapshot.updatedAt,
+          statusRevision = canceled.snapshot.execution?.statusRevision,
+        )
+      assertTrue(assertNotNull(component.workControlService.options(restart)).canLaunch)
+      assertEquals(WorkControlResult.Accepted, component.launchRun(restart, "codex"))
+      assertEquals(1, launches.size)
+      assertTrue(
+        component.ideStatusService.detail(WorkDetailRequest("old-goal")).item?.snapshot?.lifecycleState !=
+          IdeStatusLifecycleState.CANCELED,
+      )
     }
   }
 
@@ -224,6 +347,11 @@ class WorkRunControlsTest {
             component.goalRunnerStatusService,
             supervisor,
             Clock.systemUTC(),
+            object : WorkRunLauncher {
+              override fun start(request: WorkRunLaunchRequest) = WorkRunLaunchResult.Refused("Unused")
+
+              override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+            },
           )
         val result = cancellation.cancel(target(component))
         if (initial == FeatureTaskRuntimeProcessInspection.ExactLive) {

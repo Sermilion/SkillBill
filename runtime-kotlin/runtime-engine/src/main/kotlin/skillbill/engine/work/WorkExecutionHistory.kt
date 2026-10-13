@@ -11,6 +11,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkExecutionInstance
 import skillbill.ports.persistence.UnitOfWork
+import java.time.Instant
 
 private val historyLogger = System.getLogger("skillbill.execution-history")
 
@@ -18,7 +19,7 @@ internal fun phaseGroupIdentity(record: StandalonePhaseStatusRecord): Triple<Str
   Triple(
     record.repositoryIdentity,
     record.phaseId,
-    record.issueKey?.uppercase() ?: record.workflowId ?: record.invocationId,
+    record.issueKey?.uppercase() ?: record.workflowId ?: record.branchCorrelation,
   )
 
 internal fun latestPhaseExecutions(records: List<StandalonePhaseStatusRecord>): List<StandalonePhaseStatusRecord> =
@@ -28,6 +29,26 @@ internal fun latestPhaseExecutions(records: List<StandalonePhaseStatusRecord>): 
         .thenBy { it.runSequence }.thenBy { it.invocationId },
     )
   }
+
+internal fun supersededPhase(
+  record: StandalonePhaseStatusRecord?,
+  unit: UnitOfWork,
+  observedAt: Instant,
+): Boolean {
+  if (record == null) return false
+  val latest =
+    unit.standalonePhaseStatuses.readPhaseExecutions(
+      StandalonePhaseExecutionQuery(
+        record.repositoryIdentity,
+        record.phaseId,
+        phaseGroupIdentity(record).third,
+        observedAt,
+        0,
+        1,
+      ),
+    ).firstOrNull()
+  return latest != null && latest.invocationId != record.invocationId
+}
 
 internal fun workExecutionHistory(
   unitOfWork: UnitOfWork,

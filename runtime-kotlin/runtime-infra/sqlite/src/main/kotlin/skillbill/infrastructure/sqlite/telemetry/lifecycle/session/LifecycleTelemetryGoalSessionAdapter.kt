@@ -49,6 +49,25 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     return changed
   }
 
+  override fun restartCanceledGoalIssue(
+    parentWorkflowId: String,
+    issueKey: String,
+    restartedAt: Instant,
+  ): Boolean {
+    val changed =
+      connection.prepareStatement(
+        "UPDATE goal_issue_progress SET status = 'running', finished_at = NULL, state_entered_at = ?, " +
+          "state_entered_at_estimated = 0 WHERE parent_workflow_id = ? AND issue_key = ? AND status = 'abandoned'",
+      ).use { statement ->
+        statement.bindAll(restartedAt.toString(), parentWorkflowId, issueKey)
+        statement.executeUpdate() == 1
+      }
+    diagnostics.info(
+      "seam=goal-cancellation outcome=${if (changed) "restarted" else "refused"} workflow=$parentWorkflowId",
+    )
+    return changed
+  }
+
   override fun goalStarted(
     record: GoalStartedRecord,
     level: String,
