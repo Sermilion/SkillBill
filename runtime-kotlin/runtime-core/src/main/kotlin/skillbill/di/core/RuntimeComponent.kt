@@ -66,6 +66,7 @@ import skillbill.engine.work.control.WorkControlService
 import skillbill.engine.work.observation.WorkObservationService
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
+import skillbill.infrastructure.sqlite.SQLiteDatabaseSchema
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
@@ -73,6 +74,7 @@ import skillbill.model.RuntimeVersion
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.concurrency.InterruptSignalPort
+import skillbill.ports.db.DatabaseSchemaPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -159,6 +161,9 @@ abstract class RuntimeComponent(
     runtimeVersion: RuntimeVersion,
   ): DatabaseSessionFactory =
     SQLiteDatabaseSessionFactory(context, clock, diagnostics, workflowSnapshotValidator, runtimeVersion.value)
+
+  @Provides
+  fun databaseSchemaPort(adapter: SQLiteDatabaseSchema): DatabaseSchemaPort = adapter
 
   @Provides
   fun standalonePhaseStatusPublisherFactory(
