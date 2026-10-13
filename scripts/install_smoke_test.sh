@@ -230,20 +230,49 @@ make_skills_bundle() {
 }
 
 make_desktop_bundle() {
-  local token="$1" out_dir="$2" work archive sha
+  local token="$1" out_dir="$2" work archive sha executable
   work="$(mktemp -d)"
   WORK_TMPDIRS+=("$work")
-  mkdir -p "$work/Skill Bill/bin"
+  case "$token" in
+    macos-arm64|macos-x64)
+      executable="$work/Skill Bill.app/Contents/MacOS/Skill Bill"
+      ;;
+    windows-x64)
+      executable="$work/Skill Bill/bin/Skill Bill.bat"
+      ;;
+    *)
+      executable="$work/Skill Bill/bin/Skill Bill"
+      ;;
+  esac
+  mkdir -p "$(dirname "$executable")"
   cp "$REPO_ROOT/LICENSE" "$work/LICENSE"
-  cat > "$work/Skill Bill/bin/Skill Bill" <<'APP'
+  cat > "$executable" <<'APP'
 #!/usr/bin/env bash
 exit 0
 APP
-  chmod +x "$work/Skill Bill/bin/Skill Bill"
+  chmod +x "$executable"
   archive="skill-bill-desktop-0.0.0-smoke-${token}.tar.gz"
   tar -czf "$out_dir/$archive" -C "$work" .
   sha="$(cd "$out_dir" && sha256sum "$archive" 2>/dev/null || shasum -a 256 "$archive")"
   printf '%s' "$sha" >"$out_dir/$archive.sha256"
+}
+
+desktop_app_target() {
+  local fake_home="$1"
+  case "$TOKEN" in
+    macos-arm64|macos-x64) printf '%s/Applications/Skill Bill.app' "$fake_home" ;;
+    windows-x64) printf '%s/AppData/Local/SkillBill/Desktop/Skill Bill' "$fake_home" ;;
+    *) printf '%s/.local/share/skillbill/desktop/Skill Bill' "$fake_home" ;;
+  esac
+}
+
+desktop_app_executable() {
+  local app_target="$1"
+  case "$TOKEN" in
+    macos-arm64|macos-x64) printf '%s/Contents/MacOS/Skill Bill' "$app_target" ;;
+    windows-x64) printf '%s/bin/Skill Bill.bat' "$app_target" ;;
+    *) printf '%s/bin/Skill Bill' "$app_target" ;;
+  esac
 }
 
 setup_release_dir() {
@@ -274,6 +303,8 @@ run_install() {
   done
   env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
+    XDG_DATA_HOME="$fake_home/.local/share" \
+    LOCALAPPDATA="$fake_home/AppData/Local" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
     SKILL_BILL_BIN_DIR="$fake_home/.local/bin" \
@@ -681,25 +712,34 @@ else
   fail "fresh-machine install did not complete: $GATE_OUTPUT"
 fi
 assert_file_absent "default desktop choice does not install the optional app" \
-  "$FAKE_HOME/.local/share/skillbill/desktop/Skill Bill"
+  "$(desktop_app_target "$FAKE_HOME")"
 
 echo ""
 echo "--- scenario 9: explicit desktop app install is checksum-verified and user-scoped ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"
 run_install "$FAKE_HOME" --install-desktop-app
-DESKTOP_APP="$FAKE_HOME/.local/share/skillbill/desktop/Skill Bill"
-assert_file_exists "desktop app launcher installed" "$DESKTOP_APP/bin/Skill Bill"
-[[ -x "$DESKTOP_APP/bin/Skill Bill" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
-[[ -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
-[[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
+DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
+assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
+if [[ "$TOKEN" == "windows-x64" ]]; then
+  [[ -f "$FAKE_HOME/.local/bin/skillbill-desktop.cmd" ]] && pass "desktop app launcher installed" || fail "desktop app launcher is missing"
+else
+  [[ -x "$DESKTOP_EXECUTABLE" ]] && pass "desktop app launcher is executable" || fail "desktop app launcher is not executable"
+  [[ -L "$FAKE_HOME/.local/bin/skillbill-desktop" ]] && pass "desktop app launcher symlink installed" || fail "desktop app launcher symlink is missing"
+fi
+if [[ "$TOKEN" == "linux-x64" ]]; then
+  [[ -f "$FAKE_HOME/.local/share/applications/skillbill.desktop" ]] && pass "Linux desktop entry installed" || fail "Linux desktop entry is missing"
+fi
 
 echo ""
 echo "--- scenario 10: explicit no preserves an existing desktop app during upgrade ---"
-mkdir -p "$FAKE_HOME/.local/share/skillbill/desktop/Skill Bill/bin"
-printf 'existing app\n' > "$FAKE_HOME/.local/share/skillbill/desktop/Skill Bill/bin/Skill Bill"
+DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
+DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
+mkdir -p "$(dirname "$DESKTOP_EXECUTABLE")"
+printf 'existing app\n' > "$DESKTOP_EXECUTABLE"
 run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app
-[[ "$(cat "$FAKE_HOME/.local/share/skillbill/desktop/Skill Bill/bin/Skill Bill")" == "existing app" ]] && \
+[[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] && \
   pass "declining the optional app keeps the existing desktop install" || \
   fail "declining the optional app changed the existing desktop install"
 
