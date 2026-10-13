@@ -1,6 +1,7 @@
 package skillbill.idestatus.model
 
 import skillbill.workflow.model.WorkflowStatus
+import java.time.Duration
 import java.time.Instant
 
 enum class IdeStatusWorkflowFamily(val wireValue: String) {
@@ -103,6 +104,17 @@ object IdeStatusPolicy {
       }
     }
 
+  fun verifyLifecycle(
+    durable: IdeStatusLifecycleState,
+    updatedAt: Instant,
+    observedAt: Instant,
+  ): IdeStatusLifecycleState =
+    if (durable == IdeStatusLifecycleState.ACTIVE && Duration.between(updatedAt, observedAt) > VERIFY_ABANDONED_AFTER) {
+      IdeStatusLifecycleState.IDLE
+    } else {
+      durable
+    }
+
   fun goalLifecycle(facts: IdeStatusGoalLifecycleFacts): IdeStatusLifecycleState {
     if (facts.completionRecorded || facts.durableLifecycle == IdeStatusLifecycleState.TERMINAL) {
       return IdeStatusLifecycleState.TERMINAL
@@ -172,6 +184,9 @@ object IdeStatusPolicy {
           facts.scope == IdeStatusExecutionScope.STANDALONE_PHASE
       }
     }
+
+  private const val VERIFY_ABANDONED_AFTER_HOURS = 24L
+  val VERIFY_ABANDONED_AFTER: Duration = Duration.ofHours(VERIFY_ABANDONED_AFTER_HOURS)
 
   private const val BLOCKED_PRIORITY = 0
   private const val FAILED_PRIORITY = 1

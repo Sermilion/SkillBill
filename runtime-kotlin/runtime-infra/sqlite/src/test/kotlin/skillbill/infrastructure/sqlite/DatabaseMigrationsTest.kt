@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
@@ -99,11 +100,11 @@ class DatabaseMigrationsTest {
           }
           statement.executeQuery("PRAGMA user_version").use {
             assertTrue(it.next())
-            assertEquals(55, it.getInt(1))
+            assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
           }
           statement.executeQuery("SELECT max(version) FROM schema_migrations").use {
             assertTrue(it.next())
-            assertEquals(55, it.getInt(1))
+            assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
           }
         }
       }
@@ -170,6 +171,7 @@ class DatabaseMigrationsTest {
         53 to "bind-work-observations-and-accepted-results",
         54 to "separate-agent-activity-revisions",
         55 to "complete-desktop-launch-schema",
+        56 to "abandon-stale-verify-workflows",
       ),
       migrationDefinitions,
     )
@@ -331,6 +333,42 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v56 abandons only verify workflows that stopped reporting while running`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v56-verify").resolve("legacy.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'abandon-stale-verify-workflows'")
+        statement.executeUpdate(
+          "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, updated_at, finished_at) VALUES " +
+            "('wfv-stale', 'running', datetime('now', '-3 days'), NULL), " +
+            "('wfv-fresh', 'running', datetime('now', '-1 hours'), NULL), " +
+            "('wfv-done', 'completed', datetime('now', '-3 days'), '2026-01-01T00:00:00.000Z')",
+        )
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val rows =
+        connection.createStatement().use { statement ->
+          statement.executeQuery(
+            "SELECT workflow_id, workflow_status, finished_at FROM feature_verify_workflows ORDER BY workflow_id",
+          ).use { result ->
+            buildMap {
+              while (result.next()) {
+                put(result.getString(1), result.getString(2) to result.getString(3))
+              }
+            }
+          }
+        }
+      assertEquals("abandoned", rows.getValue("wfv-stale").first)
+      assertNotNull(rows.getValue("wfv-stale").second)
+      assertEquals("running" to null, rows.getValue("wfv-fresh"))
+      assertEquals("completed" to "2026-01-01T00:00:00.000Z", rows.getValue("wfv-done"))
     }
   }
 

@@ -512,6 +512,19 @@ class IdeStatusProjector(
         WorkflowFamily.VERIFY -> IdeStatusWorkflowFamily.FEATURE_VERIFY
         WorkflowFamily.TASK_RUNTIME -> IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME
       }
+    val lifecycle =
+      if (family == WorkflowFamily.VERIFY) {
+        IdeStatusPolicy.verifyLifecycle(candidate.lifecycleState, updatedAt, context.observedAt)
+      } else {
+        candidate.lifecycleState
+      }
+    val summary =
+      if (lifecycle == IdeStatusLifecycleState.IDLE && candidate.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
+        val subject = candidate.issueKey?.let { "${wireFamily.wireValue} $it" } ?: wireFamily.wireValue
+        "$subject stopped reporting progress at $stepLabel and is treated as abandoned."
+      } else {
+        familySummary(wireFamily, candidate.issueKey, lifecycle, stepLabel)
+      }
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
       branchCorrelation = context.branchCorrelation,
@@ -519,7 +532,7 @@ class IdeStatusProjector(
       workflowId = candidate.workflowId,
       workflowFamily = wireFamily,
       execution = candidate.execution,
-      lifecycleState = candidate.lifecycleState,
+      lifecycleState = lifecycle,
       currentStep = IdeStatusStep(id = stepId, label = stepLabel),
       progress = progress,
       startedAt = startedAt,
@@ -527,7 +540,7 @@ class IdeStatusProjector(
       lastAgentActivityLabel = activityLabel,
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
-      summary = familySummary(wireFamily, candidate.issueKey, candidate.lifecycleState, stepLabel),
+      summary = summary,
     )
   }
 
