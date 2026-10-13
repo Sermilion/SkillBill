@@ -780,7 +780,7 @@ internal val databaseMigrations: List<DatabaseMigration> =
     ),
     DatabaseMigration(
       version = 55,
-      name = "save-standalone-phase-launch",
+      name = "complete-desktop-launch-schema",
       operation = ::saveStandalonePhaseLaunch,
     ),
   )

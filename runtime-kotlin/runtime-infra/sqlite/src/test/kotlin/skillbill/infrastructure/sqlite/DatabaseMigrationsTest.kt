@@ -70,7 +70,10 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'separate-agent-activity-revisions'")
-        statement.executeUpdate("UPDATE schema_migrations SET version = 54 WHERE name = 'save-standalone-phase-launch'")
+        statement.executeUpdate(
+          "UPDATE schema_migrations SET version = 54, name = 'save-standalone-phase-launch' " +
+            "WHERE name = 'complete-desktop-launch-schema'",
+        )
         statement.executeUpdate("DELETE FROM desktop_change_revisions WHERE topic = 'activity'")
         listOf("insert", "update", "delete").forEach { operation ->
           statement.execute("DROP TRIGGER desktop_change_agent_activity_stamps_$operation")
@@ -86,13 +89,19 @@ class DatabaseMigrationsTest {
     repeat(2) {
       DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
         connection.createStatement().use { statement ->
-          statement.executeQuery("SELECT launch_agent_id, launch_arguments_json FROM standalone_phase_status LIMIT 0").use {
+          statement.executeQuery(
+            "SELECT launch_agent_id, launch_arguments_json FROM standalone_phase_status LIMIT 0",
+          ).use {
             assertEquals(2, it.metaData.columnCount)
           }
           statement.executeQuery("SELECT revision FROM desktop_change_revisions WHERE topic = 'activity'").use {
             assertTrue(it.next())
           }
           statement.executeQuery("PRAGMA user_version").use {
+            assertTrue(it.next())
+            assertEquals(55, it.getInt(1))
+          }
+          statement.executeQuery("SELECT max(version) FROM schema_migrations").use {
             assertTrue(it.next())
             assertEquals(55, it.getInt(1))
           }
@@ -160,7 +169,7 @@ class DatabaseMigrationsTest {
         52 to "add-desktop-room-read-identity",
         53 to "bind-work-observations-and-accepted-results",
         54 to "separate-agent-activity-revisions",
-        55 to "save-standalone-phase-launch",
+        55 to "complete-desktop-launch-schema",
       ),
       migrationDefinitions,
     )
