@@ -152,6 +152,7 @@ class GoalRunnerControlStoreTest {
           pausedAt = "2026-08-02T09:00:00Z",
           goalCompletedAt = "2026-08-02T10:00:00Z",
           goalPullRequestUrl = "https://github.com/example/repo/pull/7",
+          goalBlockedReason = "Remote rejected the branch push.\n" + "Full diagnostic line\n".repeat(100),
         )
       store.persistControlState("parent-1", state)
       assertEquals(state, store.controlState("parent-1"))

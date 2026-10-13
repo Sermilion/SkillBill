@@ -277,6 +277,12 @@ class GoalRunner(
     finalReport: GoalRunnerRunReport,
     attempted: List<Int>,
   ) {
+    manifestStore.persistControlState(
+      state.parentWorkflowId,
+      manifestStore.controlState(state.parentWorkflowId).copy(
+        goalBlockedReason = (finalReport as? GoalRunnerRunReport.Stopped)?.stop?.blockedReason,
+      ),
+    )
     telemetryEmitter.let { emitter ->
       emitter.emitNewlyTerminalSubtasks(state.manifest, attempted)
       emitter.goalFinished(state.manifest, finalReport)

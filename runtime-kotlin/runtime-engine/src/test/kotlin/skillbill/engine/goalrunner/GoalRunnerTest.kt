@@ -1778,6 +1778,7 @@ class GoalRunnerLinearScratchFinalizeTest {
     val stopped = assertIs<GoalRunnerRunReport.Stopped>(runner.run(linearRunRequest(repoRoot)))
     assertEquals(GoalRunnerStopReason.PULL_REQUEST_FAILED, stopped.stop.reason)
     assertContains(stopped.stop.blockedReason, "unpushed commits")
+    assertEquals(stopped.stop.blockedReason, store.controlState(stopped.parentWorkflowId!!).goalBlockedReason)
     assertEquals(listOf("feat/SKILL-56-goal"), git.pushedBranches)
     assertEquals(0, pullRequests.openCount, "must not open a PR from a stale remote tip")
   }

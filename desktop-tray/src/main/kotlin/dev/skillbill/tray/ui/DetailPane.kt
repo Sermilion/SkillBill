@@ -65,6 +65,9 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
     ?: detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.result
     ?: item.pauseReason
     ?: item.summary
+  val copyReason = if (item.family == WorkFamily.FEATURE_GOAL) item.exactPauseReason else blockReason
+  val goalBlocked = item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.BLOCKED
+  val goalBlockReason = copyReason.takeIf { goalBlocked }
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen, timing?.subtaskMs)
   Column(modifier.background(canvas)) {
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
@@ -81,8 +84,8 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-              ReasonTooltip(blockReason, Modifier.weight(1f), color = amber, fontSize = 13.sp, lineHeight = 19.sp)
-              DesignButton("Copy reason") { clipboard.setText(AnnotatedString(blockReason)) }
+              ReasonTooltip(if (item.family == WorkFamily.FEATURE_GOAL) item.summary else blockReason, Modifier.weight(1f), color = amber, fontSize = 13.sp, lineHeight = 19.sp)
+              DesignButton("Copy reason", enabled = copyReason != null) { copyReason?.let { clipboard.setText(AnnotatedString(it)) } }
             }
           }
         }
@@ -175,8 +178,18 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
           event?.let { add("Event" to listOfNotNull(it.workflowPhase, it.workerRole, it.summary).joinToString(" · ")) }
           item.activity?.let { add("Phase event" to it) }
         }
-        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (activity.isNotEmpty() || detail.executionHistory.isNotEmpty() || goalBlocked) Column(Modifier.fillMaxWidth().padding(top = 4.dp).background(panel, RoundedCornerShape(10.dp)).border(1.dp, border, RoundedCornerShape(10.dp)).padding(horizontal = 15.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           DesignLabel(if (standalone) "Phase activity" else "Goal activity")
+          goalBlockReason?.let { reason ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+              Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Blocked · ${formatInstant(item.updatedAt, "d MMM HH:mm:ss")}", color = orange, fontSize = 12.sp)
+                ReasonTooltip(reason, color = orange)
+              }
+              DesignButton("Copy reason") { clipboard.setText(AnnotatedString(reason)) }
+            }
+          }
+          if (goalBlocked && goalBlockReason == null) Text("The full block reason was not saved for this attempt.", color = muted, fontSize = 12.sp)
           activity.forEach { (label, value) -> DesignKv(label, value) }
           LazyColumn(state = executionScroll, modifier = Modifier.heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(detail.executionHistory, key = { "${item.identity.repositoryIdentity}:${item.identity.id}:execution:${it.invocationId}:${it.executionId}" }) { instance ->

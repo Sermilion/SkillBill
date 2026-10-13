@@ -31,6 +31,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
       "pending_causing_loop_entry_by_subtask",
       "goal_completed_at",
       "goal_pull_request_url",
+      GoalRunnerControlPayloadKeys.BLOCKED_REASON,
     )
   state.keys.forEach { key ->
     if (key !in allowedKeys) {
@@ -43,6 +44,7 @@ internal fun decodeControlState(raw: String): GoalRunnerControlState {
     pauseConsumed = state.booleanOrDefault("pause_consumed", false),
     paused = state.booleanOrDefault("paused", false),
     pauseReason = state.nullableString("pause_reason"),
+    goalBlockedReason = state.nullableString(GoalRunnerControlPayloadKeys.BLOCKED_REASON),
     pausedAt = state.nullableString("paused_at") ?: legacyPausedAt(state),
     stopAfterConsumed = state.booleanOrDefault("stop_after_consumed", false),
     repositoryIdentity = state.nullableString("repository_identity"),

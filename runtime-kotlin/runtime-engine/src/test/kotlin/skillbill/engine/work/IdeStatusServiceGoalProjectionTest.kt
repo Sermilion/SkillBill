@@ -243,6 +243,37 @@ class IdeStatusServiceGoalProjectionTest {
   }
 
   @Test
+  fun `goal finalization detail preserves full durable block reason beyond bounded status text`() {
+    val fixture = gitRepoFixture("ide-status-finalization-block-reason")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val reason = "Branch push failed\n" + "Remote diagnostic line\n".repeat(100)
+    val controls =
+      object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+        override fun controlState(parentWorkflowId: String): GoalRunnerControlState =
+          GoalRunnerControlState(repositoryIdentity = identity, goalBlockedReason = reason)
+      }
+    val database =
+      TrackingDatabase(
+        work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, "blocked", "2026-08-06T10:00:00Z")),
+        workflows = IdeStatusWorkflowStates(),
+        controls = controls,
+      )
+    val service =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = ""),
+          ),
+      )
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+    assertEquals(IdeStatusLifecycleState.BLOCKED, detail.snapshot.lifecycleState)
+    assertEquals(reason, detail.exactPauseReason)
+    assertTrue(requireNotNull(detail.snapshot.pauseReason?.label).length < reason.length)
+    assertEquals("Goal SKILL-148 is blocked.", detail.snapshot.summary)
+  }
+
+  @Test
   fun `blocked goal board includes durable subtask reason without an active child pause`() {
     val fixture = gitRepoFixture("ide-status-goal-durable-block-reason")
     val identity = testGoalRepositoryIdentity(fixture)

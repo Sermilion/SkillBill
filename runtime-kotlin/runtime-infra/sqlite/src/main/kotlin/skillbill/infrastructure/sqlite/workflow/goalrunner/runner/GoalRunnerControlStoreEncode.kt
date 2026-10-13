@@ -74,6 +74,7 @@ internal fun GoalRunnerControlState.toArtifactMap(source: Map<String, Any?>? = n
       pendingCausingLoopEntryBySubtask.entries.associate { (k, v) -> k.toString() to v },
     "goal_completed_at" to goalCompletedAt,
     "goal_pull_request_url" to goalPullRequestUrl,
+    GoalRunnerControlPayloadKeys.BLOCKED_REASON to goalBlockedReason,
   )
 
 private fun leaseTimestamp(

@@ -104,3 +104,9 @@ Reason: Cancel must stop the process that can start more work, and process owner
 Context: Showing separate canceled and completed attempts in History repeated the same phase after retries.
 Decision: Apply the same latest-attempt grouping to History and Recent as the live sections. A newer active attempt replaces its earlier finished entries in the sidebar. Keep all stored attempts available in the phase detail activity history.
 Reason: The sidebar represents work the operator can select. Its activity history holds the individual attempts.
+
+
+## [2026-10-13] Copy the full goal block reason
+Context: Finalization failures kept only a blocked status after the runner exited, so Copy reason copied the generic goal summary.
+Decision: Save the runner's full stopped reason in goal control state and project it separately from the bounded status text. Show blocked goals in Goal activity with the existing three-line preview, delayed tooltip, and copy button. Keep the header summary short. Disable copying when an older attempt has no saved full reason and state that absence in Goal activity.
+Reason: Clipboard text must contain the recorded failure, and a missing reason must remain visible rather than become a generic status sentence.

@@ -98,6 +98,7 @@ data class GoalRunnerControlState(
   val pendingCausingLoopEntryBySubtask: Map<Int, String> = emptyMap(),
   val goalCompletedAt: String? = null,
   val goalPullRequestUrl: String? = null,
+  val goalBlockedReason: String? = null,
 ) {
   init {
     goalCompletedAt?.let { require(it.isNotBlank()) { "goalCompletedAt must not be blank when provided." } }

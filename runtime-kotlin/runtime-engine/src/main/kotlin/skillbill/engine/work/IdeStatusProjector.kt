@@ -228,7 +228,13 @@ class IdeStatusProjector(
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
-    val pauseReason = goalPauseReason(lifecycle, projection, childContext)
+    val pauseReason =
+      goalPauseReason(
+        lifecycle,
+        projection,
+        childContext,
+        context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalBlockedReason,
+      )
     val step =
       goalCurrentStep(
         planningStep,
@@ -345,6 +351,7 @@ class IdeStatusProjector(
     lifecycle: IdeStatusLifecycleState,
     projection: GoalRunnerStatusProjection?,
     childContext: ChildOptionalContext,
+    goalBlockedReason: String?,
   ): GoalPauseReasonProjection {
     childContext.operatorDecisionPause?.let { pause ->
       if (lifecycle == IdeStatusLifecycleState.PAUSED || lifecycle == IdeStatusLifecycleState.BLOCKED) {
@@ -355,7 +362,7 @@ class IdeStatusProjector(
       }
     }
     if (lifecycle == IdeStatusLifecycleState.BLOCKED) {
-      val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason
+      val reason = projection?.currentSubtaskBlockedReason ?: projection?.planning?.reason ?: goalBlockedReason
       val exact = reason?.takeIf(String::isNotBlank)
       return GoalPauseReasonProjection(
         exact?.let { IdeStatusPauseReason.of(IdeStatusPauseReasonCode.AWAITING_OPERATOR_DECISION, it) },
