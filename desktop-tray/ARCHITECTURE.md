@@ -126,11 +126,12 @@ settings corruption, and same-path replacement. The Room compatibility test
 compares durable schema and rows before and after read-only access.
 
 Tray placement captures the native activation coordinates before the UI coroutine
-runs. It uses AWT's display bounds and insets to place the window beside the
-nearest panel edge. Tray availability uses the JVM `SystemTray` API. This removes
-the `gdbus` and `kscreen-doctor` runtime calls. KDE Wayland native-to-Xwayland
-coordinate conversion still needs a platform API implementation; the current
-placement falls back to AWT coordinates.
+runs. On KDE Wayland, it reads the current output layout with `kscreen-doctor`
+and maps the activation point into AWT's display bounds using KWin's Xwayland
+scale. Other desktops use the AWT point directly. The display query runs off the
+UI thread. Placement uses AWT's display insets to keep the window beside the
+nearest panel edge. Tray availability uses the JVM `SystemTray` API without a
+`gdbus` query.
 The header supports dragging and has a close button that hides the tray window.
 Running work is green, attention is orange, and the tray icon uses the bundled
 Skill Bill logo. Blocked rows show the reason with a three-line ellipsis.

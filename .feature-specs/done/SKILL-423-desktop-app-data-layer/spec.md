@@ -10,13 +10,13 @@ The app shows live work independently of completed history. Refresh preserves th
 
 ### Operator scope transfer on 2026-10-12
 
-The operator transferred the seven remaining reported repair obligations to [SKILL-424](../SKILL-424-readian-desktop-architecture-parity/spec.md#data-repair-handoff-from-skill-423) and requested completion of the current `audit_implement_fix` phase by handoff. SKILL-424 AC-28 through AC-34 now own the remaining portions of normalized SKILL-423 AC-002, AC-003, AC-004, AC-009, AC-010, AC-011, and AC-017, respectively. Preserve implemented data behavior and all existing repairs. The transferred obligations stay required in SKILL-424 and are excluded from further SKILL-423 repair acceptance.
+The operator transferred the seven remaining reported repair obligations to [SKILL-424](../../SKILL-424-readian-desktop-architecture-parity/spec.md#data-repair-handoff-from-skill-423) and requested completion of the current `audit_implement_fix` phase by handoff. SKILL-424 AC-28 through AC-34 now own the remaining portions of normalized SKILL-423 AC-002, AC-003, AC-004, AC-009, AC-010, AC-011, and AC-017, respectively. Preserve implemented data behavior and all existing repairs. The transferred obligations stay required in SKILL-424 and are excluded from further SKILL-423 repair acceptance.
 
 This decision supersedes earlier instructions below to finish those remaining portions in SKILL-423, including the historical remaining-repairs section and saved implementation plan. It does not claim that the transferred gaps were fixed or passed a fresh audit. The source is workflow `wftr-20261012-112951-so8l`, repair attempt 8, with the latest report at `2026-10-12T16:02:56.524Z`. That report may contain stale descriptions; SKILL-424 reconciles them against current source. AC-005, AC-012, and AC-015 were reported satisfied and their behavior remains preserved.
 
 Phase completion means the operator-approved repair handoff is complete. Review, build, validation, commit, publication, and goal completion retain their runtime-owned requirements. No manifest or workflow database status is edited by this specification.
 
-[SKILL-424](../SKILL-424-readian-desktop-architecture-parity/spec.md) owns the final Readian-style KMP module/source-set graph, desktop build conventions, generated Kotlin-Inject/Anvil composition and scopes, feature ViewModels and typed state/action/effect structure, Navigation 3, entry/window ownership, native host integration, and final architecture guards/inventories.
+[SKILL-424](../../SKILL-424-readian-desktop-architecture-parity/spec.md) owns the final Readian-style KMP module/source-set graph, desktop build conventions, generated Kotlin-Inject/Anvil composition and scopes, feature ViewModels and typed state/action/effect structure, Navigation 3, entry/window ownership, native host integration, and final architecture guards/inventories.
 
 SKILL-423 owns working data-layer behavior. Room 3 compatibility, typed shared runtime reads and controls, bounded queries and Paging, external committed-write observation, database generations, DataStore migration, notification correctness, and removal of the CLI work-data path and polling remain requirements here. SKILL-424 consumes and preserves those implementations while placing them in its final architecture.
 
@@ -37,12 +37,12 @@ The installed launcher separately rejected `--page-size`. The running app used i
 - `desktop-tray/src/main/kotlin/dev/skillbill/tray/infrastructure/cli/CliBoardSource.kt` launches board, detail, pause, and stop commands and parses their output.
 - `desktop-tray/src/main/kotlin/dev/skillbill/tray/infrastructure/cli/CliResolver.kt` discovers executables through overrides, PATH, and a login shell.
 - `desktop-tray/src/main/kotlin/dev/skillbill/tray/infrastructure/cli/ProcessRunner.kt` owns process slots, capture, and request deadlines.
-- `desktop-tray/src/main/kotlin/dev/skillbill/tray/application/Ports.kt` combines reads, controls, executable configuration, and refresh signaling in `BoardSource`.
-- `desktop-tray/src/main/kotlin/dev/skillbill/tray/application/DashboardController.kt` polls, paginates, selects details, tracks freshness, and sends controls.
-- `desktop-tray/src/main/kotlin/dev/skillbill/tray/ui/MainWindow.kt` filters board records into live sidebar sections. History uses the same board pages through `TrayUi.kt`.
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusService.kt` owns the shared board/detail projection. Board pagination sorts candidates by start time and identity before projecting the selected page.
-- `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/status/GoalRunnerStatusService.kt` exposes existing goal status and pause/stop behavior.
-- `runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt` is the runtime composition root. `runtime-ports` and `runtime-infra/sqlite` own database session contracts and their implementation.
+- `../../../desktop-tray/src/main/kotlin/dev/skillbill/tray/application/Ports.kt` combines reads, controls, executable configuration, and refresh signaling in `BoardSource`.
+- `../../../desktop-tray/src/main/kotlin/dev/skillbill/tray/application/DashboardController.kt` polls, paginates, selects details, tracks freshness, and sends controls.
+- `../../../desktop-tray/src/main/kotlin/dev/skillbill/tray/ui/MainWindow.kt` filters board records into live sidebar sections. History uses the same board pages through `TrayUi.kt`.
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/IdeStatusService.kt` owns the shared board/detail projection. Board pagination sorts candidates by start time and identity before projecting the selected page.
+- `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/status/GoalRunnerStatusService.kt` exposes existing goal status and pause/stop behavior.
+- `../../../runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt` is the runtime composition root. `runtime-ports` and `runtime-infra/sqlite` own database session contracts and their implementation.
 
 Recheck these owners against the implementation checkout. SKILL-422 audits workflow correctness across shared projections; retain its landed repairs and coordinate overlapping changes without making this feature depend on that audit finishing.
 
@@ -166,7 +166,7 @@ SKILL-424 owns typed Navigation 3 routes, saved back stacks, entry/ViewModelStor
 
 Package the runtime libraries and driver needed for the in-process data layer on Linux, macOS, and Windows. SKILL-424 owns final application-build conventions, native host resource placement, and host packaging integration. The app runs with the Skill Bill executable absent and PATH excluding the checkout. Use declared Gradle dependencies or composite-build integration, not jars copied from an installed runtime or sibling build output. The desktop CI workflow builds the required shared artifacts from a clean checkout.
 
-Diagnostics follow `docs/observability-policy.md`. Record storage failures, timeouts, discarded legacy configuration, observation degradation, and stale control rejection with the query/control seam and bounded cause. Do not log database rows, agent payloads, credentials, or raw SQL parameters. A failure cannot become an empty successful board.
+Diagnostics follow `../../../docs/observability-policy.md`. Record storage failures, timeouts, discarded legacy configuration, observation degradation, and stale control rejection with the query/control seam and bounded cause. Do not log database rows, agent payloads, credentials, or raw SQL parameters. A failure cannot become an empty successful board.
 
 ## Acceptance Criteria
 

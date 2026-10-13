@@ -17,7 +17,14 @@ import java.awt.MouseInfo
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Toolkit
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
+
+private const val KDE_LAYOUT_QUERY_TIMEOUT_MILLIS = 1_000L
+private const val KDE_LAYOUT_OUTPUT_TIMEOUT_MILLIS = 250L
 
 fun trayIconAnchor(): Point {
   val pointer = MouseInfo.getPointerInfo()
@@ -30,7 +37,8 @@ fun trayIconAnchor(): Point {
 class TrayPopoverPlacement {
   fun position(size: DpSize, nativeAnchor: Point, gap: Int): WindowPosition {
     val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration }
-    val screen = screens.firstOrNull { it.bounds.contains(nativeAnchor) }
+    val anchor = awtTrayAnchor(nativeAnchor, screens.map { it.bounds }, System.getenv())
+    val screen = screens.firstOrNull { it.bounds.contains(anchor) }
       ?: MouseInfo.getPointerInfo().device.defaultConfiguration.also {
         RuntimeDiagnostics.record("tray_icon_screen_unavailable")
       }
@@ -38,10 +46,63 @@ class TrayPopoverPlacement {
     val insets = Toolkit.getDefaultToolkit().getScreenInsets(screen)
     val workArea = Rectangle(bounds.x + insets.left, bounds.y + insets.top,
       bounds.width - insets.left - insets.right, bounds.height - insets.top - insets.bottom)
-    val position = anchoredTrayPosition(nativeAnchor, workArea, size.width.value.roundToInt(), size.height.value.roundToInt(), gap)
+    val position = anchoredTrayPosition(anchor, workArea, size.width.value.roundToInt(), size.height.value.roundToInt(), gap)
     System.getLogger("SkillBillTrayPlacement").log(System.Logger.Level.INFO,
-      "tray_window_anchored native=$nativeAnchor anchor=$nativeAnchor work_area=$workArea position=$position")
+      "tray_window_anchored native=$nativeAnchor anchor=$anchor work_area=$workArea position=$position")
     return WindowPosition(position.x.dp, position.y.dp)
+  }
+}
+
+private fun awtTrayAnchor(raw: Point, screens: List<Rectangle>, environment: Map<String, String>): Point {
+  val desktop = listOfNotNull(environment["XDG_CURRENT_DESKTOP"], environment["DESKTOP_SESSION"])
+    .joinToString(" ").lowercase()
+  if (!environment["XDG_SESSION_TYPE"].equals("wayland", ignoreCase = true) ||
+    ("kde" !in desktop && "plasma" !in desktop)) return raw
+  val layout = queryKdeDisplayLayout() ?: return raw
+  val configHome = environment["XDG_CONFIG_HOME"]?.takeIf(String::isNotBlank)?.let(Path::of)
+    ?: Paths.get(System.getProperty("user.home"), ".config")
+  val xwaylandScale = readKwinXwaylandScale(configHome.resolve("kwinrc"))
+  if (xwaylandScale == null) {
+    RuntimeDiagnostics.record("tray_kde_xwayland_scale_unavailable")
+    return raw
+  }
+  return try {
+    mapKdeTrayAnchor(raw, layout, screens, xwaylandScale)
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_anchor_mapping_failed")
+    raw
+  }
+}
+
+private fun queryKdeDisplayLayout(): String? {
+  val process = try {
+    ProcessBuilder("kscreen-doctor", "-j").redirectError(ProcessBuilder.Redirect.DISCARD).start()
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+    return null
+  }
+  val output = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().use { it.readText() } }
+  return try {
+    if (!process.waitFor(KDE_LAYOUT_QUERY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+      RuntimeDiagnostics.record("tray_kde_layout_query_timeout")
+      null
+    } else if (process.exitValue() != 0) {
+      RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+      null
+    } else {
+      output.get(KDE_LAYOUT_OUTPUT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).takeIf(String::isNotBlank)
+        ?: run { RuntimeDiagnostics.record("tray_kde_layout_query_failed"); null }
+    }
+  } catch (failure: InterruptedException) {
+    Thread.currentThread().interrupt()
+    RuntimeDiagnostics.record("tray_kde_layout_query_interrupted")
+    null
+  } catch (_: Exception) {
+    RuntimeDiagnostics.record("tray_kde_layout_query_failed")
+    null
+  } finally {
+    process.destroyForcibly()
+    output.cancel(true)
   }
 }
 

@@ -30,6 +30,7 @@ import dev.skillbill.tray.ui.TrayPopover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 fun main() {
   val uiScale = resolveDesktopUiScale()
@@ -38,6 +39,7 @@ fun main() {
     var historyVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
     var trayPopoverVisible by remember { mutableStateOf(false) }
+    var trayPopoverOpening by remember { mutableStateOf(false) }
     val trayPopoverWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(380).dp, uiScale.scaledWindowPixels(590).dp))
     val uiScope = rememberCoroutineScope()
     val native = remember { NativeServicesImpl() }
@@ -104,13 +106,25 @@ fun main() {
       },
       tooltip = if (isLinux) dev.skillbill.tray.presentation.presentTrayHover(state) else tooltip,
       primaryAction = {
-        val anchor = trayIconAnchor()
-        uiScope.launch {
-          model.trayAvailable()
+        if (!trayPopoverOpening) {
+          val anchor = trayIconAnchor()
           if (!trayPopoverVisible) {
-            trayPopoverWindowState.position = trayPlacement.position(trayPopoverWindowState.size, anchor, uiScale.scaledWindowPixels(16))
+            trayPopoverOpening = true
+            uiScope.launch {
+              try {
+                model.trayAvailable()
+                trayPopoverWindowState.position = withContext(Dispatchers.IO) {
+                  trayPlacement.position(trayPopoverWindowState.size, anchor, uiScale.scaledWindowPixels(16))
+                }
+                trayPopoverVisible = true
+              } finally {
+                trayPopoverOpening = false
+              }
+            }
+          } else {
+            model.trayAvailable()
+            trayPopoverVisible = false
           }
-          trayPopoverVisible = !trayPopoverVisible
         }
       },
     )

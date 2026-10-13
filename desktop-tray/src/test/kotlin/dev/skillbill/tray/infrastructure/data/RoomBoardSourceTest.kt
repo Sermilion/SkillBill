@@ -246,7 +246,7 @@ class RoomBoardSourceTest {
           override fun warning(message: String, error: Throwable?) = Unit
           override fun error(message: String, error: Throwable?) = Unit
         }).currentProcess()
-        unit.goalRunnerControls.persistControlState("older-goal", GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir}",
+        unit.goalRunnerControls.persistControlState("older-goal", GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}",
           executionLease = GoalRunnerExecutionLease(1, "owned-test", process.hostIdentity, process.bootIdentity, process.pid,
             process.processBirthToken, now, now.plusSeconds(3600))))
         unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "live", now.minusSeconds(3600), "live-branch"))
@@ -601,7 +601,7 @@ class RoomBoardSourceTest {
 
   private fun source(home: java.nio.file.Path, clock: Clock) = RoomBoardSource(emptyMap(), home, home, clock)
   private fun registration(root: String, id: String, started: Instant, branch: String) = StandalonePhaseStatusRegistration(
-    "repo-root-realpath-v1:$root", branch, if (id.startsWith("done-")) "SKILL-${id.removePrefix("done-").toInt() + 1000}" else "SKILL-423", null, id, "review", "execution-$id", "active", "review",
+    "repo-root-realpath-v1:${java.nio.file.Path.of(root).toRealPath()}", branch, if (id.startsWith("done-")) "SKILL-${id.removePrefix("done-").toInt() + 1000}" else "SKILL-423", null, id, "review", "execution-$id", "active", "review",
     started, "owned-test", 1, now.plusSeconds(300))
   private fun value(outcome: Outcome<Board>): Board { assertIs<Outcome.Value<Board>>(outcome, outcome.toString()); return outcome.value }
 }

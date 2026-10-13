@@ -51,6 +51,7 @@ class DesktopArchitectureTest {
   @Test
   fun `domain application and presentation avoid process adapters`() {
     val sources = productionSources()
+    assertApprovedNativeDisplayQuery(sources)
     val workDataSources = sources.filter { it.path.startsWith("src/main/kotlin/dev/skillbill/tray/") }
     assertTrue(workDataSources.isNotEmpty(), "The governed production scan set is empty.")
     workDataSources.forEach { source ->
@@ -86,7 +87,7 @@ class DesktopArchitectureTest {
       val (function, trace) = pending.removeFirst()
       if (!visited.add(function)) continue
       assertFalse(function.calls.any { it in forbiddenWorkDataProcessAdapters }, function.path + ":" + function.name)
-      assertFalse(function.launchesCommand, trace.joinToString(" -> "))
+      assertFalse(function.launchesCommand && !isApprovedNativeDisplayQuery(function), trace.joinToString(" -> "))
       function.calls.forEach { name ->
         val declarations = byName[name]
         val imported = function.imports[name]
@@ -128,6 +129,17 @@ class DesktopArchitectureTest {
       assertTrue(visited.any { it.path.endsWith(path) && it.name == name }, "Unresolved governed adapter edge: $path:$name")
     }
   }
+
+  private fun assertApprovedNativeDisplayQuery(sources: List<Source>) {
+    val placement = sources.single { it.path == "src/main/kotlin/dev/skillbill/tray/infrastructure/TrayPopoverPlacement.kt" }
+    assertTrue(Regex("""\bProcessBuilder\s*\(""").findAll(placement.text).count() == 1)
+    assertTrue(Regex("""ProcessBuilder\("kscreen-doctor", "-j"\)""").findAll(placement.text).count() == 1)
+    assertFalse("Runtime.getRuntime().exec" in placement.text)
+  }
+
+  private fun isApprovedNativeDisplayQuery(function: FunctionBody): Boolean =
+    function.path.endsWith("/infrastructure/TrayPopoverPlacement.kt") &&
+      function.name in setOf("queryKdeDisplayLayout", "process")
 
   @OptIn(K1Deprecation::class, CoreEnvironmentDeprecation::class, CompilerConfiguration.Internals::class, ExperimentalCompilerApi::class)
   private fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
@@ -344,6 +356,7 @@ class DesktopArchitectureTest {
     val approvedNativeHostProcessFiles = setOf(
       "src/main/kotlin/dev/skillbill/tray/infrastructure/NativeServicesImpl.kt",
       "src/main/kotlin/dev/skillbill/tray/infrastructure/NativeTrayHost.kt",
+      "src/main/kotlin/dev/skillbill/tray/infrastructure/TrayPopoverPlacement.kt",
       "src/main/kotlin/dev/skillbill/tray/infrastructure/macos/MacStatusItemBridge.kt",
     )
   }
