@@ -2,7 +2,7 @@
 contract_version: "0.5"
 issue_key: "SKILL-423"
 feature_name: "desktop-app-data-layer"
-parent_spec_path: ".feature-specs/SKILL-423-desktop-app-data-layer/spec.md"
+parent_spec_path: ".feature-specs/done/SKILL-423-desktop-app-data-layer/spec.md"
 status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
@@ -14,7 +14,7 @@ current_subtask_intent:
 subtasks:
 - id: 1
   name: "Implement the requested change"
-  spec_path: "/home/sermilion/IdeaProjects/SkillBill/.feature-specs/SKILL-423-desktop-app-data-layer/spec_subtask_1_implement-the-requested-change.md"
+  spec_path: ".feature-specs/done/SKILL-423-desktop-app-data-layer/spec_subtask_1_implement-the-requested-change.md"
   status: "complete"
   branch: null
   commit_sha: null
