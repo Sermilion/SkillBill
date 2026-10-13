@@ -87,7 +87,7 @@ fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain
         item { DesignLabel("Finished in the last hour", Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) }
         items(view.finishedPhases, key = { it.identity }) { item -> PopoverWorkRow(item, false, now, state.stale) { model.select(item.identity); openMain() } }
       }
-      item { PageFooter(hasMore, state.boardLoading, model::loadMoreBoard) }
+      if (hasMore) item { PageFooter(hasMore, state.boardLoading, model::loadMoreBoard) }
     }
     HorizontalDivider(color = border)
     Row(Modifier.fillMaxWidth().background(sidebar).padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {

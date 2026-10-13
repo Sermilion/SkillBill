@@ -505,6 +505,26 @@ class RoomBoardSourceTest {
   }
 
   @Test
+  fun `exactly one full page has no continuation`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-exact-page-size").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        repeat(10) { index ->
+          unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "page-$index", now.minusSeconds(index.toLong()), "main")
+            .copy(issueKey = "SKILL-${index + 3000}"))
+        }
+      }
+      val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val board = value(source.board(WorkSection.PHASES, Retention.DAY))
+        assertEquals(10, board.items.size)
+        assertNull(board.nextCursor)
+      } finally { source.closeAndJoin() }
+    }
+  }
+
+  @Test
   fun `continuation rejects changed queries and same-path replacement without reusing old identities`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-page-generation").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())

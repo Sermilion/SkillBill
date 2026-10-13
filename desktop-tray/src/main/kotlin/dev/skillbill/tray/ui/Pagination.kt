@@ -34,6 +34,8 @@ internal fun PageFooter(hasMore: Boolean, loading: Boolean, load: () -> Unit) = 
 
 @Composable
 internal fun PageFooter(hasMore: Boolean, loading: Boolean, failed: Boolean, load: () -> Unit) {
-  if (loading) Text("Loading...", color = muted)
-  else if (hasMore) TextButton(onClick = load) { Text(if (failed) "Retry page" else "Load more", color = mint) }
+  if (hasMore) {
+    if (loading) Text("Loading...", color = muted)
+    else TextButton(onClick = load) { Text(if (failed) "Retry page" else "Load more", color = mint) }
+  }
 }

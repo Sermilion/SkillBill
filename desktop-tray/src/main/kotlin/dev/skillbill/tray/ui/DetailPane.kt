@@ -80,7 +80,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         val appending = state.detailLoadStates.values.any { it == ListLoadState.APPENDING }
         if (refreshing || appending) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           CircularProgressIndicator(Modifier.size(12.dp), color = mint, strokeWidth = 2.dp)
-          Text(if (refreshing) "Refreshing details..." else "Loading more details...", color = muted, style = MaterialTheme.typography.bodySmall)
+          if (appending) Text("Loading more details...", color = muted, style = MaterialTheme.typography.bodySmall)
         }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

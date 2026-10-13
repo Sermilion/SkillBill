@@ -321,7 +321,7 @@ class RoomBoardSource internal constructor(
             val selectionStarted = monotonicNanos()
             val rows = try {
               val query = candidateQuery(section, cutoff.toString(), observedAt.toString(),
-                afterTime, afterId, filter, PAGE_SIZE, historyFilter)
+                afterTime, afterId, filter, CANDIDATE_PAGE_SIZE, historyFilter)
               val shape = Triple(session, section, historyFilter)
               val plan = accessPlans.getOrPut(shape) { queryPlan(query.sql) }
               accounting.accessPlanIndexSearches = plan.first
@@ -342,7 +342,7 @@ class RoomBoardSource internal constructor(
             accounting.projectionSubmitted += rows.size
             val projection = try {
               existingSnapshot(runtime) { runtime.ideStatusService.projectBoardSelection(rows.map { it.id }, WorkBoardRequest(
-                WorkBoardWindow.entries.single { it.wireValue == retention.cliValue }, observedAt, PAGE_SIZE)) }
+                WorkBoardWindow.entries.single { it.wireValue == retention.cliValue }, observedAt, CANDIDATE_PAGE_SIZE)) }
             } finally {
               val elapsed = (monotonicNanos() - projectionStarted).coerceAtLeast(0)
               projectionNanos += elapsed
@@ -376,7 +376,7 @@ class RoomBoardSource internal constructor(
               }
               if (result.size == PAGE_SIZE) break
             }
-            exhausted = consumed == rows.size && rows.size < PAGE_SIZE
+            exhausted = consumed == rows.size && rows.size < CANDIDATE_PAGE_SIZE
           }
           val attemptNumber = attemptMetrics.size + 1
           val attemptRows = selectedRows - attemptRowsBefore
@@ -787,6 +787,7 @@ class RoomBoardSource internal constructor(
 
   private companion object {
     const val PAGE_SIZE = 10
+    const val CANDIDATE_PAGE_SIZE = PAGE_SIZE + 1
     const val CANDIDATE_BUDGET = 40
     const val MAX_FAILURE_CAUSES = 16
   }

@@ -69,10 +69,9 @@ fun HistoryWindow(state: DashboardState, model: DashboardModel, onClose: () -> U
     Text("Finished within ${state.settings.retention.cliValue}", color = muted)
     state.sectionProblems[WorkSection.HISTORY]?.let { Text(it.summary, color = amber) }
     if (loadState == ListLoadState.INITIAL_LOADING) Text("Loading history...", color = muted)
-    if (loadState == ListLoadState.REFRESHING) Text("Refreshing history...", color = muted)
     LazyColumn(Modifier.weight(1f), state = scroll) {
       items(items, key = { it.identity }) { PopoverWorkRow(it, state.selected == it.identity, now, state.stale) { model.select(it.identity); onClose() } }
-      item { PageFooter(hasMore, loadState == ListLoadState.APPENDING, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(WorkSection.HISTORY) } }
+      if (hasMore) item { PageFooter(hasMore, loadState == ListLoadState.APPENDING, loadState == ListLoadState.APPEND_FAILED) { model.loadMore(WorkSection.HISTORY) } }
     }
   }
 }

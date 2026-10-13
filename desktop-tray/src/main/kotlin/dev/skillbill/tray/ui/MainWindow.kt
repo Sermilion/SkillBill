@@ -52,7 +52,6 @@ fun MainWindow(model: DashboardModel, onHistory: () -> Unit, onSettings: () -> U
           val loadState = state.sectionLoadStates[section] ?: if (section in state.sections) ListLoadState.READY else ListLoadState.INITIAL_LOADING
           val sectionLoading = loadState == ListLoadState.INITIAL_LOADING || loadState == ListLoadState.APPENDING
           item { DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (title == "Needs you") 4.dp else 14.dp, bottom = 6.dp)) }
-          if (loadState == ListLoadState.REFRESHING) item { Text("Refreshing...", Modifier.padding(start = 16.dp, bottom = 6.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
           if (rows.isEmpty() && loadState !in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING, ListLoadState.FAILED)) item { Text(if (filter.isBlank()) "No ${title.lowercase()}" else "No matching work", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
           if (rows.isNotEmpty()) item {
             val visibleRows = when (title) { "Needs you" -> 3; "Goals running" -> 4; else -> 2 }
