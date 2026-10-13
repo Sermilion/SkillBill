@@ -75,7 +75,10 @@ compose.desktop {
         org.jetbrains.compose.desktop.application.dsl.TargetFormat.Rpm)
       packageName = "Skill Bill"
       packageVersion = "0.1.0"
-      macOS { bundleID = "dev.skillbill.tray" }
+      macOS {
+        bundleID = "dev.skillbill.tray"
+        packageBuildVersion = "1.0.0"
+      }
       windows { menuGroup = "Skill Bill" }
       linux { appCategory = "Development" }
     }

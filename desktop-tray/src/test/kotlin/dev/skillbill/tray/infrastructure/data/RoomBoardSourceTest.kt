@@ -248,7 +248,7 @@ class RoomBoardSourceTest {
         }).currentProcess()
         unit.goalRunnerControls.persistControlState("older-goal", GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir}",
           executionLease = GoalRunnerExecutionLease(1, "owned-test", process.hostIdentity, process.bootIdentity, process.pid,
-            process.processBirthToken, now, now.plusSeconds(300))))
+            process.processBirthToken, now, now.plusSeconds(3600))))
         unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "live", now.minusSeconds(3600), "live-branch"))
         repeat(5000) { index ->
           val record = unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "done-$index", now.minusSeconds(30), "branch-$index"))

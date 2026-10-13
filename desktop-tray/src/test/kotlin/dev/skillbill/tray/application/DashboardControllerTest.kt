@@ -42,6 +42,9 @@ class DashboardControllerTest {
         while (model.state.value.sectionLoadStates[WorkSection.PHASES] != ListLoadState.READY_EMPTY) delay(10)
       }
       assertTrue(model.state.value.board?.items.isNullOrEmpty())
+      kotlinx.coroutines.withTimeout(2000) {
+        while (model.state.value.boardLoading) delay(10)
+      }
 
       model.refresh()
       kotlinx.coroutines.withTimeout(2000) { refreshStarted.await() }
