@@ -70,8 +70,8 @@ fun MainWindow(model: DashboardModel, onSettings: () -> Unit) {
                 TextButton(onClick = model::refresh) { Text("Retry", color = amber) }
               }
             } }
-            if (loadState in setOf(ListLoadState.INITIAL_LOADING, ListLoadState.REFRESHING)) item {
-              Text(if (loadState == ListLoadState.REFRESHING) "Updating..." else "Loading...", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
+            if (loadState == ListLoadState.INITIAL_LOADING) item {
+              Text("Loading...", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall)
             }
             if (rows.isEmpty() && section in state.sections) item { Text(if (filter.isNotBlank()) "No matching work" else if (section == WorkSection.HISTORY) "No finished work" else "No ${title.lowercase()}", Modifier.padding(start = 16.dp, bottom = 8.dp), color = muted, style = MaterialTheme.typography.bodySmall) }
             if (section == WorkSection.HISTORY) {

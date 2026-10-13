@@ -37,6 +37,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
   val state by model.state.collectAsState()
   val scroll = rememberScrollState()
   val item = detail.item
+  val planning = item.planningState?.let { it != "prepared" } == true
   val subtaskKeys = detail.subtasks.map { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" } +
     listOfNotNull("${item.identity.repositoryIdentity}:${item.identity.id}:goal-finish".takeIf { detail.goalFinishPipeline.isNotEmpty() })
   val dependencyKeys = detail.dependencies.map { "${item.identity.repositoryIdentity}:${item.identity.id}:dependency:${it.subtaskId}:${it.dependency.subtaskId}" } +
@@ -93,7 +94,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
       DetailMetric(if (item.family == WorkFamily.FEATURE_GOAL) "Subtask" else "Phase", item.currentSubtaskId?.let { "$it/${total ?: "?"}" } ?: item.phaseId ?: "Goal finish", "${detail.completeCount} complete · ${detail.pendingCount} pending", Modifier.weight(1f), item.currentSubtaskId != null)
       MetricDivider()
-      DetailMetric(if (standalone) "Step" else "Phase", if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel, item.phaseExecution?.label() ?: "", Modifier.weight(1f))
+      DetailMetric(if (standalone) "Step" else "Phase", if (planning) item.currentStepLabel else if (item.family == WorkFamily.FEATURE_GOAL && item.currentSubtaskId == null) item.currentStepLabel else item.currentPhaseId ?: detail.currentPhase ?: item.currentStepLabel, if (planning) "${item.plannedSubtasks ?: 0}/${item.totalSubtasks ?: "?"} plans saved" else item.phaseExecution?.label() ?: "", Modifier.weight(1f))
       MetricDivider()
       val duration = detailDuration(item, now, frozen, timing?.goalMs)
       DetailMetric(duration.label, duration.value, duration.note, Modifier.weight(1f))
@@ -111,26 +112,26 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
             Text("from the goal manifest", color = dim, fontFamily = mono, fontSize = 11.sp)
           }
           Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            detail.subtasks.forEach { task -> Box(Modifier.weight(1f).height(5.dp).background(subtaskColor(task.status, task.id.toString() == item.currentSubtaskId), RoundedCornerShape(2.dp))) }
+            detail.subtasks.forEach { task -> Box(Modifier.weight(1f).height(5.dp).background(subtaskColor(task.status), RoundedCornerShape(2.dp))) }
           }
           LazyColumn(state = subtaskScroll, modifier = Modifier.heightIn(max = 420.dp)) {
             items(detail.subtasks, key = { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" }) { task ->
-              val active = task.id.toString() == item.currentSubtaskId && item.lifecycle == Lifecycle.ACTIVE
+              val active = !planning && task.id.toString() == item.currentSubtaskId && item.lifecycle == Lifecycle.ACTIVE && item.currentStepId !in setOf("pending_launch", "initializing")
               val pending = task.status == "pending"
               val taskInk = ink.copy(alpha = if (pending && !active) .55f else 1f)
-              Row(Modifier.fillMaxWidth().background(if (active) green.copy(alpha = .06f) else Color.Transparent, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(task.id.toString().padStart(2, '0'), Modifier.width(18.dp), color = if (active) green else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
+              Row(Modifier.fillMaxWidth().background(if (active) blue.copy(alpha = .06f) else Color.Transparent, RoundedCornerShape(8.dp)).padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(task.id.toString().padStart(2, '0'), Modifier.width(18.dp), color = if (active) blue else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
                 WorkDot(if (active) Lifecycle.ACTIVE else if (task.status in setOf("complete", "completed")) Lifecycle.TERMINAL else if (task.status == "blocked") Lifecycle.BLOCKED else if (task.status == "failed") Lifecycle.FAILED else Lifecycle.IDLE, Modifier.padding(top = 5.dp))
                 Column(Modifier.weight(1f)) {
                   Text(task.name, color = taskInk, fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 18.75.sp)
                   val validation = detail.validation.firstOrNull { it.subtaskId == task.id }
-                  Text(listOfNotNull(task.status, task.commitSha?.take(7), if (active) item.phaseExecution?.let { "${it.phaseId} ${it.label()}" } else null, if (active) item.currentModel else null, if (active) item.currentEffort else null, validation?.passed?.let { if (it) "validation passed" else "validation failed" }, task.dependencies.takeIf { pending && it.isNotEmpty() }?.joinToString { "after #${it.subtaskId}" }).joinToString(" · "), color = if (active) green else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
+                  Text(listOfNotNull(task.status, task.commitSha?.take(7), if (active) item.phaseExecution?.let { "${it.phaseId} ${it.label()}" } else null, if (active) item.currentModel else null, if (active) item.currentEffort else null, validation?.passed?.let { if (it) "validation passed" else "validation failed" }, task.dependencies.takeIf { pending && it.isNotEmpty() }?.joinToString { "after #${it.subtaskId}" }).joinToString(" · "), color = if (active) blue else dim, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
                   task.blockedReason?.let { SelectionContainer { Text(it, color = orange, fontSize = 12.sp, lineHeight = 18.sp) } }
                   if (active && detail.phases.isNotEmpty()) FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     detail.phases.forEach { phase -> PhaseChip(phase.id, phase.finished, phase.id == item.currentPhaseId, phase.attemptCount) }
                   }
                 }
-                if (active) Text(subtaskTime, color = green, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
+                if (active) Text(subtaskTime, color = blue, fontFamily = mono, fontSize = 11.sp, lineHeight = 16.5.sp)
               }
               HorizontalDivider(color = border)
             }
@@ -268,8 +269,8 @@ private fun MetadataPanel(title: String, rows: List<Pair<String, String>>) {
   HorizontalDivider(color = border)
 }
 
-private fun subtaskColor(status: String, active: Boolean): Color = when {
-  active -> green
+private fun subtaskColor(status: String): Color = when {
+  status == "in_progress" -> blue
   status == "complete" || status == "completed" -> green
   status == "blocked" -> orange
   status == "failed" -> red
