@@ -1,5 +1,24 @@
 # SQLite boundary decisions
 
+## [2026-10-17] Refuse phase settlement before INSERT when the workflow cannot settle
+Context: MCP and other upsert callers can reach feature_task_phase_settlements without the phase-loop fences, including against a missing or already terminal runtime row.
+Decision: Read the runtime workflow row and worker lease before INSERT. Missing rows return WORKFLOW_NOT_SETTLEABLE; terminal status returns TERMINAL_WORKFLOW; lower attempts, takeover-reserved, expired, or wrong-phase leases refuse with the matching reason.
+Reason: A completed envelope must not create a settlement for closed or unowned work. Attempt and lease identity belong at this durable gate because the table key is only workflow, phase, and attempt.
+Alternatives considered: Enforcing attempt and owner only in the phase loop, rejected because direct upserts would bypass it.
+Revisit when: subtask 2 needs parent-aggregate settlement rules, or a named recovery path must settle a terminal workflow.
+
+## [2026-10-17] Treat settlement ON CONFLICT as identity compare, never overwrite
+Context: INSERT ON CONFLICT DO NOTHING reports success even when the existing row has a different kind or envelope.
+Decision: After a zero-row insert, reread the key. Matching kind and envelope is IdenticalReplay; any mismatch is Conflicting and leaves the first envelope in place.
+Reason: A contradictory upsert is not idempotent because SQL succeeded. The first accepted settlement is the authoritative phase output.
+Alternatives considered: ON CONFLICT DO UPDATE, rejected because it would replace an accepted output with a later envelope.
+
+## [2026-10-17] Ordinary terminal workflow writes accept only an identical snapshot
+Context: A late running or blocked save on a completed, failed, or abandoned row reopened work and cleared finished_at.
+Decision: When the current runtime row is terminal, compare status, current step, steps and artifacts JSON, and finished_at. Identical snapshots return Accepted; any other proposed row is TerminalRefused, and the SQL upsert also refuses non-identical replacement.
+Reason: Intentional recovery uses named resume or continue with retained identity, not an ordinary overwrite. Identical replay must not fail retries.
+Revisit when: a supported recovery API needs to replace a terminal snapshot in place.
+
 ## [2026-10-09] Use an append-only migration for phase-strategy telemetry columns
 Context: Version 39 was already recorded on existing databases, while later telemetry writes required two columns it had once added.
 Decision: Register a uniquely named v49 migration and reuse the idempotent nullable-column helper for both columns.

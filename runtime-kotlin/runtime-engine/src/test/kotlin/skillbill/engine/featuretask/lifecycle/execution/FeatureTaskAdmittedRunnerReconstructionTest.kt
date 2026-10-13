@@ -46,7 +46,7 @@ class FeatureTaskAdmittedRunnerReconstructionTest {
       harness.recorder.appendCheckpointIdentity(
         AppendCheckpointIdentityArgs(
           workflowId = WORKFLOW_ID, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-          phaseId = "plan", loopId = null, generation = 0,
+          phaseId = "plan", attemptCount = 1, loopId = null, generation = 0,
           parentSha =
             "a".repeat(
               40,

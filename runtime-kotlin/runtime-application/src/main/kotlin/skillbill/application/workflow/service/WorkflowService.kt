@@ -39,6 +39,7 @@ import skillbill.application.workflow.persist.withGoalObservabilityArtifacts
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
@@ -52,6 +53,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
@@ -240,8 +242,28 @@ class WorkflowService(
       )
     val updatedRecord = engine.updateRecord(family.definition, existing, effectiveInput)
     workflowSnapshotValidator.validate(updatedRecord, family.definition.workflowName)
-    unitOfWork.workflowStates.save(family, updatedRecord)
-    val updated = unitOfWork.workflowStates.get(family, request.workflowId) ?: updatedRecord
+    val updated =
+      if (updatedRecord == existing) {
+        existing
+      } else {
+        when (unitOfWork.workflowStates.saveOrdinary(family, updatedRecord)) {
+          WorkflowStateWriteResult.Accepted ->
+            unitOfWork.workflowStates.get(family, request.workflowId)
+              ?: return WorkflowUpdatePersistence(
+                WorkflowUpdateResult.Error(request.workflowId, "Workflow update was not persisted."),
+                pendingProjection = null,
+              )
+          WorkflowStateWriteResult.TerminalRefused ->
+            return WorkflowUpdatePersistence(
+              WorkflowUpdateResult.Error(
+                request.workflowId,
+                "Workflow update conflicts with the current terminal state.",
+                diagnosticCode = WorkflowFailureCode.TERMINAL_WORKFLOW_WRITE_REFUSED,
+              ),
+              pendingProjection = null,
+            )
+        }
+      }
     if (runtimeInput.updated) {
       engine.syncDecompositionParentRuntime(
         family,

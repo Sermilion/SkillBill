@@ -5,15 +5,15 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import java.time.Instant
 
 @Inject
 class SqliteFeatureTaskPhaseSettlementRepository(
   private val databaseSessionFactory: DatabaseSessionFactory,
 ) : FeatureTaskPhaseSettlementRepository {
-  override fun upsert(settlement: FeatureTaskPhaseSettlement) {
+  override fun upsert(settlement: FeatureTaskPhaseSettlement): FeatureTaskPhaseSettlementWriteResult =
     databaseSessionFactory.transaction { it.featureTaskPhaseSettlements.upsert(settlement) }
-  }
 
   override fun find(
     workflowId: String,

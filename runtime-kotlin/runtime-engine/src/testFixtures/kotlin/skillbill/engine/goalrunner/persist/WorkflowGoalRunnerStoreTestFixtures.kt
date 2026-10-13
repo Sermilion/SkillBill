@@ -1,11 +1,17 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.application.testHarnessClock
+import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.ports.config.NoopRepoLocalConfigPort
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
@@ -111,7 +117,31 @@ fun engineWorkflowGoalRunnerManifestStore(
       ),
   )
 
-private fun testExecutionPlanCompatibility(): FeatureTaskRuntimeExecutionPlanCompatibility {
+private fun testFeatureTaskRuntimeCrashReconciler(
+  database: DatabaseSessionFactory,
+  workerSupervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+  clock: Clock = testHarnessClock,
+): FeatureTaskRuntimeCrashReconciler =
+  FeatureTaskRuntimeCrashReconciler(
+    database,
+    workerSupervisor,
+    NoopRuntimeDiagnostics,
+    clock,
+    testExecutionPlanCompatibility(),
+    FeatureTaskRuntimeExecutionPlanResolver(
+      statusProjectionPhaseStrategies(),
+      FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator()),
+      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      ValidationGateResolver(NoopRuntimeDiagnostics),
+      NoopWorkflowGitOperations,
+      NoopRepoLocalConfigPort,
+      database,
+      testExecutionPlanCompatibility(),
+      NoopRuntimeDiagnostics,
+    ),
+  )
+
+fun testExecutionPlanCompatibility(): FeatureTaskRuntimeExecutionPlanCompatibility {
   val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
   return FeatureTaskRuntimeExecutionPlanCompatibility(
     FeatureTaskRuntimeExecutionPlanCodec(validator),
@@ -126,6 +156,8 @@ fun engineWorkflowGoalRunnerOutcomeStore(
   workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   clock: Clock,
   artifactPorts: OutcomeStoreTestArtifactPorts,
+  crashReconciler: FeatureTaskRuntimeCrashReconciler =
+    testFeatureTaskRuntimeCrashReconciler(database, workerSupervisor, clock),
 ): WorkflowGoalRunnerOutcomeStore =
   WorkflowGoalRunnerOutcomeStore(
     database = database,
@@ -133,6 +165,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     wireArtifactValidator = artifactPorts.wireArtifactValidator(),
     gitOperations = gitOperations,
     workerSupervisor = workerSupervisor,
+    crashReconciler = crashReconciler,
     clock = clock,
   )
 

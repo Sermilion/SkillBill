@@ -2,12 +2,11 @@ package skillbill.ports.featuretask
 
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import java.time.Instant
 
 object UnavailableFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlementRepository {
-  override fun upsert(settlement: FeatureTaskPhaseSettlement) {
-    unavailable<Unit>()
-  }
+  override fun upsert(settlement: FeatureTaskPhaseSettlement): FeatureTaskPhaseSettlementWriteResult = unavailable()
 
   override fun find(
     workflowId: String,

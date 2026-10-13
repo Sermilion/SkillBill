@@ -910,7 +910,8 @@ class IdeStatusService(
       record.workerOwnership()?.let { owner ->
         when (workerSupervisor.inspect(owner)) {
           FeatureTaskRuntimeProcessInspection.NotRunning,
-          is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
+          FeatureTaskRuntimeProcessInspection.ForeignHost,
+          FeatureTaskRuntimeProcessInspection.PidReused,
           -> true
           FeatureTaskRuntimeProcessInspection.ExactLive,
           is FeatureTaskRuntimeProcessInspection.Unsupported,

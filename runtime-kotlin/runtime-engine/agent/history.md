@@ -1,3 +1,13 @@
+## [2026-10-17] SKILL-422 subtask 1: durable state and ownership
+Areas: runtime-engine featuretask phase record/settlement, worker, crash reconcile; goalrunner stop and persist; runtime-infra/sqlite workflow and phase settlements; runtime-domain WorkflowEngine; runtime-ports, runtime-contracts, runtime-mcp, runtime-application workflow
+- Inventory, transition matrix, and findings F1–F7 classify every discovered store and artifact family, then rank terminal reopen, settlement overwrite, stale-owner writes, and false STOPPED.
+- Ordinary workflow writes refuse a non-identical terminal replacement. Settlement INSERT is gated on missing, terminal, stale-attempt, and lease state, then compares kind and envelope after ON CONFLICT DO NOTHING. reusable
+- Owned phase writes require the current worker token and generation. Goal stop keeps the operator pause and reports incomplete termination unless process exit is confirmed.
+- Pattern: expected ownership refusals are sealed write results, not overwrites or false success. Direct MCP settlement uses the same store admission as the phase loop.
+- Breaking: callers must handle TerminalRefused and settlement Conflicting or Refused; a successful SQL upsert is not an accepted settlement. Limits: no new recovery-history artifact (F4); not every artifact writer uses recorder fencing (F5); T1-03 fault injection and test execution wait for validate; parent and projection closure is subtask 2.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented (source-based; tests unexecuted)
+
 ## [2026-10-10] SKILL-417 subtask 2: ide-status live goal projection
 Areas: runtime-engine work (IdeStatusProjector, IdeStatusProjectorMapping, IdeStatusSelectionPolicy); runtime-engine work tests; runtime-core di IdeStatusReadSnapshotConcurrencyTest
 - Selection ranks a goal-authoritative live candidate above a non-goal PAUSED peer before runSequence, so a parked parent seq 20 no longer beats a live FEATURE_GOAL on monitor.

@@ -25,6 +25,9 @@ internal fun goalStopExitCode(result: GoalRunnerStopVerbResult): Int =
     GoalRunnerStopStatus.NO_LIVE_LEASE,
     -> 0
     GoalRunnerStopStatus.IDENTITY_MISMATCH,
+    GoalRunnerStopStatus.FOREIGN_HOST,
+    GoalRunnerStopStatus.PID_REUSED,
+    GoalRunnerStopStatus.UNINSPECTABLE,
     GoalRunnerStopStatus.CHANGED_TARGET,
     GoalRunnerStopStatus.TERMINATION_INCOMPLETE,
     GoalRunnerStopStatus.NOT_FOUND,

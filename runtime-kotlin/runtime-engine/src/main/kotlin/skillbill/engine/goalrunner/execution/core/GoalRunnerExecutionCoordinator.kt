@@ -107,22 +107,22 @@ class DefaultGoalRunnerExecutionCoordinator(
     childAdmission: GoalRunnerChildExecutionPlanAdmission?,
   ): LeaseAcquisition {
     val existing = manifestStore.executionLease(parentWorkflowId)
-    val expectedOwnerToken =
+    val expectedOwner =
       when (val claim = existing?.let { reclaimableOwnerToken(parentWorkflowId, it) }) {
         null -> null
-        is LeaseClaim.Reclaimable -> claim.ownerToken
+        is LeaseClaim.Reclaimable -> existing
         is LeaseClaim.Blocked ->
           return LeaseAcquisition.AlreadyRunning(alreadyRunningReason(parentWorkflowId, claim.detail))
       }
     val lease = newLease(existing, supervisor.currentProcess())
     val acquired =
       if (childAdmission == null) {
-        manifestStore.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
+        manifestStore.acquireExecutionLeaseFenced(parentWorkflowId, lease, expectedOwner)
       } else {
-        manifestStore.acquireExecutionLeaseWithChildAdmission(
+        manifestStore.acquireExecutionLeaseWithChildAdmissionFenced(
           parentWorkflowId,
           lease,
-          expectedOwnerToken,
+          expectedOwner,
           childAdmission,
         )
       }
@@ -330,12 +330,17 @@ class DefaultGoalRunnerExecutionCoordinator(
     parentWorkflowId: String,
     existing: GoalRunnerExecutionLease,
   ): LeaseClaim {
-    if (leaseIsExpired(existing)) return LeaseClaim.Reclaimable(existing.ownerToken)
     val ownership = existing.asWorkerOwnership(parentWorkflowId)
     return when (supervisor.inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning -> LeaseClaim.Reclaimable(existing.ownerToken)
-      FeatureTaskRuntimeProcessInspection.ExactLive -> reclaimAfterLiveOwner(existing, ownership)
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> blockedClaim(OWNER_AMBIGUOUS)
+      FeatureTaskRuntimeProcessInspection.ExactLive ->
+        if (leaseIsExpired(existing)) {
+          blockedClaim(OWNER_LIVE_EXPIRED)
+        } else {
+          reclaimAfterLiveOwner(existing, ownership)
+        }
+      FeatureTaskRuntimeProcessInspection.ForeignHost -> blockedClaim(OWNER_FOREIGN_HOST)
+      FeatureTaskRuntimeProcessInspection.PidReused -> blockedClaim(OWNER_PID_REUSED)
       is FeatureTaskRuntimeProcessInspection.Unsupported -> blockedClaim(OWNER_UNINSPECTABLE)
     }
   }
@@ -354,7 +359,8 @@ class DefaultGoalRunnerExecutionCoordinator(
     return when (supervisor.inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning -> LeaseClaim.Reclaimable(existing.ownerToken)
       FeatureTaskRuntimeProcessInspection.ExactLive -> blockedClaim(OWNER_LIVE)
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> blockedClaim(OWNER_AMBIGUOUS)
+      FeatureTaskRuntimeProcessInspection.ForeignHost -> blockedClaim(OWNER_FOREIGN_HOST)
+      FeatureTaskRuntimeProcessInspection.PidReused -> blockedClaim(OWNER_PID_REUSED)
       is FeatureTaskRuntimeProcessInspection.Unsupported -> blockedClaim(OWNER_UNINSPECTABLE)
     }
   }
@@ -393,9 +399,11 @@ class DefaultGoalRunnerExecutionCoordinator(
     val LEASE_DURATION: Duration = Duration.ofSeconds(30)
     val DUPLICATE_LAUNCH_WINDOW: Duration = Duration.ofSeconds(60)
     const val HEARTBEAT_SECONDS: Long = 10
-    const val OWNER_AMBIGUOUS = "the existing process owner is ambiguous"
+    const val OWNER_FOREIGN_HOST = "the existing process owner belongs to a different host"
+    const val OWNER_PID_REUSED = "the existing process owner pid was reused"
     const val OWNER_UNINSPECTABLE = "the existing process owner cannot be inspected"
     const val OWNER_LIVE = "another goal runner process is live"
+    const val OWNER_LIVE_EXPIRED = "the expired goal runner process is still live"
 
     val SHUTDOWN_WRITE_BUDGET: Duration = Duration.ofSeconds(2)
   }

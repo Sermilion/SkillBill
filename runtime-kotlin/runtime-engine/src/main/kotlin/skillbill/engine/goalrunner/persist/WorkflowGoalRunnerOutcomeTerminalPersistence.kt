@@ -90,28 +90,7 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     workflowId: String,
     issueKey: String,
     subtaskId: Int,
-  ): GoalRunnerStoredOutcome? {
-    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
-    val row =
-      ownership?.let { workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) }
-    val continuation =
-      row
-        ?.takeIf { it.workflowStatus.workflowStatus() == WorkflowStatus.RUNNING }
-        ?.let { DurableWorkflowArtifacts.fromMap(it.toSnapshot().artifacts).goalContinuation() }
-        ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
-    if (ownership == null || row == null || continuation == null) return null
-    return crashReconcileExpiredWorkerToResumable(
-      CrashReconcileExpiredWorkerRequest(
-        workflowStates = workflowStates,
-        workerSupervisor = workerSupervisor,
-        workflowId = workflowId,
-        continuation = continuation,
-        ownership = ownership,
-        row = row,
-      ),
-      clock,
-    )
-  }
+  ): GoalRunnerStoredOutcome? = null
 
   fun persistMeasuredCompletion(
     workflowStates: WorkflowStateRepository,

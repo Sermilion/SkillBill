@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.persist
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -14,6 +15,7 @@ import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
+import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.validatedGoalReviewPasses
@@ -25,12 +27,18 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -55,6 +63,7 @@ class WorkflowGoalRunnerOutcomeStore
     wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
     gitOperations: WorkflowGitOperations,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
+    crashReconciler: FeatureTaskRuntimeCrashReconciler,
     clock: Clock,
   ) : GoalRunnerWorkflowOutcomeStore,
     GoalRunnerAttemptLedgerStore {
@@ -82,7 +91,8 @@ class WorkflowGoalRunnerOutcomeStore
         workflowSnapshotValidator,
         wireArtifactValidator,
       )
-    private val terminal = WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations)
+    private val terminal =
+      WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations, crashReconciler)
     private val review = WorkflowGoalRunnerReviewBridge(database, engine)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile)
     private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites)
@@ -194,6 +204,7 @@ internal class WorkflowGoalRunnerTerminalBridge(
   private val database: DatabaseSessionFactory,
   private val terminalPersistence: WorkflowGoalRunnerOutcomeTerminalPersistence,
   private val gitOperations: WorkflowGitOperations,
+  private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
 ) : GoalRunnerTerminalOutcomeStore {
   override fun terminalOutcome(
     workflowId: String,
@@ -209,45 +220,74 @@ internal class WorkflowGoalRunnerTerminalBridge(
     issueKey: String,
     subtaskId: Int,
     repoRoot: Path,
-  ): GoalRunnerStoredOutcome? =
+  ): GoalRunnerStoredOutcome? {
+    val resolvedInTransaction =
+      database.transaction { unitOfWork ->
+        terminalPersistence.displaceStaleBlockedContinuationOutcomeIfPresent(
+          unitOfWork.workflowStates,
+          workflowId,
+          issueKey,
+          subtaskId,
+        )
+        val resolved =
+          terminalPersistence.resolveTerminalOutcome(
+            unitOfWork.workflowStates,
+            workflowId,
+            issueKey,
+            subtaskId,
+          ) {
+            gitOperations.headCommitSha(repoRoot).measuredCommitSha()
+          } ?: return@transaction null
+        val recovered =
+          terminalPersistence.recoverResolvedCommitPushBlock(
+            workflowStates = unitOfWork.workflowStates,
+            identity = GoalSubtaskIdentity(workflowId, issueKey, subtaskId),
+            repoRoot = repoRoot,
+            outcome = resolved,
+          ) ?: resolved
+        recovered.also { outcome ->
+          terminalPersistence.persistMeasuredCompletion(
+            unitOfWork.workflowStates,
+            workflowId,
+            issueKey,
+            subtaskId,
+            outcome,
+          )
+        }
+      }
+    if (resolvedInTransaction != null) return resolvedInTransaction
+    val reconciled = crashReconciler.reconcile(workflowId)
+    if (reconciled.reconciledCount <= 0) return null
+    val reconcilableOutcome =
+      database.read { unitOfWork ->
+        val row =
+          unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+            ?: return@read null
+        val continuation =
+          DurableWorkflowArtifacts.fromMap(row.toSnapshot().artifacts).goalContinuation()
+            ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
+            ?: return@read null
+        if (row.workflowStatus.workflowStatus() != WorkflowStatus.RUNNING) return@read null
+        GoalRunnerStoredOutcome(
+          status = GoalRunnerTerminalStatus.RECONCILABLE,
+          workflowId = workflowId,
+          commitSha = null,
+          blockedReason = null,
+          lastResumableStep = row.currentStepId.ifBlank { "preplan" },
+          suppressPr = continuation.suppressPr,
+        )
+      } ?: return null
     database.transaction { unitOfWork ->
-      terminalPersistence.displaceStaleBlockedContinuationOutcomeIfPresent(
+      terminalPersistence.persistMeasuredCompletion(
         unitOfWork.workflowStates,
         workflowId,
         issueKey,
         subtaskId,
+        reconcilableOutcome,
       )
-      val resolved =
-        terminalPersistence.resolveTerminalOutcome(
-          unitOfWork.workflowStates,
-          workflowId,
-          issueKey,
-          subtaskId,
-        ) {
-          gitOperations.headCommitSha(repoRoot).measuredCommitSha()
-        } ?: return@transaction terminalPersistence.crashReconcileToResumable(
-          unitOfWork.workflowStates,
-          workflowId,
-          issueKey,
-          subtaskId,
-        )
-      val recovered =
-        terminalPersistence.recoverResolvedCommitPushBlock(
-          workflowStates = unitOfWork.workflowStates,
-          identity = GoalSubtaskIdentity(workflowId, issueKey, subtaskId),
-          repoRoot = repoRoot,
-          outcome = resolved,
-        ) ?: resolved
-      recovered.also { outcome ->
-        terminalPersistence.persistMeasuredCompletion(
-          unitOfWork.workflowStates,
-          workflowId,
-          issueKey,
-          subtaskId,
-          outcome,
-        )
-      }
     }
+    return reconcilableOutcome
+  }
 
   override fun recoverMissingResultPrefixOutput(
     workflowId: String,

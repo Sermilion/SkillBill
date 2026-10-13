@@ -52,6 +52,11 @@ internal fun phaseRecordsFrom(artifacts: Map<String, Any?>): Map<String, Feature
     FeatureTaskRuntimePhaseRecord.fromArtifactMap(recordMap)
   }
 
+fun featureTaskRuntimePhaseRecordAttemptCount(
+  artifacts: Map<String, Any?>,
+  phaseId: String,
+): Int? = phaseRecordsFrom(artifacts)[phaseId]?.attemptCount
+
 internal fun resolvedBranchFrom(artifacts: Map<String, Any?>): FeatureTaskRuntimeResolvedBranch? {
   if (FEATURE_TASK_RUNTIME_RESOLVED_BRANCH_ARTIFACT_KEY !in artifacts) return null
   val raw = artifacts[FEATURE_TASK_RUNTIME_RESOLVED_BRANCH_ARTIFACT_KEY]

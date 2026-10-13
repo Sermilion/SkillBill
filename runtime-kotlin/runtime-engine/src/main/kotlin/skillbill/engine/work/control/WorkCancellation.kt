@@ -64,13 +64,13 @@ class WorkCancellation(
         item.snapshot.workflowId,
         target.databaseFileObservation,
       ) { matchingRun(status, target) != null }
-    if (stopped.status in
-      setOf(
-        GoalRunnerStopStatus.IDENTITY_MISMATCH,
-        GoalRunnerStopStatus.CHANGED_TARGET,
-        GoalRunnerStopStatus.TERMINATION_INCOMPLETE,
-      )
-    ) {
+    goalRunnerStopWorkControlRejection(stopped.status)?.let {
+      return Interruption.Refused(it)
+    }
+    if (stopped.status == GoalRunnerStopStatus.CHANGED_TARGET) {
+      return Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
+    }
+    if (stopped.status == GoalRunnerStopStatus.TERMINATION_INCOMPLETE) {
       return Interruption.Refused(WorkControlRejection.TERMINATION_INCOMPLETE)
     }
     if (stopped.status == GoalRunnerStopStatus.NOT_FOUND &&
@@ -171,10 +171,12 @@ class WorkCancellation(
         return@transactionFenced Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
       }
       val inspection = worker?.let(supervisor::inspect) ?: FeatureTaskRuntimeProcessInspection.NotRunning
+      val inspectionRejection = processInspectionCancelRejection(inspection)
       val interruption =
-        when (inspection) {
-          FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
-          FeatureTaskRuntimeProcessInspection.ExactLive -> {
+        when {
+          inspectionRejection != null -> Interruption.Refused(inspectionRejection)
+          inspection == FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
+          inspection == FeatureTaskRuntimeProcessInspection.ExactLive -> {
             requireNotNull(worker)
             val reserved =
               if (phase != null) {
@@ -189,7 +191,7 @@ class WorkCancellation(
               }
             if (reserved) Interruption.Reserved(worker) else Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
           }
-          else -> Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
+          else -> Interruption.Unowned
         }
       if (interruption is Interruption.Refused) return@transactionFenced interruption
       if (supersededPhase(phase, unit, clock.instant())) return@transactionFenced interruption
@@ -232,13 +234,19 @@ class WorkCancellation(
       val ownership =
         phase?.workerOwnership()
           ?: workflowId?.let(unit.workflowStates::getFeatureTaskRuntimeWorkerOwnership)
-      if (ownership != null && supervisor.inspect(ownership) != FeatureTaskRuntimeProcessInspection.NotRunning) {
-        return@transaction WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+      if (ownership != null) {
+        when (val rejection = processInspectionWorkControlRejection(supervisor.inspect(ownership))) {
+          null -> Unit
+          else -> return@transaction WorkControlResult.Rejected(rejection)
+        }
       }
       val childId = item.goalStatus?.currentChildWorkflowId
       val childOwner = childId?.let(unit.workflowStates::getFeatureTaskRuntimeWorkerOwnership)
-      if (childOwner != null && supervisor.inspect(childOwner) != FeatureTaskRuntimeProcessInspection.NotRunning) {
-        return@transaction WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
+      if (childOwner != null) {
+        when (val rejection = processInspectionWorkControlRejection(supervisor.inspect(childOwner))) {
+          null -> Unit
+          else -> return@transaction WorkControlResult.Rejected(rejection)
+        }
       }
       val now = clock.instant()
       if (phase != null) {

@@ -3,13 +3,19 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementRefusalReason
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
+import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import java.nio.file.Files
 import java.sql.Connection
+import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -130,6 +136,86 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
     )
 
     assertEquals(unknown, repo.find("wftr-unknown", "implement", 1)?.kind)
+  }
+
+  @Test
+  fun `terminal workflow refuses a new settlement row`() {
+    val tempDir = Files.createTempDirectory("phase-settlement-terminal")
+    val dbPath = tempDir.resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val row =
+        workflowRow(
+          workflowId = "wftr-settle-terminal",
+          sessionId = "ftr-settle-terminal",
+          workflowName = "bill-feature-task",
+          currentStepId = "pr",
+          mode = RUNTIME,
+        )
+      store.saveFeatureTaskWorkflow(row, RUNTIME)
+      store.saveFeatureTaskWorkflow(
+        row.copy(
+          workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+          finishedAt = "2026-10-13T12:00:00Z",
+        ),
+        RUNTIME,
+      )
+    }
+    val repo =
+      SqliteFeatureTaskPhaseSettlementRepository(
+        sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
+      )
+    val result =
+      repo.upsert(
+        FeatureTaskPhaseSettlement(
+          workflowId = "wftr-settle-terminal",
+          phaseId = "implement",
+          attempt = 1,
+          kind = FeatureTaskPhaseSettlementKind.Complete,
+          envelopeJson = """{"status":"completed"}""",
+          recordedAt = Instant.now().toString(),
+        ),
+      )
+    assertEquals(
+      FeatureTaskPhaseSettlementWriteResult.Refused(
+        FeatureTaskPhaseSettlementRefusalReason.TERMINAL_WORKFLOW,
+      ),
+      result,
+    )
+    assertNull(repo.find("wftr-settle-terminal", "implement", 1))
+  }
+
+  @Test
+  fun `contradictory retry keeps the accepted settlement`() {
+    val tempDir = Files.createTempDirectory("phase-settlement-conflict")
+    val dbPath = tempDir.resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).close()
+    val repo =
+      SqliteFeatureTaskPhaseSettlementRepository(
+        sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
+      )
+    val accepted =
+      FeatureTaskPhaseSettlement(
+        workflowId = "wftr-conflict",
+        phaseId = "implement",
+        attempt = 2,
+        kind = FeatureTaskPhaseSettlementKind.Complete,
+        envelopeJson = """{"status":"completed","produced_outputs":{"value":"accepted"}}""",
+        recordedAt = "2026-10-13T19:00:00Z",
+      )
+    repo.upsert(accepted)
+
+    val conflict =
+      repo.upsert(
+        accepted.copy(
+          kind = FeatureTaskPhaseSettlementKind.Block,
+          envelopeJson = """{"status":"blocked","produced_outputs":{"value":"late"}}""",
+          recordedAt = "2026-10-13T19:01:00Z",
+        ),
+      )
+
+    assertEquals(FeatureTaskPhaseSettlementWriteResult.Conflicting, conflict)
+    assertEquals(accepted, repo.find("wftr-conflict", "implement", 2))
   }
 
   private fun tableExists(

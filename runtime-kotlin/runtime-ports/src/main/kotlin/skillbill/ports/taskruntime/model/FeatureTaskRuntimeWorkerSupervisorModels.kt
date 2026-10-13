@@ -12,7 +12,9 @@ sealed interface FeatureTaskRuntimeProcessInspection {
 
   data object NotRunning : FeatureTaskRuntimeProcessInspection
 
-  data class OwnershipMismatch(val reason: String) : FeatureTaskRuntimeProcessInspection
+  data object ForeignHost : FeatureTaskRuntimeProcessInspection
+
+  data object PidReused : FeatureTaskRuntimeProcessInspection
 
   data class Unsupported(val reason: String) : FeatureTaskRuntimeProcessInspection
 }
@@ -21,7 +23,8 @@ fun FeatureTaskRuntimeProcessInspection.isConfirmedDead(): Boolean =
   when (this) {
     FeatureTaskRuntimeProcessInspection.NotRunning -> true
     FeatureTaskRuntimeProcessInspection.ExactLive -> false
-    is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> false
+    FeatureTaskRuntimeProcessInspection.ForeignHost -> false
+    FeatureTaskRuntimeProcessInspection.PidReused -> false
     is FeatureTaskRuntimeProcessInspection.Unsupported -> false
   }
 

@@ -568,7 +568,22 @@ class RoomBoardSource internal constructor(
           is WorkControlResult.LaunchFailed -> Outcome.Failure(Problem(ProblemCode.UNKNOWN, result.reason))
           is WorkControlResult.Rejected -> {
             RuntimeDiagnostics.record("goal_control_${result.reason.name.lowercase()}")
-            Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "This goal changed or cannot accept this control. Refresh before retrying.", StorageFailure.STALE_QUERY))
+            val message =
+              when (result.reason) {
+                WorkControlRejection.FOREIGN_HOST ->
+                  "The runner process is on another host. Refresh before retrying stop or pause."
+                WorkControlRejection.PID_REUSED ->
+                  "The runner PID was reused by a different process. Refresh before retrying stop or pause."
+                WorkControlRejection.UNINSPECTABLE ->
+                  "The runner process could not be inspected. Refresh before retrying stop or pause."
+                WorkControlRejection.IDENTITY_MISMATCH ->
+                  "The runner identity no longer matches this goal. Refresh before retrying stop or pause."
+                WorkControlRejection.OWNERSHIP_MISMATCH ->
+                  "The runner's identity could not be confirmed. Refresh before retrying."
+                else ->
+                  "This goal changed or cannot accept this control. Refresh before retrying."
+              }
+            Outcome.Failure(Problem(ProblemCode.STALE_TARGET, message, StorageFailure.STALE_QUERY))
           }
       }
     }
@@ -592,13 +607,24 @@ class RoomBoardSource internal constructor(
         }
         is WorkControlResult.Rejected -> {
           RuntimeDiagnostics.record("run_action_${result.reason.name.lowercase()}")
-          val message = when (result.reason) {
-            WorkControlRejection.AGENT_REQUIRED -> "Choose an agent to start this run."
-            WorkControlRejection.BRANCH_CHANGED -> "Check out this run's recorded branch before starting it again."
-            WorkControlRejection.TERMINATION_INCOMPLETE -> "The runner has not stopped yet. Refresh and retry cancellation."
-            WorkControlRejection.OWNERSHIP_MISMATCH -> "The runner's identity could not be confirmed. Refresh before retrying."
-            else -> "This run changed or cannot accept this action. Refresh before retrying."
-          }
+          val message =
+            when (result.reason) {
+              WorkControlRejection.AGENT_REQUIRED -> "Choose an agent to start this run."
+              WorkControlRejection.BRANCH_CHANGED -> "Check out this run's recorded branch before starting it again."
+              WorkControlRejection.TERMINATION_INCOMPLETE ->
+                "The runner has not stopped yet. Refresh and retry cancellation."
+              WorkControlRejection.FOREIGN_HOST ->
+                "The runner process is on another host. Refresh before retrying cancellation."
+              WorkControlRejection.PID_REUSED ->
+                "The runner PID was reused by a different process. Refresh before retrying cancellation."
+              WorkControlRejection.UNINSPECTABLE ->
+                "The runner process could not be inspected. Refresh before retrying cancellation."
+              WorkControlRejection.IDENTITY_MISMATCH ->
+                "The runner identity no longer matches this run. Refresh before retrying cancellation."
+              WorkControlRejection.OWNERSHIP_MISMATCH ->
+                "The runner's identity could not be confirmed. Refresh before retrying."
+              else -> "This run changed or cannot accept this action. Refresh before retrying."
+            }
           Outcome.Failure(Problem(ProblemCode.STALE_TARGET, message))
         }
       }

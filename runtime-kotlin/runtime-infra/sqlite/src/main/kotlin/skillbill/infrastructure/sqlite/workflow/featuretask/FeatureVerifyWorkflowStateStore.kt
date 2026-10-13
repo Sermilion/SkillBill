@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
+import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.schema.FEATURE_VERIFY_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.getWorkflowRow
@@ -9,6 +10,8 @@ import skillbill.infrastructure.sqlite.workflow.listWorkflowRows
 import skillbill.infrastructure.sqlite.workflow.upsertWorkflowRow
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.isTerminal
 import java.sql.Connection
 import java.time.Clock
 
@@ -18,6 +21,11 @@ internal class FeatureVerifyWorkflowStateStore(
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
 ) {
   fun saveWorkflow(row: WorkflowStateRecord) {
+    val current = connection.getWorkflowRow("feature_verify_workflows", row.workflowId)
+    if (current != null && WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true) {
+      if (current.sameTerminalSnapshot(row)) return
+      throw terminalWorkflowWriteRefusedError(row.workflowId)
+    }
     connection.upsertWorkflowRow(
       tableName = "feature_verify_workflows",
       row = row,
@@ -62,3 +70,7 @@ internal class FeatureVerifyWorkflowStateStore(
       }
     }
 }
+
+private fun WorkflowStateRecord.sameTerminalSnapshot(other: WorkflowStateRecord): Boolean =
+  workflowStatus == other.workflowStatus && currentStepId == other.currentStepId &&
+    stepsJson == other.stepsJson && artifactsJson == other.artifactsJson && finishedAt == other.finishedAt

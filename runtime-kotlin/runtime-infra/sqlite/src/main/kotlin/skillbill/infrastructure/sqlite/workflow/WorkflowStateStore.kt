@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.workflow
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.goalrunner.model.GoalAttemptLedgerStatusEntry
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskExecutionLookupStore
@@ -23,12 +24,15 @@ import skillbill.ports.workflow.model.FeatureTaskRuntimePhaseLedgerPage
 import skillbill.ports.workflow.model.FeatureTaskRuntimeWorkflowHeader
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.isTerminal
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.Clock
@@ -107,16 +111,48 @@ internal class WorkflowStateStore private constructor(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
   ) {
-    val source =
-      when (family) {
-        WorkflowFamily.VERIFY -> verifyStore.getWorkflow(snapshot.workflowId)
-        WorkflowFamily.TASK_RUNTIME ->
-          featureTaskStore.getFeatureTaskWorkflowAsMode(snapshot.workflowId, FeatureTaskWorkflowMode.RUNTIME)
-      }
-    saveRecord(family, snapshot.toRecord(source))
+    if (saveOrdinary(family, snapshot) == WorkflowStateWriteResult.TerminalRefused) {
+      throw terminalWorkflowWriteRefusedError(snapshot.workflowId)
+    }
+  }
+
+  override fun saveOrdinary(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ): WorkflowStateWriteResult {
+    val source = currentRecord(family, snapshot.workflowId)
+    val record = snapshot.toRecord(source)
+    val terminalResult = terminalOrdinaryWriteResult(source, record)
+    if (terminalResult != null) return terminalResult
+    persistRecord(family, record)
+    return WorkflowStateWriteResult.Accepted
   }
 
   override fun saveRecord(
+    family: WorkflowFamily,
+    record: WorkflowStateRecord,
+  ) {
+    val current = currentRecord(family, record.workflowId)
+    when (terminalOrdinaryWriteResult(current, record)) {
+      WorkflowStateWriteResult.TerminalRefused -> throw terminalWorkflowWriteRefusedError(record.workflowId)
+      WorkflowStateWriteResult.Accepted -> return
+      null -> persistRecord(family, record)
+    }
+  }
+
+  private fun terminalOrdinaryWriteResult(
+    current: WorkflowStateRecord?,
+    proposed: WorkflowStateRecord,
+  ): WorkflowStateWriteResult? {
+    if (current == null || WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal != true) return null
+    return if (current.sameTerminalSnapshot(proposed)) {
+      WorkflowStateWriteResult.Accepted
+    } else {
+      WorkflowStateWriteResult.TerminalRefused
+    }
+  }
+
+  private fun persistRecord(
     family: WorkflowFamily,
     record: WorkflowStateRecord,
   ) {
@@ -126,6 +162,20 @@ internal class WorkflowStateStore private constructor(
         featureTaskStore.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
     }
   }
+
+  private fun currentRecord(
+    family: WorkflowFamily,
+    workflowId: String,
+  ): WorkflowStateRecord? =
+    when (family) {
+      WorkflowFamily.VERIFY -> verifyStore.getWorkflow(workflowId)
+      WorkflowFamily.TASK_RUNTIME ->
+        featureTaskStore.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+    }
+
+  private fun WorkflowStateRecord.sameTerminalSnapshot(other: WorkflowStateRecord): Boolean =
+    workflowStatus == other.workflowStatus && currentStepId == other.currentStepId &&
+      stepsJson == other.stepsJson && artifactsJson == other.artifactsJson && finishedAt == other.finishedAt
 
   override fun get(
     family: WorkflowFamily,

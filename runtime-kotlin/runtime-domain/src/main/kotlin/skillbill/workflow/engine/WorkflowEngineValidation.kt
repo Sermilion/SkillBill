@@ -3,7 +3,9 @@ package skillbill.workflow.engine
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.workflow.engine.model.WorkflowDefinition
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.engine.model.isTerminalStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 
@@ -14,6 +16,7 @@ internal fun validateWorkflowOpen(
 
 internal fun validateWorkflowUpdate(
   definition: WorkflowDefinition,
+  existing: WorkflowStateSnapshot,
   input: WorkflowUpdateInput,
 ): String? {
   if (input.workflowStatus !in definition.workflowStatusEnums) {
@@ -22,6 +25,10 @@ internal fun validateWorkflowUpdate(
   }
   if (input.currentStepId.isNotBlank()) {
     validateWorkflowEnum(input.currentStepId, definition.stepIds, "current_step_id")?.let { return it }
+  }
+  if (definition.isTerminalStatus(existing.workflowStatus) && input.workflowStatus != existing.workflowStatus) {
+    return "A terminal workflow cannot transition from '${existing.workflowStatus.wireValue}' " +
+      "to '${input.workflowStatus.wireValue}' through an ordinary update."
   }
   return input.stepUpdates?.let { validateWorkflowStepUpdates(definition, it.asEntries()) }
 }

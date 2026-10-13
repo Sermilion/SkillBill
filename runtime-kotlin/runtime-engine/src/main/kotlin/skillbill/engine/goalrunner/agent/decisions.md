@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-17] Stop reports incomplete termination unless process exit is confirmed
+Context: Goal stop paused first, then mapped inspect or terminate failure to STOPPED, so operators saw success while the owned process was still live or unverified.
+Decision: After reserveStop writes the operator pause, only confirmed process exit yields STOPPED. Inspect or terminate failure, or a still-live owner, returns TERMINATION_INCOMPLETE with termination_failed or owner_still_live. The pause JSON stays.
+Reason: Pause is the operator request; STOPPED is an observed exit. Fabricating STOPPED hides a live worker and makes a later takeover look like a fresh start.
+Alternatives considered: Reporting STOPPED whenever pause persisted, rejected because pause does not prove the process died.
+
 ## [2026-10-10] Rewrite status extras together on live goal finalization
 Context: GoalRunnerStatusProjectionRuntimeInputs keeps currentStepOverride and latestLivenessSignal as separate extras. The assembler already copied currentStepId from the goal_finalization declared event and left latestLivenessSignal on the parked parent row.
 Decision: When the parent lease is LIVE and the latest declared event is goal_finalization, copy both currentStepId and latestLivenessSignal from the same parent progress rewrite, using resolvedLivenessSignal(liveStepId).

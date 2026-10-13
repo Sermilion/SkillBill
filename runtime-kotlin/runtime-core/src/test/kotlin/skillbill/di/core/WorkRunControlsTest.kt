@@ -315,7 +315,7 @@ class WorkRunControlsTest {
   fun `cancel terminates only the exact recorded owner and refuses an identity mismatch`() {
     listOf(
       FeatureTaskRuntimeProcessInspection.ExactLive,
-      FeatureTaskRuntimeProcessInspection.OwnershipMismatch("PID belongs to another process"),
+      FeatureTaskRuntimeProcessInspection.PidReused,
     ).forEach { initial ->
       establishTemporarySchemaReadiness("owned-phase-cancel").use { fixture ->
         val component = component(fixture.tempDir, fixture.dbPath)

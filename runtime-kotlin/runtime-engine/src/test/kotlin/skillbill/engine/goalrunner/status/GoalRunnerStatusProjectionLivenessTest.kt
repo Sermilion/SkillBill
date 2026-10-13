@@ -45,7 +45,8 @@ class GoalRunnerStatusProjectionLivenessTest {
       listOf(
         FeatureTaskRuntimeProcessInspection.ExactLive to ExecutionLiveness.LIVE,
         FeatureTaskRuntimeProcessInspection.NotRunning to ExecutionLiveness.IDLE,
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("process birth differs") to ExecutionLiveness.IDLE,
+        FeatureTaskRuntimeProcessInspection.PidReused to ExecutionLiveness.PID_REUSED,
+        FeatureTaskRuntimeProcessInspection.ForeignHost to ExecutionLiveness.FOREIGN_HOST,
         FeatureTaskRuntimeProcessInspection.Unsupported("inspection unavailable") to ExecutionLiveness.UNKNOWN,
       )
     for ((inspection, expected) in cases) {

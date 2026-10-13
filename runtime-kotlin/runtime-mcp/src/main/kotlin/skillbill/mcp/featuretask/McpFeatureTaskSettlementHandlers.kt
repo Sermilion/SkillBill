@@ -1,9 +1,10 @@
 package skillbill.mcp.featuretask
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.review.ReviewAccountingPayloadKeys
 import skillbill.contracts.system.UpdateCheckPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
+import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
+import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.mcp.shared.McpComponent
@@ -49,12 +50,25 @@ internal fun featureTaskPhaseBlock(
 private fun McpToolArguments.requiredAttempt(): Int =
   optionalInt(SharedPayloadKeys.ATTEMPT) ?: invalid(SharedPayloadKeys.ATTEMPT, "is required")
 
-private fun FeatureTaskPhaseSettlementAcknowledgment.toWireMap(): Map<String, Any?> =
-  linkedMapOf(
-    SharedPayloadKeys.STATUS to status,
-    SharedPayloadKeys.WORKFLOW_ID to workflowId,
-    SharedPayloadKeys.PHASE_ID to phaseId,
-    SharedPayloadKeys.ATTEMPT to attempt,
-    ReviewAccountingPayloadKeys.KIND to kind.wireValue,
-    McpToolPayloadKeys.ENVELOPE to envelope,
-  )
+private fun FeatureTaskPhaseSettlementAcknowledgment.toWireMap(): Map<String, Any?> {
+  val wire =
+    linkedMapOf<String, Any?>(
+      SharedPayloadKeys.STATUS to status.wireValue,
+      SharedPayloadKeys.WORKFLOW_ID to workflowId,
+      SharedPayloadKeys.PHASE_ID to phaseId,
+      SharedPayloadKeys.ATTEMPT to attempt,
+      FeatureTaskPhaseSettlementPayloadKeys.KIND to kind.wireValue,
+    )
+  val settledEnvelope = envelope
+  if (settledEnvelope != null) {
+    wire[McpToolPayloadKeys.ENVELOPE] = settledEnvelope
+  }
+  val code = diagnosticCode
+  if (code != null) {
+    wire[McpToolPayloadKeys.DIAGNOSTIC_CODE] = code
+  }
+  if (status != FeatureTaskPhaseSettlementAckStatus.OK) {
+    wire[McpToolPayloadKeys.IS_ERROR] = true
+  }
+  return wire
+}

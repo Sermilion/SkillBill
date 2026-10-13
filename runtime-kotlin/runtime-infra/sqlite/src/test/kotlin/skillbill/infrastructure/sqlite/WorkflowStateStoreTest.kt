@@ -11,6 +11,8 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -616,6 +618,45 @@ class WorkflowStateStoreTest {
       val written = assertNotNull(store.get(WorkflowFamily.VERIFY, "wfv-upgrade"))
       assertEquals(WORKFLOW_STATE_CONTRACT_VERSION, written.contractVersion)
       assertEquals(WorkflowStatus.ABANDONED, written.workflowStatus)
+    }
+  }
+
+  @Test
+  fun `late running update cannot reopen a completed runtime workflow`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-workflow-terminal-reopen").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val initialRow =
+        workflowRow(
+          workflowId = "wftr-terminal-reopen",
+          sessionId = "ftr-terminal-reopen",
+          workflowName = "bill-feature-task",
+          currentStepId = "implement",
+          mode = RUNTIME,
+        )
+      store.saveFeatureTaskWorkflow(initialRow, RUNTIME)
+      store.saveFeatureTaskWorkflow(
+        initialRow.copy(
+          workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+          currentStepId = "pr",
+          finishedAt = "2026-10-13T12:00:00Z",
+        ),
+        RUNTIME,
+      )
+      val terminal = assertNotNull(store.getFeatureTaskWorkflowAsMode("wftr-terminal-reopen", RUNTIME))
+      val lateReopen =
+        terminal.toSnapshot().copy(
+          workflowStatus = WorkflowStatus.RUNNING,
+          currentStepId = "implement",
+          finishedAt = null,
+        )
+      assertEquals(
+        WorkflowStateWriteResult.TerminalRefused,
+        store.saveOrdinary(WorkflowFamily.TASK_RUNTIME, lateReopen),
+      )
+      val afterReopen = assertNotNull(store.getFeatureTaskWorkflowAsMode("wftr-terminal-reopen", RUNTIME))
+      assertEquals(WorkflowStatus.COMPLETED.wireValue, afterReopen.workflowStatus)
+      assertEquals("2026-10-13T12:00:00Z", afterReopen.finishedAt)
     }
   }
 

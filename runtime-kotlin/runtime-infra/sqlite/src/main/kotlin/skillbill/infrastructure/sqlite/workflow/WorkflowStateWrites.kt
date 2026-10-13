@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.workflow
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_READABLE_CONTRACT_VERSIONS
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.requireUnchangedExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -80,14 +81,26 @@ internal fun Connection.upsertWorkflowRow(
         ELSE $tableName.state_entered_at_estimated
       END,
       finished_at = CASE
+        WHEN $tableName.workflow_status IN ($terminalWorkflowStatusSqlValues)
+          THEN $tableName.finished_at
         WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
           THEN COALESCE(NULLIF(excluded.finished_at, ''), CURRENT_TIMESTAMP)
         ELSE NULL
       END
+    WHERE $tableName.workflow_status NOT IN ($terminalWorkflowStatusSqlValues)
+      OR (
+        $tableName.workflow_status = excluded.workflow_status
+        AND $tableName.current_step_id = excluded.current_step_id
+        AND $tableName.steps_json = excluded.steps_json
+        AND $tableName.artifacts_json = excluded.artifacts_json
+        AND $tableName.finished_at IS excluded.finished_at
+      )
     """.trimIndent(),
   ).use { statement ->
     statement.bindWorkflowRow(row, defaultContractVersion, insertionTimestamp)
-    statement.executeUpdate()
+    if (statement.executeUpdate() != 1) {
+      throw terminalWorkflowWriteRefusedError(row.workflowId)
+    }
   }
 }
 
@@ -126,12 +139,22 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
         ELSE feature_task_workflows.state_entered_at_estimated
       END,
       finished_at = CASE
+        WHEN feature_task_workflows.workflow_status IN ($terminalWorkflowStatusSqlValues)
+          THEN feature_task_workflows.finished_at
         WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
           THEN COALESCE(NULLIF(excluded.finished_at, ''), CURRENT_TIMESTAMP)
         ELSE NULL
       END,
       mode = excluded.mode,
       implementation_skill = excluded.implementation_skill
+    WHERE feature_task_workflows.workflow_status NOT IN ($terminalWorkflowStatusSqlValues)
+      OR (
+        feature_task_workflows.workflow_status = excluded.workflow_status
+        AND feature_task_workflows.current_step_id = excluded.current_step_id
+        AND feature_task_workflows.steps_json = excluded.steps_json
+        AND feature_task_workflows.artifacts_json = excluded.artifacts_json
+        AND feature_task_workflows.finished_at IS excluded.finished_at
+      )
     """.trimIndent(),
   ).use { statement ->
     statement.bindFeatureTaskWorkflowRow(
@@ -141,7 +164,9 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
       request.defaultContractVersion,
       insertionTimestamp,
     )
-    statement.executeUpdate()
+    if (statement.executeUpdate() != 1) {
+      throw terminalWorkflowWriteRefusedError(row.workflowId)
+    }
   }
 }
 

@@ -196,6 +196,7 @@ class FeatureTaskRuntimeRunPreparation(
           reviewBaseline = initial.baseline,
           fieldAdoption = fieldAdoption,
         ),
+      admitted = requireNotNull(request.admittedExecution),
     )
   }
 
@@ -257,6 +258,7 @@ class FeatureTaskRuntimeRunPreparation(
             ),
           reviewBaseline = requireNotNull(context.reviewBaseline),
         ),
+      admitted = requireNotNull(request.admittedExecution),
     )
   }
 
@@ -271,7 +273,12 @@ class FeatureTaskRuntimeRunPreparation(
         codeReviewMode = continuation?.continuation?.codeReviewMode ?: selectedMode,
         agentAddonSelection = request.agentAddonSelection.persisted,
       )
-    val durable = runInvariantsStore.resolve(request.workflowId, proposed) ?: proposed
+    val durable =
+      runInvariantsStore.resolve(
+        request.workflowId,
+        proposed,
+        requireNotNull(request.admittedExecution),
+      ) ?: proposed
     val durableContinuation = continuation?.continuation
     if (durableContinuation != null && durable.codeReviewMode != durableContinuation.codeReviewMode) {
       return blocked(

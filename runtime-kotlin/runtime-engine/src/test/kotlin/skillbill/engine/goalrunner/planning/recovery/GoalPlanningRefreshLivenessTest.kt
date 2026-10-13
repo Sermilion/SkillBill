@@ -9,6 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -60,6 +61,7 @@ class GoalPlanningRefreshLivenessTest {
       resolveChildExecutionLiveness(
         state.manifest.subtasks.first(),
         harness.recorder.phaseQuery,
+        harness.supervisor,
         clock,
         NoopRuntimeDiagnostics,
       ),
@@ -182,7 +184,8 @@ private class RefreshLivenessHarness(clock: Clock) {
       NoopRuntimeDiagnostics,
     )
   val diagnostics = RecordingRefreshLivenessDiagnostics()
-  val liveness = ChildAwareGoalPlanningRefreshLiveness(recorder.phaseQuery, clock, diagnostics)
+  val supervisor = NoopFeatureTaskRuntimeWorkerSupervisor
+  val liveness = ChildAwareGoalPlanningRefreshLiveness(recorder.phaseQuery, supervisor, clock, diagnostics)
 
   fun seedRuntimeChild(
     workflowId: String,

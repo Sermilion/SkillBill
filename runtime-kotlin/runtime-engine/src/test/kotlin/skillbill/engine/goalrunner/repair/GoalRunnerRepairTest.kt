@@ -1597,7 +1597,7 @@ internal class GoalRunnerRepairLeaseClearanceTest : GoalRunnerRepairFixtures() {
       FeatureTaskRuntimeProcessIdentity("host", "boot", 1, "birth")
 
     override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
-      FeatureTaskRuntimeProcessInspection.OwnershipMismatch("the existing process owner is ambiguous")
+      FeatureTaskRuntimeProcessInspection.ForeignHost
 
     override fun awaitExit(
       ownership: FeatureTaskRuntimeWorkerOwnership,

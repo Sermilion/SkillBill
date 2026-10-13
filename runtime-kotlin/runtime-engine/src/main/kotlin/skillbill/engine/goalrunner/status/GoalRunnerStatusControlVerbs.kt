@@ -116,9 +116,9 @@ class GoalRunnerStatusControlVerbs(
     val ownership = lease.asWorkerOwnership(reservation.parentWorkflowId)
     return runCatching {
       when (workerSupervisor.inspect(ownership)) {
-        is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
-        is FeatureTaskRuntimeProcessInspection.Unsupported,
-        -> outcome(GoalRunnerStopStatus.IDENTITY_MISMATCH)
+        FeatureTaskRuntimeProcessInspection.ForeignHost -> outcome(GoalRunnerStopStatus.FOREIGN_HOST)
+        FeatureTaskRuntimeProcessInspection.PidReused -> outcome(GoalRunnerStopStatus.PID_REUSED)
+        is FeatureTaskRuntimeProcessInspection.Unsupported -> outcome(GoalRunnerStopStatus.UNINSPECTABLE)
         FeatureTaskRuntimeProcessInspection.NotRunning -> {
           outcome(
             if (releaseStoppedLease(reservation.parentWorkflowId, lease, databaseFileObservation)) {

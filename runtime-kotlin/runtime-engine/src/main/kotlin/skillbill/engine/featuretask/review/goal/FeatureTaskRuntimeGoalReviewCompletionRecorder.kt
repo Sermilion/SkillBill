@@ -1,9 +1,14 @@
 package skillbill.engine.featuretask.review.goal
 
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
+import skillbill.engine.featuretask.phase.record.completedPhaseRequestMatches
+import skillbill.engine.featuretask.phase.record.phaseEventAdmissible
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
@@ -42,11 +47,37 @@ import java.time.Clock
 class FeatureTaskRuntimeGoalReviewCompletionRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   private val clock: Clock,
 ) {
   fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean {
     val request = validatedGoalReviewPhaseState(completion)
     return database.transaction { unitOfWork ->
+      persistCompletedGoalReview(unitOfWork, request, completion)
+    }
+  }
+
+  fun completeOwnedGoalReviewPhase(
+    completion: GoalReviewPhaseCompletionRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean {
+    val request = validatedGoalReviewPhaseState(completion)
+    return runtimeOwnedPersistence.requiredWrite(
+      seam = "FeatureTaskRuntimeGoalReviewCompletionRecorder.completeGoalReviewPhase",
+      expected = "runtime-owned goal review phase completion",
+    ) { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
+        return@requiredWrite false
+      }
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
+          ?: return@requiredWrite false
+      val existingRecords = decodePhaseRecords(record.artifacts)
+      val previous = existingRecords[request.phaseId]
+      if (previous?.status == WorkflowStepStatus.COMPLETED) {
+        return@requiredWrite completedPhaseRequestMatches(request, previous)
+      }
+      if (!phaseEventAdmissible(request, previous, phaseStart = false)) return@requiredWrite false
       persistCompletedGoalReview(unitOfWork, request, completion)
     }
   }

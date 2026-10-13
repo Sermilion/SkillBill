@@ -99,7 +99,7 @@ class FeatureTaskRuntimeRunnerExecute(
     val telemetrySessionId = lifecycleTelemetry.started(runRequest)
     val observability =
       FeatureTaskRuntimeRunObservability(
-        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, runRequest.admittedExecution),
+        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, requireNotNull(runRequest.admittedExecution)),
         runRequest,
         diagnostics,
       )

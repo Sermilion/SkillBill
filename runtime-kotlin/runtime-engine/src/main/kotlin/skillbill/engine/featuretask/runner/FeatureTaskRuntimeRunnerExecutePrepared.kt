@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -46,6 +47,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   private val launchOutcomes: FeatureTaskRuntimeLaunchOutcomes,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
+  private val database: DatabaseSessionFactory,
 ) {
   internal fun driveExecutePreparedRunLoop(
     runRequest: FeatureTaskRuntimeRunRequest,
@@ -74,8 +76,13 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
         specSource,
         executionPlan,
         strategies,
-        DurablePhaseRunGoal(goalContinuationRecorder),
-        DurablePhaseRunSettlements(phaseSettlementService),
+        DurablePhaseRunGoal(goalContinuationRecorder, requireNotNull(runRequest.admittedExecution)),
+        DurablePhaseRunSettlements(
+          database,
+          requireNotNull(runRequest.admittedExecution),
+          clock,
+          phaseSettlementService,
+        ),
         DurablePhaseRunCheckpoints(gitOperations),
         durableLaunch,
         clock,
@@ -88,6 +95,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
             workflowId = runRequest.workflowId,
             gitOperations = gitOperations,
             repoRoot = runRequest.repoRoot,
+            admitted = requireNotNull(runRequest.admittedExecution),
           )
       ) {
         is RemediationBaseBlocked ->

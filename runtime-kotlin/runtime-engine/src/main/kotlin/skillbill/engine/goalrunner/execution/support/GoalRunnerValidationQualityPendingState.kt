@@ -15,15 +15,15 @@ class GoalRunnerValidationQualityPendingState(
   private fun control(): GoalRunnerControlState = manifestStore.controlState(parentWorkflowId)
 
   private fun update(transform: (GoalRunnerControlState) -> GoalRunnerControlState) {
-    val current = control()
-    manifestStore.persistControlState(parentWorkflowId, transform(current))
+    manifestStore.updateControlState(parentWorkflowId, transform)
   }
 
   fun validationQualityRetryCount(subtaskId: Int): Int = control().validationQualityRetriesBySubtask[subtaskId] ?: 0
 
   fun incrementValidationQualityRetry(subtaskId: Int): Int {
-    val next = validationQualityRetryCount(subtaskId) + 1
+    var next = 0
     update { state ->
+      next = (state.validationQualityRetriesBySubtask[subtaskId] ?: 0) + 1
       state.copy(validationQualityRetriesBySubtask = state.validationQualityRetriesBySubtask + (subtaskId to next))
     }
     return next
@@ -39,9 +39,9 @@ class GoalRunnerValidationQualityPendingState(
   }
 
   fun takePendingReAttemptCause(subtaskId: Int): String? {
-    val current = control()
-    val cause = current.pendingReAttemptCauseBySubtask[subtaskId] ?: return null
+    var cause: String? = null
     update { state ->
+      cause = state.pendingReAttemptCauseBySubtask[subtaskId]
       state.copy(pendingReAttemptCauseBySubtask = state.pendingReAttemptCauseBySubtask - subtaskId)
     }
     return cause
@@ -57,9 +57,9 @@ class GoalRunnerValidationQualityPendingState(
   }
 
   fun takePendingCausingLoopEntry(subtaskId: Int): String? {
-    val current = control()
-    val entry = current.pendingCausingLoopEntryBySubtask[subtaskId] ?: return null
+    var entry: String? = null
     update { state ->
+      entry = state.pendingCausingLoopEntryBySubtask[subtaskId]
       state.copy(pendingCausingLoopEntryBySubtask = state.pendingCausingLoopEntryBySubtask - subtaskId)
     }
     return entry

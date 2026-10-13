@@ -12,6 +12,7 @@ import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -185,6 +186,14 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
 
   open override fun heartbeatFeatureTaskRuntimeWorker(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean = false
 
+  open override fun bindFeatureTaskRuntimeWorkerPhaseCoordinates(
+    workflowId: String,
+    ownerToken: String,
+    generation: Long,
+    phaseId: String,
+    phaseAttempt: Int,
+  ): Boolean = false
+
   open override fun releaseFeatureTaskRuntimeWorker(
     workflowId: String,
     ownerToken: String,
@@ -214,6 +223,14 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
   ) = Unit
+
+  open override fun saveOrdinary(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ): WorkflowStateWriteResult {
+    save(family, snapshot)
+    return WorkflowStateWriteResult.Accepted
+  }
 
   open override fun saveRecord(
     family: WorkflowFamily,

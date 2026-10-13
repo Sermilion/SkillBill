@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -20,15 +22,37 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
 ) {
   private val engine: WorkflowEngine = WorkflowEngine()
 
+  fun recordOwnedDecomposeTerminal(
+    workflowId: String,
+    terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)
+    }
+
   fun recordDecomposeTerminal(
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean =
     database.transaction { unitOfWork ->
+      recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)
+    }
+
+  private fun recordDecomposeTerminalInTransaction(
+    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    workflowId: String,
+    terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
+  ): Boolean {
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction false
+          ?: return false
       val updated =
         engine.updateRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -50,8 +74,8 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
           ),
         )
       unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
-      true
-    }
+      return true
+  }
 
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     database.read { unitOfWork ->

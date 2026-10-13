@@ -191,9 +191,21 @@ class WorkflowGoalRunnerManifestStore
       lease: GoalRunnerExecutionLease,
       expectedOwnerToken: String?,
     ): Boolean =
-      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken) { unitOfWork ->
+      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken, null) { unitOfWork ->
         requireCompatibleChildPlan(unitOfWork, parentWorkflowId, null, executionAdmission)
       }
+
+    override fun acquireExecutionLeaseFenced(
+      parentWorkflowId: String,
+      lease: GoalRunnerExecutionLease,
+      expectedOwner: GoalRunnerExecutionLease?,
+    ): Boolean =
+      controls.acquireExecutionLease(
+        parentWorkflowId,
+        lease,
+        expectedOwner?.ownerToken,
+        expectedOwner?.generation,
+      ) { unitOfWork -> requireCompatibleChildPlan(unitOfWork, parentWorkflowId, null, executionAdmission) }
 
     override fun acquireExecutionLeaseWithChildAdmission(
       parentWorkflowId: String,
@@ -201,7 +213,22 @@ class WorkflowGoalRunnerManifestStore
       expectedOwnerToken: String?,
       childAdmission: GoalRunnerChildExecutionPlanAdmission,
     ): Boolean =
-      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken) { unitOfWork ->
+      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken, null) { unitOfWork ->
+        requireCompatibleChildPlan(unitOfWork, parentWorkflowId, childAdmission, executionAdmission)
+      }
+
+    override fun acquireExecutionLeaseWithChildAdmissionFenced(
+      parentWorkflowId: String,
+      lease: GoalRunnerExecutionLease,
+      expectedOwner: GoalRunnerExecutionLease?,
+      childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    ): Boolean =
+      controls.acquireExecutionLease(
+        parentWorkflowId,
+        lease,
+        expectedOwner?.ownerToken,
+        expectedOwner?.generation,
+      ) { unitOfWork ->
         requireCompatibleChildPlan(unitOfWork, parentWorkflowId, childAdmission, executionAdmission)
       }
 
@@ -238,6 +265,11 @@ class WorkflowGoalRunnerManifestStore
       parentWorkflowId: String,
       state: GoalRunnerControlState,
     ): GoalRunnerControlState = controls.persistControlState(parentWorkflowId, state)
+
+    override fun updateControlState(
+      parentWorkflowId: String,
+      update: (GoalRunnerControlState) -> GoalRunnerControlState,
+    ): GoalRunnerControlState = controls.updateControlState(parentWorkflowId, update)
 
     override fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState =
       controls.clearRunnerInterruptedPause(parentWorkflowId)

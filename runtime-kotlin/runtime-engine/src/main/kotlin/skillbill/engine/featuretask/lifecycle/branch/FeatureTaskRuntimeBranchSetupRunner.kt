@@ -204,23 +204,24 @@ class FeatureTaskRuntimeBranchSetupRunner(
               baselineOwnedPaths.error,
           )
       }
-    val recorded =
-      recorder.recordResolvedBranch(
-        request.workflowId,
-        FeatureTaskRuntimeResolvedBranch(
-          branch = branch,
-          baseBranch = baseBranch,
-          created = created,
-          reviewBaseSha = immutableBase.reviewBaseSha,
-          baselineUntrackedPaths = immutableBase.baselineUntrackedPaths,
-          baselineOwnedPaths =
-            baselineOwnedPathNames
-              .map(String::trim)
-              .filter(String::isNotBlank)
-              .distinct()
-              .sorted(),
-        ),
+    val resolvedBranch =
+      FeatureTaskRuntimeResolvedBranch(
+        branch = branch,
+        baseBranch = baseBranch,
+        created = created,
+        reviewBaseSha = immutableBase.reviewBaseSha,
+        baselineUntrackedPaths = immutableBase.baselineUntrackedPaths,
+        baselineOwnedPaths =
+          baselineOwnedPathNames
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+            .sorted(),
       )
+    val recorded =
+      request.admittedExecution?.let { admitted ->
+        recorder.recordOwnedResolvedBranch(request.workflowId, resolvedBranch, admitted)
+      } ?: recorder.recordResolvedBranch(request.workflowId, resolvedBranch)
     if (!recorded) {
       return FeatureTaskRuntimeBranchSetupOutcome.blocked(branchSetupNotPersistedBlockedReason(branch))
     }

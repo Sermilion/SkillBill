@@ -36,6 +36,14 @@ internal fun GoalRunnerControlRepository.heartbeatExecutionLease(
   val state = controlState(parentWorkflowId)
   val current = state.executionLease ?: return false
   if (current.ownerToken != lease.ownerToken || current.generation != lease.generation) return false
+  val proposedHeartbeat = lease.heartbeatAtInstant
+  if (!current.expiresAtInstant.isAfter(proposedHeartbeat) ||
+    !lease.expiresAtInstant.isAfter(proposedHeartbeat) ||
+    lease.expiresAtInstant <= current.expiresAtInstant ||
+    lease.heartbeatAtInstant < current.heartbeatAtInstant
+  ) {
+    return false
+  }
   persistControlState(parentWorkflowId, state.advancedBy(lease.heartbeatAt).copy(executionLease = lease))
   return true
 }

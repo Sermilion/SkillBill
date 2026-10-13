@@ -853,6 +853,7 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
       FeatureTaskRuntimeRunInvariantsStore(
         database,
         FeatureTaskRuntimeWorkflowPersistence(database, NoopWorkflowSnapshotValidator),
+        testHarnessClock,
       ),
   )
 
@@ -1021,6 +1022,7 @@ private fun harnessRunner(
         ),
         entry,
       ),
+      deps.database,
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
 }
@@ -1217,6 +1219,7 @@ private class TelemetryExecutePreparedSetup(
         ),
         configuredEntry,
       ),
+      database,
     )
 }
 

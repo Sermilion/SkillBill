@@ -57,7 +57,7 @@ class GoalRunnerExecutionCoordinatorTest {
       )
     val supervisor =
       FakeGoalSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process."),
+        FeatureTaskRuntimeProcessInspection.PidReused,
       )
     val coordinator = testCoordinator(store, supervisor)
 
@@ -163,7 +163,7 @@ class GoalRunnerExecutionCoordinatorTest {
       )
     val supervisor =
       FakeGoalSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("the existing process owner is ambiguous"),
+        FeatureTaskRuntimeProcessInspection.ForeignHost,
       )
     val coordinator = testCoordinator(store, supervisor)
 

@@ -82,7 +82,7 @@ internal class SQLiteUnitOfWork(
   override val databaseFileObservation: DatabaseFileObservation? = null,
 ) : UnitOfWork {
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
-    SqliteFeatureTaskPhaseSettlementStore(connection)
+    SqliteFeatureTaskPhaseSettlementStore(connection, clock, diagnostics)
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)

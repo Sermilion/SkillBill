@@ -48,6 +48,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import java.time.Clock
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -69,6 +70,7 @@ class GoalRunnerStatusProjectionAssembler(
   private val gitOperations: WorkflowGitOperations,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
 ) {
   fun project(
@@ -168,7 +170,7 @@ class GoalRunnerStatusProjectionAssembler(
       currentSubtask?.workflowId?.takeIf(String::isNotBlank)
         ?: return resolveParentExecutionLiveness(parentWorkflowId, durableRead)
     val childLiveness = resolveChildExecutionLiveness(workflowId, durableRead)
-    if (childLiveness == ExecutionLiveness.LIVE || childLiveness == ExecutionLiveness.UNKNOWN) {
+    if (childLiveness != ExecutionLiveness.IDLE) {
       return childLiveness
     }
     return resolveParentExecutionLiveness(parentWorkflowId, durableRead)
@@ -180,7 +182,7 @@ class GoalRunnerStatusProjectionAssembler(
   ): ExecutionLiveness? {
     val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
     val parentLiveness = resolveParentExecutionLiveness(parentWorkflowId, durableRead)
-    if (parentLiveness == ExecutionLiveness.LIVE || parentLiveness == ExecutionLiveness.UNKNOWN) {
+    if (executionLivenessBlocksIdleSafeRefresh(parentLiveness)) {
       return parentLiveness
     }
     return firstBlockingWorkerLiveness(childWorkflowIds, durableRead)
@@ -195,7 +197,7 @@ class GoalRunnerStatusProjectionAssembler(
   ): ExecutionLiveness? =
     workflowIds.firstNotNullOfOrNull { workflowId ->
       resolveChildExecutionLiveness(workflowId, durableRead)
-        .takeIf { it == ExecutionLiveness.LIVE || it == ExecutionLiveness.UNKNOWN }
+        .takeIf { executionLivenessBlocksIdleSafeRefresh(it) }
     }
 
   private fun resolveStatusWorkflowProgress(
@@ -605,15 +607,6 @@ class GoalRunnerStatusProjectionAssembler(
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): ExecutionLiveness =
     when (val inspection = workerSupervisor.inspect(ownership)) {
-      FeatureTaskRuntimeProcessInspection.NotRunning -> ExecutionLiveness.IDLE
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> {
-        diagnostics.info(
-          "seam=goal-status.execution_liveness workflow_id=${ownership.workflowId} " +
-            "value_used=idle reason=${inspection.reason}",
-        )
-        ExecutionLiveness.IDLE
-      }
-      FeatureTaskRuntimeProcessInspection.ExactLive -> ExecutionLiveness.LIVE
       is FeatureTaskRuntimeProcessInspection.Unsupported -> {
         durableRead.recordDegradedRead(
           seam = "goal-status.execution_liveness",
@@ -622,6 +615,8 @@ class GoalRunnerStatusProjectionAssembler(
         )
         ExecutionLiveness.UNKNOWN
       }
+      else ->
+        executionLivenessFromWorkerInspection(ownership, inspection, clock.instant())
     }
 
   private fun resolveActiveAgent(currentSubtask: DecompositionSubtask?): String? {

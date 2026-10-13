@@ -145,10 +145,17 @@ class GoalRunnerPurgeCoordinator(
     childWorkflowIds: List<String>,
   ): String? =
     when (projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)) {
-      ExecutionLiveness.LIVE -> "Goal '$issueKey' is live; refuse purge while a parent or child worker is active."
+      ExecutionLiveness.IDLE, null -> null
+      ExecutionLiveness.LIVE ->
+        "Goal '$issueKey' is live; refuse purge while a parent or child worker is active."
+      ExecutionLiveness.LIVE_EXPIRED ->
+        "Goal '$issueKey' has a live-but-expired lease; refuse purge until ownership is reconciled."
       ExecutionLiveness.UNKNOWN ->
         "Goal '$issueKey' has unknown execution liveness; refuse purge until liveness is known."
-      ExecutionLiveness.IDLE, null -> null
+      ExecutionLiveness.FOREIGN_HOST ->
+        "Goal '$issueKey' has foreign-host ownership; refuse purge until ownership is reconciled."
+      ExecutionLiveness.PID_REUSED ->
+        "Goal '$issueKey' has pid-reused ownership; refuse purge until ownership is reconciled."
     }
 
   private fun planRefusal(
@@ -156,11 +163,17 @@ class GoalRunnerPurgeCoordinator(
     planWorkflowIds: Collection<String>,
   ): String? =
     when (projectionAssembler.resolveWorkerBlockingLiveness(planWorkflowIds)) {
+      ExecutionLiveness.IDLE, null -> null
       ExecutionLiveness.LIVE ->
         "Goal '$issueKey' has a live plan worker; refuse purge while a plan workflow is active."
+      ExecutionLiveness.LIVE_EXPIRED ->
+        "Goal '$issueKey' has a live-but-expired plan worker; refuse purge until ownership is reconciled."
       ExecutionLiveness.UNKNOWN ->
         "Goal '$issueKey' has unknown plan worker liveness; refuse purge until liveness is known."
-      ExecutionLiveness.IDLE, null -> null
+      ExecutionLiveness.FOREIGN_HOST ->
+        "Goal '$issueKey' has foreign-host plan ownership; refuse purge until ownership is reconciled."
+      ExecutionLiveness.PID_REUSED ->
+        "Goal '$issueKey' has pid-reused plan ownership; refuse purge until ownership is reconciled."
     }
 
   private fun ownedDirectories(

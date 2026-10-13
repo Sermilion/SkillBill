@@ -339,6 +339,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       FeatureTaskRuntimeRunInvariantsStore(
         database,
         FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator),
+        testHarnessClock,
       )
     return AdoptionHarness(
       repository = repository,

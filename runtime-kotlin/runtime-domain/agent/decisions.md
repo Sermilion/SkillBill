@@ -1,3 +1,9 @@
+## [2026-10-17] Recover through named resume on the existing workflow row
+Context: Explicit recovery and rerun have no separate recovery-history artifact table.
+Decision: Keep recovery as WorkflowEngine resume or continue on the same workflow id and embedded artifacts. Do not add a recovery ledger in this subtask.
+Reason: A second history table would split identity from the row that already carries steps, artifacts, and session. Named transitions already distinguish intentional recovery from late ordinary writes.
+Revisit when: parent aggregate in subtask 2 requires a shared recovery ledger.
+
 ## [2026-10-10] Measure review quality from prose without constraining reviewers
 Context: SKILL-414 needs precision and recall per review lane, but reviewers write prose findings and review completion must not depend on extracting metadata.
 Decision: Keep the scorer and on-demand runner in the runtime-domain test source set and use ReviewParser.parseReview only as a best-effort reader. Prepend placeholder run/session ids when they are missing. Route uninterpretable text and unlocated findings to curation and label the scores partial.

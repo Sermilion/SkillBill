@@ -67,6 +67,7 @@ class CheckpointHistoryRefusalTest {
                 subtaskId = "2",
                 branch = "feat/SKILL-384",
                 phaseId = "review",
+                attemptCount = 1,
                 loopId = null,
                 generation = 0,
                 parentSha = "a".repeat(40),

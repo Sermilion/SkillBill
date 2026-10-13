@@ -10,6 +10,7 @@ import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.engine.work.observation.workerOwnership
+import skillbill.engine.goalrunner.status.executionLivenessBlocksIdleSafeRefresh
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
@@ -121,7 +122,7 @@ class WorkRunActions(
     val supported = arguments(item, phase, unit, agent ?: SupportedAgent.supportedIds.first()) != null
     val live =
       snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE || liveWorker ||
-        item.goalStatus?.executionLiveness == ExecutionLiveness.LIVE
+        item.goalStatus?.executionLiveness?.let { executionLivenessBlocksIdleSafeRefresh(it) } == true
     return WorkRunOptions(
       !completed && !canceled,
       !completed && !live && supported,

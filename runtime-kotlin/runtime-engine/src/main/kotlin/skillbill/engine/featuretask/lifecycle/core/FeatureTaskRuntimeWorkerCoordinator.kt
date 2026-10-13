@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
@@ -30,6 +31,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
   private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun <T> runOwned(
     workflowId: String,
@@ -43,7 +45,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
     val heartbeats = supervisor.startHeartbeat(heartbeatPlan(workflowId)) { heartbeat(ownership) }
     val result =
       try {
-        block(acquired.execution)
+        block(acquired.execution.withWorkerOwnership(ownership))
       } finally {
         heartbeats.stop()
         database.transaction {
@@ -154,6 +156,14 @@ class FeatureTaskRuntimeWorkerCoordinator(
     reviewSelection: RuntimeReviewSelection?,
   ): AcquiredWorker {
     val inspection = inspectForRecovery(existing)
+    if (inspection == FeatureTaskRuntimeProcessInspection.ExactLive &&
+      !existing.expiresAtInstant.isAfter(clock.instant())
+    ) {
+      diagnostics.info(
+        "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
+          "outcome=live_expired_lease owner_token=${existing.ownerToken}",
+      )
+    }
     var admissionReceipt: RuntimeMigrationReceipt? = null
     val admitted =
       runCatching {
@@ -173,7 +183,22 @@ class FeatureTaskRuntimeWorkerCoordinator(
               existing.ownerToken,
               existing.generation,
             )
-          if (!reserved) error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+          if (!reserved) {
+            val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
+            val leftoverReservation =
+              current != null &&
+                current.workflowId == existing.workflowId &&
+                current.ownerToken == existing.ownerToken &&
+                current.generation == existing.generation &&
+                current.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
+            if (!leftoverReservation) {
+              error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+            }
+            diagnostics.info(
+              "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
+                "outcome=leftover_takeover_reserved owner_token=${existing.ownerToken}",
+            )
+          }
           execution
         }
       }.onFailure {
@@ -225,16 +250,15 @@ class FeatureTaskRuntimeWorkerCoordinator(
     when (inspection) {
       FeatureTaskRuntimeProcessInspection.ExactLive -> Unit
       FeatureTaskRuntimeProcessInspection.NotRunning -> Unit
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch ->
-        if (leaseIsActive(existing)) error(inspection.reason)
+      FeatureTaskRuntimeProcessInspection.ForeignHost ->
+        error("Worker ownership for workflow '${existing.workflowId}' belongs to a different host.")
+      FeatureTaskRuntimeProcessInspection.PidReused ->
+        error("Worker ownership for workflow '${existing.workflowId}' pid was reused.")
       is FeatureTaskRuntimeProcessInspection.Unsupported ->
-        if (leaseIsActive(existing)) error(inspection.reason)
+        error("Worker process inspection for workflow '${existing.workflowId}' is unsupported: ${inspection.reason}")
     }
     return inspection
   }
-
-  private fun leaseIsActive(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
-    ownership.expiresAtInstant.isAfter(clock.instant())
 
   private fun stopExactWorker(existing: FeatureTaskRuntimeWorkerOwnership) {
     supervisor.terminateGracefully(existing)

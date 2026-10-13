@@ -278,7 +278,7 @@ class FeatureTaskContinuationAdmissionTest {
         recorder.appendCheckpointIdentity(
           AppendCheckpointIdentityArgs(
             workflowId = WORKFLOW_ID, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-            phaseId = "review", loopId = null, generation = 0, parentSha = "a".repeat(40),
+            phaseId = "review", attemptCount = 1, loopId = null, generation = 0, parentSha = "a".repeat(40),
             ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
           ),
         ),

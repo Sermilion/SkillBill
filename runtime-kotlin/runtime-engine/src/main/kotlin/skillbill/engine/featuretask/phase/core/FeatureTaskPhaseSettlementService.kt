@@ -5,6 +5,8 @@ import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAcknowledgment
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
@@ -12,11 +14,13 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelo
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaim
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -34,7 +38,7 @@ class FeatureTaskPhaseSettlementService(
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
-        status = "completed",
+        status = WorkflowStepStatus.COMPLETED.wireValue,
         summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
         output = PhaseOutput(value = request.value, prompt = request.prompt),
         verdict = request.verdict?.takeIf(String::isNotBlank),
@@ -58,7 +62,7 @@ class FeatureTaskPhaseSettlementService(
     val envelope =
       NormalizedFeatureTaskRuntimePhaseOutput(
         phaseId = request.phaseId,
-        status = "blocked",
+        status = WorkflowStepStatus.BLOCKED.wireValue,
         summary = truncateSummary(request.reason),
         output = PhaseOutput(value = request.reason),
         verdict = request.verdict?.takeIf(String::isNotBlank),
@@ -107,7 +111,7 @@ class FeatureTaskPhaseSettlementService(
 
   private fun persist(request: PersistRequest): FeatureTaskPhaseSettlementAcknowledgment {
     val envelopeJson = JsonCodec.mapToJsonString(request.envelopeAsMap())
-    repository.upsert(
+    val result = repository.upsert(
       FeatureTaskPhaseSettlement(
         workflowId = request.workflowId,
         phaseId = request.phaseId,
@@ -117,13 +121,23 @@ class FeatureTaskPhaseSettlementService(
         recordedAt = clock.instant().toString(),
       ),
     )
+    val accepted = result == FeatureTaskPhaseSettlementWriteResult.Accepted ||
+      result == FeatureTaskPhaseSettlementWriteResult.IdenticalReplay
     return FeatureTaskPhaseSettlementAcknowledgment(
-      status = "ok",
+      status = if (accepted) FeatureTaskPhaseSettlementAckStatus.OK else FeatureTaskPhaseSettlementAckStatus.ERROR,
       workflowId = request.workflowId,
       phaseId = request.phaseId,
       attempt = request.attempt,
       kind = request.kind,
-      envelope = request.envelope,
+      envelope = request.envelope.takeIf { accepted },
+      diagnosticCode = when (result) {
+        FeatureTaskPhaseSettlementWriteResult.Accepted,
+        FeatureTaskPhaseSettlementWriteResult.IdenticalReplay,
+        -> null
+        FeatureTaskPhaseSettlementWriteResult.Conflicting ->
+          FeatureTaskRuntimeFailureCode.PHASE_SETTLEMENT_CONFLICT.name
+        is FeatureTaskPhaseSettlementWriteResult.Refused -> result.reason.name
+      },
     )
   }
 

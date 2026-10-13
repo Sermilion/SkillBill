@@ -93,6 +93,7 @@ fun testGoalRunnerStatusService(
       gitOperations = ports.gitOperations,
       workerSupervisor = ports.workerSupervisor,
       diagnostics = ports.diagnostics,
+      clock = clock,
       runtimeStatusService = ports.runtimeStatusService,
     )
   return GoalRunnerStatusService(

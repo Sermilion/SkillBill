@@ -272,6 +272,7 @@ internal fun ideStatusService(
         FeatureTaskRuntimeRunInvariantsStore(
           database,
           FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator),
+          testHarnessClock,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )

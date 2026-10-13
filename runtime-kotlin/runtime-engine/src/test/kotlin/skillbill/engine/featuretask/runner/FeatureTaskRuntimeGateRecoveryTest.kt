@@ -170,7 +170,7 @@ class FeatureTaskRuntimeGateRecoveryTest {
       recorder.appendCheckpointIdentity(
         AppendCheckpointIdentityArgs(
           workflowId = WORKFLOW_ID, issueKey = RUNNER_TEST_ISSUE_KEY, subtaskId = "1",
-          branch = "feat/SKILL-384-gates", phaseId = phase, loopId = null, generation = 0,
+          branch = "feat/SKILL-384-gates", phaseId = phase, attemptCount = 1, loopId = null, generation = 0,
           parentSha = "b".repeat(40), ownedPaths = listOf("src/Foo.kt"), commitSha = "a".repeat(40),
         ),
       ),

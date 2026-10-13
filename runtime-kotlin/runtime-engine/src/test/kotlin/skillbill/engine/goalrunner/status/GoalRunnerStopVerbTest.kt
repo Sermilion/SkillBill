@@ -211,12 +211,12 @@ class GoalRunnerStopVerbTest {
     val store = StopFakeManifestStore(lease = liveLease())
     val supervisor =
       RecordingSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("lease was recorded on another boot"),
+        FeatureTaskRuntimeProcessInspection.ForeignHost,
       )
 
     val result = stopService(store, supervisor).stop("SKILL-168", null)
 
-    assertEquals(GoalRunnerStopStatus.IDENTITY_MISMATCH, result.status)
+    assertEquals(GoalRunnerStopStatus.FOREIGN_HOST, result.status)
     assertFalse(result.terminationAttempted)
     assertEquals(listOf("inspect"), supervisor.calls)
   }
@@ -228,7 +228,7 @@ class GoalRunnerStopVerbTest {
 
     val result = stopService(store, supervisor).stop("SKILL-168", null)
 
-    assertEquals(GoalRunnerStopStatus.IDENTITY_MISMATCH, result.status)
+    assertEquals(GoalRunnerStopStatus.UNINSPECTABLE, result.status)
     assertEquals(listOf("inspect"), supervisor.calls)
   }
 

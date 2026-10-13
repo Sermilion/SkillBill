@@ -96,10 +96,23 @@ interface GoalRunnerManifestExecutionCommands {
     expectedOwnerToken: String? = null,
   ): Boolean
 
+  fun acquireExecutionLeaseFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
+  ): Boolean
+
   fun acquireExecutionLeaseWithChildAdmission(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+  ): Boolean
+
+  fun acquireExecutionLeaseWithChildAdmissionFenced(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwner: GoalRunnerExecutionLease?,
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
@@ -143,6 +156,11 @@ interface GoalRunnerManifestControlWrites {
   fun persistControlState(
     parentWorkflowId: String,
     state: GoalRunnerControlState,
+  ): GoalRunnerControlState
+
+  fun updateControlState(
+    parentWorkflowId: String,
+    update: (GoalRunnerControlState) -> GoalRunnerControlState,
   ): GoalRunnerControlState
 
   fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState

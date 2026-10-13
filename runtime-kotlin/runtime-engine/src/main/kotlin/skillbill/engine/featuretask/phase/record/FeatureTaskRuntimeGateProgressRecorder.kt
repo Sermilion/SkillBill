@@ -14,7 +14,10 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import java.time.Clock
 
 interface FeatureTaskRuntimeReadinessEvidencePort {
   fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence?
@@ -39,6 +42,7 @@ interface FeatureTaskRuntimeNoChangePausePort {
 class FeatureTaskRuntimeGateProgressRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  private val clock: Clock,
 ) : FeatureTaskRuntimeReadinessEvidencePort,
   FeatureTaskRuntimeNoChangePausePort {
   fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
@@ -53,11 +57,33 @@ class FeatureTaskRuntimeGateProgressRecorder(
       decodeValidationGateProgressFromArtifact(artifact)
     }
 
+  fun persistOwnedValidationGateProgress(
+    workflowId: String,
+    progress: FeatureTaskRuntimeValidationGateProgress,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      persistValidationGateProgressInTransaction(unitOfWork, workflowId, progress)
+      true
+    }
+
   fun persistValidationGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
     database.transaction { unitOfWork ->
+      persistValidationGateProgressInTransaction(unitOfWork, workflowId, progress)
+    }
+  }
+
+  private fun persistValidationGateProgressInTransaction(
+    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    workflowId: String,
+    progress: FeatureTaskRuntimeValidationGateProgress,
+  ) {
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: throw invalidWorkflowStateSchemaError(
@@ -72,7 +98,6 @@ class FeatureTaskRuntimeGateProgressRecorder(
           ),
         ),
       )
-    }
   }
 
   fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
@@ -144,31 +169,74 @@ class FeatureTaskRuntimeGateProgressRecorder(
       )
     }
 
+  fun persistOwnedNoChangePause(
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      persistNoChangePauseInTransaction(unitOfWork, workflowId, pause)
+      true
+    }
+
   override fun persistNoChangePause(
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
   ) {
     database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: throw invalidWorkflowStateSchemaError(
-            "Cannot persist no-change pause: workflow '$workflowId' is missing.",
-          )
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.entry(pause.asWorkflowArtifactEntry()),
-        ),
-      )
+      persistNoChangePauseInTransaction(unitOfWork, workflowId, pause)
     }
   }
+
+  private fun persistNoChangePauseInTransaction(
+    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    workflowId: String,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ) {
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: throw invalidWorkflowStateSchemaError(
+          "Cannot persist no-change pause: workflow '$workflowId' is missing.",
+        )
+    workflowPersistence.persistArtifactsPatch(
+      unitOfWork.workflowStates,
+      record,
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE.entry(pause.asWorkflowArtifactEntry()),
+      ),
+    )
+  }
+
+  fun persistOwnedBuildGateProgress(
+    workflowId: String,
+    progress: FeatureTaskRuntimeValidationGateProgress,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      persistBuildGateProgressInTransaction(unitOfWork, workflowId, progress)
+      true
+    }
 
   fun persistBuildGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
     database.transaction { unitOfWork ->
+      persistBuildGateProgressInTransaction(unitOfWork, workflowId, progress)
+    }
+  }
+
+  private fun persistBuildGateProgressInTransaction(
+    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    workflowId: String,
+    progress: FeatureTaskRuntimeValidationGateProgress,
+  ) {
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: throw invalidWorkflowStateSchemaError(
@@ -183,6 +251,5 @@ class FeatureTaskRuntimeGateProgressRecorder(
           ),
         ),
       )
-    }
   }
 }

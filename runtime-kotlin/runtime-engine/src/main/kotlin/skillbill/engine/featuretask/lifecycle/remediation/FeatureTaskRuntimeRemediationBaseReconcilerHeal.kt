@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifacts
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.model.subtask.PersistHealedRemediationBaseRequest
 import skillbill.engine.featuretask.model.subtask.ResolvedReviewFixCheckpoint
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -32,6 +33,11 @@ internal fun FeatureTaskRuntimeRemediationBaseReconciler.persistHealedRemediatio
     val record =
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
         ?: return@transaction null
+    if (request.admitted != null &&
+      !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId, clock)
+    ) {
+      return@transaction null
+    }
     val artifacts = record.artifacts
     val latest = reviewStateFromArtifacts(artifacts) ?: return@transaction null
     if (latest.remediationBaseSha == request.target) return@transaction latest

@@ -1207,6 +1207,7 @@ internal fun statusHarness(): StatusHarness {
     FeatureTaskRuntimeRunInvariantsStore(
       database,
       FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator),
+      testHarnessClock,
     )
   return StatusHarness(
     recorder,

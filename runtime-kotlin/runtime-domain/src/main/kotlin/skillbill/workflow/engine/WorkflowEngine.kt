@@ -52,7 +52,7 @@ class WorkflowEngine {
     existing: WorkflowStateSnapshot,
     input: WorkflowUpdateInput,
   ): WorkflowStateSnapshot {
-    validateWorkflowUpdate(definition, input)?.let { throw invalidWorkflowStateSchemaError(it) }
+    validateWorkflowUpdate(definition, existing, input)?.let { throw invalidWorkflowStateSchemaError(it) }
     val mergedArtifacts =
       if (input.replaceArtifacts) {
         LinkedHashMap<String, Any?>()
@@ -76,6 +76,14 @@ class WorkflowEngine {
             null
           },
       )
+    if (definition.isTerminalStatus(existing.workflowStatus)) {
+      if (updated != existing) {
+        throw invalidWorkflowStateSchemaError(
+          "An ordinary terminal replay cannot change the accepted workflow snapshot '${existing.workflowId}'.",
+        )
+      }
+      return existing
+    }
     return updated
   }
 

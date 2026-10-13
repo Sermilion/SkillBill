@@ -108,32 +108,11 @@ class GoalRunnerChildRepairWedgeApplyLoop(
           engine = engine,
           decompositionManifestValidator = decompositionManifestValidator,
         )
-      GoalRunnerWedgeClass.STALE_CHILD_WORKER_LEASE ->
-        applyStaleChildWorkerLease(wedgeClass, state, workflowStates)
+      GoalRunnerWedgeClass.STALE_CHILD_WORKER_LEASE -> Unit
       GoalRunnerWedgeClass.STALE_EXECUTION_LEASE,
       GoalRunnerWedgeClass.STALE_RUNNER_INTERRUPTED_PAUSE,
       -> Unit
     }
-  }
-
-  private fun applyStaleChildWorkerLease(
-    wedgeClass: GoalRunnerWedgeClass,
-    state: ApplyState,
-    workflowStates: WorkflowStateRepository,
-  ) {
-    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(state.request.workflowId) ?: return
-    if (
-      !workflowStates.releaseFeatureTaskRuntimeWorkerIfExpired(
-        state.request.workflowId,
-        ownership.ownerToken,
-        ownership.generation,
-        state.clock.instant().toString(),
-      )
-    ) {
-      return
-    }
-    val priorValue = state.request.wedgeFindings.firstOrNull { it.wedgeClass == wedgeClass }?.currentValue
-    recordChildRepairWedge(state, wedgeClass, priorValue = priorValue, newValue = null)
   }
 
   private fun applyMissingValidationDepth(

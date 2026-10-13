@@ -44,8 +44,11 @@ object GoalPlanningStatusReasons {
 
 enum class ExecutionLiveness(val wireValue: String) {
   LIVE("live"),
+  LIVE_EXPIRED("live_expired"),
   IDLE("idle"),
   UNKNOWN("unknown"),
+  FOREIGN_HOST("foreign_host"),
+  PID_REUSED("pid_reused"),
   ;
 
   companion object {

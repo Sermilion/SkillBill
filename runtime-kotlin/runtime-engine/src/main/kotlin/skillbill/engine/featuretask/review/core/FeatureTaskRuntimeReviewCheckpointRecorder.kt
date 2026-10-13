@@ -9,23 +9,33 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
+import java.time.Clock
 
 class FeatureTaskRuntimeReviewCheckpointRecorder(
   database: DatabaseSessionFactory,
   workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+  clock: Clock,
 ) {
   private val reviewGeneration =
     FeatureTaskRuntimeReviewGenerationRecorder(
       database,
       workflowPersistence,
       runtimeOwnedPersistence,
+      clock,
     )
   private val findingVerification =
     FeatureTaskRuntimeFindingVerificationRecorder(
       database,
       workflowPersistence,
+      clock,
     )
+
+  fun persistOwnedReviewGenerationInvalidation(
+    workflowId: String,
+    reviewStepId: String,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Int? = reviewGeneration.persistOwnedReviewGenerationInvalidation(workflowId, reviewStepId, admitted)
 
   fun persistReviewGenerationInvalidation(
     workflowId: String,
@@ -61,6 +71,13 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
     rejected: List<UnaddressedFinding>,
   ) = reviewGeneration.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
 
+  fun appendOwnedRejectedVerificationFindings(
+    workflowId: String,
+    passNumber: Int,
+    rejected: List<UnaddressedFinding>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ) = reviewGeneration.appendRejectedVerificationFindings(workflowId, passNumber, rejected, admitted)
+
   fun loadFindingVerificationCheckpoint(workflowId: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     findingVerification.loadFindingVerificationCheckpoint(workflowId)
 
@@ -69,6 +86,12 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
   ): Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? =
     findingVerification.loadFindingVerificationBoundarySelection(workflowId)
 
+  fun persistOwnedFindingVerificationBoundarySelection(
+    workflowId: String,
+    selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean = findingVerification.persistOwnedFindingVerificationBoundarySelection(workflowId, selections, admitted)
+
   fun persistFindingVerificationBoundarySelection(
     workflowId: String,
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
@@ -76,6 +99,12 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
 
   fun loadFindingVerificationDispositions(workflowId: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     findingVerification.loadFindingVerificationDispositions(workflowId)
+
+  fun persistOwnedFindingVerificationCheckpoint(
+    workflowId: String,
+    dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean = findingVerification.persistOwnedFindingVerificationCheckpoint(workflowId, dispositions, admitted)
 
   fun persistFindingVerificationCheckpoint(
     workflowId: String,

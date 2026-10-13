@@ -1,8 +1,11 @@
 package skillbill.engine.featuretask.review.finding
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -12,6 +15,7 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFinding
 class FeatureTaskRuntimeFindingVerificationRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  private val clock: java.time.Clock,
 ) {
   fun loadFindingVerificationCheckpoint(workflowId: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     database.transaction { unitOfWork ->
@@ -33,13 +37,36 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
       )
     }
 
+  fun persistOwnedFindingVerificationBoundarySelection(
+    workflowId: String,
+    selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean {
+    if (selections.isEmpty()) return false
+    return database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      persistFindingVerificationBoundarySelectionInTransaction(unitOfWork, workflowId, selections)
+    }
+  }
+
   fun persistFindingVerificationBoundarySelection(
     workflowId: String,
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
   ): Boolean {
     if (selections.isEmpty()) return false
     return database.transaction { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction false
+      persistFindingVerificationBoundarySelectionInTransaction(unitOfWork, workflowId, selections)
+    }
+  }
+
+  private fun persistFindingVerificationBoundarySelectionInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
+  ): Boolean {
+      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
       val artifacts = record.artifacts
       workflowPersistence.persistArtifactsPatch(
         unitOfWork.workflowStates,
@@ -51,8 +78,7 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
         ),
         WorkflowRowAdvance.keepFrom(record),
       )
-      true
-    }
+      return true
   }
 
   fun loadFindingVerificationDispositions(
@@ -66,13 +92,36 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
       )
     }
 
+  fun persistOwnedFindingVerificationCheckpoint(
+    workflowId: String,
+    dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean {
+    if (dispositions.isEmpty()) return false
+    return database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      persistFindingVerificationCheckpointInTransaction(unitOfWork, workflowId, dispositions)
+    }
+  }
+
   fun persistFindingVerificationCheckpoint(
     workflowId: String,
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean {
     if (dispositions.isEmpty()) return false
     return database.transaction { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@transaction false
+      persistFindingVerificationCheckpointInTransaction(unitOfWork, workflowId, dispositions)
+    }
+  }
+
+  private fun persistFindingVerificationCheckpointInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
+  ): Boolean {
+      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
       val serialized = dispositions.map { it.asWorkflowArtifactEntry() }
       workflowPersistence.persistArtifactsPatch(
         unitOfWork.workflowStates,
@@ -83,8 +132,7 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
         ),
         WorkflowRowAdvance.keepFrom(record),
       )
-      true
-    }
+      return true
   }
 
   fun clearFindingVerificationCheckpoint(workflowId: String): Boolean =

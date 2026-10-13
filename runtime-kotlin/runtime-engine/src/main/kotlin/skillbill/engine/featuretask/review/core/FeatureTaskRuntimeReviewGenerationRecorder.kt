@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.review.core
 
-import skillbill.engine.featuretask.lifecycle.execution.requireCurrent
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
@@ -9,6 +8,7 @@ import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.reviewGenerationFrom
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
@@ -16,6 +16,7 @@ import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.reviewRunIdOf
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -28,26 +29,48 @@ import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArt
 import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import java.time.Clock
 
 class FeatureTaskRuntimeReviewGenerationRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+  private val clock: Clock,
 ) {
+  fun persistOwnedReviewGenerationInvalidation(
+    workflowId: String,
+    reviewStepId: String,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Int? =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction null
+      }
+      persistReviewGenerationInvalidationInTransaction(unitOfWork, workflowId, reviewStepId)
+    }
+
   fun persistReviewGenerationInvalidation(
     workflowId: String,
     reviewStepId: String,
   ): Int? =
     database.transaction { unitOfWork ->
+      persistReviewGenerationInvalidationInTransaction(unitOfWork, workflowId, reviewStepId)
+    }
+
+  private fun persistReviewGenerationInvalidationInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    reviewStepId: String,
+  ): Int? {
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction null
+          ?: return null
       val artifacts = record.artifacts
       val storedGeneration = reviewGenerationFrom(artifacts)
       val existingRecords = decodePhaseRecords(artifacts)
       val previousReview =
         existingRecords[reviewStepId]
-          ?: return@transaction storedGeneration
+          ?: return storedGeneration
       val tombstone =
         FeatureTaskRuntimePhaseRecord(
           phaseId = reviewStepId,
@@ -91,8 +114,8 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
           stepUpdates = stepUpdatesFrom(updatedRecords),
         ),
       )
-      nextGeneration
-    }
+      return nextGeneration
+  }
 
   fun reconcileReviewGeneration(workflowId: String): Int =
     database.transaction { unitOfWork ->
@@ -129,7 +152,11 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
       if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps && admitted == null) {
         throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
       }
-      admitted?.requireCurrent(unitOfWork.workflowStates, workflowId)
+      if (admitted != null &&
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+      ) {
+        return@transaction false
+      }
       val artifacts = record.artifacts
       val existingRecords = decodePhaseRecords(artifacts)
       val irreversibleSteps = PhaseSlot.COMMIT_PUSH.steps + PhaseSlot.PULL_REQUEST.steps
@@ -223,9 +250,15 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     workflowId: String,
     passNumber: Int,
     rejected: List<UnaddressedFinding>,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ) {
     if (rejected.isEmpty()) return
     database.transaction { unitOfWork ->
+      if (admitted != null &&
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+      ) {
+        return@transaction
+      }
       val existing = unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)
       val rejectedById =
         rejected.mapNotNull { finding ->

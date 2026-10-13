@@ -263,8 +263,14 @@ class GoalRunnerResetReplanCoordinator(
       when (liveness) {
         ExecutionLiveness.LIVE ->
           "Goal '${request.issueKey}' is live; refuse scoped replan while a child or parent run is active."
+        ExecutionLiveness.LIVE_EXPIRED ->
+          "Goal '${request.issueKey}' has a live-but-expired lease; refuse scoped replan."
         ExecutionLiveness.UNKNOWN ->
           "Goal '${request.issueKey}' has unknown execution liveness; refuse scoped replan."
+        ExecutionLiveness.FOREIGN_HOST ->
+          "Goal '${request.issueKey}' has foreign-host ownership; refuse scoped replan."
+        ExecutionLiveness.PID_REUSED ->
+          "Goal '${request.issueKey}' has pid-reused ownership; refuse scoped replan."
         ExecutionLiveness.IDLE -> "Goal '${request.issueKey}' is idle."
       }
     }

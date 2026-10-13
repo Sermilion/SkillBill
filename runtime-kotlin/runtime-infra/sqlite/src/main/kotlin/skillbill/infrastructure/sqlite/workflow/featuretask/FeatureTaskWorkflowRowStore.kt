@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.proseFeatureTaskWorkflowWriteRefusedError
+import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.workflow.FeatureTaskWorkflowUpsertRequest
 import skillbill.infrastructure.sqlite.workflow.defaultContractVersion
 import skillbill.infrastructure.sqlite.workflow.defaultImplementationSkill
@@ -11,6 +12,8 @@ import skillbill.infrastructure.sqlite.workflow.upsertFeatureTaskWorkflowRow
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.isTerminal
 import java.sql.Connection
 import java.time.Clock
 
@@ -25,6 +28,11 @@ internal class FeatureTaskWorkflowRowStore(
   ) {
     if (mode == FeatureTaskWorkflowMode.PROSE) {
       throw proseFeatureTaskWorkflowWriteRefusedError(row.workflowId)
+    }
+    val current = connection.getFeatureTaskWorkflowRow(row.workflowId)
+    if (current != null && WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true) {
+      if (current.sameTerminalSnapshot(row)) return
+      throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
     connection.upsertFeatureTaskWorkflowRow(
       row = row,
@@ -74,3 +82,7 @@ internal class FeatureTaskWorkflowRowStore(
     connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row)
   }
 }
+
+private fun WorkflowStateRecord.sameTerminalSnapshot(other: WorkflowStateRecord): Boolean =
+  workflowStatus == other.workflowStatus && currentStepId == other.currentStepId &&
+    stepsJson == other.stepsJson && artifactsJson == other.artifactsJson && finishedAt == other.finishedAt

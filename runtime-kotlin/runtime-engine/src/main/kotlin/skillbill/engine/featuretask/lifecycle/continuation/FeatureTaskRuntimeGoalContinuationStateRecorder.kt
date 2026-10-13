@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -18,11 +20,19 @@ class FeatureTaskRuntimeGoalContinuationStateRecorder(
   private val engine: WorkflowEngine,
   private val clock: Clock,
 ) {
-  internal fun recordGoalContinuationState(request: GoalContinuationStateRecordRequest): Boolean =
+  internal fun recordGoalContinuationState(
+    request: GoalContinuationStateRecordRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): Boolean =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
           ?: return@transaction false
+      if (admitted != null &&
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)
+      ) {
+        return@transaction false
+      }
       val artifacts = record.artifacts
       val existingContinuation = continuationFromArtifacts(artifacts)
       val supplied =

@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.review.goal
 
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationArtifactPatcher
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewBaseField
 import skillbill.engine.featuretask.lifecycle.continuation.canRecoverReviewBase
 import skillbill.engine.featuretask.lifecycle.continuation.continuationFromArtifacts
@@ -22,11 +24,17 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
+import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewInputBuilder(
   private val database: DatabaseSessionFactory,
   private val patcher: FeatureTaskRuntimeGoalContinuationArtifactPatcher,
-  private val persistGoalReviewInput: (String, GoalSubtaskReviewInput) -> GoalSubtaskReviewState?,
+  private val clock: Clock,
+  private val persistGoalReviewInput: (
+    String,
+    GoalSubtaskReviewInput,
+    AdmittedFeatureTaskRuntimeExecution?,
+  ) -> GoalSubtaskReviewState?,
 ) {
   fun loadGoalReviewDurable(
     workflowId: String,
@@ -44,6 +52,7 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
     scope: FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): GoalSubtaskReviewInputPreparation {
     val durable = loadGoalReviewDurable(workflowId) ?: return GoalSubtaskReviewInputPreparation.MissingState
     val (state, continuation) = durable
@@ -69,14 +78,18 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
             failedField = failedField,
             scope = scope,
             execution = GoalReviewInputRecoveryExecution(gitOperations, repoRoot),
+            admitted = admitted,
           ),
         )
       }
+    if (recovery is GoalReviewInputRecovery.OwnershipRejected) {
+      return GoalSubtaskReviewInputPreparation.MissingState
+    }
     val input =
       goalReviewInputFromBuildResult(result, recovery)
         ?: return goalReviewBlockedPreparation(result, recovery)
     val persisted =
-      persistGoalReviewInput(workflowId, input)
+      persistGoalReviewInput(workflowId, input, admitted)
         ?: return GoalSubtaskReviewInputPreparation.MissingState
     return GoalSubtaskReviewInputReady(persisted, input)
   }
@@ -112,10 +125,10 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
     val recoveredBaseline = requireNotNull(recovered.baseline)
     val input = rebuildRecoveredGoalReviewInput(request, recoveredBaseline)
     val persisted = persistRecoveredGoalReviewBaseline(request, recoveredBaseline, input, failureReason)
-    return if (persisted != null) {
-      GoalReviewInputRecovery.Recovered(input)
-    } else {
-      GoalReviewInputRecovery.Ineligible
+    return when {
+      persisted != null -> GoalReviewInputRecovery.Recovered(input)
+      request.admitted != null -> GoalReviewInputRecovery.OwnershipRejected
+      else -> GoalReviewInputRecovery.Ineligible
     }
   }
 
@@ -147,6 +160,11 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
           ?: return@transaction null
+      if (request.admitted != null &&
+        !requireCurrentWorker(request.admitted, unitOfWork.workflowStates, request.workflowId, clock)
+      ) {
+        return@transaction null
+      }
       val artifacts = record.artifacts
       val latest = reviewStateFromArtifacts(artifacts) ?: return@transaction null
       check(latest == request.state && latest.canRecoverReviewBase()) {
@@ -212,6 +230,7 @@ internal data class GoalReviewInputRecoveryRequest(
   val failedField: GoalReviewBaseField,
   val scope: FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope,
   val execution: GoalReviewInputRecoveryExecution,
+  val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 )
 
 internal sealed interface GoalReviewInputRecovery {
@@ -220,6 +239,8 @@ internal sealed interface GoalReviewInputRecovery {
   class Failed(val reason: String) : GoalReviewInputRecovery
 
   data object Ineligible : GoalReviewInputRecovery
+
+  data object OwnershipRejected : GoalReviewInputRecovery
 }
 
 internal data class GoalReviewInputRecoveryExecution(
@@ -267,6 +288,8 @@ internal fun goalReviewBlockedPreparation(
     when (recovery) {
       is GoalReviewInputRecovery.Failed -> recovery.reason
       is GoalReviewInputRecovery.Ineligible, null -> result.error
+      is GoalReviewInputRecovery.OwnershipRejected ->
+        error("blocked preparation requested for ownership-rejected recovery")
       is GoalReviewInputRecovery.Recovered -> error("blocked preparation requested for recovered input")
     },
   )

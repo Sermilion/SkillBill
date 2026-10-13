@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.phase.briefing
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.deliveredProjectionHistoryFrom
@@ -30,7 +32,27 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
+  private val clock: java.time.Clock,
 ) {
+  fun recordOwnedPhaseBriefing(
+    workflowId: String,
+    briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+    attempt: Int,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): RequiredPhaseWrite =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction RequiredPhaseWrite.Rejected(
+          writeKind = RequiredPhaseWriteKind.BRIEFING,
+          workflowId = workflowId,
+          phaseId = briefing.phaseId,
+          attempt = attempt,
+        )
+      }
+      recordPhaseBriefingInTransaction(unitOfWork, workflowId, briefing, sharedEvidenceMeasurement, attempt)
+    }
+
   fun recordPhaseBriefing(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
@@ -38,9 +60,19 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     attempt: Int,
   ): RequiredPhaseWrite =
     database.transaction { unitOfWork ->
+      recordPhaseBriefingInTransaction(unitOfWork, workflowId, briefing, sharedEvidenceMeasurement, attempt)
+    }
+
+  private fun recordPhaseBriefingInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+    attempt: Int,
+  ): RequiredPhaseWrite {
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction RequiredPhaseWrite.Rejected(
+          ?: return RequiredPhaseWrite.Rejected(
             writeKind = RequiredPhaseWriteKind.BRIEFING,
             workflowId = workflowId,
             phaseId = briefing.phaseId,
@@ -50,7 +82,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
         FeatureTaskRuntimeWorkflowArtifactMap.from(briefing.handoffEnvelope.asWorkflowArtifactEntry()),
         workflowId,
       )?.let { rejection ->
-        return@transaction RequiredPhaseWrite.Rejected(
+        return RequiredPhaseWrite.Rejected(
           writeKind = RequiredPhaseWriteKind.BRIEFING,
           workflowId = workflowId,
           phaseId = briefing.phaseId,
@@ -92,7 +124,30 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
           ),
         )
       workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
-      RequiredPhaseWrite.Acknowledged
+      return RequiredPhaseWrite.Acknowledged
+  }
+
+  fun recordOwnedProjectionRejection(
+    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
+    repositoryCheckpointFingerprint: String?,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, context.workflowId.orEmpty(), clock)) {
+        return@transaction false
+      }
+      recordProjectionRejectionMeasurement(
+        unitOfWork,
+        FeatureTaskRuntimeProjectionRejection(
+          workflowId = context.workflowId.orEmpty(),
+          consumerPhaseId = context.consumerPhaseId,
+          projectionContractId = context.projectionContractId.ifBlank { "unknown" },
+          producerIteration = FeatureTaskRuntimeProducerIteration(context.consumerPhaseId, 1),
+          repositoryCheckpointFingerprint = repositoryCheckpointFingerprint,
+          failureClassification = context.failureKind.toMeasurementFailureClassification(),
+          sourceLabel = context.projectionName,
+        ),
+      )
     }
 
   fun recordProjectionRejection(
@@ -116,6 +171,17 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
 
   fun recordProjectionRejection(rejection: FeatureTaskRuntimeProjectionRejection): Boolean =
     database.transaction { unitOfWork ->
+      recordProjectionRejectionMeasurement(unitOfWork, rejection)
+    }
+
+  fun recordOwnedProjectionRejection(
+    rejection: FeatureTaskRuntimeProjectionRejection,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, rejection.workflowId, clock)) {
+        return@transaction false
+      }
       recordProjectionRejectionMeasurement(unitOfWork, rejection)
     }
 

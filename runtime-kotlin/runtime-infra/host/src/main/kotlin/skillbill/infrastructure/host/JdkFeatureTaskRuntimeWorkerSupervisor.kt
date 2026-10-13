@@ -93,7 +93,8 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
   ): AutoCloseable? {
     when (inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning,
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
+      FeatureTaskRuntimeProcessInspection.ForeignHost,
+      FeatureTaskRuntimeProcessInspection.PidReused,
       -> {
         onExit()
         return null
@@ -145,9 +146,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     local: FeatureTaskRuntimeProcessIdentity,
   ): FeatureTaskRuntimeProcessInspection {
     if (ownership.hostIdentity != local.hostIdentity) {
-      return FeatureTaskRuntimeProcessInspection.OwnershipMismatch(
-        "Worker ownership belongs to a different host.",
-      )
+      return FeatureTaskRuntimeProcessInspection.ForeignHost
     }
     if (bootIdentitiesConflict(ownership.bootIdentity, local.bootIdentity)) {
       return FeatureTaskRuntimeProcessInspection.NotRunning
@@ -162,7 +161,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
         FeatureTaskRuntimeProcessInspection.Unsupported("Worker PID has no verifiable birth evidence.")
       handle.isAlive && birth == ownership.processBirthToken -> FeatureTaskRuntimeProcessInspection.ExactLive
       !handle.isAlive -> FeatureTaskRuntimeProcessInspection.NotRunning
-      else -> FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process.")
+      else -> FeatureTaskRuntimeProcessInspection.PidReused
     }
   }
 

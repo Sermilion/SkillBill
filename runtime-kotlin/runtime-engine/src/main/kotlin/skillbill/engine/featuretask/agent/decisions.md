@@ -1,3 +1,8 @@
+## [2026-10-17] Map settlement store conflict and refusal to an ERROR acknowledgment
+Context: A second settlement at the same workflow, phase, and attempt with a different envelope, or an admission refusal, could look like a completed persist at the service edge.
+Decision: Persist treats Accepted and IdenticalReplay as OK. Conflicting maps to PHASE_SETTLEMENT_CONFLICT; Refused maps to the refusal reason name. The late envelope is withheld. The SQLite repository returns the store result and does not throw.
+Reason: Expected settlement outcomes are values. Throwing inside the sqlite repository hid Conflicting as a defect and still left the first row in place without a typed acknowledgment.
+
 ## [2026-10-12] Validation owns checks, commit_push only publishes
 Context: SKILL-423 completed validation, then commit_push selected an Ubuntu CI dependency-install command and ran it on CachyOS. The operator required commit_push to commit and push without another gate.
 Decision: Delete local CI-command discovery and execution, readiness settlement and committed-head rebinding, and the PR readiness gate. Validation retains project-check discovery and repair. Commit_push stages, commits, pushes and records its receipt. PR retains branch and template checks, and monitor observes remote CI. Preserve legacy readiness artifact decoding so saved workflows remain readable, but ignore those artifacts during publication.

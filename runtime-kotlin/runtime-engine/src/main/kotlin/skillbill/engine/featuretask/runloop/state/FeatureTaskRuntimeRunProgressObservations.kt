@@ -78,6 +78,14 @@ private class DetachedProgressObservations(
   private val captured: FeatureTaskRuntimeRunState,
 ) : FeatureTaskRuntimeProgressSnapshotAccess by captured
 
+internal fun durablePhaseAttemptCount(
+  progress: FeatureTaskRuntimeProgressSnapshotAccess,
+  phaseId: String,
+): Int {
+  val observation = progress.phase(phaseId)
+  return observation.record?.attemptCount ?: observation.nextIteration
+}
+
 internal data class PhaseProgressObservation(
   val completed: Boolean,
   val hasPriorRecord: Boolean,
