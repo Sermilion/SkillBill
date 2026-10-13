@@ -188,7 +188,7 @@ internal class VerifyStepSequence(
       is VerifyCodeReviewOutcome.Refused -> VerifyStepDone.Refused(outcome.refusal)
       is VerifyCodeReviewOutcome.Reviewed -> {
         val register = outcome.review.findings.map(::registerLine)
-        telemetry.reviewImported(importText(run, register))
+        telemetry.reviewImported(importText(run, outcome.review.routedSkill, register))
         settled(VerifyWorkflow.CODE_REVIEW_RECEIPT, outcome.review.verdict.wireValue, register)
       }
     }
@@ -362,11 +362,13 @@ internal class VerifyStepSequence(
 
   private fun importText(
     run: VerifyRun,
+    routedSkill: String,
     register: List<String>,
   ): String =
     buildString {
       appendLine("Review run ID: ${InlineReviewEnvelope.mintReviewRunId(clock)}")
       appendLine("Review session ID: ${run.sessionId.ifBlank { run.workflowId }}")
+      appendLine("Routed to: $routedSkill")
       appendLine("Execution mode: ${run.mode.wireValue}")
       appendLine()
       register.forEach(::appendLine)

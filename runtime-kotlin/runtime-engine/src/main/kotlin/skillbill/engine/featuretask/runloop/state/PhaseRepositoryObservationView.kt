@@ -7,7 +7,6 @@ import skillbill.ports.workflow.gitops.RepositoryFingerprintGitOperations
 import skillbill.ports.workflow.gitops.RepositoryOwnedPathsGitOperations
 import skillbill.ports.workflow.gitops.RuntimePhaseFileManifestGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import java.nio.file.Path
 
 internal fun WorkflowGitOperations.repositoryObservations(): PhaseRepositoryObservations =
@@ -20,8 +19,7 @@ private class RepositoryObservationView(
   GoalSubtaskReviewGitOperations by git,
   RepositoryFingerprintGitOperations by git,
   RepositoryOwnedPathsGitOperations by git,
-  RuntimePhaseFileManifestGitOperations by git,
-  ReadinessTreeIdentityGitOperations by git {
+  RuntimePhaseFileManifestGitOperations by git {
   override fun worktreeStatus(repoRoot: Path) = git.worktreeStatus(repoRoot)
 
   override fun headCommitSha(repoRoot: Path) = git.headCommitSha(repoRoot)

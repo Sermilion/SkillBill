@@ -7,9 +7,11 @@ import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
+import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.pauseAtOperatorBoundary
 import skillbill.goalrunner.model.targetReached
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
@@ -195,7 +197,13 @@ internal fun reconcileControlStateForManifest(
   val parent = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentWorkflowId) ?: return
   val manifest = parent.decompositionRuntime() ?: return
   val existing = unitOfWork.goalRunnerControls.controlState(parentWorkflowId)
-  val reconciled = existing.reconciledForCurrentSubtask(manifest.currentSubtaskIntent.subtaskId)
+  val current = existing.reconciledForCurrentSubtask(manifest.currentSubtaskIntent.subtaskId)
+  val reconciled =
+    if (current.goalCompletedAt != null && GoalRunnerPlanner.selectNext(manifest) !is GoalRunnerSelection.Done) {
+      current.copy(goalCompletedAt = null, goalPullRequestUrl = null)
+    } else {
+      current
+    }
   if (reconciled != existing) {
     unitOfWork.goalRunnerControls.persistControlState(parentWorkflowId, reconciled)
   }

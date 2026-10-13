@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.engine.featuretask.validation.coordinator
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder

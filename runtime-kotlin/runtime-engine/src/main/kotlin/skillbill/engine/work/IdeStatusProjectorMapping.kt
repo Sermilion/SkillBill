@@ -98,6 +98,8 @@ internal fun goalPlanningSummary(
     "(${planning.plannedSubtaskCount}/${planning.totalSubtaskCount} planned).$wave"
 }
 
+internal fun GoalRunnerStatusProjection.hasUnfinishedSubtasks(): Boolean = pendingCount > 0 || blockedCount > 0
+
 internal fun goalStaysOnOpenCiMonitor(
   projection: GoalRunnerStatusProjection?,
   completionRecorded: Boolean,

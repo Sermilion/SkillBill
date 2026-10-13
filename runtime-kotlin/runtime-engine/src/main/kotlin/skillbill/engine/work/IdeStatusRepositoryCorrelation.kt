@@ -45,6 +45,9 @@ class IdeStatusRepositoryCorrelation(
   }
 
   private fun matchesVerifyRepository(item: WorkItem): Boolean? {
+    unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)?.let { registration ->
+      return registration.repositoryIdentity == repositoryIdentity
+    }
     val issueKey = item.issueKey?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return when (verifyIssueRepositoryCorrelation(issueKey)) {
       VerifyRepoCorrelation.SAME_REPO -> true

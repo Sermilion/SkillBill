@@ -12,6 +12,7 @@ import skillbill.infrastructure.workflow.github.GhPullRequestIdentityLookup
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
+import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
@@ -33,6 +34,10 @@ internal interface RuntimeOptionalCallbackProvides {
   @Provides
   fun pullRequestIdentityLookup(callbacks: OptionalCallbacks): PullRequestIdentityLookup =
     callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup()
+
+  @Provides
+  fun mergeStatePullRequestIdentityLookup(callbacks: OptionalCallbacks): MergeStatePullRequestIdentityLookup =
+    callbacks.pullRequestIdentityLookup ?: GhPullRequestIdentityLookup(includeMergeState = true)
 
   @Provides
   fun pullRequestChecksLookup(callbacks: OptionalCallbacks): PullRequestChecksLookup =

@@ -27,6 +27,7 @@ import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunne
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -37,7 +38,6 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -58,7 +58,6 @@ import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanErr
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
-import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -134,7 +133,6 @@ class PhaseStrategyCompositionTest {
   private val prDescriptionStrategy =
     PrDescriptionStrategy(
       UnavailablePullRequestIdentityLookup,
-      PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
       LocalPullRequestTemplateFiles,
     )
 
@@ -176,6 +174,31 @@ class PhaseStrategyCompositionTest {
     val actual = strategies.flatMap { strategy -> strategy.steps.map { it to strategy.policyFor(it) } }.toMap()
 
     assertEquals(EXPECTED_POLICIES, actual)
+  }
+
+  @Test
+  fun `every implement strategy tells implement how to return a no-change claim`() {
+    listOf(ImplementThenSimplifyStrategy(), ImplementThenSimplifyOpus55Strategy()).forEach { strategy ->
+      val implement =
+        strategy.promptSections(
+          "implement",
+          FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement")),
+        )
+      val simplify =
+        strategy.promptSections(
+          "simplify",
+          FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("simplify")),
+        )
+
+      assertTrue(
+        implement.taskDirective.contains(ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE),
+        "${strategy.strategyId} implement must carry the no-change claim directive",
+      )
+      assertTrue(
+        !simplify.taskDirective.contains("`no_change` argument"),
+        "${strategy.strategyId} simplify must not offer a no-change claim",
+      )
+    }
   }
 
   @Test

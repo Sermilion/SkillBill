@@ -796,9 +796,16 @@ class IdeStatusService(
     ) &&
       (
         candidate.standaloneStatus != null ||
+          isVerifyRegisteredOnBranch(candidate, branch) ||
           candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
           isPlanningOnBaseBranch(candidate, branch, repoRoot)
       )
+
+  private fun isVerifyRegisteredOnBranch(
+    candidate: IdeStatusCandidate,
+    branch: String,
+  ): Boolean =
+    candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY && candidate.branchCorrelation == branch
 
   private fun isPlanningOnBaseBranch(
     candidate: IdeStatusCandidate,
@@ -936,7 +943,7 @@ class IdeStatusService(
         ) {
           null
         } else {
-          IdeStatusSelectionPolicy.lifecycleFromDurableStateWire(item.currentState)
+          IdeStatusSelectionPolicy.lifecycleFromDurableStateWire(candidateFamily, item.currentState)
         }
       }
     if (family == null || lifecycle == null) return null

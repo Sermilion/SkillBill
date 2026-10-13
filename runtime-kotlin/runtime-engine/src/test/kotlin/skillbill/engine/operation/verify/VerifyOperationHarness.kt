@@ -45,6 +45,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ParallelReviewMergeResult
@@ -124,12 +125,14 @@ internal class VerifyOperationHarness : AutoCloseable {
             ParallelCodeReviewResult(
               mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
               lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+              routedSkill = DELEGATED_ROUTED_SKILL,
             ),
           )
         },
         NoopRuntimeDiagnostics,
         clock,
         testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
+        CheckedOutBranchSource { "main" },
       )
     val proposals = SqliteOperationProposalRepository(database)
     executor =
@@ -164,6 +167,8 @@ internal class VerifyOperationHarness : AutoCloseable {
   fun workflowStatus(workflowId: String): String? = column(workflowId, "workflow_status")
 
   fun currentStep(workflowId: String): String? = column(workflowId, "current_step_id")
+
+  fun issueKey(workflowId: String): String? = column(workflowId, "issue_key")
 
   fun snapshot(workflowId: String): WorkflowSnapshotView =
     (workflows.get(WorkflowFamilyKind.VERIFY, workflowId) as WorkflowGetResult.Ok).snapshot
@@ -323,6 +328,7 @@ internal class VerifyOperationHarness : AutoCloseable {
     const val AGENT = "codex"
     const val REVIEW_REGISTER = "Verdict: approved\n"
     const val SKILL_SESSION_ID = "fvr-skill"
+    const val DELEGATED_ROUTED_SKILL = "bill-kotlin-code-review"
   }
 }
 

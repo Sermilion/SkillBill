@@ -1385,8 +1385,8 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   branch, ref, commit, or goal. Implementation and simplification run inside workflows and
   consume their plan output. `skill-bill phase pr` refuses a detached, protected, or
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
-  has unpushed commits, and runs the pull-request readiness gate only when the
-  run's forward steps include `commit_push`.
+  has unpushed commits. Commit/push and PR publication execute no local checks
+  and require no readiness evidence. The preceding quality gate owns validation.
   The `skill-bill` dispatcher, the only listed skill, translates
   `phase:<name>` into this subcommand.
   `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
@@ -1504,7 +1504,7 @@ Composition:
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
   | `runtime-commit` | `slot.commitpush` | Commit push cycle, upstream-head fallback, finalization briefing field set |
-  | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR readiness gate (`PullRequestReadinessGate`), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
+  | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
 
 - A strategy reaches shared code through hooks, never the other way round.
   `PhaseStrategy.stepHooks` returns the step's `PhaseStepHooks` (launch,

@@ -3,7 +3,6 @@ package skillbill.ports.workflow.gitops
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeNumstatResult
-import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import java.nio.file.Path
 
 abstract class WorkflowGitOperationsTestBase :
@@ -12,7 +11,6 @@ abstract class WorkflowGitOperationsTestBase :
   CheckpointHistoryGitOperations by UnavailableCheckpointHistoryGitOperations,
   GoalSubtaskReviewGitOperations by NoopGoalSubtaskReviewGitOperations,
   RepositoryFingerprintGitOperations by UnavailableRepositoryFingerprintGitOperations,
-  ReadinessTreeIdentityGitOperations by UnavailableReadinessTreeIdentityGitOperations,
   RepositoryOwnedPathsGitOperations by UnavailableRepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations by NoopRuntimePhaseFileManifestGitOperations,
   ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,

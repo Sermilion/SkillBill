@@ -8,7 +8,6 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
-import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runner.BranchSetupTestConfig
 import skillbill.engine.featuretask.runner.IMPLEMENT_OUTPUT
 import skillbill.engine.featuretask.runner.PLAN_OUTPUT
@@ -17,7 +16,6 @@ import skillbill.engine.featuretask.runner.RUNNER_TEST_ISSUE_KEY
 import skillbill.engine.featuretask.runner.RunnerHarnessCore
 import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
 import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
-import skillbill.engine.featuretask.runner.SESSION_ID
 import skillbill.engine.featuretask.runner.SIMPLIFY_OUTPUT
 import skillbill.engine.featuretask.runner.VALID_AUDIT_OUTPUT
 import skillbill.engine.featuretask.runner.VALID_REVIEW_OUTPUT
@@ -32,7 +30,11 @@ import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckResult
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -58,9 +60,10 @@ class FeatureTaskRuntimeCommitPushCycleTest {
   }
 
   @Test
-  fun `commit_push does not launch an agent and still records commit_sha`() {
+  fun `commit_push publishes validated work despite failing CI setup and stale readiness evidence`() {
     val repoRoot = Files.createTempDirectory("skillbill-runtime-owned-commit-push")
     try {
+      val marker = writeFailingCiSetup(repoRoot)
       val git =
         RecordingWorkflowGitOperations(currentBranchValue = "feat/existing-runtime-branch")
           .also { it.headCommitShaValue = "f".repeat(40) }
@@ -77,6 +80,7 @@ class FeatureTaskRuntimeCommitPushCycleTest {
                 goalBranch = "feat/existing-runtime-branch",
                 suppressPr = true,
                 parentWorkflowId = "wfl-parent",
+                lastResumableStep = "commit_push",
                 reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
               ),
           ),
@@ -91,7 +95,6 @@ class FeatureTaskRuntimeCommitPushCycleTest {
               agentAssignment = phasePerAgentAssignment(),
             ),
         )
-      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), PREPLAN_OUTPUT)
       harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), PLAN_OUTPUT)
       harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), IMPLEMENT_OUTPUT)
@@ -101,11 +104,18 @@ class FeatureTaskRuntimeCommitPushCycleTest {
       harness.seedPhase("verify_findings", "completed", 1, phaseAgent("verify_findings"), VALID_VERIFY_FINDINGS_OUTPUT)
       harness.seedPhase("validate", "completed", 1, phaseAgent("validate"), validJsonOutput("validate"))
       harness.seedPhase("write_history", "completed", 1, phaseAgent("write_history"), validJsonOutput("write_history"))
+      harness.seedPhase("commit_push", "blocked", 1, "runtime", null)
+
+      val legacyEvidence = failedReadinessEvidence()
+      harness.recorder.persistReadinessEvidence(WORKFLOW_ID, legacyEvidence)
 
       val report = harness.runner.run(harness.request())
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-      assertFalse("commit_push" in harness.launchedPromptPhaseOrder())
+      assertEquals(emptyList(), harness.launchedPromptPhaseOrder())
+      assertFalse(Files.exists(marker), "Commit/push must not execute CI setup")
+      assertEquals(legacyEvidence, harness.recorder.loadReadinessEvidence(WORKFLOW_ID))
+      assertEquals(listOf("feat/existing-runtime-branch"), git.pushedBranches)
       val output =
         harness.recorder
           .loadPhaseRecords(WORKFLOW_ID)
@@ -122,4 +132,38 @@ class FeatureTaskRuntimeCommitPushCycleTest {
       repoRoot.toFile().deleteRecursively()
     }
   }
+
+  private fun writeFailingCiSetup(repoRoot: Path): Path {
+    val workflows = Files.createDirectories(repoRoot.resolve(".github/workflows"))
+    Files.writeString(
+      workflows.resolve("desktop.yml"),
+      """
+      on:
+        pull_request:
+          paths: ['**']
+      jobs:
+        check:
+          steps:
+            - run: touch ci-setup-ran; exit 1
+      """.trimIndent(),
+    )
+    return repoRoot.resolve("ci-setup-ran")
+  }
+
+  private fun failedReadinessEvidence() =
+    FeatureTaskRuntimeReadinessEvidence(
+      sourceTreeSha = "old-tree",
+      baseRefSha = "old-base",
+      headSha = "old-head",
+      selectedChecks = listOf("desktop:check"),
+      checkResults =
+        listOf(
+          FeatureTaskRuntimeReadinessCheckResult(
+            checkId = "desktop:check",
+            command = "touch ci-setup-ran; exit 1",
+            exitCode = 1,
+            status = FeatureTaskRuntimeReadinessCheckStatus.FAILED,
+          ),
+        ),
+    )
 }

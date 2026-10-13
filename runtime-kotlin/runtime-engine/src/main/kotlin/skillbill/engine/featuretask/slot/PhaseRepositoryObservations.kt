@@ -6,7 +6,6 @@ import skillbill.ports.workflow.gitops.RepositoryFingerprintGitOperations
 import skillbill.ports.workflow.gitops.RepositoryOwnedPathsGitOperations
 import skillbill.ports.workflow.gitops.RuntimePhaseFileManifestGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import java.nio.file.Path
 
 internal interface PhaseRepositoryObservations :
@@ -14,8 +13,7 @@ internal interface PhaseRepositoryObservations :
   GoalSubtaskReviewGitOperations,
   RepositoryFingerprintGitOperations,
   RepositoryOwnedPathsGitOperations,
-  RuntimePhaseFileManifestGitOperations,
-  ReadinessTreeIdentityGitOperations {
+  RuntimePhaseFileManifestGitOperations {
   fun worktreeStatus(repoRoot: Path): WorkflowGitOperationResult
 
   fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult

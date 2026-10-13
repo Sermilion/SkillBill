@@ -6,7 +6,6 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineRecoveryRe
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInputResult
-import skillbill.ports.workflow.gitops.model.ReadinessTreeIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
@@ -14,7 +13,6 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
-import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
@@ -52,12 +50,6 @@ class RecordingWorkflowGitOperations(
   var repositoryFingerprintCalls: Int = 0
   var repositoryCheckpointFingerprintResult: WorkflowGitOperationResult? = null
   var changedPathsBetweenCommitsResult: WorkflowGitNameListResult? = null
-  var readinessTreeIdentity: ReadinessTreeIdentity =
-    ReadinessTreeIdentity(
-      sourceTreeSha = "a".repeat(40),
-      baseRefSha = "b".repeat(40),
-      headSha = "c".repeat(40),
-    )
   val createCommitMessages = mutableListOf<String>()
   var createCommitResult: WorkflowGitCommitResult? = null
   var localBranchHasUnpushedCommitsValue: Boolean = true
@@ -380,20 +372,6 @@ class RecordingWorkflowGitOperations(
     WorkflowGitNameListResult.Listed(
       trackedPathsValue,
     )
-
-  override fun resolveReadinessTreeIdentity(
-    repoRoot: Path,
-    baseBranch: String,
-    workflowId: String,
-  ): WorkflowReadinessTreeIdentityResult =
-    WorkflowReadinessTreeIdentityResult.Resolved(
-      identity = readinessTreeIdentity.copy(headSha = headCommitShaValue.ifBlank { readinessTreeIdentity.headSha }),
-    )
-
-  override fun readinessChangedPathsAgainstBase(
-    repoRoot: Path,
-    baseBranch: String,
-  ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(ownedPathsValue)
 
   override fun commitCountAhead(
     repoRoot: Path,

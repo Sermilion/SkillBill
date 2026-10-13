@@ -80,9 +80,7 @@ import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.engine.featuretask.validation.ReadinessCheckSelection
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
@@ -97,7 +95,6 @@ import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
-import skillbill.infrastructure.workflow.github.GitHubPullRequestCheckDiscovery
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
 import skillbill.install.model.SupportedAgent
@@ -155,9 +152,7 @@ import skillbill.ports.telemetry.model.TelemetrySettingsLoad
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
-import skillbill.ports.validation.PrCheckProcessRunner
 import skillbill.ports.validation.ValidationGateRunner
-import skillbill.ports.validation.model.PrCheckRunResult
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
@@ -735,18 +730,6 @@ private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntim
         FeatureTaskRuntimeValidationGateCoordinator(),
         validationGateResolver,
       ),
-    readinessGateCoordinator =
-      FeatureTaskRuntimeReadinessGateCoordinator(
-        ReadinessCheckSelection(GitHubPullRequestCheckDiscovery()),
-        object : PrCheckProcessRunner {
-          override fun run(
-            command: String,
-            repoRoot: Path,
-          ): PrCheckRunResult = PrCheckRunResult(exitCode = 0, durationMs = 1)
-        },
-        deps.recorder,
-        NoopRuntimeDiagnostics,
-      ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
     diffResolver = deps.diffResolver,
   )
@@ -1006,7 +989,6 @@ private fun harnessRunner(
       gitOperations,
       harnessReviewRunner(deps.runtimeConfig, deps.launcher),
       deps.runtimeConfig.pullRequestIdentityLookup,
-      readinessEvidence = deps.recorder,
       delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
@@ -1267,7 +1249,6 @@ private fun telemetryHarnessRunner(
       runtimeConfig.harnessGitOperations,
       harnessReviewRunner(runtimeConfig, launcher),
       runtimeConfig.pullRequestIdentityLookup,
-      readinessEvidence = workflow.recorder,
       delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
@@ -1447,18 +1428,6 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
       NoopRuntimeDiagnostics,
     ),
   qualityGateCycles: RuntimeQualityGateCycles = defaultQualityGateCycles(),
-  readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator =
-    FeatureTaskRuntimeReadinessGateCoordinator(
-      ReadinessCheckSelection(GitHubPullRequestCheckDiscovery()),
-      object : PrCheckProcessRunner {
-        override fun run(
-          command: String,
-          repoRoot: Path,
-        ): PrCheckRunResult = PrCheckRunResult(exitCode = 0, durationMs = 1)
-      },
-      harnessPhaseRecorder(RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository())),
-      NoopRuntimeDiagnostics,
-    ),
   sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
   diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   implementationChecklistStore: FeatureTaskImplementationChecklistStore =
@@ -1471,7 +1440,6 @@ internal open class TestFeatureTaskRuntimeRunLoopEntry(
     specIntentProjectionResolver,
     lifecycleTelemetry,
     qualityGateCycles,
-    readinessGateCoordinator,
     sharedEvidenceResolver,
     diffResolver,
     implementationChecklistStore,
@@ -2534,7 +2502,6 @@ internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState)
     specIntentProjectionResolver,
     lifecycleTelemetry,
     qualityGateCycles,
-    readinessGateCoordinator,
     sharedEvidenceResolver,
     diffResolver,
   )

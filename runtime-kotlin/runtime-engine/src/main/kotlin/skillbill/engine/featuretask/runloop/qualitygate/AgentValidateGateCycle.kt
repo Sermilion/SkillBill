@@ -1,23 +1,18 @@
 package skillbill.engine.featuretask.runloop.qualitygate
 
-import skillbill.application.decomposition.baseBranch
-import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.attempt.PhaseQualityGateCycleContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.attempt.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.attempt.blockGateStep
-import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
 import skillbill.engine.featuretask.slot.attempt.runAcceptedAttemptLoop
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.engine.featuretask.validation.ReadinessPostValidateCaptureRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
 internal class AgentValidateGateCycle(
   private val context: PhaseQualityGateCycleContext,
@@ -67,7 +62,7 @@ internal class AgentValidateGateCycle(
         when (val terminal = cycle.outcome) {
           is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)
           is ValidationGateCycleTerminalOutcome.Completed ->
-            RuntimeOwnedGateSettlement(context, label = "validation", afterCompleted = ::captureReadinessFragment)
+            RuntimeOwnedGateSettlement(context, label = "validation")
               .settle(run, terminal.output.iteration, terminal.output.payload, context.observability)
           is ValidationGateCycleTerminalOutcome.Blocked ->
             context.blockGateStep(
@@ -83,21 +78,4 @@ internal class AgentValidateGateCycle(
             )
         }
     }
-
-  private fun captureReadinessFragment(run: PhaseRun) {
-    if (context.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) return
-    context.readinessGateCoordinator.capturePostValidateFragment(
-      ReadinessPostValidateCaptureRequest(
-        workflowId = context.request.workflowId,
-        repoRoot = context.request.repoRoot,
-        baseBranch =
-          context.gitOperations.baseBranchOrDefault(
-            context.request.repoRoot,
-            context.recorder.loadResolvedBranch(context.request.workflowId)?.baseBranch,
-          ),
-        changedPaths = context.gateChangedPaths(run),
-        gitOperations = context.gitOperations,
-      ),
-    )
-  }
 }

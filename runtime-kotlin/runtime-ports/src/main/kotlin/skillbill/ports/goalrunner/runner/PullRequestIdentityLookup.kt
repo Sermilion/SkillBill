@@ -10,3 +10,5 @@ fun interface PullRequestIdentityLookup {
     branch: String,
   ): PullRequestIdentity
 }
+
+typealias MergeStatePullRequestIdentityLookup = PullRequestIdentityLookup

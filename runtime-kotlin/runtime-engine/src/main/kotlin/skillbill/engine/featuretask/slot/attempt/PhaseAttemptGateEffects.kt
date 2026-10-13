@@ -123,7 +123,6 @@ internal class RuntimeOwnedGateSettlement(
   private val context: PhaseQualityGateCycleContext,
   private val label: String,
   private val acceptance: (PhaseRun, NormalizedFeatureTaskRuntimePhaseOutput) -> Unit = { _, _ -> },
-  private val afterCompleted: (PhaseRun) -> Unit = {},
 ) {
   internal fun settle(
     run: PhaseRun,
@@ -166,7 +165,6 @@ internal class RuntimeOwnedGateSettlement(
       )
     }
     observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
-    afterCompleted(run)
     return PhaseOutcome.completed(
       FeatureTaskRuntimePhaseOutput(
         run.phaseId,

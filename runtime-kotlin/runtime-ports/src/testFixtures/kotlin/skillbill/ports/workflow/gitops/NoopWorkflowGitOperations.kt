@@ -1,6 +1,5 @@
 package skillbill.ports.workflow.gitops
 
-import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations
 
 object NoopWorkflowGitOperations :
@@ -13,7 +12,6 @@ object NoopWorkflowGitOperations :
   CheckpointHistoryGitOperations by UnavailableCheckpointHistoryGitOperations,
   GoalSubtaskReviewGitOperations by NoopGoalSubtaskReviewGitOperations,
   RepositoryFingerprintGitOperations by NoopRepositoryFingerprintGitOperations,
-  ReadinessTreeIdentityGitOperations by UnavailableReadinessTreeIdentityGitOperations,
   RepositoryOwnedPathsGitOperations by UnavailableRepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations by NoopRuntimePhaseFileManifestGitOperations,
   ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,

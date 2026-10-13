@@ -109,7 +109,6 @@ internal class InMemoryPhaseRunState(
           runLoopContext.sharedEvidenceResolver,
           runLoopContext.diffResolver,
           runLoopContext.qualityGateCycles,
-          runLoopContext.readinessGateCoordinator,
         ),
       ),
       run,

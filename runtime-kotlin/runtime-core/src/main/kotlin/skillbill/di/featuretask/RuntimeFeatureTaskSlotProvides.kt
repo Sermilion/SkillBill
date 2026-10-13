@@ -2,7 +2,6 @@ package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
@@ -27,7 +26,6 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -42,8 +40,8 @@ import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strat
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
@@ -69,13 +67,10 @@ internal interface RuntimeFeatureTaskSlotProvides {
   @Provides
   fun prDescriptionStrategy(
     pullRequestIdentityLookup: PullRequestIdentityLookup,
-    readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
-    diagnostics: RuntimeDiagnostics,
     templateFiles: PullRequestTemplateFiles,
   ): PrDescriptionStrategy =
     PrDescriptionStrategy(
       pullRequestIdentityLookup,
-      PullRequestReadinessGate(readinessEvidence, diagnostics),
       templateFiles,
     )
 
@@ -85,7 +80,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun monitorStrategy(
-    pullRequestIdentityLookup: PullRequestIdentityLookup,
+    pullRequestIdentityLookup: MergeStatePullRequestIdentityLookup,
     pullRequestChecksLookup: PullRequestChecksLookup,
   ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 

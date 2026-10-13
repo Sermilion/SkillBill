@@ -20,7 +20,6 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusExecutionScope
-import skillbill.idestatus.model.IdeStatusGoalLifecycleFacts
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
@@ -166,10 +165,9 @@ class IdeStatusProjector(
     context: IdeStatusProjectionContext,
   ): IdeStatusProjection? {
     val issueKey = candidate.issueKey ?: return null
-    val parentWorkflowId = manifestStore.statusParentWorkflowId(issueKey, context.repoRoot) ?: return null
+    val manifestState = manifestStore.loadDurableByIssueKey(issueKey, context.repoRoot) ?: return null
     val projection =
-      goalRunnerStatusService.statusForWorkflow(
-        parentWorkflowId,
+      goalRunnerStatusService.status(
         GoalRunnerStatusRequest(
           issueKey = issueKey,
           repoRoot = context.repoRoot,
@@ -178,23 +176,16 @@ class IdeStatusProjector(
         ),
       )
     val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(parentWorkflowId).goalCompletedAt != null
+      context.unitOfWork.goalRunnerControls.controlState(manifestState.parentWorkflowId).goalCompletedAt != null &&
+        projection?.hasUnfinishedSubtasks() != true
     val goalCandidate =
       candidate.copy(
-        workflowId = parentWorkflowId,
+        workflowId = manifestState.parentWorkflowId,
         workflowFamily = IdeStatusWorkflowFamily.FEATURE_GOAL,
         isGoalAuthoritative = true,
         lifecycleState = IdeStatusLifecycleState.ACTIVE,
       )
-    val preliminaryLifecycle =
-      IdeStatusPolicy.goalLifecycle(
-        IdeStatusGoalLifecycleFacts(
-          goalCandidate.lifecycleState,
-          completionRecorded,
-          projection?.executionLiveness == ExecutionLiveness.LIVE,
-          projection?.paused == true,
-        ),
-      )
+    val preliminaryLifecycle = goalLifecycle(goalCandidate, projection, completionRecorded)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
     if (!goalShowsOpenCiMonitor(projection, completionRecorded, preliminaryLifecycle) && !liveFinalization) {
       return null
@@ -210,8 +201,7 @@ class IdeStatusProjector(
       candidate.issueKey
         ?: return IdeStatusProjection(incompatible(candidate, context, "Goal work is missing an issue key."), null)
     val projection =
-      goalRunnerStatusService.statusForWorkflow(
-        candidate.workflowId,
+      goalRunnerStatusService.status(
         GoalRunnerStatusRequest(
           issueKey = issueKey,
           repoRoot = context.repoRoot,
@@ -229,16 +219,9 @@ class IdeStatusProjector(
     projection: GoalRunnerStatusProjection?,
   ): IdeStatusProjection {
     val completionRecorded =
-      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null
-    val preliminaryLifecycle =
-      IdeStatusPolicy.goalLifecycle(
-        IdeStatusGoalLifecycleFacts(
-          candidate.lifecycleState,
-          completionRecorded,
-          projection?.executionLiveness == ExecutionLiveness.LIVE,
-          projection?.paused == true,
-        ),
-      )
+      context.unitOfWork.goalRunnerControls.controlState(candidate.workflowId).goalCompletedAt != null &&
+        projection?.hasUnfinishedSubtasks() != true
+    val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
@@ -314,6 +297,36 @@ class IdeStatusProjector(
   ): Instant? =
     parseInstantOrNull(projection?.pausedAt)
       ?.takeIf { lifecycle == IdeStatusLifecycleState.PAUSED }
+
+  private fun goalLifecycle(
+    candidate: IdeStatusCandidate,
+    projection: GoalRunnerStatusProjection?,
+    completionRecorded: Boolean,
+  ): IdeStatusLifecycleState {
+    val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
+    val candidateLifecycle =
+      if (candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL &&
+        (projection?.hasUnfinishedSubtasks() == true || liveFinalization)
+      ) {
+        IdeStatusLifecycleState.ACTIVE
+      } else {
+        candidate.lifecycleState
+      }
+    if (completionRecorded || candidateLifecycle == IdeStatusLifecycleState.TERMINAL) {
+      return IdeStatusLifecycleState.TERMINAL
+    }
+    if (candidateLifecycle == IdeStatusLifecycleState.PAUSED &&
+      projection?.executionLiveness == ExecutionLiveness.LIVE && !projection.paused
+    ) {
+      return IdeStatusLifecycleState.ACTIVE
+    }
+    return when {
+      candidateLifecycle != IdeStatusLifecycleState.ACTIVE -> candidateLifecycle
+      projection?.paused == true -> IdeStatusLifecycleState.PAUSED
+      projection?.executionLiveness != ExecutionLiveness.LIVE -> IdeStatusLifecycleState.IDLE
+      else -> IdeStatusLifecycleState.ACTIVE
+    }
+  }
 
   private fun goalLifecycleForOperatorBlock(
     lifecycle: IdeStatusLifecycleState,

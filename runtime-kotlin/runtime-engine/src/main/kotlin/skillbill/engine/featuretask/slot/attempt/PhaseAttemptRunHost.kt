@@ -42,7 +42,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -69,7 +68,6 @@ internal class PhaseAttemptRunHost(
   private val directSharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort? = null,
   private val directDiffResolver: DiffResolverPort? = null,
   private val directQualityGateCycles: RuntimeQualityGateCycles? = null,
-  private val directReadinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator? = null,
 ) : PhaseAttemptEnvironment,
   PhaseQualityGateReporting by backingRunState {
   override val request: FeatureTaskRuntimeRunFacts get() = acceptedRun.request
@@ -123,9 +121,6 @@ internal class PhaseAttemptRunHost(
 
   val qualityGateCycles: RuntimeQualityGateCycles
     get() = directQualityGateCycles ?: throw GoalPlanningPhaseGatesUnsupportedError()
-
-  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
-    get() = directReadinessGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
 
   val commitPushManifestCompletion: CommitPushManifestCompletion?
     get() = backingRunState.commitPushManifestCompletion

@@ -17,6 +17,8 @@ import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
+import skillbill.ports.idestatus.model.WorkBoardRequest
+import skillbill.ports.idestatus.model.WorkDetailRequest
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -35,6 +37,48 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeStatusServiceGoalProjectionTest {
+  @Test
+  fun `reopened goal ignores historical completion in status and work detail`() {
+    listOf("running", "completed").forEach { parentState ->
+      val fixture = gitRepoFixture("ide-status-resumed-goal-$parentState")
+      val identity = testGoalRepositoryIdentity(fixture)
+      val service =
+        ideStatusService(
+          TrackingDatabase(
+            work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, parentState, "2026-08-06T10:00:00Z")),
+            workflows = IdeStatusWorkflowStates(),
+            controls =
+              object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+                override fun controlState(parentWorkflowId: String) =
+                  GoalRunnerControlState(
+                    repositoryIdentity = identity,
+                    goalCompletedAt = "2026-08-06T09:00:00Z",
+                  )
+              },
+          ),
+          manifestStore =
+            StubGoalManifestStore(
+              goalManifestState(fixture, identity, childWorkflowId = ""),
+              planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+              lease = liveLease(),
+            ),
+        )
+
+      val snapshot =
+        service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt)).snapshot
+      assertEquals(IdeStatusLifecycleState.ACTIVE, snapshot.lifecycleState)
+      assertEquals("implement", snapshot.currentStep.id)
+      assertEquals("Goal SKILL-148 is active on implement.", snapshot.summary)
+      assertEquals(1, snapshot.progress?.completed)
+      assertEquals(2, snapshot.progress?.total)
+
+      val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+      assertEquals(IdeStatusLifecycleState.ACTIVE, detail.snapshot.lifecycleState)
+      assertNull(detail.finishedAt)
+      assertNull(detail.finishedAtSource)
+    }
+  }
+
   @Test
   fun `running goal whose parent lease expired projects idle or active without operator pause`() {
     val fixture = gitRepoFixture("ide-status-goal-lease-expired")
@@ -603,6 +647,54 @@ class IdeStatusServiceGoalProjectionTest {
   @Test
   fun `0AC-46 shape without feature goal work item still projects monitor through goal status`() {
     assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem = false)
+  }
+
+  @Test
+  fun `live monitor keeps a historically completed parent active in status board and detail`() {
+    val fixture = gitRepoFixture("ide-status-completed-parent-monitor", branch = "feat/SKILL-148-status-fix")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val original = zeroAc46Database(identity, includeFeatureGoalWorkItem = true)
+    val database =
+      TrackingDatabase(
+        work = original.work.filter { it.workflowId == "goal-1" }.map { it.copy(currentState = "completed") },
+        workflows = original.workflows,
+        controls =
+          object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+            override fun controlState(parentWorkflowId: String) = GoalRunnerControlState(repositoryIdentity = identity)
+          },
+      )
+    val service =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            zeroAc46ManifestState(fixture, identity),
+            planning = planningSnapshot(GoalPlanningStatusState.PREPARED),
+            lease = liveLease(),
+          ),
+        outcomeStore =
+          object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+            override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+              parkedParentProgressOnMonitor().copy(workflowStatus = WorkflowStatus.COMPLETED)
+                .takeIf { workflowId == "goal-1" }
+          },
+      )
+    val status = service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    val board = service.board(WorkBoardRequest(observedAt = ideStatusObservedAt))
+    val boardItem = board.items.single { it.snapshot.workflowId == "goal-1" }
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    listOf(status.snapshot, boardItem.snapshot, detail.snapshot).forEach { snapshot ->
+      assertEquals(IdeStatusLifecycleState.ACTIVE, snapshot.lifecycleState)
+      assertEquals("monitor", snapshot.currentStep.id)
+      assertEquals("Goal SKILL-148 is active on monitor.", snapshot.summary)
+      assertEquals(2, snapshot.progress?.completed)
+      assertEquals(2, snapshot.progress?.total)
+    }
+    assertNull(boardItem.finishedAt)
+    assertNull(boardItem.finishedAtSource)
+    assertNull(detail.finishedAt)
+    assertNull(detail.finishedAtSource)
   }
 
   private fun assertZeroAc46MonitorProjection(includeFeatureGoalWorkItem: Boolean) {

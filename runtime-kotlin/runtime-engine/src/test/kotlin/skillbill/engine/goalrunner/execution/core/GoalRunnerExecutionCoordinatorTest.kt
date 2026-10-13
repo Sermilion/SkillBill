@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.engine.featuretask.validation.coordinator
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP

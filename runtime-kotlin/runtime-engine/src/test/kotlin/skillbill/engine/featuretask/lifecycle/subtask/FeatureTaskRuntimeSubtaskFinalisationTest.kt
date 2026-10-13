@@ -119,6 +119,22 @@ class FeatureTaskRuntimeSubtaskFinalisationTest {
   }
 
   @Test
+  fun `a subtask that never checkpointed and left no changes blocks naming the missing no-change claim`() {
+    val repo = repoWithRemote()
+    val baseSha = git(repo.root, "rev-parse", "HEAD")
+
+    val blocked =
+      assertIs<FeatureTaskRuntimeSubtaskFinalisationBlocked>(
+        finalise(repo, durableCommitSha = null, paths = emptyList()),
+      )
+
+    assertContains(blocked.reason, NOTHING_TO_COMMIT_REASON)
+    assertTrue(!blocked.reason.contains("empty sha"), "an empty diff must not be reported as an empty sha")
+    assertEquals(baseSha, git(repo.root, "rev-parse", "HEAD"))
+    assertEquals(emptyList<String>(), recordedCommits)
+  }
+
+  @Test
   fun `commit_push includes feature-spec paths in the subtask commit`() {
     val repo = repoWithRemote()
     Files.createDirectories(repo.root.resolve(".feature-specs/$issueKey"))

@@ -9,6 +9,15 @@ internal object ImplementationPromptSections {
   const val IMPLEMENT_READONLY_REPAIR_SENTENCE: String =
     "Repair evidence is read-only repository facts: do not run builds or tests here."
 
+  const val NO_CHANGE_CLAIM_DIRECTIVE: String =
+    "When the repository already satisfies the owned spec and needs no change, leave the diff empty and " +
+      "pass a claim object as the `no_change` argument of feature_task_phase_complete, settling with status " +
+      "completed and a prose value as usual. The claim needs `reason` (`out_of_repo`, `already_satisfied` or " +
+      "`not_reproducible`), one `criteria` entry per acceptance criterion with `criterion_id`, a `verdict` set " +
+      "to the same reason word, and non-blank `evidence`, at least one `path:line` citation in `citations`, and " +
+      "a non-blank `boundary_trace`. Add `owning_system` when the owner is known. Never finish an implement " +
+      "step that changed nothing without this claim: an empty diff without a claim cannot be committed."
+
   const val IMPLEMENT_DIRECTIVE: String =
     "Reconcile the repository to the intended state the selected governed spec describes: read the file named " +
       "by spec_reference for its scope, planned details, and acceptance criteria, make the changes it " +
@@ -18,7 +27,8 @@ internal object ImplementationPromptSections {
       "tree is in. Keep it a bounded summary, not a transcript. Compilation and build proof belong to build, " +
       "and tests and full validation belong to validate; only the safe scoped authoring commands admitted " +
       "above may run. " +
-      IMPLEMENT_READONLY_REPAIR_SENTENCE
+      IMPLEMENT_READONLY_REPAIR_SENTENCE + " " +
+      NO_CHANGE_CLAIM_DIRECTIVE
 
   const val SIMPLIFY_DIRECTIVE: String =
     "Within the current subtask scoped diff and owned paths only, apply high-confidence local simplifications: " +
