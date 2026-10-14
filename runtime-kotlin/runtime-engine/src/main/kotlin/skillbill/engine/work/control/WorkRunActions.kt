@@ -55,11 +55,10 @@ class WorkRunActions(
       val agent =
         (agentId ?: options.agentId)?.takeIf { it in options.agentChoices }
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.AGENT_REQUIRED)
-      val branch = item.snapshot.branchCorrelation
-      if (!branch.isNullOrBlank() && branch != "HEAD" && branches.checkedOutBranch(target.repositoryRoot) != branch) {
+      val phase = unit.standalonePhaseStatuses.readByInvocation(target.id)
+      if (phase != null && checkoutLeftRecordedBranch(phase, target)) {
         return@operation WorkControlResult.Rejected(WorkControlRejection.BRANCH_CHANGED)
       }
-      val phase = unit.standalonePhaseStatuses.readByInvocation(target.id)
       val arguments =
         arguments(item, phase, unit, agent)
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
@@ -69,8 +68,9 @@ class WorkRunActions(
             target.repositoryRoot,
             unit.dbPath,
             agent,
-            launchPrompt(item, arguments, agent),
+            launchPrompt(item, phase, arguments, agent),
             workRunOwnershipKey(item, phase),
+            recordedAgentEnvironment(item, phase, unit),
           ),
         )
       if (result is WorkRunLaunchResult.Refused) return@operation WorkControlResult.LaunchFailed(result.reason)
@@ -84,6 +84,14 @@ class WorkRunActions(
       FencedTransactionResult.ChangedTarget -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       is FencedTransactionResult.Committed -> result.value
     }
+  }
+
+  private fun checkoutLeftRecordedBranch(
+    phase: StandalonePhaseStatusRecord,
+    target: WorkRunTarget,
+  ): Boolean {
+    val branch = phase.branchCorrelation
+    return branch.isNotBlank() && branch != "HEAD" && branches.checkedOutBranch(target.repositoryRoot) != branch
   }
 
   private fun restartCanceled(
@@ -199,6 +207,7 @@ class WorkRunActions(
 
   private fun launchPrompt(
     item: WorkDetailItem,
+    phase: StandalonePhaseStatusRecord?,
     arguments: List<String>,
     agent: String,
   ): String =
@@ -213,9 +222,22 @@ class WorkRunActions(
       appendLine("Selected agent: $agent")
       appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
       appendLine("Repository: ${item.repositoryRoot}")
-      appendLine("Keep the recorded branch ${item.snapshot.branchCorrelation ?: "HEAD"} and existing PR.")
+      if (phase != null) {
+        appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
+      } else {
+        appendLine("Keep the branches and PR the runtime recorded for ${item.snapshot.issueKey}.")
+      }
       append("Read durable state before continuing. Do not create another branch or PR for this work.")
     }
+
+  private fun recordedAgentEnvironment(
+    item: WorkDetailItem,
+    phase: StandalonePhaseStatusRecord?,
+    unit: UnitOfWork,
+  ): Map<String, String> =
+    phase?.agentEnvironment
+      ?: item.snapshot.workflowId?.let(unit.standalonePhaseStatuses::latestWorkflowExecution)?.agentEnvironment
+      ?: emptyMap()
 
   private fun recordedAgent(
     item: WorkDetailItem,

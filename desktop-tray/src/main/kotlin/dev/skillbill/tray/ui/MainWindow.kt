@@ -124,12 +124,9 @@ private fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Un
     Row(Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
-        Text(item.repositoryTitle(), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val status = if (item.scope == ExecutionScope.STANDALONE_PHASE || item.lifecycle == Lifecycle.CANCELED) {
-          item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
-        } else null
-        val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
-        Text(listOfNotNull(item.issueKey ?: item.phaseId, status, step).joinToString(" · "), color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val labels = sidebarRowLabels(item)
+        Text(labels.title, color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(labels.meta, color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted, fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (item.scope == ExecutionScope.STANDALONE_PHASE) {
           val started = item.startedAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ofPattern("d MMM HH:mm"))
           val invocation = item.invocationId?.removePrefix("phr-")?.take(8)
@@ -139,6 +136,18 @@ private fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Un
       if (item.progressTotal != null) Text("${item.progressCompleted ?: 0}/${item.progressTotal}", color = if (selected) amber else dim, style = MaterialTheme.typography.labelSmall)
     }
   }
+}
+
+internal data class SidebarRowLabels(val title: String, val meta: String)
+
+internal fun sidebarRowLabels(item: WorkItem): SidebarRowLabels {
+  val repository = item.repositoryTitle()
+  val status = if (item.scope == ExecutionScope.STANDALONE_PHASE || item.lifecycle == Lifecycle.CANCELED) {
+    item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
+  } else null
+  val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
+  val subject = if (item.issueKey != null) repository else item.phaseId
+  return SidebarRowLabels(item.issueKey ?: repository, listOfNotNull(subject, status, step).joinToString(" · "))
 }
 
 @Composable

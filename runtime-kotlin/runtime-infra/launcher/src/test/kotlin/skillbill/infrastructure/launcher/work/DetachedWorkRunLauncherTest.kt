@@ -128,6 +128,45 @@ class DetachedWorkRunLauncherTest {
   }
 
   @Test
+  fun `the harness runs with the recorded agent home over the tray environment and ignores other recorded keys`() {
+    val home = Files.createTempDirectory("recorded-agent-environment")
+    executable(
+      home,
+      """
+      #!/bin/sh
+      printf 'claude=%s\n' "${'$'}CLAUDE_CONFIG_DIR"
+      printf 'codex=%s\n' "${'$'}CODEX_HOME"
+      printf 'token=%s\n' "${'$'}SKILLBILL_RECORDED_SECRET"
+      cat
+      printf 'done\n'
+      """.trimIndent(),
+    )
+    val launcher =
+      DetachedWorkRunLauncher(
+        EnvironmentContext(
+          environment = mapOf("CLAUDE_CONFIG_DIR" to "/tray/.claude", "CODEX_HOME" to "/tray/.codex"),
+          userHome = home,
+        ),
+        NoopRuntimeDiagnostics,
+      )
+    val request =
+      WorkRunLaunchRequest(
+        home,
+        home.resolve("metrics.db"),
+        "claude",
+        "Resume monitor",
+        "work",
+        mapOf("CLAUDE_CONFIG_DIR" to "/operator/.claude-work", "SKILLBILL_RECORDED_SECRET" to "recorded-token"),
+      )
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher.start(request))
+    await { Files.readString(started.logPath).endsWith("done\n") }
+    val output = Files.readString(started.logPath)
+    assertTrue(output.contains("claude=/operator/.claude-work\n"), output)
+    assertTrue(output.contains("codex=/tray/.codex\n"), output)
+    assertTrue(output.contains("token=\n"), output)
+  }
+
+  @Test
   fun `an immediate runner failure exposes its log and releases the launch lock`() {
     val home = Files.createTempDirectory("failed-work-launch")
     executable(home, "#!/bin/sh\nprintf 'invalid intake\\n'\nexit 7\n")

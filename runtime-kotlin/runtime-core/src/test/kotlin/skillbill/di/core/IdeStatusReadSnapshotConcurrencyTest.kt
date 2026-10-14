@@ -209,7 +209,6 @@ private class SnapshotFixture(
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
-      manifestStore = EmptyManifestStore,
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,

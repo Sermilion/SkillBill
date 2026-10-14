@@ -12,6 +12,7 @@ data class IdeStatusWorkflowRegistration(
   val executionId: String,
   val lifecycleState: String,
   val startedAt: Instant,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
 data class IdeStatusWorkflowExecution(
@@ -27,6 +28,7 @@ data class IdeStatusWorkflowExecution(
   val lifecycleState: String,
   val startedAt: Instant,
   val updatedAt: Instant,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
 data class StandalonePhaseStatusRegistration(
@@ -46,6 +48,7 @@ data class StandalonePhaseStatusRegistration(
   val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
   val launchAgentId: String? = null,
   val launchArguments: List<String>? = null,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -100,6 +103,7 @@ data class StandalonePhaseStatusRecord(
   val processOwner: FeatureTaskRuntimeProcessIdentity? = null,
   val launchAgentId: String? = null,
   val launchArguments: List<String>? = null,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
 data class StandalonePhaseExecutionQuery(
