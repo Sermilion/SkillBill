@@ -94,4 +94,26 @@ if install_selected_desktop_app; then
 fi
 [[ "$DESKTOP_APP_INSTALL_RESULT" == 'not available for macos-arm64' ]]
 
+sed -n '/^launch_desktop_app() {/,/^}/p' "$repo_root/install.sh" > "$task_dir/launch-function.sh"
+source "$task_dir/launch-function.sh"
+mkdir -p "$task_dir/service-bin"
+cat > "$task_dir/service-bin/systemctl" <<'SERVICE'
+#!/usr/bin/env bash
+[[ "$*" == '--user show-environment' ]]
+SERVICE
+cat > "$task_dir/service-bin/systemd-run" <<'SERVICE'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$DESKTOP_LAUNCH_ARGS"
+exit "${DESKTOP_LAUNCH_STATUS:-0}"
+SERVICE
+chmod +x "$task_dir/service-bin/systemctl" "$task_dir/service-bin/systemd-run"
+export DESKTOP_LAUNCH_ARGS="$task_dir/service-launch"
+PATH="$task_dir/service-bin:$PATH" launch_desktop_app linux "$(dirname "$app")" "$app"
+grep -Fx -- '--service-type=exec' "$DESKTOP_LAUNCH_ARGS" >/dev/null
+[[ "$(tail -n 1 "$DESKTOP_LAUNCH_ARGS")" == "$app" ]]
+if DESKTOP_LAUNCH_STATUS=23 PATH="$task_dir/service-bin:$PATH" launch_desktop_app linux "$(dirname "$app")" "$app"; then
+  err 'Desktop service launch failure was reported as success.'
+  exit 1
+fi
+
 printf 'Required desktop install, direct and symlink launch restart, and failure preservation passed.\n'

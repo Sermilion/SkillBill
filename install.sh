@@ -1599,6 +1599,18 @@ launch_desktop_app() {
     macos)
       open "$app_target"
       ;;
+    linux)
+      if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 &&
+        systemctl --user show-environment >/dev/null 2>&1; then
+        systemd-run --user --collect --quiet --service-type=exec \
+          --unit="skill-bill-desktop-$$" -- "$executable"
+      else
+        warn "Desktop service manager unavailable; launching the app with nohup."
+        local log_dir="$SKILL_BILL_STATE_DIR/desktop"
+        mkdir -p "$log_dir" || return 1
+        nohup "$executable" >>"$log_dir/desktop.log" 2>&1 &
+      fi
+      ;;
     *)
       nohup "$executable" >/dev/null 2>&1 &
       ;;
