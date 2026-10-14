@@ -2,6 +2,7 @@ package skillbill.infrastructure.contracts
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeHandoffEnvelopeSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationAttemptSchemaValidator
@@ -57,6 +58,8 @@ class FeatureTaskRuntimeWireArtifactValidator : FeatureTaskRuntimeWireArtifactVa
         GoalObservabilityEventSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE ->
         GoalPlanningPreparationSchemaValidator.validate(wireMap, sourceLabel)
+      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
+        AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
     }
   }
 

@@ -153,6 +153,11 @@ governedResources {
     "SKILL-360: canonical validation-evidence schema",
   )
   copy(
+    "copyAcceptanceCriterionRepairStateSchema",
+    "acceptance-criterion-repair-state-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-state schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeReadinessEvidenceSchema",
     "feature-task-runtime-readiness-evidence-schema.yaml",
     "SKILL-364: canonical readiness-evidence schema",

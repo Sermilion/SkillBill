@@ -5,6 +5,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENV
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeBuildReceiptSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
@@ -92,4 +93,6 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
         fieldPath = "<root>",
         reason = reason,
       )
+    FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
+      invalidAcceptanceCriterionRepairStateSchema(sourceLabel, reason)
   }

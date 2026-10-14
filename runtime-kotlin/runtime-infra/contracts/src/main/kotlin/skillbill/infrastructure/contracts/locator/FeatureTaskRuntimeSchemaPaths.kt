@@ -13,6 +13,15 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }
 
+object AcceptanceCriterionRepairStateSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/acceptance-criterion-repair-state-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-state-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/acceptance-criterion-repair-state.yaml"
+}
+
 object FeatureTaskRuntimePhaseOutputSchemaPaths {
   const val CURRENT_CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"

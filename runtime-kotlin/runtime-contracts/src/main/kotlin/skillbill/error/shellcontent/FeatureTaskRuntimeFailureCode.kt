@@ -19,6 +19,7 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_BUILD_RECEIPT_SCHEMA,
   INVALID_VALIDATION_EVIDENCE_SCHEMA,
   INVALID_READINESS_EVIDENCE_SCHEMA,
+  INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA,
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   FEATURE_TASK_RUNTIME_CONTRACT_REJECTED,
@@ -170,6 +171,17 @@ fun invalidFeatureTaskRuntimeReadinessEvidenceSchema(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_READINESS_EVIDENCE_SCHEMA,
     "Feature-task-runtime readiness evidence '$sourceLabel' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidAcceptanceCriterionRepairStateSchema(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA,
+    "Acceptance criterion repair state '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 
