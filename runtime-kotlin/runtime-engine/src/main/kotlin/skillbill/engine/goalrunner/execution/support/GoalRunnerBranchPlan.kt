@@ -59,10 +59,6 @@ private fun String.toPullRequestTitle(): String =
       word.replaceFirstChar { character -> character.uppercase() }
     }
 
-/**
- * The branch this goal's work lives on, which is not the branch checked out when the goal launched: a goal
- * started on a base branch creates its feature branch only after it registers its run.
- */
 internal fun DecompositionManifest.goalWorkBranch(): String? {
   val branch =
     when (executionModel) {
