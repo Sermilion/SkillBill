@@ -65,20 +65,6 @@ class StandalonePlanRun(
 ) {
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
-  fun incompletePlanWorkflowId(
-    issueKey: String,
-    repoRoot: Path,
-  ): String? =
-    if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
-      null
-    } else {
-      when (val found = lookupService.lookupPlan(issueKey, repositories.repositoryIdentity(repoRoot))) {
-        is FeatureTaskContinuationLookupResult.Resumable -> found.candidate.workflowId
-        is FeatureTaskContinuationLookupResult.AlreadyRunning -> found.candidate.workflowId
-        else -> null
-      }
-    }
-
   fun run(
     issueKey: String,
     suppliedIntake: String?,

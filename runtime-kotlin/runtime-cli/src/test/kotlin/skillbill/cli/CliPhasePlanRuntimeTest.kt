@@ -14,7 +14,10 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -150,6 +153,108 @@ class CliPhasePlanRuntimeTest {
     assertGoalStartsAtImplementation(launcher)
   }
 
+  @Test
+  fun `full run on a new key plans first then imports the bundle and runs the goal linked to the plan`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir)
+    val goal = GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)
+
+    val result = runFull(PlanThenGoalLauncher(planner, goal))
+
+    assertEquals(3, result.exitCode, result.stdout + result.stderr)
+    assertEquals(listOf("preplan", "plan"), planner.phaseIds)
+    assertEquals(1, goal.childLaunches.size)
+    assertEquals(1, rowCount("goal_runner_controls"))
+    assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
+  }
+
+  @Test
+  fun `full run stops with the plan block reason and workflow id when planning blocks`() {
+    installGoalBuildPack(tempDir)
+    val goal = GoalFixtureAgentRunLauncher(fixture)
+
+    val result = runFull(PlanThenGoalLauncher(PhasePlanLauncher(tempDir, incompleteFirstBundle = true), goal))
+
+    assertEquals(1, result.exitCode, result.stdout + result.stderr)
+    assertContains(result.stdout + result.stderr, "Readiness problem")
+    assertContains(result.stdout + result.stderr, "Plan workflow ID: ${planWorkflowId()}")
+    assertTrue(goal.requests.isEmpty())
+    assertEquals(0, rowCount("goal_runner_controls"))
+  }
+
+  @Test
+  fun `full run on a key with an incomplete plan workflow resumes that workflow`() {
+    installGoalBuildPack(tempDir)
+    val planner = PhasePlanLauncher(tempDir, authorNothingFirst = true)
+    val launcher = PlanThenGoalLauncher(planner, GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1))
+
+    val blocked = runFull(launcher)
+    assertEquals(1, blocked.exitCode, blocked.stdout + blocked.stderr)
+    val incompletePlan = planWorkflowId()
+
+    val resumed = runFull(launcher)
+
+    assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
+    assertEquals(listOf("preplan", "plan", "plan"), planner.phaseIds)
+    assertEquals(incompletePlan, planWorkflowId())
+  }
+
+  @Test
+  fun `full run on a key with a stored goal resumes the goal without planning again`() {
+    installGoalBuildPack(tempDir)
+    val firstPlanner = PhasePlanLauncher(tempDir)
+    runFull(PlanThenGoalLauncher(firstPlanner, GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)))
+    val planWorkflow = planWorkflowId()
+    val secondPlanner = PhasePlanLauncher(tempDir)
+
+    runFull(PlanThenGoalLauncher(secondPlanner, GoalFixtureAgentRunLauncher(fixture, noTerminalSubtask = 1)))
+
+    assertTrue(secondPlanner.phaseIds.isEmpty(), secondPlanner.phaseIds.toString())
+    assertEquals(1, rowCount("goal_runner_controls"))
+    assertEquals(planWorkflow, planWorkflowId())
+  }
+
+  private fun runFull(launcher: AgentRunLauncher) =
+    CliRuntime.run(
+      listOf(
+        "--db",
+        fixture.dbPath.toString(),
+        "$ISSUE_KEY Split the work into two parts.",
+        "--agent",
+        "codex",
+        "--repo-root",
+        tempDir.toString(),
+      ),
+      fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
+    )
+
+  private fun planWorkflowId(): String =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT workflow_id, artifacts_json FROM feature_task_workflows").use { rows ->
+          buildList {
+            while (rows.next()) {
+              val artifacts = DurableWorkflowArtifacts.fromAny(JsonCodec.parseValue(rows.getString(2)))
+              if (ExecutionPlanArtifactView.definitionId(artifacts) == SkeletonDefinition.PLAN.id) {
+                add(rows.getString(1))
+              }
+            }
+          }.single()
+        }
+      }
+    }
+
+  private fun workflowIdsMentioning(planWorkflowId: String): List<String> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.prepareStatement(
+        "SELECT workflow_id FROM feature_task_workflows WHERE workflow_id <> ? AND steps_json LIKE '%' || ? || '%'",
+      ).use { query ->
+        query.setString(1, planWorkflowId)
+        query.setString(2, planWorkflowId)
+        query.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getString(1)) } }
+      }
+    }
+
   private fun settledIntakeStep(): Map<String, Any?> =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       connection.createStatement().use { statement ->
@@ -224,10 +329,28 @@ class CliPhasePlanRuntimeTest {
       }
     }
 
+  private class PlanThenGoalLauncher(
+    private val planner: PhasePlanLauncher,
+    private val goal: GoalFixtureAgentRunLauncher,
+  ) : AgentRunLauncher {
+    override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
+      passThroughResolvedLaunchModel(request)
+
+    override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
+      val skillRequest = request.skillRunRequest
+      return if (skillRequest.goalContinuation == null && skillRequest.promptOverride != null) {
+        planner.launch(request)
+      } else {
+        goal.launch(request)
+      }
+    }
+  }
+
   private class PhasePlanLauncher(
     private val repoRoot: Path,
     private val dirtyOutsideBundle: Boolean = false,
     private val incompleteFirstBundle: Boolean = false,
+    private val authorNothingFirst: Boolean = false,
   ) : AgentRunLauncher {
     val phaseIds = mutableListOf<String>()
 
@@ -248,6 +371,7 @@ class CliPhasePlanRuntimeTest {
     }
 
     private fun authorBundle(): String {
+      if (authorNothingFirst && phaseIds.count { it == "plan" } == 1) return "Authored nothing yet."
       val bundle = seededBundle()
       Files.writeString(
         bundle.resolve("spec.md"),

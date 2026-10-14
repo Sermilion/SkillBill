@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Full run plans first"
   spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_2_full-run-plans-first.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261014-125938-zgh4"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

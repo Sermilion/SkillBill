@@ -2,7 +2,6 @@ package skillbill.engine.goalrunner.intake
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.issueAndFeature
-import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
@@ -11,13 +10,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
-import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
-import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
@@ -29,7 +25,6 @@ class GoalIntakePreparation(
   private val specWriter: FeatureSpecPreparationWriter,
   private val specPathResolver: FeatureSpecPathResolverPort,
   private val fileStore: DecompositionManifestStore,
-  private val gitOperations: WorkflowGitOperations,
 ) {
   fun issueKeyForExistingSpec(
     intake: String,
@@ -48,60 +43,8 @@ class GoalIntakePreparation(
       null
     }
 
-  fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? {
-    manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)?.let { return it }
-    val suppliedIntake = request.intake?.takeIf(String::isNotBlank) ?: return null
-    val specPath = existingSpecPath(suppliedIntake, request.issueKey, request.repoRoot)
-    val specText = specPath?.let(fileStore::readText)
-    val preservedSpecPath = specPath?.takeIf { specText != null && hasAcceptanceList(specText) }
-    val intake = specText?.let { if (preservedSpecPath == null) asProse(it) else it } ?: suppliedIntake
-    val featureName =
-      specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second }
-        ?: newWorkFeatureName(GoalIntake.parse(suppliedIntake))
-    val baseBranch =
-      if (specPath == null) {
-        gitOperations.baseBranchOrDefault(request.repoRoot, recordedBaseBranch = null)
-      } else {
-        val branch = gitOperations.currentBranch(request.repoRoot)
-        if (!branch.ok) invalidIntake("base_branch", branch.error)
-        gitOperations.baseBranchOrDefault(request.repoRoot, branch.value)
-      }
-    val criteria = acceptanceCriteria(specText ?: intake)
-    val constraints = listOf(TRACKER_RESOLUTION)
-    specWriter.write(
-      request.repoRoot,
-      FeatureSpecWriteRequest(
-        decision =
-          FeatureSpecPreparationDecision(
-            request.issueKey,
-            intake,
-            criteria,
-            constraints,
-            emptyList(),
-            FeatureSpecPreparationMode.SINGLE_SPEC,
-          ),
-        featureName = featureName,
-        baseBranch = baseBranch,
-        parentSpecOverview = intake,
-        validationStrategy = VALIDATION,
-        subtasks =
-          listOf(
-            FeatureSpecSubtaskPreparation(
-              id = 1,
-              name = "Implement the requested change",
-              scope = intake + "\n\n" + TRACKER_RESOLUTION,
-              acceptanceCriteria = criteria,
-              nonGoals = emptyList(),
-              dependencyNotes = "The full goal owns planning and execution of the supplied requirements.",
-              validationStrategy = VALIDATION,
-              nextPath = "Complete the goal and prepare its pull request.",
-            ),
-          ),
-      ),
-      existingParentSpecPath = preservedSpecPath,
-    )
-    return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
-  }
+  fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
+    manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
 
   /** Where intake will leave the parent spec and how, without writing anything. */
   fun resolvePlanSpec(

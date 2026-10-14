@@ -12,7 +12,6 @@ import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanSeedRecorder
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 
 fun testPlanIntake(): FeatureTaskRuntimePlanIntake =
   FeatureTaskRuntimePlanIntake(
@@ -32,5 +31,4 @@ fun testGoalIntakePreparation(): GoalIntakePreparation =
     ),
     FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
     TestDecompositionManifestStore,
-    NoopWorkflowGitOperations,
   )

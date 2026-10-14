@@ -305,7 +305,6 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         ),
         FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
         UnavailableDecompositionManifestStore,
-        NoopWorkflowGitOperations,
       ),
   )
 }

@@ -11,34 +11,22 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalIntakePreparationTest {
   private val preparation = testGoalIntakePreparation()
 
   @Test
-  fun `a spec without a readable acceptance list becomes prose intake for a runtime-written spec`() {
-    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-unlisted")
+  fun `prepare finds no bundle for an intake and writes no manifest or subtask spec`() {
+    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-no-bundle")
     val parentSpec = writeParentSpec(repoRoot, TABLE_SPEC)
 
-    preparation.prepare(request(repoRoot))
+    val prepared = preparation.prepare(request(repoRoot))
 
-    val rewritten = Files.readString(parentSpec)
-    assertContains(rewritten, "> | AC-01 | The desktop app compiles. |")
-    assertTrue(acceptanceCriteria(rewritten).isNotEmpty())
-    assertTrue(acceptanceCriteria(Files.readString(subtaskSpec(parentSpec))).isNotEmpty())
-  }
-
-  @Test
-  fun `a spec with a readable acceptance list is kept verbatim`() {
-    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-listed")
-    val listedSpec = "# SKILL-77 Listed\n\n## Acceptance Criteria\n\n1. The desktop app compiles.\n"
-    val parentSpec = writeParentSpec(repoRoot, listedSpec)
-
-    preparation.prepare(request(repoRoot))
-
-    assertEquals(listedSpec, Files.readString(parentSpec))
-    assertTrue(acceptanceCriteria(Files.readString(subtaskSpec(parentSpec))).isNotEmpty())
+    assertNull(prepared)
+    assertEquals(TABLE_SPEC, Files.readString(parentSpec))
+    assertEquals(listOf("spec.md"), directoryEntries(parentSpec))
   }
 
   @Test
@@ -118,11 +106,6 @@ class GoalIntakePreparationTest {
     Files.writeString(parentSpec, text)
     return parentSpec
   }
-
-  private fun subtaskSpec(parentSpec: Path): Path =
-    Files.list(parentSpec.parent).use { paths ->
-      paths.filter { it.fileName.toString().startsWith("spec_subtask_1") }.findFirst().orElseThrow()
-    }
 
   private fun request(repoRoot: Path) =
     GoalRunnerRunRequest(

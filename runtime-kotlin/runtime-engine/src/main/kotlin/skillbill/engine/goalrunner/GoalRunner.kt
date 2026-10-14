@@ -76,6 +76,10 @@ class GoalRunner(
       ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
   }
 
+  fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
+    manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
+      intakePreparation.prepare(request) == null
+
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val admittedState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)

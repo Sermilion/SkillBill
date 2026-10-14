@@ -231,7 +231,7 @@ class GoalRunCommand(
           effectiveRepoRoot = effectiveRepoRoot,
         ),
       )
-    if (!finishIncompletePlan(runIssueKey, intake, effectiveRepoRoot, invokedAgentId, hydratedSelection)) {
+    if (!planFirstWhenNoGoal(runIssueKey, intake, effectiveRepoRoot, invokedAgentId, hydratedSelection)) {
       return
     }
     val presenter =
@@ -259,14 +259,21 @@ class GoalRunCommand(
     drainTelemetryOnCompletion(telemetryService, diagnostics)
   }
 
-  private fun finishIncompletePlan(
+  private fun planFirstWhenNoGoal(
     runIssueKey: String,
     intake: String,
     effectiveRepoRoot: Path,
     invokedAgentId: String,
     hydratedSelection: HydratedAgentAddonSelection,
   ): Boolean {
-    if (planLauncher.incompletePlanWorkflowId(runIssueKey, effectiveRepoRoot) == null) {
+    val planningCheck =
+      GoalRunnerRunRequest(
+        issueKey = runIssueKey,
+        repoRoot = effectiveRepoRoot,
+        invokedAgentId = invokedAgentId,
+        intake = intake,
+      )
+    if (!goalRunner.requiresPlanning(planningCheck)) {
       return true
     }
     val planned =
@@ -276,7 +283,7 @@ class GoalRunCommand(
         effectiveRepoRoot,
         invokedAgentId,
         StandalonePlanOptions(
-          timeout = resumedPlanTimeout(),
+          timeout = planTimeout(),
           agentAddonSelection = hydratedSelection,
           eventSink = runtimeRunEventSink(inputs, monitor = !noLiveOutput),
         ),
@@ -288,7 +295,7 @@ class GoalRunCommand(
     return false
   }
 
-  private fun resumedPlanTimeout(): Duration? =
+  private fun planTimeout(): Duration? =
     listOfNotNull(
       maxWallClockMinutes.takeIf { it > 0 }?.minutes,
       planningBudgetMinutes.takeIf { it > 0 }?.minutes,

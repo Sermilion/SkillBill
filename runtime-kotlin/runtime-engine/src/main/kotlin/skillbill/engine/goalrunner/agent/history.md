@@ -1,5 +1,16 @@
 # goalrunner boundary history
 
+## [2026-10-14] SKILL-425 subtask 2: full run plans first
+Areas: runtime-engine goalrunner (intake, plan, GoalRunner), runtime-cli goal/core and kernel/plan, goalrunner and CLI tests
+- A full run on a key with no stored durable goal and no bundle on disk now runs the plan skeleton first, then imports the bundle and runs the goal in the same invocation. GoalRunner.requiresPlanning answers the question; GoalCliCommands.planFirstWhenNoGoal acts on it after admission.
+- A blocked or incomplete plan stops the run with exit 1, the block reason and the plan workflow id. StandalonePlanRun.run already opens or resumes, so the CLI makes one planLauncher call. incompletePlanWorkflowId was removed from launcher and run.
+- GoalIntakePreparation.prepare only reads the on-disk bundle and returns it or null. The one-subtask writer, its prose fallback and the gitOperations dependency are gone, so nothing authors a manifest or subtask spec outside the skeleton.
+- Plan-to-goal linking needed no new code; the manifest import already links the completed plan workflow to the goal parent.
+- Reusable: CliPhasePlanRuntimeTest PlanThenGoalLauncher routes plan-skeleton prompts to the plan launcher and everything else to the goal fixture launcher, so one test covers plan and goal together.
+- Limits: a manifest left on disk by a blocked plan makes the next run import the bundle instead of resuming the plan workflow. Intake helpers (hasAcceptanceList, asProse) stay because the intake slot uses them. FeatureSpecPreparationWriter.write is untouched. No GoalRunnerTest covers requiresPlanning directly.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented (self-reported; build and validate had not run when written)
+
 ## [2026-10-10] SKILL-417 subtask 1 — Goal-status liveness agrees with the live goal step
 Areas: runtime-engine/goalrunner/{status, model, persist}
 - Status extras take child progress while the child is not idle or completed. An idle or completed child still supplies implement/review until the parent is LIVE on a goal_finalization event; then the assembler rewrites the parent copy to the live monitor/PR/CI step.
