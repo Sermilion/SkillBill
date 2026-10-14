@@ -1,0 +1,54 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-425"
+feature_name: "one-planning-skeleton"
+parent_spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-425-one-planning-skeleton"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Intake slot"
+  spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_1_intake-slot.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: "Full run plans first"
+  spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_2_full-run-plans-first.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 3
+  name: "One plan strategy and planning state on the plan workflow"
+  spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_3_one-plan-strategy.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 4
+  name: "Retire the standalone skeleton and update docs"
+  spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_4_retire-standalone-skeleton.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
