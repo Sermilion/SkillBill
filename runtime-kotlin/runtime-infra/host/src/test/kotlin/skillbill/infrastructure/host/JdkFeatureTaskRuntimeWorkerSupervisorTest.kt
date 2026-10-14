@@ -255,6 +255,21 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   }
 
   @Test
+  fun `a live worker still reads live after the network renames the machine`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
+    val current = supervisor.currentProcess()
+
+    val ownership =
+      ownershipFor(
+        current,
+        bootIdentity = current.bootIdentity,
+        hostIdentity = "before-vpn-${current.hostIdentity}",
+      )
+
+    assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
+  }
+
+  @Test
   fun `a reused pid is still caught when the boot check abstains`() {
     val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
@@ -301,11 +316,12 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     current: FeatureTaskRuntimeProcessIdentity,
     bootIdentity: String,
     processBirthToken: String = current.processBirthToken,
+    hostIdentity: String = current.hostIdentity,
   ) = FeatureTaskRuntimeWorkerOwnership(
     workflowId = "wftr-test",
     generation = 1,
     ownerToken = "owner-token-0001",
-    hostIdentity = current.hostIdentity,
+    hostIdentity = hostIdentity,
     bootIdentity = bootIdentity,
     pid = current.pid,
     processBirthToken = processBirthToken,

@@ -211,11 +211,6 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     local: FeatureTaskRuntimeProcessIdentity,
   ): FeatureTaskRuntimeProcessInspection {
-    if (ownership.hostIdentity != local.hostIdentity) {
-      return FeatureTaskRuntimeProcessInspection.OwnershipMismatch(
-        "Worker ownership belongs to a different host.",
-      )
-    }
     if (bootIdentitiesConflict(ownership.bootIdentity, local.bootIdentity)) {
       return FeatureTaskRuntimeProcessInspection.NotRunning
     }
