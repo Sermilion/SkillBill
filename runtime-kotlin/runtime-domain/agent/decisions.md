@@ -1,3 +1,9 @@
+## [2026-10-14] Match review routing content signals at identifier boundaries
+Context: Bare `expect` and `actual` content signals selected KMP for JVM identifiers such as `ExpectedState` and `actualOwner`.
+Decision: Compile literal manifest content signals with Unicode letter, digit and underscore boundaries at identifier endpoints. Path ownership still admits candidates before content breaks ties. Composition and cross-root ownership checks retain their existing behavior.
+Reason: The stack-routing contract requires lexical boundaries. Manifest-driven matching avoids adding a Kotlin parser or platform-specific routing rules.
+Evidence: `ReviewStackRoutingTest` rejects identifier substrings and retains composed ownership for declaration tokens.
+
 ## [2026-10-10] Measure review quality from prose without constraining reviewers
 Context: SKILL-414 needs precision and recall per review lane, but reviewers write prose findings and review completion must not depend on extracting metadata.
 Decision: Keep the scorer and on-demand runner in the runtime-domain test source set and use ReviewParser.parseReview only as a best-effort reader. Prepend placeholder run/session ids when they are missing. Route uninterpretable text and unlocated findings to curation and label the scores partial.

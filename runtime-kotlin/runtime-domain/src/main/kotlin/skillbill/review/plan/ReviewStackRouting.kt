@@ -17,6 +17,10 @@ object ReviewStackRouting {
   ): ReviewStackRoutingResult {
     val changedFiles = files.filterNot { ReviewPathMatcher.isIgnored(it.path) }
     val concreteManifests = manifests.filterNot { CODE_REVIEW_CAPABILITY in it.fallbackCapabilities }
+    val contentSignals =
+      concreteManifests.associateWith { manifest ->
+        manifest.routingSignals.content.distinct().map(::contentSignalPattern)
+      }
     val signalOwners =
       concreteManifests.flatMap { manifest ->
         manifest.routingSignals.path.distinct().map { it to manifest.slug }
@@ -44,8 +48,8 @@ object ReviewStackRouting {
               }
             }
           val contentScore =
-            manifest.routingSignals.content.distinct().count { signal ->
-              changed.changedContent.contains(signal, ignoreCase = true)
+            contentSignals.getValue(manifest).count { signal ->
+              signal.containsMatchIn(changed.changedContent)
             } * CONTENT_SIGNAL_SCORE
           pathScore to contentScore
         }.filterValues { (pathScore, _) -> pathScore > 0 }
@@ -93,6 +97,14 @@ object ReviewStackRouting {
     return survivors.singleOrNull()
   }
 
+  private fun contentSignalPattern(signal: String): Regex {
+    val start = if (signal.firstOrNull()?.isIdentifierCharacter() == true) IDENTIFIER_START_BOUNDARY else ""
+    val end = if (signal.lastOrNull()?.isIdentifierCharacter() == true) IDENTIFIER_END_BOUNDARY else ""
+    return Regex(start + Regex.escape(signal) + end, RegexOption.IGNORE_CASE)
+  }
+
+  private fun Char.isIdentifierCharacter(): Boolean = isLetterOrDigit() || this == '_'
+
   private fun missingPackFallback(
     routedSlug: String,
     missingPlatforms: List<String>,
@@ -103,4 +115,6 @@ object ReviewStackRouting {
   private const val CODE_REVIEW_CAPABILITY = "code-review"
   private const val UNIQUE_PATH_SIGNAL_SCORE = 10
   private const val CONTENT_SIGNAL_SCORE = 20
+  private const val IDENTIFIER_START_BOUNDARY = "(?<![\\p{L}\\p{N}_])"
+  private const val IDENTIFIER_END_BOUNDARY = "(?![\\p{L}\\p{N}_])"
 }
