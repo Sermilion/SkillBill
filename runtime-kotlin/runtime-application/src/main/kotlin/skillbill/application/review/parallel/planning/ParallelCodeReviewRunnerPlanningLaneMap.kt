@@ -11,8 +11,6 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diff.model.ReviewDiffQuery
-import skillbill.review.plan.ReviewStackRouting
-import skillbill.review.plan.model.ReviewRoutingChangedFile
 
 internal fun ParallelCodeReviewRunnerPlanning.resolveAgent(
   agentId: String,
@@ -156,10 +154,7 @@ internal fun ParallelCodeReviewRunnerPlanning.detectStack(
   }
 
   val routing =
-    ReviewStackRouting.route(
-      manifests,
-      evidence.files.map { ReviewRoutingChangedFile(it.path, it.changedContent) },
-    )
+    routeStack(manifests, evidence)
   val routed = manifests.filter { it.slug in routing.routedSlugs }
   return ParallelCodeReviewPlanned.Ready(
     ParallelCodeReviewStackDetection(routed, manifests, routing.ownedPathsBySlug),

@@ -1,3 +1,9 @@
+## [2026-10-14] Recover review ownership conflicts through the declared fallback
+Context: The operator requires conflicting review lanes to continue through generic review and report an error.
+Decision: Preserve strict ownership classification. A pure resolution policy recovers only typed ambiguous cross-root ownership area by area through the manifest-declared fallback, with all affected paths, hunks and original inputs. Uncontested lanes keep their owners. Resolution returns conflict facts for application error diagnostics. Stack discovery also returns its ownership ties instead of silently selecting fallback.
+Supersession: Production uses recovery instead of blocking on the overlap and same-composition conflicts described in the preceding decision. Low-level rejecting fixtures still prove conflict detection. Invalid manifest and missing fallback contracts remain strict.
+Evidence: Domain recovery regression and application delegated, inline and discovery-tie regressions. No architecture baseline or exemption changes.
+
 ## [2026-10-14] Independent review packs keep separate area owners
 Context: A Python capture fixture made a Kotlin review fail because both packs declared the same area.
 Decision: Reconcile manifest-connected composition roots together. Keep independent owners on separate file scopes, merge identical shared fallback owners and reject distinct owners assigning the same path. Within each composition, existing depth and ownership checks remain authoritative.

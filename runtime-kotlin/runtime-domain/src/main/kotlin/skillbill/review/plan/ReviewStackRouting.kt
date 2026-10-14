@@ -1,6 +1,7 @@
 package skillbill.review.plan
 
 import skillbill.review.plan.model.ReviewRoutingChangedFile
+import skillbill.review.plan.model.ReviewStackRoutingConflict
 import skillbill.review.plan.model.ReviewStackRoutingFallback
 import skillbill.review.plan.model.ReviewStackRoutingResult
 import skillbill.scaffold.model.PlatformManifest
@@ -33,34 +34,19 @@ object ReviewStackRouting {
     val routedSlugs = linkedSetOf<String>()
     val ownedPathsBySlug = linkedMapOf<String, LinkedHashSet<String>>()
     val missingPackFallbacks = mutableListOf<ReviewStackRoutingFallback>()
+    val ownershipConflicts = mutableListOf<ReviewStackRoutingConflict>()
 
     changedFiles.forEach { changed ->
       val scores =
         concreteManifests.associateWith { manifest ->
-          val pathScore =
-            manifest.routingSignals.path.distinct().sumOf { signal ->
-              if (!ReviewPathMatcher.matches(changed.path, signal)) {
-                0
-              } else if (signalOwners.getValue(signal).size == 1) {
-                UNIQUE_PATH_SIGNAL_SCORE
-              } else {
-                1
-              }
-            }
-          val contentScore =
-            contentSignals.getValue(manifest).count { signal ->
-              signal.containsMatchIn(changed.changedContent)
-            } * CONTENT_SIGNAL_SCORE
-          pathScore to contentScore
+          score(manifest, changed, signalOwners, contentSignals.getValue(manifest))
         }.filterValues { (pathScore, _) -> pathScore > 0 }
 
-      val resolved =
-        scores.takeIf { it.isNotEmpty() }?.let {
-          val strongestPath = it.values.maxOf { score -> score.first }
-          val pathWinners = it.filterValues { score -> score.first == strongestPath }
-          val strongestContent = pathWinners.values.maxOf { score -> score.second }
-          resolveComposition(pathWinners.filterValues { score -> score.second == strongestContent }.keys)
-        }
+      val winners = strongestOwners(scores)
+      val resolved = resolveComposition(winners)
+      if (resolved == null && winners.size > 1) {
+        ownershipConflicts += ReviewStackRoutingConflict(changed.path, winners.map { it.slug }.sorted(), fallback?.slug)
+      }
       val missingBaselinePlatforms =
         resolved?.codeReviewComposition?.baselineLayers.orEmpty()
           .map { layer -> layer.platform }
@@ -83,7 +69,40 @@ object ReviewStackRouting {
       }
     }
 
-    return ReviewStackRoutingResult(routedSlugs, ownedPathsBySlug, missingPackFallbacks.toList())
+    return ReviewStackRoutingResult(
+      routedSlugs,
+      ownedPathsBySlug,
+      missingPackFallbacks.toList(),
+      ownershipConflicts.toList(),
+    )
+  }
+
+  private fun score(
+    manifest: PlatformManifest,
+    changed: ReviewRoutingChangedFile,
+    signalOwners: Map<String, List<String>>,
+    contentPatterns: List<Regex>,
+  ): Pair<Int, Int> {
+    val pathScore =
+      manifest.routingSignals.path.distinct().sumOf { signal ->
+        if (!ReviewPathMatcher.matches(changed.path, signal)) {
+          0
+        } else if (signalOwners.getValue(signal).size == 1) {
+          UNIQUE_PATH_SIGNAL_SCORE
+        } else {
+          1
+        }
+      }
+    val contentScore = contentPatterns.count { it.containsMatchIn(changed.changedContent) } * CONTENT_SIGNAL_SCORE
+    return pathScore to contentScore
+  }
+
+  private fun strongestOwners(scores: Map<PlatformManifest, Pair<Int, Int>>): Set<PlatformManifest> {
+    if (scores.isEmpty()) return emptySet()
+    val strongestPath = scores.values.maxOf { it.first }
+    val pathWinners = scores.filterValues { it.first == strongestPath }
+    val strongestContent = pathWinners.values.maxOf { it.second }
+    return pathWinners.filterValues { it.second == strongestContent }.keys
   }
 
   private fun resolveComposition(winners: Set<PlatformManifest>): PlatformManifest? {

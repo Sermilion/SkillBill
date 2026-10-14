@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-14] Continue ambiguous review ownership through generic review and error diagnostics
+Context: The operator requires review ownership conflicts to recover through generic review without blocking. Inline review also assumed one global code-quality owner and refused independently scoped Kotlin and Python rubrics.
+Decision: Keep domain conflict detection strict, then recover only typed ambiguous ownership through the manifest-declared fallback for each affected area. Preserve all affected paths, hunks and original inputs, retain uncontested lanes, and prevent accepted quality owners from replacing a current conflict fallback. Inline prompts include every selected quality rubric with its changed-file scope. Application records routing conflicts at error severity, including discovery ties that already used fallback.
+Supersession: Production cross-root ambiguity now recovers instead of the refusal described in the preceding decision. Low-level conflict detection tests remain. Missing or malformed fallback manifests retain their existing failure contracts.
+Evidence: Domain overlap recovery preserves scope and provenance. Application regressions prove delegated completion, inline fallback, scoped mixed-stack prompts and error diagnostics. A1, A2, A5 and A11 keep pure recovery policy separate from effects. G3 and G7 retain conflict detection and record the requested behavior change without architecture baseline or exemption changes.
+
 ## [2026-10-14] Reconcile review area ownership within a composition and file scope
 Context: Global cross-root area uniqueness refused a Kotlin production review when a Python fixture also declared `architecture`. The stack-routing playbook delegates independent matching packs over their own changed files.
 Decision: Group routed roots by their declared composition closure and reconcile each group with the existing nearest-depth and fallback rules. Independent groups retain separate specialist lanes. Shared fallback owners merge once with all scopes and provenance. Distinct area owners assigning the same path still fail. Quality follow-up preserves accepted owners when unresolved documentation changes require their review.

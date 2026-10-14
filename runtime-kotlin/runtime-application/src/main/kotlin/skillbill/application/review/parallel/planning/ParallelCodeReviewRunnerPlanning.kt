@@ -8,7 +8,6 @@ import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
-import skillbill.application.review.model.ReviewRubricProjection
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID
 import skillbill.application.review.parallel.runner.ParallelCodeReviewCompiledLaunches
 import skillbill.application.review.parallel.runner.ParallelCodeReviewInitialRun
@@ -67,9 +66,14 @@ class ParallelCodeReviewRunnerPlanning(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val reviewLearningsResolver: ReviewLearningsResolver,
 ) {
-  internal fun resolveInlineCodeQualityRubric(
+  internal fun routeStack(
+    manifests: List<PlatformManifest>,
+    evidence: ReviewDiffEvidence,
+  ) = rubricPlanning.routeStack(manifests, evidence)
+
+  internal fun resolveInlineCodeQualityRubrics(
     request: ParallelCodeReviewRequest,
-  ): ParallelCodeReviewPlanned<ReviewRubricProjection?> {
+  ): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> {
     val revisions =
       when (val resolved = resolveReviewRevisions(request)) {
         is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
@@ -80,10 +84,10 @@ class ParallelCodeReviewRunnerPlanning(
         is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
         is DiffResolution.Resolved -> resolved.value
       }
-    return if (diff.isBlank()) ParallelCodeReviewPlanned.Ready(null) else resolveInlineCodeQualityRubric(diff)
+    return if (diff.isBlank()) ParallelCodeReviewPlanned.Ready(emptyList()) else resolveInlineCodeQualityRubrics(diff)
   }
 
-  private fun resolveInlineCodeQualityRubric(diff: String): ParallelCodeReviewPlanned<ReviewRubricProjection?> {
+  private fun resolveInlineCodeQualityRubrics(diff: String): ParallelCodeReviewPlanned<List<PlannedReviewRubric>> {
     val evidence =
       when (val parsed = ReviewDiffEvidence.parseOrRejection(diff)) {
         is ReviewDiffEvidenceParseResult.Parsed -> parsed.evidence
@@ -95,14 +99,13 @@ class ParallelCodeReviewRunnerPlanning(
         is ParallelCodeReviewPlanned.Failed -> return detected
         is ParallelCodeReviewPlanned.Ready -> detected.value
       }
-    val qualityRubrics =
+    return ParallelCodeReviewPlanned.Ready(
       rubricPlanning.resolvePlannedRubrics(
         evidence,
         detection,
         qualityOnly = true,
-      ).filter { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS }
-    require(qualityRubrics.size <= 1) { "Inline review resolved more than one code-quality owner." }
-    return ParallelCodeReviewPlanned.Ready(qualityRubrics.singleOrNull()?.rubric)
+      ).filter { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS },
+    )
   }
 
   internal fun prepareInitialRun(

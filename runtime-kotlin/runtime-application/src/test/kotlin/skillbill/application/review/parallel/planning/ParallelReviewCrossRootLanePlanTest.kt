@@ -1,5 +1,6 @@
 package skillbill.application.review.parallel.planning
 
+import skillbill.application.review.model.ParallelCodeReviewPlanned
 import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder
@@ -10,8 +11,6 @@ import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.application.review.snapshot.reviewed
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.preparation.ReviewRubricResolver
@@ -21,7 +20,7 @@ import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -156,18 +155,18 @@ class ParallelReviewCrossRootLanePlanTest {
     assertEquals(setOf("kotlin", "python"), introducedPack.map { it.descriptor.packSlug }.toSet())
   }
 
-  @Test fun `competing composing roots sharing a baseline still refuse ownership before durable launch`() {
+  @Test fun `conflicting owners use generic review and log errors while preserving uncontested lanes`() {
     val first =
       reviewPack(
         "first",
-        listOf("architecture"),
+        listOf("architecture", "code-quality"),
         layers = listOf(reviewLayer("kotlin")),
         routingSignals = listOf("*.first"),
       )
     val second =
       reviewPack(
         "second",
-        listOf("architecture"),
+        listOf("architecture", "code-quality"),
         layers = listOf(reviewLayer("kotlin")),
         routingSignals = listOf("*.second"),
       )
@@ -178,24 +177,68 @@ class ParallelReviewCrossRootLanePlanTest {
         "src/App.second" to "second source",
       )
 
-    val error =
-      assertFailsWith<SkillBillRuntimeException> {
-        reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, first, second), diff = diff), recorder)
-          .reviewed(
-            harnessRequest(reviewRunId = "cross-root-ambiguous", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
-          )
-      }.also { failure ->
-        assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
-      }
+    val generic = reviewPack("generic", listOf("architecture", "code-quality"), fallback = true)
+    val result =
+      reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, first, second, generic), diff = diff), recorder)
+        .reviewed(
+          harnessRequest(reviewRunId = "cross-root-ambiguous", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
+        )
+    assertTrue(result.lane1.success, result.lane1.failureReason.orEmpty())
+    assertEquals(
+      setOf("generic"),
+      recorder.durableLanes.filter { it.area == "architecture" }.map { it.packSlug }.toSet(),
+    )
+    assertEquals(
+      setOf("generic"),
+      recorder.durableLanes.filter { it.area == "code-quality" }.map { it.packSlug }.toSet(),
+    )
+    assertEquals("kotlin", recorder.durableLanes.single { it.area == "security" }.packSlug)
+    assertTrue(recorder.durableLanes.all { it.unreviewedSegmentIds.isEmpty() })
+    assertNotNull(recorder.durableIntegrationPass)
+    assertEquals(2, recorder.diagnosticErrors.size)
+    assertTrue(
+      recorder.diagnosticErrors.all {
+        listOf("AMBIGUOUS_LANE_OWNERSHIP", "first", "second", "value_used=generic").all { value -> value in it }
+      },
+    )
+  }
 
-    assertTrue(
-      listOf("architecture", "first", "second").all { it in error.message.orEmpty() },
-      "The typed error must name the contested area and both owning packs: \${error.message}",
+  @Test
+  fun `inline review includes scoped Kotlin and Python quality rubrics without launching workers`() {
+    val kotlin = reviewPack("kotlin", listOf("architecture", "code-quality"), routingSignals = listOf("*.kt"))
+    val python = reviewPack("python", listOf("architecture", "code-quality"), routingSignals = listOf("*.py"))
+    val recorder = ReviewRecorder()
+    val runner =
+      reviewHarness(
+        ReviewHarnessConfig(
+          manifests = listOf(kotlin, python),
+          diff =
+            diffForChanges(
+              "src/ExpectedState.kt" to "class ExpectedState(val actualOwner: String)",
+              "src/test/resources/capture.py" to "def capture(): return {}",
+            ),
+          rubricBody = { "Rubric for $it" },
+        ),
+        recorder,
+      )
+
+    val prompt =
+      assertNotNull(
+        assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+          runner.resolveInlineCodeQualityRubric(harnessRequest(codeReviewMode = CodeReviewExecutionMode.INLINE)),
+        ).value,
+      )
+    assertEquals(
+      "Selected code-quality specialist: bill-kotlin-code-review-code-quality\n" +
+        "Apply this rubric to these changed paths:\n- src/ExpectedState.kt\n\n" +
+        "Rubric for bill-kotlin-code-review-code-quality\n\n" +
+        "Selected code-quality specialist: bill-python-code-review-code-quality\n" +
+        "Apply this rubric to these changed paths:\n- src/test/resources/capture.py\n\n" +
+        "Rubric for bill-python-code-review-code-quality",
+      prompt,
     )
-    assertTrue(
-      recorder.durableLanes.isEmpty() && recorder.durableIntegrationPass == null,
-      "An unresolvable cross-root tie must leave no durable lanes and no integration pass.",
-    )
+    assertTrue(recorder.parentLaunches.isEmpty())
+    assertTrue(recorder.durableLanes.isEmpty())
   }
 
   private fun run(
@@ -208,5 +251,76 @@ class ParallelReviewCrossRootLanePlanTest {
         harnessRequest(reviewRunId = "cross-root-lane-plan", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
       )
     return recorder
+  }
+
+  @Test
+  fun `tied stack discovery logs an error and inline review uses the generic rubric`() {
+    val first = reviewPack("first", listOf("code-quality"), routingSignals = listOf("*.shared"))
+    val second = reviewPack("second", listOf("code-quality"), routingSignals = listOf("*.shared"))
+    val generic = reviewPack("generic", listOf("code-quality"), fallback = true)
+    val recorder = ReviewRecorder()
+    val runner =
+      reviewHarness(
+        ReviewHarnessConfig(listOf(first, second, generic), diffForChanges("src/App.shared" to "source")),
+        recorder,
+      )
+
+    val prompt =
+      assertNotNull(
+        assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+          runner.resolveInlineCodeQualityRubric(harnessRequest(codeReviewMode = CodeReviewExecutionMode.INLINE)),
+        ).value,
+      )
+    assertTrue("bill-generic-code-review-code-quality" in prompt && "src/App.shared" in prompt)
+    assertTrue(
+      listOf("review_stack_routing", "first", "second", "value_used=generic").all {
+        it in recorder.diagnosticErrors.single()
+      },
+    )
+    assertTrue(recorder.parentLaunches.isEmpty())
+  }
+
+  @Test
+  fun `inline review falls back for conflicting routed owners and records routing errors`() {
+    val first =
+      reviewPack(
+        "first",
+        listOf("architecture", "code-quality"),
+        layers = listOf(reviewLayer("kotlin")),
+        routingSignals = listOf("*.first"),
+      )
+    val second =
+      reviewPack(
+        "second",
+        listOf("architecture", "code-quality"),
+        layers = listOf(reviewLayer("kotlin")),
+        routingSignals = listOf("*.second"),
+      )
+    val generic = reviewPack("generic", listOf("architecture", "code-quality"), fallback = true)
+    val recorder = ReviewRecorder()
+    val runner =
+      reviewHarness(
+        ReviewHarnessConfig(
+          manifests = listOf(kotlin, first, second, generic),
+          diff = diffForChanges("src/App.first" to "first source", "src/App.second" to "second source"),
+        ),
+        recorder,
+      )
+
+    val prompt =
+      assertNotNull(
+        assertIs<ParallelCodeReviewPlanned.Ready<String?>>(
+          runner.resolveInlineCodeQualityRubric(harnessRequest(codeReviewMode = CodeReviewExecutionMode.INLINE)),
+        ).value,
+      )
+    assertTrue("bill-generic-code-review-code-quality" in prompt)
+    assertTrue("src/App.first" in prompt && "src/App.second" in prompt)
+    assertEquals(2, recorder.diagnosticErrors.size)
+    assertTrue(
+      recorder.diagnosticErrors.all {
+        listOf("AMBIGUOUS_LANE_OWNERSHIP", "first", "second", "value_used=generic").all { value -> value in it }
+      },
+    )
+    assertTrue(recorder.parentLaunches.isEmpty())
   }
 }

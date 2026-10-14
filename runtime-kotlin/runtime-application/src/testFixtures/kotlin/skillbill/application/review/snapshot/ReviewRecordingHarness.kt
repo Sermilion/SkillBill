@@ -156,6 +156,7 @@ class ReviewRecorder {
   val savedSessionLearnings: MutableList<Pair<String, String>> =
     Collections.synchronizedList(mutableListOf())
   val diagnosticWarnings: MutableList<String> = Collections.synchronizedList(mutableListOf())
+  val diagnosticErrors: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
   val parentPrompts: List<String>
     get() = parentLaunches.mapNotNull { it.skillRunRequest.promptOverride }
@@ -241,6 +242,7 @@ fun reviewHarness(
     governedEvidenceEndpointBinder = config.evidenceEndpointBinder,
     originScopeKeyPort = config.originScopeKeyPort,
     learningsDiagnostics = recordingDiagnostics(recorder),
+    routingDiagnostics = recordingDiagnostics(recorder),
   )
 }
 
@@ -265,6 +267,7 @@ fun parallelCodeReviewRunnerOf(
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = CanonicalRepositoryRoot,
   originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
   learningsDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  routingDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   clock: Clock = Clock.systemUTC(),
 ): ParallelCodeReviewRunner {
   val persistence = RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics)
@@ -281,7 +284,7 @@ fun parallelCodeReviewRunnerOf(
         ParallelCodeReviewRunnerRubricPlanning(
           reviewRubricResolver,
           installedPackCatalog,
-          NoopRuntimeDiagnostics,
+          routingDiagnostics,
         ),
       lanePlanRecording = ParallelCodeReviewRunnerLanePlanRecording(persistence, clock),
       repositoryEnclosingRootPort = repositoryEnclosingRootPort,

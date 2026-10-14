@@ -42,6 +42,27 @@ class ReviewCrossRootLaneReconciliationTest {
   }
 
   @Test
+  fun `conflicting ownership recovers to fallback without losing paths hunks or original owners`() {
+    val roots =
+      mapOf(
+        "kotlin" to root(0, lane("kotlin", "architecture", 0, ownedPaths = listOf("shared.txt", "main.kt"))),
+        "python" to root(0, lane("python", "architecture", 0, ownedPaths = listOf("shared.txt", "capture.py"))),
+      )
+    val fallback = pack("generic").copy(fallbackCapabilities = setOf("code-review"))
+    val resolution = ReviewLaneOwnershipResolution.reconcile(roots, listOf(pack("kotlin"), pack("python"), fallback))
+
+    val recovered = resolution.lanes.single()
+    assertEquals("generic", recovered.lane.packSlug)
+    assertEquals(listOf("capture.py", "main.kt", "shared.txt"), recovered.lane.ownedPaths)
+    assertEquals(listOf("hunk-capture.py", "hunk-main.kt", "hunk-shared.txt"), recovered.lane.changedHunkIds)
+    assertTrue(recovered.lane.required)
+    assertEquals(setOf("kotlin", "python"), recovered.inputs.map { it.packSlug }.toSet())
+    assertEquals(listOf("kotlin", "python"), resolution.conflicts.single().owners)
+    assertEquals("architecture", resolution.conflicts.single().area)
+    assertEquals("generic", resolution.conflicts.single().fallbackOwner)
+  }
+
+  @Test
   fun `independent roots assigning the same path to different area owners still fail`() {
     val error =
       assertFailsWith<SkillBillRuntimeException> {
