@@ -96,37 +96,33 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val tree = sha256Hex(checkpoint)
     val digest = sha256Hex("${phase.workflowId}:${phase.phaseId}:${phase.attemptCount}:${state.revision}:$prose:$tree")
     val ref = "${phase.workflowId}:${phase.phaseId}:${phase.attemptCount}:${state.revision}"
+    val conclusion = envelope[SharedPayloadKeys.VERDICT] as? String
     val satisfied =
-      envelope[SharedPayloadKeys.VERDICT] in
+      conclusion in
         setOf(
           FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
           FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
         )
-    val conclusion = envelope[SharedPayloadKeys.VERDICT] as? String
-    val clarification =
-      conclusion == null || conclusion == FeatureTaskRuntimeVerdict.PROGRESS.wireValue ||
-        conclusion == FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue ||
-        conclusion !in setOf(
-          FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
-          FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
-          FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED.wireValue,
-          FeatureTaskRuntimeVerdict.ADVANCE.wireValue,
-        )
+    val clarification = needsClarification(conclusion)
     val evidence = CompletionEvidence(ref, digest, prose, tree, checkpoint, satisfied, clarification)
     return completionMutation(state, phase.phaseId, evidence, session.steps)?.let { mutation ->
-      val incompleteAdmission = mutation is AcceptanceCriterionRepairMutation.Outcome &&
-        mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
       commit(
         session,
         phase,
         mutation,
         expectedState = state,
-        additionalPhaseId = session.steps.repair.takeIf { incompleteAdmission && phase.phaseId == session.steps.audit },
-        additionalAttemptStatus = FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
-          .takeIf { incompleteAdmission && phase.phaseId == session.steps.audit },
       )
     } ?: false
   }
+
+  private fun needsClarification(conclusion: String?): Boolean =
+    conclusion !in
+      setOf(
+        FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
+        FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue,
+        FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED.wireValue,
+        FeatureTaskRuntimeVerdict.ADVANCE.wireValue,
+      )
 
   private data class CompletionEvidence(
     val ref: String,
@@ -146,51 +142,11 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairMutation? =
     with(evidence) {
       val pendingClarificationQuestion = state.pendingClarificationQuestion
-      val auditedCriterion =
-        if (state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED ||
-          state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
-        ) {
-          null
-        } else {
-          state.currentCriterionRef
-        }
+      val auditedCriterion = auditedCriterion(state)
       when {
-        phaseId == steps.repair -> {
-          val live = state.reservation ?: return@with null
-          if (satisfied) {
-            AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
-          } else {
-            AcceptanceCriterionRepairMutation.Clarification(
-              "Read-only repair-report admission. Decide whether this report leaves production work unfinished. " +
-                "Report advance for unfinished production work, satisfied if the repair is complete. " + prose,
-            )
-          }
-        }
+        phaseId == steps.repair -> repairCompletionMutation(state, evidence)
         state.stage == AcceptanceCriterionRepairStage.REPAIR_RESERVED && phaseId == steps.audit &&
-          pendingClarificationQuestion != null -> {
-          val live = state.reservation ?: return@with null
-          if (clarification) {
-            AcceptanceCriterionRepairMutation.Clarification(prose)
-          } else if (satisfied) {
-            AcceptanceCriterionRepairMutation.RepairCompleted(
-              live.reservationId,
-              pendingClarificationQuestion,
-              tree,
-              checkpoint,
-            )
-          } else {
-            AcceptanceCriterionRepairMutation.Outcome(
-              AcceptanceCriterionRepairOutcome(
-                ref,
-                live.reservationId,
-                live.criterionRef,
-                digest,
-                AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
-                pendingClarificationQuestion,
-              ),
-            )
-          }
-        }
+          pendingClarificationQuestion != null -> repairAdmissionMutation(state, evidence, pendingClarificationQuestion)
         clarification -> AcceptanceCriterionRepairMutation.Clarification(prose)
         state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> {
           val live = state.reservation ?: return@with null
@@ -232,6 +188,58 @@ class AcceptanceCriterionRepairPhaseRecorder(
               checkpoint,
             ),
           )
+      }
+    }
+
+  private fun auditedCriterion(state: AcceptanceCriterionRepairState): String? =
+    state.currentCriterionRef.takeUnless {
+      state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED ||
+        state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
+    }
+
+  private fun repairCompletionMutation(
+    state: AcceptanceCriterionRepairState,
+    evidence: CompletionEvidence,
+  ): AcceptanceCriterionRepairMutation? =
+    with(evidence) {
+      val live = state.reservation ?: return@with null
+      if (satisfied) {
+        AcceptanceCriterionRepairMutation.RepairCompleted(live.reservationId, prose, tree, checkpoint)
+      } else {
+        AcceptanceCriterionRepairMutation.Clarification(
+          "Read-only repair-report admission. Decide whether this report leaves production work unfinished. " +
+            "Report advance for unfinished production work, satisfied if the repair is complete. " + prose,
+        )
+      }
+    }
+
+  private fun repairAdmissionMutation(
+    state: AcceptanceCriterionRepairState,
+    evidence: CompletionEvidence,
+    pendingClarificationQuestion: String,
+  ): AcceptanceCriterionRepairMutation? =
+    with(evidence) {
+      val live = state.reservation ?: return@with null
+      if (clarification) {
+        AcceptanceCriterionRepairMutation.Clarification(prose)
+      } else if (satisfied) {
+        AcceptanceCriterionRepairMutation.RepairCompleted(
+          live.reservationId,
+          pendingClarificationQuestion,
+          tree,
+          checkpoint,
+        )
+      } else {
+        AcceptanceCriterionRepairMutation.Outcome(
+          AcceptanceCriterionRepairOutcome(
+            ref,
+            live.reservationId,
+            live.criterionRef,
+            digest,
+            AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
+            pendingClarificationQuestion,
+          ),
+        )
       }
     }
 
@@ -339,9 +347,12 @@ class AcceptanceCriterionRepairPhaseRecorder(
     mutation: AcceptanceCriterionRepairMutation,
     attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
     expectedState: AcceptanceCriterionRepairState? = session.accounting.snapshot,
-    additionalPhaseId: String? = null,
-    additionalAttemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
   ): Boolean {
+    val additionalPhaseId =
+      session.steps.repair.takeIf {
+        phase.phaseId == session.steps.audit && mutation is AcceptanceCriterionRepairMutation.Outcome &&
+          mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+      }
     val scope = session.accounting
     val state = expectedState
     val result =
@@ -360,7 +371,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
           attemptStatus,
           serialNextSteps(session.steps, mutation),
           additionalPhaseId,
-          additionalAttemptStatus,
+          FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf { additionalPhaseId != null },
         ),
         session.root,
       )

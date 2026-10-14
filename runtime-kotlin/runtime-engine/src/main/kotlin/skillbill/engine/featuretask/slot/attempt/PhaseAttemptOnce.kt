@@ -75,10 +75,11 @@ object PhaseAttemptOnce {
     val run = args.context.run
     return when {
       requiredStartAlreadyAcknowledged -> attemptAfterRequiredStart(context, args)
-      else -> when (val start = persistRequiredStart(context, run, args.context.iteration)) {
-        is RequiredPhaseWrite.Acknowledged -> attemptAfterRequiredStart(context, args)
-        is RequiredPhaseWrite.Rejected -> AttemptResult.settled(blockRequiredWriteRejection(context, run, start))
-      }
+      else ->
+        when (val start = persistRequiredStart(context, run, args.context.iteration)) {
+          is RequiredPhaseWrite.Acknowledged -> attemptAfterRequiredStart(context, args)
+          is RequiredPhaseWrite.Rejected -> AttemptResult.settled(blockRequiredWriteRejection(context, run, start))
+        }
     }
   }
 

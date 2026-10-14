@@ -19,8 +19,8 @@ import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowStatusFor
-import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAccounting
@@ -36,7 +36,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairFinalAuditInput
@@ -44,10 +43,11 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.requireFinalProseAudit
-import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.audit.retainClarification
+import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
@@ -195,17 +195,22 @@ class AcceptanceCriterionRepairPersistence(
       states.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId)
         ?: throw invalidAcceptanceCriterionRepairAccounting(worker.workflowId, "The workflow is missing.")
     val previous = decode(record.artifacts, binding)
-    if (previous != null && sameCommittedStart(record.artifacts, request)) {
-      return AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
+    return when {
+      previous != null && sameCommittedStart(record.artifacts, request) ->
+        AcceptanceCriterionRepairWriteResult.Committed(detach(previous), true)
+      previous != null && supersededStart(record.artifacts, request) ->
+        refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
+      else -> {
+        val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
+        val next = transition(previous, request.mutation, digest)
+        val refusal = candidateRefusal(previous, next, request, record, binding)
+        if (refusal != null) {
+          refuse(worker, previous, refusal)
+        } else {
+          commitCandidate(work, worker, record, requireNotNull(next), request)
+        }
+      }
     }
-    if (previous != null && supersededStart(record.artifacts, request)) {
-      return refuse(worker, previous, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
-    }
-    val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
-    val next = transition(previous, request.mutation, digest)
-    val refusal = candidateRefusal(previous, next, request, record, binding)
-    if (refusal != null) return refuse(worker, previous, refusal)
-    return commitCandidate(work, worker, record, requireNotNull(next), request)
   }
 
   private fun sameCommittedStart(
@@ -317,46 +322,10 @@ class AcceptanceCriterionRepairPersistence(
           phases.serialPhasePatch(record.artifacts, request.phase, request.attemptStatus)
         }
       request.additionalPhaseId?.let { phaseId ->
-        val prior = decodePhaseRecords(record.artifacts + patch)[phaseId]
-          ?: return refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
-        val priorEnvelope = prior.outputArtifact?.let { JsonCodec.parseObjectOrNull(it) }
-          ?.let { JsonCodec.jsonElementToValue(it) }
-          ?.let { JsonCodec.anyToStringAnyMap(it) }
-        val normalizedPrior = priorEnvelope?.let {
-          NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(it))
-        }
-        if (normalizedPrior == null) {
-          return refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
-        }
         val additional =
-          FeatureTaskRuntimePhaseStateRequest(
-            worker.workflowId,
-            phaseId,
-            WorkflowStepStatus.COMPLETED.wireValue,
-            prior.attemptCount,
-            prior.resolvedAgentId,
-            true,
-            outputArtifact = prior.outputArtifact,
-            normalizedOutput = normalizedPrior,
-            blockedReason = prior.blockedReason,
-            failureDisposition = prior.failureDisposition,
-            fileManifestBefore = prior.fileManifestBefore,
-            fileManifestAfter = prior.fileManifestAfter,
-            fileManifestIntroduced = prior.fileManifestIntroduced,
-            loopId = prior.loopId,
-            edgeIteration = prior.edgeIteration,
-            reviewPassNumber = prior.reviewPassNumber,
-            repairEvidence = prior.repairEvidence,
-            launchedModel = prior.launchedModel,
-            launchedEffort = prior.launchedEffort,
-            reviewRunId = prior.reviewRunId,
-            mutating = true,
-          )
-        patch = patch + phases.serialPhasePatch(
-          record.artifacts + patch,
-          additional,
-          request.additionalAttemptStatus,
-        )
+          restoreCompletedPhase(worker.workflowId, phaseId, record.artifacts + patch)
+            ?: return refuse(worker, next, AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED)
+        patch = patch + phases.serialPhasePatch(record.artifacts + patch, additional, request.additionalAttemptStatus)
       }
       workflowPersistence.persistAcquiredRepairState(
         work.workflowStates,
@@ -376,6 +345,50 @@ class AcceptanceCriterionRepairPersistence(
       )
     }
     return AcceptanceCriterionRepairWriteResult.Committed(detach(next), replay)
+  }
+
+  private fun restoreCompletedPhase(
+    workflowId: String,
+    phaseId: String,
+    artifacts: Map<String, Any?>,
+  ): FeatureTaskRuntimePhaseStateRequest? {
+    val prior =
+      decodePhaseRecords(artifacts)[phaseId]
+        ?: return null
+    val priorEnvelope =
+      prior.outputArtifact?.let { JsonCodec.parseObjectOrNull(it) }
+        ?.let { JsonCodec.jsonElementToValue(it) }
+        ?.let { JsonCodec.anyToStringAnyMap(it) }
+    val normalizedPrior =
+      priorEnvelope?.let {
+        NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(it))
+      }
+    if (normalizedPrior == null) {
+      return null
+    }
+    return FeatureTaskRuntimePhaseStateRequest(
+      workflowId,
+      phaseId,
+      WorkflowStepStatus.COMPLETED.wireValue,
+      prior.attemptCount,
+      prior.resolvedAgentId,
+      true,
+      outputArtifact = prior.outputArtifact,
+      normalizedOutput = normalizedPrior,
+      blockedReason = prior.blockedReason,
+      failureDisposition = prior.failureDisposition,
+      fileManifestBefore = prior.fileManifestBefore,
+      fileManifestAfter = prior.fileManifestAfter,
+      fileManifestIntroduced = prior.fileManifestIntroduced,
+      loopId = prior.loopId,
+      edgeIteration = prior.edgeIteration,
+      reviewPassNumber = prior.reviewPassNumber,
+      repairEvidence = prior.repairEvidence,
+      launchedModel = prior.launchedModel,
+      launchedEffort = prior.launchedEffort,
+      reviewRunId = prior.reviewRunId,
+      mutating = true,
+    )
   }
 
   fun recoverProjection(

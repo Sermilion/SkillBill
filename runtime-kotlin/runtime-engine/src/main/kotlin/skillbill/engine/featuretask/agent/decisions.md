@@ -1,3 +1,9 @@
+## [2026-10-15] Report committed criterion context through existing prose channels
+Context: SKILL-426 subtask 3 replaces the versioned criterion-status payload design with readable context in existing reports, summaries and details. IntelliJ retains a sanitized 512-character summary limit.
+Decision: Project the selected workflow's committed accounting into detached explanation text. Put identity, failure allowance, queue and final-audit facts before long detail; mark abbreviation and retain stale caveats in cached displays. Readers keep their existing read-only authority.
+Reason: The respecification requires existing transport shapes and versions to remain unchanged. Reusing committed accounting avoids a second counter or selection owner. Early budget facts survive bounded display, while stale caveats prevent cached observations from appearing current. Missing attribution cannot justify invented counts or source acceptance.
+Alternatives considered: A new criterion payload, parser, semantic prose validator or larger cache limit would contradict the supplied scope.
+
 ## [2026-10-14] Prose verdicts separate source acceptance from quality evidence
 Context: The SKILL-426 respecification rejects an agent-authored catalog, disposition list, evidence receipt, completion marker or exact remaining-criteria format as a progress requirement.
 Decision: Use ordinary audit prose and existing verdicts through existing phase envelopes. The runtime binds the report to its accepted invocation and checkpoint. Resolve ambiguous conclusions with read-only prose clarification and keep source acceptance separate from later quality obligations.

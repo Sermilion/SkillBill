@@ -170,6 +170,17 @@ class FeatureTaskRuntimeWorkflowPersistence
         state
       }
 
+    fun readAcceptanceCriterionRepairState(workflowId: String): AcceptanceCriterionRepairState? =
+      database.read { unitOfWork ->
+        val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+        workflowSnapshotValidator.validate(record, record.workflowName)
+        val artifacts = record.artifacts
+        val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+        if (!family.contains(artifacts)) return@read null
+        FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+          .toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+      }
+
     internal fun persistArtifactsPatch(
       workflowStates: WorkflowStateRepository,
       record: WorkflowStateSnapshot,

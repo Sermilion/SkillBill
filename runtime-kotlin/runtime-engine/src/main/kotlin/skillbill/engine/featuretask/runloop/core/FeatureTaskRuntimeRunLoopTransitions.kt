@@ -17,9 +17,10 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -157,16 +158,26 @@ object FeatureTaskRuntimeRunLoopTransitions {
     )
   }
 
-  private fun requireFinalAuditAfterCheckpoint(
-    context: FeatureTaskRuntimeRunLoopContext,
-  ): FinalAuditRoute {
+  private fun requireFinalAuditAfterCheckpoint(context: FeatureTaskRuntimeRunLoopContext): FinalAuditRoute {
     val request = context.request as? FeatureTaskRuntimeRunRequest ?: return FinalAuditRoute.NOT_REQUIRED
     val scope = request.acceptanceCriterionRepair ?: return FinalAuditRoute.NOT_REQUIRED
-    val state = scope.snapshot ?: return FinalAuditRoute.NOT_REQUIRED
-    if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED) return FinalAuditRoute.NOT_REQUIRED
-    val auditPhase = requireNotNull(scope.steps).audit
-    val accepted = state.finalAudits.lastOrNull()
-      ?: return blockFinalAudit(context, auditPhase, "The accepted final audit has no durable proof.")
+    val state = scope.snapshot
+    return if (state?.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
+      checkFinalAuditCheckpoint(context, request, requireNotNull(scope.steps).audit, state)
+    } else {
+      FinalAuditRoute.NOT_REQUIRED
+    }
+  }
+
+  private fun checkFinalAuditCheckpoint(
+    context: FeatureTaskRuntimeRunLoopContext,
+    request: FeatureTaskRuntimeRunRequest,
+    auditPhase: String,
+    state: AcceptanceCriterionRepairState,
+  ): FinalAuditRoute {
+    val accepted =
+      state.finalAudits.lastOrNull()
+        ?: return blockFinalAudit(context, auditPhase, "The accepted final audit has no durable proof.")
     val fingerprint = context.gitOperations.repositoryFingerprint(request.repoRoot)
     if (!fingerprint.ok || fingerprint.value.isBlank()) {
       return blockFinalAudit(
@@ -176,8 +187,17 @@ object FeatureTaskRuntimeRunLoopTransitions {
       )
     }
     if (sha256Hex(fingerprint.value) == accepted.treeDigest) return FinalAuditRoute.NOT_REQUIRED
-    val record = context.state.phase(auditPhase).record
-      ?: return blockFinalAudit(context, auditPhase, "The final audit phase record is missing.")
+    return reopenFinalAudit(context, request, auditPhase)
+  }
+
+  private fun reopenFinalAudit(
+    context: FeatureTaskRuntimeRunLoopContext,
+    request: FeatureTaskRuntimeRunRequest,
+    auditPhase: String,
+  ): FinalAuditRoute {
+    val record =
+      context.state.phase(auditPhase).record
+        ?: return blockFinalAudit(context, auditPhase, "The final audit phase record is missing.")
     val phase =
       FeatureTaskRuntimePhaseStateRequest(
         request.workflowId,
@@ -203,7 +223,9 @@ object FeatureTaskRuntimeRunLoopTransitions {
     auditPhase: String,
     reason: String,
   ): FinalAuditRoute {
-    val record = context.state.phase(auditPhase).record
+    val record =
+      context.state.phase(auditPhase).record
+        ?: context.recorder.loadPhaseRecords(context.request.workflowId)?.get(auditPhase)
     context.observability.blocked(
       auditPhase,
       record?.resolvedAgentId ?: context.request.invokedAgentId,

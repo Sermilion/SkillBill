@@ -39,7 +39,9 @@ internal object AcceptanceCriterionRepairCoherence {
       outcomesAreCoherent(state) && historyIsCoherent(state)
 
   private fun clarificationIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    state.pendingClarificationQuestion?.let { it.isNotBlank() && it.length <= 1024 } ?: true
+    state.pendingClarificationQuestion?.let {
+      it.isNotBlank() && it.length <= AcceptanceCriterionRepairState.MAX_CLARIFICATION_LENGTH
+    } ?: true
 
   private fun catalogIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val admission =

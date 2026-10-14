@@ -61,10 +61,12 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(
         listOf(
           "audit",
+          "audit",
           "audit_plan_fix",
           "audit_implement_fix",
           "audit_plan_fix",
           "audit_implement_fix",
+          "audit",
           "audit",
           "audit",
           "audit",
@@ -177,11 +179,14 @@ class FeatureTaskRuntimeSerialRepairTest {
       when (phaseIdFromPrompt(prompt)) {
         "audit" -> {
           audit++
-          if (audit <= 2) assertContains(prompt, "AC-1")
-          if (audit == 3) assertContains(prompt, "AC-2")
+          if (audit <= 3) assertContains(prompt, "AC-1")
+          if (audit == 4) assertContains(prompt, "AC-2")
           facts(
-            if (audit == 1) {
-              auditRemainingAcOutput("There is no caller for the first requirement.")
+            if (audit <= 2) {
+              auditRemainingAcOutput("There is no caller for the first requirement.").replace(
+                "\"status\": \"completed\",",
+                "\"status\": \"completed\", \"verdict\": \"advance\",",
+              )
             } else {
               settledAuditSatisfiedRecord().replace(
                 AUDIT_SATISFIED_VALUE,

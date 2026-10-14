@@ -90,16 +90,7 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
 fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
   sourceLabel: String,
 ): AcceptanceCriterionRepairState {
-  if (!isObject) {
-    throw invalidAcceptanceCriterionRepairAccounting(
-      sourceLabel,
-      "repair accounting must be an object.",
-    )
-  }
-  val byteSize = JsonCodec.valueToJsonString(this).encodeToByteArray().size
-  if (byteSize > AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES) {
-    throw invalidAcceptanceCriterionRepairAccounting(sourceLabel, "repair accounting exceeds its durable byte limit.")
-  }
+  validateRepairWireSize(sourceLabel)
   return AcceptanceCriterionRepairState.restore(
     AcceptanceCriterionRepairState(
       catalogId = string(Keys.CATALOG_ID),
@@ -145,14 +136,26 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
   ) ?: throw invalidAcceptanceCriterionRepairAccounting(sourceLabel, "repair state is incoherent.")
 }
 
+private fun FeatureTaskRuntimeWorkflowArtifactMap.validateRepairWireSize(sourceLabel: String) {
+  if (!isObject) {
+    throw invalidAcceptanceCriterionRepairAccounting(
+      sourceLabel,
+      "repair accounting must be an object.",
+    )
+  }
+  val byteSize = JsonCodec.valueToJsonString(this).encodeToByteArray().size
+  if (byteSize > AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES) {
+    throw invalidAcceptanceCriterionRepairAccounting(sourceLabel, "repair accounting exceeds its durable byte limit.")
+  }
+}
+
 private fun FeatureTaskRuntimeWorkflowArtifactMap.string(key: String): String =
   this[key] as? String ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredBoolean(key: String): Boolean =
   this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredLong(key: String): Long =
-  repairLong(this[key], key)
+private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredLong(key: String): Long = repairLong(this[key], key)
 
 private fun <E> FeatureTaskRuntimeWorkflowArtifactMap.requiredEnum(
   key: String,
@@ -180,17 +183,21 @@ private fun Map<String, Any?>.requiredString(key: String): String =
 private fun Map<String, Any?>.requiredBoolean(key: String): Boolean =
   this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
 
-private fun Map<String, Any?>.requiredInt(key: String): Int =
-  repairInt(this[key], key)
+private fun Map<String, Any?>.requiredInt(key: String): Int = repairInt(this[key], key)
 
-private fun Map<String, Any?>.requiredLong(key: String): Long =
-  repairLong(this[key], key)
+private fun Map<String, Any?>.requiredLong(key: String): Long = repairLong(this[key], key)
 
-private fun repairLong(value: Any?, key: String): Long =
+private fun repairLong(
+  value: Any?,
+  key: String,
+): Long =
   (value as? Number)?.toString()?.toLongOrNull()
     ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an integer within Long range.")
 
-private fun repairInt(value: Any?, key: String): Int {
+private fun repairInt(
+  value: Any?,
+  key: String,
+): Int {
   val integer = repairLong(value, key)
   if (integer !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
     throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an integer within Int range.")
@@ -198,7 +205,10 @@ private fun repairInt(value: Any?, key: String): Int {
   return integer.toInt()
 }
 
-private fun repairObjectList(value: Any?, key: String): List<Map<String, Any?>> =
+private fun repairObjectList(
+  value: Any?,
+  key: String,
+): List<Map<String, Any?>> =
   (value as? List<*>)?.map(::repairObject)
     ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an object list.")
 

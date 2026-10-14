@@ -7,9 +7,9 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
@@ -68,11 +68,12 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     requireNotNull(scope)
     requireNotNull(steps)
     if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
-      if (!finalAuditMatchesCurrentSource(context, state)) {
+      return if (!finalAuditMatchesCurrentSource(context, state)) {
         context.runState.coupledRunTransitions.reenterAcceptanceSteps(listOf(steps.audit))
-        return Routing.Reenter(steps.audit)
+        Routing.Reenter(steps.audit)
+      } else {
+        Routing.Continue
       }
-      return Routing.Continue
     }
     if (state.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
@@ -84,6 +85,15 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
       )
       return Routing.Stop
     }
+    return reenterFocusedWork(context, phaseId, state, steps)
+  }
+
+  private fun reenterFocusedWork(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    state: AcceptanceCriterionRepairState,
+    steps: AcceptanceCriterionRepairStepRoles,
+  ): Routing {
     val target =
       when (state.stage) {
         AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED ->
@@ -123,10 +133,13 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     if (context.runState.selectedOwnerOf(phaseId)?.slot != PhaseSlot.CODE_REVIEW) return null
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
     val state = scope.snapshot ?: return "The authored acceptance catalog has not completed its final source audit."
-    if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED || !finalAuditMatchesCurrentSource(context, state)) {
-      return "The current source has no committed final acceptance audit. Resume at the full audit before review."
+    return if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED ||
+      !finalAuditMatchesCurrentSource(context, state)
+    ) {
+      "The current source has no committed final acceptance audit. Resume at the full audit before review."
+    } else {
+      null
     }
-    return null
   }
 
   private fun finalAuditMatchesCurrentSource(

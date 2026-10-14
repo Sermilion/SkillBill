@@ -33,6 +33,7 @@ import dev.skillbill.intellij.domain.PAUSE_REASON_LABEL_MAX_LENGTH
 import dev.skillbill.intellij.domain.PAUSE_REASON_WIRE_KEY
 import dev.skillbill.intellij.domain.PauseReason
 import dev.skillbill.intellij.domain.StatusExecutionMetadata
+import dev.skillbill.intellij.domain.boundedDisplaySummary
 import dev.skillbill.intellij.domain.PAUSE_REQUESTED_WIRE_KEY
 import dev.skillbill.intellij.domain.SkillBillStatusOutcome
 import dev.skillbill.intellij.domain.StatusDiagnostic
@@ -366,7 +367,7 @@ object IdeStatusJsonMapper {
         val value = raw?.trim().orEmpty()
         if (value.isEmpty()) return fallback
 
-        return AbsolutePathGuard.redact(value).take(512)
+        return boundedDisplaySummary(AbsolutePathGuard.redact(value))
     }
 
     

@@ -189,6 +189,13 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     satisfied: Boolean,
     prose: String,
   ) {
+    if (recorder.accounting.snapshot == null) {
+      val discovery = phase(f, "audit", 0)
+      assertTrue(recorder.start(discovery) == true)
+      assertTrue(
+        recorder.complete(output(discovery, "advance", "The full source audit found a missing caller.")) == true,
+      )
+    }
     val phase = phase(f, "audit", attempt)
     assertTrue(recorder.start(phase) == true)
     assertTrue(
@@ -204,7 +211,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     val phase = phase(f, "audit_implement_fix", attempt)
     assertTrue(recorder.start(phase) == true)
     assertTrue(
-      recorder.complete(output(phase, "advance", "Connected the missing production caller.")) == true,
+      recorder.complete(output(phase, "satisfied", "Connected the missing production caller.")) == true,
     )
   }
 
@@ -216,7 +223,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     f.workflowId,
     id,
     "running",
-    attempt,
+    if (id == "audit") attempt + 1 else attempt,
     "codex",
     false,
     mutating = id == "audit_implement_fix",

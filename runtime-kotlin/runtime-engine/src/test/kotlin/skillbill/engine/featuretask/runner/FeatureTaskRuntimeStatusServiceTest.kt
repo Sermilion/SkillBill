@@ -1204,20 +1204,15 @@ internal fun statusHarness(): StatusHarness {
       NoopRuntimeDiagnostics,
     )
   val decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
-  val runInvariantsStore =
-    FeatureTaskRuntimeRunInvariantsStore(
-      database,
-      FeatureTaskRuntimeWorkflowPersistence(
-        database,
-        StatusNoopSnapshotValidator,
-      ),
-    )
+  val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator)
+  val runInvariantsStore = FeatureTaskRuntimeRunInvariantsStore(database, workflowPersistence)
   return StatusHarness(
     recorder,
     decomposeTerminalRecorder,
     runInvariantsStore,
     FeatureTaskRuntimeStatusService(
       recorder,
+      workflowPersistence,
       runInvariantsStore,
       decomposeTerminalRecorder,
     ),

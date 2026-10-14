@@ -150,8 +150,7 @@ data class AcceptanceCriterionRepairState internal constructor(
   val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
   val pendingClarificationQuestion: String? = null,
 ) {
-  fun clearPendingClarification(): AcceptanceCriterionRepairState =
-    copy(pendingClarificationQuestion = null)
+  fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
 
   fun reserve(
     reservationId: String,
@@ -487,6 +486,7 @@ data class AcceptanceCriterionRepairState internal constructor(
         .filter { it.sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED }
         .map { it.canonicalRef }
 
+    internal const val MAX_CLARIFICATION_LENGTH: Int = 1024
     internal const val MAX_REPAIR_CRITERIA: Int = 256
     internal const val MAX_REPAIR_OUTCOMES: Int = 4096
     internal const val MAX_REPAIR_SOURCE_TRANSITIONS: Int = 16384

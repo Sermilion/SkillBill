@@ -135,25 +135,40 @@ class AcceptanceCriterionRepairRunState internal constructor(
 
   val currentCriterionContext: String?
     get() {
-      val state = (accounting as? AcceptanceCriterionRepairHydration.Present)?.state ?: return null
+      val state = snapshot ?: return null
       val current = state.currentCriterionRef
       if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
         return "Initial full audit of the authored acceptance criteria against current source." +
           state.pendingClarificationQuestion?.let { " Read-only clarification: $it" }.orEmpty()
       }
       if (current == null) {
-        return "Audit the full authored AC set against current source. Mode=${state.mode.wireValue}." +
-          state.pendingClarificationQuestion?.let { " Read-only clarification: $it" }.orEmpty()
+        val outcome =
+          if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
+            "Final full source audit accepted. Tests, build, and project-quality work remain in their later phases."
+          } else if (state.finalAuditRequired) {
+            "Focused queue is empty; the final full source audit is required before source acceptance."
+          } else {
+            "Audit the full authored acceptance set against current source."
+          }
+        return outcome + state.pendingClarificationQuestion?.let { " Read-only clarification: $it" }.orEmpty()
       }
       val criterion = state.criteria.firstOrNull { it.canonicalRef == current } ?: return null
+      val identity = criterion.originalAlias?.let { "$it ($current)" } ?: current
       val failures = state.unsuccessfulTotals.getOrDefault(current, 0)
       val reserved = state.reservation?.takeIf { it.criterionRef == current }?.reservationId
       val remaining = (AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES - failures).coerceAtLeast(0)
+      val authoredQueue =
+        state.criteria
+          .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
+          .sortedBy { it.ordinal }
+      val queuePosition = authoredQueue.indexOf(criterion).takeIf { it >= 0 }?.plus(1)
       val gap = criterion.evidenceRef.takeUnless { it == state.specDigest } ?: "Not assessed."
-      return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; $current: ${criterion.originalText}; " +
+      return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; criterion $identity; " +
         "retained failures: $failures of ${AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES}; " +
-        "remaining repairs: $remaining; live cycle: ${reserved ?: "none"}; " +
-        "latest gap: $gap" + state.pendingClarificationQuestion?.let { "; read-only clarification: $it" }.orEmpty()
+        "remaining failures: $remaining; queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
+        "live cycle: ${reserved ?: "none"}; final audit required: ${state.finalAuditRequired}; " +
+        "authored criterion: ${criterion.originalText}; latest gap: $gap" +
+        state.pendingClarificationQuestion?.let { "; read-only clarification: $it" }.orEmpty()
     }
 }
 

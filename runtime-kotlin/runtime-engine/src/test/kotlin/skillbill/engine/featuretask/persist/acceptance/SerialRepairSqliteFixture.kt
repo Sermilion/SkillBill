@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
@@ -262,13 +263,23 @@ internal class SerialRepairSqliteFixture(
   fun phase(mutation: AcceptanceCriterionRepairMutation): FeatureTaskRuntimePhaseStateRequest {
     val mutating = mutation is AcceptanceCriterionRepairMutation.RepairCompleted
     val id = if (mutating || mutation is AcceptanceCriterionRepairMutation.Reserve) "audit_implement_fix" else "audit"
+    val finished =
+      mutation !is AcceptanceCriterionRepairMutation.Discover &&
+        mutation !is AcceptanceCriterionRepairMutation.Reserve
+    val priorAttempt = decodePhaseRecords(snapshot().artifacts)[id]?.attemptCount ?: 0
+    val attempt =
+      if (mutation is AcceptanceCriterionRepairMutation.Reserve) {
+        priorAttempt + 1
+      } else {
+        priorAttempt.coerceAtLeast(1)
+      }
     return FeatureTaskRuntimePhaseStateRequest(
       workflowId,
       id,
-      "running",
-      1,
+      if (finished) "completed" else "running",
+      attempt,
       "codex",
-      false,
+      finished,
       mutating = mutating,
       normalizedOutput =
         if (mutating) {

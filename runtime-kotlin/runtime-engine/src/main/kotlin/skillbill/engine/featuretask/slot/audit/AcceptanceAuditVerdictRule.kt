@@ -39,6 +39,6 @@ internal class AcceptanceAuditVerdictRule(
   }
 
   companion object {
-    val UNKNOWN_WORD_DEFAULT: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict.PROGRESS
+    val UNKNOWN_WORD_DEFAULT: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict.ADVANCE
   }
 }

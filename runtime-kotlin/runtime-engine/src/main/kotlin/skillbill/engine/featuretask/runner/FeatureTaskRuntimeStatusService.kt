@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDegradedDiagnos
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
+import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -23,15 +24,21 @@ import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
+private const val MAX_INLINE_CRITERION_ALIAS = 32
+
 @Inject
 class FeatureTaskRuntimeStatusService(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
+  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
 ) {
@@ -156,8 +163,72 @@ class FeatureTaskRuntimeStatusService(
         ),
       degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
       operatorDecisionPause = operatorDecisionPause(parts.records),
+      criterionExplanation =
+        workflowPersistence.readAcceptanceCriterionRepairState(request.workflowId)
+          ?.let(::acceptanceCriterionRepairExplanation),
     )
   }
+
+  private fun acceptanceCriterionRepairExplanation(state: AcceptanceCriterionRepairState): String {
+    val current = state.currentCriterionRef?.let { ref -> state.criteria.firstOrNull { it.canonicalRef == ref } }
+    val prefix =
+      listOfNotNull(
+        current?.let { criterionBudgetExplanation(state, it.canonicalRef, it.originalAlias) },
+        criterionRepairStageExplanation(state),
+        when {
+          state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED -> "Source acceptance recorded"
+          state.finalAuditRequired -> "Final full source audit required"
+          else -> "Final full source audit remains required after focused work"
+        },
+        "Source acceptance is separate from later tests, build, and project-quality checks",
+      ).joinToString("; ")
+    val gap = current?.evidenceRef?.takeUnless { it == state.specDigest }
+    val detail =
+      listOfNotNull(
+        current?.originalAlias?.takeIf { it.length > MAX_INLINE_CRITERION_ALIAS }?.let { "Authored alias: $it" },
+        gap?.let { "Latest gap: $it" },
+        current?.originalText,
+        state.pendingClarificationQuestion?.let { "Clarification question: $it" },
+      )
+    return listOfNotNull(prefix, detail.takeIf { it.isNotEmpty() }?.joinToString(". ")).joinToString(". ")
+  }
+
+  private fun criterionBudgetExplanation(
+    state: AcceptanceCriterionRepairState,
+    criterionRef: String,
+    originalAlias: String?,
+  ): String {
+    val failures = state.unsuccessfulTotals.getOrDefault(criterionRef, 0)
+    val remaining = (AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES - failures).coerceAtLeast(0)
+    val authoredQueue =
+      state.criteria
+        .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
+        .sortedBy { it.ordinal }
+    val queuePosition = authoredQueue.indexOfFirst { it.canonicalRef == criterionRef }.takeIf { it >= 0 }?.plus(1)
+    val alias = originalAlias?.takeIf { it.length <= MAX_INLINE_CRITERION_ALIAS }
+    return listOfNotNull(
+      "Criterion $criterionRef${alias?.let { " ($it)" }.orEmpty()}",
+      "$failures failures used",
+      "$remaining failures remaining",
+      queuePosition?.let { "queue position $it of ${authoredQueue.size}" },
+    ).joinToString("; ")
+  }
+
+  private fun criterionRepairStageExplanation(state: AcceptanceCriterionRepairState): String =
+    if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
+      "Initial full source discovery"
+    } else {
+      when (state.stage) {
+        AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> "Focused source assessment selected"
+        AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> "Read-only source audit or clarification required"
+        AcceptanceCriterionRepairStage.REPAIR_RESERVED -> "Focused repair cycle reserved"
+        AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+          "Repair completed; targeted verification required"
+        AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED -> "Final full source audit required now"
+        AcceptanceCriterionRepairStage.FINAL_ACCEPTED -> "Final full source audit accepted"
+        AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> "Criterion exhausted; source repair cannot advance"
+      }
+    }
 
   private fun gateRunCountFor(
     request: FeatureTaskRuntimeStatusRequest,

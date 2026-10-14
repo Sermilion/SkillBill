@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-15] SKILL-426 subtask 3 - Criterion reporting through existing text channels
+Areas: runtime-engine featuretask and work projections, runtime-domain taskruntime, runtime-cli featuretask, desktop-tray details, intellij-plugin presentation/cache, docs/runtime-command-guidance.md
+- Status reads committed accounting for the selected workflow and explains authored criterion identity/text, retained and remaining failures, queue position, latest gap and final source-audit state.
+- CLI status and existing run-report reasons carry criterion context. Shared IDE summaries retain selected-child association; desktop details show the summary during active work alongside phase and quality sections.
+- IntelliJ tooltip, accessibility and popup details combine retained context with poll-failure and stale caveats. The existing sanitized 512-character cache marks abbreviated summaries and preserves context across restart.
+- Detached committed explanations reuse existing report/detail channels without adding transport fields or reader mutation authority. reusable
+- Runtime guidance describes prose findings/plans, focused repair, one failure per cycle, third-failure blocking and retained budgets on final regressions. Source acceptance remains separate from later quality work.
+- Supporting repairs retain ordinary routing without criterion accounting and read committed phase records for final-audit blocks. Consumer regressions cover visible context and stale/cache retention.
+- Limits: missing historical attribution remains unavailable; reporting cannot authorize prospective accounting or incident resume. Transport versions, payload shapes and phase/subtask progress keep their existing meaning.
+Feature flag: N/A
+Acceptance criteria: 6/6 implemented for S3-001 through S3-006; this entry does not assert parent-feature completion.
+
 ## [2026-10-14] SKILL-426 subtask 2 - Focused audit execution and final source gate
 Areas: runtime-engine featuretask and goalrunner repair, runtime-domain taskruntime, runtime-contracts, runtime-ports gitops, runtime-infra contracts/workflow, runtime-core DI, runtime-application persistence fixtures, orchestration/contracts
 - Removed the superseded repair-state, audit-result, handoff and adoption schemas, validators, registrations, strict admission and historical tuple reconstruction. This replaces subtask 1's structured-contract and dependency-order design.

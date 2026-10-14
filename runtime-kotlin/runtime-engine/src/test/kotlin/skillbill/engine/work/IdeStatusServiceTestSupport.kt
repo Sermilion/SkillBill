@@ -266,16 +266,15 @@ internal fun ideStatusService(
       testHarnessClock,
       NoopRuntimeDiagnostics,
     )
+  val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator)
   val runtimeStatusService =
     FeatureTaskRuntimeStatusService(
       recorder = phaseRecorder,
+      workflowPersistence = workflowPersistence,
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          FeatureTaskRuntimeWorkflowPersistence(
-            database,
-            snapshotValidator,
-          ),
+          workflowPersistence,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )

@@ -128,12 +128,20 @@ object FeatureTaskRuntimeRunLoopDrive {
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
     val serial = scope?.snapshot
     if (serial != null && FeatureTaskRuntimeRunLoopAcceptanceRepair.ownsCompletedPhase(phaseId, scope.steps)) {
-      when (val routing = FeatureTaskRuntimeRunLoopAcceptanceRepair.next(context, phaseId)) {
-        is FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Reenter -> return routing.phaseId
-        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Stop -> return null
-        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Continue -> Unit
+      return when (val routing = FeatureTaskRuntimeRunLoopAcceptanceRepair.next(context, phaseId)) {
+        is FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Reenter -> routing.phaseId
+        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Stop -> null
+        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Continue -> nextTransitionAfter(context, phaseId, verdict)
       }
     }
+    return nextTransitionAfter(context, phaseId, verdict)
+  }
+
+  private fun nextTransitionAfter(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    verdict: FeatureTaskRuntimeVerdict,
+  ): String? {
     val effectiveVerdict =
       FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
         rules.routedVerdict(phaseId, verdict, stepState)

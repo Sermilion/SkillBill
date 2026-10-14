@@ -1,6 +1,7 @@
 package dev.skillbill.tray.ui
 
 import dev.skillbill.tray.domain.*
+import dev.skillbill.tray.domain.Retention
 import dev.skillbill.tray.application.*
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
@@ -62,6 +63,56 @@ class MainWindowTest {
     val metric = detailDuration(work, now, stale = false)
     assertEquals("Goal active", metric.label)
     assertEquals("2m 0s", metric.value)
+  }
+
+  @Test
+  fun `long stale criterion detail keeps final source audit and pending quality work visible`() = runBlocking {
+    val now = Instant.parse("2026-10-13T10:00:00Z")
+    val summary = "Acceptance criteria: Final full source audit required. Tests, build, and validation remain pending.\n" +
+      "Latest gap still needs source repair.\n".repeat(50)
+    val work = item("serial", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL).copy(
+      freshness = Freshness.STALE,
+      summary = summary,
+    )
+    val detail = Detail(
+      work, emptyList(), emptyList(), null, "validate", 2, 1, 0, null, null, emptyMap(),
+      phases = listOf(WorkPhase("validate", "pending", 0, false)),
+      validation = listOf(SubtaskValidation(1, null, null, emptyList(), null)),
+    )
+    val emptyBoard = Board(now, Retention.WEEK, emptyList())
+    val model = object : DashboardModel {
+      override val state = MutableStateFlow(DashboardState(AppSettings(), detail = detail, board = emptyBoard, boardLoading = false))
+      override fun refresh() = Unit
+      override fun loadMoreBoard() = Unit
+      override fun loadMore(section: WorkSection) = Unit
+      override fun filter(value: String) = Unit
+      override fun loadMoreDetail(list: DetailList) = Unit
+      override fun select(identity: WorkIdentity) = Unit
+      override fun updateSettings(settings: AppSettings) = Unit
+      override fun chooseTab(tab: String) = Unit
+      override fun trayAvailable() = Unit
+      override fun trayUnavailable() = Unit
+      override fun perform(action: String, identity: WorkIdentity) = Unit
+      override fun close() = Unit
+    }
+    ImageComposeScene(1060, 698, coroutineContext = coroutineContext) {
+      SkillBillTheme { DetailPane(detail, null, model, androidx.compose.ui.Modifier, now, boardStale = false) }
+    }.use { scene ->
+      scene.render(System.nanoTime()).close()
+      val nodes = scene.semanticsOwners.flatMap { it.getAllSemanticsNodes(false) }
+      val visibleTexts = nodes.flatMap {
+        it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text }
+      }
+      assertTrue(visibleTexts.any { it.contains("Final full source audit required") }, visibleTexts.joinToString())
+      assertTrue(visibleTexts.any { it.contains("stale") }, visibleTexts.joinToString())
+      assertTrue("VALIDATION" in visibleTexts, visibleTexts.joinToString())
+      val validation = nodes.single {
+        it.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text -> text.text == "VALIDATION" }
+      }
+      assertTrue(validation.boundsInRoot.height > 0f)
+      assertTrue(validation.boundsInRoot.bottom <= 698f)
+      assertTrue(visibleTexts.any { it.contains("pending") }, visibleTexts.joinToString())
+    }
   }
 
   @Test

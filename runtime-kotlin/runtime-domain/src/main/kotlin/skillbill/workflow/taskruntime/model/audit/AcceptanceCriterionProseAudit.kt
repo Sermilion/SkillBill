@@ -11,11 +11,10 @@ data class AcceptanceCriterionProseAudit(
   val checkpointId: String,
 )
 
-fun AcceptanceCriterionRepairState.retainProseProgress(): AcceptanceCriterionRepairState =
-  copy(revision = revision + 1)
+fun AcceptanceCriterionRepairState.retainProseProgress(): AcceptanceCriterionRepairState = copy(revision = revision + 1)
 
 fun AcceptanceCriterionRepairState.retainClarification(question: String): AcceptanceCriterionRepairState? {
-  val readable = question.trim().take(1024)
+  val readable = question.trim().take(AcceptanceCriterionRepairState.MAX_CLARIFICATION_LENGTH)
   if (readable.isBlank()) return null
   return copy(revision = revision + 1, pendingClarificationQuestion = readable)
 }
@@ -61,13 +60,14 @@ private fun AcceptanceCriterionRepairState.applyInitialAudit(
       revision = audit.revision,
     )
   }
-  val closed = criteria.map { criterion ->
-    if (criterion.sourceDisposition == AcceptanceCriterionSourceDisposition.NOT_APPLICABLE) {
-      criterion
-    } else {
-      criterion.afterProseAudit(audit, AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+  val closed =
+    criteria.map { criterion ->
+      if (criterion.sourceDisposition == AcceptanceCriterionSourceDisposition.NOT_APPLICABLE) {
+        criterion
+      } else {
+        criterion.afterProseAudit(audit, AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+      }
     }
-  }
   return copy(
     criteria = closed,
     unresolvedQueue = emptyList(),
