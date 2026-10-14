@@ -13,7 +13,7 @@ class SQLiteDatabaseSchema(
 ) : DatabaseSchemaPort {
   override fun migrateExistingDatabase(): Boolean {
     if (!database.databaseExists()) return false
-    DatabaseRuntime.ensureWriteReady(database.resolveDbPath(), diagnostics)
+    DatabaseRuntime.migrateExistingDatabase(database.resolveDbPath(), diagnostics)
     return true
   }
 }

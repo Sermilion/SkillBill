@@ -669,6 +669,7 @@ object PrincipleEnforcementInventory {
       "agentRunLauncher",
       "agentRunService",
       "configResolutionService",
+      "databaseSchema",
       "databaseSession",
       "externalAddonOverlayService",
       "externalAgentAddonSourceConfigPort",

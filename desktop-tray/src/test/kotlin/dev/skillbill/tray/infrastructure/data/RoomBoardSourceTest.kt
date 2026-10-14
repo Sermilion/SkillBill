@@ -1,6 +1,7 @@
 package dev.skillbill.tray.infrastructure.data
 
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.tray.application.Outcome
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
@@ -350,6 +351,45 @@ class RoomBoardSourceTest {
         assertEquals(StorageFailure.INCOMPATIBLE_SCHEMA, (source.board(WorkSection.GOALS, Retention.DAY) as Outcome.Failure).problem.storageFailure)
         fixture.connection.createStatement().use { statement ->
           statement.executeQuery("SELECT identity_hash FROM room_master_table WHERE id = 42").use { it.next(); assertEquals("foreign-schema", it.getString(1)) }
+        }
+      } finally { source.close() }
+    }
+  }
+
+  @Test
+  fun `selecting an older store applies runtime migrations and preserves its saved work`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-upgrade-selected-store").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "saved", now, "main")
+          .copy(lifecycleState = "blocked"))
+      }
+      fixture.connection.createStatement().use { statement ->
+        statement.execute("DELETE FROM schema_migrations WHERE version = 56")
+        statement.execute("PRAGMA user_version = 55")
+      }
+      val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        assertEquals(listOf("saved"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY)).items.map { it.identity.id })
+        val migratedAt = fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT applied_at FROM schema_migrations WHERE version = 56").use { rows ->
+            assertTrue(rows.next())
+            rows.getString(1)
+          }
+        }
+        source.selectDatabase(fixture.dbPath.toString())
+        assertEquals(listOf("saved"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY)).items.map { it.identity.id })
+        fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("PRAGMA user_version").use { rows ->
+            assertTrue(rows.next())
+            assertEquals(DesktopReadSchema.VERSION, rows.getInt(1))
+          }
+          statement.executeQuery("SELECT applied_at FROM schema_migrations WHERE version = 56").use { rows ->
+            assertTrue(rows.next())
+            assertEquals(migratedAt, rows.getString(1))
+            assertFalse(rows.next())
+          }
         }
       } finally { source.close() }
     }

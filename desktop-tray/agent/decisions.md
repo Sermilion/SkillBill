@@ -110,3 +110,8 @@ Reason: The sidebar represents work the operator can select. Its activity histor
 Context: Finalization failures kept only a blocked status after the runner exited, so Copy reason copied the generic goal summary.
 Decision: Save the runner's full stopped reason in goal control state and project it separately from the bounded status text. Show blocked goals in Goal activity with the existing three-line preview, delayed tooltip, and copy button. Keep the header summary short. Disable copying when an older attempt has no saved full reason and state that absence in Goal activity.
 Reason: Clipboard text must contain the recorded failure, and a missing reason must remain visible rather than become a generic status sentence.
+
+## [2026-10-14] Apply supported upgrades when selecting a database
+Context: An installed desktop app rejected an older runtime store with an incompatible-database message. Installation upgrades the runtime's default store, but the app can select a different store or open one restored after installation.
+Decision: Database selection calls the shared runtime schema port before opening Room or registering observation. The runtime checks the migration ledger, version, and installed Room identity before applying pending migrations. Missing databases stay absent, and newer or unrecognized stores remain unchanged. Ordinary reads and observation retain their read-only behavior.
+Reason: An older supported store should open with its saved work intact. Runtime migrations remain the only schema authority, and upgrading belongs to the connection boundary rather than each read.

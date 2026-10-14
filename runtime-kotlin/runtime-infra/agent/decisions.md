@@ -24,3 +24,8 @@ Reason: Expected persistence failures must not stop lease renewal. Recovering de
 Context: Stored shared-evidence index rejection emitted a degraded cause beginning with "IllegalArgumentException: ". SKILL-401 removes the constructor-defect catch.
 Decision: Validate stored model fields before construction and emit the same ordered reason with the literal prefix. Keep the existing seam, re-derive action and expected-value text.
 Reason: The prefix is part of emitted diagnostic bytes. Replacing exception-based control flow must preserve that output even though rejection now arrives as a value.
+
+## [2026-10-14] Validate and settle an existing store before desktop connection
+Context: Installation migrates the default runtime store, but desktop selection can reach an older restored or separately selected store. A cached current user_version can also hide a missing migration ledger entry.
+Decision: The existing schema port checks the ledger, user_version, and any installed Room identity through a read-only connection. It rejects newer or unrecognized stores. When supported migrations are pending, it establishes schema readiness directly rather than trusting the routine-write cache. The desktop consumes this same port through the pinned composition API; installation remains its other consumer.
+Reason: An explicit upgrade must settle the observed pending ledger before a read-only consumer connects. Routine reads keep their schema checks and never perform this upgrade themselves.
