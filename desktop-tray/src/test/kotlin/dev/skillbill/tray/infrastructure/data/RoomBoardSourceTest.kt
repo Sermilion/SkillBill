@@ -1,5 +1,6 @@
 package dev.skillbill.tray.infrastructure.data
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import dev.skillbill.tray.application.Outcome
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
@@ -381,7 +382,7 @@ class RoomBoardSourceTest {
         val process = JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
           override fun warning(message: String, error: Throwable?) = Unit
           override fun error(message: String, error: Throwable?) = Unit
-        }).currentProcess()
+        }, JdkHostPlatformPort).currentProcess()
         unit.goalRunnerControls.persistControlState("older-goal", GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}",
           executionLease = GoalRunnerExecutionLease(1, "owned-test", process.hostIdentity, process.bootIdentity, process.pid,
             process.processBirthToken, now, now.plusSeconds(3600))))

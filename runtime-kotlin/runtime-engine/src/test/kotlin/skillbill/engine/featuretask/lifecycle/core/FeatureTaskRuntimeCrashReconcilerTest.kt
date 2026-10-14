@@ -36,6 +36,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -381,6 +382,8 @@ class FeatureTaskRuntimeCrashReconcilerTest {
         override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection =
           error("probe blew up")
 
+        override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
         override fun awaitExit(
           ownership: FeatureTaskRuntimeWorkerOwnership,
           timeout: Duration,
@@ -447,6 +450,8 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("h", "b", 1, "birth")
 
       override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
+
+      override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
       override fun awaitExit(
         ownership: FeatureTaskRuntimeWorkerOwnership,

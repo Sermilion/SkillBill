@@ -419,6 +419,8 @@ internal object DeadProcessSupervisor : FeatureTaskRuntimeWorkerSupervisor {
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,
@@ -440,6 +442,8 @@ internal object LiveProcessSupervisor : FeatureTaskRuntimeWorkerSupervisor {
   override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("host", "boot", 9, "birth-9")
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ExactLive
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

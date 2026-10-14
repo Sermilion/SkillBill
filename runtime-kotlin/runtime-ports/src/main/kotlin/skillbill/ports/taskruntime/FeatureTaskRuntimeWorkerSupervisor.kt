@@ -6,11 +6,15 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.time.Duration
+import java.time.Instant
 
 interface FeatureTaskRuntimeWorkerSupervisor {
   fun currentProcess(): FeatureTaskRuntimeProcessIdentity
 
   fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection
+
+  /** Returns the start time only when [ownership] identifies an exact live process. */
+  fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant?
 
   /**
    * Block until [ownership] is no longer [FeatureTaskRuntimeProcessInspection.ExactLive], or until

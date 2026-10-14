@@ -266,6 +266,8 @@ private class FakeWorkerSupervisor(
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,

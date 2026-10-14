@@ -5,6 +5,7 @@ import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.WorkOwnerExitObserver
@@ -17,6 +18,7 @@ import java.net.InetAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -25,6 +27,62 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
+
+private const val LINUX_START_TICKS_PREFIX = "linux-start-ticks:"
+private const val START_TIME_INDEX_AFTER_COMM = 19
+
+internal fun processBirthToken(
+  handle: ProcessHandle,
+  platform: HostPlatformPort,
+  diagnostics: RuntimeDiagnostics,
+): String? {
+  if (!platform.osName.startsWith("Linux", ignoreCase = true)) {
+    return handle.info().startInstant().orElse(null)?.toEpochMilli()?.toString()
+  }
+  val stat =
+    try {
+      Files.readString(Path.of("/proc/${handle.pid()}/stat"))
+    } catch (failure: IOException) {
+      diagnostics.warning(
+        "seam=processBirthToken expected=kernel start ticks used=unavailable pid=${handle.pid()}",
+        failure,
+      )
+      return null
+    }
+  val fields = stat.substringAfterLast(')', "").trim().split(Regex("\\s+"))
+  val ticks = fields.getOrNull(START_TIME_INDEX_AFTER_COMM)?.toLongOrNull()
+  if (ticks == null || ticks < 0) {
+    diagnostics.warning(
+      "seam=processBirthToken expected=kernel start ticks used=unavailable " +
+        "cause=malformed_proc_stat pid=${handle.pid()}",
+    )
+    return null
+  }
+  return "$LINUX_START_TICKS_PREFIX$ticks"
+}
+
+internal fun processBirthMatches(
+  handle: ProcessHandle,
+  stored: String,
+  platform: HostPlatformPort,
+  diagnostics: RuntimeDiagnostics,
+): Boolean? {
+  if (stored.startsWith(LINUX_START_TICKS_PREFIX)) {
+    return processBirthToken(handle, platform, diagnostics)?.let { it == stored }
+  }
+  val birth = handle.info().startInstant().orElse(null)?.toEpochMilli()?.toString() ?: return null
+  return when {
+    birth == stored -> true
+    platform.osName.startsWith("Linux", ignoreCase = true) && stored.toLongOrNull() != null -> {
+      diagnostics.warning(
+        "seam=processBirthMatches expected=stable kernel start ticks " +
+          "used=unverifiable_legacy_timestamp pid=${handle.pid()}",
+      )
+      null
+    }
+    else -> false
+  }
+}
 
 private const val INIT_PID: Long = 1L
 private const val BOOT_IDENTITY_UNAVAILABLE: String = "boot-identity-unavailable"
@@ -40,9 +98,6 @@ private fun bootIdentityIsDecisive(value: String): Boolean =
   value.isNotBlank() &&
     value != BOOT_IDENTITY_UNAVAILABLE &&
     !value.startsWith(LEGACY_BOOT_IDENTITY_PREFIX)
-
-internal fun processBirthToken(handle: ProcessHandle): String? =
-  handle.info().startInstant().orElse(null)?.toEpochMilli()?.toString()
 
 internal fun processBootIdentity(diagnostics: RuntimeDiagnostics): String {
   val linuxBootId = Path.of("/proc/sys/kernel/random/boot_id")
@@ -66,6 +121,7 @@ internal fun processBootIdentity(diagnostics: RuntimeDiagnostics): String {
 @Inject
 class JdkFeatureTaskRuntimeWorkerSupervisor(
   private val diagnostics: RuntimeDiagnostics,
+  private val platform: HostPlatformPort,
 ) : FeatureTaskRuntimeWorkerSupervisor, WorkOwnerExitObserver {
   override fun currentProcess(): FeatureTaskRuntimeProcessIdentity {
     val handle = ProcessHandle.current()
@@ -74,7 +130,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
       bootIdentity = processBootIdentity(diagnostics),
       pid = handle.pid(),
       processBirthToken =
-        processBirthToken(handle)
+        processBirthToken(handle, platform, diagnostics)
           ?: error("The current process does not expose process-birth evidence."),
     )
   }
@@ -102,15 +158,23 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
       FeatureTaskRuntimeProcessInspection.ExactLive -> Unit
     }
     val handle = ProcessHandle.of(ownership.pid).orElse(null)
-    if (handle == null || processBirthToken(handle) != ownership.processBirthToken) {
+    if (handle == null || !handle.isAlive) {
       onExit()
       return null
     }
-    return if (handle.pid() == ProcessHandle.current().pid()) {
-      null
-    } else {
-      val completion = handle.onExit().thenRun(onExit)
-      AutoCloseable { completion.cancel(false) }
+    return when (processBirthMatches(handle, ownership.processBirthToken, platform, diagnostics)) {
+      false -> {
+        onExit()
+        null
+      }
+      null -> null
+      true ->
+        if (handle.pid() == ProcessHandle.current().pid()) {
+          null
+        } else {
+          val completion = handle.onExit().thenRun(onExit)
+          AutoCloseable { completion.cancel(false) }
+        }
     }
   }
 
@@ -140,6 +204,9 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     }
   }
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? =
+    exactHandle(ownership)?.info()?.startInstant()?.orElse(null)
+
   private fun inspectLocalOwnership(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     local: FeatureTaskRuntimeProcessIdentity,
@@ -154,14 +221,13 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     }
 
     val handle =
-      ProcessHandle.of(ownership.pid).orElse(null)
+      ProcessHandle.of(ownership.pid).orElse(null)?.takeIf { it.isAlive }
         ?: return FeatureTaskRuntimeProcessInspection.NotRunning
-    val birth = processBirthToken(handle)
+    val matches = processBirthMatches(handle, ownership.processBirthToken, platform, diagnostics)
     return when {
-      birth == null ->
+      matches == null ->
         FeatureTaskRuntimeProcessInspection.Unsupported("Worker PID has no verifiable birth evidence.")
-      handle.isAlive && birth == ownership.processBirthToken -> FeatureTaskRuntimeProcessInspection.ExactLive
-      !handle.isAlive -> FeatureTaskRuntimeProcessInspection.NotRunning
+      matches -> FeatureTaskRuntimeProcessInspection.ExactLive
       else -> FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process.")
     }
   }
@@ -187,12 +253,13 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
     Thread.sleep(durationMillis)
   }
 
-  private fun exactHandle(ownership: FeatureTaskRuntimeWorkerOwnership): ProcessHandle? =
-    if (inspect(ownership) == FeatureTaskRuntimeProcessInspection.ExactLive) {
-      ProcessHandle.of(ownership.pid).orElse(null)
-    } else {
-      null
+  private fun exactHandle(ownership: FeatureTaskRuntimeWorkerOwnership): ProcessHandle? {
+    if (inspect(ownership) != FeatureTaskRuntimeProcessInspection.ExactLive) return null
+    val handle = ProcessHandle.of(ownership.pid).orElse(null) ?: return null
+    return handle.takeIf {
+      it.isAlive && processBirthMatches(it, ownership.processBirthToken, platform, diagnostics) == true
     }
+  }
 }
 
 private class HeartbeatLoop(

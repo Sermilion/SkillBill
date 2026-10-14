@@ -43,6 +43,7 @@ import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRunEvidenceAddr
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -459,6 +460,8 @@ private object LiveInspectWorkerSupervisor : FeatureTaskRuntimeWorkerSupervisor 
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection =
     FeatureTaskRuntimeProcessInspection.ExactLive
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

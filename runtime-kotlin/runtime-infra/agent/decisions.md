@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-10-14] Linux worker identity uses kernel start ticks
+Context: The desktop JVM read a live planning runner's start timestamp one second earlier than the CLI had recorded. Exact comparison of those timestamps projected the active run as paused with `runner_interrupted`.
+Decision: On Linux, process birth tokens use field 22 of `/proc/<pid>/stat`, prefixed with `linux-start-ticks:`. Host and boot identity remain separate checks. Other platforms retain JDK start timestamps. Duplicate-launch admission requests the inspected owner's start time through the supervisor port instead of interpreting its identity token as a timestamp.
+Reason: Kernel start ticks identify a process within a boot without depending on a JVM's wall-clock conversion. A timestamp tolerance could accept a reused PID. An older Linux timestamp that matches remains verifiable; a mismatched legacy timestamp returns an observable unsupported result and cannot authorize termination. Process death still returns not running. No durable record is rewritten during inspection.
+
 ## [2026-10-10] Scripted git pins pager off and Git's default rename limit
 Context: `worktreeActivity` numstat on a 5_000-file dirty tree returned OK with zero diffstat on the self-hosted macmini runner while `status --porcelain` counted every file. `runCatchingDiffStat` mapped a failed `git diff --numstat` onto empty stats. That runner inherits the operator's global git config, so an unlimited `diff.renameLimit` can make rename detection exceed the 30s git timeout.
 Decision: Invoke git with `--no-pager` and `-c diff.renameLimit=1000` (Git's documented default) at `gitArgv`. If unstaged or staged numstat fails, `worktreeActivity` returns ERROR with that error and does not emit a zero diffstat.
