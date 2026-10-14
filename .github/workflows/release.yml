@@ -123,7 +123,7 @@ jobs:
           HOST_TOKEN: ${{ matrix.host_token }}
         run: |
           set -euo pipefail
-          app_dir="desktop-tray/build/compose/binaries/main/app"
+          app_dir="desktop-tray/composeApp/build/compose/binaries/main/app"
           [[ -d "$app_dir" ]] || { echo "Missing desktop distribution: $app_dir." >&2; exit 1; }
           stage_dir="$(mktemp -d)"
           trap 'rm -rf "$stage_dir"' EXIT

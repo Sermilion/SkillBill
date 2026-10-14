@@ -8,8 +8,8 @@ import sys
 import tempfile
 
 project = Path(__file__).resolve().parents[1]
-image = project / "build/compose/binaries/main/app"
-classes = project / "build/classes/kotlin/test"
+image = project / "composeApp/build/compose/binaries/main/app"
+classes = project / "composeApp/build/classes/kotlin/jvm/test"
 if not image.is_dir() or not classes.is_dir():
     raise SystemExit("Run clean check createDistributable before the packaged data smoke.")
 

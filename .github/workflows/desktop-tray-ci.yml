@@ -42,7 +42,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          for error_log in desktop-tray/build/compose/logs/createDistributable/*-err.txt; do
+          for error_log in desktop-tray/composeApp/build/compose/logs/createDistributable/*-err.txt; do
             [[ -f "$error_log" ]] || continue
             echo "jpackage error log: $error_log"
             cat "$error_log"
@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-tray-snapshot-${{ matrix.os }}
-          path: desktop-tray/build/compose/binaries/main/app/
+          path: desktop-tray/composeApp/build/compose/binaries/main/app/
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 90

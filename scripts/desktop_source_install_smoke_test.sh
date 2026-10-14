@@ -33,9 +33,9 @@ set -euo pipefail
 if [[ -f fail-build ]]; then
   exit 23
 fi
-mkdir -p 'build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
-printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
-chmod +x 'build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+mkdir -p 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS'
+printf '#!/usr/bin/env bash\nprintf "source desktop app\\n"\n' > 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
+chmod +x 'composeApp/build/compose/binaries/main/app/Skill Bill.app/Contents/MacOS/Skill Bill'
 BUILD
 chmod +x "$task_dir/checkout/desktop-tray/gradlew"
 

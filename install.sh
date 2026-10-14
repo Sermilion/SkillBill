@@ -1631,7 +1631,7 @@ build_source_desktop_app() {
     DESKTOP_APP_INSTALL_RESULT="build failed"
     return 1
   fi
-  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/build/compose/binaries/main/app")"
+  BUILT_DESKTOP_APP_SOURCE="$(desktop_app_target_path "$os" "$desktop_dir/composeApp/build/compose/binaries/main/app")"
 }
 
 install_selected_desktop_app() {
