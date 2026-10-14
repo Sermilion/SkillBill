@@ -1,5 +1,12 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-14] Reconcile review area ownership within a composition and file scope
+Context: Global cross-root area uniqueness refused a Kotlin production review when a Python fixture also declared `architecture`. The stack-routing playbook delegates independent matching packs over their own changed files.
+Decision: Group routed roots by their declared composition closure and reconcile each group with the existing nearest-depth and fallback rules. Independent groups retain separate specialist lanes. Shared fallback owners merge once with all scopes and provenance. Distinct area owners assigning the same path still fail. Quality follow-up preserves accepted owners when unresolved documentation changes require their review.
+Reason: An area name identifies a responsibility, not one global platform owner. A Kotlin baseline and its composing KMP pack compete within one composition; a Python fixture is an independent scope.
+Supersession: The former application test requiring disjoint Kotlin and Swift scopes to fail is replaced by a mixed Kotlin/KMP/Python launch and accounting regression. Domain overlap rejection, same-composition ambiguity rejection and a production no-partial-launch conflict test remain. No architecture baseline or exemption changes.
+Evidence: `ReviewCrossRootLaneReconciliationTest`, `ParallelReviewCrossRootLanePlanTest`, `PlatformPackCompositionTest`. A1, A2, A5 and A11 keep pure ownership policy in domain and rubric resolution in application. G3 and G7 retain rejecting fixtures and record the corrected acceptance scope.
+
 ## [2026-10-10] Pack build gates always use the whole branch
 Context: Changed-file routing let one edited language choose a different gate from the rest of the branch. A generic-only installation also refused the next goal child after the previous child committed and cleared the working tree.
 Decision: Goal execution-plan creation and pack build gate execution select the gate from the current branch's tracked files. Remove the changed-file fallback selector. Preserve recorded descriptors and their command policies on resume. Standalone and workflow validation discover project checks through the agent strategy.

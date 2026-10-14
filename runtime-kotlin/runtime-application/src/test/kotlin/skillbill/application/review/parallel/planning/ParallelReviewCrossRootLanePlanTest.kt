@@ -1,5 +1,6 @@
 package skillbill.application.review.parallel.planning
 
+import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForChanges
@@ -8,8 +9,13 @@ import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.application.review.snapshot.reviewed
+import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.review.model.ResolvedReviewRubric
+import skillbill.ports.review.preparation.ReviewRubricResolver
+import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
@@ -83,18 +89,98 @@ class ParallelReviewCrossRootLanePlanTest {
     )
   }
 
-  @Test fun `two non-composing routed packs tying on one area abort planning instead of launching both lanes`() {
-    val swift = reviewPack("swift", listOf("architecture", "ui"), routingSignals = listOf("*.swift"))
+  @Test fun `Python fixtures review separately from composed Kotlin source with the same area names`() {
+    val python = reviewPack("python", listOf("architecture", "code-quality"), routingSignals = listOf("*.py"))
+    val withQuality = reviewPack("kotlin", kotlinAreas + "code-quality", routingSignals = listOf("*.kt"))
+    val recorder =
+      run(
+        listOf(withQuality, kmp, python),
+        diffForChanges(
+          "src/commonMain/kotlin/App.kt" to "expect fun platformName(): String",
+          "src/main/kotlin/Repo.kt" to "class ExpectedState",
+          "src/test/resources/capture.py" to "def capture(): return {}",
+        ),
+      )
+    assertEquals(
+      setOf("kmp", "python"),
+      recorder.durableLanes.filter {
+        it.area == "architecture"
+      }.map { it.packSlug }.toSet(),
+    )
+    assertEquals(
+      setOf("kotlin", "python"),
+      recorder.durableLanes.filter {
+        it.area == "code-quality"
+      }.map { it.packSlug }.toSet(),
+    )
+    assertEquals(listOf(0, 1, 2, 3, 4, 5, 6), recorder.durableLanes.sortedBy { it.orderIndex }.map { it.orderIndex })
+    assertTrue(recorder.durableLanes.all { it.unreviewedSegmentIds.isEmpty() })
+    assertNotNull(recorder.durableIntegrationPass)
+
+    val generic = reviewPack("generic", listOf("code-quality"), fallback = true)
+    val installed = listOf(withQuality, kmp, python, generic)
+    val evidence =
+      assertNotNull(ReviewDiffEvidence.parseAttributable(diffForChanges("docs/repair.md" to "repair notes")))
+    val planner =
+      ParallelCodeReviewRunnerRubricPlanning(
+        ReviewRubricResolver { ResolvedReviewRubric("review", "review rubric") },
+        InstalledPlatformPackCatalogPort { installed },
+        NoopRuntimeDiagnostics,
+      )
+    val followUp =
+      planner.resolvePlannedRubrics(
+        evidence,
+        ParallelCodeReviewStackDetection(listOf(generic), installed, mapOf("generic" to setOf("docs/repair.md"))),
+        acceptedLanes = recorder.durableLanes,
+        qualityOnly = true,
+      )
+    assertEquals(setOf("kotlin", "python"), followUp.map { it.descriptor.packSlug }.toSet())
+    assertTrue(followUp.all { it.descriptor.ownedPaths == listOf("docs/repair.md") })
+
+    val mixedEvidence =
+      assertNotNull(
+        ReviewDiffEvidence.parseAttributable(
+          diffForChanges(
+            "src/main/kotlin/Repo.kt" to "class ExpectedState",
+            "src/test/resources/capture.py" to "def capture(): return {}",
+          ),
+        ),
+      )
+    val introducedPack =
+      planner.resolvePlannedRubrics(
+        mixedEvidence,
+        ParallelCodeReviewStackDetection(emptyList(), installed, emptyMap()),
+        acceptedLanes = recorder.durableLanes.filter { it.area == "code-quality" && it.packSlug == "kotlin" },
+        qualityOnly = true,
+      )
+    assertEquals(setOf("kotlin", "python"), introducedPack.map { it.descriptor.packSlug }.toSet())
+  }
+
+  @Test fun `competing composing roots sharing a baseline still refuse ownership before durable launch`() {
+    val first =
+      reviewPack(
+        "first",
+        listOf("architecture"),
+        layers = listOf(reviewLayer("kotlin")),
+        routingSignals = listOf("*.first"),
+      )
+    val second =
+      reviewPack(
+        "second",
+        listOf("architecture"),
+        layers = listOf(reviewLayer("kotlin")),
+        routingSignals = listOf("*.second"),
+      )
     val recorder = ReviewRecorder()
     val diff =
       diffForChanges(
-        "src/main/kotlin/Repo.kt" to "class Repo",
-        "Sources/App/View.swift" to "struct View",
+        "src/App.first" to "first source",
+        "src/App.second" to "second source",
       )
 
     val error =
       assertFailsWith<SkillBillRuntimeException> {
-        reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, swift), diff = diff), recorder)
+        reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, first, second), diff = diff), recorder)
           .reviewed(
             harnessRequest(reviewRunId = "cross-root-ambiguous", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
           )
@@ -103,7 +189,7 @@ class ParallelReviewCrossRootLanePlanTest {
       }
 
     assertTrue(
-      listOf("architecture", "kotlin", "swift").all { it in error.message.orEmpty() },
+      listOf("architecture", "first", "second").all { it in error.message.orEmpty() },
       "The typed error must name the contested area and both owning packs: \${error.message}",
     )
     assertTrue(

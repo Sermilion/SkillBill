@@ -14,9 +14,9 @@ import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.model.ReviewRunLane
 import skillbill.review.plan.ReviewAddonSelectionPolicy
 import skillbill.review.plan.ReviewCrossRootLaneReconciliation
+import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewLaneInclusionPolicy
 import skillbill.review.plan.ReviewLaunchPlanPolicy
-import skillbill.review.plan.ReviewPerAreaFallbackExclusion
 import skillbill.review.plan.ReviewStackRouting
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewReconciledLane
@@ -95,7 +95,7 @@ class ParallelCodeReviewRunnerRubricPlanning(
       ReviewCrossRootLaneReconciliation
         .compositionDepthOffsets(routing.routed.map { it.slug }, manifests)
     val rootLanes =
-      routing.routed.map { root ->
+      routing.routed.associate { root ->
         val rootOwnedPaths = routing.ownedPathsBySlug[root.slug].orEmpty()
         val rootFiles = evidence.files.filter { it.path in rootOwnedPaths }
         val selectedAreas = ReviewLaunchPlanPolicy.composedAreas(root.slug, manifests)
@@ -111,11 +111,10 @@ class ParallelCodeReviewRunnerRubricPlanning(
               changedHunkIds = evidence.hunks.filter { it.path in ownedPaths }.map { it.hunkId },
             )
           }
-        ReviewRootLanes(depthOffsets[root.slug] ?: 0, lanes)
+        root.slug to ReviewRootLanes(depthOffsets[root.slug] ?: 0, lanes)
       }
-    val exclusion = ReviewPerAreaFallbackExclusion.partition(rootLanes, manifests)
     val reconciled =
-      ReviewCrossRootLaneReconciliation.reconcile(exclusion.roots, exclusion.excludedFallbackLanesByArea)
+      ReviewCrossRootLaneReconciliation.reconcileRoutedRoots(rootLanes, manifests)
     if (reconciled.none { it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS }) {
       recordMissingQualityOwner("no_manifest_declared_owner")
     }
@@ -138,6 +137,14 @@ class ParallelCodeReviewRunnerRubricPlanning(
     manifests: List<PlatformManifest>,
     acceptedLanes: List<ReviewRunLane>,
   ): List<PlannedReviewRubric> {
+    val qualityOwners =
+      acceptedLanes.filter { it.area in UNIVERSAL_CODE_REVIEW_AREAS }
+        .distinctBy { it.packSlug to it.area }
+    if (qualityOwners.isNotEmpty() &&
+      (qualityOwners.size > 1 || planned.count { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS } > 1)
+    ) {
+      return preserveMultipleAcceptedQualityOwners(planned, evidence, manifests, qualityOwners)
+    }
     val accepted = acceptedLanes.lastOrNull { it.area in UNIVERSAL_CODE_REVIEW_AREAS } ?: return planned
     val current = planned.singleOrNull { it.descriptor.area == accepted.area }
     if (current?.descriptor?.skillName == accepted.laneSkillName) return planned
@@ -182,6 +189,51 @@ class ParallelCodeReviewRunnerRubricPlanning(
       )
     val preserved = toPlannedRubric(evidence, ReviewReconciledLane(descriptor, listOf(descriptor)), manifests)
     return planned.filterNot { it.descriptor.area == accepted.area } + preserved
+  }
+
+  private fun preserveMultipleAcceptedQualityOwners(
+    planned: List<PlannedReviewRubric>,
+    evidence: ReviewDiffEvidence,
+    manifests: List<PlatformManifest>,
+    qualityOwners: List<ReviewRunLane>,
+  ): List<PlannedReviewRubric> {
+    val fallbackSlug = ReviewFallbackResolver.resolveOptional(manifests)?.slug
+    val fallback =
+      planned.filter {
+        it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS && it.descriptor.packSlug == fallbackSlug
+      }
+    val base = planned - fallback.toSet()
+    return qualityOwners.fold(base) { result, accepted ->
+      val current =
+        result.singleOrNull {
+          it.descriptor.area == accepted.area && it.descriptor.packSlug == accepted.packSlug
+        }
+      if (fallback.isEmpty() && (current != null || base.any { it.descriptor.area == accepted.area })) {
+        result
+      } else {
+        val seed = current ?: fallback.firstOrNull { it.descriptor.area == accepted.area }
+        val paths =
+          (
+            current?.descriptor?.ownedPaths.orEmpty() +
+              fallback.flatMap {
+                it.descriptor.ownedPaths
+              }
+          ).distinct().sorted()
+        val scoped =
+          seed?.copy(
+            descriptor =
+              seed.descriptor.copy(
+                ownedPaths = paths,
+                changedHunkIds =
+                  evidence.hunks.filter {
+                    it.path in paths
+                  }.map { it.hunkId },
+              ),
+          )
+        val preserved = preserveAcceptedQualityOwner(listOfNotNull(scoped), evidence, manifests, listOf(accepted))
+        result.filterNot { it === current } + preserved
+      }
+    }
   }
 
   private fun toPlannedRubric(

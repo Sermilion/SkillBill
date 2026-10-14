@@ -1,3 +1,9 @@
+## [2026-10-14] Independent review packs keep separate area owners
+Context: A Python capture fixture made a Kotlin review fail because both packs declared the same area.
+Decision: Reconcile manifest-connected composition roots together. Keep independent owners on separate file scopes, merge identical shared fallback owners and reject distinct owners assigning the same path. Within each composition, existing depth and ownership checks remain authoritative.
+Reason: The stack-routing playbook requires delegated review for each independent matching pack. Project-level validation still selects its dominant pack separately.
+Evidence: Domain scope and overlap regressions, application launch/accounting and quality follow-up regressions, shipped-pack serial-adoption fixture reproduction. The repository decision dated 2026-10-14 records the superseded cross-root uniqueness test.
+
 ## [2026-10-14] Match review routing content signals at identifier boundaries
 Context: Bare `expect` and `actual` content signals selected KMP for JVM identifiers such as `ExpectedState` and `actualOwner`.
 Decision: Compile literal manifest content signals with Unicode letter, digit and underscore boundaries at identifier endpoints. Path ownership still admits candidates before content breaks ties. Composition and cross-root ownership checks retain their existing behavior.
