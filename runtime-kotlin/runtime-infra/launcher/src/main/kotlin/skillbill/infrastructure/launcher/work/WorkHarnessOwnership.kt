@@ -47,7 +47,7 @@ internal class WorkHarnessOwnership(private val directory: Path, private val dia
     scopeUnit: String?,
   ) {
     val birth = process.toHandle().info().startInstant().orElse(null)
-    if (birth == null && !process.isAlive) return
+    if (birth == null && process.waitFor(EXIT_RACE_WAIT_MILLIS, TimeUnit.MILLISECONDS)) return
     if (birth == null) throw IOException("The harness exposes no process birth evidence.")
     val staged = Files.createTempFile(directory, "owner-", ".tmp")
     try {
@@ -149,6 +149,7 @@ internal class WorkHarnessOwnership(private val directory: Path, private val dia
 
   private companion object {
     const val EXIT_WAIT_SECONDS = 5L
+    const val EXIT_RACE_WAIT_MILLIS = 500L
     const val OWNER_FIELDS = 3
   }
 
