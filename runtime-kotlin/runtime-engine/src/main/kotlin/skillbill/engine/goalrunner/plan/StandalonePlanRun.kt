@@ -2,20 +2,11 @@ package skillbill.engine.goalrunner.plan
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
-import skillbill.engine.featuretask.lifecycle.remediation.buildCompletedUpstreamMissingOutputRepair
-import skillbill.engine.featuretask.lifecycle.remediation.featureSizeFromArtifacts
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.subtask.CompletedUpstreamRepairRequest
-import skillbill.engine.featuretask.phase.core.decodePhaseLedger
-import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
-import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
@@ -26,14 +17,11 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.text.sha256HexUtf8
-import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.taskruntime.artifact.decomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
-import java.time.Clock
 
 /** How a standalone plan run ended. */
 sealed interface StandalonePlanResult {
@@ -62,42 +50,36 @@ sealed interface StandalonePlanResult {
 class StandalonePlanRun(
   private val intakePreparation: GoalIntakePreparation,
   private val manifestStore: GoalRunnerManifestStore,
-  private val lookupService: FeatureTaskContinuationLookupService,
+  private val planLookup: PlanWorkflowLookup,
   private val entry: FeatureTaskRuntimeRunEntry,
-  private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val database: DatabaseSessionFactory,
   private val repositories: RepositoryEnclosingRootPort,
   private val fileStore: DecompositionManifestStore,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
-  private val planBundles: FeatureTaskRuntimeDecomposeTerminalRecorder,
-  private val clock: Clock,
+  private val reopening: PlanSubtasksReopening,
 ) {
-  private val engine = WorkflowEngine()
-
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
   fun replanSubtasks(
-    issueKey: String,
-    planWorkflowId: String,
-    repoRoot: Path,
-    settledSubtaskIds: Set<Int>,
-    agentId: String? = null,
-    forcedSubtaskIds: Set<Int> = emptySet(),
+    replan: PlanSubtasksReplan,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
+    val issueKey = replan.issueKey
+    val planWorkflowId = replan.planWorkflowId
+    val repoRoot = replan.repoRoot
     val publisher =
       statusPublisherFactory.forPlan(
         repoRoot = repoRoot,
         issueKey = issueKey,
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
-        agentId = agentId,
+        agentId = replan.agentId,
         launchArguments = null,
       )
     return runCatching {
-      rebasePlanBundle(issueKey, planWorkflowId, repoRoot, settledSubtaskIds, forcedSubtaskIds)
-      if (!reopenAtPlanSubtasks(planWorkflowId)) {
+      reopening.rebasePlanBundle(replan)
+      if (!reopening.reopenAtPlanSubtasks(planWorkflowId)) {
         return@runCatching refused(
           publisher,
           "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",
@@ -105,7 +87,7 @@ class StandalonePlanRun(
         )
       }
       val identity = repositories.repositoryIdentity(repoRoot)
-      val found = lookupService.lookupPlan(issueKey, identity)
+      val found = planLookup.lookup(issueKey, identity)
       if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
         return@runCatching refused(
           publisher,
@@ -116,43 +98,6 @@ class StandalonePlanRun(
       resume(found.candidate, null, repoRoot, { specPath -> withPublisher(inputFor(specPath), publisher) }, publisher)
     }.onFailure(publisher::settleFailure).getOrThrow()
   }
-
-  private fun rebasePlanBundle(
-    issueKey: String,
-    planWorkflowId: String,
-    repoRoot: Path,
-    settledSubtaskIds: Set<Int>,
-    forcedSubtaskIds: Set<Int>,
-  ) {
-    val bundle = planBundles.loadPlanBundle(planWorkflowId) ?: return
-    PlanBundleSnapshots(decompositionPlanner).rebase(repoRoot, issueKey, bundle, settledSubtaskIds)
-      ?.let { rebased ->
-        planBundles.recordPlanBundle(planWorkflowId, rebased.withoutPlannedUnits(forcedSubtaskIds))
-      }
-  }
-
-  private fun reopenAtPlanSubtasks(planWorkflowId: String): Boolean =
-    database.transaction { unitOfWork ->
-      val snapshot = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId)
-      if (snapshot == null || !snapshot.hasPlanSubtasksStep()) {
-        false
-      } else {
-        val update =
-          buildCompletedUpstreamMissingOutputRepair(
-            CompletedUpstreamRepairRequest(
-              phaseRecords = decodePhaseRecords(snapshot.artifacts),
-              ledger = decodePhaseLedger(snapshot.artifacts),
-              featureSize = featureSizeFromArtifacts(snapshot.artifacts),
-              resumePhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
-              reason = "Spec drift recovery re-plans the subtask implementation details.",
-              clock = clock,
-            ),
-          )
-        val updated = engine.updateRecord(WorkflowFamily.TASK_RUNTIME.definition, snapshot, update)
-        unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
-        true
-      }
-    }
 
   private fun withPublisher(
     input: FeatureTaskRuntimeRunInput,
@@ -191,7 +136,7 @@ class StandalonePlanRun(
   ): StandalonePlanResult {
     val intake = suppliedIntake?.trim()?.takeIf { it.isNotEmpty() && !it.equals(issueKey, ignoreCase = true) }
     val identity = repositories.repositoryIdentity(repoRoot)
-    val found = lookupPlanAfterCrashRecovery(issueKey, identity)
+    val found = planLookup.lookupAfterCrashRecovery(issueKey, identity)
     if (manifestStore.readByIssueKey(issueKey, repoRoot) != null) {
       if (found is FeatureTaskContinuationLookupResult.Resumable) {
         return resume(found.candidate, intake, repoRoot, inputFor, statusPublisher)
@@ -255,16 +200,6 @@ class StandalonePlanRun(
       "A decomposition manifest already exists for $issueKey; the runtime never overwrites a plan. " +
         "Run `skill-bill $issueKey` to execute it.",
     )
-  }
-
-  private fun lookupPlanAfterCrashRecovery(
-    issueKey: String,
-    repositoryIdentity: String,
-  ): FeatureTaskContinuationLookupResult {
-    val found = lookupService.lookupPlan(issueKey, repositoryIdentity)
-    if (found !is FeatureTaskContinuationLookupResult.AlreadyRunning) return found
-    crashReconciler.reconcile(found.candidate.workflowId)
-    return lookupService.lookupPlan(issueKey, repositoryIdentity)
   }
 
   private fun open(
@@ -397,6 +332,3 @@ class StandalonePlanRun(
 
   private fun specHash(specPath: Path): String = sha256HexUtf8(fileStore.readText(specPath))
 }
-
-private fun WorkflowStateSnapshot.hasPlanSubtasksStep(): Boolean =
-  steps.any { it.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS }

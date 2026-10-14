@@ -165,10 +165,11 @@ class AgentPlanStrategy : PhaseStrategy() {
         decomposition-manifest.yaml whose parent spec path names that spec.md and whose
         subtasks list those files in order, each depending only on earlier subtasks. The parent and every subtask
         spec need an Acceptance Criteria list as the Spec Format Contract requires. Do not write an Implementation
-        Details section: the runtime plans each subtask in the plan_subtasks step that follows this one. Write
-        nothing outside that directory and never write through a symlink. When resuming, this workflow's previously authored
-        manifest and subtask specs may already exist. Inspect them, keep valid content, and repair incomplete
-        content in that same bundle. An existing file in your own resumed bundle is not a reason to block.
+        Details section: the runtime plans each subtask in the plan_subtasks step that follows this one.
+        Write nothing outside that directory and never write through a symlink. When resuming, this workflow's
+        previously authored manifest and subtask specs may already exist. Inspect them, keep valid content, and
+        repair incomplete content in that same bundle. An existing file in your own resumed bundle is not a reason
+        to block.
         Never replace a bundle owned by another workflow. A bundle that
         fails these checks blocks the plan.
         """.trimIndent()

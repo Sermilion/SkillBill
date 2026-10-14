@@ -29,6 +29,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -61,8 +62,17 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
       )
     }
     val bundle =
-      PlanBundleSnapshots(decompositionPlanner()).capture(repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
-    records.recordPlanBundle(WORKFLOW_ID, bundle)
+      PlanBundleSnapshots(
+        decompositionPlanner(),
+      ).capture(repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+    records.recordPlanBundleWithUnits(
+      WORKFLOW_ID,
+      bundle,
+      bundle.subtasks.associate { subtask ->
+        val unit = PlanUnit(WORKFLOW_ID, PLAN_SUBTASKS, subtask.id)
+        subtask.id to PlanUnitRecords.keptDetails(unit, "- Planned task.", Instant.EPOCH)
+      },
+    )
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
@@ -123,5 +133,6 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
     const val ISSUE_KEY = "SKILL-901"
     const val WORKFLOW_ID = "wfl-planning-stop"
     const val PLAN = "plan"
+    const val PLAN_SUBTASKS = "plan_subtasks"
   }
 }

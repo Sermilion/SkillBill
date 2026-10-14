@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runner
 internal object SlotBaselinePaths {
   const val RESOURCE_ROOT = "featuretask/slotbaseline"
 
-  const val STANDALONE = "$RESOURCE_ROOT/standalone"
   const val GOAL_CHILD_BUILD = "$RESOURCE_ROOT/goal-child-build"
   const val GOAL_CHILD_VALIDATE = "$RESOURCE_ROOT/goal-child-validate"
   const val CODE_REVIEW = "$RESOURCE_ROOT/code-review"
@@ -11,7 +10,7 @@ internal object SlotBaselinePaths {
   const val PHASE = "$RESOURCE_ROOT/phase"
 
   val BUNDLE_DIRECTORIES =
-    listOf(STANDALONE, GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, CODE_REVIEW, MCP_LIFECYCLE, PHASE)
+    listOf(GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, CODE_REVIEW, MCP_LIFECYCLE, PHASE)
 
   const val WORKFLOW_SNAPSHOT = "workflow-snapshot.json"
   const val PHASE_RECORDS = "phase-records.json"

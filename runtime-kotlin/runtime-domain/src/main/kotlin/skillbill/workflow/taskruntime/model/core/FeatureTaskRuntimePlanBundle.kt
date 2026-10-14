@@ -100,12 +100,8 @@ data class FeatureTaskRuntimePlanBundle(
         FeatureTaskRuntimePlanBundleOrigin.entries.firstOrNull { it.wireValue == reader.requiredString(ORIGIN) }
           ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime plan bundle has an unknown origin.")
       val subtasks =
-        reader.requiredList(SUBTASKS).map { entry ->
-          @Suppress("UNCHECKED_CAST")
-          val map =
-            (entry as? Map<String, Any?>)
-              ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime plan bundle subtask must be an object.")
-          FeatureTaskRuntimePlanBundleSubtask.fromArtifactMap(map)
+        reader.requiredList(SUBTASKS).mapIndexed { index, entry ->
+          FeatureTaskRuntimePlanBundleSubtask.fromArtifactMap(reader.nestedObjectFromValue(entry, "$SUBTASKS[$index]"))
         }
       return FeatureTaskRuntimePlanBundle(
         origin = origin,

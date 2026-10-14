@@ -356,7 +356,7 @@ Decomposed goals execute discovery and preplan once at the parent, then persist 
 
 Packaged CLI and MCP candidates check their own bundled schema pins through a database-free composition root. The installer runs `--check-packaged-contracts` on both staged images before promoting either image. This check runs before normal runtime composition can open the durable database.
 
-Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. Standalone feature-task workflows retain directly executed and attributed preplan and plan phases.
+Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. A retired standalone feature-task workflow keeps its recorded preplan and plan phases, readable and abandonable, and is never resumed.
 
 Runtime worker ownership is mutable state kept separately from immutable execution identity. A worker lease records a random owner token, monotonic fencing generation, host and boot identity, PID plus process-birth evidence, heartbeat/expiry, and the incomplete phase attempt. Every heartbeat, phase write, takeover reservation, transfer, and release must match both token and generation. Process liveness is exact only when host, boot, PID, and birth evidence agree; unverifiable or mismatched ownership must fail loudly instead of terminating a process or creating a replacement workflow. Confirmed takeover first reserves ownership with compare-and-set, then requests graceful shutdown and escalates only if the same process identity remains live.
 
@@ -1293,10 +1293,13 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
-  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `STANDALONE` uses
-  all nine and `GOAL_CHILD` omits `pull_request`. `standalone_review` is outside
-  that list. `forRun(goalContinuation)` picks one. The declaration derived from a
-  definition equals the phase workflow's, and a reorder raises a typed error.
+  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `GOAL_CHILD` omits
+  `pull_request` and `monitor`. `standalone_review` is outside that list. The
+  retired `STANDALONE` definition still uses all nine slots. It stays declared,
+  listed in `entries` and bound to strategies so a stored `standalone` plan keeps
+  decoding, but no run is admitted on it and it is not `standaloneInvocable`.
+  The declaration derived from a definition equals the phase workflow's, and a
+  reorder raises a typed error.
   `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
@@ -1305,9 +1308,15 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, plan, pr and monitor.
   `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
-  carry: `{GOAL_CHILD}` for a goal child, `{STANDALONE, PLAN}` otherwise, so
+  carry: `{GOAL_CHILD}` for a goal child, `{PLAN}` otherwise, so
   admission and crash reconciliation still raise
   `IncompatibleFeatureTaskRuntimeExecutionPlanError` for any other pairing.
+  Admission and continuation claim check a recorded `standalone` plan first and
+  refuse it with `retiredStandaloneWorkflowError`
+  (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`), whose message tells the
+  operator to abandon the workflow and run `skill-bill <KEY>`. Such a row stays
+  decodable, visible in lookup and status, and abandonable; no migration rewrites
+  it. The `standalone` route scope stays, because plan workflows carry it.
   Each carries a
   `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
   existing governed spec, and the rest take an optional intake.
@@ -1383,7 +1392,8 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` is a durable
   standalone run, not a phase run. `StandalonePlanRun`
-  (`skillbill.engine.goalrunner.plan`) opens a `standalone` workflow whose
+  (`skillbill.engine.goalrunner.plan`) opens a workflow with the `standalone` route
+  scope (the `standalone` skeleton is retired; the scope stays) whose
   execution plan names the `plan` definition before the parent `spec.md` need
   exist, and carries the operator's intake on the run request. The plan's
   `intake` step (`RuntimeIntakeStrategy` over `FeatureTaskRuntimePlanIntake`)
@@ -1437,7 +1447,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 | `pull_request` | pr | `pr-description` |
 | `monitor` | monitor, monitor_fix | `monitor-ci` |
 
-`monitor` runs after `pr` in standalone and PR skeletons and is excluded from
+`monitor` runs after `pr` in the PR skeleton and is excluded from
 goal children. `PullRequestCiWatcher` polls the PR checks through
 `PullRequestChecksLookup`. A failed check immediately sets verdict
 `ci_failed`, even while other checks are pending, and routes backward to
@@ -1489,7 +1499,7 @@ Composition:
   (`slot.qualitygate.packbuild`) runs the runtime-owned pack build gate and
   its triage and repair sessions. `AgentValidateStrategy`
   (`slot.qualitygate.agentvalidate`) runs the agent validate step. A BUILD goal
-  child selects build; the final child and a standalone run select validate.
+  child selects build; the final child selects validate.
   Traversal filters the forward path to the selected steps, handoff projection
   omits the unselected steps' outputs, and the handoff rejects a settled output
   from an unselected step. Nothing rewrites transitions, and no shared
@@ -1872,10 +1882,10 @@ commit, and PR requests or receipts; it never substitutes the private audit,
 review, implementation, validation, or history artifacts. The `build` phase
 (SKILL-204) runs only the pack `validation_gate.build_command` for
 compile/buildability proof and never invokes the collect-all validation gate.
-Default standalone runs skip `build` (`review -> validate`); goal continuation
-stamps which quality gate a child runs (subtask 2).
+Goal continuation stamps which quality gate a child runs (subtask 2); a child
+that selects `VALIDATE` skips `build` (`review -> validate`).
 
-`SkeletonDefinition.VALIDATION`, standalone runs, and goal-child `VALIDATE` use
+`SkeletonDefinition.VALIDATION` and goal-child `VALIDATE` use
 `AgentValidateStrategy`. The agent discovers required checks from repository
 instructions, build configuration, scripts, and CI, then runs and repairs them in
 one session. No validation pack or declared command pair is required. If discovery
@@ -2083,8 +2093,10 @@ install planner/validator policy.
   identity through that port (or `goalRepositoryIdentity`, which forwards to it).
   Governed feature-task spec paths resolve in
   `skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath`.
-- **Goal-child launch protocol:** flag and environment spellings for
-  `feature-task run` / `resume` live in
+- **Goal-child launch protocol:** the goal runner opens the child row under its
+  assigned id before launch, and every goal-child launch, first or later, runs
+  `skill-bill feature-task resume <child workflow id> <KEY> <spec>` with the goal
+  flags. Flag, environment, and subcommand spellings live in
   `skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens`.
   Launcher argv/env builders and CLI option readers reference those constants only.
 - **Scaffold payload:** `skillbill.application.scaffold.decodeScaffoldCommandRequest`

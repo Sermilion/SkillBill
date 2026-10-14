@@ -19,7 +19,6 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-/** The intake is a provider because its manifest-store dependencies reach the strategy lookup that holds this one. */
 class RuntimeIntakeStrategy(private val planIntake: () -> FeatureTaskRuntimePlanIntake) : PhaseStrategy() {
   private val policies =
     mapOf(

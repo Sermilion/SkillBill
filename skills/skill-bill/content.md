@@ -79,8 +79,10 @@ operator's current request selects a standalone phase or operation.
 `phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
 plan workflow, stops after the verified spec bundle, and prints the bundle
 paths, the plan workflow id, and `skill-bill <KEY>`. Running the full run for
-that key later finishes an incomplete plan and then executes the goal. The
-dispatcher never invokes `phase plan` itself.
+that key later finishes an incomplete plan and then executes the goal. The full
+run plans new work through the same plan skeleton (intake, preplan, plan), so a
+single feature is a one-subtask bundle and there is no separate single-feature
+run. The dispatcher never invokes `phase plan` itself.
 
 If `phase:plan` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. `phase:verify` stops

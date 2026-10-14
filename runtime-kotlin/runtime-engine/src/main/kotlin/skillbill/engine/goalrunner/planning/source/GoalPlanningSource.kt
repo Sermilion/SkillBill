@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
@@ -127,6 +128,12 @@ class PlanWorkflowGoalPlanningSource(
       (legacyPreparations.findSharedPreplanResult(scope.identity) as? SharedGoalPreplanLookupResult.Found)
         ?.checkpoint
         ?: return null
+    val storedHashes = legacyStoredHashes(scope) ?: return null
+    val descriptors = scope.descriptors(recordedHash = storedHashes::get) ?: return null
+    return GoalPlanningSweepOutcome.PreparedAll(scope.identity, shared.provenance, descriptors, null)
+  }
+
+  private fun legacyStoredHashes(scope: PlanningScope): Map<Int, String>? {
     val storedHashes = mutableMapOf<Int, String>()
     scope.planned.forEach { subtask ->
       val governedPath = scope.governedPathOf(subtask) ?: return null
@@ -135,8 +142,7 @@ class PlanWorkflowGoalPlanningSource(
       val matches = stored != null && stored.manifestOrder == scope.orderOf(subtask)
       if (subtask in scope.pending && !(matches && stored.subSpecHash == scope.diskHashOf(subtask))) return null
     }
-    val descriptors = scope.descriptors(recordedHash = storedHashes::get) ?: return null
-    return GoalPlanningSweepOutcome.PreparedAll(scope.identity, shared.provenance, descriptors, null)
+    return storedHashes
   }
 
   private fun runPlanSkeleton(scope: PlanningScope): GoalPlanningSweepOutcome {
@@ -157,12 +163,14 @@ class PlanWorkflowGoalPlanningSource(
           .forceReplanOf(replanned, scope, agentId, inputFor)
       } else {
         planRun.replanSubtasks(
-          issueKey = issueKey,
-          planWorkflowId = linked.workflowId,
-          repoRoot = request.repoRoot,
-          settledSubtaskIds = scope.settledIds,
-          agentId = agentId,
-          inputFor = inputFor,
+          PlanSubtasksReplan(
+            issueKey = issueKey,
+            planWorkflowId = linked.workflowId,
+            repoRoot = request.repoRoot,
+            settledSubtaskIds = scope.settledIds,
+            agentId = agentId,
+          ),
+          inputFor,
         )
       }
     return when (result) {
@@ -209,13 +217,15 @@ class PlanWorkflowGoalPlanningSource(
   ): StandalonePlanResult =
     if (this is StandalonePlanResult.Completed && forcedSubtaskIds.isNotEmpty()) {
       planRun.replanSubtasks(
-        issueKey = scope.state.manifest.issueKey,
-        planWorkflowId = workflowId,
-        repoRoot = scope.request.repoRoot,
-        settledSubtaskIds = scope.settledIds,
-        agentId = agentId,
-        forcedSubtaskIds = forcedSubtaskIds,
-        inputFor = inputFor,
+        PlanSubtasksReplan(
+          issueKey = scope.state.manifest.issueKey,
+          planWorkflowId = workflowId,
+          repoRoot = scope.request.repoRoot,
+          settledSubtaskIds = scope.settledIds,
+          agentId = agentId,
+          forcedSubtaskIds = forcedSubtaskIds,
+        ),
+        inputFor,
       )
     } else {
       this

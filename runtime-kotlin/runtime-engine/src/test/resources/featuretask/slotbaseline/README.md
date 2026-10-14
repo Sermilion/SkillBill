@@ -12,7 +12,6 @@ Harness sources live in
 
 | Directory | Entry | What runs |
 | --- | --- | --- |
-| `standalone/` | `SlotBaselineFullRunCapture.standalone()` | A full feature-task runtime run with no goal continuation |
 | `goal-child-build/` | `SlotBaselineFullRunCapture.goalChildBuild()` | Goal child for subtask 1 at the BUILD gate (`kotlinPackWithBuildGate`) |
 | `goal-child-validate/` | `SlotBaselineFullRunCapture.goalChildValidate()` | Goal child for subtask 2 at the VALIDATE gate (`kotlinPackWithValidationGate`) |
 | `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
@@ -137,7 +136,7 @@ To compare a live value with a committed file, encode the value with
 `SlotBaselineJson.encode` and call:
 
 ```kotlin
-SlotBaselineFixtureCompare.assertBytesEqual("featuretask/slotbaseline/standalone/phase-records.json", actual)
+SlotBaselineFixtureCompare.assertBytesEqual("featuretask/slotbaseline/goal-child-validate/phase-records.json", actual)
 ```
 
 If the bytes differ, the call fails and prints a line diff. Any change the
@@ -182,3 +181,10 @@ ledger expects must be regenerated in the subtask that the ledger names.
   are removed. Every other file is unchanged.
 - SKILL-425 (one planning skeleton): goal planning runs through the plan workflow instead of
   `DefaultGoalPlanningSweep`, so `goal-planning/` and its capture are removed. Every other file is unchanged.
+- SKILL-425 subtask 4 (retire the standalone skeleton): a run without a goal continuation is no longer
+  admitted, so `standalone/` and `SlotBaselineFullRunCapture.standalone()` are removed. The inline review prompt
+  test reads `goal-child-validate/prompts/review.txt`, which is byte-identical. The goal-child captures now
+  start from hydrated preplan, plan and plan_subtasks records, as production goal children do, so their
+  `prompts/preplan.txt` and `prompts/plan.txt` are removed and their phase records, ledger, handoff projections,
+  finished event and workflow snapshots no longer carry launched planning phases. Every captured prompt's loop
+  header names `plan_subtasks`. Every other file is unchanged.

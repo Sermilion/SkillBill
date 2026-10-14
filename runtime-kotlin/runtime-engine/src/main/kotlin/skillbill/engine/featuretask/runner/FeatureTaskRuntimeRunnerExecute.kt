@@ -136,10 +136,6 @@ class FeatureTaskRuntimeRunnerExecute(
     return terminalReport
   }
 
-  /**
-   * Drives only the `intake` step. The pass carries placeholder invariants, so it emits no `RunStarted` or lifecycle
-   * telemetry and never finalizes the spec; the pass that reads the settled spec owns all three.
-   */
   private fun executeIntakeOnlyPass(
     runRequest: FeatureTaskRuntimeRunRequest,
     specSource: SpecSource,

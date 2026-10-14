@@ -18,7 +18,6 @@ internal object SlotBaselineCommittedTree {
 
   fun liveCaptureTree(): Map<String, String> =
     buildMap {
-      putAll(SlotBaselineFullRunCapture.standalone().encodedFiles(SlotBaselinePaths.STANDALONE))
       putAll(SlotBaselineFullRunCapture.goalChildBuild().encodedFiles(SlotBaselinePaths.GOAL_CHILD_BUILD))
       putAll(SlotBaselineFullRunCapture.goalChildValidate().encodedFiles(SlotBaselinePaths.GOAL_CHILD_VALIDATE))
       putAll(SlotBaselineCodeReviewCapture.encodedFiles())

@@ -83,7 +83,8 @@ class PlanFanOutStrategy(
     return if (isSubtaskStep(run.phaseId)) {
       runSubtasks(run, planning)
     } else {
-      planning.settleExistingBundle(run) ?: plan.runStep(run, state)
+      planning.settleExistingBundle(run, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS)
+        ?: plan.runStep(run, state)
     }
   }
 

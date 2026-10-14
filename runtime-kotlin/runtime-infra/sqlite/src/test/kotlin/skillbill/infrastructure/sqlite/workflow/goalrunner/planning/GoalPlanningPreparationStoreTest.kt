@@ -232,7 +232,6 @@ class GoalPlanningPreparationStoreTest {
       )
     }
   }
-
 }
 
 private fun Connection.seedLegacyPairedPreparation() {

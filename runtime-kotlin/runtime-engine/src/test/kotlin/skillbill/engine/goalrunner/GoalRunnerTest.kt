@@ -4243,9 +4243,6 @@ internal class InMemoryGoalManifestStore(
   var scopedReplanCount: Int = 0
     private set
   var clearedChildSubtaskIdsOnReplan: List<Int> = emptyList()
-  var lastIncludeSharedPreplan: Boolean? = null
-    private set
-  var forceSharedDigestMismatchOnReplan: Boolean = false
 
   override fun planningStatus(
     parentWorkflowId: String,
@@ -4290,7 +4287,6 @@ internal class InMemoryGoalManifestStore(
     options: GoalRunnerScopedReplanOptions,
   ): GoalRunnerScopedReplanWriteResult {
     scopedReplanCount += 1
-    lastIncludeSharedPreplan = false
     val before = plannedSubtaskIds.sorted()
     val deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
     val saved = save(state)

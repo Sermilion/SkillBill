@@ -8,6 +8,6 @@ data class FeatureTaskContinuationLookupQuery(
   val repositoryIdentity: String,
   val workflowId: String?,
   val routeScope: FeatureTaskRouteScope,
+  val admittedDefinition: SkeletonDefinition,
   val readIfPresent: Boolean = false,
-  val admittedDefinition: SkeletonDefinition = SkeletonDefinition.STANDALONE,
 )

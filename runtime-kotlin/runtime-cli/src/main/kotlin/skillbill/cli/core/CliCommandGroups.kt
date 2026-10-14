@@ -5,8 +5,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.cli.agentaddon.AgentAddonCommand
 import skillbill.cli.codereview.CodeReviewCommand
 import skillbill.cli.config.ConfigCommand
-import skillbill.cli.featuretask.FeatureTaskRuntimeDeprecatedRunCommand
-import skillbill.cli.featuretask.FeatureTaskRuntimeRunCommand
+import skillbill.cli.featuretask.FeatureTaskCommands
+import skillbill.cli.featuretask.FeatureTaskRuntimeDeprecatedCommand
 import skillbill.cli.goal.core.GoalRunCommand
 import skillbill.cli.install.core.InstallTopLevelCommands
 import skillbill.cli.learning.LearningsCommand
@@ -52,16 +52,16 @@ class CliWorkflowCommands(
   workflowCommands: WorkflowTopLevelCommands,
   repoValidationCommands: RepoValidationCliCommands,
   goalRunCommand: GoalRunCommand,
-  featureTaskRunCommand: FeatureTaskRuntimeRunCommand,
-  featureTaskRuntimeDeprecatedRunCommand: FeatureTaskRuntimeDeprecatedRunCommand,
+  featureTaskCommands: FeatureTaskCommands,
+  featureTaskRuntimeDeprecatedCommand: FeatureTaskRuntimeDeprecatedCommand,
 ) {
   val commands: List<CliktCommand> =
     workflowCommands.commands +
       repoValidationCommands.commands +
       listOf(
         goalRunCommand,
-        featureTaskRunCommand,
-        featureTaskRuntimeDeprecatedRunCommand,
+        featureTaskCommands.command,
+        featureTaskRuntimeDeprecatedCommand,
       )
 }
 

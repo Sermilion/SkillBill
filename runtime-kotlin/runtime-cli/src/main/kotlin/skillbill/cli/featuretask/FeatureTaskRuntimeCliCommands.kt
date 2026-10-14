@@ -1,8 +1,6 @@
 package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -11,6 +9,7 @@ import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
@@ -100,12 +99,6 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.QUALITY_GATE_SELECTION_FLAG,
     help = "Goal-child quality gate: build (compile proof) or validate (full collect-all). Defaults to validate.",
   ).multiple()
-  internal val explicitWorkflowId by option(
-    FeatureTaskRuntimeGoalContinuationLaunchTokens.WORKFLOW_ID_FLAG,
-    help =
-      "Open the run under this exact workflow id instead of minting a new one. Used by the goal " +
-        "driver's open-with-assigned-id path for a first runtime subtask run (distinct from resume).",
-  )
   internal val agentAddonSelectionJson by option(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG,
     help = "Already-resolved ordered agent add-on selection JSON. Raw agent-addon tokens are not accepted here.",
@@ -113,53 +106,13 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
 }
 
 @Inject
-class FeatureTaskRuntimeRunCommand(
-  private val preparation: FeatureTaskRuntimeRunPreparation,
-  private val execution: FeatureTaskRuntimeRunExecution,
-  featureTaskRuntimeExplicitRunCommand: FeatureTaskRuntimeExplicitRunCommand,
+class FeatureTaskCommands(
   control: FeatureTaskRuntimeControlSubcommands,
   rejectedOutput: FeatureTaskRejectedOutputSubcommands,
-) : FeatureTaskRuntimePhaseAgentCommand(
-    FeatureTaskRuntimeGoalContinuationLaunchTokens.FEATURE_TASK_COMMAND,
-    "Run the runtime-driven feature-task phase loop in the foreground.",
-  ) {
-  private val issueKey by argument(help = "Issue key the run implements.").optional()
-  private val specPath by argument(help = "Path to the governed spec the run implements.").optional()
-
-  override val invokeWithoutSubcommand: Boolean = true
-
-  init {
-    subcommands(listOf(featureTaskRuntimeExplicitRunCommand) + control.commands + rejectedOutput.commands)
-  }
-
-  override fun run() {
-    if (currentContext.invokedSubcommand != null) {
-      return
-    }
-    execution.run(
-      this,
-      preparation.prepareRun(this, issueKey, specPath),
-      explicitWorkflowId?.takeIf(String::isNotBlank),
-    )
-  }
-}
-
-@Inject
-class FeatureTaskRuntimeExplicitRunCommand(
-  private val preparation: FeatureTaskRuntimeRunPreparation,
-  private val execution: FeatureTaskRuntimeRunExecution,
-) : FeatureTaskRuntimePhaseAgentCommand(
-    FeatureTaskRuntimeGoalContinuationLaunchTokens.RUN_SUBCOMMAND,
-    "Run the feature-task phase loop (explicit form of the parent command's default run).",
-  ) {
-  private val issueKey by argument(help = "Issue key the run implements.")
-  private val specPath by argument(help = "Path to the governed spec the run implements.").optional()
-
-  override fun run() {
-    execution.run(
-      this,
-      preparation.prepareRun(this, issueKey, specPath),
-      explicitWorkflowId?.takeIf(String::isNotBlank),
-    )
-  }
+) {
+  val command: DocumentedNoOpCliCommand =
+    object : DocumentedNoOpCliCommand(
+      FeatureTaskRuntimeGoalContinuationLaunchTokens.FEATURE_TASK_COMMAND,
+      "Inspect, resume, abandon or repair durable feature-task workflows.",
+    ) {}.subcommands(control.commands + rejectedOutput.commands)
 }

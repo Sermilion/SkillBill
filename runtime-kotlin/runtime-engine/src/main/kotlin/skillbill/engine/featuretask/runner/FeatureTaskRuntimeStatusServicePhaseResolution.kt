@@ -33,7 +33,7 @@ fun phaseStatuses(
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): List<FeatureTaskRuntimePhaseStatus> =
   FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-    .filter { phaseId -> phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE || phaseId in records }
+    .filter { phaseId -> PhaseSlot.slotForStep(phaseId) != PhaseSlot.INTAKE || phaseId in records }
     .map { phaseId ->
       records[phaseId].toPhaseStatus(
         phaseId = phaseId,

@@ -34,6 +34,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -2636,6 +2637,7 @@ class WorkflowGoalRunnerReconciliationTest {
               listOf(
                 mapOf("step_id" to "preplan", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
+                mapOf("step_id" to "plan_subtasks", "status" to "completed", "attempt_count" to 1),
               ),
             ),
           artifactsPatch =
@@ -2647,21 +2649,7 @@ class WorkflowGoalRunnerReconciliationTest {
                     "subtask_id" to 1,
                     "suppress_pr" to true,
                   ),
-                "feature_task_runtime_phase_records" to
-                  mapOf(
-                    "preplan" to
-                      completedRuntimePhaseRecord(
-                        "preplan",
-                        "2026-06-18T10:00:00Z",
-                        "2026-06-18T10:01:00Z",
-                      ),
-                    "plan" to
-                      completedRuntimePhaseRecord(
-                        "plan",
-                        "2026-06-18T10:02:00Z",
-                        "2026-06-18T10:03:00Z",
-                      ),
-                  ),
+                "feature_task_runtime_phase_records" to completedPlanningPhaseRecords(),
               ),
             ),
           sessionId = "ftr-001",
@@ -2703,6 +2691,7 @@ class WorkflowGoalRunnerReconciliationTest {
               listOf(
                 mapOf("step_id" to "preplan", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
+                mapOf("step_id" to "plan_subtasks", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "implement", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "simplify", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "review", "status" to "completed", "attempt_count" to 1),
@@ -2806,6 +2795,13 @@ class WorkflowGoalRunnerReconciliationTest {
       WorkflowFamily.TASK_RUNTIME.loopOnlyStepIds,
     )
   }
+
+  private fun completedPlanningPhaseRecords(): Map<String, Any?> =
+    mapOf(
+      "preplan" to completedRuntimePhaseRecord("preplan", "2026-06-18T10:00:00Z", "2026-06-18T10:01:00Z"),
+      "plan" to completedRuntimePhaseRecord("plan", "2026-06-18T10:02:00Z", "2026-06-18T10:03:00Z"),
+      "plan_subtasks" to completedRuntimePhaseRecord("plan_subtasks", "2026-06-18T10:03:00Z", "2026-06-18T10:04:00Z"),
+    )
 
   private fun completedRuntimePhaseRecord(
     phaseId: String,
@@ -3873,12 +3869,22 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         resolvedAgentId = "claude",
         outputArtifact = PREPLAN_PAYLOAD,
       )
+    val unitRecordId = FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(1)
+    val unit =
+      preplan.copy(
+        phaseId = unitRecordId,
+        outputArtifact =
+          PlanDecompositionStop.settledOutput("plan_subtasks", "Planned subtask 1.", details).canonicalJson,
+      )
     return workflowRecord(
       workflowId,
       mapOf(
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.entry(bundle.asWorkflowArtifactEntry()),
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-          mapOf("preplan" to workflowArtifactEntryMap(preplan.asWorkflowArtifactEntry())),
+          mapOf(
+            "preplan" to workflowArtifactEntryMap(preplan.asWorkflowArtifactEntry()),
+            unitRecordId to workflowArtifactEntryMap(unit.asWorkflowArtifactEntry()),
+          ),
         ),
       ),
       WorkflowStatus.COMPLETED.wireValue,

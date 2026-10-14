@@ -27,7 +27,6 @@ sealed interface PlanIntakeSettlement {
   data class Refused(val reason: String) : PlanIntakeSettlement
 }
 
-/** The work of the plan's `intake` step: resolve, write or keep the parent spec, and record the plan seed. */
 @Inject
 class FeatureTaskRuntimePlanIntake(
   private val intakePreparation: GoalIntakePreparation,
@@ -63,8 +62,6 @@ class FeatureTaskRuntimePlanIntake(
     }
     val intakeSha256 = intake?.let(::sha256HexUtf8)
     if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.SEEDED) {
-      // Record the runtime's authorship before writing: a crash after the write must not let the retry read the
-      // runtime-written spec, which now has an acceptance list, as an operator spec the plan step may not rewrite.
       seedRecorder.record(
         workflowId,
         FeatureTaskRuntimePlanSeed(intakeSha256, resolution.specOrigin, specHashOrEmpty(resolution.specPath)),
@@ -81,14 +78,12 @@ class FeatureTaskRuntimePlanIntake(
     }
   }
 
-  /** A recorded seed finishes intake once an operator spec is kept or the runtime-written spec has its list. */
   private fun intakeFinished(
     seed: FeatureTaskRuntimePlanSeed,
     governed: Path,
   ): Boolean =
     seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR || intakePreparation.keepsOperatorSpec(governed)
 
-  /** Repairs the hash of a seed recorded before the write, when a crash kept the retry from recording it after. */
   private fun refreshRuntimeSpecHash(
     workflowId: String,
     seed: FeatureTaskRuntimePlanSeed,

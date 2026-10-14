@@ -35,7 +35,6 @@ import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
@@ -75,8 +74,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
 
   override fun fanOut(stepId: String): PhaseRunFanOut =
-    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS) {
-      launch.planSubtasksFanOut(facts, this)
+    if (selectedOwnerOf(stepId)?.plansInFanOut == true) {
+      launch.planSubtasksFanOut(facts, this, stepId)
     } else {
       throw PhaseRunFanOutUnsupportedError(stepId)
     }
@@ -123,7 +122,9 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   internal fun planSubtasksFanOut(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
-  ): PhaseRunFanOut = DurablePlanSubtasksFanOut(state, facts, decompositionPlanner)
+    stepId: String,
+  ): PhaseRunFanOut =
+    FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
 
   internal fun step(
     facts: FeatureTaskRuntimeRunFacts,

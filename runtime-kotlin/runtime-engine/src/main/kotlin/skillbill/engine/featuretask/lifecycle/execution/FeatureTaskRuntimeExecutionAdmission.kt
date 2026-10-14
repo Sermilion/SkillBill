@@ -20,6 +20,7 @@ import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
+import skillbill.error.shellcontent.retiredStandaloneWorkflowError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
@@ -178,11 +179,12 @@ class FeatureTaskRuntimeExecutionAdmission(
     identity: FeatureTaskExecutionIdentity,
     requestedReviewSelection: RuntimeReviewSelection?,
   ) {
-    if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
-      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    val reviewMismatch = requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection
+    if (!reviewMismatch && plan.definitionId == SkeletonDefinition.STANDALONE.id) {
+      throw retiredStandaloneWorkflowError(identity.workflowId, identity.normalizedIssueKey)
     }
     val admitted = SkeletonDefinition.admittedForRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
-    if (admitted.none { it.id == plan.definitionId }) {
+    if (reviewMismatch || admitted.none { it.id == plan.definitionId }) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
   }

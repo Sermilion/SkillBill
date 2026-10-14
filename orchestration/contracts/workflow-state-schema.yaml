@@ -131,6 +131,7 @@ $defs:
           - intake
           - preplan
           - plan
+          - plan_subtasks
           - implement
           - simplify
           - implement_fix
@@ -158,6 +159,7 @@ $defs:
                     - intake
                     - preplan
                     - plan
+                    - plan_subtasks
                     - implement
                     - simplify
                     - implement_fix

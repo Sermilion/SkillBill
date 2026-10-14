@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -83,6 +84,10 @@ fun testPhaseStrategies(
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
+        PhaseStrategyRegistration(
+          RuntimeIntakeStrategy { error("Test phase strategies do not run plan intake.") },
+          runner(),
+        ),
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
@@ -237,7 +242,7 @@ fun testPhaseStrategyBindings(
           reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
       ),
     SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
-    SkeletonDefinition.PLAN to shared.filterKeys { slot -> slot == PhaseSlot.PREPLAN || slot == PhaseSlot.PLAN },
+    SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
     SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
   )

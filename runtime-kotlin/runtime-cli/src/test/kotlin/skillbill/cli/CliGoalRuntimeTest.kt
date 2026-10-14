@@ -15,12 +15,11 @@ import kotlin.time.Duration.Companion.minutes
 
 class CliGoalSharedPreplanReplanTest {
   @Test
-  fun `include-shared-preplan lists cascade then relaunch regenerates without reopening terminals`() {
+  fun `include-shared-preplan is refused naming purge and phase plan and keeps planning intact`() {
     val fixture = goalFixture(subtaskCount = 3)
     val launcher = GoalFixtureAgentRunLauncher(fixture)
     advanceToSubtaskThreeBoundary(fixture, launcher)
-    assertSharedPreplanCascade(fixture, launcher)
-    assertRelaunchRegeneratesIntoSubtaskThree(fixture, launcher)
+    assertSharedPreplanRefused(fixture, launcher)
   }
 
   private fun advanceToSubtaskThreeBoundary(
@@ -40,7 +39,7 @@ class CliGoalSharedPreplanReplanTest {
     CliRuntime.run(goalControlCommand(fixture, "resume"), fixture.context(launcher = launcher))
   }
 
-  private fun assertSharedPreplanCascade(
+  private fun assertSharedPreplanRefused(
     fixture: GoalCliFixture,
     launcher: GoalFixtureAgentRunLauncher,
   ) {
@@ -55,65 +54,13 @@ class CliGoalSharedPreplanReplanTest {
         ),
         fixture.context(launcher = launcher),
       )
-    assertEquals(0, replan.exitCode, replan.stdout)
-    assertContains(replan.stdout, "discarded_shared_preplan: true")
-    assertContains(replan.stdout, "cascaded_plans=")
-
-    assertTrue(
-      replan.stdout.contains("cascaded_plans=none"),
-      replan.stdout,
-    )
-    assertEquals(true, replan.payload?.get("discarded_shared_preplan"))
-    val cascaded = replan.payload?.get("cascaded_plan_subtask_ids") as? List<*>
-    val cascadedIds = cascaded.orEmpty().mapNotNull { (it as? Number)?.toInt() ?: (it as? String)?.toIntOrNull() }
-    assertTrue(1 !in cascadedIds, "complete+commit sibling 1 must not cascade")
-    assertTrue(2 !in cascadedIds, "complete+commit sibling 2 must not cascade")
-    assertFalse(3 in cascadedIds)
-    val plannedAfter = (replan.payload?.get("after") as? Map<*, *>)?.get("planned_subtask_ids") as? List<*>
-    val plannedAfterIds =
-      plannedAfter.orEmpty().mapNotNull {
-        (it as? Number)?.toInt() ?: (it as? String)?.toIntOrNull()
-      }
-    assertTrue(1 in plannedAfterIds, "complete+commit plan row 1 must survive include-shared-preplan")
-    assertTrue(2 in plannedAfterIds, "complete+commit plan row 2 must survive include-shared-preplan")
-
-    val clearedChildren =
-      (replan.payload?.get("cleared_child_subtask_ids") as? List<*>)
-        ?.mapNotNull { (it as? Number)?.toInt() ?: (it as? String)?.toIntOrNull() }
-        .orEmpty()
-    assertFalse(1 in clearedChildren, "a completed subtask's child must survive the cascade")
-    assertFalse(2 in clearedChildren, "a completed subtask's child must survive the cascade")
+    val output = replan.stdout + replan.stderr
+    assertTrue(replan.exitCode != 0, output)
+    assertContains(output, "skill-bill goal purge SKILL-901")
+    assertContains(output, "skill-bill phase plan SKILL-901")
     val statusAfter = goalStatus(fixture, launcher)
-    assertContains(statusAfter.stdout, "shared_preplan=false")
+    assertContains(statusAfter.stdout, "shared_preplan=true")
     assertContains(statusAfter.stdout, "complete: 2")
-    assertTrue(
-      statusAfter.stdout.contains("planning_reason:") &&
-        (statusAfter.stdout.contains("not started") || statusAfter.stdout.contains("preplan")),
-      statusAfter.stdout,
-    )
-  }
-
-  private fun assertRelaunchRegeneratesIntoSubtaskThree(
-    fixture: GoalCliFixture,
-    launcher: GoalFixtureAgentRunLauncher,
-  ) {
-    val planningBefore =
-      launcher.requests.count {
-        it.skillRunRequest.goalContinuation == null && it.skillRunRequest.promptOverride != null
-      }
-    launcher.childLaunches.clear()
-    val relaunch = CliRuntime.run(fixture.goalCommand(), fixture.context(launcher = launcher))
-    assertEquals(0, relaunch.exitCode, relaunch.stdout + relaunch.stderr)
-    assertEquals(listOf(3), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
-    val planningAfter =
-      launcher.requests.count {
-        it.skillRunRequest.goalContinuation == null && it.skillRunRequest.promptOverride != null
-      }
-    assertTrue(
-      planningAfter > planningBefore,
-      "relaunch must regenerate shared preplan/plans after opt-in discard",
-    )
-    assertContains(goalStatus(fixture, launcher).stdout, "complete: 3")
   }
 
   private fun goalStatus(

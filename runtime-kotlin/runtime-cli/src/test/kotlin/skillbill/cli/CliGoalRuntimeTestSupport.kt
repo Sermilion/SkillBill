@@ -662,14 +662,14 @@ internal fun parentArtifactsPatch(fixture: GoalCliFixture): String =
       "plan" to
         mapOf(
           "mode" to "decompose",
-          "parent_spec_path" to fixture.parentSpec.toString(),
+          "parent_spec_path" to fixture.tempDir.relativize(fixture.parentSpec).toString(),
           "recommended_first_subtask_id" to 1,
           "subtasks" to
             fixture.subtaskSpecs.mapIndexed { index, path ->
               mapOf(
                 "id" to index + 1,
                 "name" to "Part ${index + 1}",
-                "spec_path" to path.toString(),
+                "spec_path" to fixture.tempDir.relativize(path).toString(),
                 "depends_on" to if (index == 0) emptyList<Int>() else listOf(index),
               )
             },

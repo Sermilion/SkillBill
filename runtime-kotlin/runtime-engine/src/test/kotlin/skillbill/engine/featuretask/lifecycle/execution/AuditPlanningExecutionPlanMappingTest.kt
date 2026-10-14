@@ -22,9 +22,9 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 
 class AuditPlanningExecutionPlanMappingTest {
   @Test
-  fun `archived audit descriptors map to prose planning in every skeleton`() {
+  fun `archived audit descriptors map to prose planning for every quality gate`() {
     val fixture = ExecutionPlanAdmissionFixture()
-    listOf("standalone", "goal-child-build", "goal-child-validate").forEach { mode ->
+    listOf("goal-child-build", "goal-child-validate").forEach { mode ->
       listOf(1, 2).forEach { revision ->
         val encoded = archive(fixture, mode, revision)
         val mapped = fixture.compatibility.requireSupportedComposition(encoded)
@@ -39,7 +39,7 @@ class AuditPlanningExecutionPlanMappingTest {
   fun `admission retains the original descriptor and all artifacts while binding the mapped plan`() {
     val fixture = ExecutionPlanAdmissionFixture()
     val repository = InMemoryRuntimeWorkflowRepository()
-    val old = fixture.codec.decode(archive(fixture, "standalone"))
+    val old = fixture.codec.decode(archive(fixture, "goal-child-validate"))
     val encoded =
       fixture.codec.encode(
         old.withEffectivePolicies(FeatureTaskRuntimeEffectivePolicies.resolve(old, fixture.inputs)),
@@ -102,7 +102,7 @@ class AuditPlanningExecutionPlanMappingTest {
   @Test
   fun `mapping refuses changed audit caps and unrelated policy digests`() {
     val fixture = ExecutionPlanAdmissionFixture()
-    val old = fixture.codec.decode(archive(fixture, "standalone"))
+    val old = fixture.codec.decode(archive(fixture, "goal-child-validate"))
     val changed =
       old.withTraversal(
         old.traversal.copy(backwardEdges = old.traversal.backwardEdges.map { it.copy(perEdgeCap = 9) }),

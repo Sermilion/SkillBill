@@ -12,11 +12,19 @@ private val TEST_MUTATING_PHASES = setOf("implement", "simplify", "implement_fix
 private val TEST_SINGLE_SESSION_PHASES = setOf("simplify", "audit")
 private val TEST_STRATEGIES = statusProjectionPhaseStrategies()
 
+private fun definitionOwning(stepId: String): SkeletonDefinition =
+  when (stepId) {
+    "intake" -> SkeletonDefinition.PLAN
+    "validate" -> SkeletonDefinition.VALIDATION
+    "pr", "monitor", "monitor_fix" -> SkeletonDefinition.PR
+    else -> SkeletonDefinition.GOAL_CHILD
+  }
+
 internal fun productionStrategyFor(stepId: String): PhaseStrategy =
   TEST_STRATEGIES.strategyFor(
     stepId,
     PhaseStrategySelectionFacts(
-      if (stepId == "build") SkeletonDefinition.GOAL_CHILD else SkeletonDefinition.STANDALONE,
+      definitionOwning(stepId),
       setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
     ),
   )

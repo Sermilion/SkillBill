@@ -34,7 +34,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -90,9 +89,8 @@ class FeatureTaskRuntimeRunEntry(
       if (input.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(input, admittedExecution)
       }
-      val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+      val definition = resolveRunDefinition(input.definition, goalContinuation != null)
       if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
-        // The spec may not exist until `intake` settles, so the invariants are read only after it completes.
         val intakeReport =
           runner.run(
             runRequest(input, workflowId, admittedExecution, intakePassInvariants(input, specPath, admittedExecution))
@@ -144,12 +142,11 @@ class FeatureTaskRuntimeRunEntry(
       planIntake = input.planIntake,
     )
 
-  private fun intakeCompleted(workflowId: String): Boolean =
-    phaseRecorder.loadPhaseRecords(workflowId)
-      ?.get(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE)
-      ?.status == WorkflowStepStatus.COMPLETED
+  private fun intakeCompleted(workflowId: String): Boolean {
+    val records = phaseRecorder.loadPhaseRecords(workflowId).orEmpty()
+    return PhaseSlot.INTAKE.steps.all { stepId -> records[stepId]?.status == WorkflowStepStatus.COMPLETED }
+  }
 
-  /** Placeholder invariants for the intake-only pass; the pass never persists them and never reaches an agent. */
   private fun intakePassInvariants(
     input: FeatureTaskRuntimeRunInput,
     specPath: Path,
@@ -170,7 +167,7 @@ class FeatureTaskRuntimeRunEntry(
   ): String {
     val goalContinuation = input.goalContinuation
     val specPath = Path.of(input.specPath)
-    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = resolveRunDefinition(input.definition, goalContinuation != null)
     val reviewMode =
       goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
         ?: if (PhaseSlot.INTAKE in definition.slots) {
@@ -231,7 +228,7 @@ class FeatureTaskRuntimeRunEntry(
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
   ) {
     val goalContinuation = input.goalContinuation
-    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = resolveRunDefinition(input.definition, goalContinuation != null)
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
     val qualityGate = admittedExecution.plan.qualityGateSelection
     val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))

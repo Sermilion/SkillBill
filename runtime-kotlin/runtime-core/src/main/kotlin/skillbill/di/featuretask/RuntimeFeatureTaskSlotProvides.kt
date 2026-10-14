@@ -85,14 +85,21 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 
   @Provides
+  fun pullRequestPhaseStrategies(
+    prDescription: PrDescriptionStrategy,
+    monitor: MonitorStrategy,
+  ): PullRequestPhaseStrategies = PullRequestPhaseStrategies(prDescription, monitor)
+
+  @Provides
   fun phaseStrategyRegistry(
     runner: () -> PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
     planFanOut: PlanFanOutStrategy,
-    prDescription: PrDescriptionStrategy,
-    monitor: MonitorStrategy,
+    pullRequest: PullRequestPhaseStrategies,
     planIntake: () -> FeatureTaskRuntimePlanIntake,
   ): PhaseStrategyRegistry {
+    val prDescription = pullRequest.prDescription
+    val monitor = pullRequest.monitor
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
     val standaloneInlineRunner = runner()

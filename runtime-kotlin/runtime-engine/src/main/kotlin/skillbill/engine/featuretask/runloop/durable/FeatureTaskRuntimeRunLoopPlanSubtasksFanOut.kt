@@ -12,21 +12,21 @@ import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunCheckpoints
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunGoal
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunRecords
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunSettlements
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompletion
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
+import skillbill.engine.featuretask.runloop.planning.PlanUnit
+import skillbill.engine.featuretask.runloop.planning.PlanUnitAttempt
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
@@ -51,13 +51,15 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
-internal class DurablePlanSubtasksFanOut(
+internal class FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(
   private val parent: PhaseRunState,
   private val facts: FeatureTaskRuntimeRunFacts,
+  private val stepId: String,
   planner: FeatureTaskRuntimeDecompositionPlanner,
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunFanOut {
   private val snapshots = PlanBundleSnapshots(planner)
-  private val unitStates = ConcurrentHashMap<Int, DurablePlanUnitRunState>()
+  private val unitStates = ConcurrentHashMap<Int, FeatureTaskRuntimeRunLoopPlanUnitState>()
 
   override val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE
 
@@ -83,7 +85,14 @@ internal class DurablePlanSubtasksFanOut(
     outputSink: AgentRunOutputSink,
   ): PhaseAcceptedStepExecution {
     val run = parent.stepBinding.requireAuthorizedFanOutWave()
-    val unit = DurablePlanUnitRunState(parent, facts, unitId, outputSink)
+    val unit =
+      FeatureTaskRuntimeRunLoopPlanUnitState(
+        parent,
+        facts,
+        PlanUnit(facts.workflowId, stepId, unitId),
+        outputSink,
+        runLoopEntry,
+      )
     unitStates[unitId] = unit
     return unit.step(run)
   }
@@ -117,19 +126,20 @@ internal class DurablePlanSubtasksFanOut(
     bundle: FeatureTaskRuntimePlanBundle,
   ): Boolean {
     val settledStep =
-      unitStates.remove(unitId)?.records?.loadPhaseRecords(facts.workflowId)?.get(STEP_ID)
+      unitStates.remove(unitId)?.records?.loadPhaseRecords(facts.workflowId)?.get(stepId)
     val unitRecord =
       PlanUnitRecords.settled(
-        workflowId = facts.workflowId,
-        subtaskId = unitId,
-        attemptCount = settledStep?.attemptCount ?: outcome.output.iteration,
-        resolvedAgentId =
-          settledStep?.resolvedAgentId
-            ?: FeatureTaskRuntimeAgentResolver
-              .resolve(STEP_ID, facts.agentAssignment, facts.invokedAgentId)
-              .resolvedAgentId,
-        prose =
-          outcome.output.output.value.ifBlank { bundle.subtask(unitId)?.planText.orEmpty() },
+        unit = PlanUnit(facts.workflowId, stepId, unitId),
+        attempt =
+          PlanUnitAttempt(
+            attemptCount = settledStep?.attemptCount ?: outcome.output.iteration,
+            resolvedAgentId =
+              settledStep?.resolvedAgentId
+                ?: FeatureTaskRuntimeAgentResolver
+                  .resolve(stepId, facts.agentAssignment, facts.invokedAgentId)
+                  .resolvedAgentId,
+          ),
+        prose = outcome.output.output.value.ifBlank { bundle.subtask(unitId)?.planText.orEmpty() },
         now = parent.clock.instant(),
       )
     return parent.records.recordPlanBundleWithUnits(facts.workflowId, bundle, mapOf(unitId to unitRecord))
@@ -142,11 +152,11 @@ internal class DurablePlanSubtasksFanOut(
     val summary =
       "Planned subtasks ${ids.joinToString(", ")}; unit records " +
         ids.joinToString(", ") { unitRecordId(it) } + "."
-    val output = PlanDecompositionStop.settledOutput(STEP_ID, summary, summary)
+    val output = PlanDecompositionStop.settledOutput(stepId, summary, summary)
     return PhaseOutcome.completed(
       FeatureTaskRuntimePhaseOutput(
-        STEP_ID,
-        parent.progress.phase(STEP_ID).nextIteration,
+        stepId,
+        parent.progress.phase(stepId).nextIteration,
         output.canonicalJson,
         output,
         null,
@@ -155,7 +165,6 @@ internal class DurablePlanSubtasksFanOut(
   }
 
   private companion object {
-    const val STEP_ID = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
     const val MISSING_BUNDLE_REASON = "plan_subtasks requires the plan bundle that the plan step records."
 
     fun unitRecordId(subtaskId: Int): String =
@@ -173,19 +182,18 @@ internal fun planSubtaskLaunchContext(
 
 internal fun planSubtaskUpstreamRecords(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
-): Map<String, FeatureTaskRuntimePhaseRecord> =
-  records.filterKeys { phaseId ->
-    phaseId in
-      FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations
-        .getValue(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS)
-        .consumedUpstreamPhaseIds
-  }
+  stepId: String,
+): Map<String, FeatureTaskRuntimePhaseRecord> {
+  val consumed = FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations.getValue(stepId).consumedUpstreamPhaseIds
+  return records.filterKeys { phaseId -> phaseId in consumed }
+}
 
-private class DurablePlanUnitRunState(
+private class FeatureTaskRuntimeRunLoopPlanUnitState(
   private val parent: PhaseRunState,
   private val facts: FeatureTaskRuntimeRunFacts,
-  private val unitId: Int,
+  private val unit: PlanUnit,
   override val launchOutputSink: AgentRunOutputSink,
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
   override var implementationChecklistStore: FeatureTaskImplementationChecklistStore?
     get() = parent.implementationChecklistStore
@@ -198,10 +206,11 @@ private class DurablePlanUnitRunState(
       parent.commitPushManifestCompletion = value
     }
   override val launchPromptContext: String =
-    planSubtaskLaunchContext(parent.records.loadPlanBundle(facts.workflowId), unitId)
+    planSubtaskLaunchContext(parent.records.loadPlanBundle(facts.workflowId), unit.subtaskId)
   override val progress =
     FeatureTaskRuntimeRunState(
-      initialRecords = planSubtaskUpstreamRecords(parent.records.loadPhaseRecords(facts.workflowId).orEmpty()),
+      initialRecords =
+        planSubtaskUpstreamRecords(parent.records.loadPhaseRecords(facts.workflowId).orEmpty(), unit.stepId),
       transitions = parent.transitions,
       resumeRulesFn = parent.progress.resumeRules,
     )
@@ -232,16 +241,8 @@ private class DurablePlanUnitRunState(
 
   override fun fanOut(stepId: String): PhaseRunFanOut = error("A plan subtask unit cannot start nested fan-out.")
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
-    require(run.request === facts)
-    parent.stepBinding.beginStepBinding(run, unitId)
-    return FeatureTaskRuntimeRunLoopStepBindings.create(
-      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run, this)),
-      run,
-      unitId,
-      bindingCoordinator = parent.stepBinding,
-    )
-  }
+  override fun step(run: PhaseRun): PhaseAcceptedStepExecution =
+    runLoopEntry.context(facts, this).acceptedFanOutUnitStep(run, unit.subtaskId, parent.stepBinding)
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     FeatureTaskRuntimeBranchSetupOutcome.unchanged()
@@ -264,4 +265,3 @@ private class DurablePlanUnitRunState(
     target: FeatureTaskRuntimePhaseSettlementTarget,
   ): PhaseSettledEnvelopeRead = PhaseSettledEnvelopeRead.None
 }
-

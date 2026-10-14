@@ -134,14 +134,22 @@ internal class PlanBundleSnapshots(private val planner: FeatureTaskRuntimeDecomp
     drift(repoRoot, issueKey, bundle)?.let { return PlanUnitSettlement.Rejected(it) }
     val subtask =
       bundle.subtask(unitId) ?: return PlanUnitSettlement.Rejected("Subtask $unitId is not in the plan bundle.")
+    return settleUnitDetails(repoRoot, bundle, subtask)
+  }
+
+  private fun settleUnitDetails(
+    repoRoot: Path,
+    bundle: FeatureTaskRuntimePlanBundle,
+    subtask: FeatureTaskRuntimePlanBundleSubtask,
+  ): PlanUnitSettlement {
     val text =
       readOrNull(repoRoot.resolve(subtask.specPath).normalize())
-        ?: return PlanUnitSettlement.Rejected("The spec of subtask $unitId is no longer readable.")
+        ?: return PlanUnitSettlement.Rejected("The spec of subtask ${subtask.id} is no longer readable.")
     val details =
       PlanBundleSpecText.detailsOf(text)
         ?.takeIf { PlanBundleSpecText.governedSubSpecReady(text) }
         ?: return PlanUnitSettlement.Rejected(
-          "Subtask $unitId has no acceptance criteria or a blank Implementation Details section.",
+          "Subtask ${subtask.id} has no acceptance criteria or a blank Implementation Details section.",
         )
     return PlanUnitSettlement.Planned(
       bundle.withSubtask(subtask.copy(detailsSha256 = sha256HexUtf8(details), planText = details)),

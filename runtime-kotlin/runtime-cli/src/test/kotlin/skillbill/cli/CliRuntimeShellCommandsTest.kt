@@ -163,7 +163,6 @@ class CliRuntimeShellCommandsTest {
     val context = CliRuntimeContext(userHome = tempDir)
     val note = "feature-task-runtime is a deprecated alias for feature-task"
 
-    val run = CliRuntime.run(listOf("--home", tempDir.toString(), "feature-task-runtime", "run"), context)
     val status =
       CliRuntime.run(
         listOf("--db", tempDir.resolve("runtime.db").toString(), "feature-task-runtime", "status", "missing-workflow"),
@@ -175,7 +174,6 @@ class CliRuntimeShellCommandsTest {
         context,
       )
 
-    assertContains(run.stderr, note)
     assertContains(status.stderr, note)
     assertContains(resume.stderr, note)
   }

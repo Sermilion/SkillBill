@@ -38,6 +38,7 @@ internal interface PhaseRunRecords :
   PhaseStepRecords,
   PhaseReviewRecords,
   PhaseLaunchRecords,
+  PhasePlanRecords,
   FeatureTaskRuntimeNoChangePausePort {
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
@@ -68,7 +69,10 @@ internal interface PhaseRunRecords :
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean
+}
 
+/** The plan bundle snapshot and decompose terminal records planning makes for one run. */
+internal interface PhasePlanRecords {
   /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
 

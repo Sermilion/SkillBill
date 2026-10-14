@@ -46,7 +46,6 @@ class GoalIntakePreparation(
   fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? =
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
 
-  /** Where intake will leave the parent spec and how, without writing anything. */
   fun resolvePlanSpec(
     issueKey: String,
     intake: String?,
@@ -65,11 +64,9 @@ class GoalIntakePreparation(
     return PlanSpecSeed(planned, FeatureTaskRuntimePlanSpecOrigin.SEEDED)
   }
 
-  /** Whether [specPath] is an existing operator spec with a readable acceptance list, which intake never rewrites. */
   fun keepsOperatorSpec(specPath: Path): Boolean =
     fileStore.isRegularFile(specPath) && hasAcceptanceList(fileStore.readText(specPath))
 
-  /** Writes the spec [resolution] (from [resolvePlanSpec]) names, unless it is an operator spec to keep. */
   fun intakePlanSpec(
     issueKey: String,
     intake: String?,

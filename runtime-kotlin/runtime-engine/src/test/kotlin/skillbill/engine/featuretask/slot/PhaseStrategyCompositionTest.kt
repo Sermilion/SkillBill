@@ -208,7 +208,7 @@ class PhaseStrategyCompositionTest {
 
   @Test
   fun `every selectable step without a structured contract settles with the uniform output`() {
-    val registry = PhaseStrategyRegistry(strategies)
+    val registry = productionRegistry()
     val selectable =
       testPhaseStrategyBindings()
         .values

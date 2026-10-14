@@ -1,3 +1,14 @@
+## [2026-10-14] SKILL-425 subtask 4 — retire the standalone feature-task skeleton
+Areas: runtime-domain workflow/taskruntime skeleton; runtime-contracts error/shellcontent; runtime-engine featuretask lifecycle, runner, continuation; runtime-cli featuretask; runtime-infra/launcher agentrun; runtime-engine test slotbaseline; README.md; docs/; skills/skill-bill/content.md
+- SkeletonDefinition.admittedForRun(goalContinuation) is {GOAL_CHILD} for a goal child and {PLAN} otherwise; forRun is gone. STANDALONE stays declared and decode-only, so old rows still read, show in lookup and status, and can be abandoned. No migration.
+- New coded refusal retiredStandaloneWorkflowError (WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW), no new exception class. Execution admission and continuation claim raise it before the admittedForRun check, and the message points to `skill-bill <KEY>`. reusable
+- FeatureTaskContinuationLookupQuery.admittedDefinition has no default; each lookup caller names its definition (STANDALONE read-only, GOAL_CHILD, PLAN). FeatureTaskRuntimeRunnerPolicies.resolveRunDefinition requires a goal continuation when none is given.
+- The feature-task run command and its alias are removed. Goal children launch through `feature-task resume <child id>`, so the launcher and launch tokens changed.
+- Tests: the slot baseline drops its standalone bundle; the runner harness defaults to a goal-child continuation with hydrated planning; the shared-preplan replan tests became refusal tests. One lookup test covers a retired row staying visible and abandonable but refusing resume.
+- Limits: goal-child rows created before SKILL-425 record the agent-plan strategy and are refused on resume as an incompatible execution plan, and they have no plan_subtasks record. That needs a decision. The operator must run ./install.sh so the skills/skill-bill/content.md change reaches installed skills. npx agnix and validate_agent_configs did not run headless; ./gradlew check covers agent-config validation.
+Feature flag: N/A
+Acceptance criteria: not self-reported (AC-003 and AC-004 are covered by a named test; build and validate own the proof)
+
 ## [2026-10-14] SKILL-425 subtask 3 — one plan strategy and durable plan records
 Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask, goalrunner, goalplanning; runtime-infra/sqlite goalrunner; runtime-ports goalrunner; runtime-core di; runtime-cli goal control; runtime-application workflow/decomposition
 - PhaseSlot.PLAN now owns plan and plan_subtasks. Every skeleton binds PlanFanOutStrategy (plus an Opus 5.5 variant). DurablePlanSubtasksFanOut fans agent-plan out per subtask, and each unit writes only its Implementation Details section.

@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-425"
 feature_name: "one-planning-skeleton"
 parent_spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-425-one-planning-skeleton"
@@ -54,12 +54,12 @@ subtasks:
 - id: 4
   name: "Retire the standalone skeleton and update docs"
   spec_path: ".feature-specs/SKILL-425-one-planning-skeleton/spec_subtask_4_retire-standalone-skeleton.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261014-164448-hwxj"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

@@ -21,6 +21,7 @@ class SkeletonDefinitionTest {
     listOf(
       "preplan",
       "plan",
+      "plan_subtasks",
       "implement",
       "simplify",
       "audit_plan_fix",
@@ -133,12 +134,6 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `a run resolves goal-child only with a goal continuation`() {
-    assertEquals(SkeletonDefinition.GOAL_CHILD, SkeletonDefinition.forRun(goalContinuation = true))
-    assertEquals(SkeletonDefinition.STANDALONE, SkeletonDefinition.forRun(goalContinuation = false))
-  }
-
-  @Test
   fun `a definition that reorders slots raises a typed error`() {
     val error =
       assertFailsWith<InvalidSkeletonDefinitionError> {
@@ -174,11 +169,17 @@ class SkeletonDefinitionTest {
       listOf("review", "validation", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
     )
-    assertEquals(
-      setOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.PLAN),
-      SkeletonDefinition.admittedForRun(goalContinuation = false),
-    )
+    assertEquals(setOf(SkeletonDefinition.PLAN), SkeletonDefinition.admittedForRun(goalContinuation = false))
     assertEquals(setOf(SkeletonDefinition.GOAL_CHILD), SkeletonDefinition.admittedForRun(goalContinuation = true))
+  }
+
+  @Test
+  fun `the retired standalone skeleton is decodable but never admitted for a run`() {
+    assertEquals(SkeletonDefinition.STANDALONE, SkeletonDefinition.byId("standalone"))
+    assertFalse(SkeletonDefinition.STANDALONE.standaloneInvocable)
+    listOf(true, false).forEach { goalContinuation ->
+      assertFalse(SkeletonDefinition.STANDALONE in SkeletonDefinition.admittedForRun(goalContinuation))
+    }
   }
 
   @Test

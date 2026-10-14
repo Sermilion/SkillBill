@@ -97,10 +97,8 @@ data class SkeletonDefinition(
     val entries: List<SkeletonDefinition>
       get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR)
 
-    fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
-
     fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
-      if (goalContinuation) setOf(GOAL_CHILD) else setOf(STANDALONE, PLAN)
+      if (goalContinuation) setOf(GOAL_CHILD) else setOf(PLAN)
 
     fun byId(id: String): SkeletonDefinition =
       entries.firstOrNull { it.id == id }

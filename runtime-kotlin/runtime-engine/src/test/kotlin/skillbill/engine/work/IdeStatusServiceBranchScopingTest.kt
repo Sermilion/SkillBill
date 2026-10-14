@@ -367,6 +367,7 @@ class IdeStatusServiceBranchScopingTest {
           phaseRecordsArtifactsJson(
             "preplan" to phaseRecordWire("preplan", "completed", null),
             "plan" to phaseRecordWire("plan", "completed", null),
+            "plan_subtasks" to phaseRecordWire("plan_subtasks", "completed", null),
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),
@@ -405,6 +406,7 @@ class IdeStatusServiceBranchScopingTest {
           phaseRecordsArtifactsJson(
             "preplan" to phaseRecordWire("preplan", "completed", null),
             "plan" to phaseRecordWire("plan", "completed", null),
+            "plan_subtasks" to phaseRecordWire("plan_subtasks", "completed", null),
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),

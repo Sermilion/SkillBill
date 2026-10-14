@@ -32,7 +32,7 @@ class DurablePlanSubtaskUnitContextTest {
     val records =
       listOf("intake", "preplan", "plan", "plan_subtasks", "implement").associateWith(::record)
 
-    assertEquals(setOf("preplan", "plan"), planSubtaskUpstreamRecords(records).keys)
+    assertEquals(setOf("preplan", "plan"), planSubtaskUpstreamRecords(records, "plan_subtasks").keys)
   }
 
   private fun record(phaseId: String) =

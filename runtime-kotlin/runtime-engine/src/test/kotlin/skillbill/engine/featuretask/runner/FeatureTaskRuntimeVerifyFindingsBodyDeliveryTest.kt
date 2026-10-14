@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runner
 
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
@@ -40,7 +41,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
     var verifyLaunches = 0
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(repoRoot = repoRoot).copy(
+        RuntimeHarnessConfig(branchSetup = branchSetupWithHead(), repoRoot = repoRoot).copy(
           launcher =
             RuntimeRecordingLauncher { request ->
               val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
@@ -73,7 +74,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
 
     val report = harness.runner.run(harness.request())
 
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(report)
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     assertEquals(2, verifyLaunches, "heading selection must continue once for body delivery")
     assertTrue(
       harness.io.database.rejectedDiagnostics().none { it.metadata.phaseId == "verify_findings" },
@@ -92,7 +93,10 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
     var verifyLaunches = 0
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(repoRoot = Files.createTempDirectory("skillbill-verify-census-only")).copy(
+        RuntimeHarnessConfig(
+          branchSetup = branchSetupWithHead(),
+          repoRoot = Files.createTempDirectory("skillbill-verify-census-only"),
+        ).copy(
           launcher =
             RuntimeRecordingLauncher { request ->
               val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
@@ -115,7 +119,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
 
     val report = harness.runner.run(harness.request())
 
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(report)
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
     assertEquals(1, verifyLaunches, "census-only verify must settle in one launch")
     val bodyDeliveryContinuations =
       harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty()
@@ -127,6 +131,9 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
     )
   }
 }
+
+private fun branchSetupWithHead(): BranchSetupTestConfig =
+  BranchSetupTestConfig(gitOperations = RecordingWorkflowGitOperations().apply { headCommitShaValue = "f".repeat(40) })
 
 private fun reviewFindingWithLocation(locationPath: String): String =
   """

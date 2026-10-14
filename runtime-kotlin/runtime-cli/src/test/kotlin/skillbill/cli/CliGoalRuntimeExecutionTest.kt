@@ -201,14 +201,13 @@ class CliGoalRuntimeExecutionTest {
                 add(Triple(rows.getString(1), rows.getString(2), rows.getString(3)))
               }
             }
-          assertEquals(2, identities.size)
-          assertTrue(identities.all { it.first == "SKILL-901" && it.third == "goal_child" })
           assertEquals(
             listOf(
-              ".feature-specs/SKILL-901-goal/spec_subtask_1_part.md",
-              ".feature-specs/SKILL-901-goal/spec_subtask_2_part.md",
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec.md", "standalone"),
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_1_part.md", "goal_child"),
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_2_part.md", "goal_child"),
             ),
-            identities.map { it.second },
+            identities,
           )
         }
       }

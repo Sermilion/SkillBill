@@ -368,20 +368,24 @@ private class FeatureTaskRuntimeRunLoopPlanningStepBinding(
     environment.stepBinding,
 ) : FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhasePlanningStepBinding {
-  override fun settleExistingBundle(run: PhaseRun): PhaseOutcome? {
+  override fun settleExistingBundle(
+    run: PhaseRun,
+    unitStepId: String,
+  ): PhaseOutcome? {
     bindingCoordinator.requireActiveStepBinding(this.run, fanOutUnitId)
     check(run === this.run) { "Existing-bundle settlement must settle the accepted step '${this.run.phaseId}'." }
     val request = environment.request
     val planner = environment.decompositionPlanner
     val parentSpec = planner.existingParentSpec(request.repoRoot, request.issueKey)
     if (parentSpec == null || planner.existingManifest(request.repoRoot, request.issueKey) == null) return null
-    val rejection = PlanDecompositionStop.recordExistingBundleOrRejection(environment)
+    val rejection = PlanDecompositionStop.recordExistingBundleOrRejection(environment, unitStepId)
     if (rejection != null) {
       return if (environment.progress.phase(run.phaseId).nextIteration > 1) null else PhaseOutcome.blocked(rejection)
     }
-    val bundle = checkNotNull(environment.recorder.loadPlanBundle(workflowId)) {
-      "The existing plan bundle was recorded but cannot be read back."
-    }
+    val bundle =
+      checkNotNull(environment.recorder.loadPlanBundle(workflowId)) {
+        "The existing plan bundle was recorded but cannot be read back."
+      }
     val output =
       PlanDecompositionStop.settledOutput(
         run.phaseId,

@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCeremonyScaling
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
@@ -13,7 +14,7 @@ val forwardPhaseOrder: String =
   FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
     .filterNot {
       it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds ||
-        it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
+        PhaseSlot.slotForStep(it) == PhaseSlot.INTAKE
     }
     .joinToString(" -> ")
 

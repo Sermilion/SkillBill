@@ -44,7 +44,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
 class ExecutionPlanAdmissionFixture(
-  definition: SkeletonDefinition = SkeletonDefinition.STANDALONE,
+  definition: SkeletonDefinition = SkeletonDefinition.GOAL_CHILD,
   private val repository: String = "repo-root-realpath-v1:/tmp/admission-repository",
   private val specPath: String = ".feature-specs/SKILL-384/spec.md",
   private val database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),

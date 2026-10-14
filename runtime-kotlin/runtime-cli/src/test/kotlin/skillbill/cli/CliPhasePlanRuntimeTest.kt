@@ -14,6 +14,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.ExecutionPlanArtifactView
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
@@ -54,9 +55,9 @@ class CliPhasePlanRuntimeTest {
 
     val resumed = CliRuntime.run(arguments + listOf("--agent", "codex"), context)
     assertEquals(0, resumed.exitCode, resumed.stdout + resumed.stderr)
-    assertEquals(listOf("preplan", "plan", "plan"), launcher.phaseIds)
+    assertEquals(RESUMED_PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals(1, rowCount("feature_task_workflows"))
-    assertEquals(2, rowCount("goal_subtask_plans"))
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
     assertEquals(mapOf("status" to "completed", "attempt_count" to 1), settledIntakeStep())
     val board = CliRuntime.run(listOf("--db", fixture.dbPath.toString(), "work", "board", "--format", "json"), context)
     val boardPayload = requireNotNull(JsonCodec.parseObjectOrNull(board.stdout))
@@ -90,7 +91,7 @@ class CliPhasePlanRuntimeTest {
         fixture.context(launcher = launcher, workflowGitOperations = git).copy(repositoryRoot = tempDir),
       )
     assertEquals(0, result.exitCode, result.stdout + result.stderr)
-    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals("Concurrent edit", Files.readString(tempDir.resolve("outside-plan.txt")))
   }
 
@@ -118,10 +119,9 @@ class CliPhasePlanRuntimeTest {
 
     assertEquals(0, plan.exitCode, plan.stdout)
     assertContains(plan.stdout, "Manifest: .feature-specs/$ISSUE_KEY-")
-    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals(1, rowCount("feature_task_workflows"))
-    assertEquals(1, rowCount("goal_shared_preplans"))
-    assertEquals(2, rowCount("goal_subtask_plans"))
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
     val preflight =
       CliRuntime.run(
         listOf(
@@ -162,7 +162,7 @@ class CliPhasePlanRuntimeTest {
     val result = runFull(PlanThenGoalLauncher(planner, goal))
 
     assertEquals(3, result.exitCode, result.stdout + result.stderr)
-    assertEquals(listOf("preplan", "plan"), planner.phaseIds)
+    assertEquals(PLAN_LAUNCHES, planner.phaseIds)
     assertEquals(1, goal.childLaunches.size)
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
@@ -195,7 +195,7 @@ class CliPhasePlanRuntimeTest {
     val resumed = runFull(launcher)
 
     assertEquals(3, resumed.exitCode, resumed.stdout + resumed.stderr)
-    assertEquals(listOf("preplan", "plan", "plan"), planner.phaseIds)
+    assertEquals(RESUMED_PLAN_LAUNCHES, planner.phaseIds)
     assertEquals(incompletePlan, planWorkflowId())
   }
 
@@ -293,25 +293,39 @@ class CliPhasePlanRuntimeTest {
         fixture.context(launcher = implementation),
       )
     assertEquals(3, goal.exitCode, goal.stdout + goal.stderr)
-    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals(3, rowCount("feature_task_workflows"))
     assertEquals(1, implementation.requests.size)
     assertTrue(implementation.requests.single().skillRunRequest.goalContinuation != null)
     val workflowId = goal.payload?.get("workflow_id")?.toString().orEmpty()
     val child = RuntimeWorkflowTestSupport.get(fixture.dbPath, workflowId, fixture.context(launcher = implementation))
     assertEquals("implement", child["current_step_id"])
-    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
-      connection.createStatement().use { it.executeUpdate("DELETE FROM goal_subtask_plans WHERE subtask_id = 2") }
-    }
     val settled =
       CliRuntime.run(
         listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "--agent", "codex"),
         fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
       )
     assertEquals(0, settled.exitCode, settled.stdout + settled.stderr)
-    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
-    assertEquals(2, rowCount("goal_subtask_plans"))
+    assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
+    assertEquals(PLANNED_UNITS, completedPlanUnitIds())
   }
+
+  private fun completedPlanUnitIds(): List<String> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.prepareStatement("SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = ?").use {
+        it.setString(1, planWorkflowId())
+        it.executeQuery().use { rows ->
+          check(rows.next())
+          val artifacts = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(rows.getString(1))))
+          val recordsKey = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()
+          requireNotNull(JsonCodec.anyToStringAnyMap(artifacts[recordsKey]))
+            .filter { (phaseId, record) ->
+              phaseId.startsWith("plan_subtasks:") && JsonCodec.anyToStringAnyMap(record)?.get("status") == "completed"
+            }.keys
+            .sorted()
+        }
+      }
+    }
 
   private fun rowCount(table: String): Int =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
@@ -406,6 +420,9 @@ class CliPhasePlanRuntimeTest {
     const val ISSUE_KEY = "SKILL-904"
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
     val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
+    val PLAN_LAUNCHES = listOf("preplan", "plan", "plan_subtasks", "plan_subtasks")
+    val RESUMED_PLAN_LAUNCHES = listOf("preplan", "plan", "plan", "plan_subtasks", "plan_subtasks")
+    val PLANNED_UNITS = listOf("plan_subtasks:1", "plan_subtasks:2")
 
     fun manifestYaml(
       bundleDirectory: String,

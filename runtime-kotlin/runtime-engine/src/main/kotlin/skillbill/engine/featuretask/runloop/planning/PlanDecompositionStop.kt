@@ -93,15 +93,18 @@ internal object PlanDecompositionStop {
         capture.fileManifest.introduced,
         context.decompositionPlanner::bundleTree,
       )?.let { return notReadyReason(it) }
-    return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED)
+    return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED, keptUnitStepId = null)
   }
 
-  fun recordExistingBundleOrRejection(context: PhaseOutputSettlementContext): String? =
-    recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+  fun recordExistingBundleOrRejection(
+    context: PhaseOutputSettlementContext,
+    unitStepId: String,
+  ): String? = recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING, unitStepId)
 
   private fun recordBundle(
     context: PhaseOutputSettlementContext,
     origin: FeatureTaskRuntimePlanBundleOrigin,
+    keptUnitStepId: String?,
   ): String? {
     val request = context.request
     return try {
@@ -114,15 +117,14 @@ internal object PlanDecompositionStop {
       val bundle = PlanBundleSnapshots(context.decompositionPlanner).capture(request.repoRoot, written, origin)
       val now = context.clock.instant()
       val keptUnits =
-        if (origin == FeatureTaskRuntimePlanBundleOrigin.EXISTING) {
+        keptUnitStepId?.let { stepId ->
           bundle.subtasks.mapNotNull { subtask ->
             subtask.planText?.let { details ->
-              subtask.id to PlanUnitRecords.keptDetails(request.workflowId, subtask.id, details, now)
+              subtask.id to
+                PlanUnitRecords.keptDetails(PlanUnit(request.workflowId, stepId, subtask.id), details, now)
             }
           }.toMap()
-        } else {
-          emptyMap()
-        }
+        }.orEmpty()
       if (context.recorder.recordPlanBundleWithUnits(request.workflowId, bundle, keptUnits)) {
         null
       } else {

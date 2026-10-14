@@ -5,6 +5,7 @@ import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
+import skillbill.engine.featuretask.runloop.planning.PlanUnit
 import skillbill.engine.featuretask.runloop.planning.PlanUnitRecords
 import skillbill.engine.featuretask.runner.writePlanBundle
 import skillbill.featurespec.model.FeatureSpecWriteResult
@@ -12,6 +13,7 @@ import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathRes
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleSubtask
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -130,7 +132,11 @@ class PlanBundleSnapshotsTest {
     snapshots.unitComplete(
       repoRoot,
       unit,
-      PlanUnitRecords.keptDetails("wftr-test", unit.id, "- Planned task.", Instant.EPOCH),
+      PlanUnitRecords.keptDetails(
+        PlanUnit("wftr-test", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS, unit.id),
+        "- Planned task.",
+        Instant.EPOCH,
+      ),
     )
 
   private fun requirePlanned(settlement: PlanUnitSettlement): PlanUnitSettlement.Planned {

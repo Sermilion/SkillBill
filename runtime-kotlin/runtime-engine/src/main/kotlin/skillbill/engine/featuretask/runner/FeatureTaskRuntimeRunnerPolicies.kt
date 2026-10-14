@@ -26,7 +26,18 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
 }
 
 fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
-  request.skeletonDefinition ?: SkeletonDefinition.forRun(isGoalContinuationRun(request))
+  resolveRunDefinition(request.skeletonDefinition, isGoalContinuationRun(request))
+
+fun resolveRunDefinition(
+  explicit: SkeletonDefinition?,
+  goalContinuation: Boolean,
+): SkeletonDefinition =
+  explicit ?: run {
+    require(goalContinuation) {
+      "The standalone skeleton is retired; a run without a goal continuation needs an explicit skeleton definition."
+    }
+    SkeletonDefinition.GOAL_CHILD
+  }
 
 fun boundedSchemaGateDetail(validationReason: String): String =
   if (validationReason.length <= SCHEMA_GATE_DETAIL_MAX_CHARS) {

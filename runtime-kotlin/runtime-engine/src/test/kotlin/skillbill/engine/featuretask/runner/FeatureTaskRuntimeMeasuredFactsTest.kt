@@ -11,8 +11,6 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.validation.passed
-import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
-import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -20,7 +18,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
 class FeatureTaskRuntimeMeasuredFactsTest {
@@ -77,44 +74,6 @@ class FeatureTaskRuntimeMeasuredFactsTest {
   }
 
   @Test
-  fun `pr persists the pull request looked up on GitHub, not the agent's claims`() {
-    val found = PullRequestIdentity.Found("https://github.com/o/r/pull/7", 7)
-    val lookups = mutableListOf<String>()
-    val lookup =
-      PullRequestIdentityLookup { _, branch ->
-        lookups += branch
-        if (lookups.size == 1) PullRequestIdentity.Absent else found
-      }
-    val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()
-    val databaseHome = SlotBaselineNormalizer.newTempHome()
-    try {
-      val git = committedRepoBranchSetup().gitOperations.also { it.currentBranchValue = GOAL_BRANCH }
-      val launcher = forgingLauncher()
-      val harness =
-        telemetryRunnerHarness(
-          launcher = launcher,
-          runtimeConfig =
-            sqliteRunConfig(git, repoRoot, launcher, goalContinuation = null)
-              .copy(pullRequestIdentityLookup = lookup),
-          databaseFactory = { SlotBaselineFullRunCapture.sqliteDatabase(databaseHome) },
-        )
-
-      val report = harness.runner.run(harness.request)
-
-      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-      val record = harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("pr")?.outputArtifact.orEmpty()
-      val facts = measuredFacts(record)
-      assertEquals(found.url, facts[FeatureTaskRuntimeMeasuredFactKeys.PR_URL], record)
-      assertEquals(found.number, (facts[FeatureTaskRuntimeMeasuredFactKeys.PR_NUMBER] as Number).toInt(), record)
-      assertEquals(true, facts[FeatureTaskRuntimeMeasuredFactKeys.PR_CREATED], record)
-      assertFalse(record.contains(FORGED_PR_URL), record)
-    } finally {
-      repoRoot.toFile().deleteRecursively()
-      databaseHome.toFile().deleteRecursively()
-    }
-  }
-
-  @Test
   fun `a run resumed on SQLite from a write_history record written before measurement completes`() {
     val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()
     val databaseHome = SlotBaselineNormalizer.newTempHome()
@@ -163,7 +122,7 @@ class FeatureTaskRuntimeMeasuredFactsTest {
     FeatureTaskRuntimeGoalContinuationContext(
       parentIssueKey = RUNNER_TEST_ISSUE_KEY,
       subtaskId = 5,
-      subtaskName = "measured write_history and pr facts",
+      subtaskName = "measured write_history facts",
       goalBranch = GOAL_BRANCH,
       suppressPr = true,
       parentWorkflowId = "wfl-parent",
@@ -174,7 +133,7 @@ class FeatureTaskRuntimeMeasuredFactsTest {
     git: RecordingWorkflowGitOperations,
     repoRoot: Path,
     launcher: RuntimeRecordingLauncher,
-    goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+    goalContinuation: FeatureTaskRuntimeGoalContinuationContext,
   ): RuntimeHarnessConfig =
     RuntimeHarnessConfig(
       branchSetup =
@@ -194,7 +153,6 @@ class FeatureTaskRuntimeMeasuredFactsTest {
       when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
         "audit" -> facts(auditSatisfiedOutput())
         "write_history" -> facts(FORGED_WRITE_HISTORY_OUTPUT)
-        "pr" -> facts(FORGED_PR_OUTPUT)
         else -> facts(defaultPhaseOutput(request))
       }
     }
@@ -208,17 +166,11 @@ class FeatureTaskRuntimeMeasuredFactsTest {
   private companion object {
     const val GOAL_BRANCH = "feat/existing-runtime-branch"
     const val VERSION = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-    const val FORGED_PR_URL = "https://github.com/o/r/pull/999"
 
     const val FORGED_WRITE_HISTORY_OUTPUT =
       """{"contract_version":"$VERSION","phase_id":"write_history","status":"completed","summary":"done",""" +
         """"produced_outputs":{"value":"Recorded the boundary history entry.","runtime_measured_facts":""" +
         """{"changed_paths":["src/Forged.kt"],"history_written":false,"decisions_recorded":true}}}"""
-
-    const val FORGED_PR_OUTPUT =
-      """{"contract_version":"$VERSION","phase_id":"pr","status":"completed","summary":"done",""" +
-        """"produced_outputs":{"value":"Opened the pull request for the branch.","runtime_measured_facts":""" +
-        """{"pr_url":"$FORGED_PR_URL","pr_number":999,"pr_created":false}}}"""
 
     const val LEGACY_WRITE_HISTORY_OUTPUT =
       """{"contract_version":"0.7","phase_id":"write_history","status":"completed","summary":"done",""" +

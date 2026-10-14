@@ -27,6 +27,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -57,9 +58,10 @@ import java.nio.file.Path
 
 internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
-  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 ) : PhaseRunRecords,
+  PhasePlanRecords by DurablePhasePlanRecords(decomposeTerminalRecorder),
   FeatureTaskRuntimeNoChangePausePort by recorder {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -210,7 +212,11 @@ internal class DurablePhaseRunRecords(
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean = recorder.recordWorkflowOwnedPaths(workflowId, ownedPaths)
+}
 
+private class DurablePhasePlanRecords(
+  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+) : PhasePlanRecords {
   override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
     decomposeTerminalRecorder.loadPlanBundle(workflowId)
 

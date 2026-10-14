@@ -79,6 +79,7 @@
             "enum": [
               "preplan",
               "plan",
+              "plan_subtasks",
               "implement",
               "simplify",
               "implement_fix",
@@ -141,6 +142,7 @@
             "enum": [
               "preplan",
               "plan",
+              "plan_subtasks",
               "implement",
               "simplify",
               "implement_fix",

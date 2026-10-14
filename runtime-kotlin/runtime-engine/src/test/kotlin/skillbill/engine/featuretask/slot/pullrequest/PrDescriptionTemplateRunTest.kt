@@ -1,12 +1,9 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
-import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -15,7 +12,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PrDescriptionTemplateRunTest {
@@ -32,22 +28,6 @@ class PrDescriptionTemplateRunTest {
   }
 
   @Test
-  fun `standalone pr publishes without readiness evidence and carries the template without its checklist`() {
-    val repoRoot = Files.createDirectories(root.resolve("standalone"))
-    writeTemplate(repoRoot, TEMPLATE_PATH, TEMPLATE)
-
-    val run = standalonePrRun(repoRoot, database, absent)
-
-    val completed = assertIs<FeatureTaskRuntimeRunReport.Completed>(run.report, run.report.toString())
-    val workflow =
-      database.read { unitOfWork ->
-        requireNotNull(unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, completed.workflowId))
-      }
-    assertNull(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE.value(workflow.artifacts))
-    assertTemplatePrompt(run.prPrompts.single())
-  }
-
-  @Test
   fun `the phase pr prompt carries the found template without its checklist`() {
     val repository = featureRepository()
     writeTemplate(repository.repoRoot, TEMPLATE_PATH, TEMPLATE)
@@ -59,16 +39,6 @@ class PrDescriptionTemplateRunTest {
   }
 
   @Test
-  fun `the standalone pr prompt falls back to the coded template when none is found`() {
-    val repoRoot = Files.createDirectories(root.resolve("standalone"))
-
-    val run = standalonePrRun(repoRoot, database, absent)
-
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(run.report, run.report.toString())
-    assertFallbackPrompt(run.prPrompts.single())
-  }
-
-  @Test
   fun `the phase pr prompt falls back to the coded template when none is found`() {
     val repository = featureRepository()
 
@@ -76,19 +46,6 @@ class PrDescriptionTemplateRunTest {
 
     assertIs<PhaseRunResult.Completed>(run.result, run.result.toString())
     assertFallbackPrompt(run.prPrompts.single())
-  }
-
-  @Test
-  fun `the standalone run blocks at pr when two templates have no default`() {
-    val repoRoot = Files.createDirectories(root.resolve("standalone"))
-    writeAmbiguousTemplates(repoRoot)
-
-    val run = standalonePrRun(repoRoot, database, absent)
-
-    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(run.report, run.report.toString())
-    assertEquals(PR_STEP, report.lastIncompletePhase)
-    assertNamesBothTemplates(report.blockedReason)
-    assertEquals(emptyList(), run.prPrompts, "no pr agent may launch")
   }
 
   @Test
