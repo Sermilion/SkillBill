@@ -2938,6 +2938,9 @@ private class InMemoryPreparationDatabase(
   markPreparedThrows: Boolean = false,
   planCheckpointThrows: Boolean = false,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   val repository = InMemoryPreparationRepository(markPreparedThrows, planCheckpointThrows)
   private val dbPath = Path.of("/fake/goal-planning-sweep-preparations.db")
 

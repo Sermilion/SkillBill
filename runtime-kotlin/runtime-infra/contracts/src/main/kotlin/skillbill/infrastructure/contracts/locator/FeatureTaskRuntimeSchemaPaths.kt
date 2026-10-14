@@ -13,6 +13,40 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }
 
+object AcceptanceCriterionRepairStateSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/acceptance-criterion-repair-state-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-state-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/acceptance-criterion-repair-state.yaml"
+}
+
+object AcceptanceCriterionAuditResultSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-audit-result-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-audit-result-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/acceptance-criterion-audit-result.yaml"
+}
+
+object AcceptanceCriterionRepairHandoffSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-repair-handoff-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-handoff-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/acceptance-criterion-repair-handoff.yaml"
+}
+
+object AcceptanceCriterionRepairAdoptionSchemaPaths {
+  const val REPO_RELATIVE_PATH: String = "orchestration/contracts/acceptance-criterion-repair-adoption-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-adoption-schema.yaml"
+  const val HISTORICAL_0_1_REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/acceptance-criterion-repair-adoption-schema-0.1.yaml"
+  const val HISTORICAL_0_1_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/acceptance-criterion-repair-adoption-schema-0.1.yaml"
+  const val EXPECTED_SCHEMA_ID: String = "https://skill-bill.dev/contracts/acceptance-criterion-repair-adoption.yaml"
+}
+
 object FeatureTaskRuntimePhaseOutputSchemaPaths {
   const val CURRENT_CLASSPATH_RESOURCE: String =
     "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"

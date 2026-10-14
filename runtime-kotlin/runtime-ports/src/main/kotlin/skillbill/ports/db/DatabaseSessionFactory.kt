@@ -1,6 +1,7 @@
 package skillbill.ports.db
 
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.UnitOfWork
 import java.nio.file.Path
@@ -15,6 +16,8 @@ interface DatabaseSessionFactory {
   fun <T> readIfPresent(block: (UnitOfWork) -> T): T? = if (databaseExists()) read(block) else null
 
   fun <T> transaction(block: (UnitOfWork) -> T): T
+
+  fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T>
 
   fun <T> transactionFenced(
     expected: DatabaseFileObservation,

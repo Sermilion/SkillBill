@@ -235,6 +235,9 @@ private object NoopRefreshLivenessSnapshotValidator : WorkflowSnapshotValidator 
 private class SeedableRefreshLivenessDatabase(
   private val repository: SeedableRefreshLivenessWorkflowStates,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/goal-planning-refresh-liveness.db")
 
   override fun resolveDbPath(): Path = dbPath

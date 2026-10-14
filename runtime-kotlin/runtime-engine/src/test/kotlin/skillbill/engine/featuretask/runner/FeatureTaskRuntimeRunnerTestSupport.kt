@@ -93,6 +93,8 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
@@ -215,6 +217,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.TimeSource
 import java.lang.Double.TYPE as DoubleTYPE
 import java.lang.Long.TYPE as LongTYPE
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal const val WORKFLOW_ID = "wftr-20260602-test-0001"
 internal const val SESSION_ID = "ftr-test-001"
@@ -852,7 +855,14 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
     runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(
         database,
-        FeatureTaskRuntimeWorkflowPersistence(database, NoopWorkflowSnapshotValidator),
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          NoopWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(
+            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+            ContractFeatureTaskRuntimePhaseOutputMigration(),
+          ),
+        ),
       ),
   )
 
@@ -1944,6 +1954,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val lifecycle: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
   private val knownIssue: Boolean = true,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/metrics.db")
   var transactionCount: Int = 0
   val ledgerRows = mutableListOf<UnaddressedFinding>()

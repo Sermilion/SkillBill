@@ -245,6 +245,9 @@ private class LedgerOnlySessionFactory(
   private val findings: UnaddressedFindingsRepository,
   private val workflowStateRepository: WorkflowStateRepository? = null,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("/fake/runtime.db")
 
   override fun databaseExists(): Boolean = true

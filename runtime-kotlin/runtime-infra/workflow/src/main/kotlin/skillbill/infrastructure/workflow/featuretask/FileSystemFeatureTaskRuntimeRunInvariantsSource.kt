@@ -10,6 +10,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.review.spec.GovernedSpecSectionParser.MANDATES_HEADINGS
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.decodeDecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
@@ -49,6 +50,7 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSource : FeatureTaskRuntimeRunInv
         acceptanceCriteria = acceptanceCriteria,
         mandatesAndOverrides = GovernedSpecSectionParser.parseListSection(specText) { it in MANDATES_HEADINGS },
       ),
+      sourceDigest = sha256HexUtf8(specText),
     )
   }
 

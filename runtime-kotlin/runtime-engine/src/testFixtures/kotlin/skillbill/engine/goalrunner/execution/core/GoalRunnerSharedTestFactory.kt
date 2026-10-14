@@ -32,6 +32,8 @@ import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -51,6 +53,7 @@ import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractWireArtifactValidator
 
 fun goalRunnerDefaultPhaseRecorder(): FeatureTaskRuntimePhaseRecorder =
   testPhaseRecorder(
@@ -148,6 +151,10 @@ fun testGoalRunnerChildRepairExecutor(
   GoalRunnerChildRepairOperations(
     database,
     testWorkflowSnapshotValidator,
+    ContractWireArtifactValidator(
+      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      ContractFeatureTaskRuntimePhaseOutputMigration(),
+    ),
     gitOperations,
     testDecompositionManifestValidator,
     clock,

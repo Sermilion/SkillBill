@@ -105,6 +105,9 @@ internal class FeatureTaskGitIntegrationWorkflowRepository : WorkflowStateReposi
 internal class FeatureTaskGitIntegrationDatabase(
   private val repository: FeatureTaskGitIntegrationWorkflowRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/metrics.db")
 
   override fun resolveDbPath(): Path = dbPath

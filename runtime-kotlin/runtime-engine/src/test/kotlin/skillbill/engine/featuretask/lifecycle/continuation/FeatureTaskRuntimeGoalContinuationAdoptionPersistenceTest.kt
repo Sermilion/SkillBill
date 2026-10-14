@@ -18,6 +18,8 @@ import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -50,6 +52,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label()
@@ -77,6 +80,10 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()
           }
         },
+        ContractSerialArtifactValidator(
+          FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+          ContractFeatureTaskRuntimePhaseOutputMigration(),
+        ),
       )
 
     assertFailsWith<SkillBillRuntimeException> {
@@ -338,7 +345,14 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
     val runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(
         database,
-        FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator),
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(
+            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+            ContractFeatureTaskRuntimePhaseOutputMigration(),
+          ),
+        ),
       )
     return AdoptionHarness(
       repository = repository,

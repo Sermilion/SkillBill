@@ -1,3 +1,8 @@
+## [2026-10-14] Serial source history survives bounded display evidence
+Context: SKILL-426 needs per-criterion unsuccessful totals and source closure/reopening proof to survive restart, while phase and attempt histories already have display limits.
+Decision: Keep accepted outcome identities, verification revision/tree/checkpoint, source transitions and final audits in the durable repair aggregate. Restore and schema admission share typed coherence rules. Refuse history or UTF-8 capacity exhaustion rather than prune authoritative history. State and adoption artifacts have a 12,582,912-byte limit. Reservation requires another 65,536 bytes of state capacity before repair effects. Audit results retain the 196,608-byte planning limit and repair handoffs the 65,536-byte receipt limit.
+Reason: Reconstructing counters from pruned phase history would reset budgets or lose the evidence needed to reject conflicting replay. Reserving capacity before mutation preserves room to settle one repair result.
+
 ## [2026-10-10] Measure review quality from prose without constraining reviewers
 Context: SKILL-414 needs precision and recall per review lane, but reviewers write prose findings and review completion must not depend on extracting metadata.
 Decision: Keep the scorer and on-demand runner in the runtime-domain test source set and use ReviewParser.parseReview only as a best-effort reader. Prepend placeholder run/session ids when they are missing. Route uninterpretable text and unlocated findings to curation and label the scores partial.

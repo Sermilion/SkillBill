@@ -13,6 +13,7 @@ internal fun invokeGitProcess(
   stdin: ByteArray?,
   extraEnvironment: Map<String, String> = emptyMap(),
   deadlineSeconds: Long = gitTimeoutSeconds(args),
+  preserveOutput: Boolean = false,
 ): GitProcessResult {
   val result =
     BoundedExternalProcessRunner.run(
@@ -25,7 +26,7 @@ internal fun invokeGitProcess(
       ),
     )
   return GitProcessResult(
-    output = result.output.trim(),
+    output = if (preserveOutput) result.output else result.output.trim(),
     readFailure = gitReadFailure(result),
     timedOut = result.timedOut,
     exitCode = if (result.timedOut) -1 else result.exitCode,

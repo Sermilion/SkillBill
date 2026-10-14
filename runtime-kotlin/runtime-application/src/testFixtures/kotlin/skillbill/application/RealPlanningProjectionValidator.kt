@@ -1,7 +1,12 @@
 package skillbill.application
 
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactValidatorPort
 
 val realPlanningProjectionValidator: FeatureTaskRuntimeWireArtifactValidatorPort =
-  FeatureTaskRuntimeWireArtifactSchemaValidator()
+  FeatureTaskRuntimeWireArtifactSchemaValidator(
+    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+    ContractFeatureTaskRuntimePhaseOutputMigration(),
+  )

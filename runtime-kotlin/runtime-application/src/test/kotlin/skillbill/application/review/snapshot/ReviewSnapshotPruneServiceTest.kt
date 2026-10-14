@@ -55,6 +55,9 @@ class ReviewSnapshotPruneServiceTest {
   }
 
   private object StubSessionFactory : DatabaseSessionFactory {
+    override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+      skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
     override fun resolveDbPath(): Path = Path.of("/home/u/.skill-bill/review-metrics.db")
 
     override fun databaseExists(): Boolean = true

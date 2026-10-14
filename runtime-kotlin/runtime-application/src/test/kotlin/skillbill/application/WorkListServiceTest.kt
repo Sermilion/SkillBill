@@ -150,6 +150,9 @@ private class WorkListDatabase(
   private val workflows: WorkflowStateRepository,
   private val work: List<WorkItem>,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("/fake/work-list.db")
 
   override fun databaseExists(): Boolean = true

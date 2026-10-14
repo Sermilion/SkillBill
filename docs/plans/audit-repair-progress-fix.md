@@ -2,9 +2,8 @@
 
 ## Target and outcome
 
-Implement on `base/SKILL-380-phase-slot-strategies` in
-`/home/sermilion/StudioProjects/skill-bill-base-380`.
-Preserve the existing work in that worktree. Keep this fix separate from
+Implement in the checkout supplied by the active workflow briefing.
+Preserve the existing work in that checkout. Keep this fix separate from
 SKILL-384's capability refactor and its acceptance criteria.
 
 An audit may launch another repair only when its count of unresolved production
@@ -137,18 +136,18 @@ Do not use the live workflow database as a test fixture.
 
 1. Run the focused audit retry, prompt, composition, and durable-resume tests in
    the base worktree. Run `skill-bill operation unit-test-value-check` over the fix.
-2. Run `skill-bill phase validation` from the base worktree and repair required
+2. Run `skill-bill phase validation` from the workflow checkout and repair required
    project failures. Compilation alone does not finish validation. Review the
    scoped diff for architecture, wire vocabulary, and contract boundaries.
 3. If implementation adds a durable field or changes a governed payload shape,
    update its canonical schema, version, typed parse errors, compatibility policy,
    and parity coverage together. Prefer reuse of existing evidence over new
    storage. Never normalize incompatible records silently.
-4. Commit the fix on `base/SKILL-380-phase-slot-strategies`. Preserve unrelated
+4. Commit the fix on the active workflow branch. Preserve unrelated
    edits and record the exact tested source revision.
 5. Before replacing the installed runtime, stop the active goal through its
    supported control path and confirm the worker exits. Install from the tested
-   base worktree with `./install.sh`, then verify installation health and packaged
+   workflow checkout with `./install.sh`, then verify installation health and packaged
    behavior. Read source-generation guidance before any installer or skill edits.
 6. Inspect the existing SKILL-384 child and resume it with the supported runtime
    command. Preserve subtasks 1 and 2, the child workflow, accepted outputs,
@@ -167,12 +166,12 @@ Do not use the live workflow database as a test fixture.
 - A marker inside a refusal cannot complete repair, including on its final line.
 - Existing guard scope, terminal failure handling, storage ownership, and
   checkpoint recovery remain covered by passing tests.
-- The fix is implemented, validated, and installed from the base branch. The
+- The fix is implemented, validated, and installed from the workflow branch. The
   existing SKILL-384 workflow resumes without resetting completed subtasks.
 
 ## Rollout record
 
-Implemented on `base/SKILL-380-phase-slot-strategies`, starting at
+Implementation started at
 `a7e1d1fadc1ddd0f1ce4de3d74ba21f0b9459ea1`. The worktree already contained pending
 runtime changes. The fix remains uncommitted alongside that work.
 

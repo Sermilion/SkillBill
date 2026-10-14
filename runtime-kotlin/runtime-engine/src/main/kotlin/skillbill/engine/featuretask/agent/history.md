@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-14] SKILL-426 subtask 1 - Durable serial repair admission and transactions
+Areas: runtime-domain taskruntime, runtime-engine featuretask and goalrunner repair, runtime-contracts, runtime-ports, runtime-infra contracts/SQLite/workflow, runtime-core DI, orchestration/contracts, runtime-application persistence fixtures
+- Typed admission retains authored criterion identities and text, separates source disposition from validation obligations, and orders unresolved criteria by dependencies with spec-ordinal ties. Composite criteria keep one identity and budget.
+- Pure transitions permit one current criterion and reservation, retain unsuccessful totals through success and restart, cap failures at three per criterion, and require final-full evidence for completion or reopening.
+- Acquired-worker fencing couples serial changes with phase, ledger, attempt and workflow records in one required transaction. Callers receive accepted facts after commit; identical replay preserves counters and evidence. reusable
+- Strict artifact schemas, codecs, validators and typed failures govern repair state, audit results, handoffs and adoption. Typed hydration distinguishes retained state, proven fresh discovery and legacy-adoption-required absence. reusable
+- Legacy adoption checks nine captured historical composition/revision tuples, physical stop and pristine evidence. Separate provenance retains original descriptors and supported phase-output 0.6 bytes without inventing historical per-criterion attempts.
+- Workflow-scoped projection locks protect retained revision checks and atomic replacement. Older or conflicting revisions refuse; malformed-cache recovery emits a diagnostic. Projection-only recovery regenerates committed state without replaying mutations. reusable
+- Limits: revision-4 activation, execution routing, startup/resume consumption, focused handoff delivery and final success publication belong to subtask 2. Reporting belongs to subtask 3. Unsupported repaired or ambiguously stopped legacy workflows refuse adoption.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented in source at the callable S1 boundary; this entry does not assert fresh runtime audit acceptance or parent-feature completion.
+
 ## [2026-10-10] SKILL-415 subtask 1 - Review-fallback-only catalogs are unrouted for build
 Areas: runtime-engine featuretask (lifecycle/execution, validation, runner, lifecycle/remediation), runtime-engine goalrunner (launch, repair), featuretask slot and validation tests
 - `ValidationGateResolver` returns an unrouted absence (null pack slug) when the dominant pack is the review fallback with no `validation_gate`. A concrete pack without a gate (kotlin, kmp) still resolves as selected-but-missing, so the SKILL-360 refusal stands.

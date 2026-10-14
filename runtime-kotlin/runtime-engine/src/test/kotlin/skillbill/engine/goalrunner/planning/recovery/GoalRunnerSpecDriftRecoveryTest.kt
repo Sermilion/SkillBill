@@ -19,6 +19,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
@@ -176,7 +178,10 @@ private class SpecDriftFixture(
       checkpoint =
         GoalPlanningPreparationCheckpoint(
           FakeDatabaseSessionFactory(InMemoryWorkflowStates(), planningPreparations = plans),
-          FeatureTaskRuntimeWireArtifactValidator(),
+          FeatureTaskRuntimeWireArtifactValidator(
+            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+            ContractFeatureTaskRuntimePhaseOutputMigration(),
+          ),
         ),
       manifestStore = store,
       fileStore = TestDecompositionManifestStore,
@@ -191,7 +196,10 @@ private class SpecDriftFixture(
               workerSupervisor = if (live) LiveProcessSupervisor else DeadProcessSupervisor,
             ),
         ),
-      envelopeValidator = FeatureTaskRuntimeWireArtifactValidator(),
+      envelopeValidator = FeatureTaskRuntimeWireArtifactValidator(
+        FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+        ContractFeatureTaskRuntimePhaseOutputMigration(),
+      ),
       diagnostics = diagnostics,
     )
 

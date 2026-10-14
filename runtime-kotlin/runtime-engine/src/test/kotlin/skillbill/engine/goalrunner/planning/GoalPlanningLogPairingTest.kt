@@ -149,6 +149,9 @@ private class StubOutcomeStore(private val events: List<GoalProgressEvent>) :
 }
 
 private object UnreadableDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("/fake/metrics.db")
 
   override fun databaseExists(): Boolean = false

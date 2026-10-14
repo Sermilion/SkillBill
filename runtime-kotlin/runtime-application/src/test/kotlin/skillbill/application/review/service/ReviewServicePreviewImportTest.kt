@@ -62,6 +62,9 @@ class ReviewServicePreviewImportTest {
 }
 
 private object PreviewImportBlockingDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = error("previewImport must not touch the database")
 
   override fun databaseExists(): Boolean = error("previewImport must not touch the database")

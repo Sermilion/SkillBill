@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
@@ -47,6 +48,7 @@ class FeatureTaskRuntimeRunEntry(
   private val agentRunLauncher: AgentRunLauncher,
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val repairPersistence: AcceptanceCriterionRepairPersistence,
 ) {
   fun run(
     input: FeatureTaskRuntimeRunInput,
@@ -78,11 +80,17 @@ class FeatureTaskRuntimeRunEntry(
       requestedReviewSelection =
         (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
-    ) { admittedExecution ->
+    ) { admittedExecution, acquiredWorker ->
       if (input.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(input, admittedExecution)
       }
-      val sourceInvariants = runInvariantsSource.read(specPath).requireInvariants()
+      val sourceRead = runInvariantsSource.read(specPath)
+      val sourceInvariants = sourceRead.requireInvariants()
+      repairPersistence.inspectExisting(
+        acquiredWorker,
+        sourceInvariants.acceptanceCriteria,
+        (sourceRead as? FeatureTaskRuntimeRunInvariantsRead.Read)?.sourceDigest ?: input.protectedSpecSha256,
+      )
       runner.run(
         FeatureTaskRuntimeRunRequest(
           issueKey = input.issueKey,

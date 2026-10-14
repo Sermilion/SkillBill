@@ -290,6 +290,9 @@ private fun noopReviewContextEnvelopeValidator(): ReviewContextEnvelopeValidator
   }
 
 private class FailingDatabase(private val failure: Throwable) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   var calls = 0
 
   override fun resolveDbPath(): Path = Path.of("/tmp/failing-database.db")

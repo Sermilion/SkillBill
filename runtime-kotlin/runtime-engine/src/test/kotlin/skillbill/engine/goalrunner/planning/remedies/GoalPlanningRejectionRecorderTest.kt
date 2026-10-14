@@ -96,6 +96,9 @@ private object NoopRejectionSnapshotValidator : WorkflowSnapshotValidator {
 private class FailingRejectionDatabase(
   private val failure: Throwable,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("/fake/goal-planning-rejection.db")
 
   override fun databaseExists(): Boolean = true

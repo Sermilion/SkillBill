@@ -88,6 +88,9 @@ class GoalRunnerStatusProjectionDegradationTest {
     val diagnostics = RecordingStatusDiagnostics()
     val throwingJournalDatabase =
       object : DatabaseSessionFactory {
+        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+          skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
         private val dbPath = Path.of("/fake/goal-status-journal-fail.db")
 
         override fun resolveDbPath(): Path = dbPath

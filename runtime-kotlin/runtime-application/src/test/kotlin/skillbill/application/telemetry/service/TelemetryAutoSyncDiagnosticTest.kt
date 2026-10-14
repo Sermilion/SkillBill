@@ -341,6 +341,9 @@ private class DiagnosticDatabaseSessionFactory(
   private val outbox: TelemetryOutboxRepository,
   private val reconciliationFailure: Throwable? = null,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("diagnostic.db")
 
   override fun databaseExists(): Boolean = true

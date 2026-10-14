@@ -1,11 +1,13 @@
 package skillbill.engine.featuretask.persist
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtimepersistence.runtimeOwnedFactUnavailable
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import kotlin.coroutines.cancellation.CancellationException
@@ -13,6 +15,7 @@ import kotlin.coroutines.cancellation.CancellationException
 private fun Throwable.isOwnedFactUnavailable(): Boolean =
   (this as? SkillBillRuntimeException)?.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE
 
+@Inject
 class RuntimeOwnedPersistenceBoundary(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
@@ -76,6 +79,15 @@ class RuntimeOwnedPersistenceBoundary(
     }
     throw error
   }
+
+  fun <T> requiredOwningWrite(
+    seam: String,
+    expected: String,
+    block: (UnitOfWork) -> T,
+  ): OwningTransactionResult<T> =
+    invokeOrHandle({ fail(seam, expected, "blocked", it) }) {
+      database.owningTransaction(block)
+    }
 
   private fun fail(
     seam: String,

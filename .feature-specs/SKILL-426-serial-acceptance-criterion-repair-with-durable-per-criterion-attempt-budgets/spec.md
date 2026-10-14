@@ -16,9 +16,11 @@ This invocation prepares artifacts only. It does not authorize implementation, S
 
 Use the existing acceptance-audit strategy and phase/slot owners, authoritative transaction boundaries, schema admission, bounded handoff, final-audit permission, compatibility refusal, block diagnostics, common status serialization, and existing desktop/IntelliJ details. Policy stays in domain/application/engine, adapter effects in infrastructure, and composition in runtime-core.
 
-Two dependency-ordered subtasks deliver independently shippable increments. Subtask 1 contains the complete serial policy, contracts, persistence, recovery, final-audit gate, compatibility and production-boundary regressions in one reviewable commit. No contract-only intermediate state is allowed. Subtask 2 can ship separately against the established read-only snapshot. Its absence does not disable enforcement or the runtime's budget-block explanation. This split keeps substantial fault/recovery work in one implement pass and postpones an independently useful presentation increment. It does not assign one ticket to each layer or AC.
+Three dependency-ordered subtasks deliver the feature on the same branch. Subtask 1 supplies working typed domain operations, schema admission, acquired-owner transactions, replay/recovery and stopped-pristine adoption operations, with production-boundary regressions. These operations are callable at their engine boundary but are not selected by the existing revision-3 audit workflow. Subtask 1 must preserve that workflow's behavior and must not claim that serial enforcement is active.
 
-Each subtask spec contains an executable Implementation Details section. implementation_plan_subtask_1.md and implementation_plan_subtask_2.md save the detailed execution checklist and coverage mapping. These artifacts grant no additional handoff sources; declared runtime consumer projections remain authoritative.
+Subtask 2 connects those operations to the existing audit and repair owners, activates semantic revision 4 with its adoption gate, gates in-memory acceptance and result publication on commit, derives and consumes focused handoffs, and enforces routing, budgets, recovery and final-full completion gates. It also supplies actionable runtime budget-block facts. Subtask 3 propagates accepted read-only facts through common payloads, CLI/MCP, desktop and IntelliJ consumers and updates guidance. Serial enforcement is complete only after subtask 2; the full parent outcome requires all three subtasks. Subtask 1 is not a separately complete executor release.
+
+Each subtask spec contains an executable Implementation Details section. implementation_plan_subtask_1.md, implementation_plan_subtask_2.md and implementation_plan_subtask_3.md save the detailed execution checklists and coverage mapping. These artifacts grant no additional handoff sources; declared runtime consumer projections remain authoritative.
 
 ## Acceptance Criteria
 
@@ -47,7 +49,7 @@ Introduce canonical acceptance-audit semantic revision 4, including the delegati
 
 Blocked broad-repair workflows such as the described SKILL-422 case are unsupported in this release. Refuse with typed unsafe-adoption diagnostics, preserving all records. Recovery is inspection with a compatible runtime followed only by a separately reviewed, later authorized mapping that defines prospective versus historical budget semantics and preserves identities/evidence. That mapping, actual migration and SKILL-422 resume are outside this bundle. A new runtime alone cannot safely resume that workflow.
 
-New repair-state, structured-audit-result and focused-projection contracts start at 0.1. Extend the closed handoff vocabulary under 0.3 with explicit supported 0.2 admission. Keep phase-output envelope 0.7 and its supported 0.6 migration; validate audit payload separately under revision 4. Keep persistence 0.2 for existing private-record/delivered-projection shapes and validate the new durable artifact under its own 0.1 schema. If implementation proves an existing closed shape must change, version that owning schema first with exact admission/refusal coverage. No unversioned interpretation change is allowed. Subtask 2 owns IDE status 0.5 and optional-absent 0.4 admission.
+New repair-state, structured-audit-result and focused-projection contracts start at 0.1. Extend the closed handoff vocabulary under 0.3 with explicit supported 0.2 admission. Keep phase-output envelope 0.7 and its supported 0.6 migration; validate audit payload separately under revision 4. Keep persistence 0.2 for existing private-record/delivered-projection shapes and validate the new durable artifact under its own 0.1 schema. If implementation proves an existing closed shape must change, version that owning schema first with exact admission/refusal coverage. No unversioned interpretation change is allowed. Subtask 3 owns IDE status 0.5 and optional-absent 0.4 admission.
 
 ## Constraints
 
@@ -55,7 +57,7 @@ Preplan is this phase's only repository knowledge. Planning reads only its own s
 
 Later implementation applies AGENTS.md, docs/runtime-command-guidance.md, docs/architecture-guidelines.md A1-A12/G1-G7/P1-P8, runtime-kotlin/ARCHITECTURE.md Design Principles, docs/code-principles.md and docs/observability-policy.md. Review owns the section 5 checklist with rule IDs. Use narrow typed observations/requests, one authoritative transaction owner, shared keys only for actual multiple consumers, injected Clock/host facts and cancellation propagation. No authored Kotlin line/block comments; KDoc only on interfaces/members. Do not weaken guards, baselines, exemptions, payload budgets or scan fixtures.
 
-Preserve SKILL-422 work, evidence, ACs, retry/workflow rows and checkpoints, plus unrelated desktop edits. The current checkout is not SKILL-426 implementation ownership. While base/SKILL-380-phase-slot-strategies is unmerged, later fixes use its worktree when another feature tree contains implementation. Required review/validate repairs to production wiring, test bodies/setup, formatting and lint remain permitted. Source ownership maps are starting points, not blanket file allowlists.
+Preserve SKILL-422 work, evidence, ACs, retry/workflow rows and checkpoints, plus unrelated desktop edits. Apply implementation and repair edits in the repository checkout supplied by the active workflow briefing. Reconcile separate worktree changes into that checkout before reporting implementation complete. Required review/validate repairs to production wiring, test bodies/setup, formatting and lint remain permitted. Source ownership maps are starting points, not blanket file allowlists.
 
 Experiments use isolated SQLite fixtures, explicit disposable homes/environments, injected time and owned controlled processes. Production databases and incident evidence remain untouched. No tracker is required or contacted.
 
@@ -65,7 +67,23 @@ No automatic SKILL-422 retry/resume, blocked-aggregate recovery mapping, desktop
 
 ## Dependency notes
 
-Subtask 1 has no implementation dependency on SKILL-422. Subtask 2 depends on subtask 1's admitted state/read-only snapshot semantics. Integration repairs may not reset counters or weaken authority.
+Subtask 1 has no implementation dependency on SKILL-422. Subtask 2 depends on subtask 1's working domain and persistence operations. Subtask 3 depends on both the authoritative operations and the activated executor's detached observations. Integration repairs may not reset counters or weaken authority.
+
+## Subtask acceptance boundary
+
+The parent AC-001 through AC-010 define the completed feature. Their references in a subtask identify coverage contributions, not a requirement that the entire parent criterion be active in that subtask. Audit each subtask against its numbered S1, S2 or S3 criteria and the allocation below. No parent requirement is removed or considered satisfied by schema declarations alone.
+
+| Requirement | Subtask 1 boundary | Subtask 2 execution owner | Subtask 3 consumer owner |
+| --- | --- | --- | --- |
+| Catalog, dependencies and serial transitions | Typed admission and pure transitions with identity and budget retention | Structured discovery and mode selection in the running workflow | Accepted count presentation |
+| Fenced persistence, replay and commit failure | Callable engine operations couple serial, phase, ledger, attempt and workflow writes; return accepted facts only after commit | RunTransitionOwner and recorder use those operations before accepting output, changing routing or publishing success | Readers expose committed facts only |
+| Hydration and projection recovery | Typed present/fresh/adoption-required results, authoritative replay and projection-only regeneration operations | Startup and resumed execution consume those results and refuse unsafe continuation | Preserve absence and stale observations |
+| Repair handoff and audit result | Strict inner schemas, serialization, validators and persistence admission | Derive, deliver and consume mode-specific handoffs and structured results | No mutation authority |
+| Legacy adoption | Exact historical tuple admission, stopped-pristine checks, receipt persistence/replay and preserved originals | Call adoption before revision-4 execution and fresh discovery; refuse unsupported history | Observe retained facts without adopting |
+| Final proof and deferred validation | Pure final-required/reopen operations and separate source/validation facts | Gate every completion path and accept validation evidence only through its owner | Show source and validation facts separately |
+| Regressions and diagnostics | Domain, validator and production SQLite boundary regressions; operation-level diagnostics | Runner/handoff regressions and execution-path diagnostics | Payload, UI and cache regressions; guidance |
+
+A missing revision-3 call to serial write/adoption, automatic startup recovery, production handoff delivery or commit-gated run-loop publication is a subtask 2 integration requirement. It is not a subtask 1 refusal reason. A stubbed operation, empty supported-adoption allowlist, unsafe owner/expected-state admission, malformed artifact acceptance or failed coupled-write behavior remains a subtask 1 defect. Operation boundaries must work even while activation is deferred. Authored test and guard evidence belongs to source inspection; execution of checks belongs to the later validation owner.
 
 The digest does not name the default branch. Manifest base_branch assumes main as a planning descriptor only. Later launch must confirm the actual default and active-fix merge/worktree facts before selecting an implementation branch and correct that descriptor if needed. Planning changes no branch. Proposed filenames and packaging paths need implementation confirmation within the supplied owners. Installed packaging availability is a later launch fact.
 

@@ -220,6 +220,9 @@ private fun releaseEntry(
   )
 
 private class TestDatabaseSessionFactory : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
   private val dbPath = Files.createTempDirectory("skillbill-update-check-db").resolve("metrics.db")
 
   override fun resolveDbPath(): Path = dbPath

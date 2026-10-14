@@ -32,7 +32,7 @@ data class FeatureTaskRuntimePlanSeed(
     private const val SPEC_ORIGIN = "spec_origin"
     private const val SPEC_SHA256 = "spec_sha256"
 
-    internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePlanSeed {
+    fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimePlanSeed {
       val reader = durableArtifactMapReader(raw)
       val origin =
         FeatureTaskRuntimePlanSpecOrigin.entries.firstOrNull { it.wireValue == reader.requiredString(SPEC_ORIGIN) }

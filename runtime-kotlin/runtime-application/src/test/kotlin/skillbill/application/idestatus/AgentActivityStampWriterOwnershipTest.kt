@@ -72,6 +72,9 @@ class AgentActivityStampWriterOwnershipTest {
     val attempts = AtomicInteger(0)
     val database =
       object : DatabaseSessionFactory {
+        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+          skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+
         override fun resolveDbPath() = base.resolveDbPath()
 
         override fun databaseExists() = base.databaseExists()

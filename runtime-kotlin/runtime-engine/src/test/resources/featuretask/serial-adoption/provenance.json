@@ -1,0 +1,114 @@
+{
+  "description": "Unnormalized execution descriptors emitted by immutable historical production strategies and codecs through ExecutionPlanAdmissionFixture. These capture producer definitions, not original persisted workflow histories. Adoption validates each actual retained history separately.",
+  "capture_source": "HistoricalProducerCaptureTest.kt.txt",
+  "capture_sha256": "ac59a53a7121ab973fd3f416ff7bbc846a7185f49ac8774213b87ccc7074097f",
+  "command": [
+    "./gradlew",
+    ":runtime-engine:test",
+    "--tests",
+    "*HistoricalProducerCaptureTest",
+    "--no-configuration-cache",
+    "--rerun-tasks"
+  ],
+  "archives": [
+    {
+      "archive": "standalone-r1.json",
+      "source_commit": "8527efaee41cfc2beb316be9b6eec4be017f9deb",
+      "source_tree": "826c71af975e77b8ea6cd914067a12ec7191f678",
+      "descriptor_sha256": "42b3b7cd9ee3c7173235aae93612116a49ba94970276f2b6d5f835e2d4f607c6",
+      "descriptor_shape_sha256": "5d528d3176a6ae49361d65262c0d728dbb3880b9c1dd5722a88929681b32ab8a",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 1,
+      "retry_policy_sha256": "595112dcc1ef7d1bbcbfc7d903fe01649ae1f3ecb9e1b1a735e1c663a6d2f9bd",
+      "resume_policy_sha256": "d589711414f8eced537c44bdff52703257f945efa0dc8193b8fbe84d7611685e"
+    },
+    {
+      "archive": "goal-child-build-r1.json",
+      "source_commit": "8527efaee41cfc2beb316be9b6eec4be017f9deb",
+      "source_tree": "826c71af975e77b8ea6cd914067a12ec7191f678",
+      "descriptor_sha256": "9842c8aad7974cf6a7bd68559ceef1f52d6831a564a1f89e8a01097a4d446922",
+      "descriptor_shape_sha256": "2882fadafaaddfb50b06604d911a91ad0f4b319d7e736f6b89f8f7352cbdff6a",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 1,
+      "retry_policy_sha256": "936be9d703ed34f3ca0fd0978dbe3a110b82770107c82bfdfac3846ec45696ee",
+      "resume_policy_sha256": "3bfc25ee9af1409be3f2c9202869b7f92424b0c15d36e719f7927b49cb9ab03f"
+    },
+    {
+      "archive": "goal-child-validate-r1.json",
+      "source_commit": "8527efaee41cfc2beb316be9b6eec4be017f9deb",
+      "source_tree": "826c71af975e77b8ea6cd914067a12ec7191f678",
+      "descriptor_sha256": "66394ae69b196134883a9251607d96abf5294dee7aa67164cd7f2d714dbebda5",
+      "descriptor_shape_sha256": "2138181a3be059457194108d58adf2f40a402bafe0d6197eb687055bcd37f76c",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 1,
+      "retry_policy_sha256": "c2ce8bf9fc651aaebc26429fdea731cf8fe071b3b9aa4aff726365c73beb6dc3",
+      "resume_policy_sha256": "81aa70357ef9ad14e298e4813740aaffa27db83c04469afb9a8e0c6483745c35"
+    },
+    {
+      "archive": "standalone-r2.json",
+      "source_commit": "ef73b9043f4e3e8689237139314be1e17628461c",
+      "source_tree": "6cb06e9bb6ace81acb9756020b692939d5051248",
+      "descriptor_sha256": "89a0958c7ebe08e9bfb61ba2941ce5068c0c32a7278f4137d98471187aea13d9",
+      "descriptor_shape_sha256": "6139b231f6d5d02c5b36d57fc1579b4899d102e45229651f76cc154eee3adbdf",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 2,
+      "retry_policy_sha256": "d2c087aaa0ed089439a0aa6e30bba6f5cd2a84115a01021d6b0f286c63d7f3ce",
+      "resume_policy_sha256": "4c1348638cacc9480570bef176905f555d2ba3cc41ec2f2f37c3f3536a939391"
+    },
+    {
+      "archive": "goal-child-build-r2.json",
+      "source_commit": "ef73b9043f4e3e8689237139314be1e17628461c",
+      "source_tree": "6cb06e9bb6ace81acb9756020b692939d5051248",
+      "descriptor_sha256": "02b99ba1ed255055a4c912aa47ff5ee3a3cfe351888493243b31da0e4475e921",
+      "descriptor_shape_sha256": "ef7e4a527a441ed63b4816bbd54981ab3f390179b9df07b170889b2454047f43",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 2,
+      "retry_policy_sha256": "af940243352afcbfdc06af01f3f76ea88ec2f79b42a780641c3d5321e5c21208",
+      "resume_policy_sha256": "fea8e40513df7371bf63ab68418b00adc2e8c0834c1da967cc8b14eba1c45c87"
+    },
+    {
+      "archive": "goal-child-validate-r2.json",
+      "source_commit": "ef73b9043f4e3e8689237139314be1e17628461c",
+      "source_tree": "6cb06e9bb6ace81acb9756020b692939d5051248",
+      "descriptor_sha256": "2ba4fd56f857773a3d979cc82246e777f323a73980b914b823411619d2cd7b40",
+      "descriptor_shape_sha256": "4bd8ad384392e92c93b3720b8bd5a60cf75e6cf0e7da3410228d185144638345",
+      "descriptor_version": "0.1",
+      "audit_semantic_revision": 2,
+      "retry_policy_sha256": "d450b02b6349baed913bf7e3246061454a0263ec218ceb6ed74b1369900415cb",
+      "resume_policy_sha256": "7574e448bc6647af57b951bab0fa7272f64208b11b2ddec0fb71498d54269863"
+    },
+    {
+      "archive": "standalone-r3.json",
+      "source_commit": "132424dc2fda836b1f78ddd3e294a3a097de8d5a",
+      "source_tree": "9a6839c06f7bdc2787b627dfd27519f36e02b647",
+      "descriptor_sha256": "febf15b6f1fdd183f96f9ee653f474ac463d45084c346eebc006caad96db2e28",
+      "descriptor_shape_sha256": "95b0435a52adc6e9cfc7cd3f697c8eff61e7d5423b97190589cf87a8ec3982a7",
+      "descriptor_version": "0.2",
+      "audit_semantic_revision": 3,
+      "retry_policy_sha256": "8c36c379450376c719e798977a99412f768bb83304e51272d428ab57f94fc177",
+      "resume_policy_sha256": "14d71790f2ddeea8efd9a3cadfaf849c0c29e42ae289c54b5ea094687ba3feed"
+    },
+    {
+      "archive": "goal-child-build-r3.json",
+      "source_commit": "132424dc2fda836b1f78ddd3e294a3a097de8d5a",
+      "source_tree": "9a6839c06f7bdc2787b627dfd27519f36e02b647",
+      "descriptor_sha256": "361c615d22fe13450fe983244c9b601e2262238ed2148f34dc79f336550bcc13",
+      "descriptor_shape_sha256": "a578122cc2d44e8807e2502fb09e921eb3555076dd25788c168cc95b16cc76d1",
+      "descriptor_version": "0.2",
+      "audit_semantic_revision": 3,
+      "retry_policy_sha256": "5a311a6158c6f0fd51be9974488d4f60c1c1c1f8db9622ec585c8cd21f893369",
+      "resume_policy_sha256": "01ae2d16bafe91eebf82d0ddb0176ade23187ff54f6d2c1f2fa47e8be0c1688a"
+    },
+    {
+      "archive": "goal-child-validate-r3.json",
+      "source_commit": "132424dc2fda836b1f78ddd3e294a3a097de8d5a",
+      "source_tree": "9a6839c06f7bdc2787b627dfd27519f36e02b647",
+      "descriptor_sha256": "493c80e2400a2ba5172655793650948bf842360cc5da4288278e239190b21321",
+      "descriptor_shape_sha256": "905f9c754f631c13b44de04a2e52a284466e6110a20c8acad6aa57092f173f85",
+      "descriptor_version": "0.2",
+      "audit_semantic_revision": 3,
+      "retry_policy_sha256": "bea07674b874a9ebd0205327f9ec6ec81f45df5c06c056b5f4acecb64d6d18f7",
+      "resume_policy_sha256": "ed1e393fad996096ab5b6c64ae123802064d37737c81e9710805a4cd6858e6b3"
+    }
+  ]
+}

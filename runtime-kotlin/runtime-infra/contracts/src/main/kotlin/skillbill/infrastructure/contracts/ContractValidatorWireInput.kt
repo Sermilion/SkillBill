@@ -5,6 +5,10 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENV
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
+import skillbill.error.shellcontent.invalidAcceptanceCriterionAuditResultSchema
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAdoptionSchema
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairHandoffSchema
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeBuildReceiptSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
@@ -92,4 +96,22 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
         fieldPath = "<root>",
         reason = reason,
       )
+    else -> serialWireArtifactNonObjectError(kind, sourceLabel, reason)
+  }
+
+private fun serialWireArtifactNonObjectError(
+  kind: FeatureTaskRuntimeWireArtifactKind,
+  sourceLabel: String,
+  reason: String,
+): SkillBillRuntimeException =
+  when (kind) {
+    FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
+      invalidAcceptanceCriterionRepairStateSchema(sourceLabel, reason)
+    FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->
+      invalidAcceptanceCriterionAuditResultSchema(sourceLabel, reason)
+    FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_HANDOFF ->
+      invalidAcceptanceCriterionRepairHandoffSchema(sourceLabel, reason)
+    FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION ->
+      invalidAcceptanceCriterionRepairAdoptionSchema(sourceLabel, reason)
+    else -> error("Unexpected non-serial wire artifact $kind")
   }
