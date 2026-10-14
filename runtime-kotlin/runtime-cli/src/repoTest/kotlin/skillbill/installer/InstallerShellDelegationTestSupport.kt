@@ -61,6 +61,8 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopTray(repoRoot)
+  val releaseDir = PrebuiltReleaseStager.stageDesktopOnlyRelease()
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -76,6 +78,7 @@ internal fun runInstallerShell(
         environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+        if (!fromSource) environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
       }
       .start()
@@ -314,6 +317,7 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
   InstallerShellFixtures.seedFakeGradlew(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopTray(repoRoot)
 }
 
 internal fun stageRelease(
@@ -631,6 +635,37 @@ internal object InstallerShellFixtures {
     gradlew.toFile().setExecutable(true)
   }
 
+  /** A checkout whose `desktop-tray` build writes a runnable stub app, so the required desktop step succeeds. */
+  fun seedFakeDesktopTray(repoRoot: Path) {
+    val desktopDir = repoRoot.resolve("desktop-tray")
+    val gradlew = desktopDir.resolve("gradlew")
+    Files.createDirectories(gradlew.parent)
+    val appRelative = "build/compose/binaries/main/app/${desktopAppName(currentDesktopOs())}"
+    val executable = desktopAppExecutable(currentDesktopOs())
+    Files.writeString(
+      gradlew,
+      """
+      |#!/usr/bin/env bash
+      |set -euo pipefail
+      |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
+      |launcher="${'$'}root/$appRelative/$executable"
+      |mkdir -p "${'$'}(dirname "${'$'}launcher")"
+      |printf '#!/usr/bin/env bash\nexit 0\n' > "${'$'}launcher"
+      |chmod +x "${'$'}launcher"
+      """.trimMargin(),
+    )
+    gradlew.toFile().setExecutable(true)
+  }
+
+  fun desktopAppName(os: String): String = if (os == "macos") "Skill Bill.app" else "Skill Bill"
+
+  fun desktopAppExecutable(os: String): String =
+    when (os) {
+      "macos" -> "Contents/MacOS/Skill Bill"
+      "windows" -> "bin/Skill Bill.bat"
+      else -> "bin/Skill Bill"
+    }
+
   fun seedDesktopInstall(
     desktopRoot: Path,
     binDir: Path,
@@ -671,7 +706,7 @@ internal object InstallerShellFixtures {
       }
     }
 
-  private fun currentDesktopOs(): String {
+  fun currentDesktopOs(): String {
     val osName = System.getProperty("os.name").lowercase()
     return when {
       osName.contains("mac") -> "macos"
@@ -811,6 +846,25 @@ internal object PrebuiltReleaseStager {
       writeChecksumSibling(cliZip, corrupt = !releaseValid)
       writeChecksumSibling(mcpZip, corrupt = false)
     }
+    writeDesktopArchive(releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz"))
+  }
+
+  /** A release directory holding only the desktop archive, for installs that skip the runtime download. */
+  fun stageDesktopOnlyRelease(): Path =
+    Files.createTempDirectory("skillbill-desktop-release").also {
+      stage(it, releaseValid = true, omitRuntimeAssets = true)
+    }
+
+  private fun writeDesktopArchive(archivePath: Path) {
+    val os = InstallerShellFixtures.currentDesktopOs()
+    val staging = Files.createTempDirectory("skillbill-image-desktop")
+    val appName = InstallerShellFixtures.desktopAppName(os)
+    val launcher = staging.resolve(appName).resolve(InstallerShellFixtures.desktopAppExecutable(os))
+    Files.createDirectories(launcher.parent)
+    Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
+    launcher.toFile().setExecutable(true)
+    runOrThrow(staging, listOf("tar", "-czf", archivePath.toString(), appName))
+    writeChecksumSibling(archivePath, corrupt = false)
   }
 
   private fun writeRuntimeImageZip(

@@ -113,6 +113,7 @@ class InstallerShellReuseLastSelectionTest {
           environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+          environment()["SKILL_BILL_RELEASE_DIR"] = PrebuiltReleaseStager.stageDesktopOnlyRelease().toString()
           environment()["SKILL_BILL_TEST_REUSE_SELECTION"] = options.reuseSelection
           environment()["SKILL_BILL_TEST_REPLAY_TELEMETRY"] = options.replayTelemetryLevel
           options.currentTelemetryLevel?.let { environment()["SKILL_BILL_TEST_CURRENT_TELEMETRY"] = it }

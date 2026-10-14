@@ -179,6 +179,7 @@ class InstallerShellReconcileTest {
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+          environment()["SKILL_BILL_RELEASE_DIR"] = PrebuiltReleaseStager.stageDesktopOnlyRelease().toString()
           environment().remove("SKILL_BILL_GOAL_CONTINUATION")
           environment().remove("DISPLAY")
           environment().remove("WAYLAND_DISPLAY")

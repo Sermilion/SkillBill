@@ -26,7 +26,7 @@ Reconcile overlapping changes against the current tree. Keep existing working re
 
 Preserve SKILL-414, SKILL-417, SKILL-418, and landed SKILL-422 lifecycle/status behavior. Runtime architecture rules remain authoritative. This spec does not authorize weakened guards, changed workflow semantics, schema duplication, or an unrelated UI redesign.
 
-Follow the active-fix-branch rule in the implementation checkout's `AGENTS.md`. The current instruction names `base/SKILL-380-phase-slot-strategies` until it merges. Recheck that condition before a later execution and use its worktree when another feature branch has work in progress. All spec references and later planning paths are repository-relative.
+Follow the worktree ownership guidance in the implementation checkout's `AGENTS.md`. Apply edits in the checkout supplied by the active workflow briefing and preserve unrelated work. All spec references and later planning paths are repository-relative.
 
 ## Reference evidence and precedence
 

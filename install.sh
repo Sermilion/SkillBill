@@ -28,8 +28,7 @@ INSTALL_SOURCE="auto"
 RELEASE_TAG="${SKILL_BILL_RELEASE_TAG:-}"
 REUSE_LAST_SELECTION=0
 CLEAN_INSTALL=0
-DESKTOP_APP_INSTALL_REQUESTED=1
-DESKTOP_APP_INSTALL_RESULT="not selected"
+DESKTOP_APP_INSTALL_RESULT="not installed"
 RELEASE_REPO="${SKILL_BILL_RELEASE_REPO:-Sermilion/skill-bill}"
 # Memoized result of resolve_latest_runtime_release_tag. The tag is consumed once per
 # asset plus once per .sha256 sibling and by both list_release_asset_names callers, so
@@ -89,12 +88,12 @@ MCP_REGISTRATION="register"
 
 usage() {
   cat <<USAGE
-Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection] [--install-desktop-app|--no-desktop-app]
+Usage: ./install.sh [--from-source] [--release TAG] [--reuse-last-selection]
 
 By default a local checkout builds and installs from source. A standalone
 downloaded installer uses checksum-verified prebuilt release images.
 The desktop app builds from source for local checkouts and downloads a matching
-release build for standalone installs.
+release build for standalone installs. Desktop installation is required.
 
 Options:
   --from-source            Force building the runtime from source with Gradle.
@@ -104,8 +103,6 @@ Options:
   --reuse-last-selection   Reuse the latest successful agent, telemetry,
                            and MCP choices from ~/.skill-bill. All platform
                            packs are installed on every run.
-  --install-desktop-app   Install the desktop app. This is the default.
-  --no-desktop-app        Skip the desktop app install.
   --clean                  Wipe ~/.skill-bill/skills/, ~/.skill-bill/platform-packs/,
                            and ~/.skill-bill/orchestration/ before staging the
                            candidate tree. Useful for a clean-slate install.
@@ -128,12 +125,11 @@ parse_args() {
         shift
         ;;
       --install-desktop-app)
-        DESKTOP_APP_INSTALL_REQUESTED=1
         shift
         ;;
       --no-desktop-app)
-        DESKTOP_APP_INSTALL_REQUESTED=0
-        shift
+        err "Desktop installation is required; --no-desktop-app is no longer supported."
+        exit 1
         ;;
       --clean)
         CLEAN_INSTALL=1
@@ -693,14 +689,10 @@ print_install_plan() {
   info "Cleanup: after both runtime candidates pass parity, re-runs ./uninstall.sh while preserving copied source, durable databases, and the current desktop app."
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
-  if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -eq 1 ]]; then
-    if [[ "$INSTALL_SOURCE" == "source" ]]; then
-      info "Desktop tray app: build and install from this checkout."
-    else
-      info "Desktop tray app: download and install the latest matching release build."
-    fi
+  if [[ "$INSTALL_SOURCE" == "source" ]]; then
+    info "Desktop tray app: build and install from this checkout."
   else
-    info "Desktop tray app: skipped with --no-desktop-app."
+    info "Desktop tray app: download and install the matching release build."
   fi
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
   info "MCP registration: registers the skill-bill MCP server with your selected agents."
@@ -1607,6 +1599,18 @@ launch_desktop_app() {
     macos)
       open "$app_target"
       ;;
+    linux)
+      if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1 &&
+        systemctl --user show-environment >/dev/null 2>&1; then
+        systemd-run --user --collect --quiet --service-type=exec \
+          --unit="skill-bill-desktop-$$" -- "$executable"
+      else
+        warn "Desktop service manager unavailable; launching the app with nohup."
+        local log_dir="$SKILL_BILL_STATE_DIR/desktop"
+        mkdir -p "$log_dir" || return 1
+        nohup "$executable" >>"$log_dir/desktop.log" 2>&1 &
+      fi
+      ;;
     *)
       nohup "$executable" >/dev/null 2>&1 &
       ;;
@@ -1631,11 +1635,6 @@ build_source_desktop_app() {
 }
 
 install_selected_desktop_app() {
-  if [[ "$DESKTOP_APP_INSTALL_REQUESTED" -ne 1 ]]; then
-    DESKTOP_APP_INSTALL_RESULT="not selected"
-    return 0
-  fi
-
   local os token archive work_dir extract_dir app_source app_target legacy_target executable install_root staged_app backup_app
   os="$(host_os)"
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
@@ -1643,9 +1642,9 @@ install_selected_desktop_app() {
     app_source="$BUILT_DESKTOP_APP_SOURCE"
   else
     if ! token="$(host_token)"; then
-      warn "No desktop tray release target is supported for this host."
+      err "No desktop tray release target is supported for this host."
       DESKTOP_APP_INSTALL_RESULT="not available for $os"
-      return 0
+      return 1
     fi
     if ! resolve_desktop_app_release_asset; then
       warn "Could not query desktop release assets; keeping the existing app install."
@@ -1653,9 +1652,9 @@ install_selected_desktop_app() {
       return 1
     fi
     if [[ -z "$RESOLVED_DESKTOP_APP_ASSET" ]]; then
-      warn "The selected release has no desktop tray build for $token; the Skill Bill install can still continue."
+      err "The selected release has no required desktop tray build for $token."
       DESKTOP_APP_INSTALL_RESULT="not available for $token"
-      return 0
+      return 1
     fi
 
     init_prebuilt_work_dir
@@ -1723,7 +1722,8 @@ install_selected_desktop_app() {
   while IFS= read -r running_pid; do
     [[ -n "$running_pid" ]] && running_pids+=("$running_pid")
   done < <(desktop_app_running_pids "$executable" \
-    "$(desktop_app_legacy_executable_path "$os" "$legacy_target")")
+    "$(desktop_app_legacy_executable_path "$os" "$legacy_target")" \
+    "$RUNTIME_LAUNCHER_BIN_DIR/skillbill-desktop")
 
   mkdir -p "$install_root" || return 1
   staged_app="$install_root/.Skill Bill.installing.$$"
@@ -1759,16 +1759,20 @@ install_selected_desktop_app() {
   if [[ "$legacy_target" != "$app_target" && -d "$legacy_target" ]]; then
     rm -rf "$legacy_target"
   fi
-  rm -rf "$backup_app"
   ok "Desktop tray app installed at $app_target"
   DESKTOP_APP_INSTALL_RESULT="installed at $app_target"
   if [[ ${#running_pids[@]} -gt 0 ]]; then
     stop_desktop_app "${running_pids[@]}"
+    rm -rf "$backup_app"
     if launch_desktop_app "$os" "$app_target" "$executable"; then
       ok "Restarted the running desktop tray app."
     else
-      warn "Stopped the previous desktop tray app but could not start the new one; open it from $app_target."
+      err "Stopped the previous desktop tray app but could not start the new one; open it from $app_target."
+      DESKTOP_APP_INSTALL_RESULT="restart failed"
+      return 1
     fi
+  else
+    rm -rf "$backup_app"
   fi
 }
 
@@ -2327,7 +2331,8 @@ run_full_install() {
   apply_external_addon_overlay
   apply_runtime_install
   if ! install_selected_desktop_app; then
-    warn "The Skill Bill runtime install is complete, but the desktop app step did not finish."
+    err "Installation incomplete: the required desktop app step failed. $DESKTOP_APP_INSTALL_RESULT."
+    return 1
   fi
 
   printf "${GREEN}━━━ Installation complete ━━━${NC}\n"

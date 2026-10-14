@@ -190,8 +190,8 @@ inputs:
   the accepted step is active. `PhaseReviewExecutionContext` supplies repository
   observations, the output validator, and the clock; it has no git writer or
   attempt scope. Review launch and persistence pass through the accepted-step
-  binding and its owning recorder operations. Since SKILL-380 subtask 7, no
-  slot class takes the run-loop context.
+  binding and its owning recorder operations. No slot class takes the run-loop
+  context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -1515,8 +1515,7 @@ Composition:
   validation session. Resume reads success from the step status. Historical
   `progress` and `no_progress` verdicts remain readable terminal reports.
 - A phase run executes one slot's strategy outside the full graph. Phase runs
-  arrive in later SKILL-380 subtasks and reuse the same runner, state port, and
-  input and output shapes.
+  reuse the same runner, state port, and input and output shapes.
 - Operations (SKILL-382) will compose the same runner and state port, and
   name their steps with operation-local names outside the domain graph.
 - IDE status goes through the same lookup.

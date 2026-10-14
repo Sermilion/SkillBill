@@ -53,7 +53,9 @@ internal fun recordingDiagnostics(recorder: ReviewRecorder): RuntimeDiagnostics 
     override fun error(
       message: String,
       error: Throwable?,
-    ) = Unit
+    ) {
+      recorder.diagnosticErrors += message
+    }
   }
 
 fun recordingLearnings(

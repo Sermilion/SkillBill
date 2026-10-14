@@ -6,6 +6,13 @@ data class ReviewStackRoutingResult(
   val routedSlugs: Set<String>,
   val ownedPathsBySlug: Map<String, Set<String>>,
   val missingPackFallbacks: List<ReviewStackRoutingFallback> = emptyList(),
+  val ownershipConflicts: List<ReviewStackRoutingConflict> = emptyList(),
+)
+
+data class ReviewStackRoutingConflict(
+  val path: String,
+  val owners: List<String>,
+  val fallbackSlug: String?,
 )
 
 data class ReviewStackRoutingFallback(

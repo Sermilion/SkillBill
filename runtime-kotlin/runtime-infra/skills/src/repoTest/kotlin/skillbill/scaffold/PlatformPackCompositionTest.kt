@@ -5,6 +5,11 @@ import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
+import skillbill.review.plan.ReviewCrossRootLaneReconciliation
+import skillbill.review.plan.ReviewLaunchPlanPolicy
+import skillbill.review.plan.ReviewStackRouting
+import skillbill.review.plan.model.ReviewRootLanes
+import skillbill.review.plan.model.ReviewRoutingChangedFile
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
@@ -20,6 +25,35 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class PlatformPackCompositionTest {
+  @Test
+  fun `shipped packs keep JVM source and serial adoption Python fixtures in independent review scopes`() {
+    val packs = discoverPlatformPackManifests(repoRootFromTest().resolve("platform-packs"))
+    val kotlinPath = "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/Admission.kt"
+    val pythonPath = "runtime-kotlin/runtime-engine/src/test/resources/featuretask/serial-adoption/capture.py"
+    val routing =
+      ReviewStackRouting.route(
+        packs,
+        listOf(
+          ReviewRoutingChangedFile(kotlinPath, "class ExpectedState(val actualOwner: String)"),
+          ReviewRoutingChangedFile(pythonPath, "def capture(): return {}"),
+        ),
+      )
+    assertEquals(setOf("kotlin", "python"), routing.routedSlugs)
+    val offsets = ReviewCrossRootLaneReconciliation.compositionDepthOffsets(routing.routedSlugs, packs)
+    val roots =
+      routing.routedSlugs.associateWith { slug ->
+        val paths = routing.ownedPathsBySlug.getValue(slug).sorted()
+        val lanes =
+          ReviewLaunchPlanPolicy.flatten(slug, packs, ReviewLaunchPlanPolicy.composedAreas(slug, packs)).lanes
+            .map { it.copy(ownedPaths = paths, changedHunkIds = paths.map { path -> "hunk-$path" }) }
+        ReviewRootLanes(offsets.getValue(slug), lanes)
+      }
+    val architecture =
+      ReviewCrossRootLaneReconciliation.reconcileRoutedRoots(roots, packs)
+        .filter { it.lane.area == "architecture" }.associate { it.lane.packSlug to it.lane.ownedPaths }
+    assertEquals(mapOf("kotlin" to listOf(kotlinPath), "python" to listOf(pythonPath)), architecture)
+  }
+
   @Test
   fun `buildPack parses code review composition into typed manifest values`() {
     val pack =

@@ -48,12 +48,14 @@ class ParallelCodeReviewRunner(
   private val nativeAgentPreflight: ReviewNativeAgentPreflightPort,
 ) {
   fun resolveInlineCodeQualityRubric(request: ParallelCodeReviewRequest): ParallelCodeReviewPlanned<String?> =
-    when (val planned = planning.resolveInlineCodeQualityRubric(request)) {
+    when (val planned = planning.resolveInlineCodeQualityRubrics(request)) {
       is ParallelCodeReviewPlanned.Failed -> planned
       is ParallelCodeReviewPlanned.Ready -> {
         ParallelCodeReviewPlanned.Ready(
-          planned.value?.let { rubric ->
-            "Selected code-quality specialist: ${rubric.rubricId}\n\n${rubric.body}"
+          planned.value.takeIf { it.isNotEmpty() }?.joinToString("\n\n") { plannedRubric ->
+            val paths = plannedRubric.descriptor.ownedPaths.joinToString("\n") { "- $it" }
+            "Selected code-quality specialist: ${plannedRubric.rubric.rubricId}\n" +
+              "Apply this rubric to these changed paths:\n$paths\n\n${plannedRubric.rubric.body}"
           },
         )
       }
