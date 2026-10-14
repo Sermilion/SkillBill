@@ -36,8 +36,6 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -88,7 +86,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 class FeatureTaskExecutionPlanCreationTest {
   @Test
@@ -151,10 +148,6 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(
-            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-            ContractFeatureTaskRuntimePhaseOutputMigration(),
-          ),
         )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
@@ -183,10 +176,6 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(
-            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-            ContractFeatureTaskRuntimePhaseOutputMigration(),
-          ),
         )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")

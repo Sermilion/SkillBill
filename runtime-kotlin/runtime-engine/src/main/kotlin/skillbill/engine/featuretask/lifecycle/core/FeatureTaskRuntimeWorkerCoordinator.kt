@@ -210,18 +210,18 @@ class FeatureTaskRuntimeWorkerCoordinator(
       inputs,
       admitted.identity,
       reviewSelection,
-      requireNotNull(original),
-      previousOwnerStopped,
+      TakeoverEvidence(requireNotNull(original), previousOwnerStopped),
     )
   }
+
+  private data class TakeoverEvidence(val original: WorkflowStateSnapshot, val previousOwnerStopped: Boolean)
 
   private fun transferOwned(
     existing: FeatureTaskRuntimeWorkerOwnership,
     inputs: EffectiveGatePolicyInputs,
     identity: FeatureTaskExecutionIdentity,
     reviewSelection: RuntimeReviewSelection?,
-    original: WorkflowStateSnapshot,
-    previousOwnerStopped: Boolean,
+    evidence: TakeoverEvidence,
   ): AcquiredWorker {
     val replacement =
       newOwnership(
@@ -263,9 +263,9 @@ class FeatureTaskRuntimeWorkerCoordinator(
     return AcquiredWorker(
       replacement,
       transferred,
-      original,
+      evidence.original,
       existing.generation,
-      previousOwnerStopped,
+      evidence.previousOwnerStopped,
       requireNotNull(admittedSnapshot),
     )
   }

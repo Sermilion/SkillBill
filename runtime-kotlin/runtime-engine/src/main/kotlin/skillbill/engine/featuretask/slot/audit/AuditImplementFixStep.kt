@@ -1,41 +1,36 @@
 package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
+import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AuditImplementFixStep : PhaseStepHooks {
+  override val serialAcceptanceRepairStep: Boolean = true
+
   override fun settleCompletedRound(
     context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): AttemptResult? {
-    if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
+    if (capture.run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) return null
+    val verdict = outputMap[SharedPayloadKeys.VERDICT]
+    if (verdict != FeatureTaskRuntimeVerdict.PROGRESS.wireValue &&
+      verdict != FeatureTaskRuntimeVerdict.NO_PROGRESS.wireValue
+    ) {
       return null
     }
-    if (NoChangeClaimResolution.claimOf(outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS]) != null) return null
-    val value = auditProseValue(outputMap).orEmpty()
-    return if (AuditImplementFixPromptSections.endsWithCompletionMarker(value)) {
-      null
-    } else {
-      AttemptResult.incompleteWork(
-        operatorReason =
-          "Audit repair returned completed without the '${AuditImplementFixPromptSections.COMPLETION_MARKER}' marker.",
-        continuationReason =
-          "Continue repairing every in-scope production gap in this repair run. Do not return completed " +
-            "until the repair is complete and value ends with '${AuditImplementFixPromptSections.COMPLETION_MARKER}'.",
-        fileManifest = capture.fileManifest,
-        normalizedOutput = attested,
-      )
-    }
+    return AttemptResult.incompleteWork(
+      "The repair report says production work remains.",
+      "Continue the reserved repair cycle through its serial outcome owner.",
+      capture.fileManifest,
+      attested,
+    )
   }
 }

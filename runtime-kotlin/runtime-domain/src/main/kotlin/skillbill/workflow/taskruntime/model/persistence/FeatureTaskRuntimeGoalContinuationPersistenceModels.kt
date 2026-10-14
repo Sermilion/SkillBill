@@ -57,24 +57,25 @@ private object FeatureTaskRuntimeGoalPlanningImportKeys {
   const val PREPLAN_PAYLOAD_SHA256 = "preplan_payload_sha256"
   const val PLAN_PAYLOAD_SHA256 = "plan_payload_sha256"
   const val IMPORTED_GOAL_PLANNING = "imported_goal_planning"
-  val ALL = setOf(
-    SOURCE_KIND,
-    PARENT_GOAL_WORKFLOW_ID,
-    NORMALIZED_ISSUE_KEY,
-    REPOSITORY_IDENTITY,
-    PARENT_SPEC_HASH,
-    DECOMPOSITION_MANIFEST_HASH,
-    PLANNING_CONTRACT_ID,
-    PLANNING_CONTRACT_VERSION,
-    PHASE_OUTPUT_CONTRACT_ID,
-    PHASE_OUTPUT_CONTRACT_VERSION,
-    SharedPayloadKeys.SUBTASK_ID,
-    MANIFEST_ORDER,
-    GOVERNED_SUB_SPEC_PATH,
-    SUB_SPEC_HASH,
-    PREPLAN_PAYLOAD_SHA256,
-    PLAN_PAYLOAD_SHA256,
-  )
+  val ALL =
+    setOf(
+      SOURCE_KIND,
+      PARENT_GOAL_WORKFLOW_ID,
+      NORMALIZED_ISSUE_KEY,
+      REPOSITORY_IDENTITY,
+      PARENT_SPEC_HASH,
+      DECOMPOSITION_MANIFEST_HASH,
+      PLANNING_CONTRACT_ID,
+      PLANNING_CONTRACT_VERSION,
+      PHASE_OUTPUT_CONTRACT_ID,
+      PHASE_OUTPUT_CONTRACT_VERSION,
+      SharedPayloadKeys.SUBTASK_ID,
+      MANIFEST_ORDER,
+      GOVERNED_SUB_SPEC_PATH,
+      SUB_SPEC_HASH,
+      PREPLAN_PAYLOAD_SHA256,
+      PLAN_PAYLOAD_SHA256,
+    )
 }
 
 data class FeatureTaskRuntimeGoalPlanningImport(
@@ -116,13 +117,14 @@ data class FeatureTaskRuntimeGoalPlanningImport(
     )
 
   companion object {
-    fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeGoalPlanningImport {
+    internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeGoalPlanningImport {
       val allowed = FeatureTaskRuntimeGoalPlanningImportKeys.ALL
       val unknown = raw.keys - allowed
       if (unknown.isNotEmpty()) throw invalidWorkflowStateSchemaError("Goal planning import has unknown fields.")
       val reader = durableArtifactMapReader(raw)
       if (reader.requiredString(FeatureTaskRuntimeGoalPlanningImportKeys.SOURCE_KIND) !=
-        FeatureTaskRuntimeGoalPlanningImportKeys.IMPORTED_GOAL_PLANNING) {
+        FeatureTaskRuntimeGoalPlanningImportKeys.IMPORTED_GOAL_PLANNING
+      ) {
         throw invalidWorkflowStateSchemaError("Goal planning import has an unsupported source kind.")
       }
       return FeatureTaskRuntimeGoalPlanningImport(

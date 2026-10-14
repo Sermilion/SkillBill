@@ -13,6 +13,7 @@ import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.ReleaseCatalogPort
@@ -290,8 +291,7 @@ private fun noopReviewContextEnvelopeValidator(): ReviewContextEnvelopeValidator
   }
 
 private class FailingDatabase(private val failure: Throwable) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   var calls = 0
 
@@ -359,6 +359,9 @@ private class UpdateCheckTestDatabaseSessionFactory : DatabaseSessionFactory {
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = transaction(block)
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = error("unused")
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 }
 
 private object UpdateCheckTestTelemetrySettingsProvider : TelemetrySettingsProvider {

@@ -6,12 +6,14 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.lifecycle.execution.expectedFeatureTaskExecutionIdentity
 import skillbill.engine.featuretask.lifecycle.execution.governedFeatureTaskSpecPath
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -28,6 +30,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -50,6 +53,10 @@ class FeatureTaskRuntimeRunEntry(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val repairPersistence: AcceptanceCriterionRepairPersistence,
 ) {
+  private companion object {
+    const val MAX_DIAGNOSTIC_ID = 128
+  }
+
   fun run(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
@@ -86,11 +93,10 @@ class FeatureTaskRuntimeRunEntry(
       }
       val sourceRead = runInvariantsSource.read(specPath)
       val sourceInvariants = sourceRead.requireInvariants()
-      repairPersistence.inspectExisting(
-        acquiredWorker,
-        sourceInvariants.acceptanceCriteria,
-        (sourceRead as? FeatureTaskRuntimeRunInvariantsRead.Read)?.sourceDigest ?: input.protectedSpecSha256,
-      )
+      val repairState = inspectRepairState(input, acquiredWorker, sourceRead)
+      if (repairState?.historicalAttributionUnavailable() == true) {
+        return@runOwned historicalRepairRefusal(input, acquiredWorker, sourceInvariants)
+      }
       runner.run(
         FeatureTaskRuntimeRunRequest(
           issueKey = input.issueKey,
@@ -117,9 +123,54 @@ class FeatureTaskRuntimeRunEntry(
           eventSink = input.eventSink,
           skeletonDefinition = input.definition,
           protectedSpecSha256 = input.protectedSpecSha256,
+          acceptanceCriterionRepair = repairState,
         ),
+        acquiredWorker,
       )
     }
+  }
+
+  private fun inspectRepairState(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    sourceRead: FeatureTaskRuntimeRunInvariantsRead,
+  ): AcceptanceCriterionRepairRunState? {
+    if (worker.auditStepIds().isEmpty()) return null
+    val state =
+      repairPersistence.inspectExisting(
+        worker,
+        sourceRead.requireInvariants().acceptanceCriteria,
+        (sourceRead as? FeatureTaskRuntimeRunInvariantsRead.Read)?.sourceDigest ?: input.protectedSpecSha256,
+      )
+    if (state.snapshot != null) {
+      repairPersistence.recoverProjection(input.repoRoot, worker.workflowId, requireNotNull(state.binding))
+    }
+    return state
+  }
+
+  private fun historicalRepairRefusal(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    sourceInvariants: FeatureTaskRuntimeRunInvariants,
+  ): FeatureTaskRuntimeRunReport.Blocked {
+    val reason =
+      "Serial acceptance repair cannot start because this workflow has earlier audit or repair activity, " +
+        "but no per-criterion attribution record. The aggregate attempts and saved prose remain intact. " +
+        "An operator must decide separately whether prospective per-criterion accounting may begin; " +
+        "a generic retry does not make that decision."
+    diagnostics.warning(
+      "seam=serial_acceptance_repair record_kind=refusal workflow=${worker.workflowId.take(MAX_DIAGNOSTIC_ID)} " +
+        "value_expected=criterion_attribution value_used=unavailable",
+    )
+    return FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = input.issueKey,
+      workflowId = worker.workflowId,
+      featureSize = sourceInvariants.featureSize.name,
+      lastIncompletePhase = worker.currentStepId,
+      blockedReason = reason,
+      completedPhaseIds = emptyList(),
+      resolvedBranch = null,
+    )
   }
 
   private fun open(

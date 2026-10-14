@@ -56,6 +56,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
   internal fun serialPhasePatch(
     artifacts: Map<String, Any?>,
     request: FeatureTaskRuntimePhaseStateRequest,
+    implementationStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
   ): Map<String, Any?> {
     val records = decodePhaseRecords(artifacts)
     val now = clock.instant()
@@ -95,7 +96,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       implementationAttemptPatch(
         artifacts,
         request,
-        attemptStatusFor(
+        implementationStatus ?: attemptStatusFor(
           request,
         ),
       ) + findingVerificationCheckpointPatch(request)

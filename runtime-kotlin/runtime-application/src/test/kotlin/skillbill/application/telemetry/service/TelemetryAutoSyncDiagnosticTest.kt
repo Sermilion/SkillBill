@@ -3,6 +3,7 @@ package skillbill.application.telemetry.service
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -341,8 +342,7 @@ private class DiagnosticDatabaseSessionFactory(
   private val outbox: TelemetryOutboxRepository,
   private val reconciliationFailure: Throwable? = null,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   override fun resolveDbPath(): Path = Path.of("diagnostic.db")
 

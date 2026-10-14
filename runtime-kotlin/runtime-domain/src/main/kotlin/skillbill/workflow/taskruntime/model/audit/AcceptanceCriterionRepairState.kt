@@ -8,17 +8,12 @@ enum class AcceptanceCriterionRepairMode(val wireValue: String) {
 
 enum class AcceptanceCriterionRepairStage(val wireValue: String) {
   DISCOVERY_ADMITTED("discovery_admitted"),
+  READ_ONLY_AUDIT_REQUIRED("read_only_audit_required"),
   REPAIR_RESERVED("repair_reserved"),
   REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION("repair_completed_awaiting_targeted_verification"),
   FINAL_AUDIT_REQUIRED("final_audit_required"),
   FINAL_ACCEPTED("final_accepted"),
   BUDGET_BLOCKED("budget_blocked"),
-}
-
-enum class AcceptanceCriterionRepairAdoptionComposition(val wireValue: String) {
-  STANDALONE("standalone"),
-  GOAL_CHILD_BUILD("goal_child_build"),
-  GOAL_CHILD_VALIDATE("goal_child_validate"),
 }
 
 enum class AcceptanceCriterionSourceDisposition(val wireValue: String) {
@@ -40,21 +35,13 @@ enum class AcceptanceCriterionRepairOutcomeKind(val wireValue: String) {
   TARGETED_FAILURE("targeted_failure"),
 }
 
-fun isUnavailableValidationPrerequisite(
-  sourceDisposition: AcceptanceCriterionSourceDisposition,
-  validationObligation: AcceptanceCriterionValidationObligation,
-  validationOwnerAvailable: Boolean,
-): Boolean =
-  sourceDisposition != AcceptanceCriterionSourceDisposition.SOURCE_CLOSED &&
-    validationObligation != AcceptanceCriterionValidationObligation.NOT_REQUIRED && !validationOwnerAvailable
-
 data class AcceptanceCriterionRepairAdmission(
   val catalogId: String,
   val executionId: String,
   val specDigest: String,
   val authoredCriteria: List<String>,
   val criteria: List<AcceptanceCriterionRepairCriterion>,
-  val dependencies: List<AcceptanceCriterionRepairDependency>,
+  val dependencies: List<AcceptanceCriterionRepairDependency> = emptyList(),
 )
 
 data class AcceptanceCriterionRepairCriterion(
@@ -159,7 +146,13 @@ data class AcceptanceCriterionRepairState internal constructor(
   val admittedCheckpointId: String?,
   val sourceTransitions: List<AcceptanceCriterionRepairSourceTransition>,
   val finalAudits: List<AcceptanceCriterionRepairFinalAudit>,
+  val pendingAuditRefs: List<String> = emptyList(),
+  val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
+  val pendingClarificationQuestion: String? = null,
 ) {
+  fun clearPendingClarification(): AcceptanceCriterionRepairState =
+    copy(pendingClarificationQuestion = null)
+
   fun reserve(
     reservationId: String,
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
@@ -223,10 +216,14 @@ data class AcceptanceCriterionRepairState internal constructor(
       totals[outcome.criterionRef] = next
     }
     val changedCriteria = criteriaAfter(outcome)
-    val byRef = changedCriteria.associateBy { it.canonicalRef }
-    val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
-    val current = queue.firstOrNull()
-    val blocked = hasExhaustedUnresolvedCriterion(queue, totals)
+    val queue = stableQueue(changedCriteria)
+    val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
+    val current = pending.firstOrNull() ?: queue.firstOrNull()
+    val blocked =
+      !outcome.successful && totals.getOrDefault(
+        outcome.criterionRef,
+        0,
+      ) >= MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
     val acceptedSourceTransitions =
       if (outcome.successful) {
         sourceTransitions +
@@ -248,23 +245,20 @@ data class AcceptanceCriterionRepairState internal constructor(
       criteria = changedCriteria,
       unresolvedQueue = queue,
       currentCriterionRef = current,
+      pendingAuditRefs = pending,
       reservation = null,
       outcomes = outcomes + acceptedOutcome,
       unsuccessfulTotals = totals,
-      finalAuditRequired = queue.isEmpty(),
+      finalAuditRequired = queue.isEmpty() && pending.isEmpty(),
       finalAuditDigest = if (queue.isEmpty()) null else finalAuditDigest,
       mode =
-        if (queue.isEmpty()) {
+        if (queue.isEmpty() && pending.isEmpty()) {
           AcceptanceCriterionRepairMode.FINAL_FULL
         } else {
           AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
         },
       stage =
-        when {
-          blocked -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
-          queue.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
-          else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
-        },
+        outcomeStage(blocked, outcome.successful, pending, queue),
       completedRepairEvidenceRef = null,
       admittedTreeDigest = null,
       admittedCheckpointId = null,
@@ -272,6 +266,19 @@ data class AcceptanceCriterionRepairState internal constructor(
       revision = revision + 1,
     )
   }
+
+  private fun outcomeStage(
+    blocked: Boolean,
+    successful: Boolean,
+    pending: List<String>,
+    queue: List<String>,
+  ): AcceptanceCriterionRepairStage =
+    when {
+      blocked -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
+      successful && pending.isNotEmpty() -> AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
+      queue.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
+      else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
+    }
 
   private fun canRecord(outcome: AcceptanceCriterionRepairOutcome): Boolean {
     val live = reservation ?: return false
@@ -440,7 +447,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       if (mode != AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) return null
       if (!AcceptanceCriterionRepairCoherence.admissionIsCoherent(admission)) return null
       val criteria = admission.criteria
-      val queue = stableQueue(criteria, admission.dependencies, criteria.associateBy { it.canonicalRef }) ?: return null
+      val queue = stableQueue(criteria)
       return AcceptanceCriterionRepairState(
         catalogId = admission.catalogId,
         executionId = admission.executionId,
@@ -475,34 +482,12 @@ data class AcceptanceCriterionRepairState internal constructor(
       )
     }
 
-    internal fun stableQueue(
-      criteria: List<AcceptanceCriterionRepairCriterion>,
-      dependencies: List<AcceptanceCriterionRepairDependency>,
-      byRef: Map<String, AcceptanceCriterionRepairCriterion>,
-    ): List<String>? =
-      (topologicalOrder(criteria, dependencies) ?: return null).filter {
-        byRef.getValue(it).sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED
-      }
-
-    internal fun topologicalOrder(
-      criteria: List<AcceptanceCriterionRepairCriterion>,
-      dependencies: List<AcceptanceCriterionRepairDependency>,
-    ): List<String>? {
-      val prerequisites = criteria.associate { it.canonicalRef to mutableSetOf<String>() }
-      dependencies.forEach { prerequisites.getValue(it.dependentRef).add(it.prerequisiteRef) }
-      val result = mutableListOf<String>()
-      while (result.size < criteria.size) {
-        val next =
-          criteria.asSequence().filter { it.canonicalRef !in result }
-            .filter { prerequisites.getValue(it.canonicalRef).all(result::contains) }
-            .minByOrNull { it.ordinal } ?: return null
-        result += next.canonicalRef
-      }
-      return result
-    }
+    internal fun stableQueue(criteria: List<AcceptanceCriterionRepairCriterion>): List<String> =
+      criteria.sortedBy { it.ordinal }
+        .filter { it.sourceDisposition == AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED }
+        .map { it.canonicalRef }
 
     internal const val MAX_REPAIR_CRITERIA: Int = 256
-    internal const val MAX_REPAIR_DEPENDENCIES: Int = 4096
     internal const val MAX_REPAIR_OUTCOMES: Int = 4096
     internal const val MAX_REPAIR_SOURCE_TRANSITIONS: Int = 16384
     internal const val MAX_REPAIR_FINAL_AUDITS: Int = 4096

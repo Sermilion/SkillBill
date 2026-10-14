@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.audit.opus
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -31,6 +32,8 @@ class AcceptanceAuditOpus55Strategy : PhaseStrategyStatusProjection() {
   override val steps: List<String> = canonical.steps
   override val entryStep: String = canonical.entryStep
   override val loopRules: PhaseLoopRules? = canonical.loopRules
+  internal override val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles?
+    get() = canonical.acceptanceRepairSteps
 
   override fun mapRecordedExecutionPlan(
     recorded: ResolvedPhaseExecutionPlan,

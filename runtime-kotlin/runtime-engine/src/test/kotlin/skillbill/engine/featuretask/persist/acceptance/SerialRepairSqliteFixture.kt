@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -21,8 +21,6 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRec
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
@@ -31,15 +29,10 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
@@ -55,7 +48,6 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 internal class SerialRepairSqliteFixture(
   archiveRevision: Int? = null,
@@ -83,6 +75,7 @@ internal class SerialRepairSqliteFixture(
       workflowId,
       "a".repeat(64),
       listOf("first", "second"),
+      setOf("audit", "audit_plan_fix", "audit_implement_fix"),
     )
   val admission =
     AcceptanceCriterionRepairAdmission(
@@ -175,37 +168,24 @@ internal class SerialRepairSqliteFixture(
   fun owned(block: (AcquiredFeatureTaskRuntimeWorker) -> Unit) =
     coordinator.runOwned(workflowId, execution.inputs, execution.identity(workflowId)) { _, worker -> block(worker) }
 
-  fun service(
-    db: DatabaseSessionFactory = database,
-    gitOperations: WorkflowGitOperations =
-      NoopWorkflowGitOperations,
-  ): AcceptanceCriterionRepairPersistence {
-    val validator = FeatureTaskRuntimeWireArtifactValidator(
-      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ContractFeatureTaskRuntimePhaseOutputMigration(),
-    )
+  fun service(db: DatabaseSessionFactory = database): AcceptanceCriterionRepairPersistence {
+    val validator =
+      FeatureTaskRuntimeWireArtifactValidator()
     val snapshots = WorkflowStateSchemaValidator()
     return AcceptanceCriterionRepairPersistence(
       RuntimeOwnedPersistenceBoundary(db, diagnostics),
-      FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator),
+      FeatureTaskRuntimeWorkflowPersistence(db, snapshots),
       FeatureTaskRuntimePhaseStateRecorder(
         db,
-        FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator),
+        FeatureTaskRuntimeWorkflowPersistence(db, snapshots),
         RuntimeOwnedPersistenceBoundary(db, diagnostics),
         validator,
         clock,
       ),
-      validator,
       projection,
       diagnostics,
       clock,
-      AcceptanceCriterionRepairLegacyAdoption(
-        execution.codec,
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
-        gitOperations,
-        source,
-      ),
-      AcceptanceCriterionRepairAuditAdmission(validator),
+      source,
     )
   }
 
@@ -248,9 +228,7 @@ internal class SerialRepairSqliteFixture(
         worker,
         null,
         AcceptanceCriterionRepairMutation.Discover(admission),
-        audit(
-          AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-        ),
+        audit(),
       ),
     ).state
 
@@ -306,72 +284,11 @@ internal class SerialRepairSqliteFixture(
     )
   }
 
-  fun audit(
-    mode: AcceptanceCriterionRepairMode,
-    state: AcceptanceCriterionRepairState = initial,
-    outputDigest: String = "b".repeat(64),
-    outcome: AcceptanceCriterionRepairOutcome? = null,
-    regressed: Set<String> = emptySet(),
-  ): AcceptanceCriterionRepairAuditEvidence {
-    val selected =
-      if (mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED) {
-        state
-          .criteria.filter { it.canonicalRef == state.currentCriterionRef }
-      } else {
-        state.criteria
-      }
+  fun audit(): AcceptanceCriterionRepairAuditEvidence {
     return AcceptanceCriterionRepairAuditEvidence(
       FeatureTaskRuntimeWorkflowArtifactMap.from(
         mapOf(
-          Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
-          Keys.MODE to mode.wireValue, Keys.CATALOG_ID to binding.catalogId,
-          Keys
-            .EXECUTION_ID to workflowId,
-          Keys.SPEC_DIGEST to binding.specDigest,
-          Keys.TREE_DIGEST to (state.admittedTreeDigest ?: "d".repeat(64)),
-          Keys.CHECKPOINT_ID to (
-            state
-              .admittedCheckpointId ?: "checkpoint:1"
-          ),
-          Keys.PRODUCING_OUTPUT_ID to (outcome?.outcomeId ?: "audit-output"),
-          Keys.PRODUCING_OUTPUT_DIGEST to (
-            outcome?.digest ?: outputDigest
-          ),
-          Keys.EXPECTED_REVISION to
-            state.revision.takeIf {
-              mode ==
-                AcceptanceCriterionRepairMode
-                  .CURRENT_CRITERION_TARGETED
-            },
-          Keys.CURRENT_CRITERION_REF to
-            state.currentCriterionRef.takeIf {
-              mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-            },
-          Keys.RESERVATION_ID to
-            state.reservation?.reservationId.takeIf {
-              mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-            },
-          Keys.CRITERIA to
-            selected.map { criterion ->
-              mapOf(
-                Keys.CANONICAL_REF to criterion.canonicalRef,
-                Keys.SOURCE_DISPOSITION to
-                  when {
-                    criterion.canonicalRef in regressed ->
-                      AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED.wireValue
-                    outcome?.successful == true -> AcceptanceCriterionSourceDisposition.SOURCE_CLOSED.wireValue
-                    else -> criterion.sourceDisposition.wireValue
-                  },
-                Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
-                Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
-                Keys
-                  .EVIDENCE_REF to (outcome?.evidenceRef ?: criterion.evidenceRef),
-              )
-            },
-          Keys.DEPENDENCIES to state.asRepairWireMap()[Keys.DEPENDENCIES],
-          Keys
-            .EDGE_CHANGES to emptyList<Any>(),
-          Keys.REGRESSED_REFS to regressed.toList(),
+          SharedPayloadKeys.VALUE to "Reviewed the authored criterion against current production source.",
         ),
       ),
     )

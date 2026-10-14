@@ -71,12 +71,6 @@ internal const val FEATURE_TASK_RUNTIME_NO_CHANGE_PAUSE_ARTIFACT_KEY: String =
 
 internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ARTIFACT_KEY: String =
   "feature_task_runtime_acceptance_criterion_repair"
-internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT_ARTIFACT_KEY: String =
-  "feature_task_runtime_acceptance_criterion_audit_result"
-internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_ARTIFACT_KEY: String =
-  "feature_task_runtime_acceptance_criterion_repair_handoff"
-internal const val FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_ARTIFACT_KEY: String =
-  "feature_task_runtime_acceptance_criterion_repair_adoption"
 
 internal const val FEATURE_TASK_RUNTIME_PLAN_SEED_ARTIFACT_KEY: String = "plan_seed"
 internal const val FEATURE_TASK_RUNTIME_PLAN_WORKFLOW_ARTIFACT_KEY: String = "plan_workflow"

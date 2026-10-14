@@ -66,15 +66,15 @@ class FeatureTaskRuntimePhaseRecorder
     ),
     FeatureTaskRuntimeReadinessEvidencePort by FeatureTaskRuntimeGateProgressRecorder(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator),
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
     ),
     FeatureTaskRuntimeNoChangePausePort by FeatureTaskRuntimeGateProgressRecorder(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator),
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
     ) {
     val phaseQuery = FeatureTaskRuntimePhaseQuery(database)
     private val workflowPersistence =
-      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator)
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
     private val runtimeOwnedPersistence = RuntimeOwnedPersistenceBoundary(database, diagnostics)
     private val rejectedOutput =
       FeatureTaskRuntimeRejectedOutputRecorder(
@@ -317,7 +317,7 @@ private class FeatureTaskRuntimePhaseEvidenceApiDelegate(
   private val evidence =
     FeatureTaskRuntimePhaseEvidenceRecorder(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator),
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
       wireArtifactValidator,
       clock,
     )

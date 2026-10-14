@@ -2,8 +2,6 @@ package skillbill.infrastructure.contracts
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairAuxiliarySchemaValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeHandoffEnvelopeSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationAttemptSchemaValidator
@@ -16,16 +14,11 @@ import skillbill.infrastructure.contracts.workflow.goal.GoalObservabilityEventSc
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalProgressEventSchemaValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 @Inject
-class FeatureTaskRuntimeWireArtifactValidator(
-  private val executionPlans: FeatureTaskRuntimeExecutionPlanValidator,
-  private val phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,
-) : FeatureTaskRuntimeWireArtifactValidator {
+class FeatureTaskRuntimeWireArtifactValidator : FeatureTaskRuntimeWireArtifactValidator {
   override fun handoffEnvelopeRejection(
     payload: FeatureTaskRuntimeWorkflowArtifactMap,
     sourceLabel: String,
@@ -64,30 +57,6 @@ class FeatureTaskRuntimeWireArtifactValidator(
         GoalObservabilityEventSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE ->
         GoalPlanningPreparationSchemaValidator.validate(wireMap, sourceLabel)
-      else -> validateSerial(kind, wireMap, sourceLabel)
-    }
-  }
-
-  private fun validateSerial(
-    kind: FeatureTaskRuntimeWireArtifactKind,
-    wireMap: Map<String, Any?>,
-    sourceLabel: String,
-  ) {
-    when (kind) {
-      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE ->
-        AcceptanceCriterionRepairStateSchemaValidator.validate(wireMap, sourceLabel)
-      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT ->
-        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateAuditResult(wireMap, sourceLabel)
-      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_HANDOFF ->
-        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairHandoff(wireMap, sourceLabel)
-      FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION ->
-        AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(
-          wireMap,
-          sourceLabel,
-          executionPlans,
-          phaseOutputs,
-        )
-      else -> error("Unexpected non-serial wire artifact $kind")
     }
   }
 

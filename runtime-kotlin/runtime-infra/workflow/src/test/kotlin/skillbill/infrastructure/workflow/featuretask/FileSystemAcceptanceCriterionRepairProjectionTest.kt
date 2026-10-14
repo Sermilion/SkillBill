@@ -1,7 +1,6 @@
 package skillbill.infrastructure.workflow.featuretask
 
 import org.junit.jupiter.api.io.TempDir
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
@@ -20,20 +19,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 
 class FileSystemAcceptanceCriterionRepairProjectionTest {
   @TempDir lateinit var root: Path
 
-  private val validator = FeatureTaskRuntimeWireArtifactValidator(
-    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-    ContractFeatureTaskRuntimePhaseOutputMigration(),
-  )
-
   @Test
   fun `older recovery and conflicting same revision cannot replace an accepted projection`() {
-    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics, validator)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics)
     val initial = state()
     val newer = assertNotNull(initial.reserve("reservation-1"))
     projector.write(request(newer))
@@ -61,7 +53,7 @@ class FileSystemAcceptanceCriterionRepairProjectionTest {
           warnings += message
         }
       }
-    val projector = FileSystemAcceptanceCriterionRepairProjection(diagnostics, validator)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(diagnostics)
     val committed = state()
     projector.write(request(committed))
     val target = target()
@@ -75,7 +67,7 @@ class FileSystemAcceptanceCriterionRepairProjectionTest {
 
   @Test
   fun `local projection lock contention reports recoverable IO failure without leaking a temporary file`() {
-    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics, validator)
+    val projector = FileSystemAcceptanceCriterionRepairProjection(NoopRuntimeDiagnostics)
     val committed = state()
     projector.write(request(committed))
     val target = target()

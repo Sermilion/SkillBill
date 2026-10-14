@@ -28,8 +28,6 @@ import skillbill.engine.goalrunner.planning.sweep.fakeContextDiscovery
 import skillbill.engine.goalrunner.planning.sweep.readySubSpec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
@@ -63,10 +61,8 @@ class StandalonePlanPreparationTest {
   private val home = Files.createTempDirectory("standalone-plan-handoff-db")
   private val database = sqliteSessionFactoryForTests(home, home.resolve("metrics.db").toString(), emptyMap())
   private val clock = Clock.systemUTC()
-  private val validator = FeatureTaskRuntimeWireArtifactValidator(
-    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-    ContractFeatureTaskRuntimePhaseOutputMigration(),
-  )
+  private val validator =
+    FeatureTaskRuntimeWireArtifactValidator()
   private val checkpoint = GoalPlanningPreparationCheckpoint(database, validator)
   private val manifest = manifest(2)
   private val manifestStore = InMemoryGoalManifestStore(manifest)

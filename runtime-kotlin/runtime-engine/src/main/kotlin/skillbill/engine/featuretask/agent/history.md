@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-14] SKILL-426 subtask 2 - Focused audit execution and final source gate
+Areas: runtime-engine featuretask and goalrunner repair, runtime-domain taskruntime, runtime-contracts, runtime-ports gitops, runtime-infra contracts/workflow, runtime-core DI, runtime-application persistence fixtures, orchestration/contracts
+- Removed the superseded repair-state, audit-result, handoff and adoption schemas, validators, registrations, strict admission and historical tuple reconstruction. This replaces subtask 1's structured-contract and dependency-order design.
+- Audit, planning and repair use existing prose envelopes and normal verdicts. Runtime-selected authored criterion context carries retained failures, remaining allowance and latest readable gap; ambiguous reports receive read-only clarification.
+- Live repair reserves before mutation. Acquired-owner transactions couple accounting with phase records, ledger, implementation attempts and advancement; committed acknowledgements refresh memory before publication. reusable
+- Serial routing retains focus through planning, repair and targeted verification, counts unsuccessful cycles once, and blocks at three failures. Success, restart and regression retain earlier failures; shared edits do not skip other criteria.
+- Review and resumed source completion require a final full audit bound to the current source. Failed final audits trigger focused regression checks; projection recovery copies committed accounting without replaying outcomes. reusable
+- Historical aggregate attempts remain unchanged and cannot supply per-criterion authorization. Missing attribution refuses prospective accounting without an explicit operator decision; source acceptance leaves quality obligations to their owning phases.
+- Regression coverage includes focused routing, source-fingerprint refusal, retained-budget reopening, replay, rollback, stale ownership and projection recovery. Live third-failure launcher coverage remains incomplete.
+Feature flag: N/A
+Acceptance criteria: 7/8 implemented in source from the current diff; S2-008 remains partial. This entry does not assert a new audit verdict, executed quality evidence or parent-feature completion.
+
 ## [2026-10-14] SKILL-426 subtask 1 - Durable serial repair admission and transactions
 Areas: runtime-domain taskruntime, runtime-engine featuretask and goalrunner repair, runtime-contracts, runtime-ports, runtime-infra contracts/SQLite/workflow, runtime-core DI, orchestration/contracts, runtime-application persistence fixtures
 - Typed admission retains authored criterion identities and text, separates source disposition from validation obligations, and orders unresolved criteria by dependencies with spec-ordinal ties. Composite criteria keep one identity and budget.

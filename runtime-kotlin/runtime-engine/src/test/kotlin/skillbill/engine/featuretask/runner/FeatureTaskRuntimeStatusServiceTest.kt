@@ -22,9 +22,8 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeCont
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -74,7 +73,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.label()
@@ -1209,10 +1207,10 @@ internal fun statusHarness(): StatusHarness {
   val runInvariantsStore =
     FeatureTaskRuntimeRunInvariantsStore(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator, ContractSerialArtifactValidator(
-        FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
-      )),
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+      ),
     )
   return StatusHarness(
     recorder,
@@ -1374,8 +1372,7 @@ internal class StatusHarness(
 private class StatusFakeDatabaseSessionFactory(
   val repository: StatusInMemoryWorkflowRepository,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   private val dbPath = Path.of("/fake/status-metrics.db")
 

@@ -47,12 +47,4 @@ interface WorkflowGitCommitHistoryOperations {
     repoRoot: Path,
     repoRelativePath: String,
   ): WorkflowGitOperationResult
-
-  fun readRegularFileAtCommit(
-    repoRoot: Path,
-    commitSha: String,
-    repoRelativePath: String,
-    maximumUtf8Bytes: Int,
-  ): WorkflowGitOperationResult =
-    WorkflowGitOperationResult.Failed(error = "Historical file reads are not supported.")
 }

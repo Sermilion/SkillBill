@@ -13,10 +13,8 @@ import kotlin.test.assertNotNull
 class FeatureTaskRuntimeHandoffFoundationSchemaValidatorTest {
   @Test
   fun `persistence violations return a reason without repeating the diagnostic prefix`() {
-    val validator = FeatureTaskRuntimeWireArtifactValidator(
-      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ContractFeatureTaskRuntimePhaseOutputMigration(),
-    )
+    val validator =
+      FeatureTaskRuntimeWireArtifactValidator()
     val kind = FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD
     val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(emptyMap<String, Any?>())
     val reason = assertNotNull(validator.violation(kind, payload, "stored-delivery"))

@@ -3,6 +3,7 @@ package skillbill.application
 import skillbill.application.work.WorkListService
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -150,8 +151,7 @@ private class WorkListDatabase(
   private val workflows: WorkflowStateRepository,
   private val work: List<WorkItem>,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   override fun resolveDbPath(): Path = Path.of("/fake/work-list.db")
 

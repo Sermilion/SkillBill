@@ -21,7 +21,6 @@ import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -53,7 +52,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
             "targeted:1",
           )
-        val evidence = f.audit(AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED, verifying, outcome = outcome)
+        val evidence = f.audit()
         val failed =
           assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
             f.write(worker, verifying, AcceptanceCriterionRepairMutation.Outcome(outcome), evidence),
@@ -165,7 +164,7 @@ class AcceptanceCriterionRepairPersistenceTest {
           worker,
           verifying,
           AcceptanceCriterionRepairMutation.Outcome(success),
-          f.audit(AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED, verifying, outcome = success),
+          f.audit(),
         ),
       ).state
     assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, closed.stage)
@@ -188,13 +187,7 @@ class AcceptanceCriterionRepairPersistenceTest {
           "d".repeat(64),
           "checkpoint:1",
         ),
-        f.audit(
-          AcceptanceCriterionRepairMode.FINAL_FULL,
-          closed,
-          outputDigest = "f".repeat(64),
-          regressed =
-            setOf("AC-001"),
-        ),
+        f.audit(),
       ),
     ).state
   }
@@ -209,9 +202,7 @@ class AcceptanceCriterionRepairPersistenceTest {
               worker,
               null,
               AcceptanceCriterionRepairMutation.Discover(f.admission),
-              f.audit(
-                AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-              ),
+              f.audit(),
             ),
           ).state
         val reserved =
@@ -320,7 +311,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             worker,
             verifying,
             AcceptanceCriterionRepairMutation.Outcome(success),
-            f.audit(AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED, verifying, outcome = success),
+            f.audit(),
             f.service(failing),
           )
         }
@@ -378,9 +369,7 @@ class AcceptanceCriterionRepairPersistenceTest {
               worker,
               null,
               AcceptanceCriterionRepairMutation.Discover(f.admission),
-              f.audit(
-                AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-              ),
+              f.audit(),
             ),
           )
         val before = f.snapshot().toRecord()
@@ -424,9 +413,7 @@ class AcceptanceCriterionRepairPersistenceTest {
               worker,
               null,
               AcceptanceCriterionRepairMutation.Discover(f.admission),
-              f.audit(
-                AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-              ),
+              f.audit(),
             ),
           ).reason,
         )
@@ -439,9 +426,7 @@ class AcceptanceCriterionRepairPersistenceTest {
             escaped,
             null,
             AcceptanceCriterionRepairMutation.Discover(f.admission),
-            f.audit(
-              AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-            ),
+            f.audit(),
           ),
         ).reason,
       )

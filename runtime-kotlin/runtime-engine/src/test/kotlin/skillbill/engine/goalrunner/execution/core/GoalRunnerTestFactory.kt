@@ -56,8 +56,6 @@ import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEE
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
@@ -66,6 +64,7 @@ import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -242,19 +241,13 @@ internal fun testSpecDriftRecovery(
   GoalRunnerSpecDriftRecovery(
     GoalPlanningPreparationCheckpoint(
       TestGoalActivityStampDatabase,
-      FeatureTaskRuntimeWireArtifactValidator(
-        FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
-      ),
+      FeatureTaskRuntimeWireArtifactValidator(),
     ),
     manifestStore,
     UnavailableDecompositionManifestStore,
     TestRepositoryEnclosingRoot,
     testGoalRunnerStatusService(manifestStore, outcomeStore),
-    FeatureTaskRuntimeWireArtifactValidator(
-      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ContractFeatureTaskRuntimePhaseOutputMigration(),
-    ),
+    FeatureTaskRuntimeWireArtifactValidator(),
     NoopRuntimeDiagnostics,
   )
 
@@ -427,8 +420,7 @@ internal fun testGoalRunner(
   )
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   private val dbPath = Path.of("/fake/goal-activity-stamp.db")
 

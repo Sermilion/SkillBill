@@ -34,22 +34,6 @@ internal fun runGitCommand(
   args: List<String>,
 ): WorkflowGitOperationResult = runGitCommand(repoRoot, emptyMap(), args)
 
-internal fun runGitCommandPreservingOutput(
-  repoRoot: Path,
-  vararg args: String,
-): WorkflowGitOperationResult {
-  val argList = args.toList()
-  val result = invokeGitProcess(repoRoot, argList, stdin = null, preserveOutput = true)
-  return when {
-    result.timedOut -> WorkflowGitOperationResult.Failed(error = gitTimedOutError(argList))
-    result.readFailure != null -> WorkflowGitOperationResult.Failed(error = result.readFailure.message.orEmpty())
-    result.exitCode == 0 -> WorkflowGitOperationResult.Ok(value = result.output)
-    else -> WorkflowGitOperationResult.Failed(
-      error = "git ${argList.joinToString(" ")} failed with exit code ${result.exitCode}: ${result.output}",
-    )
-  }
-}
-
 internal fun runGitCommand(
   repoRoot: Path,
   env: Map<String, String>,

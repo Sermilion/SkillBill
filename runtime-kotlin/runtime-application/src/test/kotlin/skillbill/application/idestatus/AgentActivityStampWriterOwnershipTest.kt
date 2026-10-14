@@ -3,6 +3,7 @@ package skillbill.application.idestatus
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -72,8 +73,7 @@ class AgentActivityStampWriterOwnershipTest {
     val attempts = AtomicInteger(0)
     val database =
       object : DatabaseSessionFactory {
-        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-          skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+        override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
         override fun resolveDbPath() = base.resolveDbPath()
 
@@ -223,6 +223,9 @@ private class MemoryDatabaseSessionFactory(
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unit())
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unit())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {

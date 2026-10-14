@@ -5,10 +5,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.io.IOException
 import java.nio.channels.FileChannel
@@ -24,7 +23,6 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 @Inject
 class FileSystemAcceptanceCriterionRepairProjection(
   private val diagnostics: RuntimeDiagnostics,
-  private val validator: FeatureTaskRuntimeWireArtifactValidator,
 ) : AcceptanceCriterionRepairProjection {
   override fun write(request: AcceptanceCriterionRepairProjectionRequest) {
     val key =
@@ -71,11 +69,7 @@ class FileSystemAcceptanceCriterionRepairProjection(
     if (!Files.isRegularFile(target)) return null
     return try {
       FeatureTaskRuntimeWorkflowArtifactMap.from(JsonCodec.parseValue(Files.readString(target))).also {
-        validator.validate(
-          FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE,
-          it,
-          target.toString(),
-        )
+        it.toAcceptanceCriterionRepairState(target.toString())
       }
     } catch (failure: SkillBillRuntimeException) {
       diagnostics.warning(

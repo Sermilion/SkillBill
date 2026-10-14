@@ -5,6 +5,7 @@ import skillbill.application.updatecheck.model.RECOMMENDED_INSTALL_COMMAND
 import skillbill.application.updatecheck.model.UpdateCheckStatus
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.process.ReleaseCatalogPort
@@ -220,8 +221,7 @@ private fun releaseEntry(
   )
 
 private class TestDatabaseSessionFactory : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   private val dbPath = Files.createTempDirectory("skillbill-update-check-db").resolve("metrics.db")
 

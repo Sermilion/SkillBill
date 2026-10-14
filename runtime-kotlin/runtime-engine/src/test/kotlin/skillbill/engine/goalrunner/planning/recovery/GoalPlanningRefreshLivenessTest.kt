@@ -8,6 +8,7 @@ import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -235,8 +236,7 @@ private object NoopRefreshLivenessSnapshotValidator : WorkflowSnapshotValidator 
 private class SeedableRefreshLivenessDatabase(
   private val repository: SeedableRefreshLivenessWorkflowStates,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   private val dbPath = Path.of("/fake/goal-planning-refresh-liveness.db")
 

@@ -39,9 +39,8 @@ import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -100,7 +99,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal val acceptingIdeStatusSnapshotValidator: WorkflowSnapshotValidator =
   object : WorkflowSnapshotValidator {
@@ -274,10 +272,10 @@ internal fun ideStatusService(
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, ContractSerialArtifactValidator(
-            FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-            ContractFeatureTaskRuntimePhaseOutputMigration(),
-          )),
+          FeatureTaskRuntimeWorkflowPersistence(
+            database,
+            snapshotValidator,
+          ),
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
@@ -505,8 +503,7 @@ internal class TrackingDatabase(
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   internal val statusRepository: StandalonePhaseStatusRepository? = null,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   var readCalls: Int = 0
     internal set

@@ -33,8 +33,6 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
 import skillbill.learnings.model.CreateLearningRequest
@@ -1422,14 +1420,8 @@ internal fun testPhaseRecorder(database: DatabaseSessionFactory) =
   featureTaskRuntimePhaseRecorder(
     database,
     WorkflowStateSchemaValidator(),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(
-      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ContractFeatureTaskRuntimePhaseOutputMigration(),
-    ),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(
-      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ContractFeatureTaskRuntimePhaseOutputMigration(),
-    ),
+    FeatureTaskRuntimeWireArtifactSchemaValidator(),
+    FeatureTaskRuntimeWireArtifactSchemaValidator(),
     Clock.systemUTC(),
     NoopRuntimeDiagnostics,
   )

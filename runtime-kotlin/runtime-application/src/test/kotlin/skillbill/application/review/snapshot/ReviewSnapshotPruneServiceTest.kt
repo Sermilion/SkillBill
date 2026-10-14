@@ -1,6 +1,7 @@
 package skillbill.application.review.snapshot
 
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.evidence.ReviewSnapshotGateway
@@ -55,8 +56,7 @@ class ReviewSnapshotPruneServiceTest {
   }
 
   private object StubSessionFactory : DatabaseSessionFactory {
-    override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-      skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+    override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
     override fun resolveDbPath(): Path = Path.of("/home/u/.skill-bill/review-metrics.db")
 

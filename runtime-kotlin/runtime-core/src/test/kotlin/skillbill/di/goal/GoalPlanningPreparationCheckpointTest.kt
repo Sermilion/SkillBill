@@ -5,8 +5,6 @@ import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
-import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -242,10 +240,7 @@ class GoalPlanningPreparationCheckpointTest {
     val checkpoint =
       GoalPlanningPreparationCheckpoint(
         database = database,
-        envelopeValidator = FeatureTaskRuntimeWireArtifactSchemaValidator(
-          FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-          ContractFeatureTaskRuntimePhaseOutputMigration(),
-        ),
+        envelopeValidator = FeatureTaskRuntimeWireArtifactSchemaValidator(),
       )
     return CheckpointHarness(checkpoint, database)
   }

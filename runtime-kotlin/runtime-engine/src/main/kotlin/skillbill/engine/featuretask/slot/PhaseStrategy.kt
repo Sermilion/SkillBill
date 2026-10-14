@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
@@ -43,6 +44,8 @@ abstract class PhaseStrategy {
   }
 
   internal open val plansInFanOut: Boolean = false
+
+  internal open val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles? get() = null
 
   internal open val qualityGateOperation: PhaseQualityGateOperation? = null
 

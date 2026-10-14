@@ -5,6 +5,7 @@ import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -245,8 +246,7 @@ private class LedgerOnlySessionFactory(
   private val findings: UnaddressedFindingsRepository,
   private val workflowStateRepository: WorkflowStateRepository? = null,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   override fun resolveDbPath(): Path = Path.of("/fake/runtime.db")
 

@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -40,6 +41,7 @@ data class FeatureTaskRuntimeRunRequest(
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
   override val skeletonDefinition: SkeletonDefinition? = null,
   override val protectedSpecSha256: String? = null,
+  val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }

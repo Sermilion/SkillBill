@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
@@ -308,8 +309,7 @@ private class FakeWorkerSupervisor(
 private class BumpUpdatedAtAfterReadDatabase(
   private val workflows: InMemoryRuntimeWorkflowRepository,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    skillbill.ports.db.model.OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
 
   private val inner = RuntimeFakeDatabaseSessionFactory(workflows)
 

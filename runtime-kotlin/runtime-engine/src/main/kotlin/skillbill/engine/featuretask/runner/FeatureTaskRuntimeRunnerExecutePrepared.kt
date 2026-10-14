@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoa
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.continuation.reconcileRemediationBaseCoherence
 import skillbill.engine.featuretask.lifecycle.continuation.remediationBaseCoherenceBlockedReport
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
@@ -47,6 +48,12 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
 ) {
+  internal fun acceptanceRepairSteps(plan: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairStepRoles? {
+    val audit = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
+    return audit.steps.mapNotNull { strategies.selectedOwnerOf(it, plan)?.acceptanceRepairSteps }
+      .distinct().singleOrNull()
+  }
+
   internal fun driveExecutePreparedRunLoop(
     runRequest: FeatureTaskRuntimeRunRequest,
     specSource: SpecSource,

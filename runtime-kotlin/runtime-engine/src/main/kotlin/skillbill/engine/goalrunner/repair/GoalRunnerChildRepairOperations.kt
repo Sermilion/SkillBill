@@ -6,7 +6,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -19,14 +18,13 @@ import java.time.Clock
 class GoalRunnerChildRepairOperations(
   database: DatabaseSessionFactory,
   workflowSnapshotValidator: WorkflowSnapshotValidator,
-  wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val gitOperations: WorkflowGitOperations,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val clock: Clock,
 ) : GoalRunnerChildRepairRunnerPort {
   private val engine = WorkflowEngine()
   private val workflowPersistence =
-    FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator)
+    FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
   private val wedgeDiagnosis = GoalRunnerChildRepairWedgeDiagnosis(gitOperations, clock)
   private val wedgeApplyLoop =
     GoalRunnerChildRepairWedgeApplyLoop(
