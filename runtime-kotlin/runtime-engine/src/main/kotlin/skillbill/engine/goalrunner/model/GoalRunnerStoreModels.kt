@@ -8,7 +8,6 @@ import skillbill.goalrunner.model.GoalObservabilityProgressEvent
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
-import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -43,9 +42,7 @@ data class GoalRunnerScopedReplanWriteResult(
 )
 
 data class GoalRunnerScopedReplanOptions(
-  val includeSharedPreplan: Boolean = false,
-  val expectedSharedPayloadSha256: String? = null,
-  val planningIdentity: GoalPlanningIdentity? = null,
+  val repositoryIdentity: String,
 )
 
 data class GoalRunnerPausePersistenceResult(

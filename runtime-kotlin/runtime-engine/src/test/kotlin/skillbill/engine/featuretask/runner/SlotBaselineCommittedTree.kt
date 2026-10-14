@@ -21,7 +21,6 @@ internal object SlotBaselineCommittedTree {
       putAll(SlotBaselineFullRunCapture.standalone().encodedFiles(SlotBaselinePaths.STANDALONE))
       putAll(SlotBaselineFullRunCapture.goalChildBuild().encodedFiles(SlotBaselinePaths.GOAL_CHILD_BUILD))
       putAll(SlotBaselineFullRunCapture.goalChildValidate().encodedFiles(SlotBaselinePaths.GOAL_CHILD_VALIDATE))
-      putAll(SlotBaselineGoalPlanningCapture.encodedFiles())
       putAll(SlotBaselineCodeReviewCapture.encodedFiles())
       putAll(SlotBaselineMcpLifecycleCapture.encodedFiles())
       putAll(SlotBaselinePhaseRunCapture.encodedFiles())

@@ -74,9 +74,6 @@ interface FeatureTaskRuntimeRunFacts {
   /** The operator instructions a phase run adds to its step prompts; null for a full run. */
   val phaseInstructions: PhaseInstructions? get() = null
 
-  /** Whether the plan must persist as a governed spec bundle because no later step consumes it. */
-  val specBundleRequired: Boolean get() = skeletonDefinition?.requiresSpecBundle(goalContinuation != null) ?: false
-
   /** The hash of an operator-authored `spec.md` the plan must leave untouched; null when the plan may rewrite it. */
   val protectedSpecSha256: String? get() = null
 

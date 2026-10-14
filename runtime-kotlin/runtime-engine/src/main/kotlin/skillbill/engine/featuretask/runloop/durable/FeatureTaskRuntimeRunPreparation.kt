@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 @Inject
 class FeatureTaskRuntimeRunPreparation(
@@ -41,7 +42,7 @@ class FeatureTaskRuntimeRunPreparation(
       } catch (error: SkillBillRuntimeException) {
         error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         val completedPhases =
-          recorder.loadPhaseRecords(request.workflowId).orEmpty().values
+          recorder.loadPhaseRecords(request.workflowId).orEmpty().withoutPlanSubtaskUnitRecords().values
             .filter { it.status == WorkflowStepStatus.COMPLETED }
             .map { it.phaseId }
         val plan = requireNotNull(request.admittedExecution).plan

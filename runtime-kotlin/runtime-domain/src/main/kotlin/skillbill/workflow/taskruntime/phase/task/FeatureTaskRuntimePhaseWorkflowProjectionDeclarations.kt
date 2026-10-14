@@ -108,6 +108,14 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
         listOf(
           phaseProseDeclaration(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
         ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS to
+        listOf(
+          phaseProseDeclaration(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS),
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+          ),
+        ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
         listOf(

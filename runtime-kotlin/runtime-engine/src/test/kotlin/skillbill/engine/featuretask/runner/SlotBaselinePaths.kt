@@ -6,13 +6,12 @@ internal object SlotBaselinePaths {
   const val STANDALONE = "$RESOURCE_ROOT/standalone"
   const val GOAL_CHILD_BUILD = "$RESOURCE_ROOT/goal-child-build"
   const val GOAL_CHILD_VALIDATE = "$RESOURCE_ROOT/goal-child-validate"
-  const val GOAL_PLANNING = "$RESOURCE_ROOT/goal-planning"
   const val CODE_REVIEW = "$RESOURCE_ROOT/code-review"
   const val MCP_LIFECYCLE = "$RESOURCE_ROOT/mcp-lifecycle"
   const val PHASE = "$RESOURCE_ROOT/phase"
 
   val BUNDLE_DIRECTORIES =
-    listOf(STANDALONE, GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, GOAL_PLANNING, CODE_REVIEW, MCP_LIFECYCLE, PHASE)
+    listOf(STANDALONE, GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, CODE_REVIEW, MCP_LIFECYCLE, PHASE)
 
   const val WORKFLOW_SNAPSHOT = "workflow-snapshot.json"
   const val PHASE_RECORDS = "phase-records.json"
@@ -21,13 +20,6 @@ internal object SlotBaselinePaths {
   const val RUN_INVARIANTS = "run-invariants.json"
   const val FEATURE_TASK_RUNTIME_FINISHED = "feature-task-runtime-finished.json"
   const val PROMPTS_DIR = "prompts"
-
-  const val PREPLAN_PROMPT = "preplan-prompt.txt"
-  const val PLAN_PROMPTS = "plan-prompts.json"
-  const val SHARED_PREPLAN_CHECKPOINT = "shared-preplan-checkpoint.json"
-  const val PLAN_RECORDS = "plan-records.json"
-  const val PLANNING_ATTEMPT_LOG = "planning-attempt-log.json"
-  const val PLANNING_LOG = "planning-log.json"
 
   const val INLINE_OUTPUT = "inline-output.json"
   const val DELEGATED_OUTPUT = "delegated-output.json"

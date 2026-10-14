@@ -15,8 +15,6 @@ import java.nio.file.Path
 data class FeatureTaskRuntimePhasePromptComposeInputs(
   val issueKey: String,
   val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-  val suppressDecomposition: Boolean = false,
-  val specBundleRequired: Boolean = false,
   val specRewritable: Boolean = false,
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
   val reviewPassNumber: Int? = null,

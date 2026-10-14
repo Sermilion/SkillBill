@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
-import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
@@ -411,8 +410,6 @@ object PhaseLaunchPreparation {
       return FeatureTaskRuntimePhasePromptComposeInputs(
         issueKey = run.request.issueKey,
         briefing = briefing,
-        suppressDecomposition = isGoalContinuationRun(run.request),
-        specBundleRequired = run.request.specBundleRequired,
         specRewritable = run.request.protectedSpecSha256 == null,
         codeReviewMode = launchReviewTier.executedTier,
         reviewPassNumber = launchReviewTier.passNumber,

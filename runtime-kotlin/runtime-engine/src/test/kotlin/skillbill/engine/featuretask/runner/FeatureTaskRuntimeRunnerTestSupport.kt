@@ -1020,6 +1020,7 @@ private fun harnessRunner(
           NoopWorkflowGitOperations,
         ),
         entry,
+        testDecompositionPlanner(),
       ),
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
@@ -1216,6 +1217,7 @@ private class TelemetryExecutePreparedSetup(
           NoopWorkflowGitOperations,
         ),
         configuredEntry,
+        testDecompositionPlanner(),
       ),
     )
 }

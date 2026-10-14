@@ -117,11 +117,11 @@ class PortNullObjectAbsenceArchitectureTest {
   fun `the companion census flags a test-only null object and accepts a main-referenced one`() {
     val testOnly =
       """
-      fun interface GoalPlanningSweep {
+      fun interface PlanningSweep {
         fun prepare(): Int
 
         companion object {
-          val NONE: GoalPlanningSweep = GoalPlanningSweep { 0 }
+          val NONE: PlanningSweep = PlanningSweep { 0 }
         }
       }
       """.trimIndent()
@@ -143,7 +143,7 @@ class PortNullObjectAbsenceArchitectureTest {
       declaringSources.values + "class Runner(private val sink: GoalRunnerEventSink = GoalRunnerEventSink.NONE)"
 
     assertEquals(
-      listOf("GoalPlanningSweep.NONE (Sweep.kt)"),
+      listOf("PlanningSweep.NONE (Sweep.kt)"),
       PortNullObjectCensus.testOnlyCompanionNullObjectsIn(declaringSources, mainSources),
     )
   }

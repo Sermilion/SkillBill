@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.planning
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePlanningStopDecision
@@ -10,12 +11,14 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_BLOCKED
+import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -25,24 +28,15 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
-import java.nio.file.Path
 
 internal object PlanDecompositionStop {
   private const val DETAIL_MAX_CHARS = 500
-
-  fun requiresBundle(request: FeatureTaskRuntimeRunFacts): Boolean =
-    request.specBundleRequired && !isGoalContinuationRun(request)
-
-  fun existingBundleReason(
-    issueKey: String,
-    existingManifest: Path,
-  ): String =
-    "A decomposition manifest '$existingManifest' already exists for $issueKey; the runtime never overwrites " +
-      "a plan. Run `skill-bill $issueKey` to execute it."
 
   fun withAuthoredParentSpecPath(
     context: PhaseOutputSettlementContext,
@@ -60,6 +54,23 @@ internal object PlanDecompositionStop {
     return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
   }
 
+  fun settledOutput(
+    phaseId: String,
+    summary: String,
+    value: String,
+  ): NormalizedFeatureTaskRuntimePhaseOutput =
+    NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(
+      FeatureTaskRuntimeWorkflowArtifactMap.from(
+        linkedMapOf<String, Any?>(
+          SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+          SharedPayloadKeys.PHASE_ID to phaseId,
+          SharedPayloadKeys.STATUS to STATUS_COMPLETED,
+          SharedPayloadKeys.SUMMARY to summary,
+          SharedPayloadKeys.PRODUCED_OUTPUTS to linkedMapOf<String, Any?>(SharedPayloadKeys.VALUE to value),
+        ),
+      ),
+    )
+
   fun notReadyReason(detail: String?): String {
     val bounded =
       detail.orEmpty().takeIf(String::isNotBlank)?.let {
@@ -69,7 +80,7 @@ internal object PlanDecompositionStop {
       (bounded?.let { " Readiness problem: $it" } ?: "")
   }
 
-  fun authoredBundleRejection(
+  fun recordAuthoredBundleOrRejection(
     context: PhaseOutputSettlementContext,
     capture: ValidatedOutputCapture,
   ): String? {
@@ -82,13 +93,41 @@ internal object PlanDecompositionStop {
         capture.fileManifest.introduced,
         context.decompositionPlanner::bundleTree,
       )?.let { return notReadyReason(it) }
+    return recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.AUTHORED)
+  }
+
+  fun recordExistingBundleOrRejection(context: PhaseOutputSettlementContext): String? =
+    recordBundle(context, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+
+  private fun recordBundle(
+    context: PhaseOutputSettlementContext,
+    origin: FeatureTaskRuntimePlanBundleOrigin,
+  ): String? {
+    val request = context.request
     return try {
-      context.decompositionPlanner.verifyAuthoredBundle(
-        request.repoRoot,
-        request.issueKey,
-        request.runInvariants,
-      )
-      null
+      val written =
+        context.decompositionPlanner.verifyAuthoredBundle(
+          request.repoRoot,
+          request.issueKey,
+          request.runInvariants,
+        )
+      val bundle = PlanBundleSnapshots(context.decompositionPlanner).capture(request.repoRoot, written, origin)
+      val now = context.clock.instant()
+      val keptUnits =
+        if (origin == FeatureTaskRuntimePlanBundleOrigin.EXISTING) {
+          bundle.subtasks.mapNotNull { subtask ->
+            subtask.planText?.let { details ->
+              subtask.id to PlanUnitRecords.keptDetails(request.workflowId, subtask.id, details, now)
+            }
+          }.toMap()
+        } else {
+          emptyMap()
+        }
+      if (context.recorder.recordPlanBundleWithUnits(request.workflowId, bundle, keptUnits)) {
+        null
+      } else {
+        notReadyReason("The plan bundle snapshot could not be recorded.")
+      }
     } catch (error: SkillBillRuntimeException) {
       error.rethrowIfDatabaseFailure()
       notReadyReason(error.message)
@@ -196,14 +235,31 @@ internal class FeatureTaskRuntimePlanningStopper(
     }
 
     val recordedTerminal = records.loadDecomposeTerminal(request.workflowId)
-    return when {
-      recordedTerminal != null ->
-        FeatureTaskRuntimePlanningStopDecision.Decomposed(
-          recordedTerminal.toRunReport(request, completedPhaseIds, resolvedBranch),
-        )
-      !request.specBundleRequired -> FeatureTaskRuntimePlanningStopDecision.Proceed
-      else -> resolveAuthoredBundle(request, completedOutput, completedPhaseIds, resolvedBranch)
+    return if (recordedTerminal != null) {
+      FeatureTaskRuntimePlanningStopDecision.Decomposed(
+        recordedTerminal.toRunReport(request, completedPhaseIds, resolvedBranch),
+      )
+    } else {
+      resolveAuthoredBundle(request, completedOutput, completedPhaseIds, resolvedBranch)
     }
+  }
+
+  private fun unplannedBundleReason(request: FeatureTaskRuntimeRunFacts): String? {
+    val snapshots = PlanBundleSnapshots(decompositionPlanner)
+    val recorded =
+      records.loadPlanBundle(request.workflowId)
+        ?: return "The plan workflow recorded no plan bundle; re-plan the subtasks."
+    snapshots.drift(request.repoRoot, request.issueKey, recorded)?.let { return it }
+    val unitRecords = records.loadPhaseRecords(request.workflowId).orEmpty()
+    return recorded.subtasks
+      .firstOrNull {
+        !snapshots.unitComplete(
+          request.repoRoot,
+          it,
+          unitRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(it.id)],
+        )
+      }
+      ?.let { "Subtask ${it.id} has no recorded Implementation Details that match its spec on disk." }
   }
 
   private fun resolveAuthoredBundle(
@@ -213,6 +269,9 @@ internal class FeatureTaskRuntimePlanningStopper(
     resolvedBranch: String?,
   ): FeatureTaskRuntimePlanningStopDecision =
     try {
+      unplannedBundleReason(request)?.let {
+        return FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(it))
+      }
       val bundle =
         decompositionPlanner.verifyAuthoredBundle(request.repoRoot, request.issueKey, request.runInvariants)
       val terminal =

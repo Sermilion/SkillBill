@@ -124,6 +124,9 @@ class FeatureSpecPreparationWriter(
     )
   }
 
+  fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
+    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
+
   fun listTree(directory: Path): List<Path> = fileStore.listTree(directory)
 
   fun readText(path: Path): String = fileStore.readText(path)

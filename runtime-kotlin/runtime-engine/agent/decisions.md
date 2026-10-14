@@ -1,3 +1,9 @@
+## [2026-10-14] SKILL-425: the engine drops the goal planning sweep
+Context: The goal runner ran a planning sweep over `GoalPlanningPhaseRunState` and wrote `goal_*` checkpoints.
+Decision: The goal runner asks `GoalPlanningSource` for planning (plan workflow, then read-only legacy tables, then `StandalonePlanRun`). Status reads planning progress from the latest plan workflow bundle and falls back to the legacy tables, and `GoalChildPlanningHydrator` reads either source. The full decision is in runtime-kotlin/agent/decisions.md.
+Reason: One durable planning record serves resume, status, and hydration.
+Supersedes: Run standalone plan through the durable run loop and admit by definition (2026-10-09), for the part that left a sweep to run at plan time.
+
 ## [2026-10-14] Settle intake in the run entry before invariants are read
 Context: The PLAN skeleton now starts with an intake step, but no spec exists until intake runs, and run invariants and the review mode are derived from the spec.
 Decision: The run entry pre-settles intake through a settleIntake hook before invariants are read. The in-loop RuntimeIntakeStrategy call is idempotent, only records the step, and resolves the spec by issue key. Opening a plan workflow uses review mode AUTO when INTAKE is in the definition's slots.

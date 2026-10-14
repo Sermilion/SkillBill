@@ -574,8 +574,8 @@ and `:runtime-infra:sqlite`.
   (install, telemetry, goal planning, goal runner, review, feature task,
   workflow, validators, scaffold, diagnostics); an area with more than ten
   provides splits by its own sub-area (`RuntimeFeatureSpecProvides`,
-  `RuntimeReviewAddonCatalogProvides`, `RuntimeScaffoldValidationProvides`,
-  `RuntimeGoalPlanningSweepProvides`), never by pairing two areas. Each
+  `RuntimeReviewAddonCatalogProvides`, `RuntimeScaffoldValidationProvides`),
+  never by pairing two areas. Each
   `@Provides` is declared once, and `RuntimeBootstrapBindings` holds only the
   ambient construction seam. `runtime-core` is the single composition root; the
   abstract properties on `RuntimeComponent` are the export list that generated
@@ -1212,10 +1212,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   implements those review interfaces only on review bindings. `FeatureTaskRuntimeRunLoopDurableState`
   (`runloop.durable`) adapts durable services to `FeatureTaskRuntimeRunLoopStepState`
   (`runloop.state`), while `InMemoryPhaseRunState` and
-  `GoalPlanningPhaseRunState` use the same step-state adapter with in-memory
-  records. Goal planning fan-out units run on `GoalPlanningUnitRunState` with
-  isolated progress, session, records, telemetry, and step binding. Durable
-  and in-memory storage remain distinct.
+  `DurablePlanSubtasksFanOut`'s per-unit state use the same step-state adapter.
+  Plan fan-out units run on `DurablePlanUnitRunState` with isolated progress,
+  session, telemetry, and step binding over the plan workflow's own records.
+  Durable and in-memory storage remain distinct.
 - `PhaseAttemptEnvironment` supplies request facts only. Runtime scopes retain storage and effect
   collaborators privately. Strategy hooks receive detached observations and bound role operations;
   review/PR/loop helpers receive readonly repository inspection. Step factories require coordinator
@@ -1300,8 +1300,8 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
-  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`preplan` and `plan`)
-  is durable: `skill-bill phase plan` runs it as a standalone workflow
+  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`intake`, `preplan`,
+  `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, plan, pr and monitor.
   `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
@@ -1311,16 +1311,29 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   Each carries a
   `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
   existing governed spec, and the rest take an optional intake.
-  `GOAL_PLANNING` (`preplan` and `plan`) is the goal planning sweep's
-  definition. It selects `agent-preplan` for the shared preplan and
-  `goal-plan-fan-out` for the plans. `GoalPlanFanOutStrategy` runs
-  `agent-plan` once per active subtask, in waves capped by the burst
-  schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
-  `FeatureTaskRuntimeRunLoopEntry` over an in-memory
-  `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
-  gate, budget, and checkpoints, and writes no feature-task workflow row. The
-  selected `goal-plan-fan-out` strategy authorizes `agent-plan` at the attempt
-  boundary while preserving the selected step policy and request checks.
+  There is no separate goal planning definition: the `PLAN` skeleton
+  (`intake`, `preplan`, `plan`, `plan_subtasks`) is the only planning skeleton, and
+  `PhaseSlot.PLAN` owns both `plan` and `plan_subtasks`. Every skeleton that
+  binds the slot binds `PlanFanOutStrategy` (persisted id `goal-plan-fan-out`,
+  kept so recorded plans still resolve). `plan` authors the spec bundle and may
+  split. `plan_subtasks` fans `agent-plan` out once per subtask through
+  `DurablePlanSubtasksFanOut` in waves capped by `GOAL_PLANNING_WAVE_CAP`; each
+  unit writes only `## Implementation Details` into its subtask spec, and its
+  record lives in the durable `plan_bundle` artifact. A unit is complete when
+  its record exists and both its scope and details hashes match the spec on
+  disk, so a resumed workflow reuses completed units. `PlanDecompositionStop`
+  runs after `plan_subtasks`. No strategy or prompt input reads
+  `suppressDecomposition`, `specBundleRequired`, or goal continuation.
+  A goal run obtains its planning through `GoalPlanningSource`
+  (`PlanWorkflowGoalPlanningSource`): the linked plan workflow first, then the
+  read-only legacy `goal_*` tables, then a `StandalonePlanRun` of the plan
+  skeleton. Goal children hydrate `preplan`, `plan`, and `plan_subtasks` from
+  that source (`GoalChildPlanningHydrator`) and record the source in the
+  `goal_planning_import` provenance (`plan_workflow` or `legacy_tables`). The
+  legacy planning tables are read-only: the ports and sqlite stores keep the
+  lookups and the reset and purge deletes, no checkpoint writer or contract-version
+  migration remains, admission does not migrate a goal import, and tests seed
+  legacy rows with raw SQL.
   `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
@@ -1504,7 +1517,7 @@ Composition:
   | Strategy | Package | Owns |
   | --- | --- | --- |
   | `agent-preplan` | `slot.preplan` | Preplan directive, ceremony line, prose settlement |
-  | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
+  | `agent-plan` | `slot.plan` | Plan directive, shared planning directive, decomposition stop |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
   | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |

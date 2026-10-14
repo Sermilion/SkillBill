@@ -29,7 +29,6 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -37,7 +36,6 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.replanIntent
 import skillbill.workflow.decomposition.resetManifest
 import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
@@ -164,28 +162,13 @@ class GoalRunnerResetReplanCoordinator(
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return null
     val selected = requireReplanTarget(loaded.manifest, request)
+    require(!request.includeSharedPreplan) {
+      "A plan-workflow goal keeps one preplan for its whole bundle. Replan subtask ${request.subtaskId} without " +
+        "--include-shared-preplan, or run `skill-bill goal purge ${request.issueKey}` then " +
+        "`skill-bill phase plan ${request.issueKey}`."
+    }
     requireIdleForScopedReplan(loaded, request)
     val beforeSubtasks = loaded.manifest.toResetSnapshot().subtasks
-    val expectedSharedDigest =
-      if (request.includeSharedPreplan) {
-        manifestStore.sharedPreplanPayloadSha256(loaded.parentWorkflowId)
-      } else {
-        null
-      }
-    val planningIdentity =
-      if (request.includeSharedPreplan && expectedSharedDigest != null) {
-        GoalPlanningIdentity(
-          parentGoalWorkflowId = loaded.parentWorkflowId,
-          normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(loaded.manifest.issueKey),
-          repositoryIdentity =
-            goalRepositoryIdentity(
-              request.repoRoot ?: repositoryRoot.path,
-              repositoryEnclosingRootPort,
-            ),
-        )
-      } else {
-        null
-      }
     val retargeted =
       loaded.copy(
         manifest = loaded.manifest.copy(currentSubtaskIntent = replanIntent(selected)),
@@ -197,9 +180,8 @@ class GoalRunnerResetReplanCoordinator(
         subtaskId = request.subtaskId,
         options =
           GoalRunnerScopedReplanOptions(
-            includeSharedPreplan = request.includeSharedPreplan,
-            expectedSharedPayloadSha256 = expectedSharedDigest,
-            planningIdentity = planningIdentity,
+            repositoryIdentity =
+              goalRepositoryIdentity(request.repoRoot ?: repositoryRoot.path, repositoryEnclosingRootPort),
           ),
       )
     pruneResetSubtaskCheckpointRefs(

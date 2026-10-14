@@ -45,6 +45,7 @@ data class GoalChildPlanningHydrationRequest(
   val identity: GoalPlanningIdentity,
   val provenance: GoalPlanningContractProvenance,
   val descriptor: GovernedGoalSubtaskDescriptor,
+  val planWorkflowId: String? = null,
 )
 
 data class GoalChildPlanningHydrationResult(

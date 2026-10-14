@@ -6,7 +6,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   INTAKE("intake", listOf(FeatureTaskRuntimePhaseIds.INTAKE)),
   PREPLAN("preplan", listOf(FeatureTaskRuntimePhaseIds.PREPLAN)),
-  PLAN("plan", listOf(FeatureTaskRuntimePhaseIds.PLAN)),
+  PLAN("plan", listOf(FeatureTaskRuntimePhaseIds.PLAN, FeatureTaskRuntimePhaseIds.PLAN_SUBTASKS)),
   IMPLEMENTATION("implementation", listOf(FeatureTaskRuntimePhaseIds.IMPLEMENT, FeatureTaskRuntimePhaseIds.SIMPLIFY)),
   AUDIT(
     "audit",

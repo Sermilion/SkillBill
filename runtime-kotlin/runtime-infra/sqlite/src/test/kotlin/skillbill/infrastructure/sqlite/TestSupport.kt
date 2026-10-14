@@ -8,7 +8,6 @@ import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolic
 import skillbill.infrastructure.sqlite.telemetry.reconcileStaleFeatureTaskRuntimeSessions
 import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
 import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationStore
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.ports.telemetry.model.TelemetryReconciliationResult
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -116,6 +115,3 @@ internal fun WorkflowStateStore(
   clock: Clock,
   workflowSnapshotValidator: WorkflowSnapshotValidator,
 ): WorkflowStateStore = WorkflowStateStore(connection, clock, workflowSnapshotValidator, SqliteTestDiagnostics)
-
-internal fun GoalPlanningPreparationStore(connection: Connection): GoalPlanningPreparationStore =
-  GoalPlanningPreparationStore(connection, SqliteTestDiagnostics)

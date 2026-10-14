@@ -1,3 +1,14 @@
+## [2026-10-14] SKILL-425 subtask 3 — one plan strategy and durable plan records
+Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask, goalrunner, goalplanning; runtime-infra/sqlite goalrunner; runtime-ports goalrunner; runtime-core di; runtime-cli goal control; runtime-application workflow/decomposition
+- PhaseSlot.PLAN now owns plan and plan_subtasks. Every skeleton binds PlanFanOutStrategy (plus an Opus 5.5 variant). DurablePlanSubtasksFanOut fans agent-plan out per subtask, and each unit writes only its Implementation Details section.
+- Unit, preplan, and bundle records live in the plan workflow as the plan_bundle artifact. PlanBundleSnapshots decides completeness: both scope and details hashes must match the spec on disk, and drift rebases only the changed unit. reusable
+- GoalPlanningSource resolves planning in order: linked plan workflow, read-only legacy goal tables, then StandalonePlanRun (replanSubtasks). GoalChildPlanningHydrator and the status and manifest readers read either source and record the provenance (plan_workflow or legacy_tables).
+- Removed: SkeletonDefinition.GOAL_PLANNING, GoalPlanningPhaseRunState, the planning sweep, GoalPlanningMigration, the source validator, the legacy checkpoint writers, and the goal-continuation prompt constraint. The legacy tables keep only lookups and reset/purge deletes.
+- Tests seed legacy rows through the sqlite testFixtures LegacyGoalPlanningRowSeeds (raw SQL). Three writer-premised tests and PlanningMigrationTestFixtures were deleted.
+- Limits: no new migration or DesktopReadSchema bump. A plan workflow that predates plan_subtasks is refused on resume (goal purge, then phase plan). Admission no longer migrates a legacy goal import, so it reruns the plan skeleton. GoalPlanningPreparationRecordMapping, GOAL_PLANNING_PREPARATION_MIGRATION_PATHS, and GoalPlanningPreparationSchemaValidator are left as dead code. Gaps not covered by new tests: multi-subtask authored bundle, status plan-versus-legacy, and the pre-change refusal.
+Feature flag: N/A
+Acceptance criteria: not self-reported (implement did not compile or test; build and validate own the proof)
+
 ## [2026-10-10] SKILL-414 subtask 4 validate repairs to subtask 2 and 3 carry-over
 Areas: runtime-cli cli/core and cli/model; runtime-core di/core; runtime-infra/skills repoTest; runtime-infra/sqlite test; skills/skill-bill/content.md
 - The CLI main no longer reads System.getenv(). CliRuntimeContext.onEnvironmentResolved receives the environment resolved by bootstrap, and Main.kt configures process logging from it. The runtime-cli ambient-environment baseline stays empty. reusable

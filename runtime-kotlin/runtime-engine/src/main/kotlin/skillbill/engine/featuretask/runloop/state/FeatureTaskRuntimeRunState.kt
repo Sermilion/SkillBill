@@ -27,6 +27,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 internal class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -108,7 +109,7 @@ internal class FeatureTaskRuntimeRunState(
       )
 
   private val durableInitialRecords: Map<String, FeatureTaskRuntimePhaseRecord> =
-    initialRecords.mapValues { (_, record) -> detachedRecord(record) }.toMap()
+    initialRecords.withoutPlanSubtaskUnitRecords().mapValues { (_, record) -> detachedRecord(record) }.toMap()
 
   private val statelessAuditInputs: FeatureTaskRuntimeStatelessAuditInputs =
     FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(

@@ -7,7 +7,6 @@ import skillbill.error.featuretask.UnknownSkeletonDefinitionError
 enum class SkeletonRunStateKind(val wireValue: String) {
   DURABLE("durable"),
   IN_MEMORY("in_memory"),
-  GOAL_PLANNING("goal_planning"),
 }
 
 enum class PhaseIntakeRequirement(val wireValue: String) {
@@ -35,8 +34,6 @@ data class SkeletonDefinition(
       throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
     }
   }
-
-  fun requiresSpecBundle(goalContinuation: Boolean): Boolean = slots.last() == PhaseSlot.PLAN && !goalContinuation
 
   companion object {
     val FEATURE_RUN_SLOTS: List<PhaseSlot> =
@@ -97,15 +94,8 @@ data class SkeletonDefinition(
         SkeletonRunStateKind.IN_MEMORY,
         standaloneInvocable = true,
       )
-    val GOAL_PLANNING: SkeletonDefinition =
-      SkeletonDefinition(
-        "goal-planning",
-        listOf(PhaseSlot.PREPLAN, PhaseSlot.PLAN),
-        SkeletonRunStateKind.GOAL_PLANNING,
-      )
-
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR, GOAL_PLANNING)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
 

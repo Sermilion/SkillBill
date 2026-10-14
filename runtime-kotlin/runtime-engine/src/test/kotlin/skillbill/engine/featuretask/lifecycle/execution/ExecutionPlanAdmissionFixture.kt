@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.repoLocalConfig
-import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
@@ -111,7 +110,6 @@ class ExecutionPlanAdmissionFixture(
       compatibility,
       diagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
-      planningMigrationForTest(),
       supervisor,
     )
 

@@ -57,6 +57,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to "Phase 0: Intake",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to "Phase 1: Pre-plan",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to "Phase 2: Plan",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS to "Phase 2b: Plan Subtasks",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
@@ -79,6 +80,11 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to emptyList(),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+            ),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
@@ -152,6 +158,9 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
             "Re-run the preplan phase from the run-invariants, then persist the validated planning prose output.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
             "Resume planning from the latest preplan prose, then persist the validated planning prose output.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS to
+            "Write Implementation Details into each subtask spec that does not yet have them, " +
+            "reusing completed subtask plans, then persist the bundle record.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
             "Resume implementation from the planned work and current repository, then persist the validated output.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to

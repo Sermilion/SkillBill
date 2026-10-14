@@ -4,6 +4,7 @@ internal object FeatureTaskRuntimePhaseIds {
   const val INTAKE: String = "intake"
   const val PREPLAN: String = "preplan"
   const val PLAN: String = "plan"
+  const val PLAN_SUBTASKS: String = "plan_subtasks"
   const val IMPLEMENT: String = "implement"
   const val SIMPLIFY: String = "simplify"
   const val IMPLEMENT_FIX: String = "implement_fix"
@@ -21,11 +22,22 @@ internal object FeatureTaskRuntimePhaseIds {
   const val MONITOR_FIX: String = "monitor_fix"
   const val PRESENT_FINDINGS: String = "present_findings"
 
+  private const val PLAN_SUBTASK_UNIT_SEPARATOR: String = ":"
+
+  fun planSubtaskUnitRecordId(subtaskId: Int): String = "$PLAN_SUBTASKS$PLAN_SUBTASK_UNIT_SEPARATOR$subtaskId"
+
+  fun planSubtaskUnitIdOf(key: String): Int? =
+    key.takeIf { it.startsWith("$PLAN_SUBTASKS$PLAN_SUBTASK_UNIT_SEPARATOR") }
+      ?.substringAfter(PLAN_SUBTASK_UNIT_SEPARATOR)
+      ?.toIntOrNull()
+      ?.takeIf { it > 0 }
+
   val all: List<String> =
     listOf(
       INTAKE,
       PREPLAN,
       PLAN,
+      PLAN_SUBTASKS,
       IMPLEMENT,
       SIMPLIFY,
       AUDIT_PLAN_FIX,

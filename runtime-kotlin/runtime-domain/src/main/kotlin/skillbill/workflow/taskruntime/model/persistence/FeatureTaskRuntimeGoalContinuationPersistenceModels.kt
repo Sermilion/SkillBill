@@ -39,6 +39,31 @@ data class FeatureTaskRuntimeGoalContinuationFieldAdoption(
   }
 }
 
+data class FeatureTaskRuntimeGoalPlanningImportSource(
+  val kind: String,
+  val planWorkflowId: String? = null,
+  val detailsSha256: String? = null,
+) {
+  init {
+    require(kind in KINDS) { "FeatureTaskRuntimeGoalPlanningImportSource.kind must be one of $KINDS." }
+  }
+
+  internal fun toArtifactMap(): Map<String, Any?> =
+    linkedMapOf<String, Any?>("kind" to kind).apply {
+      planWorkflowId?.let { put("plan_workflow_id", it) }
+      detailsSha256?.let { put("details_sha256", it) }
+    }
+
+  companion object {
+    const val PLAN_WORKFLOW: String = "plan_workflow"
+    const val LEGACY_TABLES: String = "legacy_tables"
+    private val KINDS: Set<String> = setOf(PLAN_WORKFLOW, LEGACY_TABLES)
+
+    fun isPlanWorkflowArtifact(artifact: Map<*, *>): Boolean =
+      (artifact["source"] as? Map<*, *>)?.get("kind") == PLAN_WORKFLOW
+  }
+}
+
 data class FeatureTaskRuntimeGoalPlanningImport(
   val parentGoalWorkflowId: String,
   val normalizedIssueKey: String,
@@ -55,9 +80,10 @@ data class FeatureTaskRuntimeGoalPlanningImport(
   val subSpecHash: String,
   val preplanPayloadSha256: String,
   val planPayloadSha256: String,
+  val source: FeatureTaskRuntimeGoalPlanningImportSource? = null,
 ) {
   internal fun toArtifactMap(): Map<String, Any?> =
-    linkedMapOf(
+    linkedMapOf<String, Any?>(
       "source_kind" to "imported_goal_planning",
       "parent_goal_workflow_id" to parentGoalWorkflowId,
       "normalized_issue_key" to normalizedIssueKey,
@@ -74,5 +100,7 @@ data class FeatureTaskRuntimeGoalPlanningImport(
       "sub_spec_hash" to subSpecHash,
       "preplan_payload_sha256" to preplanPayloadSha256,
       "plan_payload_sha256" to planPayloadSha256,
-    )
+    ).apply {
+      source?.let { put("source", it.toArtifactMap()) }
+    }
 }

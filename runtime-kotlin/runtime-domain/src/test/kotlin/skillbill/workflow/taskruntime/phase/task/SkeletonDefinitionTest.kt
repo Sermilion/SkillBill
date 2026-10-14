@@ -169,7 +169,7 @@ class SkeletonDefinitionTest {
   @Test
   fun `standalone plan is durable, invocable on its own, and admitted only as a standalone run`() {
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
-    assertEquals(listOf("intake", "preplan", "plan"), SkeletonDefinition.PLAN.stepIds)
+    assertEquals(listOf("intake", "preplan", "plan", "plan_subtasks"), SkeletonDefinition.PLAN.stepIds)
     assertEquals(
       listOf("review", "validation", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
@@ -179,7 +179,6 @@ class SkeletonDefinitionTest {
       SkeletonDefinition.admittedForRun(goalContinuation = false),
     )
     assertEquals(setOf(SkeletonDefinition.GOAL_CHILD), SkeletonDefinition.admittedForRun(goalContinuation = true))
-    assertEquals(true, SkeletonDefinition.PLAN.requiresSpecBundle(goalContinuation = false))
   }
 
   @Test
@@ -192,11 +191,10 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `goal-planning is the preplan and plan slots over the goal-planning state`() {
-    val definition = SkeletonDefinition.byId("goal-planning")
-
-    assertEquals(listOf("preplan", "plan"), definition.declaration().forwardPhaseIds)
-    assertEquals(SkeletonRunStateKind.GOAL_PLANNING, definition.runStateKind)
+  fun `planning is one plan skeleton and no goal-planning definition remains`() {
+    assertFailsWith<UnknownSkeletonDefinitionError> { SkeletonDefinition.byId("goal-planning") }
+    assertEquals(listOf(PhaseSlot.INTAKE, PhaseSlot.PREPLAN, PhaseSlot.PLAN), SkeletonDefinition.PLAN.slots)
+    assertEquals(listOf("plan", "plan_subtasks"), PhaseSlot.PLAN.steps)
   }
 
   @Test

@@ -7,14 +7,6 @@ data class GoalPlanningPreparationConflict(
   val cause: Throwable?,
 )
 
-sealed interface GoalPlanningPreparationWriteResult {
-  data object Applied : GoalPlanningPreparationWriteResult
-
-  data class Conflicted(
-    val conflict: GoalPlanningPreparationConflict,
-  ) : GoalPlanningPreparationWriteResult
-}
-
 sealed interface SharedGoalPreplanLookupResult {
   data class Found(
     val checkpoint: SharedGoalPreplanCheckpoint?,

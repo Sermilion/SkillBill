@@ -4,12 +4,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
-import skillbill.engine.goalplanning.GoalPlanningMigration
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
@@ -47,14 +45,12 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
-private val SAVED_CONTRACT_VERSION = Regex("[0-9]{1,3}\\.[0-9]{1,3}")
 
 @Inject
 class FeatureTaskRuntimeExecutionAdmission(
   private val compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
-  private val planningMigration: GoalPlanningMigration,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
 ) {
   fun admit(
@@ -64,7 +60,7 @@ class FeatureTaskRuntimeExecutionAdmission(
     expectedIdentity: FeatureTaskExecutionIdentity? = null,
     requestedReviewSelection: RuntimeReviewSelection? = null,
   ): AdmittedFeatureTaskRuntimeExecution =
-    admitStored(states, AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection), null)
+    admitStored(states, AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection))
 
   fun admit(
     session: GoalRunnerPersistenceSession,
@@ -76,13 +72,11 @@ class FeatureTaskRuntimeExecutionAdmission(
     admitStored(
       session.workflowStates,
       AdmissionRequest(workflowId, inputs, expectedIdentity, requestedReviewSelection),
-      session,
     )
 
   private fun admitStored(
     states: WorkflowStateRepository,
     request: AdmissionRequest,
-    session: GoalRunnerPersistenceSession?,
   ): AdmittedFeatureTaskRuntimeExecution =
     try {
       val workflowId = request.workflowId
@@ -93,7 +87,6 @@ class FeatureTaskRuntimeExecutionAdmission(
         states.getFeatureTaskExecutionIdentity(workflowId)
           ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing immutable execution identity")
       FeatureTaskExecutionIdentityPolicy.validate(identity)
-      val goalMigration = migrateGoalImport(states, session, identity, request)
       val row =
         states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
           ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing workflow")
@@ -121,13 +114,12 @@ class FeatureTaskRuntimeExecutionAdmission(
         val migratedArtifacts = initialSnapshot.artifacts + patch
         states.migrateFeatureTaskArtifacts(row, JsonCodec.valueToJsonString(migratedArtifacts))
       }
-      val receipt = preferredReceipt(phaseOutputs.receipt, goalMigration)
       AdmittedFeatureTaskRuntimeExecution(
         identity,
         plan,
         checkedInputs,
         requireNotNull(descriptor),
-        receipt,
+        phaseOutputs.receipt ?: currentReceipt(),
       )
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
@@ -160,6 +152,13 @@ class FeatureTaskRuntimeExecutionAdmission(
     throw reported
   }
 
+  private fun currentReceipt(): RuntimeMigrationReceipt =
+    RuntimeMigrationReceipt(
+      FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      RuntimeMigrationReceipt.Result.CURRENT,
+    )
+
   private fun requireStoppedMigrationOwner(
     states: WorkflowStateRepository,
     workflowId: String,
@@ -173,15 +172,6 @@ class FeatureTaskRuntimeExecutionAdmission(
       )
     }
   }
-
-  private fun preferredReceipt(
-    phaseReceipt: RuntimeMigrationReceipt?,
-    goalMigration: RuntimeMigrationReceipt,
-  ): RuntimeMigrationReceipt =
-    phaseReceipt?.takeIf { it.result == RuntimeMigrationReceipt.Result.CONVERTED }
-      ?: goalMigration.takeIf { it.result == RuntimeMigrationReceipt.Result.CONVERTED }
-      ?: phaseReceipt
-      ?: goalMigration
 
   private fun requireMatchingPlan(
     plan: ResolvedPhaseExecutionPlan,
@@ -227,64 +217,6 @@ class FeatureTaskRuntimeExecutionAdmission(
     val targetVersion: String,
     val result: String,
   )
-
-  private fun migrateGoalImport(
-    states: WorkflowStateRepository,
-    session: GoalRunnerPersistenceSession?,
-    identity: FeatureTaskExecutionIdentity,
-    request: AdmissionRequest,
-  ): RuntimeMigrationReceipt {
-    val before = states.getFeatureTaskWorkflowAsMode(identity.workflowId, FeatureTaskWorkflowMode.RUNTIME)
-    val imported =
-      before?.toSnapshot()?.artifacts?.let {
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(it) as? Map<*, *>
-      }
-    return if (imported != null) {
-      val storedVersion = savedPlanningContractVersion(imported)
-      val parentId =
-        imported[GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID] as? String
-          ?: refuseImport(
-            "Goal import has no parent ownership. Restore the original import before resuming.",
-          )
-      try {
-        planningMigration.migrate(
-          session ?: refuseImport(
-            "Coupled planning migration requires the owning persistence session. Resume the parent goal.",
-          ),
-          parentId,
-          identity.repositoryIdentity,
-          identity.normalizedIssueKey,
-          requirePreparation = true,
-        )
-      } catch (error: SkillBillRuntimeException) {
-        if (request.failureFacts == null) {
-          request.failureFacts =
-            MigrationFailureFacts(
-              storedVersion,
-              FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-              (error.code as? Enum<*>)?.name?.lowercase() ?: "unsafe_import",
-            )
-        }
-        throw error
-      }
-    } else {
-      RuntimeMigrationReceipt(
-        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        RuntimeMigrationReceipt.Result.CURRENT,
-      )
-    }
-  }
-
-  private fun savedPlanningContractVersion(imported: Map<*, *>): String {
-    val stored = imported[GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION] as? String
-    return stored?.takeIf { it.matches(SAVED_CONTRACT_VERSION) }
-      ?: stored?.takeIf { it.isNotBlank() }
-      ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-  }
-
-  private fun refuseImport(reason: String): Nothing =
-    throw SkillBillRuntimeException(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT, reason)
 
   private fun requireMatchingIdentity(
     identity: FeatureTaskExecutionIdentity,

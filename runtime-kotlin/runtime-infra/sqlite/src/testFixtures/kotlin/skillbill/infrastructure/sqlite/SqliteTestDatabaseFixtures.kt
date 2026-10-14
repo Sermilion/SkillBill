@@ -52,7 +52,7 @@ fun withGoalPlanningPreparationRepository(
   block: (GoalPlanningPreparationRepository) -> Unit,
 ) {
   ensureTestDatabase(dbPath).use { connection ->
-    block(GoalPlanningPreparationStore(connection, SqliteTestDiagnostics))
+    block(GoalPlanningPreparationStore(connection))
   }
 }
 

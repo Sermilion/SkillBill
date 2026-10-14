@@ -26,7 +26,6 @@ import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
-import skillbill.di.goal.RuntimeGoalPlanningSweepProvides
 import skillbill.di.goal.RuntimeGoalRunnerLaunchProvides
 import skillbill.di.goal.RuntimeGoalRunnerStoreProvides
 import skillbill.di.install.RuntimeExternalPlatformPackProvides
@@ -101,7 +100,6 @@ abstract class RuntimeComponent(
     RuntimeExternalPlatformPackProvides,
     RuntimeTelemetryProvides,
     RuntimeGoalPlanningProvides,
-    RuntimeGoalPlanningSweepProvides,
     RuntimeGoalRunnerStoreProvides,
     RuntimeGoalRunnerLaunchProvides,
     RuntimeReviewLaunchProvides,

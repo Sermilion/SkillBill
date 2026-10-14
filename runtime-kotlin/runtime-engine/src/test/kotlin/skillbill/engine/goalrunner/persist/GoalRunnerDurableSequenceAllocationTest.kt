@@ -5,15 +5,12 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.planning.attempt.DurableGoalPlanningAttemptRecorder
-import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptRecord
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
-import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
@@ -39,27 +36,16 @@ class GoalRunnerDurableSequenceAllocationTest {
     )
 
   @Test
-  fun `interleaved planning attempts and progress events in one run read back strictly increasing`() {
-    val attempts = DurableGoalPlanningAttemptRecorder(store, sequenceTestClock)
-    val progress = progressEmitter()
+  fun `two emitter instances on one workflow allocate distinct increasing progress sequences`() {
+    progressEmitter().emit(heartbeat())
+    progressEmitter().emit(heartbeat())
+    progressEmitter().emit(heartbeat())
 
-    attempts.record(planningAttempt(attempt = 1))
-    progress.emit(heartbeat())
-    attempts.record(planningAttempt(attempt = 2))
-    progress.emit(heartbeat())
-
-    assertStrictlyIncreasing(store.progressEvents(SEQUENCE_WORKFLOW_ID).map { it.sequenceNumber }, expectedSize = 4)
+    assertStrictlyIncreasing(store.progressEvents(SEQUENCE_WORKFLOW_ID).map { it.sequenceNumber }, expectedSize = 3)
   }
 
   @Test
-  fun `two recorder instances on one workflow allocate distinct increasing sequences`() {
-    DurableGoalPlanningAttemptRecorder(store, sequenceTestClock).record(planningAttempt(attempt = 1))
-    progressEmitter().emit(heartbeat())
-    DurableGoalPlanningAttemptRecorder(store, sequenceTestClock).record(planningAttempt(attempt = 2))
-    progressEmitter().emit(heartbeat())
-
-    assertStrictlyIncreasing(store.progressEvents(SEQUENCE_WORKFLOW_ID).map { it.sequenceNumber }, expectedSize = 4)
-
+  fun `two ledger recorder instances on one workflow allocate distinct increasing ledger sequences`() {
     ledgerRecorder().recordLedgerEntry(childActivation())
     ledgerRecorder().recordLedgerEntry(childActivation())
 
@@ -85,16 +71,6 @@ class GoalRunnerDurableSequenceAllocationTest {
       ),
       sequenceTestClock,
       NoopRuntimeDiagnostics,
-    )
-
-  private fun planningAttempt(attempt: Int) =
-    GoalPlanningAttemptRecord(
-      parentWorkflowId = SEQUENCE_WORKFLOW_ID,
-      issueKey = SEQUENCE_ISSUE_KEY,
-      phaseId = "plan",
-      subtaskId = 1,
-      attempt = attempt,
-      outcome = GoalProgressOutcome.SUCCEEDED,
     )
 
   private fun heartbeat() =

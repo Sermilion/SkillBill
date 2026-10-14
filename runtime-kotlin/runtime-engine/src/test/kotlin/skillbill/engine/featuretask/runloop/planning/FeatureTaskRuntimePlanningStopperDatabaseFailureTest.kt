@@ -6,6 +6,7 @@ import skillbill.application.testDecompositionManifestWriter
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.planning.PlanBundleSnapshots
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunRecords
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
@@ -20,6 +21,7 @@ import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathRes
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -42,7 +44,7 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
 
   @Test
   fun `a busy database while persisting the decompose terminal propagates instead of blocking planning`() {
-    writePlanBundle(repoRoot, ISSUE_KEY)
+    val written = writePlanBundle(repoRoot, ISSUE_KEY)
     val busy = databaseBusy(IllegalStateException("[SQLITE_BUSY] The database file is locked (database is locked)"))
     val records =
       object : PhaseRunRecords by InMemoryPhaseRunRecords(Clock.systemUTC(), null) {
@@ -52,6 +54,15 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
           planStepId: String,
         ): Boolean = throw busy
       }
+    written.subtaskSpecPaths.forEach { path ->
+      Files.writeString(
+        repoRoot.resolve(path),
+        Files.readString(repoRoot.resolve(path)) + "\n## Implementation Details\n- Planned task.\n",
+      )
+    }
+    val bundle =
+      PlanBundleSnapshots(decompositionPlanner()).capture(repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+    records.recordPlanBundle(WORKFLOW_ID, bundle)
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
@@ -69,7 +80,7 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
     val thrown =
       assertFailsWith<Throwable> {
         stopper.resolve(
-          request = specBundleRequest(),
+          request = bundleRequest(),
           completedOutput = FeatureTaskRuntimePhaseOutput(PLAN, 1, "{}"),
           completedPhaseIds = listOf(PLAN),
           resolvedBranch = null,
@@ -91,30 +102,26 @@ class FeatureTaskRuntimePlanningStopperDatabaseFailureTest {
       specPathResolver = FileSystemFeatureSpecPathResolver(),
     )
 
-  private fun specBundleRequest(): FeatureTaskRuntimeRunFacts {
-    val request =
-      FeatureTaskRuntimeRunRequest(
-        issueKey = ISSUE_KEY,
-        workflowId = "wfl-planning-stop",
-        sessionId = "ftr-planning-stop",
-        runInvariants =
-          FeatureTaskRuntimeRunInvariants(
-            specReference = "$ISSUE_KEY split the runtime work into ordered subtasks",
-            featureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
-            acceptanceCriteria = listOf("Plan authors a governed spec bundle."),
-            mandatesAndOverrides = emptyList(),
-            codeReviewMode = CodeReviewExecutionMode.INLINE,
-          ),
-        invokedAgentId = "claude",
-        repoRoot = repoRoot,
-      )
-    return object : FeatureTaskRuntimeRunFacts by request {
-      override val specBundleRequired: Boolean = true
-    }
-  }
+  private fun bundleRequest(): FeatureTaskRuntimeRunFacts =
+    FeatureTaskRuntimeRunRequest(
+      issueKey = ISSUE_KEY,
+      workflowId = WORKFLOW_ID,
+      sessionId = "ftr-planning-stop",
+      runInvariants =
+        FeatureTaskRuntimeRunInvariants(
+          specReference = "$ISSUE_KEY split the runtime work into ordered subtasks",
+          featureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
+          acceptanceCriteria = listOf("Plan authors a governed spec bundle."),
+          mandatesAndOverrides = emptyList(),
+          codeReviewMode = CodeReviewExecutionMode.INLINE,
+        ),
+      invokedAgentId = "claude",
+      repoRoot = repoRoot,
+    )
 
   private companion object {
     const val ISSUE_KEY = "SKILL-901"
+    const val WORKFLOW_ID = "wfl-planning-stop"
     const val PLAN = "plan"
   }
 }

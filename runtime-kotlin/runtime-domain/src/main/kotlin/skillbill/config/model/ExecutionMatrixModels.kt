@@ -22,6 +22,7 @@ internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
     FeatureTaskRuntimePhaseIds.INTAKE to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PREPLAN to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PLAN to ExecutionTier.REASONING,
+    FeatureTaskRuntimePhaseIds.PLAN_SUBTASKS to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.IMPLEMENT to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.SIMPLIFY to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.IMPLEMENT_FIX to ExecutionTier.IMPLEMENTATION,

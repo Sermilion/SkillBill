@@ -2,28 +2,10 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
-import skillbill.infrastructure.sqlite.workflow.featuretask.encodeWorkflowArtifact
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
-import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
-import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.workflow.taskruntime.artifact.decodePhaseOutputRepairEvidenceFromArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import java.sql.ResultSet
-
-internal fun SharedGoalPreplanCheckpoint.repairEvidenceJson(): String? =
-  repairEvidence?.let {
-    JsonCodec.mapToJsonString(JsonCodec.anyToStringAnyMap(it.encodeWorkflowArtifact()) ?: emptyMap())
-  }
-
-internal fun GoalSubtaskPlanCheckpoint.repairEvidenceJson(): String? =
-  repairEvidence?.let {
-    JsonCodec.mapToJsonString(JsonCodec.anyToStringAnyMap(it.encodeWorkflowArtifact()) ?: emptyMap())
-  }
-
-internal fun incompatibleLoadedVersionReason(loaded: String): String = "loaded contract_version '$loaded' is not '0.1'."
-
-internal fun statusLabel(rows: ResultSet): String =
-  "${rows.getString("parent_goal_workflow_id")}#${rows.getInt("subtask_id")}"
 
 internal fun requireColumn(
   rows: ResultSet,

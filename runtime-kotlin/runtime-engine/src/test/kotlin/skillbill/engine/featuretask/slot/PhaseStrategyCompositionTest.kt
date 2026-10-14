@@ -33,8 +33,8 @@ import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
@@ -78,6 +78,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
@@ -106,7 +107,7 @@ class PhaseStrategyCompositionTest {
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
-    val fanOut = GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
+    val fanOut = PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
     return PhaseStrategyRegistry(
       (
         strategies +
@@ -119,7 +120,7 @@ class PhaseStrategyCompositionTest {
               scriptedDelegatedReviewRunner(database, home, LaneScript()),
             ),
             fanOut,
-            GoalPlanFanOutOpus55Strategy(fanOut),
+            PlanFanOutOpus55Strategy(fanOut),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
     )
@@ -621,8 +622,9 @@ class PhaseStrategyCompositionTest {
         lookup.strategyFor(PHASE_PRESENT_FINDINGS, plan).strategyId,
       )
     }
-    if (definition == SkeletonDefinition.GOAL_PLANNING) {
-      assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+    if (PhaseSlot.PLAN in definition.slots) {
+      assertEquals(PlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+      assertEquals(PlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN_SUBTASKS, plan).strategyId)
     }
     plan.selectedStrategies.forEach { identity ->
       identity.steps.forEach { step ->

@@ -3,9 +3,6 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
@@ -58,26 +55,3 @@ internal fun planCheckpoint(
     planPayload = "plan-$subtaskId",
   )
 }
-
-internal fun preparationRecord(
-  parentGoalWorkflowId: String,
-  subtaskId: Int,
-  repositoryIdentity: String = "repo-root-realpath-v1:/repository",
-  subSpecHash: String = "sub-spec-default",
-): GoalPlanningPreparationRecord =
-  GoalPlanningPreparationRecord(
-    parentGoalWorkflowId = parentGoalWorkflowId,
-    normalizedIssueKey = "SKILL-128",
-    repositoryIdentity = repositoryIdentity,
-    subtaskId = subtaskId,
-    governedSubSpecPath = ".feature-specs/SKILL-128/spec_subtask_$subtaskId.md",
-    preparationStatus = GoalPlanningPreparationState.PREPARED,
-    provenance =
-      GoalPlanningPreparationProvenance(
-        parentSpecHash = "parent-spec-$parentGoalWorkflowId",
-        subSpecHash = subSpecHash,
-        decompositionManifestHash = "manifest-$parentGoalWorkflowId",
-      ),
-    preplanPayload = """{"phase_id":"preplan"}""",
-    planPayload = """{"phase_id":"plan"}""",
-  )
