@@ -169,6 +169,7 @@ class SkeletonDefinitionTest {
   @Test
   fun `standalone plan is durable, invocable on its own, and admitted only as a standalone run`() {
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
+    assertEquals(listOf("intake", "preplan", "plan"), SkeletonDefinition.PLAN.stepIds)
     assertEquals(
       listOf("review", "validation", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),

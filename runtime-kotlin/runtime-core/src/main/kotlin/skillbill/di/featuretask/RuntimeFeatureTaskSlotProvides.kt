@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -38,6 +39,7 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -91,6 +93,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
     goalPlanFanOut: GoalPlanFanOutStrategy,
     prDescription: PrDescriptionStrategy,
     monitor: MonitorStrategy,
+    planIntake: () -> FeatureTaskRuntimePlanIntake,
   ): PhaseStrategyRegistry {
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
@@ -102,6 +105,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
     val opusStandaloneDelegatedRunner = runner()
     return PhaseStrategyRegistry(
       listOf(
+        PhaseStrategyRegistration(RuntimeIntakeStrategy(planIntake), runner()),
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),

@@ -26,11 +26,13 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -88,6 +90,7 @@ class FeatureTaskRuntimeRunnerExecute(
         specReference = runRequest.runInvariants.specReference,
         isGoalContinuation = isGoalContinuationRun(runRequest),
       )
+    if (runRequest.stopAfterIntake) return executeIntakeOnlyPass(runRequest, specSource)
     emitFeatureTaskRuntimeEventSafely(
       diagnostics = diagnostics,
       seam = "RunStarted event-sink emission",
@@ -103,13 +106,7 @@ class FeatureTaskRuntimeRunnerExecute(
         runRequest,
         diagnostics,
       )
-    val executionPlan =
-      requireNotNull(runRequest.admittedExecution).let { admitted ->
-        check(admitted.identity.workflowId == runRequest.workflowId) {
-          "Execution admission belongs to another workflow."
-        }
-        admitted.plan
-      }
+    val executionPlan = admittedPlan(runRequest)
     val state = executePrepared.createExecutePreparedRunState(runRequest, executionPlan, diagnostics)
     val telemetryContext =
       buildExecutePreparedRunTelemetryContext(
@@ -138,6 +135,33 @@ class FeatureTaskRuntimeRunnerExecute(
     lifecycleTelemetry.finished(terminalReport, telemetryContext)
     return terminalReport
   }
+
+  /**
+   * Drives only the `intake` step. The pass carries placeholder invariants, so it emits no `RunStarted` or lifecycle
+   * telemetry and never finalizes the spec; the pass that reads the settled spec owns all three.
+   */
+  private fun executeIntakeOnlyPass(
+    runRequest: FeatureTaskRuntimeRunRequest,
+    specSource: SpecSource,
+  ): FeatureTaskRuntimeRunReport {
+    val executionPlan = admittedPlan(runRequest)
+    val observability =
+      FeatureTaskRuntimeRunObservability(
+        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, runRequest.admittedExecution),
+        runRequest,
+        diagnostics,
+      )
+    val state = executePrepared.createExecutePreparedRunState(runRequest, executionPlan, diagnostics)
+    return executePrepared.driveExecutePreparedRunLoop(runRequest, specSource, executionPlan, observability, state)
+  }
+
+  private fun admittedPlan(runRequest: FeatureTaskRuntimeRunRequest): ResolvedPhaseExecutionPlan =
+    requireNotNull(runRequest.admittedExecution).let { admitted ->
+      check(admitted.identity.workflowId == runRequest.workflowId) {
+        "Execution admission belongs to another workflow."
+      }
+      admitted.plan
+    }
 
   private fun buildExecutePreparedRunTelemetryContext(
     runRequest: FeatureTaskRuntimeRunRequest,

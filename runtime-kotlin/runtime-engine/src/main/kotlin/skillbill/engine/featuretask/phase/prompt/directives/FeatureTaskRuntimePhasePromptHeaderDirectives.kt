@@ -11,7 +11,10 @@ const val PHASE_PROMPT_TEMPLATE_INDENT = "      "
 
 val forwardPhaseOrder: String =
   FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-    .filterNot { it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds }
+    .filterNot {
+      it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds ||
+        it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
+    }
     .joinToString(" -> ")
 
 fun operatorBlockRetryDirective(

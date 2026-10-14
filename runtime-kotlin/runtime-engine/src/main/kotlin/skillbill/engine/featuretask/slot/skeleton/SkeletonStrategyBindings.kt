@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -86,6 +87,7 @@ object SkeletonStrategyBindings {
         ),
       SkeletonDefinition.PLAN to
         mapOf(
+          PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),
           PhaseSlot.PREPLAN to
             PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
           PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID).withOpus(AgentPlanOpus55Strategy.ID),

@@ -26,6 +26,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
@@ -44,6 +45,7 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     when (policy) {
       PhaseHistoricalPolicy.REVISION_1 ->
         mapOf(
+          PHASE_INTAKE to PhaseResumeRules.None,
           PHASE_PREPLAN to PhaseResumeRules.None,
           PHASE_PLAN to PlanResumeRules,
           PHASE_IMPLEMENT to ImplementResumeRules,

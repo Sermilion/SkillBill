@@ -19,12 +19,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.text.sha256HexUtf8
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
-import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.decodePlanSeedFromArtifact
 import skillbill.workflow.taskruntime.artifact.decomposeTerminal
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -66,6 +61,7 @@ class StandalonePlanRun(
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val preparation: StandalonePlanPreparation,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val seedRecorder: FeatureTaskRuntimePlanSeedRecorder,
 ) {
   fun issueKeyOf(intake: String): String = intakePreparation.issueKeyOf(intake)
 
@@ -198,52 +194,56 @@ class StandalonePlanRun(
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
-    val spec = intakePreparation.seedPlanSpec(issueKey, intake, repoRoot)
-    val operatorAuthored = spec.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR
-    if (operatorAuthored && !isKeyResolvedSpec(issueKey, spec.specPath, repoRoot)) {
+    val resolution = intakePreparation.resolvePlanSpec(issueKey, intake, repoRoot)
+    val plannedPath = resolution.specPath
+    val existing = fileStore.isRegularFile(plannedPath)
+    if (existing && !isKeyResolvedSpec(issueKey, plannedPath, repoRoot)) {
       return refused(
         statusPublisher,
-        "The supplied spec ${spec.specPath} is not the governed spec for $issueKey; settlement guards the spec " +
+        "The supplied spec $plannedPath is not the governed spec for $issueKey; settlement guards the spec " +
           "found under .feature-specs/$issueKey-*/. Move it there and plan again.",
       )
     }
-    val seed = FeatureTaskRuntimePlanSeed(intake?.let(::sha256HexUtf8), spec.specOrigin, specHash(spec.specPath))
+    val specPath =
+      if (existing) plannedPath else repositories.canonicalPath(repoRoot).resolve(repoRoot.relativize(plannedPath))
     val input =
-      inputFor(spec.specPath.toString()).copy(
+      inputFor(specPath.toString()).copy(
         definition = SkeletonDefinition.PLAN,
-        protectedSpecSha256 = seed.specSha256.takeIf { operatorAuthored },
-        openArtifacts =
-          requireNotNull(
-            WorkflowArtifactPatch.from(
-              mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_SEED.entry(seed.asWorkflowArtifactEntry())),
-            ),
-          ),
+        planIntake = intake,
+        protectedSpecSha256 =
+          if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) specHash(plannedPath) else null,
       )
     return runEntry(input, repoRoot, statusPublisher)
   }
 
   private fun resume(
     candidate: FeatureTaskContinuationCandidate,
-    intakeSha256: String?,
+    intake: String?,
     repoRoot: Path,
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
     statusPublisher: StandalonePhaseStatusEventSink?,
   ): StandalonePlanResult {
-    val specPath = repoRoot.resolve(candidate.governedSpecPath)
-    val seed = recordedSeed(candidate.workflowId)
-    if (intakeSha256 != null && intakeSha256 != seed?.intakeSha256) {
+    val specPath = repositories.canonicalPath(repoRoot).resolve(candidate.governedSpecPath)
+    val seed = seedRecorder.read(candidate.workflowId)
+    if (seed != null && intake != null && sha256HexUtf8(intake) != seed.intakeSha256) {
       return refused(
         statusPublisher,
         "Plan workflow '${candidate.workflowId}' was opened with a different intake; resume it without an intake.",
         candidate.workflowId,
       )
     }
-    val operatorAuthored = seed == null || seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR
+    val protectedSpecSha256 =
+      if (seed != null) {
+        seed.specSha256.takeIf { seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR }
+      } else {
+        if (intakePreparation.keepsOperatorSpec(specPath)) specHash(specPath) else null
+      }
     val input =
       inputFor(specPath.toString()).copy(
         explicitWorkflowId = candidate.workflowId,
         definition = SkeletonDefinition.PLAN,
-        protectedSpecSha256 = (seed?.specSha256 ?: specHash(specPath)).takeIf { operatorAuthored },
+        planIntake = intake,
+        protectedSpecSha256 = protectedSpecSha256,
       )
     return runEntry(input, repoRoot, statusPublisher)
   }
@@ -299,15 +299,6 @@ class StandalonePlanRun(
     }
     return result
   }
-
-  private fun recordedSeed(workflowId: String): FeatureTaskRuntimePlanSeed? =
-    database.read { unitOfWork ->
-      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-        ?.artifacts
-        ?.toMap()
-        ?.let(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_SEED::value)
-        ?.let(::decodePlanSeedFromArtifact)
-    }
 
   private fun isKeyResolvedSpec(
     issueKey: String,

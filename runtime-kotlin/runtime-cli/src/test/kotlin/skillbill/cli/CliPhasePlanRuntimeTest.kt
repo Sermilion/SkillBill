@@ -54,6 +54,7 @@ class CliPhasePlanRuntimeTest {
     assertEquals(listOf("preplan", "plan", "plan"), launcher.phaseIds)
     assertEquals(1, rowCount("feature_task_workflows"))
     assertEquals(2, rowCount("goal_subtask_plans"))
+    assertEquals(mapOf("status" to "completed", "attempt_count" to 1), settledIntakeStep())
     val board = CliRuntime.run(listOf("--db", fixture.dbPath.toString(), "work", "board", "--format", "json"), context)
     val boardPayload = requireNotNull(JsonCodec.parseObjectOrNull(board.stdout))
     val items = boardPayload["items"] as JsonArray
@@ -148,6 +149,18 @@ class CliPhasePlanRuntimeTest {
     assertEquals(1, rowCount("feature_task_workflows"))
     assertGoalStartsAtImplementation(launcher)
   }
+
+  private fun settledIntakeStep(): Map<String, Any?> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery("SELECT steps_json FROM feature_task_workflows").use { rows ->
+          check(rows.next())
+          val steps = requireNotNull(JsonCodec.parseValue(rows.getString(1)) as? List<*>)
+          val intake = steps.mapNotNull(JsonCodec::anyToStringAnyMap).single { it["step_id"] == "intake" }
+          mapOf("status" to intake["status"], "attempt_count" to (intake["attempt_count"] as Number).toInt())
+        }
+      }
+    }
 
   private fun resumedWorkflowId(): String =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->

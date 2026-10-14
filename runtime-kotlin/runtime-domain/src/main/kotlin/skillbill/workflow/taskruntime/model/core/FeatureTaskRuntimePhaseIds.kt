@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.core
 
 internal object FeatureTaskRuntimePhaseIds {
+  const val INTAKE: String = "intake"
   const val PREPLAN: String = "preplan"
   const val PLAN: String = "plan"
   const val IMPLEMENT: String = "implement"
@@ -22,6 +23,7 @@ internal object FeatureTaskRuntimePhaseIds {
 
   val all: List<String> =
     listOf(
+      INTAKE,
       PREPLAN,
       PLAN,
       IMPLEMENT,

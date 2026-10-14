@@ -102,6 +102,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
 
   val phaseProjectionMatrix: Map<String, List<PhaseHandoffProjectionDeclaration>> =
     mapOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
         listOf(

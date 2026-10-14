@@ -1370,11 +1370,16 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` is a durable
   standalone run, not a phase run. `StandalonePlanRun`
-  (`skillbill.engine.goalrunner.plan`) seeds the parent `spec.md`
-  (`GoalIntakePreparation.seedPlanSpec`: an existing spec is operator-authored,
-  new work is seeded from the intake), opens a `standalone` workflow whose
-  execution plan names the `plan` definition, and writes a `plan_seed` artifact
-  (intake hash, spec origin, spec hash). The run requires a spec bundle
+  (`skillbill.engine.goalrunner.plan`) opens a `standalone` workflow whose
+  execution plan names the `plan` definition before the parent `spec.md` need
+  exist, and carries the operator's intake on the run request. The plan's
+  `intake` step (`RuntimeIntakeStrategy` over `FeatureTaskRuntimePlanIntake`)
+  keeps an operator spec that has a readable acceptance list, quotes one
+  without it, or seeds a spec from the intake, then writes a `plan_seed`
+  artifact (intake hash, spec origin, spec hash). `FeatureTaskRuntimeRunEntry`
+  runs an intake-only pass first and reads the run invariants from the spec
+  only once `intake` is complete; a resume that finds a recorded seed writes
+  nothing. The run requires a spec bundle
   (`requiresSpecBundle`): the plan prompt asks for subtask specs and a manifest
   inside the existing bundle, the planning stopper verifies them through
   `FeatureSpecPreparationWriter`, and the run records a completed decompose

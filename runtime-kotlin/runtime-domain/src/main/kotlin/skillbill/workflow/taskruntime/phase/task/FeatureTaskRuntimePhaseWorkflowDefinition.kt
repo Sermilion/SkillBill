@@ -9,6 +9,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 object FeatureTaskRuntimePhaseWorkflowDefinition {
+  const val PHASE_INTAKE: String = FeatureTaskRuntimePhaseIds.INTAKE
   const val PHASE_PREPLAN: String = FeatureTaskRuntimePhaseIds.PREPLAN
   const val PHASE_PLAN: String = FeatureTaskRuntimePhaseIds.PLAN
   const val PHASE_IMPLEMENT: String = FeatureTaskRuntimePhaseIds.IMPLEMENT
@@ -65,7 +66,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
 
-  val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_COMMIT_PUSH, PHASE_MONITOR)
+  val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_INTAKE, PHASE_COMMIT_PUSH, PHASE_MONITOR)
 
   val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds
 

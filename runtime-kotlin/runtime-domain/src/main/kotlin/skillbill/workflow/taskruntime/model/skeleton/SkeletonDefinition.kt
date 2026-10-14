@@ -77,9 +77,10 @@ data class SkeletonDefinition(
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
-        listOf(PhaseSlot.PREPLAN, PhaseSlot.PLAN),
+        listOf(PhaseSlot.INTAKE, PhaseSlot.PREPLAN, PhaseSlot.PLAN),
         SkeletonRunStateKind.DURABLE,
         PhaseIntakeRequirement.ISSUE_KEY,
+        semanticRevision = 2,
         standaloneInvocable = true,
       )
     val PR: SkeletonDefinition =

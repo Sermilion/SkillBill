@@ -2653,6 +2653,11 @@
     "session_id": "__NORMALIZED_SESSION_ID__",
     "steps_json": [
         {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "intake"
+        },
+        {
             "attempt_count": 1,
             "status": "completed",
             "step_id": "preplan"

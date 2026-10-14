@@ -20,6 +20,7 @@ class PhaseSlotTest {
   fun `slots keep the declared wire order`() {
     assertEquals(
       listOf(
+        "intake",
         "preplan",
         "plan",
         "implementation",

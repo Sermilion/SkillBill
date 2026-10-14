@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
@@ -94,7 +95,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
   fun `plan and pr select the existing planning and publishing strategies`() {
     val expected =
       mapOf(
-        SkeletonDefinition.PLAN to setOf(AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
+        SkeletonDefinition.PLAN to setOf(RuntimeIntakeStrategy.ID, AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
         SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID, MonitorStrategy.ID),
         SkeletonDefinition.MONITOR to setOf(RuntimeCommitStrategy.ID, MonitorStrategy.ID),
       )

@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
@@ -25,15 +26,21 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
+
+private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
 
 @Inject
 class FeatureTaskRuntimeRunEntry(
@@ -47,6 +54,7 @@ class FeatureTaskRuntimeRunEntry(
   private val agentRunLauncher: AgentRunLauncher,
   private val diagnostics: RuntimeDiagnostics,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val phaseRecorder: FeatureTaskRuntimePhaseRecorder,
 ) {
   fun run(
     input: FeatureTaskRuntimeRunInput,
@@ -82,37 +90,78 @@ class FeatureTaskRuntimeRunEntry(
       if (input.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(input, admittedExecution)
       }
+      val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+      if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
+        // The spec may not exist until `intake` settles, so the invariants are read only after it completes.
+        val intakeReport =
+          runner.run(
+            runRequest(input, workflowId, admittedExecution, intakePassInvariants(input, specPath, admittedExecution))
+              .copy(stopAfterIntake = true),
+          )
+        if (!intakeCompleted(workflowId)) return@runOwned intakeReport
+      }
       val sourceInvariants = runInvariantsSource.read(specPath).requireInvariants()
       runner.run(
-        FeatureTaskRuntimeRunRequest(
-          issueKey = input.issueKey,
-          workflowId = workflowId,
-          admittedExecution = admittedExecution,
-          sessionId =
-            "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$workflowId",
-          runInvariants =
-            sourceInvariants.copy(
-              codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
-              agentAddonSelection = input.agentAddonSelection.persisted,
-            ),
-          invokedAgentId = input.invokedAgentId,
-          agentAssignment = input.agentAssignment,
-          modelAssignment = input.modelAssignment,
-          compactionSettings = input.compactionSettings,
-          environment = input.environment,
-          repoRoot = input.repoRoot,
-          timeout = input.timeout,
-          requestedCodeReviewMode = input.requestedCodeReviewMode,
-          goalContinuation = goalContinuation,
-          operatorDecision = input.operatorDecision,
-          agentAddonSelection = input.agentAddonSelection,
-          eventSink = input.eventSink,
-          skeletonDefinition = input.definition,
-          protectedSpecSha256 = input.protectedSpecSha256,
+        runRequest(
+          input,
+          workflowId,
+          admittedExecution,
+          sourceInvariants.copy(
+            codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
+            agentAddonSelection = input.agentAddonSelection.persisted,
+          ),
         ),
       )
     }
   }
+
+  private fun runRequest(
+    input: FeatureTaskRuntimeRunInput,
+    workflowId: String,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+    invariants: FeatureTaskRuntimeRunInvariants,
+  ): FeatureTaskRuntimeRunRequest =
+    FeatureTaskRuntimeRunRequest(
+      issueKey = input.issueKey,
+      workflowId = workflowId,
+      admittedExecution = admittedExecution,
+      sessionId = "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$workflowId",
+      runInvariants = invariants,
+      invokedAgentId = input.invokedAgentId,
+      agentAssignment = input.agentAssignment,
+      modelAssignment = input.modelAssignment,
+      compactionSettings = input.compactionSettings,
+      environment = input.environment,
+      repoRoot = input.repoRoot,
+      timeout = input.timeout,
+      requestedCodeReviewMode = input.requestedCodeReviewMode,
+      goalContinuation = input.goalContinuation,
+      operatorDecision = input.operatorDecision,
+      agentAddonSelection = input.agentAddonSelection,
+      eventSink = input.eventSink,
+      skeletonDefinition = input.definition,
+      protectedSpecSha256 = input.protectedSpecSha256,
+      planIntake = input.planIntake,
+    )
+
+  private fun intakeCompleted(workflowId: String): Boolean =
+    phaseRecorder.loadPhaseRecords(workflowId)
+      ?.get(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE)
+      ?.status == WorkflowStepStatus.COMPLETED
+
+  /** Placeholder invariants for the intake-only pass; the pass never persists them and never reaches an agent. */
+  private fun intakePassInvariants(
+    input: FeatureTaskRuntimeRunInput,
+    specPath: Path,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+  ): FeatureTaskRuntimeRunInvariants =
+    FeatureTaskRuntimeRunInvariants(
+      specReference = specPath.toString(),
+      acceptanceCriteria = listOf(INTAKE_PASS_CRITERION),
+      mandatesAndOverrides = emptyList(),
+      codeReviewMode = admittedExecution.reviewMode ?: CodeReviewExecutionMode.AUTO,
+      agentAddonSelection = input.agentAddonSelection.persisted,
+    )
 
   private fun open(
     input: FeatureTaskRuntimeRunInput,
@@ -124,7 +173,11 @@ class FeatureTaskRuntimeRunEntry(
     val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
     val reviewMode =
       goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
-        ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
+        ?: if (PhaseSlot.INTAKE in definition.slots) {
+          CodeReviewExecutionMode.AUTO
+        } else {
+          runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
+        }
     val qualityGate = goalContinuation?.qualityGateSelection
     val facts =
       PhaseStrategySelectionFacts(

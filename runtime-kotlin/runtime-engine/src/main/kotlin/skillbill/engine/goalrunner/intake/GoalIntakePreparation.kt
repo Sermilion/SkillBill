@@ -103,29 +103,57 @@ class GoalIntakePreparation(
     return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
   }
 
-  fun seedPlanSpec(
+  /** Where intake will leave the parent spec and how, without writing anything. */
+  fun resolvePlanSpec(
     issueKey: String,
     intake: String?,
     repoRoot: Path,
   ): PlanSpecSeed {
     val supplied = intake?.takeIf(String::isNotBlank) ?: issueKey
-    existingSpecPath(supplied, issueKey, repoRoot)?.let {
-      return PlanSpecSeed(it, FeatureTaskRuntimePlanSpecOrigin.OPERATOR)
+    val existing = existingSpecPath(supplied, issueKey, repoRoot)
+    if (existing != null) {
+      val kept = keepsOperatorSpec(existing)
+      return PlanSpecSeed(
+        existing,
+        if (kept) FeatureTaskRuntimePlanSpecOrigin.OPERATOR else FeatureTaskRuntimePlanSpecOrigin.SEEDED,
+      )
     }
-    val featureName = newWorkFeatureName(GoalIntake.parse(supplied))
+    val planned = specWriter.plannedParentSpecPath(repoRoot, issueKey, newWorkFeatureName(GoalIntake.parse(supplied)))
+    return PlanSpecSeed(planned, FeatureTaskRuntimePlanSpecOrigin.SEEDED)
+  }
+
+  /** Whether [specPath] is an existing operator spec with a readable acceptance list, which intake never rewrites. */
+  fun keepsOperatorSpec(specPath: Path): Boolean =
+    fileStore.isRegularFile(specPath) && hasAcceptanceList(fileStore.readText(specPath))
+
+  /** Writes the spec [resolution] (from [resolvePlanSpec]) names, unless it is an operator spec to keep. */
+  fun intakePlanSpec(
+    issueKey: String,
+    intake: String?,
+    repoRoot: Path,
+    resolution: PlanSpecSeed,
+  ): PlanSpecSeed {
+    if (resolution.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR) return resolution
+    val supplied = intake?.takeIf(String::isNotBlank) ?: issueKey
+    val existing = resolution.specPath.takeIf(fileStore::isRegularFile)
+    val existingText = existing?.let(fileStore::readText)
+    val featureName =
+      existing?.parent?.fileName?.toString()?.let { issueAndFeature(it).second }
+        ?: newWorkFeatureName(GoalIntake.parse(supplied))
     val specPath =
       specWriter.writeParentSpecOnly(
         repoRoot,
         FeatureSpecPreparationDecision(
           issueKey,
-          supplied,
-          acceptanceCriteria(supplied),
+          existingText?.let(::asProse) ?: supplied,
+          acceptanceCriteria(existingText ?: supplied),
           listOf(TRACKER_RESOLUTION),
           emptyList(),
           FeatureSpecPreparationMode.DECOMPOSED,
         ),
         featureName,
         VALIDATION,
+        existing,
       )
     return PlanSpecSeed(specPath, FeatureTaskRuntimePlanSpecOrigin.SEEDED)
   }

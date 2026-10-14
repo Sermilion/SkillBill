@@ -271,7 +271,9 @@ class FeatureTaskRuntimeRunPreparation(
         codeReviewMode = continuation?.continuation?.codeReviewMode ?: selectedMode,
         agentAddonSelection = request.agentAddonSelection.persisted,
       )
-    val durable = runInvariantsStore.resolve(request.workflowId, proposed) ?: proposed
+    // The intake-only pass carries placeholder invariants; only the pass that reads the settled spec may freeze them.
+    val durable =
+      if (request.stopAfterIntake) proposed else runInvariantsStore.resolve(request.workflowId, proposed) ?: proposed
     val durableContinuation = continuation?.continuation
     if (durableContinuation != null && durable.codeReviewMode != durableContinuation.codeReviewMode) {
       return blocked(

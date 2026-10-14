@@ -5,6 +5,7 @@ import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFA
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object FeatureTaskRuntimePhaseWorkflowGraph {
@@ -50,9 +51,10 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.ABANDONED,
         ),
       defaultInitialStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-      stepIds = SkeletonDefinition.FEATURE_RUN_SLOTS.flatMap { it.steps },
+      stepIds = (listOf(PhaseSlot.INTAKE) + SkeletonDefinition.FEATURE_RUN_SLOTS).flatMap { it.steps },
       stepLabels =
         mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to "Phase 0: Intake",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to "Phase 1: Pre-plan",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to "Phase 2: Plan",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
@@ -73,6 +75,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
         ),
       requiredArtifactsByStep =
         mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to emptyList(),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to emptyList(),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN),
@@ -143,6 +146,8 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
         ),
       resumeActions =
         mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to
+            "Keep the parent spec unchanged when intake already settled; otherwise write or keep it from the intake.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to
             "Re-run the preplan phase from the run-invariants, then persist the validated planning prose output.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to

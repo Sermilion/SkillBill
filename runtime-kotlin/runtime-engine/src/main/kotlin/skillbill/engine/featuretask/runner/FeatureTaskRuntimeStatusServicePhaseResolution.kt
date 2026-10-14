@@ -32,13 +32,15 @@ fun phaseStatuses(
   blockedPhaseIds: Set<String>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): List<FeatureTaskRuntimePhaseStatus> =
-  FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.map { phaseId ->
-    records[phaseId].toPhaseStatus(
-      phaseId = phaseId,
-      blocked = phaseId in blockedPhaseIds,
-      continuationKind = latestContinuationKind(ledger, phaseId),
-    )
-  }
+  FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+    .filter { phaseId -> phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE || phaseId in records }
+    .map { phaseId ->
+      records[phaseId].toPhaseStatus(
+        phaseId = phaseId,
+        blocked = phaseId in blockedPhaseIds,
+        continuationKind = latestContinuationKind(ledger, phaseId),
+      )
+    }
 
 fun resolveCurrentPhaseId(
   terminalDecomposeRecorded: Boolean,

@@ -1,3 +1,14 @@
+## [2026-10-14] SKILL-425 subtask 1: intake slot opens the PLAN skeleton
+Areas: runtime-engine featuretask (slot/intake, slot/skeleton, slot/state, runner, lifecycle/execution, phase/core, runloop) and goalrunner (intake, plan, persist); runtime-domain PhaseSlot, SkeletonDefinition, phase workflow definition/graph/projection; runtime-core RuntimeFeatureTaskSlotProvides; orchestration/contracts/workflow-state-schema.yaml
+- PhaseSlot.INTAKE is first in canonical order with the single step `intake`. SkeletonDefinition.PLAN is now INTAKE, PREPLAN, PLAN, and the workflow definition and graph carry a first "Phase 0: Intake" step with no required artifacts.
+- RuntimeIntakeStrategy (id runtime-intake) runs no agent and does not settle. intake is runtime-settled, never launched and not agent-settleable. reusable: a runtime-owned slot strategy for deterministic work that needs no model.
+- GoalIntakePreparation replaces seedPlanSpec with plannedSpecPath and intakePlanSpec. An operator spec with a readable acceptance list is kept byte for byte. Free text, or a spec without a readable list, gets only a parent spec.md via writeParentSpecOnly. Intake never writes a manifest or a subtask spec.
+- FeatureTaskRuntimePlanSeedRecorder records the plan seed artifact (origin and hashes) after intake. StandalonePlanRun opens with a canonical-root-relative spec path and passes a settleIntake hook that the run entry calls before run invariants are read. Resume of a workflow stopped after intake finds the step complete and does not touch the spec.
+- Non-plan skeletons hide a never-run intake step from status phases, blocked-step fallback and the forwardPhaseOrder header, so existing behaviour and baselines hold.
+- Limits: workflow-state schema enums gained `intake` without a contract bump (0.3). IdeStatusService.standaloneStepPipeline(plan) still reports preplan and plan. Resume still compares raw intake text to a stored SHA-256. Snapshot baselines were hand-edited and the AUTO review-mode fallback has no direct test.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-10-10] SKILL-417 subtask 2: ide-status live goal projection
 Areas: runtime-engine work (IdeStatusProjector, IdeStatusProjectorMapping, IdeStatusSelectionPolicy); runtime-engine work tests; runtime-core di IdeStatusReadSnapshotConcurrencyTest
 - Selection ranks a goal-authoritative live candidate above a non-goal PAUSED peer before runSequence, so a parked parent seq 20 no longer beats a live FEATURE_GOAL on monitor.

@@ -19,6 +19,7 @@ enum class ExecutionTier(
 
 internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
   mapOf(
+    FeatureTaskRuntimePhaseIds.INTAKE to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PREPLAN to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.PLAN to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.IMPLEMENT to ExecutionTier.IMPLEMENTATION,

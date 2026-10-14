@@ -79,6 +79,12 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** The hash of an operator-authored `spec.md` the plan must leave untouched; null when the plan may rewrite it. */
   val protectedSpecSha256: String? get() = null
+
+  /** The operator's plan intake text the `intake` step resolves the parent spec from; null when none was supplied. */
+  val planIntake: String? get() = null
+
+  /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
+  val stopAfterIntake: Boolean get() = false
 }
 
 data class PhaseInstructions(

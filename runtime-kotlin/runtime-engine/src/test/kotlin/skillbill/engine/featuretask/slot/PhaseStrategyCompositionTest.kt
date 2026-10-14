@@ -28,6 +28,7 @@ import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
@@ -50,6 +51,7 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
@@ -72,6 +74,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
@@ -144,6 +147,7 @@ class PhaseStrategyCompositionTest {
 
   private val strategies =
     listOf(
+      RuntimeIntakeStrategy { testPlanIntake() },
       AgentPreplanStrategy(),
       AgentPreplanOpus55Strategy(),
       AgentPlanStrategy(),
@@ -534,6 +538,7 @@ class PhaseStrategyCompositionTest {
   private companion object {
     val EXPECTED_POLICIES =
       mapOf(
+        PHASE_INTAKE to policy(),
         PHASE_PREPLAN to policy(),
         PHASE_PLAN to policy(),
         PHASE_IMPLEMENT to policy(MUTATING, FILE_MUTATING).extendingInventory(),

@@ -1,3 +1,16 @@
+## [2026-10-14] Settle intake in the run entry before invariants are read
+Context: The PLAN skeleton now starts with an intake step, but no spec exists until intake runs, and run invariants and the review mode are derived from the spec.
+Decision: The run entry pre-settles intake through a settleIntake hook before invariants are read. The in-loop RuntimeIntakeStrategy call is idempotent, only records the step, and resolves the spec by issue key. Opening a plan workflow uses review mode AUTO when INTAKE is in the definition's slots.
+Reason: Invariants must read a spec that intake has already prepared. Running intake only inside the loop would read them too early. AUTO is the only mode derivable before a spec exists.
+Alternatives considered: Seed the spec before opening the workflow (the old StandalonePlanRun behaviour), which left intake outside the durable step record.
+Revisit when: invariants stop depending on the spec, or the AUTO fallback gets direct test coverage.
+
+## [2026-10-14] Keep a never-run intake step out of non-plan skeleton surfaces
+Context: Adding intake to the shared workflow definition would add a pending first step to every skeleton and shift status output, blocked-step fallback and baselines.
+Decision: phaseStatuses filters intake unless a record exists, the blocked-step fallback in WorkflowGoalRunnerBlockWrites skips it, and the forwardPhaseOrder header omits it. Only the PLAN skeleton runs it.
+Reason: Only PLAN binds the intake slot. Hiding it elsewhere keeps existing behaviour stable while the schema enums and workflow definition stay single-sourced.
+Revisit when: subtasks 2 to 4 fold full runs and the standalone skeleton into the one planning skeleton and every run executes intake.
+
 ## [2026-10-10] Rank a live goal above a parked parent before runSequence
 Context: After SKILL-416's live-cohort partition, a parked FEATURE_TASK_RUNTIME parent stayed in the live cohort as PAUSED and beat a live FEATURE_GOAL on monitor because runSequence still ranked first.
 Decision: Before comparing runSequence, a goal-authoritative candidate in the live cohort outranks a non-goal PAUSED peer. Sequence, freshness, and tier stay as they were for every other pair.

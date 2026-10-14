@@ -40,6 +40,8 @@ data class FeatureTaskRuntimeRunRequest(
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
   override val skeletonDefinition: SkeletonDefinition? = null,
   override val protectedSpecSha256: String? = null,
+  override val planIntake: String? = null,
+  override val stopAfterIntake: Boolean = false,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
@@ -69,6 +71,7 @@ data class FeatureTaskRuntimeRunInput(
   val definition: SkeletonDefinition? = null,
   val protectedSpecSha256: String? = null,
   val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
+  val planIntake: String? = null,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(
