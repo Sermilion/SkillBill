@@ -79,9 +79,17 @@ class QualityConventionPlugin : Plugin<Project> {
     extensions.findByType(KotlinMultiplatformExtension::class.java)?.let { kotlin ->
       task.targets.set(kotlin.targets.map { "${it.name}:${it.platformType.name}" })
       task.sourceSets.set(kotlin.sourceSets.names)
+      val desktopRoot = rootProject.projectDir
+      val buildDir = layout.buildDirectory.get().asFile
+      // Generated output (KSP, Room) is excluded: it is produced from governed sources and would add bogus roots to the call graph.
       task.sourceDirectories.set(
-        kotlin.sourceSets.associate { sourceSet ->
-          sourceSet.name to sourceSet.kotlin.srcDirs.map { it.relativeTo(rootProject.projectDir).invariantSeparatorsPath }.sorted()
+        provider {
+          kotlin.sourceSets.associate { sourceSet ->
+            sourceSet.name to sourceSet.kotlin.srcDirs
+              .filterNot { it.startsWith(buildDir) }
+              .map { it.relativeTo(desktopRoot).invariantSeparatorsPath }
+              .sorted()
+          }
         },
       )
     }

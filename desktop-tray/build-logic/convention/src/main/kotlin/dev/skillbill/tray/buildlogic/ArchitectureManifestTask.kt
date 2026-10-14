@@ -52,7 +52,7 @@ internal fun ResolvedComponentResult.flattenCoordinates(): List<String> {
   }
   return seen.drop(1).map { component ->
     when (val id = component.id) {
-      is ProjectComponentIdentifier -> "project:${id.projectPath}"
+      is ProjectComponentIdentifier -> "project:${id.buildTreePath}"
       is ModuleComponentIdentifier -> "${id.group}:${id.module}"
       else -> id.displayName
     }

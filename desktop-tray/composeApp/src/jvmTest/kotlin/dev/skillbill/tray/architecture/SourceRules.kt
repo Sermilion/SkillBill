@@ -14,11 +14,12 @@ internal object SourceRules {
 
   fun violations(references: Map<Source, SourceReferences>): List<String> = references.flatMap { (source, found) ->
     val path = source.path
+    val project = checkNotNull(source.project) { "source $path has no Gradle source-set attribution" }
+    val sourceSet = checkNotNull(source.sourceSet) { "source $path has no Gradle source-set attribution" }
     val forbidden = buildSet {
-      if ("/src/commonMain/" in path || "/src/commonTest/" in path) addAll(commonForbidden)
-      if (path.startsWith("core/domain/src/")) addAll(domainForbidden)
-      val production = "/src/commonMain/" in path || "/src/jvmMain/" in path
-      if (production && !path.startsWith("core/testing/")) add(TESTING_PACKAGE)
+      if (sourceSet == "commonMain" || sourceSet == "commonTest") addAll(commonForbidden)
+      if (project == ModuleGraphRules.DOMAIN) addAll(domainForbidden)
+      if (sourceSet in productionSourceSets && project != ModuleGraphRules.TESTING) add(TESTING_PACKAGE)
     }
     found.referencesAny(forbidden).map { "$path references $it" }
   }

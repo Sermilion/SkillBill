@@ -4,9 +4,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertTrue
 
-internal data class Source(val path: String, val text: String)
+internal data class Source(val path: String, val text: String, val project: String? = null, val sourceSet: String? = null)
 
-internal val desktopModules = listOf("composeApp", "core/common", "core/domain", "core/designsystem", "core/testing")
 internal val productionSourceSets = listOf("commonMain", "jvmMain")
 internal val testSourceSets = listOf("commonTest", "jvmTest")
 
@@ -16,15 +15,26 @@ internal val runtimeRoot: Path = systemPath("runtimeRoot")
 private fun systemPath(name: String): Path =
   Path.of(requireNotNull(System.getProperty(name)) { "The $name system property is not set by the Gradle test task." }).toAbsolutePath().normalize()
 
-internal fun String.isDesktopSource(): Boolean = startsWith("composeApp/") || startsWith("core/")
-
-internal fun desktopSources(modules: List<String> = desktopModules, sourceSets: List<String> = productionSourceSets): List<Source> =
-  modules.flatMap { module ->
-    sourceSets.flatMap { sourceSet ->
-      val root = desktopRoot.resolve(module).resolve("src").resolve(sourceSet).resolve("kotlin")
-      if (Files.isDirectory(root)) readSources(root, desktopRoot) else emptyList()
+internal fun desktopSources(
+  sourceSets: List<String> = productionSourceSets,
+  manifests: List<ModuleManifest> = loadManifests(),
+): List<Source> {
+  check(manifests.isNotEmpty()) { "No architecture manifests were supplied." }
+  val sources = manifests.flatMap { manifest ->
+    val scanned = sourceSets.flatMap { sourceSet ->
+      // Kotlin lists conventional directories even when they do not exist.
+      manifest.sourceDirectories[sourceSet].orEmpty().map(desktopRoot::resolve).filter(Files::isDirectory).flatMap { root ->
+        readSources(root, desktopRoot).map { it.copy(project = manifest.project, sourceSet = sourceSet) }
+      }
+    }.distinctBy(Source::path)
+    if (sourceSets.any { it in productionSourceSets } && scanned.none { it.sourceSet in productionSourceSets }) {
+      error("${manifest.project} production source directories ${manifest.directoriesFor(productionSourceSets)} contain no Kotlin sources")
     }
+    scanned
   }
+  check(sources.isNotEmpty()) { "The governed desktop scan set is empty." }
+  return sources
+}
 
 internal fun runtimeSources(): List<Source> {
   val catalog = runtimeRoot.resolve("runtime-core/src/repoTest/kotlin/skillbill/architecture/RuntimeModuleCatalog.kt")

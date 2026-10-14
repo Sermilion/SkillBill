@@ -17,9 +17,12 @@ internal data class ModuleManifest(
   val kspConfigurations: List<String>,
   val projectDependencies: List<String>,
   val resolved: Map<String, List<String>>,
+  val sourceDirectories: Map<String, List<String>>,
 ) {
   val productionEdges: Set<String> get() = edgesFor(productionSourceSets)
   val testEdges: Set<String> get() = edgesFor(testSourceSets)
+
+  fun directoriesFor(sourceSets: List<String>): List<String> = sourceSets.flatMap { sourceDirectories[it].orEmpty() }.distinct()
 
   private fun edgesFor(sourceSets: List<String>): Set<String> = projectDependencies
     .map { it.substringBefore("->") to it.substringAfter("->") }
@@ -38,6 +41,7 @@ internal fun parseManifest(text: String): ModuleManifest {
     kspConfigurations = strings("kspConfigurations"),
     projectDependencies = strings("projectDependencies"),
     resolved = document.getValue("resolved").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
+    sourceDirectories = document.getValue("sourceDirectories").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
   )
 }
 
@@ -65,7 +69,7 @@ internal object ModuleGraphRules {
   val domainClasspathForbidden = listOf(
     "org.jetbrains.compose", "androidx.compose", "org.jetbrains.androidx", "androidx.lifecycle", "androidx.room",
     "androidx.datastore", "androidx.navigation", "androidx.sqlite", "androidx.paging", "dev.nucleusframework",
-    "dev.skillbill", "project::composeApp", "project::core:designsystem", "project::core:testing",
+    "dev.skillbill", "project::runtime-kotlin", "project::composeApp", "project::core:designsystem", "project::core:testing",
   )
   private val androidPlugin = Regex("^com\\.android\\.|KotlinAndroid")
   private val nonJvmKsp = Regex("^ksp(Android|Ios|Js|Wasm|Native|Linux|Macos|Mingw|Tvos|Watchos)")
@@ -89,10 +93,17 @@ internal object ModuleGraphRules {
       if (project != TESTING) productionClasspaths.forEach { name ->
         if ("project:$TESTING" in manifest.resolved[name].orEmpty()) add("$project resolves $TESTING on $name")
       }
-      if (project == DOMAIN) productionClasspaths.forEach { name ->
-        manifest.resolved[name].orEmpty().filter { coordinate -> domainClasspathForbidden.any { coordinate.startsWith(it) } }
-          .forEach { add("$project resolves a framework dependency on $name: $it") }
+      if (project == DOMAIN) {
+        val allowedProjects = allowedProductionEdges.getValue(DOMAIN).map { "project:$it" }
+        productionClasspaths.forEach { name ->
+          val coordinates = manifest.resolved[name].orEmpty()
+          coordinates.filter { coordinate -> domainClasspathForbidden.any { coordinate.startsWith(it) } }
+            .forEach { add("$project resolves a framework dependency on $name: $it") }
+          coordinates.filter { it.startsWith("project:") && it !in allowedProjects }
+            .forEach { add("$project resolves a disallowed project component on $name: $it") }
+        }
       }
+      if (manifest.directoriesFor(productionSourceSets).isEmpty()) add("$project declares no production Kotlin source directories")
     }
     addAll(cycles(manifests))
     consumedInProduction.forEach { module ->

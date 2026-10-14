@@ -30,8 +30,8 @@ class DesktopArchitectureTest {
   @Test
   fun `domain and presentation stay outside storage and runtime adapters`() {
     val sources = desktopSources()
-    val presentation = sources.filter { "/presentation/" in it.path || "/ui/" in it.path || it.path.startsWith("core/designsystem/") }
-    val domain = sources.filter { it.path.startsWith("core/domain/") }
+    val presentation = sources.filter { "/presentation/" in it.path || "/ui/" in it.path || it.project == ":core:designsystem" }
+    val domain = sources.filter { it.project == ModuleGraphRules.DOMAIN }
     val application = sources.filter { "/application/" in it.path }
 
     assertTrue(domain.isNotEmpty())
@@ -77,8 +77,9 @@ class DesktopArchitectureTest {
       assertTrue(functions.any { it.path.contains(root) }, "The governed function root is missing: $root")
     }
     val byName = functions.groupBy(FunctionBody::name)
+    val desktopPaths = sources.filter { it.project != null }.map(Source::path).toSet()
     val roots = functions.filter { function ->
-      (function.path.isDesktopSource() &&
+      (function.path in desktopPaths &&
         (function.path.contains("/composition/") || function.path.contains("/application/") ||
           function.path.contains("/infrastructure/data/") || function.name in controlEntryPoints))
         || (function.path.endsWith("/skillbill/engine/work/IdeStatusService.kt") && function.name == "board")

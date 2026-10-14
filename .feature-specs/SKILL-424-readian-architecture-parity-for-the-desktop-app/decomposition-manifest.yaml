@@ -1,0 +1,92 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-424"
+feature_name: "readian-architecture-parity-for-the-desktop-app"
+parent_spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md"
+status: "in_progress"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-424-readian-architecture-parity-for-the-desktop-app"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "resume"
+subtasks:
+- id: 1
+  name: "Build graph and core foundations"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_1_build-graph-and-core-foundations.md"
+  status: "in_progress"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261014-215001-eidv"
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Data, preferences, and generated DI"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_2_data-preferences-and-generated-di.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 3
+  name: "SKILL-423 data repair handoff"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_3_skill-423-data-repair-handoff.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 4
+  name: "Feature presentation"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_4_feature-presentation.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 5
+  name: "Navigation and host lifetimes"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_5_navigation-and-host-lifetimes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 6
+  name: "Deletion and delivery proof"
+  spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_6_deletion-and-delivery-proof.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
