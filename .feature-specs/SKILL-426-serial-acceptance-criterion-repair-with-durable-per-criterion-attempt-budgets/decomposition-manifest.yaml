@@ -1,0 +1,37 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-426"
+feature_name: "serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets"
+parent_spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "Durable serial acceptance repair policy"
+  spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_1_durable-serial-repair.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: "Read-only criterion repair status and existing presentations"
+  spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_2_criterion-repair-status.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
