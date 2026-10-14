@@ -9,10 +9,10 @@ source "$task_dir/install-functions.sh"
 
 RUNTIME_KOTLIN_DIR="$task_dir/checkout/runtime-kotlin"
 INSTALL_SOURCE="source"
-DESKTOP_APP_INSTALL_REQUESTED=1
 DESKTOP_APP_INSTALL_RESULT=""
 BUILT_DESKTOP_APP_SOURCE=""
 mkdir -p "$RUNTIME_KOTLIN_DIR" "$task_dir/checkout/desktop-tray" "$task_dir/bin"
+RUNTIME_LAUNCHER_BIN_DIR="$task_dir/bin"
 info() { printf '%s\n' "$*"; }
 warn() { printf '%s\n' "$*" >&2; }
 err() { printf '%s\n' "$*" >&2; }
@@ -65,6 +65,17 @@ fi
 kill -0 "$unrelated_app"
 [[ "$(cat "$task_dir/launched")" == "$app" ]]
 
+(exec -a "$task_dir/bin/skillbill-desktop" sleep 60) &
+running_app=$!
+sleep 0.5
+install_selected_desktop_app
+if kill -0 "$running_app" 2>/dev/null; then
+  err 'Installer left the desktop app launched through its symlink running.'
+  exit 1
+fi
+kill -0 "$unrelated_app"
+[[ "$(wc -l < "$task_dir/launched")" -eq 2 ]]
+
 touch "$task_dir/checkout/desktop-tray/fail-build"
 if install_selected_desktop_app; then
   err 'Installer accepted a failed desktop source build.'
@@ -74,4 +85,13 @@ fi
 [[ "$("$app")" == 'source desktop app' ]]
 [[ "$(readlink "$task_dir/bin/skillbill-desktop")" == "$app" ]]
 
-printf 'macOS desktop source install, running-app restart, and failed-build preservation passed.\n'
+INSTALL_SOURCE="prebuilt"
+host_token() { printf 'macos-arm64'; }
+resolve_desktop_app_release_asset() { RESOLVED_DESKTOP_APP_ASSET=""; }
+if install_selected_desktop_app; then
+  err 'Installer accepted a release without its required desktop archive.'
+  exit 1
+fi
+[[ "$DESKTOP_APP_INSTALL_RESULT" == 'not available for macos-arm64' ]]
+
+printf 'Required desktop install, direct and symlink launch restart, and failure preservation passed.\n'

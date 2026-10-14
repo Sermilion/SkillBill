@@ -743,15 +743,30 @@ if [[ "$TOKEN" == "linux-x64" ]]; then
 fi
 
 echo ""
-echo "--- scenario 10: explicit no preserves an existing desktop app during upgrade ---"
+echo "--- scenario 10: desktop skip is rejected before install mutation ---"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 mkdir -p "$(dirname "$DESKTOP_EXECUTABLE")"
 printf 'existing app\n' > "$DESKTOP_EXECUTABLE"
-run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app
+if run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app; then
+  fail "installer accepted a desktop skip option"
+fi
 [[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] && \
-  pass "explicitly skipping the app keeps the existing desktop install" || \
-  fail "explicitly skipping the app changed the existing desktop install"
+  pass "rejecting desktop skip preserves the existing install" || \
+  fail "rejecting desktop skip changed the existing desktop install"
+
+echo ""
+echo "--- scenario 10b: missing desktop archive fails the full install ---"
+DESKTOP_ARCHIVE="$RELEASE_DIR/skill-bill-desktop-0.0.0-smoke-${TOKEN}.tar.gz"
+mv "$DESKTOP_ARCHIVE" "$DESKTOP_ARCHIVE.unavailable"
+DESKTOP_FAILURE_STATUS=0
+DESKTOP_FAILURE_OUTPUT="$(run_install "$FAKE_HOME")" || DESKTOP_FAILURE_STATUS=$?
+mv "$DESKTOP_ARCHIVE.unavailable" "$DESKTOP_ARCHIVE"
+[[ "$DESKTOP_FAILURE_STATUS" -ne 0 ]] || fail "installer succeeded without its desktop archive"
+[[ "$DESKTOP_FAILURE_OUTPUT" == *"required desktop app step failed"* ]] || fail "desktop failure was not reported"
+[[ "$DESKTOP_FAILURE_OUTPUT" != *"Installation complete"* ]] || fail "failed desktop install reported completion"
+[[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] || fail "missing desktop archive changed the existing app"
+pass "missing desktop archive fails installation and preserves the existing app"
 
 env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   HOME="$FAKE_HOME" \
