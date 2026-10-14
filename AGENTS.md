@@ -20,10 +20,11 @@ Non-negotiable contracts:
 
 `internal-for: <parent>` in `content.md` frontmatter installs as `<skill-name>.md` sidecar in the parent directory (not listed); parent reads the sibling in-session. The only parent is `skill-bill`; pack specialists install as its unlisted sidecars and native-agent inputs, never as slash commands. Contract: `docs/skill-source-generation.md`.
 
-## Active Fix Branch
+## Worktree ownership
 
-Until `base/SKILL-380-phase-slot-strategies` is merged, make all fixes on that
-branch. Use its worktree when a feature branch has implementation work in progress.
+Edit the repository root and branch supplied by the active workflow briefing.
+Do not redirect phase edits to an earlier repair worktree. Reconcile any separate
+worktree changes into the workflow checkout before reporting implementation complete.
 
 ## Product Intent
 

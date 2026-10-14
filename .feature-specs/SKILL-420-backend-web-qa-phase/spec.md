@@ -112,7 +112,7 @@ SKILL-419 owns the shared QA phase, policy tokens, receipt contract, workflow re
 
 Apply `docs/runtime-command-guidance.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, `docs/observability-policy.md`, and `docs/skill-source-generation.md`. Engine coordinates the shared phase; infrastructure owns Docker, processes, HTTP, and browser protocols. Packs own platform guidance. New shared declarations need actual cross-module consumers or a port signature; no dependency bags or generic transport ports.
 
-Base branch is `main`, which contains the SKILL-380 merge. This is a requirements spec only. Implementation planning must preserve existing work and resolve the current source without creating a second QA vocabulary. Authored skill changes require `./install.sh`; generated support files are not committed.
+Base branch is `main`. This is a requirements spec only. Implementation planning must preserve existing work and resolve the current source without creating a second QA vocabulary. Authored skill changes require `./install.sh`; generated support files are not committed.
 
 ## Validation strategy
 
