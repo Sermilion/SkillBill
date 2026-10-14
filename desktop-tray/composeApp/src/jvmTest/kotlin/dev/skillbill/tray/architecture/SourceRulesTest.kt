@@ -14,10 +14,14 @@ class SourceRulesTest {
   @Test
   fun `every scanned module contributes sources so the rules are not vacuous`() {
     val sources = desktopSources()
-    listOf(":core:common", ":core:domain", ":core:designsystem", ":core:testing").forEach { module ->
+    listOf(":core:common", ":core:domain", ":core:designsystem", ":core:testing", ":core:data", ":core:datastore").forEach { module ->
       assertTrue(sources.any { it.project == module && it.sourceSet == "commonMain" }, "No commonMain sources scanned for $module.")
     }
     assertTrue(sources.any { it.project == ":composeApp" && it.sourceSet == "jvmMain" }, "No jvmMain sources scanned for :composeApp.")
+    listOf(":core:data", ":core:datastore").forEach { module ->
+      assertTrue(sources.any { it.project == module && it.sourceSet == "jvmMain" }, "No jvmMain sources scanned for $module.")
+    }
+    assertTrue(sources.any { it.path.contains("/composition/") }, "No composition sources scanned.")
   }
 
   @Test
@@ -47,6 +51,92 @@ class SourceRulesTest {
       val violations = violationsFor(path, text)
       assertTrue(violations.any { expected in it }, "Expected a violation mentioning '$expected' for $path but got $violations")
     }
+  }
+
+  @Test
+  fun `adapter modules keep runtime, JDBC and preferences APIs in jvmMain and UI frameworks out`() {
+    val dataCommon = "core/data/src/commonMain/kotlin/dev/skillbill/tray/core/data/Bad.kt"
+    val dataJvm = "core/data/src/jvmMain/kotlin/dev/skillbill/tray/core/data/Ok.kt"
+    val datastoreCommon = "core/datastore/src/commonMain/kotlin/dev/skillbill/tray/core/datastore/Bad.kt"
+    val datastoreJvm = "core/datastore/src/jvmMain/kotlin/dev/skillbill/tray/core/datastore/Ok.kt"
+    val app = "composeApp/src/jvmMain/kotlin/dev/skillbill/tray/application/Bad.kt"
+    val domain = "core/domain/src/commonMain/kotlin/dev/skillbill/tray/core/domain/model/Bad.kt"
+    val allowed = listOf(
+      dataJvm to "import skillbill.runtime.Anything\nimport java.sql.Connection\nimport java.nio.file.Path\nclass Ok",
+      datastoreJvm to "import java.util.prefs.Preferences\nimport java.nio.file.Path\nclass Ok",
+    )
+    allowed.forEach { (path, text) -> assertEquals(emptyList(), violationsFor(path, text), path) }
+
+    val rejected = mapOf(
+      "skillbill.runtime.Anything" to (dataCommon to "import skillbill.runtime.Anything as Runtime\nclass Bad"),
+      "java.nio.file.Path" to (datastoreCommon to "class Bad(val path: java.nio.file.Path)"),
+      "java.util.prefs.Preferences" to (datastoreCommon to "import java.util.prefs.Preferences\nclass Bad"),
+      "androidx.compose.runtime.Composable" to (dataJvm to "import androidx.compose.runtime.Composable\nclass Bad"),
+      "androidx.lifecycle.ViewModel" to (datastoreJvm to "import androidx.lifecycle.ViewModel\nclass Bad"),
+      "androidx.navigation.NavController" to (dataCommon to "import androidx.navigation.NavController\nclass Bad"),
+      "java.sql.Connection" to (app to "import java.sql.Connection\nclass Bad"),
+      "skillbill.runtime" to (app to "class Bad(val runtime: skillbill.runtime.Anything)"),
+      "org.sqlite.SQLiteConnection" to (domain to "import org.sqlite.SQLiteConnection\nclass Bad"),
+    )
+    rejected.forEach { (expected, case) ->
+      val (path, text) = case
+      val violations = violationsFor(path, text)
+      assertTrue(violations.any { expected in it }, "Expected a violation mentioning '$expected' for $path but got $violations")
+    }
+  }
+
+  @Test
+  fun `production sources reject reflective lookup that the generated graph cannot see`() {
+    val prod = "composeApp/src/jvmMain/kotlin/dev/skillbill/tray/application/Bad.kt"
+    val rejected = mapOf(
+      "java.util.ServiceLoader" to "import java.util.ServiceLoader\nclass Bad",
+      "ServiceLoader.load" to "class Bad { val all = ServiceLoader.load(Runnable::class.java) }",
+      "Class.forName" to "class Bad { val type = Class.forName(\"x.Y\") }",
+      "java.lang.Class.forName" to "class Bad { val type = java.lang.Class.forName(\"x.Y\") }",
+      "kotlin.reflect.full.createInstance" to "import kotlin.reflect.full.createInstance\nclass Bad",
+      "java.lang.reflect.Constructor" to "import java.lang.reflect.Constructor\nclass Bad",
+    )
+    rejected.forEach { (expected, text) ->
+      val violations = violationsFor(prod, text)
+      assertTrue(violations.any { expected in it }, "Expected a violation mentioning '$expected' but got $violations")
+    }
+    assertEquals(emptyList(), violationsFor("composeApp/src/jvmTest/kotlin/dev/skillbill/tray/FooTest.kt", "import java.util.ServiceLoader\nclass FooTest"))
+  }
+
+  @Test
+  fun `an inject constructor parameter with a default value is rejected`() {
+    val path = "core/data/src/commonMain/kotlin/dev/skillbill/tray/core/data/Bad.kt"
+    val rejected = mapOf(
+      "Bad.limit" to "@Inject\nclass Bad(val limit: Int = 5)",
+      "Bad.scope" to "class Bad @Inject constructor(val scope: String = \"x\")",
+      "Bad.name" to "class Bad {\n  @Inject constructor(name: String = \"x\")\n}",
+    )
+    rejected.forEach { (expected, text) ->
+      val violations = violationsFor(path, text)
+      assertTrue(violations.any { "default value" in it && expected in it }, "Expected a default-value violation for '$expected' but got $violations")
+    }
+    assertEquals(emptyList(), violationsFor(path, "@Inject\nclass Ok(val limit: Int)\nclass Plain(val limit: Int = 5)"))
+  }
+
+  @Test
+  fun `composition sources do not construct what the generated graph owns`() {
+    val main = "composeApp/src/jvmMain/kotlin/dev/skillbill/tray/composition/Bad.kt"
+    val commonComposition = "composeApp/src/commonMain/kotlin/dev/skillbill/tray/composition/Bad.kt"
+    val dataDi = "core/data/src/commonMain/kotlin/dev/skillbill/tray/core/data/di/Bad.kt"
+    val rejected = mapOf(
+      "RoomWorkBoardRepository" to (main to "fun build() = RoomWorkBoardRepository()"),
+      "DataStoreSettingsRepository" to (commonComposition to "fun build() = DataStoreSettingsRepository(handle)"),
+      "DataStore" to (dataDi to "fun build() = DataStore()"),
+      "RuntimeComponent" to (main to "fun build() = RuntimeComponent()"),
+      "RoomBoardSource" to (main to "fun build() = RoomBoardSource()"),
+    )
+    rejected.forEach { (expected, case) ->
+      val (path, text) = case
+      val violations = violationsFor(path, text)
+      assertTrue(violations.any { "constructs $expected directly" in it }, "Expected a construction violation for $expected but got $violations")
+    }
+    assertEquals(emptyList(), violationsFor(main, "fun build() = HostEnvironment(emptyMap(), \"\", \"\")"))
+    assertEquals(emptyList(), violationsFor("composeApp/src/jvmTest/kotlin/dev/skillbill/tray/composition/FooTest.kt", "fun build() = RoomWorkBoardRepository()"))
   }
 
   @Test

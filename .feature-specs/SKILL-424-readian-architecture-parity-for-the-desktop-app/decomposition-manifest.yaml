@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Data, preferences, and generated DI"
   spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_2_data-preferences-and-generated-di.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261014-223628-9tqg"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

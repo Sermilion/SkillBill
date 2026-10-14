@@ -9,6 +9,7 @@ import dev.skillbill.tray.core.domain.model.HistoryFilter
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.Retention
+import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
@@ -40,11 +41,10 @@ interface WorkStoreSession {
   suspend fun closeAndJoin()
 }
 
-interface SettingsStore {
-  val settings: Flow<Outcome<AppSettings>>
-  suspend fun update(transform: (AppSettings) -> AppSettings): Outcome<Unit>
-  fun close()
-  suspend fun closeAndJoin()
+/** Preference access. App-scope teardown owns closing the backing store, so there is no `close` here. */
+interface SettingsRepository {
+  val settings: Flow<SettingsState>
+  suspend fun update(transform: (AppSettings) -> AppSettings): Outcome<AppSettings>
 }
 
 sealed interface Outcome<out T> {

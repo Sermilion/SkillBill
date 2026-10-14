@@ -51,21 +51,25 @@ internal fun loadManifests(): List<ModuleManifest> {
 }
 
 internal object ModuleGraphRules {
-  val expectedProjects = setOf(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:testing")
-  val allowedTargets = setOf("jvm:jvm", "metadata:common")
-  val allowedProductionEdges: Map<String, Set<String>> = mapOf(
-    ":composeApp" to setOf(":core:common", ":core:domain", ":core:designsystem"),
-    ":core:common" to emptySet(),
-    ":core:domain" to setOf(":core:common"),
-    ":core:designsystem" to emptySet(),
-    ":core:testing" to setOf(":core:common", ":core:domain"),
-  )
-  val allowedTestEdges: Map<String, Set<String>> = allowedProductionEdges.mapValues { (project, edges) ->
-    if (project == ":core:testing") edges else edges + ":core:testing"
-  }
-  val consumedInProduction = listOf(":core:common", ":core:domain", ":core:designsystem")
   const val TESTING = ":core:testing"
   const val DOMAIN = ":core:domain"
+  const val DATA = ":core:data"
+  const val DATASTORE = ":core:datastore"
+  val expectedProjects = setOf(":composeApp", ":core:common", DOMAIN, ":core:designsystem", TESTING, DATA, DATASTORE)
+  val allowedTargets = setOf("jvm:jvm", "metadata:common")
+  val allowedProductionEdges: Map<String, Set<String>> = mapOf(
+    ":composeApp" to setOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE),
+    ":core:common" to emptySet(),
+    DOMAIN to setOf(":core:common"),
+    ":core:designsystem" to emptySet(),
+    TESTING to setOf(":core:common", DOMAIN),
+    DATA to setOf(":core:common", DOMAIN, DATASTORE),
+    DATASTORE to setOf(":core:common", DOMAIN),
+  )
+  val allowedTestEdges: Map<String, Set<String>> = allowedProductionEdges.mapValues { (project, edges) ->
+    if (project == TESTING) edges else edges + TESTING
+  }
+  val consumedInProduction = listOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE)
   val domainClasspathForbidden = listOf(
     "org.jetbrains.compose", "androidx.compose", "org.jetbrains.androidx", "androidx.lifecycle", "androidx.room",
     "androidx.datastore", "androidx.navigation", "androidx.sqlite", "androidx.paging", "dev.nucleusframework",
@@ -111,6 +115,42 @@ internal object ModuleGraphRules {
     }
     if (manifests.none { it.project != TESTING && TESTING in it.testEdges }) add("$TESTING has no test consumer.")
   }
+
+  /**
+   * An `api` project edge re-exports the target to every consumer, so it must earn that by showing one of the target's
+   * types in a non-private declaration of the same source set. Anything else belongs in `implementation`.
+   */
+  fun apiEdgeViolations(manifests: List<ModuleManifest>, sources: List<Source>): List<String> = manifests.flatMap { manifest ->
+    manifest.projectDependencies.map { it.substringBefore("->") to it.substringAfter("->") }
+      .filter { (configuration, _) -> configuration.endsWith("Api") }
+      .distinct()
+      .filterNot { (configuration, target) ->
+        val sourceSet = configuration.removeSuffix("Api")
+        // Target-level configurations such as jvmApi carry no sources of their own; only source-set ones are judged.
+        sourceSet !in productionSourceSets + testSourceSets ||
+          exposesTypeOf(target, sources.filter { it.project == manifest.project && it.sourceSet == sourceSet })
+      }
+      .map { (configuration, target) -> "${manifest.project} declares $configuration->$target without exposing a type from $target" }
+  }
+
+  private fun exposesTypeOf(target: String, sources: List<Source>): Boolean {
+    val targetPackage = "dev.skillbill.tray." + target.removePrefix(":").replace(':', '.')
+    return sources.any { source ->
+      val lines = source.text.lineSequence().map(String::trim).toList()
+      val names = lines.filter { it.startsWith("import $targetPackage.") }.map { line ->
+        val imported = line.removePrefix("import ")
+        imported.substringAfter(" as ", imported.substringAfterLast('.'))
+      }.map { Regex("\\b${Regex.escape(it)}\\b") }
+      lines.filter { publicSignature.containsMatchIn(it) }.map { it.replace(privateProperty, "") }.any { line ->
+        "$targetPackage." in line || names.any { it.containsMatchIn(line) }
+      }
+    }
+  }
+
+  private val publicSignature = Regex(
+    "^(?!private\\b|internal\\b|protected\\b)(?:(?:public|override|open|abstract|data|sealed|enum|value|suspend|inline|operator|const|lateinit|annotation|fun\\s+interface)\\s+)*(?:class|interface|object|fun|val|var|typealias)\\b",
+  )
+  private val privateProperty = Regex("(?:private|internal|protected)\\s+va[lr]\\s+\\w+\\s*:\\s*[^,)]+")
 
   private fun cycles(manifests: List<ModuleManifest>): List<String> {
     val graph = manifests.associate { it.project to (it.productionEdges + it.testEdges) }

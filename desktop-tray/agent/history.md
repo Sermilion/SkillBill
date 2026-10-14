@@ -1,3 +1,16 @@
+## [2026-10-15] SKILL-424 subtask 2 data, preferences and generated DI
+Areas: desktop-tray (core/data, core/datastore, core/common, core/domain, core/testing, composeApp, build-logic/convention, scripts)
+
+- Moved the Room store, read-only driver, commit-signal observer, runtime adapters, mapper and paging out of composeApp into new core:data (ports in commonMain, JVM adapters in jvmMain); RoomBoardSource became Room board, detail and runtime control repositories behind session facades.
+- New core:datastore owns DataStore settings, the one-time legacy java.util.prefs migration and a diagnostics sink; Preferences.kt was split.
+- composeApp now builds one generated Kotlin-Inject/Anvil ApplicationComponent; hand-built construction is gone. Per-database session components sit behind app-scoped facades with a DatabaseSelection holder (reusable).
+- The component takes host environment and legacy-settings source as constructor arguments, so smoke tests use a disposable home and preferences node (reusable).
+- Guards extended: new module edges, an api-edge rule, runtime/sql/prefs imports confined to data and datastore, no reflection or ServiceLoader, no @Inject defaults, no construction in composition sources.
+- Tests: bounded paging, read-only store, observation lifecycle (child-JVM writer, counters), settings repository, component smoke; old test hooks recreated as port-seam wrappers.
+- Limits: nothing compiled or run when written; Kotlin-Inject/Anvil, Room 3 and PSI call-graph shapes unverified. The api-edge rule is a line heuristic. Component smoke covers AC-005 only partly; zero-connection counts live in core:data tests. ViewModels, navigation and window scopes stay for subtasks 4-6.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 2 of SKILL-424)
+
 ## [2026-10-15] SKILL-424 subtask 1 build graph and core foundations
 Areas: desktop-tray (root build, build-logic, composeApp, core/common, core/domain, core/designsystem, core/testing), .github/workflows, install.sh, scripts
 

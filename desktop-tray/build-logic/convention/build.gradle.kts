@@ -50,6 +50,10 @@ gradlePlugin {
       id = "skillbill.kotlin.inject"
       implementationClass = "dev.skillbill.tray.buildlogic.KotlinInjectConventionPlugin"
     }
+    register("room") {
+      id = "skillbill.room"
+      implementationClass = "dev.skillbill.tray.buildlogic.RoomConventionPlugin"
+    }
     register("quality") {
       id = "skillbill.quality"
       implementationClass = "dev.skillbill.tray.buildlogic.QualityConventionPlugin"

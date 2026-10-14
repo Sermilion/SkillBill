@@ -69,9 +69,15 @@ class DesktopArchitectureTest {
   private fun assertNoReachableWorkDataProcessAdapter(sources: List<Source>) {
     val functions = parsedSymbols(sources)
     assertTrue(functions.isNotEmpty(), "The governed function scan set is empty.")
-    listOf("control", "detail", "existingSnapshot").forEach { name ->
-      assertTrue(functions.any { it.path.endsWith("/RoomBoardSource.kt") && it.name == name },
-        "RoomBoardSource.$name is missing from the parsed graph.")
+    // The work-data owners that replaced RoomBoardSource: board and detail reads, runtime control, and the runtime adapter seam.
+    listOf(
+      "$DATA_PACKAGE_ROOT/repository/RoomWorkBoardRepository.kt" to "board",
+      "$DATA_PACKAGE_ROOT/repository/RoomWorkDetailRepository.kt" to "detail",
+      "$DATA_PACKAGE_ROOT/repository/RuntimeWorkControlRepository.kt" to "request",
+      "$DATA_PACKAGE_ROOT/runtime/RuntimeWorkAdapter.kt" to "request",
+      "$DATA_PACKAGE_ROOT/runtime/RuntimeWorkAdapter.kt" to "existingSnapshot",
+    ).forEach { (path, name) ->
+      assertTrue(functions.any { it.path.endsWith(path) && it.name == name }, "${path.substringAfterLast('/')}.$name is missing from the parsed graph.")
     }
     governedFunctionRoots.forEach { root ->
       assertTrue(functions.any { it.path.contains(root) }, "The governed function root is missing: $root")
@@ -80,8 +86,7 @@ class DesktopArchitectureTest {
     val desktopPaths = sources.filter { it.project != null }.map(Source::path).toSet()
     val roots = functions.filter { function ->
       (function.path in desktopPaths &&
-        (function.path.contains("/composition/") || function.path.contains("/application/") ||
-          function.path.contains("/infrastructure/data/") || function.name in controlEntryPoints))
+        (governedFunctionRoots.any { function.path.contains(it) } || function.name in controlEntryPoints))
         || (function.path.endsWith("/skillbill/engine/work/IdeStatusService.kt") && function.name == "board")
     }
     assertTrue(roots.isNotEmpty(), "No composition, application, data, or control entry points were parsed.")
@@ -332,7 +337,8 @@ class DesktopArchitectureTest {
     )
     val forbiddenCoreTokens = listOf("java.awt", "javax.swing", "androidx.compose", "ComposeWindow")
     val controlEntryPoints = setOf("control", "pause", "stop", "perform")
-    val governedFunctionRoots = setOf("/composition/", "/application/", "/infrastructure/data/")
+    const val DATA_PACKAGE_ROOT = "/dev/skillbill/tray/core/data"
+    val governedFunctionRoots = setOf("/composition/", "/application/", "/tray/core/data/")
     val forbiddenWorkDataProcessAdapters = setOf(
       "CliBoardSource", "CliResolver", "ProcessRunner", "WorkPayloadDecoder", "WorkPayloadKeys",
     )

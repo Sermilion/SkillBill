@@ -1,7 +1,6 @@
 plugins {
   id("skillbill.desktop.application")
-  id("com.google.devtools.ksp")
-  id("org.jetbrains.kotlin.plugin.serialization")
+  id("skillbill.kotlin.inject")
 }
 
 group = "dev.skillbill.tray"
@@ -10,24 +9,25 @@ version = "0.1.0"
 val runtimeRoot = rootDir.parentFile.resolve("runtime-kotlin")
 
 kotlin {
+  // The merged application component is generated from the contributions of every module it depends on.
+  sourceSets.commonMain.dependencies {
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(projects.core.common)
+    implementation(projects.core.domain)
+    implementation(projects.core.data)
+    implementation(projects.core.datastore)
+  }
   sourceSets.jvmMain.dependencies {
     implementation(compose.materialIconsExtended)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.compose.native.tray)
     implementation(libs.nucleus.notification.common)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.autolaunch)
-    implementation(libs.room.runtime)
-    implementation(libs.sqlite.api)
-    implementation(libs.sqlite.jdbc)
-    implementation(libs.datastore.core)
-    implementation(libs.paging.common)
+    // The generated component names the runtime component type that the data layer provides per database session.
     implementation("dev.skillbill:runtime-core")
     implementation("dev.skillbill:runtime-contracts")
-    implementation(projects.core.common)
-    implementation(projects.core.domain)
     implementation(projects.core.designsystem)
   }
   sourceSets.jvmTest.dependencies {
@@ -39,7 +39,6 @@ kotlin {
 }
 
 dependencies {
-  add("kspJvm", libs.room.compiler)
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
   // Projects without a build script (the implicit ":core" parent) own no sources and no manifest.
   rootProject.subprojects.filter { it.buildFile.exists() }.forEach { add("architectureManifests", project(it.path)) }

@@ -9,7 +9,7 @@ import tempfile
 
 project = Path(__file__).resolve().parents[1]
 image = project / "composeApp/build/compose/binaries/main/app"
-classes = project / "composeApp/build/classes/kotlin/jvm/test"
+classes = project / "core/data/build/classes/kotlin/jvm/test"
 if not image.is_dir() or not classes.is_dir():
     raise SystemExit("Run clean check createDistributable before the packaged data smoke.")
 
@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     cfg = cfgs[0]
     content = cfg.read_text()
     content = content.replace("app.mainclass=dev.skillbill.tray.composition.MainKt",
-                              "app.mainclass=dev.skillbill.tray.infrastructure.data.PackagedDataSmoke")
+                              "app.mainclass=dev.skillbill.tray.core.data.PackagedDataSmoke")
     content = content.replace("[JavaOptions]", f"app.classpath={classes}\n\n[JavaOptions]")
     content += f"\njava-options=-Duser.home={home}\njava-options=-Djava.util.prefs.userRoot={home / 'preferences'}\njava-options=-Djava.io.tmpdir={home / 'tmp'}\n"
     cfg.write_text(content)

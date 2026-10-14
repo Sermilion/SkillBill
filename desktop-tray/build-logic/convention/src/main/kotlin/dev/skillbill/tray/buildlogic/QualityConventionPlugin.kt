@@ -28,6 +28,7 @@ private val KNOWN_PLUGIN_IDS = listOf(
   "skillbill.kmp.library",
   "skillbill.kmp.compose",
   "skillbill.kotlin.inject",
+  "skillbill.room",
   "skillbill.desktop.application",
 )
 

@@ -1,3 +1,21 @@
+## [2026-10-15] Inject host and legacy preferences into the application component
+Context: The generated component must run in tests without touching the real user home, environment or java.util.prefs.
+Decision: ApplicationComponent takes the host environment and the legacy preferences source as constructor arguments; the factory defaults them to the real process.
+Reason: Providers that read the process directly made the smoke test mutate and clean real user state; constructor arguments let tests supply disposable ones.
+Alternatives considered: Test-only overrides inside providers were rejected as production test hooks.
+
+## [2026-10-15] Keep Room declarations in jvmMain behind a store-access port
+Context: Room 3 types and the runtime gateway are JVM-only, while repositories and paging belong in commonMain.
+Decision: Repositories in commonMain depend on ports (store access, commit signals, runtime gateway, failure classifier); Room and runtime code stay in jvmMain adapters.
+Reason: Keeps commonMain free of runtime, sql and Room imports (enforced by source rules) and lets tests wrap behavior at the port seams instead of adding production hooks.
+Revisit when: Room declarations can be shared in commonMain without JVM-only types.
+
+## [2026-10-15] Scope per-database session components behind app-scoped facades
+Context: Selecting another database must not leak connections or observers from the previous one.
+Decision: A per-database session component is created per selection and held behind app-scoped repository facades, with DatabaseSelection and generation counters app-scoped.
+Reason: Consumers keep stable injected repositories while session lifetimes close cleanly; detail owner registrations end with the detail collector, the rest at session close.
+Alternatives considered: Passing the database as a factory argument to each repository was rejected for churn in injected consumers.
+
 ## [2026-10-15] Enforce module boundaries from generated manifests
 Context: SKILL-424 splits the desktop app into core modules, and source-only path checks cannot see Gradle edges, targets or plugins.
 Decision: A quality convention plugin writes each module's targets, plugins, KSP configurations and project dependencies to a manifest. Architecture tests read the manifests plus a PSI scan of imports and qualified names against an allowed-edge table.

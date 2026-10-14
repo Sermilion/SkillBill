@@ -16,9 +16,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import dev.skillbill.tray.core.testing.board as testBoard
+
+/** A clock frozen at the moment of the call, so a controller sees one deterministic "now" for its whole run. */
+private fun startedClock() = TestClock(Clock.System.now())
 
 class DashboardControllerTest {
   @Test
@@ -35,7 +39,7 @@ class DashboardControllerTest {
       detailCall = { Outcome.Value(detail(preferred)) },
       refreshEvents = refreshEvents,
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) {
         while (WorkSection.GOALS !in model.state.value.sections || WorkSection.PHASES !in model.state.value.sections ||
@@ -70,7 +74,7 @@ class DashboardControllerTest {
       },
       detailCall = { identity -> Outcome.Value(detail(history.value.single { it.identity == identity })) },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) { selections += it }
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) { selections += it }
     try {
       kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
       assertEquals(null, model.state.value.selected)
@@ -108,7 +112,7 @@ class DashboardControllerTest {
         },
         detailCall = { Outcome.Value(detail(preferred)) },
       )
-      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
       try {
         kotlinx.coroutines.withTimeout(3000) {
           while (model.state.value.sectionLoading.isNotEmpty() ||
@@ -146,7 +150,7 @@ class DashboardControllerTest {
         }
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
       model.updateSettings(model.state.value.settings.copy(historyFilter = HistoryFilter.GOALS))
@@ -186,7 +190,7 @@ class DashboardControllerTest {
         Outcome.Value(board(Retention.DAY, emptyList()))
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { initialStarted.await() }
       assertEquals(ListLoadState.INITIAL_LOADING, model.state.value.sectionLoadStates[WorkSection.PHASES])
@@ -226,7 +230,7 @@ class DashboardControllerTest {
     val native = object : QuietNative() {
       override fun notify(title: String, body: String, identity: WorkIdentity, onClick: (WorkIdentity) -> Unit) { notifications += identity }
     }
-    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) { while (model.state.value.boardLoading || WorkSection.RECENT !in model.state.value.sections) delay(10) }
       kotlinx.coroutines.withTimeout(3000) { while (WorkSection.HISTORY !in model.state.value.sections) delay(10) }
@@ -275,7 +279,7 @@ class DashboardControllerTest {
         pending += { authorizeAndSend { notifications += identity } }
       }
     }
-    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) {
         while (model.state.value.boardLoading || WorkSection.RECENT !in model.state.value.sections) delay(10)
@@ -314,7 +318,7 @@ class DashboardControllerTest {
         ))
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) { while (model.state.value.boardLoading) delay(10) }
       model.select(selected.identity)
@@ -352,7 +356,7 @@ class DashboardControllerTest {
         ))
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(3000) { while (model.state.value.boardLoading) delay(10) }
       model.select(selected.identity)
@@ -386,7 +390,7 @@ class DashboardControllerTest {
         }
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
       model.select(selected.identity)
@@ -426,7 +430,7 @@ class DashboardControllerTest {
           }
         },
       )
-      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+      val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
       try {
         kotlinx.coroutines.withTimeout(2000) { while (section !in model.state.value.sections || model.state.value.boardLoading) delay(10) }
         assertTrue(!secondStarted.isCompleted)
@@ -458,7 +462,7 @@ class DashboardControllerTest {
         else Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "Timed out"))
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
       model.loadMoreBoard()
@@ -496,7 +500,7 @@ class DashboardControllerTest {
         }
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
       model.select(selected.identity)
@@ -531,7 +535,7 @@ class DashboardControllerTest {
       },
     )
     val store = MemorySettings()
-    val model = DashboardController(source, source, source, source, store, QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, store, QuietNative(), testDispatchers(), startedClock()) {}
     kotlinx.coroutines.withTimeout(2000) { while (calls.get() == 0) delay(10) }
     model.select(WorkIdentity("A", "repo-A"))
     model.select(WorkIdentity("B", "repo-B"))
@@ -555,7 +559,7 @@ class DashboardControllerTest {
     val source = FakeSource(boardCall = { Outcome.Value(board(it, listOf(requested, phase))) },
       pauseAction = { pauseCalls.incrementAndGet(); Outcome.Value(Unit) },
       stopAction = { stopped.complete(it.identity); Outcome.Value(Unit) })
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
       model.perform("pause", requested.identity)
@@ -586,7 +590,7 @@ class DashboardControllerTest {
         Outcome.Value(Unit)
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
       model.select(boardItem.identity)
@@ -616,7 +620,7 @@ class DashboardControllerTest {
       sectionCall = { section -> Outcome.Value(board(Retention.DAY,
         if (section == WorkSection.NEEDS_YOU) listOf(blocked) else emptyList())) },
       detailCall = { Outcome.Value(detail(blocked).copy(runOptions = RunOptions(true, true, "Run again", "codex", listOf("codex"), null))) })
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.detail?.runOptions == null) delay(10) }
       model.perform("cancel", blocked.identity)
@@ -666,7 +670,7 @@ class DashboardControllerTest {
     val source = FakeSource(boardCall = { Outcome.Value(observations.removeFirst()) }, detailCall = { Outcome.Value(detail(blocked)) })
     val selected = CompletableDeferred<WorkIdentity>()
     val native = ClickNative()
-    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers()) { selected.complete(it) }
+    val model = DashboardController(source, source, source, source, MemorySettings(), native, testDispatchers(), startedClock()) { selected.complete(it) }
     kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
     model.refresh()
     val clicked = kotlinx.coroutines.withTimeout(2000) { selected.await() }
@@ -733,14 +737,12 @@ private class ClickNative : QuietNative() {
   override fun notify(title: String, body: String, identity: WorkIdentity, onClick: (WorkIdentity) -> Unit) = onClick(identity)
 }
 
-private class MemorySettings(var value: AppSettings = AppSettings()) : SettingsStore {
-  private val flow = kotlinx.coroutines.flow.MutableStateFlow<Outcome<AppSettings>>(Outcome.Value(value))
+private class MemorySettings(var value: AppSettings = AppSettings()) : SettingsRepository {
+  private val flow = kotlinx.coroutines.flow.MutableStateFlow<SettingsState>(SettingsState.Ready(value))
   override val settings = flow
-  override suspend fun update(transform: (AppSettings) -> AppSettings): Outcome<Unit> {
-    value = transform((flow.value as Outcome.Value).value)
-    flow.value = Outcome.Value(value)
-    return Outcome.Value(Unit)
+  override suspend fun update(transform: (AppSettings) -> AppSettings): Outcome<AppSettings> {
+    value = transform((flow.value as SettingsState.Ready).settings)
+    flow.value = SettingsState.Ready(value)
+    return Outcome.Value(value)
   }
-  override fun close() = Unit
-  override suspend fun closeAndJoin() = Unit
 }

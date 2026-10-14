@@ -5,6 +5,6 @@ plugins {
 kotlin {
   sourceSets.commonMain.dependencies {
     api(projects.core.domain)
-    api(projects.core.common)
+    implementation(projects.core.common)
   }
 }

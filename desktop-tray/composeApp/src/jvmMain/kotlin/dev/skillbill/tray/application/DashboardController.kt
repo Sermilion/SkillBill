@@ -19,10 +19,10 @@ class DashboardController(
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
   private val storeSession: WorkStoreSession,
-  private val settingsStore: SettingsStore,
+  private val settingsRepository: SettingsRepository,
   private val native: NativeServices,
   private val dispatchers: DispatcherProvider,
-  private val clock: Clock = Clock.System,
+  private val clock: Clock,
   private val onSelect: (WorkIdentity) -> Unit,
 ) : DashboardModel {
   private val scope = CoroutineScope(SupervisorJob() + dispatchers.io)
@@ -56,10 +56,11 @@ class DashboardController(
 
   init {
     scope.launch {
-      settingsStore.settings.collect { result ->
+      settingsRepository.settings.collect { result ->
         val settings = when (result) {
-          is Outcome.Value -> result.value
-          is Outcome.Failure -> {
+          SettingsState.Loading -> return@collect
+          is SettingsState.Ready -> result.settings
+          is SettingsState.Failed -> {
             recordProblem(if (result.problem.code == ProblemCode.SETTINGS_CORRUPT) "settings_corrupt" else "settings_read_failed")
             mutable.update { it.copy(settingsProblem = result.problem, boardLoading = false) }
             return@collect
@@ -574,7 +575,7 @@ class DashboardController(
   override fun updateSettings(settings: AppSettings) {
     val previous = mutable.value.settings
     scope.launch {
-      val result = settingsStore.update { current ->
+      val result = settingsRepository.update { current ->
         current.copy(
           databasePath = if (settings.databasePath != previous.databasePath) settings.databasePath else current.databasePath,
           retention = if (settings.retention != previous.retention) settings.retention else current.retention,
@@ -722,16 +723,11 @@ class DashboardController(
   override fun close() {
     scope.cancel()
     storeSession.close()
-    settingsStore.close()
   }
 
   suspend fun closeAndJoin() = withContext(NonCancellable + dispatchers.io) {
     scope.coroutineContext[Job]?.cancelAndJoin()
-    try {
-      storeSession.closeAndJoin()
-    } finally {
-      settingsStore.closeAndJoin()
-    }
+    storeSession.closeAndJoin()
   }
 
   private companion object {

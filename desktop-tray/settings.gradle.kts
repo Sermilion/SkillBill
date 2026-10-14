@@ -39,4 +39,4 @@ dependencyResolutionManagement {
   }
 }
 
-include(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:testing")
+include(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:testing", ":core:data", ":core:datastore")

@@ -199,6 +199,7 @@ enum class StorageFailure(val code: String) {
 enum class ProblemCode(val wireValue: String) {
   SETTINGS_UNAVAILABLE("settings_unavailable"),
   SETTINGS_CORRUPT("settings_corrupt"),
+  SETTINGS_UPDATE_FAILED("settings_update_failed"),
   LOGIN_SETTING_FAILED("login_setting_failed"),
   STALE_TARGET("stale_target"),
   DATABASE_ACCESS("database_access"),
@@ -233,6 +234,13 @@ data class AppSettings(
   init {
     require(lastPopoverTab in setOf("Goals", "Phases"))
   }
+}
+
+/** Readiness of persisted preferences; [Ready] is only published after the first persisted read completes. */
+sealed interface SettingsState {
+  data object Loading : SettingsState
+  data class Ready(val settings: AppSettings) : SettingsState
+  data class Failed(val problem: Problem) : SettingsState
 }
 
 enum class WorkSection { NEEDS_YOU, GOALS, PHASES, HISTORY, RECENT }

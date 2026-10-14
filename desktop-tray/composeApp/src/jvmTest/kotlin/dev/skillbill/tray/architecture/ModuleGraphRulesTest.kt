@@ -68,6 +68,15 @@ class ModuleGraphRulesTest {
       "resolves a framework dependency on jvmRuntimeClasspath: androidx.room3:room3-runtime" to baseline { project, manifest ->
         if (project == ":core:domain") manifest.copy(resolved = manifest.resolved + ("jvmRuntimeClasspath" to listOf("androidx.room3:room3-runtime"))) else manifest
       },
+      ":core:data has a disallowed production edge to :feature:board" to baseline { project, manifest ->
+        if (project == ":core:data") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:feature:board") else manifest
+      },
+      ":core:data has a disallowed production edge to :core:testing" to baseline { project, manifest ->
+        if (project == ":core:data") manifest.copy(projectDependencies = manifest.projectDependencies + "jvmMainImplementation->:core:testing") else manifest
+      },
+      ":core:datastore has a disallowed production edge to :core:data" to baseline { project, manifest ->
+        if (project == ":core:datastore") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:data") else manifest
+      },
       ":core:designsystem has no production consumer" to baseline { project, manifest ->
         if (project == ":composeApp") manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:designsystem") }) else manifest
       },
@@ -81,13 +90,42 @@ class ModuleGraphRulesTest {
     }
   }
 
+  @Test
+  fun `every real api project edge exposes a type of its target`() {
+    val manifests = loadManifests()
+    assertEquals(emptyList(), ModuleGraphRules.apiEdgeViolations(manifests, desktopSources(manifests = manifests)))
+    assertTrue(manifests.any { manifest -> manifest.projectDependencies.any { it.endsWith("Api->:core:domain") } }, "The api edge rule has no real edge to judge.")
+  }
+
+  @Test
+  fun `an api edge is rejected unless a public declaration exposes a type of its target`() {
+    val api = listOf("commonMainApi->:core:domain")
+    val manifests = listOf(manifest(":core:testing", ":core:common").copy(projectDependencies = api))
+    fun source(text: String) = Source("core/testing/src/commonMain/kotlin/dev/skillbill/tray/core/testing/Fixtures.kt", text, ":core:testing", "commonMain")
+    val domainImport = "import dev.skillbill.tray.core.domain.model.Board\n"
+
+    assertEquals(emptyList(), ModuleGraphRules.apiEdgeViolations(manifests, listOf(source("${domainImport}fun board(): Board = TODO()"))))
+    assertEquals(emptyList(), ModuleGraphRules.apiEdgeViolations(manifests, listOf(source("fun board(): dev.skillbill.tray.core.domain.model.Board = TODO()"))))
+    listOf(
+      "no source at all" to emptyList(),
+      "an import that nothing declares" to listOf(source("${domainImport}class Fixtures")),
+      "a private declaration" to listOf(source("${domainImport}private fun board(): Board = TODO()")),
+      "a private property" to listOf(source("${domainImport}class Fixtures(private val board: Board)")),
+    ).forEach { (label, sources) ->
+      val violations = ModuleGraphRules.apiEdgeViolations(manifests, sources)
+      assertTrue(violations.any { "commonMainApi->:core:domain without exposing a type" in it }, "Expected a rejection for $label but got $violations")
+    }
+  }
+
   private fun baseline(mutate: (String, ModuleManifest) -> ModuleManifest = { _, manifest -> manifest }): List<ModuleManifest> =
     listOf(
-      manifest(":composeApp", ":core:common", ":core:domain", ":core:designsystem", test = listOf(":core:testing")),
+      manifest(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:data", ":core:datastore", test = listOf(":core:testing")),
       manifest(":core:common"),
       manifest(":core:domain", ":core:common"),
       manifest(":core:designsystem"),
       manifest(":core:testing", ":core:common", ":core:domain"),
+      manifest(":core:data", ":core:common", ":core:domain", ":core:datastore"),
+      manifest(":core:datastore", ":core:common", ":core:domain"),
     ).map { mutate(it.project, it) }
 
   private fun manifest(project: String, vararg production: String, test: List<String> = emptyList()) = ModuleManifest(
