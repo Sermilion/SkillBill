@@ -98,5 +98,6 @@ class ModuleGraphRulesTest {
     kspConfigurations = listOf("ksp", "kspJvm"),
     projectDependencies = production.map { "commonMainImplementation->$it" } + test.map { "jvmTestImplementation->$it" },
     resolved = mapOf("jvmCompileClasspath" to listOf("org.jetbrains.kotlin:kotlin-stdlib"), "jvmRuntimeClasspath" to listOf("org.jetbrains.kotlin:kotlin-stdlib")),
+    sourceDirectories = mapOf("commonMain" to listOf("${project.removePrefix(":").replace(':', '/')}/src/commonMain/kotlin")),
   )
 }

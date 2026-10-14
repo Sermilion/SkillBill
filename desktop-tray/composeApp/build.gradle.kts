@@ -41,11 +41,8 @@ kotlin {
 dependencies {
   add("kspJvm", libs.room.compiler)
   add("jvmTestImplementation", testFixtures("dev.skillbill:runtime-infra-sqlite"))
-  add("architectureManifests", project(":composeApp"))
-  add("architectureManifests", projects.core.common)
-  add("architectureManifests", projects.core.domain)
-  add("architectureManifests", projects.core.designsystem)
-  add("architectureManifests", projects.core.testing)
+  // Projects without a build script (the implicit ":core" parent) own no sources and no manifest.
+  rootProject.subprojects.filter { it.buildFile.exists() }.forEach { add("architectureManifests", project(it.path)) }
 }
 
 compose.desktop {
@@ -59,8 +56,8 @@ tasks.named<Test>("jvmTest") {
   systemProperty("desktopRoot", rootDir.absolutePath)
   systemProperty("runtimeRoot", runtimeRoot.absolutePath)
   inputs.files(fileTree(rootDir) {
-    include("composeApp/src/**/*.kt", "core/*/src/**/*.kt")
-    exclude("**/build/**")
+    include("**/*.kt")
+    exclude("**/build/**", "**/.gradle/**", "build-logic/**")
   }).withPropertyName("desktopArchitectureSources")
   inputs.file(runtimeRoot.resolve("runtime-core/src/repoTest/kotlin/skillbill/architecture/RuntimeModuleCatalog.kt"))
     .withPropertyName("runtimeModuleCatalog")

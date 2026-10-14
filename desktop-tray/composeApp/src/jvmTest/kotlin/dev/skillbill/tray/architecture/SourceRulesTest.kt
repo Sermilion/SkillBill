@@ -13,11 +13,11 @@ class SourceRulesTest {
 
   @Test
   fun `every scanned module contributes sources so the rules are not vacuous`() {
-    val paths = desktopSources().map { it.path }
-    listOf("core/common", "core/domain", "core/designsystem", "core/testing").forEach { module ->
-      assertTrue(paths.any { it.startsWith("$module/src/commonMain/") }, "No commonMain sources scanned for $module.")
+    val sources = desktopSources()
+    listOf(":core:common", ":core:domain", ":core:designsystem", ":core:testing").forEach { module ->
+      assertTrue(sources.any { it.project == module && it.sourceSet == "commonMain" }, "No commonMain sources scanned for $module.")
     }
-    assertTrue(paths.any { it.startsWith("composeApp/src/jvmMain/") }, "No jvmMain sources scanned for composeApp.")
+    assertTrue(sources.any { it.project == ":composeApp" && it.sourceSet == "jvmMain" }, "No jvmMain sources scanned for :composeApp.")
   }
 
   @Test
@@ -69,7 +69,9 @@ class SourceRulesTest {
   }
 
   private fun violationsFor(path: String, text: String): List<String> {
-    val source = Source(path, text)
+    val module = path.substringBefore("/src/")
+    val project = ":" + module.replace('/', ':')
+    val source = Source(path, text, project, path.substringAfter("/src/").substringBefore('/'))
     return SourceRules.violations(scanReferences(listOf(source)))
   }
 }
