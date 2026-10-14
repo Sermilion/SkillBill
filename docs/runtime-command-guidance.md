@@ -35,6 +35,15 @@ tracker reference without requirements uses its connected tracker. Lookup
 failure asks for requirements, never infers them. Local key allocation does not
 query the workflow database or a tracker.
 
+A full-run request naming an existing spec file or bundle directory executes or
+resumes that bundle directly. Planning-only instructions retained in the spec
+describe the earlier invocation and do not select a standalone planning command.
+An existing manifest requires no operator handoff to run the goal. If the
+dispatcher mistakenly requested standalone planning and received the
+existing-manifest refusal, it corrects the dispatch through the full runtime
+using the original intake and flags. Explicit planning-only requests keep their
+stop-before-implementation behavior.
+
 Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>`
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.

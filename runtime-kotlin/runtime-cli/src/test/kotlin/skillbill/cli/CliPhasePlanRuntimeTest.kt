@@ -91,7 +91,7 @@ class CliPhasePlanRuntimeTest {
   }
 
   @Test
-  fun `phase plan records one plan workflow and writes a spec bundle that goal preflight accepts`() {
+  fun `full run directory intake executes a completed plan without another planning handoff`() {
     installGoalBuildPack(tempDir)
     val launcher = PhasePlanLauncher(tempDir)
 
@@ -166,8 +166,7 @@ class CliPhasePlanRuntimeTest {
         listOf(
           "--db",
           fixture.dbPath.toString(),
-          "goal",
-          ISSUE_KEY,
+          fixture.parentSpec.parent.toString(),
           "--agent",
           "codex",
           "--repo-root",
@@ -176,6 +175,8 @@ class CliPhasePlanRuntimeTest {
         fixture.context(launcher = implementation),
       )
     assertEquals(3, goal.exitCode, goal.stdout + goal.stderr)
+    assertEquals(listOf("preplan", "plan"), launcher.phaseIds)
+    assertEquals(3, rowCount("feature_task_workflows"))
     assertEquals(1, implementation.requests.size)
     assertTrue(implementation.requests.single().skillRunRequest.goalContinuation != null)
     val workflowId = goal.payload?.get("workflow_id")?.toString().orEmpty()
@@ -235,7 +236,11 @@ class CliPhasePlanRuntimeTest {
 
     private fun authorBundle(): String {
       val bundle = seededBundle()
-      Files.writeString(bundle.resolve("spec.md"), specText("Parent", "The split work completes."))
+      Files.writeString(
+        bundle.resolve("spec.md"),
+        specText("Parent", "The split work completes.") +
+          "\nThis invocation prepares artifacts only. Stop after planning. Do not execute the goal from this phase.\n",
+      )
       SUBTASK_FILES.forEach { (id, fileName) ->
         if (incompleteFirstBundle && phaseIds.count { it == "plan" } == 1 && id == 2) return@forEach
         Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works."))
