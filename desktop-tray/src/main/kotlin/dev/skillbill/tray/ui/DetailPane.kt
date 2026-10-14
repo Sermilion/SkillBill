@@ -79,7 +79,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
-        Text("${FileName(item.repositoryRoot)} · ${displayPath(item.repositoryRoot)} · ${item.branch ?: "no branch"}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${item.repositoryTitle()} · ${item.branch ?: "no branch"} · ${displayPath(item.repositoryRoot)}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         listOfNotNull(problem, state.actionProblem).forEach { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -27,11 +27,12 @@ class StandalonePhaseRegistrationFactory(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
+    workBranch: String? = null,
   ): IdeStatusWorkflowRegistration {
     val canonicalRoot = repositories.canonicalPath(repoRoot)
     return IdeStatusWorkflowRegistration(
       repositoryIdentity = repositories.repositoryIdentity(canonicalRoot),
-      branchCorrelation = branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
+      branchCorrelation = workBranch ?: branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
       issueKey = issueKey,
       workflowId = workflowId,
       invocationId = "workflow-$workflowId-${UUID.randomUUID()}",

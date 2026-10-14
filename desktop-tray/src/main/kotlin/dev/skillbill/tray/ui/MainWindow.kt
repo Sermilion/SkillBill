@@ -124,7 +124,7 @@ private fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Un
     Row(Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
-        Text(FileName(item.repositoryRoot), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.repositoryTitle(), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val status = if (item.scope == ExecutionScope.STANDALONE_PHASE || item.lifecycle == Lifecycle.CANCELED) {
           item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
         } else null

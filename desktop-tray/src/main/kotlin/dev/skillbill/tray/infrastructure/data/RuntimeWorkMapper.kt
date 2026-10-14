@@ -22,6 +22,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     workflowId = workflowId,
     invocationId = execution?.invocationId,
     repositoryRoot = root,
+    repositoryName = RepositoryNames.nameOf(root),
     branch = branchCorrelation,
     issueKey = issueKey,
     family = workflowFamily?.let { WorkFamily.valueOf(it.name) },

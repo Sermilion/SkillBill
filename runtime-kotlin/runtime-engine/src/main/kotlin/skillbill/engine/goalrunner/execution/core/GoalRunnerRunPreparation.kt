@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionP
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
+import skillbill.engine.goalrunner.execution.support.goalWorkBranch
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
@@ -107,7 +108,12 @@ class GoalRunnerRunPreparation(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunPreparation {
-    statusPublisherFactory.registerWorkflow(request.repoRoot, request.issueKey, state.parentWorkflowId)
+    statusPublisherFactory.registerWorkflow(
+      request.repoRoot,
+      request.issueKey,
+      state.parentWorkflowId,
+      state.manifest.goalWorkBranch(),
+    )
     val persistedControl =
       manifestStore.bindRepositoryIdentity(
         state.parentWorkflowId,

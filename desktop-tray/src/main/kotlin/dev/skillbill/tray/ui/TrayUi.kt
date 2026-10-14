@@ -82,6 +82,7 @@ internal fun phaseElapsedText(item: WorkItem, now: Instant, stale: Boolean): Str
   return age(Duration.between(start, end).coerceNonNegative())
 }
 internal fun FileName(path: String) = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\')
+internal fun WorkItem.repositoryTitle() = repositoryName ?: FileName(repositoryRoot)
 @Composable
 internal fun tickingNow(): State<Instant> {
   val now = remember { mutableStateOf(Instant.now()) }
