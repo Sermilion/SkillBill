@@ -1,3 +1,15 @@
+## [2026-10-15] Enforce module boundaries from generated manifests
+Context: SKILL-424 splits the desktop app into core modules, and source-only path checks cannot see Gradle edges, targets or plugins.
+Decision: A quality convention plugin writes each module's targets, plugins, KSP configurations and project dependencies to a manifest. Architecture tests read the manifests plus a PSI scan of imports and qualified names against an allowed-edge table.
+Reason: Manifests and parsed references catch aliased or star imports and wrong edges that text greps miss. Synthetic rejection fixtures prove each rule fails when broken.
+Alternatives considered: Grep-only path tests miss aliased imports; a third-party dependency-rule plugin adds a build dependency for a small ruleset.
+
+## [2026-10-15] Keep core domain free of platform time and file types
+Context: Domain models used java.time and java.nio, which blocks a pure multiplatform domain and the guard that bans platform imports.
+Decision: Domain uses kotlin.time for instants and durations and a DatabaseFileIdentity value (path, file key) for store identity. Conversion to java types happens only in runtime-facing edges such as the runtime mapper and Room board source.
+Reason: The domain stays portable and testable with a fake clock; platform types live where the platform is used.
+Revisit when: Adapters still calling Dispatchers.IO directly move behind the injected DispatcherProvider.
+
 ## [2026-10-12] Read work through the runtime store
 Context: SKILL-423 replaces CLI work-data requests with an in-process view of the runtime-owned database.
 Decision: Room opens an existing compatible store read-only. Shared runtime services project lifecycle and identity facts, admit exact-target controls, and own migrations. DataStore stores app preferences.

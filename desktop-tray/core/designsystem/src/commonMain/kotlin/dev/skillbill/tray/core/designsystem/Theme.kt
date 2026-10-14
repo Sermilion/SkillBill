@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -16,11 +17,11 @@ import dev.skillbill.tray.core.designsystem.generated.resources.space_grotesk
 import org.jetbrains.compose.resources.Font
 
 val mono: FontFamily
-  @Composable get() = FontFamily(Font(Res.font.jetbrains_mono))
+  @Composable get() = Font(Res.font.jetbrains_mono).let { font -> remember(font) { FontFamily(font) } }
 val body: FontFamily
-  @Composable get() = FontFamily(Font(Res.font.inter))
+  @Composable get() = Font(Res.font.inter).let { font -> remember(font) { FontFamily(font) } }
 val display: FontFamily
-  @Composable get() = FontFamily(Font(Res.font.space_grotesk))
+  @Composable get() = Font(Res.font.space_grotesk).let { font -> remember(font) { FontFamily(font) } }
 
 @Composable
 fun DesignSystemTheme(content: @Composable () -> Unit) {

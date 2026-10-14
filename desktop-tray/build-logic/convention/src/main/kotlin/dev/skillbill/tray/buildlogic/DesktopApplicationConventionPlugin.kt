@@ -43,15 +43,17 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
         linux { appCategory = "Development" }
       }
     }
-    registerNativeTasks(javaHome)
-    registerAppImageTasks()
+    val osName = System.getProperty("os.name")
+    val isLinux = osName.contains("linux", true)
+    val isMac = osName.contains("mac", true)
+    registerNativeTasks(javaHome, isLinux, isMac)
+    registerAppImageTasks(isLinux)
   }
 
-  private fun Project.registerNativeTasks(javaHome: String) {
-    val osName = System.getProperty("os.name")
+  private fun Project.registerNativeTasks(javaHome: String, isLinux: Boolean, isMac: Boolean) {
     val native = layout.projectDirectory.dir("src/jvmMain/native")
     val jvmMainResources = extensions.getByType(KotlinMultiplatformExtension::class.java).sourceSets.getByName("jvmMain").resources
-    if (osName.contains("linux", true)) {
+    if (isLinux) {
       val linuxTrayResources = layout.buildDirectory.dir("generated/linuxTray/resources")
       val script = native.file("linux/build-tray.sh")
       val compileLinuxTrayNative = tasks.register<Exec>("compileLinuxTrayNative") {
@@ -66,7 +68,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val compileMacTrayNative = tasks.register<Exec>("compileMacTrayNative") {
       inputs.file(macSource)
       outputs.dir(macTrayResources)
-      onlyIf { osName.contains("mac", true) }
+      onlyIf { isMac }
       doFirst {
         val library = macTrayResources.get().asFile.resolve("macos/libskillbilltray.dylib")
         library.parentFile.mkdirs()
@@ -76,17 +78,16 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
         )
       }
     }
-    if (osName.contains("mac", true)) jvmMainResources.srcDir(files(macTrayResources).builtBy(compileMacTrayNative))
+    if (isMac) jvmMainResources.srcDir(files(macTrayResources).builtBy(compileMacTrayNative))
   }
 
-  private fun Project.registerAppImageTasks() {
-    val osName = System.getProperty("os.name")
+  private fun Project.registerAppImageTasks(isLinux: Boolean) {
     val appImageLauncher = layout.buildDirectory.file("generated/appImage/AppRun")
     val launcherSource = layout.projectDirectory.file("src/jvmMain/native/linux/AppRun.c")
     val compileAppImageLauncher = tasks.register<Exec>("compileAppImageLauncher") {
       inputs.file(launcherSource)
       outputs.file(appImageLauncher)
-      onlyIf { osName.contains("linux", true) }
+      onlyIf { isLinux }
       doFirst {
         appImageLauncher.get().asFile.parentFile.mkdirs()
         commandLine("cc", "-std=c11", "-O2", launcherSource.asFile.absolutePath, "-o", appImageLauncher.get().asFile.absolutePath)
@@ -95,7 +96,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val appDirectory = layout.buildDirectory.dir("appimage/AppDir")
     val appIcon = rootProject.layout.projectDirectory.file("../design/App/docs/assets/skill-bill-app-icon.svg")
     val stageAppImage = tasks.register<Sync>("stageAppImage") {
-      onlyIf { osName.contains("linux", true) }
+      onlyIf { isLinux }
       dependsOn("createDistributable", compileAppImageLauncher)
       from(layout.buildDirectory.dir("compose/binaries/main/app"))
       into(appDirectory)

@@ -5,8 +5,11 @@ plugins {
 group = "dev.skillbill.tray"
 version = "0.1.0"
 
+// The implicit ":core" parent has no build script, so it owns no check or jvmTest task.
+val moduleProjects = subprojects.filter { it.buildFile.exists() }
+
 tasks.named("check") {
-  dependsOn(subprojects.map { "${it.path}:check" })
+  dependsOn(moduleProjects.map { "${it.path}:check" })
   dependsOn(gradle.includedBuild("build-logic").task(":convention:check"))
 }
 
@@ -32,5 +35,5 @@ composeAppTaskAliases.forEach { name ->
 tasks.register("test") {
   group = "verification"
   description = "Runs every module's jvmTest."
-  dependsOn(subprojects.map { "${it.path}:jvmTest" })
+  dependsOn(moduleProjects.map { "${it.path}:jvmTest" })
 }

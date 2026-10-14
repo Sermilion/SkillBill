@@ -1,3 +1,16 @@
+## [2026-10-15] SKILL-424 subtask 1 build graph and core foundations
+Areas: desktop-tray (root build, build-logic, composeApp, core/common, core/domain, core/designsystem, core/testing), .github/workflows, install.sh, scripts
+
+- Split the single-module desktop build into JVM-only KMP modules: composeApp (executable, native tray, packaging) plus core:common, core:domain, core:designsystem, core:testing. Root build holds no production classes; check and packaging tasks delegate to subprojects.
+- Added included build-logic with convention plugins for KMP library, Compose, kotlin-inject, quality and desktop application, all reading the desktop version catalog. Quality plugin writes a per-module architecture manifest that tests consume.
+- Core domain is pure: DatabaseFileIdentity replaces java.nio, kotlin.time replaces java.time; java conversions stay at runtime edges (mapper, Room source). DispatcherProvider and Clock are injected into controller and board source.
+- Fonts moved to compose resources with snake_case names. Packaged output paths moved to composeApp/build in install.sh, smoke scripts and both workflows.
+- Architecture guards now read module manifests and parse sources: module-graph rules (targets, forbidden edges, cycles, test-only testing module) and PSI-based source rules (aliased, star and qualified references). Rejection fixtures cover each rule (reusable).
+- Build-logic TestKit fixtures and core:testing fixtures (TestClock, work/board/detail builders) are reusable.
+- Known limits: nothing compiled or run when written; several dependency pins (kotlin-inject, anvil, lifecycle, navigation3, savedstate, junit-bom) unverified. No scope annotations yet; some adapters still use Dispatchers.IO directly. Empty legacy src directories remain. Docs left to subtask 6.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 1 of SKILL-424)
+
 ## [2026-10-12] SKILL-423 desktop app data layer revamp
 Areas: desktop-tray, .github/workflows, runtime-kotlin/runtime-contracts, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-core, runtime-kotlin/runtime-infra/sqlite, runtime-kotlin/runtime-cli
 

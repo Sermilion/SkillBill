@@ -9,18 +9,18 @@ base_branch: "main"
 feature_branch: "feat/SKILL-424-readian-architecture-parity-for-the-desktop-app"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "resume"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Build graph and core foundations"
   spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_1_build-graph-and-core-foundations.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261014-215001-eidv"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
