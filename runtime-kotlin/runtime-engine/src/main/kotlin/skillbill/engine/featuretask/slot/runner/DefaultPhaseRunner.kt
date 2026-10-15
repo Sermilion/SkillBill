@@ -159,7 +159,7 @@ class DefaultPhaseRunner(
     val status = gitOperations.worktreeStatus(input.facts.repoRoot)
     if (status !is WorkflowGitOperationResult.Ok) return BeforeCapture.Failed("before-file manifest: ${status.error}")
     val commit = gitOperations.runtimePhaseHeadCommit(input.facts.repoRoot)
-    if (commit !is WorkflowGitOperationResult.Ok) return BeforeCapture.Failed("before commit")
+    if (commit !is WorkflowGitOperationResult.Ok) return BeforeCapture.Failed("before commit: ${commit.error}")
     return BeforeCapture.Ready(status.value.orEmpty(), commit.value.orEmpty())
   }
 
@@ -169,16 +169,25 @@ class DefaultPhaseRunner(
   ): AfterCapture {
     val repoRoot = input.facts.repoRoot
     val status = gitOperations.worktreeStatus(repoRoot)
-    if (status !is WorkflowGitOperationResult.Ok) return AfterCapture.Failed("after-file manifest")
+    if (status !is WorkflowGitOperationResult.Ok) return AfterCapture.Failed("after-file manifest: ${status.error}")
     val commit = gitOperations.runtimePhaseHeadCommit(repoRoot)
-    if (commit !is WorkflowGitOperationResult.Ok) return AfterCapture.Failed("after commit")
+    if (commit !is WorkflowGitOperationResult.Ok) return AfterCapture.Failed("after commit: ${commit.error}")
     val committed =
-      gitOperations.runtimePhaseChangedPathsBetweenCommits(repoRoot, before.commit, commit.value.orEmpty())
-    if (committed !is WorkflowGitNameListResult.Listed) return AfterCapture.Failed("committed file changes")
+      when (
+        val changes =
+          gitOperations.runtimePhaseChangedPathsBetweenCommits(
+            repoRoot,
+            before.commit,
+            commit.value.orEmpty(),
+          )
+      ) {
+        is WorkflowGitNameListResult.Listed -> changes.names
+        is WorkflowGitNameListResult.Failed -> return AfterCapture.Failed("committed file changes: ${changes.error}")
+      }
     return AfterCapture.Ready(
       PhaseStepFileManifest(
         before = FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(before.status),
-        after = (FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value) + committed.names).distinct().sorted(),
+        after = (FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value) + committed).distinct().sorted(),
       ),
     )
   }
