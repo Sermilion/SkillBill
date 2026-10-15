@@ -4,6 +4,8 @@ import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 
 internal fun PhaseRun.stepFacts(
@@ -25,6 +27,13 @@ internal fun PhaseRun.stepFacts(
     briefingText = "",
   )
 }
+
+internal fun PhaseStepFacts.withLaunchSink(state: PhaseLaunchState): PhaseStepFacts =
+  if (state.launchOutputSink === AgentRunOutputSink.NONE) {
+    this
+  } else {
+    copy(outputSink = state.launchOutputSink, streamOutputForLiveness = true)
+  }
 
 internal fun PhaseStepPromptSections.appendWhenOpus(
   profile: PhaseModelProfile,

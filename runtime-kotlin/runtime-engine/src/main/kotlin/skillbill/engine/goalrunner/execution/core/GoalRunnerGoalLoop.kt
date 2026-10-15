@@ -14,7 +14,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
@@ -31,7 +31,7 @@ import skillbill.workflow.model.DecompositionSubtaskAction
 
 internal class GoalRunnerGoalLoop(
   private val manifestStore: GoalRunnerManifestStore,
-  private val goalPlanningSweep: GoalPlanningSweep,
+  private val goalPlanningSource: GoalPlanningSource,
   private val finalization: GoalRunnerFinalization,
   private val selectedSubtaskLoop: GoalRunnerSelectedSubtaskLoop,
   private val pauseBoundary: GoalRunnerPauseBoundary,
@@ -103,8 +103,13 @@ internal class GoalRunnerGoalLoop(
       planning.identity != null &&
         planning.hydrationFor(selection.decision.subtask.id) == null
     if (planningHydrationMissing) {
-      when (val refreshedPlanning = goalPlanningSweep.prepare(state, args.request)) {
-        is GoalPlanningSweepOutcome.PreparedAll -> planning = refreshedPlanning
+      when (val refreshedPlanning = goalPlanningSource.prepare(state, args.request)) {
+        is GoalPlanningSweepOutcome.PreparedAll -> {
+          refreshedPlanning.state?.let { clearedState ->
+            return RunSelectionAdvance(state = clearedState, planning = refreshedPlanning, report = null)
+          }
+          planning = refreshedPlanning
+        }
         is GoalPlanningSweepOutcome.Stopped -> {
           return RunSelectionAdvance(
             state = state,

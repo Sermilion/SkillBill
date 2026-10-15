@@ -151,7 +151,7 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
     val record = requireNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
     assertEquals(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION, record.failureDisposition)
     assertTrue("audit" !in result.completedPhaseIds)
-    assertEquals(listOf("preplan", "plan", "implement", "simplify", "audit"), harness.launchedPromptPhaseOrder())
+    assertEquals(listOf("implement", "simplify", "audit"), harness.launchedPromptPhaseOrder())
   }
 
   @Test

@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.outboxPayloads
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -34,22 +33,6 @@ class PrDescriptionTelemetryParityTest {
   }
 
   @Test
-  fun `the standalone pr step emits pr_description_generated matching the lifecycle fixture`() {
-    val repoRoot = Files.createDirectories(root.resolve("standalone"))
-    val git =
-      standaloneGit().also {
-        it.commitCountAheadValue = "3"
-        it.mergeBaseWithHeadValue = "b".repeat(40)
-        it.changedPathsBetweenCommitsValue = CHANGED_FILES
-      }
-
-    val run = standalonePrRun(repoRoot, database, reused, git)
-
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(run.report, run.report.toString())
-    assertSingleFixturePayload()
-  }
-
-  @Test
   fun `phase pr emits pr_description_generated matching the lifecycle fixture`() {
     val repository = PrRunRepository(Files.createDirectories(root.resolve("phase")))
     repository.initOnFeatureBranch()
@@ -60,10 +43,10 @@ class PrDescriptionTelemetryParityTest {
     val run = phasePrRun(repository.repoRoot, database, reused, clock)
 
     assertIs<PhaseRunResult.Completed>(run.result, run.result.toString())
-    assertSingleFixturePayload(committedPendingChanges = true)
+    assertSingleFixturePayload()
   }
 
-  private fun assertSingleFixturePayload(committedPendingChanges: Boolean = false) {
+  private fun assertSingleFixturePayload() {
     val payloads = database.outboxPayloads(TelemetryOutboxEvent.PR_DESCRIPTION_GENERATED.wireValue)
     assertEquals(1, payloads.size, payloads.toString())
     val fixture =
@@ -73,15 +56,11 @@ class PrDescriptionTelemetryParityTest {
         ),
       )
     val expected =
-      if (committedPendingChanges) {
-        fixture +
-          mapOf(
-            "commit_count" to 4,
-            "files_changed_count" to 9,
-          )
-      } else {
-        fixture
-      }
+      fixture +
+        mapOf(
+          "commit_count" to 4,
+          "files_changed_count" to 9,
+        )
     assertEquals(
       SlotBaselineJson.encode(expected),
       SlotBaselineJson.encode(payloads.single()),

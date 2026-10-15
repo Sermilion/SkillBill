@@ -7,20 +7,14 @@ import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
-import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
-import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
-import skillbill.ports.goalrunner.model.GoalPlanningIdentity
-import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.workflow.decomposition.model.DecompositionSubtask
 
 internal data class DriveGoalLoopArgs(
   val initialState: GoalRunnerManifestState,
@@ -136,23 +130,4 @@ internal data class StoppedReportArgs(
   val workflowId: String?,
   val lastResumableStep: String,
   val noChangeReason: String? = null,
-)
-
-internal data class ProduceMissingPlansArgs(
-  val shared: GoalPlanningSharedContext,
-  val request: GoalRunnerRunRequest,
-  val identity: GoalPlanningIdentity,
-  val provenance: GoalPlanningContractProvenance,
-  val sharedCheckpoint: SharedGoalPreplanCheckpoint,
-  val activeSubtasks: List<DecompositionSubtask>,
-  val startedPlanIds: Set<Int> = emptySet(),
-)
-
-internal data class EmptyOrStoppedArgs(
-  val outcome: AgentRunLaunchOutcome,
-  val shared: GoalPlanningSharedContext,
-  val request: GoalRunnerRunRequest,
-  val currentSubtaskId: Int,
-  val phaseId: String,
-  val durationMs: Long,
 )

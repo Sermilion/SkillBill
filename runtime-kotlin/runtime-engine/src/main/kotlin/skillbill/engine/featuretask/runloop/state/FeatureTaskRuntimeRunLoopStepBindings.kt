@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopRevi
 import skillbill.engine.featuretask.runloop.output.ReviewOutputPersistenceContext
 import skillbill.engine.featuretask.runloop.output.isGoalReviewRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
@@ -381,6 +382,37 @@ private class FeatureTaskRuntimeRunLoopPlanningStepBinding(
     environment.stepBinding,
 ) : FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhasePlanningStepBinding {
+  override fun settleExistingBundle(
+    run: PhaseRun,
+    unitStepId: String,
+  ): PhaseOutcome? {
+    bindingCoordinator.requireActiveStepBinding(this.run, fanOutUnitId)
+    check(run === this.run) { "Existing-bundle settlement must settle the accepted step '${this.run.phaseId}'." }
+    val request = environment.request
+    val planner = environment.decompositionPlanner
+    val parentSpec = planner.existingParentSpec(request.repoRoot, request.issueKey)
+    if (parentSpec == null || planner.existingManifest(request.repoRoot, request.issueKey) == null) return null
+    val rejection = PlanDecompositionStop.recordExistingBundleOrRejection(environment, unitStepId)
+    if (rejection != null) {
+      return if (environment.progress.phase(run.phaseId).nextIteration > 1) null else PhaseOutcome.blocked(rejection)
+    }
+    val bundle =
+      checkNotNull(environment.recorder.loadPlanBundle(workflowId)) {
+        "The existing plan bundle was recorded but cannot be read back."
+      }
+    val output =
+      PlanDecompositionStop.settledOutput(
+        run.phaseId,
+        "Kept the existing spec bundle of ${bundle.subtasks.size} subtasks; no agent planned it.",
+        request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString(),
+      )
+    val iteration = nextStepIteration()
+    settleRuntimeAuthoredCompletion(run.phaseId, output)
+    return PhaseOutcome.completed(
+      FeatureTaskRuntimePhaseOutput(run.phaseId, iteration, output.canonicalJson, output, null),
+    )
+  }
+
   override fun fanOut(stepId: String): PhaseRunFanOut {
     check(stepId == acceptedPhaseId) { "Fan-out belongs to the accepted planning step '$acceptedPhaseId'." }
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)

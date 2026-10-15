@@ -24,7 +24,6 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
-import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -152,8 +151,8 @@ class FeatureTaskRuntimeSerialRepairTest {
     val inputs =
       admission.creationResolver().resolveInputs(
         harness.request().repoRoot,
-        null,
-        ValidationDepth.DEFAULT,
+        admission.plan.qualityGateSelection,
+        admission.inputs.validationDepth,
         null,
         WORKFLOW_ID,
       )

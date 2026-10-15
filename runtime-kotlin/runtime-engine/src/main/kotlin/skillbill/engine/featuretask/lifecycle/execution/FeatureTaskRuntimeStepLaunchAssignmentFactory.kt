@@ -31,7 +31,7 @@ object FeatureTaskRuntimeStepLaunchAssignmentFactory {
     val assignments = linkedMapOf<String, StepLaunchAssignment>()
     canonical.selectedStepIds.forEach { stepId ->
       val strategy = lookup.strategyFor(stepId, canonical)
-      if (strategy.slot == PhaseSlot.COMMIT_PUSH) return@forEach
+      if (strategy.slot == PhaseSlot.INTAKE || strategy.slot == PhaseSlot.COMMIT_PUSH) return@forEach
       val agent = FeatureTaskRuntimeAgentResolver.resolve(stepId, inputs.agentAssignment, inputs.invokedAgentId)
       val requested = FeatureTaskRuntimeModelResolver.resolve(stepId, agent.resolvedAgentId, inputs.modelAssignment)
       val launch =

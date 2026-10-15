@@ -187,7 +187,7 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
 
   @Test
   fun `plain prose stdout is admitted as the phase value and advances the run`() {
-    listOf("preplan", "implement", "validate").forEach { phaseId ->
+    listOf("implement", "simplify", "validate").forEach { phaseId ->
       val prose = "I finished $phaseId. Nothing was deferred, and no structured receipt is attached."
       val harness = runnerHarness(proseConfig(phaseId, prose))
 

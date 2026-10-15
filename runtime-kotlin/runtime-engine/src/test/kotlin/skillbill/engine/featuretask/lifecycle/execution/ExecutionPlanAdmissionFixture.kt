@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.repoLocalConfig
-import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
@@ -45,7 +44,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
 class ExecutionPlanAdmissionFixture(
-  definition: SkeletonDefinition = SkeletonDefinition.STANDALONE,
+  definition: SkeletonDefinition = SkeletonDefinition.GOAL_CHILD,
   private val repository: String = "repo-root-realpath-v1:/tmp/admission-repository",
   private val specPath: String = ".feature-specs/SKILL-384/spec.md",
   private val database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
@@ -111,7 +110,6 @@ class ExecutionPlanAdmissionFixture(
       compatibility,
       diagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
-      planningMigrationForTest(),
       supervisor,
     )
 

@@ -18,9 +18,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentrun.ExecutableLookup
-import skillbill.ports.featurespec.FeatureSpecPathResolverPort
-import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
-import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -28,7 +25,6 @@ import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeRunPreparation(
-  private val specPathResolver: FeatureSpecPathResolverPort,
   private val configResolutionService: ConfigResolutionService,
   private val agentAddonSelectionPort: AgentAddonSelectionPort,
   private val executableLookup: ExecutableLookup,
@@ -36,19 +32,6 @@ class FeatureTaskRuntimeRunPreparation(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val inputs: CliRunInputs,
 ) {
-  internal fun prepareRun(
-    options: FeatureTaskRuntimePhaseAgentCommand,
-    issueKey: String?,
-    explicitSpecPath: String?,
-  ): PreparedRuntimeRun {
-    val runIssueKey = issueKey ?: throw UsageError("issue_key is required for feature-task run.")
-    val resolvedRepoRoot = resolveCliRepositoryRoot(options.repoRoot, inputs)
-    val runSpecPath = resolveSpecPath(runIssueKey, explicitSpecPath, resolvedRepoRoot)
-    val prepared = prepare(options, resolvedRepoRoot, runIssueKey, runSpecPath)
-    repositoryEnclosingRootPort.governedSpecPathForCli(prepared.repoRoot, Path.of(prepared.specPath))
-    return prepared
-  }
-
   internal fun prepareResume(
     options: FeatureTaskRuntimePhaseAgentCommand,
     workflowId: String,
@@ -88,33 +71,6 @@ class FeatureTaskRuntimeRunPreparation(
   ) {
     if (persistedPath != repositoryEnclosingRootPort.governedSpecPathForCli(repoRoot, specPath)) {
       throw UsageError("Workflow '$workflowId' was persisted with a different governed spec path.")
-    }
-  }
-
-  private fun resolveSpecPath(
-    issueKey: String,
-    explicitSpecPath: String?,
-    repositoryRoot: Path,
-  ): String {
-    val result =
-      specPathResolver.resolve(
-        FeatureSpecPathResolveInput(
-          issueKey = issueKey,
-          explicitSpecPath = explicitSpecPath,
-          repoRoot = repositoryRoot,
-        ),
-      )
-    return when (result) {
-      is FeatureSpecPathResolveResult.Explicit -> result.specPath
-      is FeatureSpecPathResolveResult.SingleMatch -> result.specPath
-      is FeatureSpecPathResolveResult.NoMatch -> throw UsageError(
-        "spec_path is required for feature-task run; no .feature-specs match found for '${result.issueKey}' " +
-          "under ${result.specsRoot}.",
-      )
-      is FeatureSpecPathResolveResult.Ambiguous -> throw UsageError(
-        "spec_path is required for feature-task run; multiple .feature-specs matches found for '${result.issueKey}': " +
-          result.matches.joinToString(", "),
-      )
     }
   }
 

@@ -94,9 +94,11 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
   stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
   val effectiveHostUname = hostUname ?: nativeHostUname()
   seedHostUname(binDir, effectiveHostUname)
+  val desktopReleaseDir = PrebuiltReleaseStager.stageDesktopOnlyRelease()
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -113,7 +115,8 @@ internal fun runInstallerShell(
         environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
-        environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
+        environment()["SKILL_BILL_RELEASE_DIR"] =
+          if (fromSource) releaseDir.toString() else desktopReleaseDir.toString()
         environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop-apps").toString()
         environment()["PATH"] = binDir.toString() + File.pathSeparator + environment()["PATH"].orEmpty()
         environment()["SKILL_BILL_TEST_HOST_UNAME"] = effectiveHostUname
@@ -759,7 +762,7 @@ internal object InstallerShellFixtures {
       }
     }
 
-  private fun currentDesktopOs(): String {
+  fun currentDesktopOs(): String {
     val osName = System.getProperty("os.name").lowercase()
     return when {
       osName.contains("mac") -> "macos"
@@ -895,6 +898,11 @@ internal object PrebuiltReleaseStager {
     }
     writeDesktopArchive(releaseDir, token)
   }
+
+  fun stageDesktopOnlyRelease(): Path =
+    Files.createTempDirectory("skillbill-desktop-release").also {
+      stage(it, releaseValid = true, omitRuntimeAssets = true)
+    }
 
   private fun writeDesktopArchive(
     releaseDir: Path,

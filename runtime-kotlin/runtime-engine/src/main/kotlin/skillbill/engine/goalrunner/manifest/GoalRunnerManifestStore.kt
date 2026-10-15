@@ -67,8 +67,6 @@ interface GoalRunnerManifestQueries {
   fun reviewPolicy(parentWorkflowId: String): GoalRunnerReviewPolicy?
 
   fun outOfBandAcceptances(parentWorkflowId: String): Map<Int, GoalRunnerOutOfBandAcceptance>
-
-  fun sharedPreplanPayloadSha256(parentWorkflowId: String): String?
 }
 
 interface GoalRunnerManifestExecutionCommands {
@@ -207,8 +205,13 @@ interface GoalRunnerManifestStateWrites {
   fun saveScopedReplan(
     state: GoalRunnerManifestState,
     subtaskId: Int,
-    options: GoalRunnerScopedReplanOptions = GoalRunnerScopedReplanOptions(),
+    options: GoalRunnerScopedReplanOptions,
   ): GoalRunnerScopedReplanWriteResult
+
+  fun clearReplannedChildWorkflows(
+    state: GoalRunnerManifestState,
+    subtaskIds: List<Int>,
+  ): GoalRunnerManifestState
 
   fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,

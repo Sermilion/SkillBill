@@ -190,7 +190,10 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   ): GoalRunnerScopedReplanWriteResult =
     error("Goal runner manifest store must atomically persist a scoped subtask replan.")
 
-  override fun sharedPreplanPayloadSha256(parentWorkflowId: String): String? = null
+  override fun clearReplannedChildWorkflows(
+    state: GoalRunnerManifestState,
+    subtaskIds: List<Int>,
+  ): GoalRunnerManifestState = state
 
   override fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,

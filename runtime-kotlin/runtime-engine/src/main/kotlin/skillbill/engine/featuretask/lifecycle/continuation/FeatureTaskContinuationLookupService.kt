@@ -18,6 +18,7 @@ import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.error.shellcontent.legacyProseWorkflowError
+import skillbill.error.shellcontent.retiredStandaloneWorkflowError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -88,6 +89,9 @@ class FeatureTaskContinuationLookupService(
               )
             },
           )
+        if (plan.definitionId == SkeletonDefinition.STANDALONE.id) {
+          throw retiredStandaloneWorkflowError(candidate.workflowId, identity.normalizedIssueKey)
+        }
         val admitted = SkeletonDefinition.admittedForRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD)
         if (admitted.none { it.id == plan.definitionId }) {
           throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
@@ -149,6 +153,7 @@ class FeatureTaskContinuationLookupService(
         repositoryIdentity = repositoryIdentity,
         workflowId = workflowId,
         routeScope = FeatureTaskRouteScope.STANDALONE,
+        admittedDefinition = SkeletonDefinition.STANDALONE,
       ),
     )
 
@@ -163,6 +168,7 @@ class FeatureTaskContinuationLookupService(
         repositoryIdentity = repositoryIdentity,
         workflowId = workflowId,
         routeScope = FeatureTaskRouteScope.GOAL_CHILD,
+        admittedDefinition = SkeletonDefinition.GOAL_CHILD,
       ),
     )
 
@@ -192,6 +198,7 @@ class FeatureTaskContinuationLookupService(
         repositoryIdentity = repositoryIdentity,
         workflowId = workflowId,
         routeScope = FeatureTaskRouteScope.STANDALONE,
+        admittedDefinition = SkeletonDefinition.STANDALONE,
         readIfPresent = true,
       ),
     )

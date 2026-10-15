@@ -224,7 +224,11 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     verifyOutput: String,
     implementFixOutput: String? = null,
   ): RunnerHarness {
-    val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = "before-fix" }
+    val git =
+      RecordingWorkflowGitOperations().apply {
+        headCommitShaValue = "f".repeat(40)
+        repositoryFingerprintValue = "before-fix"
+      }
     val harness =
       runnerHarness(
         RuntimeHarnessConfig(

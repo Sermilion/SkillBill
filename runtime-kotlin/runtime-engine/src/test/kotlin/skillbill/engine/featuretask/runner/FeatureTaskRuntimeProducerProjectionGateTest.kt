@@ -43,6 +43,7 @@ class FeatureTaskRuntimeProducerProjectionGateTest {
               facts(if (phaseId == targetPhase) terminalOutput else validJsonOutput(phaseId))
             },
           agentAssignment = phasePerAgentAssignment(),
+          hydratedPlanning = targetPhase !in hydratedPlanningOutputs(),
         ),
       )
     val report = harness.runner.run(harness.request())

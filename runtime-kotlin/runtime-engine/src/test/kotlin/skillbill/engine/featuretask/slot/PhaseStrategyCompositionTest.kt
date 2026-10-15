@@ -28,12 +28,13 @@ import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
@@ -50,6 +51,7 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.goalrunner.intake.testPlanIntake
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
@@ -72,9 +74,11 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
@@ -103,7 +107,7 @@ class PhaseStrategyCompositionTest {
         dbPathOverride = home.resolve("metrics.db").toString(),
         environment = emptyMap(),
       )
-    val fanOut = GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
+    val fanOut = PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
     return PhaseStrategyRegistry(
       (
         strategies +
@@ -116,7 +120,7 @@ class PhaseStrategyCompositionTest {
               scriptedDelegatedReviewRunner(database, home, LaneScript()),
             ),
             fanOut,
-            GoalPlanFanOutOpus55Strategy(fanOut),
+            PlanFanOutOpus55Strategy(fanOut),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
     )
@@ -144,6 +148,7 @@ class PhaseStrategyCompositionTest {
 
   private val strategies =
     listOf(
+      RuntimeIntakeStrategy { testPlanIntake() },
       AgentPreplanStrategy(),
       AgentPreplanOpus55Strategy(),
       AgentPlanStrategy(),
@@ -203,7 +208,7 @@ class PhaseStrategyCompositionTest {
 
   @Test
   fun `every selectable step without a structured contract settles with the uniform output`() {
-    val registry = PhaseStrategyRegistry(strategies)
+    val registry = productionRegistry()
     val selectable =
       testPhaseStrategyBindings()
         .values
@@ -534,6 +539,7 @@ class PhaseStrategyCompositionTest {
   private companion object {
     val EXPECTED_POLICIES =
       mapOf(
+        PHASE_INTAKE to policy(),
         PHASE_PREPLAN to policy(),
         PHASE_PLAN to policy(),
         PHASE_IMPLEMENT to policy(MUTATING, FILE_MUTATING).extendingInventory(),
@@ -616,8 +622,9 @@ class PhaseStrategyCompositionTest {
         lookup.strategyFor(PHASE_PRESENT_FINDINGS, plan).strategyId,
       )
     }
-    if (definition == SkeletonDefinition.GOAL_PLANNING) {
-      assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+    if (PhaseSlot.PLAN in definition.slots) {
+      assertEquals(PlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+      assertEquals(PlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN_SUBTASKS, plan).strategyId)
     }
     plan.selectedStrategies.forEach { identity ->
       identity.steps.forEach { step ->

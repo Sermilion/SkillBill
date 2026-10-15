@@ -7,8 +7,6 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.translateSql
 import skillbill.ports.goalrunner.GoalSubtaskPlanRepository
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationCountResult
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
-import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
@@ -30,24 +28,6 @@ internal class GoalSubtaskPlanStore(
         blockedSubtaskId,
         blockedReason,
       )
-    }
-
-  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult =
-    translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, checkpoint.subtaskId) {
-      subtaskPlan.checkpointSubtaskPlan(checkpoint)
-    }
-
-  override fun replaceSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult =
-    translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, checkpoint.subtaskId) {
-      subtaskPlan.replaceSubtaskPlan(checkpoint)
-    }
-
-  override fun deleteSubtaskPlan(
-    parentGoalWorkflowId: String,
-    subtaskId: Int,
-  ): Int =
-    translateSqlFailure(parentGoalWorkflowId, subtaskId) {
-      subtaskPlan.deleteSubtaskPlan(parentGoalWorkflowId, subtaskId)
     }
 
   override fun findSubtaskPlan(

@@ -10,12 +10,13 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
@@ -33,6 +34,7 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
+import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -65,8 +67,11 @@ fun testPhaseStrategies(
   delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
   pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
+  planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
+  planFanOutCap: Int = 1,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
+  val planFanOut = PlanFanOutStrategy(planFanOutPort, planFanOutCap)
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
   val prCanonical =
     PrDescriptionStrategy(
@@ -79,10 +84,16 @@ fun testPhaseStrategies(
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
+        PhaseStrategyRegistration(
+          RuntimeIntakeStrategy { error("Test phase strategies do not run plan intake.") },
+          runner(),
+        ),
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
+        PhaseStrategyRegistration(planFanOut, runner()),
+        PhaseStrategyRegistration(PlanFanOutOpus55Strategy(planFanOut), runner()),
         PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
         PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
@@ -122,37 +133,6 @@ fun testPhaseStrategies(
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
   val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
-  return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
-}
-
-fun goalPlanningPhaseStrategies(
-  launcher: GoalRunnerSubtaskLauncher,
-  fanOutPort: BoundedWorkFanOutPort,
-  planFanOutCap: Int,
-): PhaseStrategyLookup {
-  val runner = { DefaultPhaseRunner(launcher, NoopWorkflowGitOperations) }
-  val fanOut = GoalPlanFanOutStrategy(fanOutPort, planFanOutCap)
-  val registry =
-    PhaseStrategyRegistry(
-      listOf(
-        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
-        PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(fanOut, runner()),
-        PhaseStrategyRegistration(GoalPlanFanOutOpus55Strategy(fanOut), runner()),
-      ),
-    )
-  val bindings =
-    mapOf(
-      SkeletonDefinition.GOAL_PLANNING to
-        mapOf(
-          PhaseSlot.PREPLAN to
-            PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-          PhaseSlot.PLAN to
-            PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID).withOpus(GoalPlanFanOutOpus55Strategy.ID),
-        ),
-    )
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
 }
 
@@ -218,7 +198,7 @@ fun testPhaseStrategyBindings(
   val shared =
     mapOf(
       PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID).withOpus(AgentPlanOpus55Strategy.ID),
+      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(PlanFanOutStrategy.ID).withOpus(PlanFanOutOpus55Strategy.ID),
       PhaseSlot.IMPLEMENTATION to
         PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID).withOpus(ImplementThenSimplifyOpus55Strategy.ID),
       PhaseSlot.AUDIT to
@@ -262,7 +242,7 @@ fun testPhaseStrategyBindings(
           reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
       ),
     SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
-    SkeletonDefinition.PLAN to shared.filterKeys { slot -> slot == PhaseSlot.PREPLAN || slot == PhaseSlot.PLAN },
+    SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
     SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
   )

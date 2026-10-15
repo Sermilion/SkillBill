@@ -72,18 +72,26 @@
         "contract_version": "0.2",
         "duration_millis": "__NORMALIZED_DURATION__",
         "execution_origin": "agent-executed",
-        "file_manifest_after": [
-            "src/Foo.kt"
-        ],
-        "file_manifest_before": [
-            "src/Foo.kt"
-        ],
         "finished_at": "__NORMALIZED_TIMESTAMP__",
         "first_started_at": "__NORMALIZED_TIMESTAMP__",
         "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}",
         "phase_id": "plan",
         "record_kind": "private_phase_record",
-        "resolved_agent_id": "agent-plan",
+        "resolved_agent_id": "goal-planning-import",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "plan_subtasks": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan_subtasks\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}",
+        "phase_id": "plan_subtasks",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "goal-planning-import",
         "started_at": "__NORMALIZED_TIMESTAMP__",
         "status": "completed"
     },
@@ -92,18 +100,12 @@
         "contract_version": "0.2",
         "duration_millis": "__NORMALIZED_DURATION__",
         "execution_origin": "agent-executed",
-        "file_manifest_after": [
-            "src/Foo.kt"
-        ],
-        "file_manifest_before": [
-            "src/Foo.kt"
-        ],
         "finished_at": "__NORMALIZED_TIMESTAMP__",
         "first_started_at": "__NORMALIZED_TIMESTAMP__",
         "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"preplan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture preplan prose for downstream plan.\"}}",
         "phase_id": "preplan",
         "record_kind": "private_phase_record",
-        "resolved_agent_id": "agent-preplan",
+        "resolved_agent_id": "goal-planning-import",
         "started_at": "__NORMALIZED_TIMESTAMP__",
         "status": "completed"
     },

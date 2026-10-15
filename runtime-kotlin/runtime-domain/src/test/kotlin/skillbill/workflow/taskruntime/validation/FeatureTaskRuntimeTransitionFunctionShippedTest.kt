@@ -206,7 +206,7 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
           edgeIterationCount = 0,
         ),
       )
-    assertEquals(def.PHASE_IMPLEMENT, next.phaseId)
+    assertEquals(def.PHASE_PLAN_SUBTASKS, next.phaseId)
     assertEquals(null, next.loopId)
   }
 }

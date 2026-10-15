@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
-import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.execution.support.goalWorkBranch
 import skillbill.engine.goalrunner.goalRepositoryIdentity
@@ -15,7 +14,6 @@ import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
@@ -25,7 +23,6 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -40,25 +37,9 @@ class GoalRunnerRunPreparation(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
-  private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
-  private val migrationAdmission: GoalPlanningMigrationAdmission,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val gitOperations: WorkflowGitOperations,
 ) {
-  internal fun admitPlanningMigration(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ) {
-    val repositoryIdentity = goalRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort)
-    migrationAdmission.admit(
-      GoalPlanningIdentity(
-        state.parentWorkflowId,
-        state.manifest.issueKey.trim().uppercase(),
-        repositoryIdentity,
-      ),
-    )
-  }
-
   internal fun alignGoalBranch(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -98,11 +79,6 @@ class GoalRunnerRunPreparation(
           ?.error
     }
   }
-
-  internal fun refreshSpecPlanning(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ): GoalRunnerManifestState = specDriftRecovery.refresh(state, request)
 
   fun prepareRun(
     state: GoalRunnerManifestState,

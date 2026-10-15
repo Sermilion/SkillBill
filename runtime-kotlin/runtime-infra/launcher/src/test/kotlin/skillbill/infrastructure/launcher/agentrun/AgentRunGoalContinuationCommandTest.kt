@@ -15,6 +15,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -32,7 +33,7 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `goal-continuation child with no child workflow id runs skill-bill feature-task run directly`() {
+  fun `goal-continuation child on its first launch resumes the assigned workflow id`() {
     val runner = RecordingAgentRunProcessRunner()
     val outcome =
       requireNotNull(adapters(runner)[SupportedAgent.CLAUDE])
@@ -46,7 +47,8 @@ class AgentRunGoalContinuationCommandTest {
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
-        "run",
+        "resume",
+        "wfl-assigned",
         "SKILL-56",
         ".feature-specs/SKILL-56-goal/spec_subtask_2.md",
         "--goal-parent-issue-key",
@@ -122,23 +124,14 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `goal-continuation child with assigned workflow id and no child runs feature-task run with workflow-id`() {
-    val runner = RecordingAgentRunProcessRunner()
-    requireNotNull(adapters(runner)[SupportedAgent.CLAUDE]).launch(
-      skillRunRequest(
-        goalContinuation = goalContinuationContext(childWorkflowId = null, assignedWorkflowId = "wfl-assigned"),
-      ),
-    )
+  fun `goal-continuation child with no persisted workflow id is refused before launch`() {
+    val unpersisted = goalContinuationContext(childWorkflowId = null, assignedWorkflowId = null)
+    val error =
+      assertFailsWith<IllegalArgumentException> {
+        goalContinuationArguments(skillRunRequest(goalContinuation = unpersisted), SupportedAgent.CLAUDE, null)
+      }
 
-    val request = runner.requests.single()
-    assertContains(request.launch.command, "feature-task")
-    assertContains(request.launch.command, "run")
-    assertContains(request.launch.command, "SKILL-56")
-    assertContains(request.launch.command, ".feature-specs/SKILL-56-goal/spec_subtask_2.md")
-    val workflowIdFlagIndex = request.launch.command.indexOf("--workflow-id")
-    assertTrue(workflowIdFlagIndex >= 0)
-    assertEquals("wfl-assigned", request.launch.command[workflowIdFlagIndex + 1])
-    assertFalse(request.launch.command.contains("resume"))
+    assertEquals("Goal-child launch requires a persisted child workflow id.", error.message)
   }
 
   @Test
@@ -155,7 +148,7 @@ class AgentRunGoalContinuationCommandTest {
         listOf("skill-bill", "--db", "/tmp/skillbill-agent-run/metrics.db", "feature-task"),
         request.launch.command.take(4),
       )
-      assertContains(request.launch.command, "run")
+      assertContains(request.launch.command, "resume")
       assertContains(request.launch.command, "--suppress-pr")
       assertNull(request.launch.stdinText)
       assertFalse(request.launch.command.any { value -> "bill-feature-task" in value })
@@ -217,7 +210,7 @@ class AgentRunGoalContinuationCommandTest {
 
   private fun goalContinuationContext(
     childWorkflowId: String? = null,
-    assignedWorkflowId: String? = null,
+    assignedWorkflowId: String? = "wfl-assigned",
   ): SkillRunGoalContinuationContext =
     SkillRunGoalContinuationContext(
       parentIssueKey = "SKILL-56",
@@ -232,7 +225,7 @@ class AgentRunGoalContinuationCommandTest {
     )
 
   @Test
-  fun `cursor goal-continuation child with no child workflow id runs skill-bill feature-task run directly`() {
+  fun `cursor goal-continuation child on its first launch resumes the assigned workflow id`() {
     val runner = RecordingAgentRunProcessRunner()
     val outcome =
       requireNotNull(adapters(runner)[SupportedAgent.CURSOR])
@@ -246,7 +239,8 @@ class AgentRunGoalContinuationCommandTest {
         "--db",
         "/tmp/skillbill-agent-run/metrics.db",
         "feature-task",
-        "run",
+        "resume",
+        "wfl-assigned",
         "SKILL-56",
         ".feature-specs/SKILL-56-goal/spec_subtask_2.md",
         "--goal-parent-issue-key",
@@ -319,28 +313,6 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `cursor goal-continuation child with assigned workflow id and no child runs feature-task run with workflow-id`() {
-    val runner = RecordingAgentRunProcessRunner()
-    requireNotNull(adapters(runner)[SupportedAgent.CURSOR]).launch(
-      skillRunRequest(
-        goalContinuation = goalContinuationContext(childWorkflowId = null, assignedWorkflowId = "wfl-assigned"),
-      ),
-    )
-
-    val request = runner.requests.single()
-    assertContains(request.launch.command, "feature-task")
-    assertContains(request.launch.command, "run")
-    assertContains(request.launch.command, "SKILL-56")
-    assertContains(request.launch.command, ".feature-specs/SKILL-56-goal/spec_subtask_2.md")
-    val workflowIdFlagIndex = request.launch.command.indexOf("--workflow-id")
-    assertTrue(workflowIdFlagIndex >= 0)
-    assertEquals("wfl-assigned", request.launch.command[workflowIdFlagIndex + 1])
-    assertFalse(request.launch.command.contains("resume"))
-    assertEquals("cursor", request.launch.command.last())
-    assertEquals("--agent", request.launch.command[request.launch.command.size - 2])
-  }
-
-  @Test
   fun `goal-continuation builder stamps full validation depth in environment only`() {
     val runner = RecordingAgentRunProcessRunner()
     val adapter = requireNotNull(adapters(runner)[SupportedAgent.CLAUDE])
@@ -355,7 +327,7 @@ class AgentRunGoalContinuationCommandTest {
   }
 
   @Test
-  fun `goal-continuation launch emits every context field for resume and assigned run`() {
+  fun `goal-continuation launch emits every context field for a resumed and a first launch`() {
     listOf(
       goalContinuationContext(childWorkflowId = "wfl-child-runtime", assignedWorkflowId = null),
       goalContinuationContext(childWorkflowId = null, assignedWorkflowId = "wfl-assigned"),

@@ -118,8 +118,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   fun `step ids are ordered and every step has a label and a declared dependency set`() {
     val expectedOrder =
       listOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
@@ -140,8 +142,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
     assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN, definition.defaultInitialStepId)
     assertEquals(
       mapOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE to "Phase 0: Intake",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to "Phase 1: Pre-plan",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to "Phase 2: Plan",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS to "Phase 2b: Plan Subtasks",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",

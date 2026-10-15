@@ -8,14 +8,15 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStrategies
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 fun featureTaskRuntimeAgentContext(
   records: Map<String, FeatureTaskRuntimePhaseRecord>?,
 ): FeatureTaskRuntimeAgentContext {
-  val phaseRecords = records ?: return FeatureTaskRuntimeAgentContext()
+  val phaseRecords = records?.withoutPlanSubtaskUnitRecords()?.values ?: return FeatureTaskRuntimeAgentContext()
   return FeatureTaskRuntimeAgentContext(
-    resolvedAgentIds = phaseRecords.values.distinctNames { it.resolvedAgentId },
-    launchedModels = phaseRecords.values.distinctNames { it.launchedModel },
+    resolvedAgentIds = phaseRecords.distinctNames { it.resolvedAgentId },
+    launchedModels = phaseRecords.distinctNames { it.launchedModel },
   )
 }
 

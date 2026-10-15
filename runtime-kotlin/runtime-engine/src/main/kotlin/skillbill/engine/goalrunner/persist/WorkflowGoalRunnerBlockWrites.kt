@@ -33,6 +33,7 @@ import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
@@ -66,7 +67,9 @@ internal class WorkflowGoalRunnerBlockWrites(
     val steps = write.record.steps
     val definitionStepIds =
       if (write.family == WorkflowFamily.TASK_RUNTIME) {
-        write.family.definition.stepIds.filterNot { it in write.family.loopOnlyStepIds }
+        write.family.definition.stepIds.filterNot {
+          it in write.family.loopOnlyStepIds || it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_INTAKE
+        }
       } else {
         emptyList()
       }

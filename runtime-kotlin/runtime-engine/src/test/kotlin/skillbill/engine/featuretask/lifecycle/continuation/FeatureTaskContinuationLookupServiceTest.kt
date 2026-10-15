@@ -42,6 +42,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.Instant
@@ -118,45 +119,45 @@ class FeatureTaskContinuationLookupServiceTest {
   @Test
   fun `only one caller can claim a resumable workflow`() {
     val fixture = fixture()
-    val opened = fixture.open(REPOSITORY_A)
-    fixture.service.update(
-      WorkflowFamilyKind.TASK_RUNTIME,
-      WorkflowUpdateRequest(
-        workflowId = opened.workflowId,
-        workflowStatus = WorkflowStatus.BLOCKED.wireValue,
-        currentStepId = "implement",
-        sessionId = "",
-      ),
-    )
-    val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
-    val artifacts = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)))
-    fixture.states.saveFeatureTaskWorkflow(
-      row.copy(
-        artifactsJson =
-          JsonCodec.mapToJsonString(
-            artifacts +
-              mapOf(
-                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-                  ExecutionPlanAdmissionFixture().descriptor(),
-                ),
-              ),
-          ),
-      ),
-      RUNTIME,
-    )
+    val opened = fixture.open(REPOSITORY_A, FeatureTaskRouteScope.GOAL_CHILD)
+    fixture.blockWithPlan(opened.workflowId, ExecutionPlanAdmissionFixture())
     val candidate =
       assertIs<FeatureTaskContinuationLookupResult.Resumable>(
-        fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
+        fixture.lookup.lookupGoalChild("SKILL-120", REPOSITORY_A, opened.workflowId),
       ).candidate
 
     assertNotNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
     assertNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
     val running =
       assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
-        fixture.lookup.lookup("SKILL-120", REPOSITORY_A, candidate.workflowId),
+        fixture.lookup.lookupGoalChild("SKILL-120", REPOSITORY_A, candidate.workflowId),
       )
     assertEquals(candidate.workflowId, running.candidate.workflowId)
     assertEquals("ownership_unavailable", running.candidate.liveness?.classification)
+  }
+
+  @Test
+  fun `a retired standalone workflow stays visible and abandonable but refuses resume with the planning command`() {
+    val fixture = fixture()
+    val opened = fixture.open(REPOSITORY_A)
+    val retired = ExecutionPlanAdmissionFixture(SkeletonDefinition.STANDALONE)
+    fixture.blockWithPlan(opened.workflowId, retired)
+    val candidate =
+      assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+        fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
+      ).candidate
+
+    val refusal = assertFailsWith<SkillBillRuntimeException> { fixture.lookup.claim(candidate, retired.inputs) }
+
+    assertEquals(WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW, refusal.code)
+    assertTrue(requireNotNull(refusal.message).contains("skill-bill SKILL-120"), refusal.message)
+    fixture.service.abandonFeatureTaskRuntime(opened.workflowId, "Retired standalone workflow.")
+    assertEquals(
+      listOf(opened.workflowId),
+      assertIs<FeatureTaskContinuationLookupResult.TerminalOnly>(
+        fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
+      ).candidates.map { it.workflowId },
+    )
   }
 
   @Test
@@ -534,7 +535,37 @@ class FeatureTaskContinuationLookupServiceTest {
         }
       }
 
-    fun open(repositoryIdentity: String): WorkflowOpenResult.Ok =
+    fun blockWithPlan(
+      workflowId: String,
+      plan: ExecutionPlanAdmissionFixture,
+    ) {
+      service.update(
+        WorkflowFamilyKind.TASK_RUNTIME,
+        WorkflowUpdateRequest(
+          workflowId = workflowId,
+          workflowStatus = WorkflowStatus.BLOCKED.wireValue,
+          currentStepId = "implement",
+          sessionId = "",
+        ),
+      )
+      val row = requireNotNull(states.getFeatureTaskWorkflow(workflowId))
+      val artifacts = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)))
+      states.saveFeatureTaskWorkflow(
+        row.copy(
+          artifactsJson =
+            JsonCodec.mapToJsonString(
+              artifacts +
+                mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(plan.descriptor())),
+            ),
+        ),
+        RUNTIME,
+      )
+    }
+
+    fun open(
+      repositoryIdentity: String,
+      routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
+    ): WorkflowOpenResult.Ok =
       assertIs(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
@@ -543,6 +574,7 @@ class FeatureTaskContinuationLookupServiceTest {
             issueKey = "SKILL-120",
             repositoryIdentity = repositoryIdentity,
             governedSpecPath = ".feature-specs/SKILL-120-continuation/spec.md",
+            routeScope = routeScope,
           ),
         ),
       )

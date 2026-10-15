@@ -70,8 +70,8 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
-import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
+import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -79,7 +79,6 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
-import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -105,7 +104,6 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.UnaddressedFinding
-import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
@@ -1208,10 +1206,10 @@ class GoalRunnerLinearScratchFinalizeTest {
           pullRequestPort = RecordingPullRequestPort(),
         ).copy(
           gitOperations = git,
-          goalPlanningSweep =
-            GoalPlanningSweep { state, request ->
+          goalPlanningSource =
+            GoalPlanningSource { state, request ->
               planningBranches += git.current
-              PREPARE_ALL_GOAL_PLANNING_SWEEP.prepare(state, request)
+              PREPARE_ALL_GOAL_PLANNING_SOURCE.prepare(state, request)
             },
         ),
       )
@@ -1683,8 +1681,8 @@ class GoalRunnerLinearScratchFinalizeTest {
           pullRequestPort = pullRequests,
         ).copy(
           gitOperations = git,
-          goalPlanningSweep =
-            GoalPlanningSweep { _, _ -> error("Archived completed specs must not be read for planning.") },
+          goalPlanningSource =
+            GoalPlanningSource { _, _ -> error("Archived completed specs must not be read for planning.") },
           pullRequestIdentityLookup =
             PullRequestIdentityLookup { _, _ ->
               if (merged) PullRequestIdentity.Merged(url, 463) else PullRequestIdentity.Found(url, 463)
@@ -4246,9 +4244,6 @@ internal class InMemoryGoalManifestStore(
   var scopedReplanCount: Int = 0
     private set
   var clearedChildSubtaskIdsOnReplan: List<Int> = emptyList()
-  var lastIncludeSharedPreplan: Boolean? = null
-    private set
-  var forceSharedDigestMismatchOnReplan: Boolean = false
 
   override fun planningStatus(
     parentWorkflowId: String,
@@ -4287,54 +4282,14 @@ internal class InMemoryGoalManifestStore(
     )
   }
 
-  override fun sharedPreplanPayloadSha256(parentWorkflowId: String): String? =
-    sharedPreplanPayloadSha256ForTest.takeIf { sharedPreplanPrepared }
-
   override fun saveScopedReplan(
     state: GoalRunnerManifestState,
     subtaskId: Int,
     options: GoalRunnerScopedReplanOptions,
   ): GoalRunnerScopedReplanWriteResult {
     scopedReplanCount += 1
-    lastIncludeSharedPreplan = options.includeSharedPreplan
     val before = plannedSubtaskIds.sorted()
-    val sharedBefore = sharedPreplanPrepared
-    val cascadedIds: List<Int>
-    val deleted: Int
-    if (options.includeSharedPreplan) {
-      cascadedIds =
-        cascadeEligiblePlanSubtaskIds(
-          plannedIds = before.filter { it != subtaskId },
-          subtasks = state.manifest.subtasks,
-        )
-      val retained = before.filter { it != subtaskId && it !in cascadedIds }
-      if (options.expectedSharedPayloadSha256 != null) {
-        if (forceSharedDigestMismatchOnReplan ||
-          options.expectedSharedPayloadSha256 != sharedPreplanPayloadSha256ForTest
-        ) {
-          throw incompatibleGoalPlanningPreparationRecoveryError(
-            state.parentWorkflowId,
-            0,
-            "shared preplan changed after it was observed for discard",
-          )
-        }
-        sharedPreplanPrepared = false
-        if (retained.isEmpty()) {
-          plannedSubtaskIds.clear()
-          sharedPreplanPayloadSha256ForTest = null
-          deleted = if (subtaskId in before) 1 else 0
-        } else {
-          cascadedIds.forEach { plannedSubtaskIds.remove(it) }
-          deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-        }
-      } else {
-        cascadedIds.forEach { plannedSubtaskIds.remove(it) }
-        deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-      }
-    } else {
-      cascadedIds = emptyList()
-      deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-    }
+    val deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
     val saved = save(state)
     return GoalRunnerScopedReplanWriteResult(
       state = saved,
@@ -4342,9 +4297,6 @@ internal class InMemoryGoalManifestStore(
       plannedSubtaskIdsBefore = before,
       plannedSubtaskIdsAfter = plannedSubtaskIds.sorted(),
       sharedPreplanPrepared = sharedPreplanPrepared,
-      sharedPreplanPreparedBefore = sharedBefore,
-      discardedSharedPreplan = sharedBefore && !sharedPreplanPrepared,
-      cascadedPlanSubtaskIds = cascadedIds,
       clearedChildSubtaskIds = clearedChildSubtaskIdsOnReplan,
     )
   }

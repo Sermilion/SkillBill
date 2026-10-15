@@ -53,7 +53,7 @@ import kotlin.test.assertNotNull
 internal class SerialRepairSqliteFixture(
   archiveRevision: Int? = null,
   supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
-  archiveMode: String = "standalone",
+  archiveMode: String = "goal-child-validate",
 ) : AutoCloseable {
   val root: Path = Files.createTempDirectory("serial-repair-sqlite")
   val clock: Clock = Clock.fixed(Instant.parse("2026-10-14T09:00:00Z"), ZoneOffset.UTC)

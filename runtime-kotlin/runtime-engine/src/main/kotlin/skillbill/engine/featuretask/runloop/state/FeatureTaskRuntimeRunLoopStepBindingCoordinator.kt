@@ -123,6 +123,10 @@ internal class FeatureTaskRuntimeRunLoopStepLaunchState(
   private val launchBacking: PhaseLaunchState,
   private val acceptedPhaseId: String,
 ) : PhaseLaunchState {
+  override val launchOutputSink get() = launchBacking.launchOutputSink
+
+  override val launchPromptContext get() = launchBacking.launchPromptContext
+
   override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? {
     requireAcceptedPhase(input.stepName)
     return launchBacking.prepareLaunch(input)

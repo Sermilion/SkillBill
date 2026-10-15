@@ -18,13 +18,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
 import skillbill.engine.featuretask.slot.testPhaseStrategies
-import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
-import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -32,37 +27,18 @@ import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerNoChangeChildCloser
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.planningMigrationForTest
-import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
-import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
-import skillbill.engine.goalrunner.planning.attempt.NO_GOAL_PLANNING_ATTEMPT_RECORDER
-import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanProduction
-import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanSettlement
-import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
-import skillbill.engine.goalrunner.planning.outcome.GoalPlanningSubtaskPlanProduction
-import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRefreshLiveness
-import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
-import skillbill.engine.goalrunner.planning.recovery.IDLE_GOAL_PLANNING_REFRESH_LIVENESS
-import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
-import skillbill.engine.goalrunner.planning.remedies.NO_GOAL_PLANNING_REJECTION_RECORDER
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningLaunchResolution
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
-import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
+import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
-import skillbill.ports.concurrency.BoundedWorkFanOutPort
-import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -71,9 +47,6 @@ import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
-import skillbill.ports.goalrunner.planning.EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
-import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
-import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -81,18 +54,13 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
-import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
-import skillbill.ports.time.NoopRuntimeTimingPort
-import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
-import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -129,7 +97,7 @@ internal data class GoalRunnerTestWiring(
   val subtaskLauncher: GoalRunnerSubtaskLauncher,
   val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   val pullRequestPort: GoalPullRequestPort,
-  val goalPlanningSweep: GoalPlanningSweep,
+  val goalPlanningSource: GoalPlanningSource,
   val specScratchStore: SpecScratchStore,
   val gitOperations: WorkflowGitOperations,
   val telemetry: GoalLifecycleTelemetryEmitter,
@@ -163,7 +131,7 @@ internal fun testGoalRunnerWiring(params: GoalRunnerTestWiringParams): GoalRunne
     subtaskLauncher = params.subtaskLauncher,
     outcomeStore = params.outcomeStore,
     pullRequestPort = params.pullRequestPort,
-    goalPlanningSweep = PREPARE_ALL_GOAL_PLANNING_SWEEP,
+    goalPlanningSource = PREPARE_ALL_GOAL_PLANNING_SOURCE,
     specScratchStore = UnavailableSpecScratchStore,
     gitOperations = NoopWorkflowGitOperations,
     telemetry = noopGoalLifecycleTelemetryEmitter,
@@ -181,7 +149,7 @@ internal data class GoalRunnerTestInputs(
   val subtaskLauncher: GoalRunnerSubtaskLauncher,
   val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   val pullRequestPort: GoalPullRequestPort,
-  val goalPlanningSweep: GoalPlanningSweep = PREPARE_ALL_GOAL_PLANNING_SWEEP,
+  val goalPlanningSource: GoalPlanningSource = PREPARE_ALL_GOAL_PLANNING_SOURCE,
   val specScratchStore: SpecScratchStore = UnavailableSpecScratchStore,
   val gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   val telemetry: GoalLifecycleTelemetryEmitter = noopGoalLifecycleTelemetryEmitter,
@@ -203,7 +171,7 @@ internal data class GoalRunnerTestInputs(
       subtaskLauncher = subtaskLauncher,
       outcomeStore = outcomeStore,
       pullRequestPort = pullRequestPort,
-      goalPlanningSweep = goalPlanningSweep,
+      goalPlanningSource = goalPlanningSource,
       specScratchStore = specScratchStore,
       gitOperations = gitOperations,
       telemetry = telemetry,
@@ -234,23 +202,6 @@ internal fun goalRunnerDeps(
 
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
-internal fun testSpecDriftRecovery(
-  manifestStore: GoalRunnerManifestStore,
-  outcomeStore: GoalRunnerWorkflowOutcomeStore,
-): GoalRunnerSpecDriftRecovery =
-  GoalRunnerSpecDriftRecovery(
-    GoalPlanningPreparationCheckpoint(
-      TestGoalActivityStampDatabase,
-      FeatureTaskRuntimeWireArtifactValidator(),
-    ),
-    manifestStore,
-    UnavailableDecompositionManifestStore,
-    TestRepositoryEnclosingRoot,
-    testGoalRunnerStatusService(manifestStore, outcomeStore),
-    FeatureTaskRuntimeWireArtifactValidator(),
-    NoopRuntimeDiagnostics,
-  )
-
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.outcomeStore)
@@ -274,7 +225,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   return GoalRunner(
     manifestStore = wiring.manifestStore,
     outcomeStore = wiring.outcomeStore,
-    goalPlanningSweep = wiring.goalPlanningSweep,
+    goalPlanningSource = wiring.goalPlanningSource,
     telemetry = wiring.telemetry,
     clock = wiring.clock,
     diagnostics = wiring.diagnostics,
@@ -285,12 +236,6 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         TestRepositoryEnclosingRoot,
         executionPlans,
         crashReconciler,
-        testSpecDriftRecovery(wiring.manifestStore, wiring.outcomeStore),
-        GoalPlanningMigrationAdmission(
-          TestGoalActivityStampDatabase,
-          planningMigrationForTest(),
-          wiring.diagnostics,
-        ),
         testStandalonePhasePublisher(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
         wiring.gitOperations,
       ),
@@ -306,7 +251,6 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         ),
         FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
         UnavailableDecompositionManifestStore,
-        NoopWorkflowGitOperations,
       ),
   )
 }
@@ -370,7 +314,7 @@ private fun testGoalRunnerLoopAssembler(
     )
   return GoalRunnerPerRunLoopAssembler(
     manifestStore = wiring.manifestStore,
-    goalPlanningSweep = wiring.goalPlanningSweep,
+    goalPlanningSource = wiring.goalPlanningSource,
     finalization = finalization,
     selectedSubtaskLoop = selectedSubtaskLoop,
     pauseBoundary = pauseBoundary,
@@ -450,123 +394,6 @@ private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
       override val goalRunnerControls = EmptyGoalRunnerControlRepository
     }
 }
-
-internal data class GoalPlanningSweepPortsParams(
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
-  val checkpoint: GoalPlanningPreparationCheckpoint,
-  val clock: Clock = Clock.systemUTC(),
-  val subtaskLauncher: GoalRunnerSubtaskLauncher,
-  val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
-  val manifestFileStore: DecompositionManifestStore,
-  val contextDiscovery: GoalPlanningContextDiscovery,
-  val planningAttemptRecorder: GoalPlanningAttemptRecorder = NO_GOAL_PLANNING_ATTEMPT_RECORDER,
-  val manifestStore: GoalRunnerManifestStore = TestNoopGoalPlanningManifestStore,
-  val planningRejectionRecorder: GoalPlanningRejectionRecorder = NO_GOAL_PLANNING_REJECTION_RECORDER,
-  val timingPort: RuntimeTimingPort = NoopRuntimeTimingPort,
-  val fanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
-  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
-  val burstSchedule: GoalPlanningBurstSchedule =
-    GoalPlanningBurstSchedule(
-      planFanOutCap = GoalPlanningBurstSchedule.DEFAULT_PLAN_FAN_OUT_CAP,
-      emptyTurnBackoffBase = GoalPlanningBurstSchedule.DEFAULT_EMPTY_TURN_BACKOFF_BASE,
-      emptyTurnBackoffFactor = GoalPlanningBurstSchedule.DEFAULT_EMPTY_TURN_BACKOFF_FACTOR,
-      waitSlice = GoalPlanningBurstSchedule.DEFAULT_WAIT_SLICE,
-    ),
-  val refreshLiveness: GoalPlanningRefreshLiveness = IDLE_GOAL_PLANNING_REFRESH_LIVENESS,
-  val agentRunLauncher: AgentRunLauncher = testAgentRunLauncher(),
-)
-
-internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): DefaultGoalPlanningSweep {
-  val attemptGate =
-    GoalPlanningPhaseAttemptGate(
-      manifestStore = params.manifestStore,
-      planningAttemptRecorder = params.planningAttemptRecorder,
-      planningRejectionRecorder = params.planningRejectionRecorder,
-      timingPort = params.timingPort,
-      burstSchedule = params.burstSchedule,
-      clock = params.clock,
-    )
-  val sharedPreplanProduction =
-    GoalPlanningSharedPreplanProduction(
-      checkpoint = params.checkpoint,
-      invariantsSource = params.invariantsSource,
-      manifestFileStore = params.manifestFileStore,
-      contextDiscovery = params.contextDiscovery,
-      repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
-      attemptGate = attemptGate,
-      migrationAdmission =
-        GoalPlanningMigrationAdmission(
-          TestGoalActivityStampDatabase,
-          planningMigrationForTest(),
-          NoopRuntimeDiagnostics,
-        ),
-    )
-  return DefaultGoalPlanningSweep(
-    sharedPreplanProduction = sharedPreplanProduction,
-    sharedPreplanSettlement =
-      GoalPlanningSharedPreplanSettlement(
-        checkpoint = params.checkpoint,
-        sharedPreplanProduction = sharedPreplanProduction,
-        contextDiscovery = params.contextDiscovery,
-        manifestFileStore = params.manifestFileStore,
-        repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
-        refreshLiveness = params.refreshLiveness,
-      ),
-    planProduction =
-      GoalPlanningSubtaskPlanProduction(
-        attemptGate = attemptGate,
-        checkpoint = params.checkpoint,
-        invariantsSource = params.invariantsSource,
-        manifestFileStore = params.manifestFileStore,
-        repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
-      ),
-    attemptGate = attemptGate,
-    checkpoint = params.checkpoint,
-    repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
-    launchResolution =
-      GoalPlanningLaunchResolution(
-        strategies =
-          goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
-        launcher = params.agentRunLauncher,
-      ),
-    clock = params.clock,
-    diagnostics = NoopRuntimeDiagnostics,
-    runLoopEntry = params.runLoopEntry,
-    manifestFileStore = params.manifestFileStore,
-  )
-}
-
-internal fun testGoalPlanningContextDiscovery(
-  context: GoalPlanningContext =
-    GoalPlanningContext(
-      boundaryCatalog = emptyList(),
-      boundaryCatalogTruncated = false,
-      validationGuidance = "",
-    ),
-): GoalPlanningContextDiscovery =
-  if (context ==
-    GoalPlanningContext(
-      boundaryCatalog = emptyList(),
-      boundaryCatalogTruncated = false,
-      validationGuidance = "",
-    )
-  ) {
-    EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
-  } else {
-    object : GoalPlanningContextDiscovery {
-      override fun loadPlanningContext(repoRoot: Path): GoalPlanningContext = context
-
-      override fun discoverForFindingPaths(
-        repoRoot: Path,
-        findingPaths: List<String>,
-        loudFailOnCapExceeded: Boolean,
-      ) = EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY.discoverForFindingPaths(
-        repoRoot,
-        findingPaths,
-        loudFailOnCapExceeded,
-      )
-    }
-  }
 
 private fun goalRunnerExecutionPlans(
   wiring: GoalRunnerTestWiring,

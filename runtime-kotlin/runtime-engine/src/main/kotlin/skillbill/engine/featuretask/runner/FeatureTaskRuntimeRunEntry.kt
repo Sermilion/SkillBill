@@ -28,16 +28,19 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.skeleton.boundedSafeModelIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
+
+private const val INTAKE_PASS_CRITERION = "Intake writes or keeps the parent spec before run invariants are read."
 
 @Inject
 class FeatureTaskRuntimeRunEntry(
@@ -91,6 +94,15 @@ class FeatureTaskRuntimeRunEntry(
       if (input.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(input, admittedExecution)
       }
+      val definition = resolveRunDefinition(input.definition, goalContinuation != null)
+      if (PhaseSlot.INTAKE in definition.slots && !intakeCompleted(workflowId)) {
+        val intakeReport =
+          runner.run(
+            runRequest(input, workflowId, admittedExecution, intakePassInvariants(input, specPath, admittedExecution))
+              .copy(stopAfterIntake = true),
+          )
+        if (!intakeCompleted(workflowId)) return@runOwned intakeReport
+      }
       val sourceRead = runInvariantsSource.read(specPath)
       val sourceInvariants = sourceRead.requireInvariants()
       val repairState = inspectRepairState(input, acquiredWorker, sourceRead)
@@ -98,37 +110,63 @@ class FeatureTaskRuntimeRunEntry(
         return@runOwned historicalRepairRefusal(input, acquiredWorker, sourceInvariants)
       }
       runner.run(
-        FeatureTaskRuntimeRunRequest(
-          issueKey = input.issueKey,
-          workflowId = workflowId,
-          admittedExecution = admittedExecution,
-          sessionId =
-            "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$workflowId",
-          runInvariants =
-            sourceInvariants.copy(
-              codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
-              agentAddonSelection = input.agentAddonSelection.persisted,
-            ),
-          invokedAgentId = input.invokedAgentId,
-          agentAssignment = input.agentAssignment,
-          modelAssignment = input.modelAssignment,
-          compactionSettings = input.compactionSettings,
-          environment = input.environment,
-          repoRoot = input.repoRoot,
-          timeout = input.timeout,
-          requestedCodeReviewMode = input.requestedCodeReviewMode,
-          goalContinuation = goalContinuation,
-          operatorDecision = input.operatorDecision,
-          agentAddonSelection = input.agentAddonSelection,
-          eventSink = input.eventSink,
-          skeletonDefinition = input.definition,
-          protectedSpecSha256 = input.protectedSpecSha256,
-          acceptanceCriterionRepair = repairState,
-        ),
+        runRequest(
+          input,
+          workflowId,
+          admittedExecution,
+          sourceInvariants.copy(
+            codeReviewMode = admittedExecution.reviewMode ?: sourceInvariants.codeReviewMode,
+            agentAddonSelection = input.agentAddonSelection.persisted,
+          ),
+        ).copy(acceptanceCriterionRepair = repairState),
         acquiredWorker,
       )
     }
   }
+
+  private fun runRequest(
+    input: FeatureTaskRuntimeRunInput,
+    workflowId: String,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+    invariants: FeatureTaskRuntimeRunInvariants,
+  ): FeatureTaskRuntimeRunRequest =
+    FeatureTaskRuntimeRunRequest(
+      issueKey = input.issueKey,
+      workflowId = workflowId,
+      admittedExecution = admittedExecution,
+      sessionId = "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$workflowId",
+      runInvariants = invariants,
+      invokedAgentId = input.invokedAgentId,
+      agentAssignment = input.agentAssignment,
+      modelAssignment = input.modelAssignment,
+      compactionSettings = input.compactionSettings,
+      environment = input.environment,
+      repoRoot = input.repoRoot,
+      timeout = input.timeout,
+      requestedCodeReviewMode = input.requestedCodeReviewMode,
+      goalContinuation = input.goalContinuation,
+      operatorDecision = input.operatorDecision,
+      agentAddonSelection = input.agentAddonSelection,
+      eventSink = input.eventSink,
+      skeletonDefinition = input.definition,
+      protectedSpecSha256 = input.protectedSpecSha256,
+      planIntake = input.planIntake,
+    )
+
+  private fun intakeCompleted(workflowId: String): Boolean = runner.intakeCompleted(workflowId)
+
+  private fun intakePassInvariants(
+    input: FeatureTaskRuntimeRunInput,
+    specPath: Path,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+  ): FeatureTaskRuntimeRunInvariants =
+    FeatureTaskRuntimeRunInvariants(
+      specReference = specPath.toString(),
+      acceptanceCriteria = listOf(INTAKE_PASS_CRITERION),
+      mandatesAndOverrides = emptyList(),
+      codeReviewMode = admittedExecution.reviewMode ?: CodeReviewExecutionMode.AUTO,
+      agentAddonSelection = input.agentAddonSelection.persisted,
+    )
 
   private fun inspectRepairState(
     input: FeatureTaskRuntimeRunInput,
@@ -180,10 +218,14 @@ class FeatureTaskRuntimeRunEntry(
   ): String {
     val goalContinuation = input.goalContinuation
     val specPath = Path.of(input.specPath)
-    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = resolveRunDefinition(input.definition, goalContinuation != null)
     val reviewMode =
       goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode
-        ?: runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
+        ?: if (PhaseSlot.INTAKE in definition.slots) {
+          CodeReviewExecutionMode.AUTO
+        } else {
+          runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
+        }
     val qualityGate = goalContinuation?.qualityGateSelection
     val facts =
       PhaseStrategySelectionFacts(
@@ -237,7 +279,7 @@ class FeatureTaskRuntimeRunEntry(
     admittedExecution: AdmittedFeatureTaskRuntimeExecution,
   ) {
     val goalContinuation = input.goalContinuation
-    val definition = input.definition ?: SkeletonDefinition.forRun(goalContinuation != null)
+    val definition = resolveRunDefinition(input.definition, goalContinuation != null)
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
     val qualityGate = admittedExecution.plan.qualityGateSelection
     val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))

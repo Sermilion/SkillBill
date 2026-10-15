@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutpu
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
+import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
@@ -23,6 +24,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -34,14 +36,22 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
-internal class InMemoryPhaseRunRecords(
+internal class InMemoryPhaseRunRecords private constructor(
   private val clock: Clock,
   private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
+  private val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
 ) : PhaseRunRecords,
+  PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses() {
-  private val phaseRecords = LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>()
+  constructor(clock: Clock, resolvedBranch: FeatureTaskRuntimeResolvedBranch?) : this(
+    clock,
+    resolvedBranch,
+    LinkedHashMap(),
+  )
+
   val acceptedOutputs = mutableMapOf<String, String>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
@@ -239,6 +249,33 @@ internal class InMemoryPhaseRunRecords(
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean = true
+}
+
+private class InMemoryPhasePlanRecords(
+  private val phaseRecords: MutableMap<String, FeatureTaskRuntimePhaseRecord>,
+) : PhasePlanRecords {
+  private val planBundles = mutableMapOf<String, FeatureTaskRuntimePlanBundle>()
+
+  override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? = planBundles[workflowId]
+
+  override fun recordPlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): Boolean {
+    planBundles[workflowId] = bundle
+    return true
+  }
+
+  override fun recordPlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean {
+    unitRecords.forEach { (subtaskId, record) ->
+      phaseRecords[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(subtaskId)] = record.detached()
+    }
+    return recordPlanBundle(workflowId, bundle)
+  }
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? = null
 

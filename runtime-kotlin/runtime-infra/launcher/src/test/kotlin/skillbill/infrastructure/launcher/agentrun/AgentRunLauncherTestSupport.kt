@@ -62,7 +62,7 @@ internal fun skillRunRequest(
     goalContinuation = goalContinuation,
   )
 
-internal fun goalContinuationContext(childWorkflowId: String? = null): SkillRunGoalContinuationContext =
+internal fun goalContinuationContext(childWorkflowId: String? = "wfl-child-runtime"): SkillRunGoalContinuationContext =
   SkillRunGoalContinuationContext(
     parentIssueKey = "SKILL-56",
     subtaskId = 2,

@@ -2,12 +2,12 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 
 @Inject
 class GoalRunnerPerRunLoopAssembler(
   private val manifestStore: GoalRunnerManifestStore,
-  private val goalPlanningSweep: GoalPlanningSweep,
+  private val goalPlanningSource: GoalPlanningSource,
   private val finalization: GoalRunnerFinalization,
   private val selectedSubtaskLoop: GoalRunnerSelectedSubtaskLoop,
   private val pauseBoundary: GoalRunnerPauseBoundary,
@@ -16,7 +16,7 @@ class GoalRunnerPerRunLoopAssembler(
   internal fun assemble(): GoalRunnerGoalLoop =
     GoalRunnerGoalLoop(
       manifestStore,
-      goalPlanningSweep,
+      goalPlanningSource,
       finalization,
       selectedSubtaskLoop,
       pauseBoundary,

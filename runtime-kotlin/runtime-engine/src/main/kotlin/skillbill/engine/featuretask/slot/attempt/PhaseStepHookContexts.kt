@@ -73,10 +73,6 @@ internal interface PhaseFindingEvidenceContext {
   val specIntentProjectionResolver: SpecIntentProjectionResolver
 }
 
-internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
-  fun existingBundleReason(): String?
-}
-
 internal interface PhasePlanningOutputContext : PhaseStepOutputContext {
   fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult?
 
