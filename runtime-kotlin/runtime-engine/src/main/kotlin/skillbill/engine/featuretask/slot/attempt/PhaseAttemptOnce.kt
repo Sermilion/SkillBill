@@ -40,6 +40,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareL
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
+import skillbill.engine.featuretask.slot.withLaunchSink
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import java.util.concurrent.CancellationException
@@ -170,7 +171,7 @@ object PhaseAttemptOnce {
                 null
               } else {
                 input.copy(
-                  directive = preparation.value.prompt,
+                  directive = preparation.value.prompt + call.acceptedExecution.launchState.launchPromptContext,
                   facts = input.facts.copy(briefingText = preparation.value.briefing.briefingText),
                 )
               }
@@ -195,7 +196,8 @@ object PhaseAttemptOnce {
           directive = "",
           priorValues = emptyMap(),
           operatorInstructions = run.request.phaseInstructions?.forStep(run.phaseId),
-          facts = run.stepFacts(run.request.issueKey, iteration),
+          facts =
+            run.stepFacts(run.request.issueKey, iteration).withLaunchSink(call.acceptedExecution.launchState),
           policy = run.policy,
         ),
         preparingState,

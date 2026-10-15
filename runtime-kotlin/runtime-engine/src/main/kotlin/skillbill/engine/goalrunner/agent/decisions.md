@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-14] Plan first only when no goal and no bundle exist
+Context: A full run must go through the plan skeleton, but stored goals and hand-written bundles must keep working.
+Decision: Plan first only when loadDurableByIssueKey finds no stored goal and intakePreparation.prepare finds no bundle. Otherwise go straight to goalRunner.run.
+Reason: A stored goal resumes with no planning. A bundle on disk is imported as before, even when an incomplete plan workflow exists, so plan resume applies only without a manifest. Running hand-written bundles through plan_subtasks belongs to other parent work.
+Alternatives considered: Having the CLI choose between open and resume was rejected because StandalonePlanRun.run already does both.
+
 ## [2026-10-10] Rewrite status extras together on live goal finalization
 Context: GoalRunnerStatusProjectionRuntimeInputs keeps currentStepOverride and latestLivenessSignal as separate extras. The assembler already copied currentStepId from the goal_finalization declared event and left latestLivenessSignal on the parked parent row.
 Decision: When the parent lease is LIVE and the latest declared event is goal_finalization, copy both currentStepId and latestLivenessSignal from the same parent progress rewrite, using resolvedLivenessSignal(liveStepId).

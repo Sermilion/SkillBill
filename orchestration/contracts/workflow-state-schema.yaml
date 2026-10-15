@@ -128,8 +128,10 @@ $defs:
         # See note above on the empty-string allowance.
         enum:
           - ""
+          - intake
           - preplan
           - plan
+          - plan_subtasks
           - implement
           - simplify
           - implement_fix
@@ -154,8 +156,10 @@ $defs:
                 step_id:
                   type: string
                   enum:
+                    - intake
                     - preplan
                     - plan
+                    - plan_subtasks
                     - implement
                     - simplify
                     - implement_fix

@@ -21,11 +21,6 @@ class StandalonePlanLauncher(
 ) {
   fun issueKeyOf(intake: String): String = planRun.issueKeyOf(intake)
 
-  fun incompletePlanWorkflowId(
-    issueKey: String,
-    repoRoot: Path,
-  ): String? = planRun.incompletePlanWorkflowId(issueKey, repoRoot)
-
   fun run(
     issueKey: String,
     intake: String?,

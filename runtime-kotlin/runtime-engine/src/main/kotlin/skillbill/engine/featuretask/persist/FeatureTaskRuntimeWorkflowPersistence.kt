@@ -42,6 +42,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
@@ -375,7 +376,7 @@ internal fun stepUpdatesFrom(
         "Feature-task-runtime phase '${record.phaseId}' has unmappable status '${record.status}' for steps[].",
       )
     }
-  return records.values.map { record ->
+  return records.withoutPlanSubtaskUnitRecords().values.map { record ->
     FeatureTaskRuntimePhaseStepWireUpdate(
       stepId = record.phaseId,
       status = stepStatusFor(record),

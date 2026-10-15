@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.planning.hydration
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
@@ -10,6 +10,7 @@ import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydration
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrationOutcome.Hydrated
 import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
+import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
 import skillbill.error.core.SkillBillRuntimeException
@@ -24,24 +25,35 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
+private data class ImportedPlanningPhase(
+  val storedPayload: String,
+  val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
+)
+
 private data class PreparedGoalPlanning(
-  val shared: SharedGoalPreplanCheckpoint,
-  val plan: GoalSubtaskPlanCheckpoint,
+  val preplan: ImportedPlanningPhase,
+  val plan: ImportedPlanningPhase,
+  val planSubtasks: ImportedPlanningPhase,
+  val source: FeatureTaskRuntimeGoalPlanningImportSource,
 )
 
 private sealed interface PreparationRead {
@@ -55,32 +67,18 @@ class GoalChildPlanningHydrator(
 ) {
   private val payloadValidator = PreparedPlanningPayloadValidator()
   private val importMatcher = GoalChildPlanningImportMatcher(payloadValidator)
+  private val planWorkflowReader = PlanWorkflowPlanningReader(payloadValidator)
+  private val legacyReader = LegacyTablesPlanningReader(payloadValidator)
 
   fun hydrate(
     unitOfWork: GoalRunnerPersistenceSession,
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
-  ): GoalChildPlanningHydrationOutcome {
-    val prepared =
-      when (val loaded = loadRequiredPreparation(unitOfWork, setup, request)) {
-        is PreparationRead.Conflicted -> return Conflicted(loaded.conflict)
-        is PreparationRead.Prepared -> loaded.value
-      }
-    requireMatchingPreparation(setup, request, prepared)?.let { return Conflicted(it) }
-    payloadValidator.requireValid(
-      "preplan",
-      prepared.shared.preplanPayload,
-      prepared.shared.payloadSha256,
-      setup.workflowId,
-    )
-    payloadValidator.requireValid(
-      "plan",
-      prepared.plan.planPayload,
-      prepared.plan.payloadSha256,
-      setup.workflowId,
-    )
-    return Hydrated(createHydration(request, prepared))
-  }
+  ): GoalChildPlanningHydrationOutcome =
+    when (val loaded = load(unitOfWork, setup, request)) {
+      is PreparationRead.Conflicted -> Conflicted(loaded.conflict)
+      is PreparationRead.Prepared -> Hydrated(createHydration(request, loaded.value))
+    }
 
   fun requireMatchingImport(
     unitOfWork: GoalRunnerPersistenceSession,
@@ -96,61 +94,16 @@ class GoalChildPlanningHydrator(
     }
   }
 
-  private fun loadRequiredPreparation(
+  private fun load(
     unitOfWork: GoalRunnerPersistenceSession,
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
-  ): PreparationRead {
-    val shared =
-      when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
-        is SharedGoalPreplanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
-        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
-      } ?: throw invalidGoalPlanningPreparationSchemaError(
-        setup.workflowId,
-        "preplan",
-        "shared preplan is missing",
-      )
-    val plan =
-      when (
-        val result =
-          unitOfWork.goalPlanningPreparations.findSubtaskPlan(
-            request.identity,
-            request.descriptor.subtaskId,
-            request.descriptor.governedSubSpecPath,
-          )
-      ) {
-        is GoalSubtaskPlanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
-        is GoalSubtaskPlanLookupResult.Found -> result.plan
-      } ?: throw invalidGoalPlanningPreparationSchemaError(
-        setup.workflowId,
-        "plan",
-        "subtask plan is missing",
-      )
-    return PreparationRead.Prepared(PreparedGoalPlanning(shared, plan))
-  }
-
-  private fun requireMatchingPreparation(
-    setup: GoalRunnerChildWorkflowSetup,
-    request: GoalChildPlanningHydrationRequest,
-    prepared: PreparedGoalPlanning,
-  ): GoalPlanningPreparationConflict? {
-    val matches =
-      listOf(
-        prepared.shared.provenance.copy(parentSpecHash = request.provenance.parentSpecHash) == request.provenance,
-        prepared.plan.provenance.copy(parentSpecHash = request.provenance.parentSpecHash) == request.provenance,
-        prepared.plan.manifestOrder == request.descriptor.manifestOrder,
-      ).all { it }
-    return if (!matches) {
-      GoalPlanningPreparationConflict(
-        request.identity.parentGoalWorkflowId,
-        setup.subtaskId,
-        "stored planning provenance or selected subtask descriptor differs from the hydration request",
-        null,
-      )
+  ): PreparationRead =
+    if (request.planWorkflowId != null) {
+      planWorkflowReader.read(unitOfWork, setup, request, request.planWorkflowId)
     } else {
-      null
+      legacyReader.read(unitOfWork, setup, request)
     }
-  }
 
   private fun createHydration(
     request: GoalChildPlanningHydrationRequest,
@@ -158,10 +111,10 @@ class GoalChildPlanningHydrator(
   ): GoalChildPlanningHydration {
     val importedAt = clock.instant().toString()
     val records =
-      createImportedRecords(
-        ImportedPlanningPhase(prepared.shared.preplanPayload, prepared.shared.repairEvidence),
-        ImportedPlanningPhase(prepared.plan.planPayload, prepared.plan.repairEvidence),
-        importedAt,
+      linkedMapOf(
+        "preplan" to importedRecordEntry("preplan", prepared.preplan, importedAt),
+        "plan" to importedRecordEntry("plan", prepared.plan, importedAt),
+        PLAN_SUBTASKS_PHASE_ID to importedRecordEntry(PLAN_SUBTASKS_PHASE_ID, prepared.planSubtasks, importedAt),
       )
     return GoalChildPlanningHydration(
       currentStepId = "implement",
@@ -177,27 +130,14 @@ class GoalChildPlanningHydrator(
     )
   }
 
-  private fun createImportedRecords(
-    preplan: ImportedPlanningPhase,
-    plan: ImportedPlanningPhase,
+  private fun importedRecordEntry(
+    phaseId: String,
+    phase: ImportedPlanningPhase,
     importedAt: String,
-  ): Map<String, Map<String, Any?>> =
-    linkedMapOf(
-      "preplan" to
-        importedRecord(
-          "preplan",
-          preplan.storedPayload,
-          preplan.repairEvidence,
-          importedAt,
-        ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap),
-      "plan" to
-        importedRecord(
-          "plan",
-          plan.storedPayload,
-          plan.repairEvidence,
-          importedAt,
-        ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap),
-    )
+  ): Map<String, Any?> =
+    importedRecord(phaseId, phase.storedPayload, phase.repairEvidence, importedAt)
+      .asWorkflowArtifactEntry()
+      .let(::workflowArtifactEntryMap)
 
   private fun createImportedLedger(importedAt: String): List<Map<String, Any?>> =
     PLANNING_PHASE_IDS.mapIndexed { sequence, phaseId ->
@@ -229,15 +169,142 @@ class GoalChildPlanningHydrator(
       manifestOrder = request.descriptor.manifestOrder,
       governedSubSpecPath = request.descriptor.governedSubSpecPath,
       subSpecHash = request.descriptor.subSpecHash,
-      preplanPayloadSha256 = prepared.shared.payloadSha256,
-      planPayloadSha256 = prepared.plan.payloadSha256,
+      preplanPayloadSha256 = sha256HexUtf8(prepared.preplan.storedPayload),
+      planPayloadSha256 = sha256HexUtf8(prepared.plan.storedPayload),
+      source = prepared.source,
     ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap)
 }
 
-private data class ImportedPlanningPhase(
-  val storedPayload: String,
-  val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-)
+private class PlanWorkflowPlanningReader(
+  private val payloadValidator: PreparedPlanningPayloadValidator,
+) {
+  fun read(
+    unitOfWork: GoalRunnerPersistenceSession,
+    setup: GoalRunnerChildWorkflowSetup,
+    request: GoalChildPlanningHydrationRequest,
+    planWorkflowId: String,
+  ): PreparationRead {
+    fun conflict(reason: String) =
+      PreparationRead.Conflicted(
+        GoalPlanningPreparationConflict(
+          request.identity.parentGoalWorkflowId,
+          setup.subtaskId,
+          "plan workflow '$planWorkflowId' $reason",
+          null,
+        ),
+      )
+    val snapshot =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, planWorkflowId)
+        ?: return conflict("is missing")
+    val unit =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.value(snapshot.artifacts)
+        ?.let(::decodePlanBundleFromArtifact)
+        ?.subtask(request.descriptor.subtaskId)
+        ?: return conflict("has no plan bundle entry for subtask ${request.descriptor.subtaskId}")
+    val details = unit.planText?.takeIf { unit.detailsSha256 != null && it.isNotBlank() }
+    val records = decodePhaseRecords(snapshot.artifacts)
+    val preplanPayload = records["preplan"]?.outputArtifact
+    val unitPayload =
+      records[FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(request.descriptor.subtaskId)]
+        ?.takeIf { it.status == WorkflowStepStatus.COMPLETED }
+        ?.outputArtifact
+        ?.takeIf(String::isNotBlank)
+    return when {
+      details == null -> conflict("has no planned details for subtask ${request.descriptor.subtaskId}")
+      preplanPayload == null -> conflict("has no preplan record")
+      unitPayload == null -> conflict("has no plan_subtasks record for subtask ${request.descriptor.subtaskId}")
+      else -> {
+        payloadValidator.requireValid("preplan", preplanPayload, sha256HexUtf8(preplanPayload), setup.workflowId)
+        payloadValidator.requireValid(PLAN_SUBTASKS_PHASE_ID, unitPayload, sha256HexUtf8(unitPayload), setup.workflowId)
+        PreparationRead.Prepared(
+          PreparedGoalPlanning(
+            preplan = ImportedPlanningPhase(preplanPayload),
+            plan = ImportedPlanningPhase(proseRecordPayload("plan", details)),
+            planSubtasks = ImportedPlanningPhase(unitPayload),
+            source =
+              FeatureTaskRuntimeGoalPlanningImportSource(
+                kind = FeatureTaskRuntimeGoalPlanningImportSource.PLAN_WORKFLOW,
+                planWorkflowId = planWorkflowId,
+                detailsSha256 = unit.detailsSha256,
+              ),
+          ),
+        )
+      }
+    }
+  }
+}
+
+private class LegacyTablesPlanningReader(
+  private val payloadValidator: PreparedPlanningPayloadValidator,
+) {
+  fun read(
+    unitOfWork: GoalRunnerPersistenceSession,
+    setup: GoalRunnerChildWorkflowSetup,
+    request: GoalChildPlanningHydrationRequest,
+  ): PreparationRead {
+    val shared =
+      when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
+        is SharedGoalPreplanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+      } ?: throw invalidGoalPlanningPreparationSchemaError(
+        setup.workflowId,
+        "preplan",
+        "shared preplan is missing",
+      )
+    val plan =
+      when (
+        val result =
+          unitOfWork.goalPlanningPreparations.findSubtaskPlan(
+            request.identity,
+            request.descriptor.subtaskId,
+            request.descriptor.governedSubSpecPath,
+          )
+      ) {
+        is GoalSubtaskPlanLookupResult.Conflicted -> return PreparationRead.Conflicted(result.conflict)
+        is GoalSubtaskPlanLookupResult.Found -> result.plan
+      } ?: throw invalidGoalPlanningPreparationSchemaError(
+        setup.workflowId,
+        "plan",
+        "subtask plan is missing",
+      )
+    requireMatchingPreparation(setup, request, shared, plan)?.let { return PreparationRead.Conflicted(it) }
+    payloadValidator.requireValid("preplan", shared.preplanPayload, shared.payloadSha256, setup.workflowId)
+    payloadValidator.requireValid("plan", plan.planPayload, plan.payloadSha256, setup.workflowId)
+    return PreparationRead.Prepared(
+      PreparedGoalPlanning(
+        preplan = ImportedPlanningPhase(shared.preplanPayload, shared.repairEvidence),
+        plan = ImportedPlanningPhase(plan.planPayload, plan.repairEvidence),
+        planSubtasks = ImportedPlanningPhase(proseRecordPayload(PLAN_SUBTASKS_PHASE_ID, LEGACY_PLAN_SUBTASKS_MARKER)),
+        source =
+          FeatureTaskRuntimeGoalPlanningImportSource(FeatureTaskRuntimeGoalPlanningImportSource.LEGACY_TABLES),
+      ),
+    )
+  }
+
+  private fun requireMatchingPreparation(
+    setup: GoalRunnerChildWorkflowSetup,
+    request: GoalChildPlanningHydrationRequest,
+    shared: SharedGoalPreplanCheckpoint,
+    plan: GoalSubtaskPlanCheckpoint,
+  ): GoalPlanningPreparationConflict? {
+    val matches =
+      listOf(
+        shared.provenance.copy(parentSpecHash = request.provenance.parentSpecHash) == request.provenance,
+        plan.provenance.copy(parentSpecHash = request.provenance.parentSpecHash) == request.provenance,
+        plan.manifestOrder == request.descriptor.manifestOrder,
+      ).all { it }
+    return if (!matches) {
+      GoalPlanningPreparationConflict(
+        request.identity.parentGoalWorkflowId,
+        setup.subtaskId,
+        "stored planning provenance or selected subtask descriptor differs from the hydration request",
+        null,
+      )
+    } else {
+      null
+    }
+  }
+}
 
 private class PreparedPlanningPayloadValidator {
   fun requireValid(
@@ -269,6 +336,8 @@ private fun invalidPlanningPreparation(
 private class GoalChildPlanningImportMatcher(
   private val payloadValidator: PreparedPlanningPayloadValidator,
 ) {
+  private val planWorkflowReader = PlanWorkflowPlanningReader(payloadValidator)
+
   fun firstDivergence(
     unitOfWork: GoalRunnerPersistenceSession,
     existing: WorkflowStateSnapshot,
@@ -279,6 +348,61 @@ private class GoalChildPlanningImportMatcher(
     val expected =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
         ?: return conflict(request, setup, "child carries no goal planning import artifact")
+    val phaseIds = if (expected["source"] == null) LEGACY_ERA_PHASE_IDS else PLANNING_PHASE_IDS
+    val storedFromPlanWorkflow = FeatureTaskRuntimeGoalPlanningImportSource.isPlanWorkflowArtifact(expected)
+    val sourceDivergence =
+      if (request.planWorkflowId != null && storedFromPlanWorkflow) {
+        planWorkflowDivergence(unitOfWork, expected, setup, request, request.planWorkflowId)
+      } else {
+        legacyDivergence(unitOfWork, setup, request)
+      }
+    val provenanceDivergence = provenanceDivergence(expected, request)
+    return when {
+      sourceDivergence != null -> sourceDivergence
+      provenanceDivergence != null -> conflict(request, setup, provenanceDivergence)
+      !ledgerMatches(artifacts, phaseIds) ->
+        conflict(request, setup, "phase ledger no longer opens with the goal planning import prefix")
+      !planningPhasesSettled(artifacts, existing, phaseIds) ->
+        conflict(request, setup, "child planning phases are not settled as completed")
+      else -> null
+    }
+  }
+
+  private fun conflict(
+    request: GoalChildPlanningHydrationRequest,
+    setup: GoalRunnerChildWorkflowSetup,
+    reason: String,
+  ) = GoalPlanningPreparationConflict(request.identity.parentGoalWorkflowId, setup.subtaskId, reason, null)
+
+  private fun planWorkflowDivergence(
+    unitOfWork: GoalRunnerPersistenceSession,
+    expected: Map<*, *>,
+    setup: GoalRunnerChildWorkflowSetup,
+    request: GoalChildPlanningHydrationRequest,
+    planWorkflowId: String,
+  ): GoalPlanningPreparationConflict? {
+    val prepared =
+      when (val read = planWorkflowReader.read(unitOfWork, setup, request, planWorkflowId)) {
+        is PreparationRead.Conflicted -> return read.conflict
+        is PreparationRead.Prepared -> read.value
+      }
+    val stored = expected["source"] as? Map<*, *>
+    val matches =
+      stored?.get("kind") == prepared.source.kind &&
+        stored["plan_workflow_id"] == prepared.source.planWorkflowId &&
+        stored["details_sha256"] == prepared.source.detailsSha256
+    return if (matches) {
+      null
+    } else {
+      conflict(request, setup, "child planning import no longer matches the linked plan workflow record")
+    }
+  }
+
+  private fun legacyDivergence(
+    unitOfWork: GoalRunnerPersistenceSession,
+    setup: GoalRunnerChildWorkflowSetup,
+    request: GoalChildPlanningHydrationRequest,
+  ): GoalPlanningPreparationConflict? {
     val shared =
       when (val result = unitOfWork.goalPlanningPreparations.findSharedPreplan(request.identity)) {
         is SharedGoalPreplanLookupResult.Conflicted -> return result.conflict
@@ -296,26 +420,10 @@ private class GoalChildPlanningImportMatcher(
         is GoalSubtaskPlanLookupResult.Conflicted -> return result.conflict
         is GoalSubtaskPlanLookupResult.Found -> result.plan
       }
-    val payloadConflict = validateAvailablePayloads(shared, plan, setup, request)
-    val provenanceDivergence = provenanceDivergence(expected, request)
-    return when {
-      payloadConflict != null -> payloadConflict
-      provenanceDivergence != null -> conflict(request, setup, provenanceDivergence)
-      !preparedMatches(shared, plan, request) ->
-        conflict(request, setup, "parent planning checkpoints are missing or have incompatible provenance")
-      !ledgerMatches(artifacts) ->
-        conflict(request, setup, "phase ledger no longer opens with the goal planning import prefix")
-      !planningPhasesSettled(artifacts, existing) ->
-        conflict(request, setup, "child planning phases are not settled as completed")
-      else -> null
-    }
+    return validateAvailablePayloads(shared, plan, setup, request)
+      ?: conflict(request, setup, "parent planning checkpoints are missing or have incompatible provenance")
+        .takeUnless { preparedMatches(shared, plan, request) }
   }
-
-  private fun conflict(
-    request: GoalChildPlanningHydrationRequest,
-    setup: GoalRunnerChildWorkflowSetup,
-    reason: String,
-  ) = GoalPlanningPreparationConflict(request.identity.parentGoalWorkflowId, setup.subtaskId, reason, null)
 
   private fun validateAvailablePayloads(
     shared: SharedGoalPreplanCheckpoint?,
@@ -410,6 +518,7 @@ private class GoalChildPlanningImportMatcher(
   private fun planningPhasesSettled(
     artifacts: Map<String, Any?>,
     existing: WorkflowStateSnapshot,
+    phaseIds: List<String>,
   ): Boolean {
     val records =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(artifacts) as? Map<*, *> ?: return false
@@ -417,13 +526,13 @@ private class GoalChildPlanningImportMatcher(
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(artifacts) as? Map<*, *>
         ?: return false
     val expectedStepStatuses =
-      PLANNING_PHASE_IDS.mapNotNull { phaseId ->
+      phaseIds.mapNotNull { phaseId ->
         settledStepStatus(records[phaseId] as? Map<*, *>, phaseId)?.let { phaseId to it }
       }.toMap()
     val preplanOutput = (records["preplan"] as? Map<*, *>)?.get("output_artifact") as? String ?: return false
-    return expectedStepStatuses.size == PLANNING_PHASE_IDS.size &&
+    return expectedStepStatuses.size == phaseIds.size &&
       sha256HexUtf8(preplanOutput) == expected["preplan_payload_sha256"] &&
-      stepsSettled(existing, expectedStepStatuses)
+      stepsSettled(existing, expectedStepStatuses, phaseIds)
   }
 
   private fun settledStepStatus(
@@ -441,18 +550,21 @@ private class GoalChildPlanningImportMatcher(
     }
   }
 
-  private fun ledgerMatches(artifacts: Map<String, Any?>): Boolean {
+  private fun ledgerMatches(
+    artifacts: Map<String, Any?>,
+    phaseIds: List<String>,
+  ): Boolean {
     val ledger =
       (DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.value(artifacts) as? List<*>)
         ?.mapNotNull { it as? Map<*, *> }
         ?: return false
-    if (ledger.size < PLANNING_PHASE_IDS.size) return false
-    return ledger.take(PLANNING_PHASE_IDS.size).withIndex().all { (index, entry) ->
+    if (ledger.size < phaseIds.size) return false
+    return ledger.take(phaseIds.size).withIndex().all { (index, entry) ->
       listOf(
         (entry["action"] as? String)?.let(FeatureTaskRuntimePhaseLedgerAction::fromWire) ==
           FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
         (entry["sequence_number"] as? Number)?.toInt() == index,
-        entry[SharedPayloadKeys.PHASE_ID] == PLANNING_PHASE_IDS[index],
+        entry[SharedPayloadKeys.PHASE_ID] == phaseIds[index],
         (entry["attempt_count"] as? Number)?.toInt() == 1,
         entry["resolved_agent_id"] == null,
       ).all { it }
@@ -462,9 +574,10 @@ private class GoalChildPlanningImportMatcher(
   private fun stepsSettled(
     existing: WorkflowStateSnapshot,
     expected: Map<String, WorkflowStepStatus>,
+    phaseIds: List<String>,
   ): Boolean {
-    val planningSteps = existing.steps.filter { it.stepId in PLANNING_PHASE_IDS }
-    return planningSteps.size == PLANNING_PHASE_IDS.size &&
+    val planningSteps = existing.steps.filter { it.stepId in phaseIds }
+    return planningSteps.size == phaseIds.size &&
       planningSteps.all { it.status.workflowStepStatus() == expected[it.stepId] }
   }
 }
@@ -495,4 +608,7 @@ private fun importedRecord(
     repairEvidence = repairEvidence,
   )
 
-private val PLANNING_PHASE_IDS = listOf("preplan", "plan")
+private const val PLAN_SUBTASKS_PHASE_ID = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
+private const val LEGACY_PLAN_SUBTASKS_MARKER = "Imported from the legacy goal planning tables."
+private val LEGACY_ERA_PHASE_IDS = listOf("preplan", "plan")
+private val PLANNING_PHASE_IDS = LEGACY_ERA_PHASE_IDS + PLAN_SUBTASKS_PHASE_ID

@@ -11,9 +11,7 @@ import skillbill.application.workflow.decomposition.withImportedPlan
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
-import skillbill.engine.goalrunner.plan.StandalonePlanCheckpointImport
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -39,7 +37,6 @@ class WorkflowGoalRunnerManifestLoader(
   private val decompositionManifestStore: DecompositionManifestStore,
   private val clock: Clock,
   private val random: Random,
-  private val planCheckpointImport: StandalonePlanCheckpointImport,
 ) {
   private val engine = WorkflowEngine()
   private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -135,18 +132,6 @@ class WorkflowGoalRunnerManifestLoader(
             replaceArtifacts = true,
           ),
         )
-      if (existing == null && planWorkflowId != null) {
-        planCheckpointImport.import(
-          unitOfWork,
-          planWorkflowId,
-          GoalPlanningIdentity(
-            imported.workflowId,
-            normalizeRequiredIssueKey(manifest.issueKey),
-            requireNotNull(repositoryIdentity),
-          ),
-          manifest,
-        )
-      }
       unitOfWork.workflowStates.saveRecord(
         WorkflowFamily.TASK_RUNTIME,
         imported.toRecord().copy(issueKey = normalizeRequiredIssueKey(manifest.issueKey)),

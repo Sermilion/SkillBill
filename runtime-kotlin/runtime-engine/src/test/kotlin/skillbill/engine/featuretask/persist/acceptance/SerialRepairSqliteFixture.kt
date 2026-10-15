@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
@@ -17,15 +17,17 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.sha256Hex
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
@@ -33,17 +35,16 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -51,13 +52,26 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
-internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoCloseable {
+internal class SerialRepairSqliteFixture(
+  archiveRevision: Int? = null,
+  supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+  archiveMode: String = "goal-child-validate",
+) : AutoCloseable {
   val root: Path = Files.createTempDirectory("serial-repair-sqlite")
   val clock: Clock = Clock.fixed(Instant.parse("2026-10-14T09:00:00Z"), ZoneOffset.UTC)
   val database = phaseRunDatabase(root, clock)
-  val execution = ExecutionPlanAdmissionFixture(database = database)
+  val execution =
+    ExecutionPlanAdmissionFixture(
+      database = database,
+      definition = if (archiveMode == "standalone") SkeletonDefinition.STANDALONE else SkeletonDefinition.GOAL_CHILD,
+      qualityGate =
+        when (archiveMode) {
+          "goal-child-build" -> FeatureTaskRuntimeQualityGateSelection.BUILD
+          "goal-child-validate" -> FeatureTaskRuntimeQualityGateSelection.VALIDATE
+          else -> null
+        },
+    )
   val workflowId = "wftr-serial-repair"
   val binding =
     AcceptanceCriterionRepairBinding(
@@ -65,6 +79,7 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
       workflowId,
       "a".repeat(64),
       listOf("first", "second"),
+      setOf("audit", "audit_plan_fix", "audit_implement_fix"),
     )
   val admission =
     AcceptanceCriterionRepairAdmission(
@@ -136,18 +151,18 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
   val coordinator =
     FeatureTaskRuntimeWorkerCoordinator(
       database,
-      NoopFeatureTaskRuntimeWorkerSupervisor,
+      supervisor,
       clock,
       execution.admission,
     )
 
   init {
     val descriptor =
-      if (archiveRevision == null || archiveRevision == 3) {
+      if (archiveRevision == null) {
         execution.descriptor()
       } else {
         execution.validator.read(
-          ArchivedAuditExecutionPlanFixture.archive(execution, "standalone", archiveRevision),
+          ArchivedAuditExecutionPlanFixture.legacyAuditPlan(execution, archiveRevision),
           "archive",
         )
       }
@@ -159,17 +174,18 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
 
   fun service(
     db: DatabaseSessionFactory = database,
-    gitOperations: WorkflowGitOperations =
-      NoopWorkflowGitOperations,
+    gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   ): AcceptanceCriterionRepairPersistence {
-    val validator = featureTaskRuntimeWireArtifactValidatorForTest()
+    val phaseOutputs = ContractFeatureTaskRuntimePhaseOutputMigration()
+    val validator = FeatureTaskRuntimeWireArtifactValidator(execution.validator, phaseOutputs)
     val snapshots = WorkflowStateSchemaValidator()
+    val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator)
     return AcceptanceCriterionRepairPersistence(
       RuntimeOwnedPersistenceBoundary(db, diagnostics),
-      FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator),
+      workflowPersistence,
       FeatureTaskRuntimePhaseStateRecorder(
         db,
-        FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator),
+        workflowPersistence,
         RuntimeOwnedPersistenceBoundary(db, diagnostics),
         validator,
         clock,
@@ -181,7 +197,7 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
       AcceptanceCriterionRepairLegacyAdoption(
         execution.codec,
         execution.compatibility,
-        ContractFeatureTaskRuntimePhaseOutputMigration(),
+        phaseOutputs,
         gitOperations,
         source,
       ),
@@ -227,9 +243,7 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
         worker,
         null,
         AcceptanceCriterionRepairMutation.Discover(admission),
-        audit(
-          AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-        ),
+        audit(),
       ),
     ).state
 
@@ -263,13 +277,23 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
   fun phase(mutation: AcceptanceCriterionRepairMutation): FeatureTaskRuntimePhaseStateRequest {
     val mutating = mutation is AcceptanceCriterionRepairMutation.RepairCompleted
     val id = if (mutating || mutation is AcceptanceCriterionRepairMutation.Reserve) "audit_implement_fix" else "audit"
+    val finished =
+      mutation !is AcceptanceCriterionRepairMutation.Discover &&
+        mutation !is AcceptanceCriterionRepairMutation.Reserve
+    val priorAttempt = decodePhaseRecords(snapshot().artifacts)[id]?.attemptCount ?: 0
+    val attempt =
+      if (mutation is AcceptanceCriterionRepairMutation.Reserve) {
+        priorAttempt + 1
+      } else {
+        priorAttempt.coerceAtLeast(1)
+      }
     return FeatureTaskRuntimePhaseStateRequest(
       workflowId,
       id,
-      "running",
-      1,
+      if (finished) "completed" else "running",
+      attempt,
       "codex",
-      false,
+      finished,
       mutating = mutating,
       normalizedOutput =
         if (mutating) {
@@ -285,72 +309,11 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
     )
   }
 
-  fun audit(
-    mode: AcceptanceCriterionRepairMode,
-    state: AcceptanceCriterionRepairState = initial,
-    outputDigest: String = "b".repeat(64),
-    outcome: AcceptanceCriterionRepairOutcome? = null,
-    regressed: Set<String> = emptySet(),
-  ): AcceptanceCriterionRepairAuditEvidence {
-    val selected =
-      if (mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED) {
-        state
-          .criteria.filter { it.canonicalRef == state.currentCriterionRef }
-      } else {
-        state.criteria
-      }
+  fun audit(): AcceptanceCriterionRepairAuditEvidence {
     return AcceptanceCriterionRepairAuditEvidence(
       FeatureTaskRuntimeWorkflowArtifactMap.from(
         mapOf(
-          Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION,
-          Keys.MODE to mode.wireValue, Keys.CATALOG_ID to binding.catalogId,
-          Keys
-            .EXECUTION_ID to workflowId,
-          Keys.SPEC_DIGEST to binding.specDigest,
-          Keys.TREE_DIGEST to (state.admittedTreeDigest ?: "d".repeat(64)),
-          Keys.CHECKPOINT_ID to (
-            state
-              .admittedCheckpointId ?: "checkpoint:1"
-          ),
-          Keys.PRODUCING_OUTPUT_ID to (outcome?.outcomeId ?: "audit-output"),
-          Keys.PRODUCING_OUTPUT_DIGEST to (
-            outcome?.digest ?: outputDigest
-          ),
-          Keys.EXPECTED_REVISION to
-            state.revision.takeIf {
-              mode ==
-                AcceptanceCriterionRepairMode
-                  .CURRENT_CRITERION_TARGETED
-            },
-          Keys.CURRENT_CRITERION_REF to
-            state.currentCriterionRef.takeIf {
-              mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-            },
-          Keys.RESERVATION_ID to
-            state.reservation?.reservationId.takeIf {
-              mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-            },
-          Keys.CRITERIA to
-            selected.map { criterion ->
-              mapOf(
-                Keys.CANONICAL_REF to criterion.canonicalRef,
-                Keys.SOURCE_DISPOSITION to
-                  when {
-                    criterion.canonicalRef in regressed ->
-                      AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED.wireValue
-                    outcome?.successful == true -> AcceptanceCriterionSourceDisposition.SOURCE_CLOSED.wireValue
-                    else -> criterion.sourceDisposition.wireValue
-                  },
-                Keys.VALIDATION_OBLIGATION to criterion.validationObligation.wireValue,
-                Keys.VALIDATION_OWNER_AVAILABLE to criterion.validationOwnerAvailable,
-                Keys
-                  .EVIDENCE_REF to (outcome?.evidenceRef ?: criterion.evidenceRef),
-              )
-            },
-          Keys.DEPENDENCIES to state.asRepairWireMap()[Keys.DEPENDENCIES],
-          Keys
-            .EDGE_CHANGES to emptyList<Any>(),
-          Keys.REGRESSED_REFS to regressed.toList(),
+          SharedPayloadKeys.VALUE to "Reviewed the authored criterion against current production source.",
         ),
       ),
     )

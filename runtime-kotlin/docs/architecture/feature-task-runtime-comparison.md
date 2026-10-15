@@ -84,14 +84,17 @@ loop, launches one agent per phase, validates each phase output against its
 schema gate, and persists per-phase state.
 
 ```bash
-skill-bill feature-task-runtime run <issue_key> <spec_path> --agent <agent> --monitor --format json
+skill-bill <issue_key>
 ```
+
+The full run plans through intake, preplan and plan, then executes the one-subtask
+bundle.
 
 Read-only status and resume mirror the goal commands:
 
 ```bash
-skill-bill feature-task-runtime status <workflow_id> --format json
-skill-bill feature-task-runtime resume <workflow_id> <issue_key> <spec_path> --agent <agent>
+skill-bill feature-task status <workflow_id> --format json
+skill-bill feature-task resume <workflow_id> <issue_key> <spec_path> --agent <agent>
 ```
 
 Capture, for each phase, from the **runtime-owned** durable state rather than

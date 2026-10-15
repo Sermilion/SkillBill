@@ -161,6 +161,16 @@ internal interface PhasePullRequestStepBinding : PhaseAgentStepBinding {
 }
 
 internal interface PhasePlanningStepBinding : PhaseAgentStepBinding {
+  /**
+   * Completes the accepted plan step from the spec bundle already on disk without launching an agent, recording its
+   * snapshot. Subtasks that already carry their plan are recorded as settled units of [unitStepId]. Returns null
+   * when the step must launch an agent to author the bundle.
+   */
+  fun settleExistingBundle(
+    run: PhaseRun,
+    unitStepId: String,
+  ): PhaseOutcome?
+
   fun fanOut(stepId: String): PhaseRunFanOut
 
   fun authorizeFanOutWave(run: PhaseRun)

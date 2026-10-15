@@ -90,7 +90,7 @@ class RequiredPhasePersistenceTest {
 
   @Test
   fun rejectedBriefingPreventsLaunchAndRecordsItsOwnReason() {
-    withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
+    withCapturedContext(hydratedPlanning = false) { context, launcherCount, gateCount, assertNoGitEffects ->
       val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 1)
       val intercepted = context.withRecords(rejectingRecords(context.recorder, rejection))
       val run = phaseRun(intercepted, "preplan")
@@ -370,6 +370,7 @@ class RequiredPhasePersistenceTest {
   }
 
   private fun withCapturedContext(
+    hydratedPlanning: Boolean = true,
     inspect: (FeatureTaskRuntimeRunLoopContext, () -> Int, () -> Int, () -> Unit) -> Unit,
   ) {
     val repo = Files.createTempDirectory("required-phase-write")
@@ -384,6 +385,7 @@ class RequiredPhasePersistenceTest {
             branchSetup = branch,
             repoRoot = repo,
             launcher = launcher,
+            hydratedPlanning = hydratedPlanning,
             validationGateRunner =
               object : ValidationGateRunner {
                 override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {

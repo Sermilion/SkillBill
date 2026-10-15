@@ -17,7 +17,8 @@ internal fun requireKnownFeatureTaskRuntimePhaseId(
       "Feature-task-runtime artifact field '$fieldPath' names removed phase '$phaseId'.",
     )
   }
-  if (phaseId !in KNOWN_FEATURE_TASK_RUNTIME_PHASE_IDS) {
+  val knownStep = phaseId in KNOWN_FEATURE_TASK_RUNTIME_PHASE_IDS
+  if (!knownStep && FeatureTaskRuntimePhaseIds.planSubtaskUnitIdOf(phaseId) == null) {
     throw invalidWorkflowStateSchemaError(
       "Feature-task-runtime artifact field '$fieldPath' has unknown phase '$phaseId'.",
     )

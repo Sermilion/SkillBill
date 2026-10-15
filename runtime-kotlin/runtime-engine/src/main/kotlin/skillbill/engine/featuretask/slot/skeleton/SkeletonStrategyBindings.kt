@@ -8,12 +8,11 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
@@ -86,16 +85,10 @@ object SkeletonStrategyBindings {
         ),
       SkeletonDefinition.PLAN to
         mapOf(
+          PhaseSlot.INTAKE to PhaseStrategyBinding.Fixed(RuntimeIntakeStrategy.ID),
           PhaseSlot.PREPLAN to
             PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-          PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID).withOpus(AgentPlanOpus55Strategy.ID),
-        ),
-      SkeletonDefinition.GOAL_PLANNING to
-        mapOf(
-          PhaseSlot.PREPLAN to
-            PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-          PhaseSlot.PLAN to
-            PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID).withOpus(GoalPlanFanOutOpus55Strategy.ID),
+          PhaseSlot.PLAN to planBinding(),
         ),
       SkeletonDefinition.PR to
         mapOf(
@@ -111,10 +104,13 @@ object SkeletonStrategyBindings {
         ),
     )
 
+  private fun planBinding(): PhaseStrategyBinding =
+    PhaseStrategyBinding.Fixed(PlanFanOutStrategy.ID).withOpus(PlanFanOutOpus55Strategy.ID)
+
   private fun sharedBindings(): Map<PhaseSlot, PhaseStrategyBinding> =
     mapOf(
       PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID).withOpus(AgentPreplanOpus55Strategy.ID),
-      PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID).withOpus(AgentPlanOpus55Strategy.ID),
+      PhaseSlot.PLAN to planBinding(),
       PhaseSlot.IMPLEMENTATION to
         PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID).withOpus(ImplementThenSimplifyOpus55Strategy.ID),
       PhaseSlot.AUDIT to

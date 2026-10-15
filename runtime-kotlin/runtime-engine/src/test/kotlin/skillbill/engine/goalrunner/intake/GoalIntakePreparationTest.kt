@@ -1,61 +1,98 @@
 package skillbill.engine.goalrunner.intake
 
-import skillbill.application.TestDecompositionManifestStore
-import skillbill.application.testDecompositionManifestValidator
-import skillbill.application.testDecompositionManifestWriter
-import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
-import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.ports.featurespec.FeatureSpecPathResolverPort
-import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GoalIntakePreparationTest {
-  private val preparation =
-    GoalIntakePreparation(
-      TestNoopGoalPlanningManifestStore,
-      FeatureSpecPreparationWriter(
-        testDecompositionManifestValidator,
-        TestDecompositionManifestStore,
-        testDecompositionManifestWriter,
-      ),
-      FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
-      TestDecompositionManifestStore,
-      NoopWorkflowGitOperations,
-    )
+  private val preparation = testGoalIntakePreparation()
 
   @Test
-  fun `a spec without a readable acceptance list becomes prose intake for a runtime-written spec`() {
-    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-unlisted")
+  fun `prepare finds no bundle for an intake and writes no manifest or subtask spec`() {
+    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-no-bundle")
     val parentSpec = writeParentSpec(repoRoot, TABLE_SPEC)
 
-    preparation.prepare(request(repoRoot))
+    val prepared = preparation.prepare(request(repoRoot))
 
-    val rewritten = Files.readString(parentSpec)
-    assertContains(rewritten, "> | AC-01 | The desktop app compiles. |")
-    assertTrue(acceptanceCriteria(rewritten).isNotEmpty())
-    assertTrue(acceptanceCriteria(Files.readString(subtaskSpec(parentSpec))).isNotEmpty())
+    assertNull(prepared)
+    assertEquals(TABLE_SPEC, Files.readString(parentSpec))
+    assertEquals(listOf("spec.md"), directoryEntries(parentSpec))
   }
 
   @Test
-  fun `a spec with a readable acceptance list is kept verbatim`() {
-    val repoRoot = Files.createTempDirectory("skillbill-goal-intake-listed")
+  fun `plan intake keeps a listed operator spec byte for byte and writes nothing else`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-listed")
     val listedSpec = "# SKILL-77 Listed\n\n## Acceptance Criteria\n\n1. The desktop app compiles.\n"
     val parentSpec = writeParentSpec(repoRoot, listedSpec)
 
-    preparation.prepare(request(repoRoot))
+    val seed = intakePlanSpec("SKILL-77", PARENT_SPEC_PATH, repoRoot)
 
+    assertEquals(FeatureTaskRuntimePlanSpecOrigin.OPERATOR, seed.specOrigin)
+    assertEquals(parentSpec, seed.specPath)
     assertEquals(listedSpec, Files.readString(parentSpec))
-    assertTrue(acceptanceCriteria(Files.readString(subtaskSpec(parentSpec))).isNotEmpty())
+    assertEquals(listOf("spec.md"), directoryEntries(parentSpec))
   }
+
+  @Test
+  fun `plan intake replaces a table-form spec in place with quoted prose and a readable list`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-table")
+    val parentSpec = writeParentSpec(repoRoot, TABLE_SPEC)
+
+    val seed = intakePlanSpec("SKILL-77", PARENT_SPEC_PATH, repoRoot)
+
+    val rewritten = Files.readString(parentSpec)
+    assertEquals(FeatureTaskRuntimePlanSpecOrigin.SEEDED, seed.specOrigin)
+    assertEquals(parentSpec, seed.specPath)
+    assertContains(rewritten, "> | AC-01 | The desktop app compiles. |")
+    assertTrue(acceptanceCriteria(rewritten).isNotEmpty())
+    assertEquals(listOf("spec.md"), directoryEntries(parentSpec))
+  }
+
+  @Test
+  fun `plan intake seeds free text at the slugged feature spec path`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-free-text")
+
+    val seed = intakePlanSpec("SKILL-78", "SKILL-78 Add dark mode\nUsers can switch themes.", repoRoot)
+
+    val expected = repoRoot.resolve(".feature-specs/SKILL-78-add-dark-mode/spec.md")
+    assertEquals(FeatureTaskRuntimePlanSpecOrigin.SEEDED, seed.specOrigin)
+    assertEquals(expected, seed.specPath)
+    assertTrue(acceptanceCriteria(Files.readString(expected)).isNotEmpty())
+    assertEquals(listOf("spec.md"), directoryEntries(expected))
+  }
+
+  @Test
+  fun `a planned spec path is computed without writing and refuses intake without requirements`() {
+    val repoRoot = Files.createTempDirectory("skillbill-plan-intake-planned")
+
+    val planned =
+      preparation.resolvePlanSpec("SKILL-78", "SKILL-78 Add dark mode\nUsers can switch themes.", repoRoot).specPath
+
+    assertEquals(repoRoot.resolve(".feature-specs/SKILL-78-add-dark-mode/spec.md"), planned)
+    assertTrue(Files.notExists(repoRoot.resolve(".feature-specs")))
+    assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+      preparation.resolvePlanSpec("SKILL-78", "SKILL-78", repoRoot)
+    }
+  }
+
+  private fun intakePlanSpec(
+    issueKey: String,
+    intake: String,
+    repoRoot: Path,
+  ) = preparation.intakePlanSpec(issueKey, intake, repoRoot, preparation.resolvePlanSpec(issueKey, intake, repoRoot))
+
+  private fun directoryEntries(spec: Path): List<String> =
+    Files.list(spec.parent).use { paths -> paths.map { it.fileName.toString() }.sorted().toList() }
 
   private fun acceptanceCriteria(specText: String): List<String> =
     GovernedSpecSectionParser.parseListSection(specText) { it.startsWith(ACCEPTANCE_CRITERIA_PREFIX) }
@@ -69,11 +106,6 @@ class GoalIntakePreparationTest {
     Files.writeString(parentSpec, text)
     return parentSpec
   }
-
-  private fun subtaskSpec(parentSpec: Path): Path =
-    Files.list(parentSpec.parent).use { paths ->
-      paths.filter { it.fileName.toString().startsWith("spec_subtask_1") }.findFirst().orElseThrow()
-    }
 
   private fun request(repoRoot: Path) =
     GoalRunnerRunRequest(

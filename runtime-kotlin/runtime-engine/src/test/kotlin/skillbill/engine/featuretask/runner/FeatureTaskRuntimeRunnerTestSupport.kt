@@ -192,7 +192,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
-import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -650,12 +649,24 @@ internal data class BranchSetupTestConfig(
   val featureSize: FeatureTaskRuntimeFeatureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
 )
 
+internal fun harnessGoalContinuation(branchSetup: BranchSetupTestConfig): FeatureTaskRuntimeGoalContinuationContext =
+  FeatureTaskRuntimeGoalContinuationContext(
+    parentIssueKey = ISSUE_KEY,
+    subtaskId = 1,
+    goalBranch = branchSetup.gitOperations.currentBranchValue,
+    suppressPr = false,
+    parentWorkflowId = "wfl-parent",
+    reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+  )
+
 internal data class RuntimeHarnessConfig(
   val seedDurableWorkflow: Boolean = true,
+  val hydratedPlanning: Boolean = true,
+  val allowOwningWrites: Boolean = false,
   val branchSetup: BranchSetupTestConfig = BranchSetupTestConfig(),
   val repoRoot: Path = Path.of("/tmp/repo"),
   val environment: Map<String, String> = emptyMap(),
-  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
+  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext = harnessGoalContinuation(branchSetup),
   val eventSink: FeatureTaskRuntimeRunEventSink? = null,
   val acceptanceCriteria: List<String> = listOf("AC-1", "AC-2"),
   val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator =
@@ -921,6 +932,9 @@ internal fun runnerHarness(
       runtimeConfig.eventSink?.emit(event)
     }
   val runRequest = runnerHarnessRequest(runtimeConfig, agentAssignment, sink)
+  if (runtimeConfig.seedDurableWorkflow && runtimeConfig.hydratedPlanning) {
+    seedHydratedPlanning(workflow.recorder)
+  }
   val io =
     RunnerHarnessIo(
       workflow = workflow,
@@ -1041,6 +1055,7 @@ private fun harnessRunner(
           NoopWorkflowGitOperations,
         ),
         entry,
+        testDecompositionPlanner(),
       ),
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
@@ -1163,6 +1178,9 @@ internal fun telemetryRunnerHarness(
       database = database,
       workflow = workflow,
     )
+  if (runtimeConfig.seedDurableWorkflow && runtimeConfig.hydratedPlanning) {
+    seedHydratedPlanning(workflow.recorder)
+  }
   return TelemetryRunnerHarness(
     assembled.runner,
     assembled.strategies,
@@ -1238,6 +1256,7 @@ private class TelemetryExecutePreparedSetup(
           NoopWorkflowGitOperations,
         ),
         configuredEntry,
+        testDecompositionPlanner(),
       ),
     )
 }
@@ -1373,17 +1392,16 @@ private fun runnerExecutionEntry(
       repositories,
     )
   }
-  val definition = SkeletonDefinition.forRun(config.goalContinuation != null)
   val facts =
     PhaseStrategySelectionFacts(
-      definition,
-      setOfNotNull(config.codeReviewMode, config.goalContinuation?.qualityGateSelection),
+      SkeletonDefinition.GOAL_CHILD,
+      setOf(config.codeReviewMode, config.goalContinuation.qualityGateSelection),
     )
   val inputs =
     resolver.resolveInputs(
       config.repoRoot,
-      config.goalContinuation?.qualityGateSelection,
-      config.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+      config.goalContinuation.qualityGateSelection,
+      config.goalContinuation.validationDepth,
       null,
     )
   val descriptor =
@@ -1398,10 +1416,7 @@ private fun runnerExecutionEntry(
         WORKFLOW_ID,
         ISSUE_KEY,
         descriptor,
-        fixture.identity(WORKFLOW_ID, ISSUE_KEY).copy(
-          routeScope =
-            if (config.goalContinuation == null) FeatureTaskRouteScope.STANDALONE else FeatureTaskRouteScope.GOAL_CHILD,
-        ),
+        fixture.identity(WORKFLOW_ID, ISSUE_KEY),
       )
     }
   }
@@ -1874,6 +1889,22 @@ internal class RuntimeRecordingLauncher(
   override fun launch(request: GoalRunnerSubtaskLaunchRequest): AgentRunLaunchOutcome {
     requests += request
     return settleScriptedEnvelope(handler(request), request.skillRunRequest.promptOverride, settlement)
+  }
+}
+
+internal const val HYDRATED_PLANNING_AGENT_ID = "goal-planning-import"
+
+internal fun hydratedPlanningOutputs(): Map<String, String> =
+  linkedMapOf(
+    "preplan" to PREPLAN_OUTPUT,
+    "plan" to PLAN_OUTPUT,
+    "plan_subtasks" to seededProjectionEnvelope("plan_subtasks", PlanningProjectionFixtures.PLAN_PROSE),
+  )
+
+private fun seedHydratedPlanning(recorder: FeatureTaskRuntimePhaseRecorder) {
+  recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+  hydratedPlanningOutputs().forEach { (phaseId, output) ->
+    recorder.recordPhaseStateForTest(phaseId, "completed", 1, HYDRATED_PLANNING_AGENT_ID, output)
   }
 }
 

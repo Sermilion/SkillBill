@@ -12,10 +12,8 @@ Harness sources live in
 
 | Directory | Entry | What runs |
 | --- | --- | --- |
-| `standalone/` | `SlotBaselineFullRunCapture.standalone()` | A full feature-task runtime run with no goal continuation |
 | `goal-child-build/` | `SlotBaselineFullRunCapture.goalChildBuild()` | Goal child for subtask 1 at the BUILD gate (`kotlinPackWithBuildGate`) |
 | `goal-child-validate/` | `SlotBaselineFullRunCapture.goalChildValidate()` | Goal child for subtask 2 at the VALIDATE gate (`kotlinPackWithValidationGate`) |
-| `goal-planning/` | `SlotBaselineGoalPlanningCapture.encodedFiles()` | `DefaultGoalPlanningSweep` preplan and plan over a two-subtask manifest, then `GoalPlanningLogService.log` |
 | `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
 | `mcp-lifecycle/` | `SlotBaselineMcpLifecycleCapture.encodedFiles()` | `LifecycleTelemetryService`, the service the MCP tools call |
 | `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, `skill-bill phase validation` over a gate that fails once and then passes, and `skill-bill phase pr` over the fixture agent outputs |
@@ -30,15 +28,6 @@ contains:
 - `handoff-projections.json` and `run-invariants.json`: the matching artifact families
 - `feature-task-runtime-finished.json`: the last `feature_task_runtime_finished` outbox payload
 - `prompts/<step>.txt`: every prompt the agents received, keyed by `phaseIdFromPrompt`. The review prompt goes in `prompts/review.txt`.
-
-`goal-planning/` holds:
-
-- `preplan-prompt.txt`
-- `plan-prompts.json`, keyed by subtask id
-- `shared-preplan-checkpoint.json`: `goal_shared_preplans` rows
-- `plan-records.json`: `goal_subtask_plans` rows
-- `planning-attempt-log.json`: progress events in persistence wire form
-- `planning-log.json`
 
 Both `code-review/` and the review captures in `phase/` run
 `SlotBaselinePhaseRunHarness`. The review finds one Blocker in `src/Foo.kt`.
@@ -118,11 +107,10 @@ Only steps that sent a prompt to an agent get a file.
 
 ## Output format
 
-The CLI renderers `renderPlanningLog` and `writeParallelReviewResult` belong
-to runtime-cli, and runtime-engine tests cannot reach them. So instead of
-rendered CLI text, these fixtures record:
+The CLI renderer `writeParallelReviewResult` belongs to runtime-cli, and
+runtime-engine tests cannot reach it. So instead of rendered CLI text, these
+fixtures record:
 
-- `planning-log.json`: the payload `GoalPlanningLogCommand` prints under JSON output
 - `*-output.json`: the `PhaseRunResult` fields the CLI prints, and the `ParallelCodeReviewResult` fields that `writeParallelReviewResult` prints
 
 ## Regenerating
@@ -148,7 +136,7 @@ To compare a live value with a committed file, encode the value with
 `SlotBaselineJson.encode` and call:
 
 ```kotlin
-SlotBaselineFixtureCompare.assertBytesEqual("featuretask/slotbaseline/standalone/phase-records.json", actual)
+SlotBaselineFixtureCompare.assertBytesEqual("featuretask/slotbaseline/goal-child-validate/phase-records.json", actual)
 ```
 
 If the bytes differ, the call fails and prints a line diff. Any change the
@@ -191,3 +179,12 @@ ledger expects must be regenerated in the subtask that the ledger names.
 - SKILL-410 (durable standalone plan): `skill-bill phase plan` runs the `plan` definition over durable
   workflow state, and `PhaseRunEntry` drives only in-memory definitions, so `phase/plan/` and its capture
   are removed. Every other file is unchanged.
+- SKILL-425 (one planning skeleton): goal planning runs through the plan workflow instead of
+  `DefaultGoalPlanningSweep`, so `goal-planning/` and its capture are removed. Every other file is unchanged.
+- SKILL-425 subtask 4 (retire the standalone skeleton): a run without a goal continuation is no longer
+  admitted, so `standalone/` and `SlotBaselineFullRunCapture.standalone()` are removed. The inline review prompt
+  test reads `goal-child-validate/prompts/review.txt`, which is byte-identical. The goal-child captures now
+  start from hydrated preplan, plan and plan_subtasks records, as production goal children do, so their
+  `prompts/preplan.txt` and `prompts/plan.txt` are removed and their phase records, ledger, handoff projections,
+  finished event and workflow snapshots no longer carry launched planning phases. Every captured prompt's loop
+  header names `plan_subtasks`. Every other file is unchanged.

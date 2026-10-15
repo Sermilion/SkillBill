@@ -245,7 +245,7 @@ class WorkerTakeoverFencingTest {
       var launches = 0
       listOf(
         identity.copy(repositoryIdentity = "repo-root-realpath-v1:/tmp/other-repository"),
-        identity.copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+        identity.copy(routeScope = FeatureTaskRouteScope.STANDALONE),
         identity.copy(normalizedIssueKey = "SKILL-999"),
         identity.copy(governedSpecPath = ".feature-specs/SKILL-384/other.md"),
       ).forEach { expected ->

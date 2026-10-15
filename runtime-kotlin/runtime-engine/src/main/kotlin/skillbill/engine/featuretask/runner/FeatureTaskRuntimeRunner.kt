@@ -10,7 +10,6 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 @Inject
 class FeatureTaskRuntimeRunner(
@@ -18,6 +17,8 @@ class FeatureTaskRuntimeRunner(
   private val preparation: FeatureTaskRuntimeRunPreparation,
   private val execute: FeatureTaskRuntimeRunnerExecute,
 ) {
+  fun intakeCompleted(workflowId: String): Boolean = execute.intakeCompleted(workflowId)
+
   fun run(
     request: FeatureTaskRuntimeRunRequest,
     repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
@@ -50,7 +51,7 @@ class FeatureTaskRuntimeRunner(
     ) {
       throw invalidFeatureTaskExecutionIdentitySchema(request.workflowId, "admission does not match run request")
     }
-    val expectedDefinition = request.skeletonDefinition ?: SkeletonDefinition.forRun(request.goalContinuation != null)
+    val expectedDefinition = resolveRunDefinition(request.skeletonDefinition, request.goalContinuation != null)
     val overrideMatches = request.transitionsOverride == null || request.transitionsOverride == admitted.plan.traversal
     if (!overrideMatches || admitted.plan.definitionId != expectedDefinition.id) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()

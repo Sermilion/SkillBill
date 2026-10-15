@@ -18,6 +18,7 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -38,6 +39,7 @@ internal interface PhaseRunRecords :
   PhaseStepRecords,
   PhaseReviewRecords,
   PhaseLaunchRecords,
+  PhasePlanRecords,
   FeatureTaskRuntimeNoChangePausePort {
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
@@ -68,9 +70,31 @@ internal interface PhaseRunRecords :
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean
+}
 
+/** The plan bundle snapshot and decompose terminal records planning makes for one run. */
+internal interface PhasePlanRecords {
   /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
+
+  /** The bundle snapshot planning recorded for [workflowId], with the settled plan of each subtask. */
+  fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle?
+
+  /** Records the plan [bundle] snapshot. Returns false when the write did not apply. */
+  fun recordPlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): Boolean
+
+  /**
+   * Records the plan [bundle] snapshot together with the settled phase record of each planned subtask in
+   * [unitRecords], keyed by subtask id, in one write. Returns false when the write did not apply.
+   */
+  fun recordPlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean
 
   /** Records the decompose [terminal] reached at [planStepId]. Returns false when the write did not apply. */
   fun recordDecomposeTerminal(

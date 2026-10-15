@@ -87,7 +87,7 @@ skill-bill update
 
 ## Glossary
 
-- **goal.** A full feature-task run keyed by an issue, URL, or spec. The runtime owns preparation, planning, execution, and durable state.
+- **goal.** A full run keyed by an issue, URL, or spec. The runtime owns preparation, planning (intake, preplan, plan), execution, and durable state. A single feature is a one-subtask goal.
 - **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
 - **subtask.** One independently shipped unit of a decomposed goal.
 - **phase.** A standalone-invocable skeleton id: `review`, `validation`, `plan`, `pr`, `monitor`. Invoked as `skill-bill phase <name>`. `verify` is not a phase.
@@ -118,7 +118,7 @@ The runtime defines 11 slots. A full run uses the first ten in this order; `stan
 | `monitor` | Watch CI on the open PR and repair failing checks. |
 | `standalone_review` | Report-only operator review. `phase:review` runs this slot. |
 
-Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs `standalone_review`, and `phase:plan` runs `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
+Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs `standalone_review`, and `phase:plan` runs `intake`, `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
 
 The quality phases have different purposes:
 
@@ -389,7 +389,7 @@ Use `phase_tiers` to move a phase to another tier for all configured agents. To 
 }
 ```
 
-Resolution order is an explicit `feature-task --phase-model phase=model@effort` assignment, then the agent's phase entry, then its tier entry. With no matching directive, Skill Bill leaves model selection to the provider's launch defaults. The `--phase-model` option belongs to the lower-level `skill-bill feature-task run` and `resume` commands, not `skill-bill goal` or `/skill-bill`.
+Resolution order is an explicit `feature-task --phase-model phase=model@effort` assignment, then the agent's phase entry, then its tier entry. With no matching directive, Skill Bill leaves model selection to the provider's launch defaults. The `--phase-model` option belongs to the lower-level `skill-bill feature-task` commands that goal children run on, not `skill-bill goal` or `/skill-bill`.
 
 Every directive requires a non-blank `model`. Omit `effort` to leave it unspecified; an empty string or `null` is invalid. Unknown fields, agent IDs, phase IDs, and tier names fail with the offending config path. The runtime validates this structure; the provider validates model availability and supported effort values.
 

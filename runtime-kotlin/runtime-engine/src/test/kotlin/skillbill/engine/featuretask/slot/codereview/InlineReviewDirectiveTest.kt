@@ -27,7 +27,7 @@ class InlineReviewDirectiveTest {
   @Test
   fun `last-commit prompt is byte-identical to the pre-change fixture`() {
     val fixture =
-      Files.readString(SlotBaselineTestResources.resolve("${SlotBaselinePaths.STANDALONE}/prompts/review.txt"))
+      Files.readString(SlotBaselineTestResources.resolve("${SlotBaselinePaths.GOAL_CHILD_VALIDATE}/prompts/review.txt"))
 
     assertEquals(fixture, compose(ReviewTarget.LastCommit))
   }

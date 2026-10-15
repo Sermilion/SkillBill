@@ -25,7 +25,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -47,17 +46,13 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
   @Test
   fun `SQLite adoption preserves original evidence and retries before prospective structured discovery`() {
     for (revision in 1..3) {
-      SerialRepairSqliteFixture(revision).use { f ->
+      SerialRepairSqliteFixture(revision, archiveMode = "goal-child-validate").use { f ->
         val descriptor =
-          if (revision == 3) {
-            f.execution.descriptor()
-          } else {
-            f.execution.validator.read(
-              ArchivedAuditExecutionPlanFixture.archive(f.execution, "standalone", revision),
-              "archive",
-            )
-          }
-        val original = pristine(f, descriptor)
+          f.execution.validator.read(
+            ArchivedAuditExecutionPlanFixture.legacyAuditPlan(f.execution, revision),
+            "archive",
+          )
+        val original = pristine(f, descriptor, "goal-child-validate")
         f.database.transaction { it.workflowStates.save(WorkflowFamily.TASK_RUNTIME, original) }
         val persistence = f.service(gitOperations = git)
         f.owned { worker ->
@@ -93,9 +88,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
                 worker,
                 null,
                 AcceptanceCriterionRepairMutation.Discover(f.admission),
-                f.audit(
-                  AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
-                ),
+                f.audit(),
                 persistence,
               ),
             ).state
@@ -135,12 +128,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             f.source,
           )
         for (revision in 1..3) {
-          val bytes =
-            if (revision == 3) {
-              ArchivedAuditExecutionPlanFixture.currentArchive(execution, mode)
-            } else {
-              ArchivedAuditExecutionPlanFixture.archive(execution, mode, revision)
-            }
+          val bytes = ArchivedAuditExecutionPlanFixture.legacyAuditPlan(execution, revision)
           val descriptor = execution.validator.read(bytes, "archive")
           val original = pristine(f, descriptor, mode)
           val receipt =

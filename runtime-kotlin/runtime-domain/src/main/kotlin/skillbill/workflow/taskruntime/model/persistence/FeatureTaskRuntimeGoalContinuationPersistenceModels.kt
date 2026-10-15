@@ -41,6 +41,45 @@ data class FeatureTaskRuntimeGoalContinuationFieldAdoption(
   }
 }
 
+data class FeatureTaskRuntimeGoalPlanningImportSource(
+  val kind: String,
+  val planWorkflowId: String? = null,
+  val detailsSha256: String? = null,
+) {
+  init {
+    require(kind in KINDS) { "FeatureTaskRuntimeGoalPlanningImportSource.kind must be one of $KINDS." }
+  }
+
+  internal fun toArtifactMap(): Map<String, Any?> =
+    linkedMapOf<String, Any?>("kind" to kind).apply {
+      planWorkflowId?.let { put("plan_workflow_id", it) }
+      detailsSha256?.let { put("details_sha256", it) }
+    }
+
+  companion object {
+    const val PLAN_WORKFLOW: String = "plan_workflow"
+    const val LEGACY_TABLES: String = "legacy_tables"
+    private val KINDS: Set<String> = setOf(PLAN_WORKFLOW, LEGACY_TABLES)
+
+    fun isPlanWorkflowArtifact(artifact: Map<*, *>): Boolean =
+      (artifact["source"] as? Map<*, *>)?.get("kind") == PLAN_WORKFLOW
+
+    internal fun fromArtifactValue(raw: Any?): FeatureTaskRuntimeGoalPlanningImportSource? {
+      if (raw == null) return null
+      val source =
+        raw as? Map<*, *>
+          ?: throw invalidWorkflowStateSchemaError("Goal planning import source must be an object.")
+      return FeatureTaskRuntimeGoalPlanningImportSource(
+        kind =
+          source["kind"] as? String
+            ?: throw invalidWorkflowStateSchemaError("Goal planning import source has no kind."),
+        planWorkflowId = source["plan_workflow_id"] as? String,
+        detailsSha256 = source["details_sha256"] as? String,
+      )
+    }
+  }
+}
+
 private object FeatureTaskRuntimeGoalPlanningImportKeys {
   const val SOURCE_KIND = "source_kind"
   const val PARENT_GOAL_WORKFLOW_ID = "parent_goal_workflow_id"
@@ -57,6 +96,7 @@ private object FeatureTaskRuntimeGoalPlanningImportKeys {
   const val SUB_SPEC_HASH = "sub_spec_hash"
   const val PREPLAN_PAYLOAD_SHA256 = "preplan_payload_sha256"
   const val PLAN_PAYLOAD_SHA256 = "plan_payload_sha256"
+  const val SOURCE = "source"
   const val IMPORTED_GOAL_PLANNING = "imported_goal_planning"
   val ALL =
     setOf(
@@ -76,6 +116,7 @@ private object FeatureTaskRuntimeGoalPlanningImportKeys {
       SUB_SPEC_HASH,
       PREPLAN_PAYLOAD_SHA256,
       PLAN_PAYLOAD_SHA256,
+      SOURCE,
     )
 }
 
@@ -95,9 +136,10 @@ data class FeatureTaskRuntimeGoalPlanningImport(
   val subSpecHash: String,
   val preplanPayloadSha256: String,
   val planPayloadSha256: String,
+  val source: FeatureTaskRuntimeGoalPlanningImportSource? = null,
 ) {
   internal fun toArtifactMap(): Map<String, Any?> =
-    linkedMapOf(
+    linkedMapOf<String, Any?>(
       FeatureTaskRuntimeGoalPlanningImportKeys.SOURCE_KIND to
         FeatureTaskRuntimeGoalPlanningImportKeys.IMPORTED_GOAL_PLANNING,
       FeatureTaskRuntimeGoalPlanningImportKeys.PARENT_GOAL_WORKFLOW_ID to parentGoalWorkflowId,
@@ -115,7 +157,9 @@ data class FeatureTaskRuntimeGoalPlanningImport(
       FeatureTaskRuntimeGoalPlanningImportKeys.SUB_SPEC_HASH to subSpecHash,
       FeatureTaskRuntimeGoalPlanningImportKeys.PREPLAN_PAYLOAD_SHA256 to preplanPayloadSha256,
       FeatureTaskRuntimeGoalPlanningImportKeys.PLAN_PAYLOAD_SHA256 to planPayloadSha256,
-    )
+    ).apply {
+      source?.let { put(FeatureTaskRuntimeGoalPlanningImportKeys.SOURCE, it.toArtifactMap()) }
+    }
 
   companion object {
     fun fromArtifactMap(raw: FeatureTaskRuntimeWorkflowArtifactMap): FeatureTaskRuntimeGoalPlanningImport {
@@ -149,6 +193,10 @@ data class FeatureTaskRuntimeGoalPlanningImport(
         subSpecHash = reader.requiredString(FeatureTaskRuntimeGoalPlanningImportKeys.SUB_SPEC_HASH),
         preplanPayloadSha256 = reader.requiredString(FeatureTaskRuntimeGoalPlanningImportKeys.PREPLAN_PAYLOAD_SHA256),
         planPayloadSha256 = reader.requiredString(FeatureTaskRuntimeGoalPlanningImportKeys.PLAN_PAYLOAD_SHA256),
+        source =
+          FeatureTaskRuntimeGoalPlanningImportSource.fromArtifactValue(
+            raw[FeatureTaskRuntimeGoalPlanningImportKeys.SOURCE],
+          ),
       )
     }
   }

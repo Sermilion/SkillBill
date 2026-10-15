@@ -6,11 +6,14 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryChe
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionTemplate
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 object FeatureTaskRuntimePhaseWorkflowDefinition {
+  const val PHASE_INTAKE: String = FeatureTaskRuntimePhaseIds.INTAKE
   const val PHASE_PREPLAN: String = FeatureTaskRuntimePhaseIds.PREPLAN
   const val PHASE_PLAN: String = FeatureTaskRuntimePhaseIds.PLAN
+  const val PHASE_PLAN_SUBTASKS: String = FeatureTaskRuntimePhaseIds.PLAN_SUBTASKS
   const val PHASE_IMPLEMENT: String = FeatureTaskRuntimePhaseIds.IMPLEMENT
   const val PHASE_SIMPLIFY: String = FeatureTaskRuntimePhaseIds.SIMPLIFY
   const val PHASE_IMPLEMENT_FIX: String = FeatureTaskRuntimePhaseIds.IMPLEMENT_FIX
@@ -27,6 +30,10 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_MONITOR: String = FeatureTaskRuntimePhaseIds.MONITOR
   const val PHASE_MONITOR_FIX: String = FeatureTaskRuntimePhaseIds.MONITOR_FIX
   const val PHASE_PRESENT_FINDINGS: String = FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS
+
+  fun planSubtaskUnitRecordId(subtaskId: Int): String = FeatureTaskRuntimePhaseIds.planSubtaskUnitRecordId(subtaskId)
+
+  fun planSubtaskUnitIdOf(key: String): Int? = FeatureTaskRuntimePhaseIds.planSubtaskUnitIdOf(key)
 
   const val DERIVED_CONTEXT_DIFF: String = "diff"
   const val DERIVED_CONTEXT_SCOPED_REPOSITORY_STATE: String = "scoped_repository_state"
@@ -65,7 +72,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
 
-  val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_COMMIT_PUSH, PHASE_MONITOR)
+  val runtimeSettledPhaseIds: Set<String> = setOf(PHASE_INTAKE, PHASE_COMMIT_PUSH, PHASE_MONITOR)
 
   val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - runtimeSettledPhaseIds
 
@@ -130,3 +137,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   val transitions: FeatureTaskRuntimeTransitionDeclaration =
     FeatureTaskRuntimePhaseWorkflowTransitions.transitions(definition)
 }
+
+fun Map<String, FeatureTaskRuntimePhaseRecord>.withoutPlanSubtaskUnitRecords():
+  Map<String, FeatureTaskRuntimePhaseRecord> =
+  filterKeys { FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitIdOf(it) == null }

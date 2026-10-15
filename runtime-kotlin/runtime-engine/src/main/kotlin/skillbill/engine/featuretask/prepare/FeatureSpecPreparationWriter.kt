@@ -58,15 +58,22 @@ class FeatureSpecPreparationWriter(
     )
   }
 
+  fun plannedParentSpecPath(
+    repoRoot: Path,
+    issueKey: String,
+    featureName: String,
+  ): Path = repoRoot.resolve(".feature-specs/${issueKey.trim()}-${normalizeFeatureName(featureName)}/spec.md")
+
   fun writeParentSpecOnly(
     repoRoot: Path,
     decision: FeatureSpecPreparationDecision,
     featureName: String,
     validationStrategy: String,
+    existingParentSpecPath: Path? = null,
   ): Path {
     val issueKey = decision.issueKey.trim()
     val normalizedFeatureName = normalizeFeatureName(featureName)
-    val parentSpecPath = repoRoot.resolve(".feature-specs/$issueKey-$normalizedFeatureName/spec.md")
+    val parentSpecPath = existingParentSpecPath ?: plannedParentSpecPath(repoRoot, issueKey, featureName)
     fileStore.writeTextAtomically(
       parentSpecPath,
       renderParentSpec(
@@ -116,6 +123,9 @@ class FeatureSpecPreparationWriter(
       repairEvidence = listOfNotNull(loaded.repairEvidence),
     )
   }
+
+  fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
+    loadPreparedManifest(parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)).manifest.subtasks
 
   fun listTree(directory: Path): List<Path> = fileStore.listTree(directory)
 

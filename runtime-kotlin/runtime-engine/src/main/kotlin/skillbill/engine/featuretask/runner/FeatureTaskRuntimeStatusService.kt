@@ -32,6 +32,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 private const val MAX_INLINE_CRITERION_ALIAS = 32
 
@@ -45,7 +46,7 @@ class FeatureTaskRuntimeStatusService(
   internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
   fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
-    val records = recorder.loadPhaseRecords(request.workflowId) ?: return null
+    val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
     val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
     return buildStatusProjection(request, records, decomposeTerminal, ledger)

@@ -145,7 +145,7 @@ class QuarantinedProducerRecoveryRefusalTest {
     val cases =
       listOf(
         GateRecoveryCase("build", SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.BUILD),
-        GateRecoveryCase("validate", SkeletonDefinition.STANDALONE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+        GateRecoveryCase("validate", SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
       ).flatMap { gate ->
         listOf(
           gate.copy(allow = true),

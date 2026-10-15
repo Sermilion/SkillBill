@@ -1,35 +1,52 @@
 package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.parsers.CommandLineParser
+import skillbill.application.workflow.model.WorkflowFamilyKind
+import skillbill.application.workflow.model.WorkflowOpenResult
+import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
+import skillbill.di.core.RuntimeComponent
+import skillbill.di.core.create
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
+import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 
 class FeatureTaskRuntimeGoalContinuationProtocolTest {
   @Test
   fun `CliRuntime parses contract-built continuation argv into the run request`() {
     val fixture = continuationFixture()
+    val workflowId = fixture.openGoalChild()
     var captured: FeatureTaskRuntimeRunInput? = null
     val result =
       CliRuntime.run(
-        continuationArguments(fixture.specPath),
+        continuationArguments(workflowId, fixture.specPath),
         CliRuntimeContext(
-          dbPathOverride = fixture.home.resolve("metrics.db").toString(),
+          dbPathOverride = fixture.dbPath,
           environment =
             mapOf(
               FeatureTaskRuntimeGoalContinuationLaunchTokens.VALIDATION_DEPTH_ENV to
@@ -59,6 +76,7 @@ class FeatureTaskRuntimeGoalContinuationProtocolTest {
 
     assertEquals(0, result.exitCode, result.stderr)
     val request = assertNotNull(captured)
+    assertEquals(workflowId, request.explicitWorkflowId)
     assertEquals("SKILL-371", request.goalContinuation?.parentIssueKey)
     assertEquals(3, request.goalContinuation?.subtaskId)
     assertEquals("feat/SKILL-371", request.goalContinuation?.goalBranch)
@@ -128,7 +146,51 @@ private data class ContinuationFixture(
   val repositoryRoot: Path,
   val specPath: Path,
   val home: Path,
-)
+) {
+  val dbPath: String = home.resolve("metrics.db").toString()
+
+  fun openGoalChild(): String {
+    val context =
+      CliRuntimeContext(
+        dbPathOverride = dbPath,
+        userHome = home,
+        environment = mapOf("SKILL_BILL_TEST_ENVIRONMENT" to "present"),
+      )
+    val component = RuntimeComponent::class.create(context.toRuntimeContext(dbPathOverride = dbPath))
+    val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
+    val plan =
+      statusProjectionPhaseStrategies().executionPlan(
+        PhaseStrategySelectionFacts(
+          SkeletonDefinition.GOAL_CHILD,
+          setOf(CodeReviewExecutionMode.DEFAULT, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+        ),
+      )
+    val descriptor =
+      FeatureTaskRuntimeExecutionPlanCodec(validator).encodeExecution(
+        plan,
+        EffectiveGatePolicyInputs(
+          ValidationGateCommandFamily.VALIDATION,
+          null,
+          null,
+          null,
+          ValidationDepth.FULL,
+          null,
+        ),
+      )
+    val opened =
+      component.workflowService.open(
+        WorkflowServiceOpenArgs(
+          kind = WorkflowFamilyKind.TASK_RUNTIME,
+          issueKey = "SKILL-371",
+          repositoryIdentity = CanonicalRepositoryRoot.repositoryIdentity(repositoryRoot),
+          governedSpecPath = ".feature-specs/SKILL-371/spec.md",
+          routeScope = FeatureTaskRouteScope.GOAL_CHILD,
+          executionPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(descriptor, validator),
+        ),
+      )
+    return assertIs<WorkflowOpenResult.Ok>(opened).workflowId
+  }
+}
 
 private fun continuationFixture(): ContinuationFixture {
   val repositoryRoot = Files.createTempDirectory("skillbill-cli-continuation-contract")
@@ -153,11 +215,15 @@ private fun continuationFixture(): ContinuationFixture {
   )
 }
 
-private fun continuationArguments(specPath: Path): List<String> {
+private fun continuationArguments(
+  workflowId: String,
+  specPath: Path,
+): List<String> {
   val tokens = FeatureTaskRuntimeGoalContinuationLaunchTokens
   return listOf(
-    "feature-task",
-    "run",
+    tokens.FEATURE_TASK_COMMAND,
+    tokens.RESUME_SUBCOMMAND,
+    workflowId,
     "SKILL-371",
     specPath.toString(),
     tokens.GOAL_PARENT_ISSUE_KEY_FLAG,

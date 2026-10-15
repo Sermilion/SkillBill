@@ -4,6 +4,7 @@ import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.goalDependencySatisfied
+import skillbill.engine.goalrunner.manifest.planWorkflowPlanningProgress
 import skillbill.engine.goalrunner.manifest.reconcileGoalSubtasks
 import skillbill.engine.goalrunner.manifest.selectGoalCurrentSubtask
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -42,6 +43,7 @@ internal class GoalRunnerStatusSubtaskReader(
       manifests.statusManifestPage(parentId, request.issueKey, 0, WorkPaginationLimits.MAX_PAGE_SIZE, request.repoRoot)
         ?: return null
     val accumulator = SubtaskAccumulator()
+    val planWorkflowPlanned = unit.planWorkflowPlanningProgress(parentId)?.plannedSubtaskIds.orEmpty()
     var offset = 0
     var page = first
     do {
@@ -50,12 +52,12 @@ internal class GoalRunnerStatusSubtaskReader(
         projected.filter {
           it.status.decompositionStatus() != DecompositionStatus.SKIPPED
         }.mapTo(mutableSetOf()) { it.id }
-      val prepared = unit.goalPlanningPreparations.preparedPlanIdsForSubtasks(parentId, planningIds)
+      val legacyPrepared = unit.goalPlanningPreparations.preparedPlanIdsForSubtasks(parentId, planningIds)
       projected.forEach { subtask ->
         val runnable =
           subtask.status.decompositionStatus() == DecompositionStatus.PENDING &&
             accumulator.firstRunnable == null && dependenciesSatisfied(parentId, request, subtask)
-        accumulator.add(subtask, prepared, runnable, request)
+        accumulator.add(subtask, legacyPrepared, planWorkflowPlanned, runnable, request)
       }
       offset += page.state.manifest.subtasks.size
       if (offset >= first.totalCount) break
@@ -122,12 +124,14 @@ internal class GoalRunnerStatusSubtaskReader(
     private var anyCommit = false
     private var planningCount = 0
     private var preparedCount = 0
+    private var legacyPreparedCount = 0
     private val missingPlans = mutableListOf<Int>()
     private val validation = mutableListOf<DecompositionSubtask>()
 
     fun add(
       subtask: DecompositionSubtask,
-      prepared: Set<Int>,
+      legacyPrepared: Set<Int>,
+      planWorkflowPlanned: Set<Int>,
       runnable: Boolean,
       request: GoalRunnerStatusRequest,
     ) {
@@ -137,7 +141,9 @@ internal class GoalRunnerStatusSubtaskReader(
       anyCommit = anyCommit || !subtask.commitSha.isNullOrBlank()
       if (status != DecompositionStatus.SKIPPED) {
         planningCount++
-        if (subtask.id in prepared) {
+        val inLegacy = subtask.id in legacyPrepared
+        if (inLegacy) legacyPreparedCount++
+        if (inLegacy || subtask.id in planWorkflowPlanned) {
           preparedCount++
         } else if (missingPlans.size < GOAL_PLANNING_WAVE_CAP) {
           missingPlans += subtask.id
@@ -168,7 +174,7 @@ internal class GoalRunnerStatusSubtaskReader(
       request: GoalRunnerStatusRequest,
       state: GoalRunnerManifestState,
     ): GoalRunnerStatusSubtasks {
-      if (unit.goalPlanningPreparations.preparedPlanStatusCount(parentId) != preparedCount) {
+      if (unit.goalPlanningPreparations.preparedPlanStatusCount(parentId) != legacyPreparedCount) {
         throw invalidGoalPlanningPreparationSchemaError(
           parentId,
           "subtask_id",

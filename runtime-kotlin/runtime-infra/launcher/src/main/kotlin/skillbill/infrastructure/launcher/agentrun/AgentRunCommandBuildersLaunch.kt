@@ -72,8 +72,10 @@ internal fun goalContinuationArguments(
   databasePath: Path?,
 ): List<String> {
   val context = requireNotNull(request.goalContinuation)
-  val childWorkflowId = context.childWorkflowId?.takeIf(String::isNotBlank)
-  val assignedWorkflowId = context.assignedWorkflowId?.takeIf(String::isNotBlank)
+  val workflowId =
+    requireNotNull(
+      context.childWorkflowId?.takeIf(String::isNotBlank) ?: context.assignedWorkflowId?.takeIf(String::isNotBlank),
+    ) { "Goal-child launch requires a persisted child workflow id." }
   return buildList {
     add("skill-bill")
     databasePath?.let { db ->
@@ -81,18 +83,10 @@ internal fun goalContinuationArguments(
       add(db.toString())
     }
     add(FeatureTaskRuntimeGoalContinuationLaunchTokens.FEATURE_TASK_COMMAND)
-    if (childWorkflowId != null) {
-      add(FeatureTaskRuntimeGoalContinuationLaunchTokens.RESUME_SUBCOMMAND)
-      add(childWorkflowId)
-    } else {
-      add(FeatureTaskRuntimeGoalContinuationLaunchTokens.RUN_SUBCOMMAND)
-    }
+    add(FeatureTaskRuntimeGoalContinuationLaunchTokens.RESUME_SUBCOMMAND)
+    add(workflowId)
     add(request.issueKey)
     add(context.specPath)
-    if (childWorkflowId == null && assignedWorkflowId != null) {
-      add(FeatureTaskRuntimeGoalContinuationLaunchTokens.WORKFLOW_ID_FLAG)
-      add(assignedWorkflowId)
-    }
     addGoalContinuationArguments(context)
     add("--agent")
     add(agent.id)

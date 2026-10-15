@@ -272,10 +272,8 @@ class ApplicationPersistencePortGoalTest {
     val standaloneMethods = workflowStatePort.declaredMethods.map { it.name }.toSet()
     val goalPlanningMethodNames =
       listOf(
-        "markPrepared",
         "deleteByGoal",
-        "checkpointSharedPreplan",
-        "checkpointSubtaskPlan",
+        "findSharedPreplan",
         "listSubtaskPlansOrdered",
       )
     goalPlanningMethodNames.forEach { methodName ->

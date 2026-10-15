@@ -24,8 +24,6 @@ internal object SlotBaselineFullRunCapture {
 
   val sqliteClock: Clock = Clock.fixed(Instant.parse("2026-06-02T12:00:00Z"), ZoneOffset.UTC)
 
-  fun standalone(): SlotBaselineDurableBundle = run(goalContinuation = null, useBuildPack = false)
-
   fun goalChildBuild(): SlotBaselineDurableBundle =
     run(
       goalContinuation =
@@ -68,7 +66,7 @@ internal object SlotBaselineFullRunCapture {
     )
 
   private fun run(
-    goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+    goalContinuation: FeatureTaskRuntimeGoalContinuationContext,
     useBuildPack: Boolean,
   ): SlotBaselineDurableBundle {
     val repoRoot = seededRepoRoot()

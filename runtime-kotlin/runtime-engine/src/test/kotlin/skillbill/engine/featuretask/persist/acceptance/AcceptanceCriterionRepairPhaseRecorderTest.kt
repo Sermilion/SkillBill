@@ -12,7 +12,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -214,7 +213,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
             discovery,
             "advance",
             "The full source audit found a missing caller.",
-            f.audit(AcceptanceCriterionRepairMode.INITIAL_DISCOVERY).payload,
+            f.audit().payload,
           ),
         ) == true,
       )
