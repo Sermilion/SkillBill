@@ -2,11 +2,14 @@
 
 The desktop reads the runtime store through read-only Room and shared runtime
 projection. Controls use the existing runtime graph. DataStore owns app
-preferences. SKILL-424 retains the final module, DI, ViewModel, Navigation 3 and
-native host work described in its separate spec. The per-obligation verdicts
-for the SKILL-423 data gaps that SKILL-424 took over are in
-[skill-423-handoff.md](skill-423-handoff.md); this record keeps the measured
-results.
+preferences. The module graph, DI, ViewModels, Navigation 3 and native host
+structure that SKILL-424 delivered are described in
+[ARCHITECTURE.md](../ARCHITECTURE.md) and [architecture-parity.md](architecture-parity.md).
+The per-obligation verdicts for the SKILL-423 data gaps that SKILL-424 took over
+are in [skill-423-handoff.md](skill-423-handoff.md); this record keeps the
+measured results. Tests named below live in the module that owns their subject:
+the data tests under `core/data/src/jvmTest`, preference tests under
+`core/datastore/src/jvmTest`, and the guards under `composeApp/src/jvmTest`.
 
 ## Checks
 
@@ -18,7 +21,8 @@ Validation on Linux used the repository's JDK 21 toolchain on 2026-10-12.
   --no-configuration-cache` builds and tests the desktop and its composite
   runtime dependencies, then creates the application image. It passed all 41
   desktop tests with no skipped tests.
-- `python desktop-tray/scripts/packaged-data-smoke.py` exercises Room, bundled
+- `cd desktop-tray && ./gradlew packagedDataSmoke` (alias of
+  `:composeApp:packagedDataSmoke`, outside `check`) exercises Room, bundled
   SQLite, shared status projection, detail and DataStore through the distribution's
   launcher and bundled JDK. It copies the image to a disposable directory, adds
   only the test entry class to that copy, and uses an empty PATH and disposable
@@ -36,7 +40,7 @@ record does not claim interactive tray or window smoke coverage.
 | Boundary | Regression evidence |
 | --- | --- |
 | Read-only compatibility | `RoomRuntimeCompatibilityTest` compares schema, migration ledger and durable rows before and after Room reads. The driver refuses writes. |
-| Missing, corrupt and incompatible stores | `RoomBoardSourceTest` refuses missing files, older schema versions and foreign Room identities without creation, migration or repair. |
+| Missing, corrupt and incompatible stores | The `:core:data` repository tests (`WorkStackTest`, `ObservationLifecycleTest`) refuse missing files, schema versions the runtime cannot upgrade and foreign Room identities without creation, migration or repair. Selecting an older supported store applies the runtime's own migrations first (`WorkStackTest`). |
 | Busy store | The exclusive-writer regression requires a typed busy result and recovery after rollback and reconnect. |
 | Completed-history starvation | A live goal with a durable manifest and process lease, plus a live phase, remain visible behind 5,000 terminal phase records. Each live query projects one candidate. EXPLAIN QUERY PLAN proves an indexed phase search. |
 | Bounded reads | Desktop pages return ten items with one lookahead candidate to detect continuation. Shared board projection examines at most forty candidates per page, with at most three coherence attempts. Goal status streams at most 100 subtasks, child outcomes, dependencies or ledger entries per batch. Each growing detail list has its own cursor. Nested subtask previews contain at most ten dependencies and one fallback agent. |
@@ -45,7 +49,7 @@ record does not claim interactive tray or window smoke coverage.
 | External commit observation | An independent JVM writes through the runtime session factory. Subscribed live, history and exact selected detail update. A counted idle interval records no repository reads or emissions. A coherent runtime transaction changes goal/control and phase topics together. Rollback and unrelated table commits stay silent. Registration barriers, coalesced topic revisions, controlled overflow after lost hints, reconnect and writer exit immediately after commit retain durable state. |
 | Resource lifetime | Closing the selected store cancels its commit-signal watcher and Room connection. The observer opens no SQLite connection. Reads after source closure fail. |
 | Time-derived state | Controlled clocks prove freshness, lease and recent/history expiry without another write. Selected detail observes lease expiry without a board subscriber. Desktop reads pass their observation time into shared detail projection. Expired deadlines do not start an idle database query loop. Display ticks do not query SQLite. |
-| Retained-page deadlines | `RoomBoardSource` keeps deadlines by section and page cursor. `DashboardController` reports the retained cursor window after refresh and append, so evicted pages no longer schedule expiry reads. These repairs preserve the separate store, query, and identity deadline work still owned by SKILL-424 AC-34. |
+| Retained-page deadlines | The board repository keeps deadlines by section and page cursor, and the feature ViewModels report the retained cursor window after refresh and append, so evicted pages no longer schedule expiry reads. Each subscription owner has its own `DeadlineScheduler`. (`RoomBoardSource` and `DashboardController`, where these repairs first landed, are deleted.) |
 | Completed-only detail selection | `IdeStatusService` passes the completed-only selector into `goalSubtaskPage`, so validation detail pages are filtered by the persistence query before projection. |
 | Control admission | Real runtime fixtures reject changed repository, database generation and lease fence. Pause admission succeeds once, rejects repeated stale targets, and does not invent goal completion. Nested runtime writes roll back with their outer admission transaction and recover after failure. |
 | Notifications | Controller and transition tests distinguish initial discovery from confirmed completion. History and reconnect do not replay completion; repeated observations deduplicate transitions. Settings authorize delivery again when the native callback sends. |
@@ -101,10 +105,9 @@ it is a historical ledger entry. `DesktopReadSchema.VERSION` describes the
 schema Room accepts; it is not used to renumber an existing migration. The
 runtime remains the only schema and write authority. Room does not create
 its own database or run destructive migrations. PagingSource units retain a
-board page and its snapshot metadata. Current controller consumers request
+board page and its snapshot metadata. Current ViewModel consumers request
 bounded pages directly and retain five page groups, rather than adopting the
-reference app's PagingData presentation stack. SKILL-424 owns that presentation
-architecture and generated composition.
+reference app's PagingData presentation stack.
 
 The desktop version catalog pins Room runtime/compiler `3.0.3`, bundled SQLite
 `2.7.1`, DataStore `1.2.1`, Paging `3.5.2`, KSP `2.3.12`, and Kotlin `2.4.21`.
@@ -122,12 +125,13 @@ repository failure instead of an empty healthy board.
 Production no longer has `CliBoardSource`, `CliResolver`, `ProcessRunner`,
 `WorkPayloadDecoder` or `WorkPayloadKeys`, and their superseded tests are deleted.
 The main composition has no work-command or executable discovery consumer.
-The retired names remain only in the architecture guard's rejection vocabulary;
-`cliOverride` and `pollSeconds` remain only in preference migration cleanup and
+A reintroduced CLI adapter would need an OS process, which `DeletionRulesTest` confines to
+the approved native files; `cliOverride` and `pollSeconds` remain only in preference migration cleanup and
 its migration regression test.
 There is no polling setting, board polling loop, or timed observer reconnect loop. A failed observer emits one typed stale result and stays failed until explicit refresh reconnects. Idle-failure coverage checks that no further queries, watcher registrations, or board emissions occur before that request. The remaining UI delays are
 hover behavior, tray availability, elapsed-time display and known data deadlines.
-Native host helpers remain in SKILL-424's scope.
+Native host helpers live in `:composeApp`; `DeletionRulesTest` pins which files may
+launch a process and rejects the retired preference names and repeating timers.
 
 ## Runtime architecture review
 
@@ -179,4 +183,5 @@ races, lost hints with controlled overflow, coalesced topics and reconnect.
 
 The final Linux runtime check, clean desktop check, distribution creation and
 packaged-data smoke passed after these repairs. macOS and Windows remain CI-only
-evidence. SKILL-424 owns final application guards and native host replacement.
+evidence. The final application guards and the delivery proof are described in
+[architecture-parity.md](architecture-parity.md).

@@ -65,7 +65,6 @@ data class IdeStatusWorkPolicyFacts(
   val planningPrepared: Boolean,
   val controlTargetPresent: Boolean,
   val pauseRequested: Boolean = false,
-  /** The instant the time-windowed facts are judged at; without it none of them hold and no deadline is reported. */
   val observedAt: Instant? = null,
 )
 
@@ -76,25 +75,18 @@ enum class IdeStatusDisplayGroup { GOALS, PHASES }
 data class IdeStatusWorkPolicy(
   val liveSection: IdeStatusLiveSection?,
   val controlEligible: Boolean,
-  /** A goal accepts a pause only while no pause is already pending; stop stays available on [controlEligible]. */
   val pauseEligible: Boolean,
   val requiresAttention: Boolean,
   val displayGroup: IdeStatusDisplayGroup?,
   val displayPriority: Int,
-  /** The work is live in a goals or phases section, so a surface counts it as running. */
   val running: Boolean,
-  /** A phase that finished within [RECENT_PHASE_WINDOW] of the observation. */
   val recentlyFinishedPhase: Boolean,
-  /** Work that completed successfully within [DONE_WINDOW] of the observation. */
   val doneWithinDay: Boolean,
-  /** The next instant at which [recentlyFinishedPhase] or [doneWithinDay] changes, or null when neither will. */
   val membershipDeadline: Instant?,
 )
 
-/** The aggregate status a surface shows for a whole board, in precedence order. */
 enum class IdeStatusTrayStatus { FAILED, NEEDS_YOU, RUNNING, IDLE }
 
-/** One item of a board as the arrangement sees it: identity, durable lifecycle and the runtime's own verdicts. */
 data class IdeStatusBoardEntry(
   val key: String,
   val repositoryIdentity: String,
@@ -102,7 +94,6 @@ data class IdeStatusBoardEntry(
   val policy: IdeStatusWorkPolicy,
 )
 
-/** The runtime's board arrangement: aggregate status, counts, and the grouped, ordered entries a surface renders. */
 data class IdeStatusBoardArrangement(
   val trayStatus: IdeStatusTrayStatus,
   val running: Int,
@@ -114,10 +105,6 @@ data class IdeStatusBoardArrangement(
 )
 
 object IdeStatusPolicy {
-  /**
-   * Groups, orders and counts [entries] so no surface judges lifecycle or sorts work itself. Goals are ordered by
-   * priority, then key, then repository identity; phases keep the order of [entries].
-   */
   fun arrange(entries: List<IdeStatusBoardEntry>): IdeStatusBoardArrangement {
     val goals =
       entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.GOALS && it.policy.liveSection != null }
@@ -219,7 +206,6 @@ object IdeStatusPolicy {
     )
   }
 
-  /** Whether `finishedAt` lies within [window] of the observation, and when that next changes. */
   private fun windowed(
     facts: IdeStatusWorkPolicyFacts,
     window: Duration,

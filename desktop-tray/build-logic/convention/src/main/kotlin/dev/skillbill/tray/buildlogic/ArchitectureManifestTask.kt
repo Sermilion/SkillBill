@@ -10,9 +10,11 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 
+@DisableCachingByDefault(because = "Renders a small JSON document from its inputs; rerunning is cheaper than a cache round trip.")
 abstract class ArchitectureManifestTask : DefaultTask() {
   @get:Input abstract val projectPath: Property<String>
   @get:Input abstract val plugins: ListProperty<String>
@@ -21,6 +23,7 @@ abstract class ArchitectureManifestTask : DefaultTask() {
   @get:Input abstract val kspConfigurations: ListProperty<String>
   @get:Input abstract val sourceSets: ListProperty<String>
   @get:Input abstract val sourceDirectories: MapProperty<String, List<String>>
+  @get:Input abstract val generatedDirectories: MapProperty<String, List<String>>
   @get:Input abstract val projectDependencies: ListProperty<String>
   @get:Input abstract val resolved: MapProperty<String, List<String>>
   @get:OutputFile abstract val manifest: RegularFileProperty
@@ -35,6 +38,7 @@ abstract class ArchitectureManifestTask : DefaultTask() {
       "kspConfigurations" to kspConfigurations.get().sorted(),
       "sourceSets" to sourceSets.get().sorted(),
       "sourceDirectories" to sourceDirectories.get(),
+      "generatedDirectories" to generatedDirectories.get(),
       "projectDependencies" to projectDependencies.get().sorted(),
       "resolved" to resolved.get(),
     )

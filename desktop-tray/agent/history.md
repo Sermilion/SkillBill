@@ -1,3 +1,15 @@
+## [2026-10-15] SKILL-424 subtask 6 deletion and delivery proof
+Areas: desktop-tray (composeApp architecture tests, docs, ARCHITECTURE.md), runtime-kotlin (runtime-cli repoTest installer fixtures, runtime-infra/sqlite worklist stores)
+
+- Removed the desktop process-adapter rule from the governed-edge walk (process assertions, WorkRunLauncher start/stop cut-off, launchesCommand). The approved native display query, the five-file WorkRunLauncher ownership set and DeletionRules (a)-(e) stay.
+- Walker fixtures: alias import and extension call now assert reach, with a negative twin for an alias to a missing declaration that must fail as an unresolved governed edge (reusable).
+- docs/architecture-parity.md gained a Deviations subsection, CI runner and host list, and runtime touched-file notes; the Readian reference moved to current HEAD (old revision unresolvable). ARCHITECTURE.md now bans only installed CLI, PATH or login-shell discovery and command-output parsing.
+- Validate repaired KDoc on a private extension in WorkGoalSubtaskStore, a Spotless violation in WorkGoalDependencyStore, and 14 installer repoTests broken on main by the mandatory desktop install step. Offline desktop fixtures (staged release asset, seeded desktop-tray gradlew, temp-home install dirs) are reusable.
+- Packaged data smoke passed with no CLI and an empty PATH; desktop-tray and runtime-kotlin check passed on macOS arm64.
+- Limits: only macOS arm64 ran locally; install_smoke_test.sh and runtime_package_parity_smoke_test.sh were denied headless, left to CI; featureTaskRuntimeRunEntry has no direct desktop reader but stays exported and pinned by RuntimeEngineInboundApiTest.
+Feature flag: N/A
+Acceptance criteria: not self-reported; audit owns the count (subtask 6 of SKILL-424)
+
 ## [2026-10-15] SKILL-424 subtask 5 navigation and host lifetimes
 Areas: desktop-tray (composeApp, core/common, core/data, core/domain, core/testing, core/ui, feature/work, feature/detail, feature/history, feature/settings, gradle catalog)
 

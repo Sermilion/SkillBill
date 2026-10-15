@@ -15,7 +15,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
-import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
@@ -45,9 +45,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
         repositoryIdentity: String,
         branchCorrelation: String,
         now: Instant,
-        limit: Int,
-        after: StandalonePhaseExecutionAnchor?,
-        slice: StandaloneEligibleSlice?,
+        page: StandaloneEligiblePage,
       ): List<StandalonePhaseStatusRecord> = emptyList()
 
       override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> =

@@ -1,6 +1,5 @@
-package skillbill.engine.work
+package skillbill.engine.work.pagination
 
-import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.WorkDetailItem
 import skillbill.ports.idestatus.model.WorkDetailList
@@ -10,13 +9,11 @@ import skillbill.ports.work.model.WorkGoalDependencyAnchor
 import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 
-/** A detail item plus, per list, the identity of the last row that list read, which its next page continues after. */
 internal data class ProjectedDetailItem(
   val item: WorkDetailItem,
   val nextAnchors: Map<WorkDetailList, WorkDetailAnchor>,
 )
 
-/** A goal subtask page for [list], with the last subtask id the read returned before any projection filtering. */
 internal data class GoalPageRead(
   val page: WorkGoalSubtaskPage,
   val list: WorkDetailList,
@@ -28,7 +25,6 @@ internal data class RuntimePhasePageRead(
   val hasMore: Boolean,
 )
 
-/** Each list's next anchor is its own last-read row: never another list's, and never a row the list did not read. */
 internal fun detailNextAnchors(
   history: List<WorkExecutionInstance>,
   goal: GoalPageRead?,

@@ -102,26 +102,21 @@ data class StandalonePhaseStatusRecord(
   val launchArguments: List<String>? = null,
 )
 
-/** Most eligible standalone rows one status read pulls for a branch; a longer tail is reached by anchored paging. */
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
 
-/**
- * Which eligibility disjunct an eligible read returns: executions still live inside the live retention window, or
- * executions settled inside the settled window. A status read pages the live slice to its end before the settled slice,
- * so a long settled tail never starves a live execution of the page budget.
- */
 enum class StandaloneEligibleSlice { LIVE, SETTLED }
 
-/**
- * The execution a history page continues after. Executions are ordered newest first by run sequence, so a page anchored
- * on one never repeats or skips a run when newer runs are recorded between reads.
- */
 data class StandalonePhaseExecutionAnchor(
   val runSequence: String,
   val invocationId: String,
 )
 
-/** A history page starts [offset] rows in, or strictly after [after] when the caller holds an anchor; never both. */
+data class StandaloneEligiblePage(
+  val limit: Int = STANDALONE_ELIGIBLE_PAGE_LIMIT,
+  val after: StandalonePhaseExecutionAnchor? = null,
+  val slice: StandaloneEligibleSlice? = null,
+)
+
 data class StandalonePhaseExecutionQuery(
   val repositoryIdentity: String,
   val phaseId: String,

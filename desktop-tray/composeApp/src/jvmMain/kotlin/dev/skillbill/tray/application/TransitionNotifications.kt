@@ -146,8 +146,9 @@ class TransitionTracker {
 
   private fun isNewer(item: WorkItem, prior: Observation): Boolean {
     if (item.databaseStoreId != prior.storeId) return false
-    if (item.databaseRevision != null && prior.storeRevision != null && item.databaseRevision != prior.storeRevision) {
-      return item.databaseRevision > prior.storeRevision
+    val storeRevision = item.databaseRevision
+    if (storeRevision != null && prior.storeRevision != null && storeRevision != prior.storeRevision) {
+      return storeRevision > prior.storeRevision
     }
     val revision = item.statusRevision
     val previousRevision = prior.revision

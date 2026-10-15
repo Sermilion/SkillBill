@@ -481,8 +481,14 @@ class WorkStackTest {
         assertEquals((1..10).toList(), selectedDetail.subtasks.map { it.id })
         assertEquals(1000, selectedDetail.completeCount + selectedDetail.pendingCount + selectedDetail.blockedCount)
         assertNotNull(selectedDetail.cursors[DetailList.SUBTASKS])
-        val tailDetail = (source.detail(goals.items.single().identity, list = DetailList.SUBTASKS,
-          startOffset = 990) as Outcome.Value).value
+        // Lists page by their own continuation, never by offset, so the tail is reached by following the subtask cursor.
+        var tailDetail = selectedDetail
+        repeat(100) {
+          val next = tailDetail.cursors[DetailList.SUBTASKS] ?: return@repeat
+          tailDetail = (source.detail(goals.items.single().identity, next, DetailList.SUBTASKS) as Outcome.Value).value
+        }
+        assertNull(tailDetail.cursors[DetailList.SUBTASKS], "The subtask list did not end within 100 pages.")
+        assertEquals(1000, tailDetail.subtasks.last().id)
         assertEquals(10, tailDetail.subtasks.last().dependencies.size)
         assertEquals((1..10).toList(), selectedDetail.dependencies.map { it.dependency.subtaskId })
         val dependenciesCursor = assertNotNull(selectedDetail.cursors[DetailList.DEPENDENCIES])

@@ -61,6 +61,7 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+  InstallerShellFixtures.seedDesktopSource(repoRoot)
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -77,6 +78,7 @@ internal fun runInstallerShell(
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
+        environment().useOfflineDesktopRelease(home)
       }
       .start()
   process.outputStream.bufferedWriter().use { writer -> writer.write(input) }
@@ -282,6 +284,7 @@ internal fun runPrebuiltInstaller(
   builder.environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
   builder.environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
   builder.environment().remove("SKILL_BILL_GOAL_CONTINUATION")
+  builder.environment().installDesktopUnder(home)
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
   }
@@ -314,6 +317,19 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
   InstallerShellFixtures.seedFakeGradlew(repoRoot)
+  InstallerShellFixtures.seedDesktopSource(repoRoot)
+}
+
+internal fun MutableMap<String, String>.useOfflineDesktopRelease(home: Path) {
+  val releaseDir = Files.createTempDirectory("skillbill-desktop-release")
+  PrebuiltReleaseStager.stageDesktopApp(releaseDir)
+  this["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
+  installDesktopUnder(home)
+}
+
+internal fun MutableMap<String, String>.installDesktopUnder(home: Path) {
+  this["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop-apps").toString()
+  this["XDG_DATA_HOME"] = home.resolve(".local/share").toString()
 }
 
 internal fun stageRelease(
@@ -631,6 +647,25 @@ internal object InstallerShellFixtures {
     gradlew.toFile().setExecutable(true)
   }
 
+  fun seedDesktopSource(repoRoot: Path) {
+    val gradlew = repoRoot.resolve("desktop-tray/gradlew")
+    val launcher = "composeApp/build/compose/binaries/main/app/${PrebuiltReleaseStager.desktopLauncherPath()}"
+    Files.createDirectories(gradlew.parent)
+    Files.writeString(
+      gradlew,
+      """
+      |#!/usr/bin/env bash
+      |set -euo pipefail
+      |cd "${'$'}(dirname "${'$'}0")"
+      |mkdir -p "${'$'}(dirname "$launcher")"
+      |printf '#!/usr/bin/env bash\nexit 0\n' > "$launcher"
+      |chmod +x "$launcher"
+      |
+      """.trimMargin(),
+    )
+    gradlew.toFile().setExecutable(true)
+  }
+
   fun seedDesktopInstall(
     desktopRoot: Path,
     binDir: Path,
@@ -810,8 +845,28 @@ internal object PrebuiltReleaseStager {
       writeRuntimeImageZip(mcpZip, "runtime-mcp")
       writeChecksumSibling(cliZip, corrupt = !releaseValid)
       writeChecksumSibling(mcpZip, corrupt = false)
+      stageDesktopApp(releaseDir)
     }
   }
+
+  fun stageDesktopApp(releaseDir: Path) {
+    val staging = Files.createTempDirectory("skillbill-desktop-app")
+    val launcherPath = desktopLauncherPath()
+    val launcher = staging.resolve(launcherPath)
+    Files.createDirectories(launcher.parent)
+    Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
+    launcher.toFile().setExecutable(true)
+    val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-${hostToken()}.tar.gz")
+    runOrThrow(staging, listOf("tar", "-czf", archive.toString(), launcherPath.substringBefore('/')))
+    writeChecksumSibling(archive, corrupt = false)
+  }
+
+  fun desktopLauncherPath(): String =
+    when (hostToken().substringBefore('-')) {
+      "macos" -> "Skill Bill.app/Contents/MacOS/Skill Bill"
+      "windows" -> "Skill Bill/bin/Skill Bill.bat"
+      else -> "Skill Bill/bin/Skill Bill"
+    }
 
   private fun writeRuntimeImageZip(
     zipPath: Path,

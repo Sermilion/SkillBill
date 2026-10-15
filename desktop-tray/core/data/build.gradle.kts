@@ -1,7 +1,7 @@
 plugins {
   id("skillbill.kotlin.inject")
   id("skillbill.room")
-  id("org.jetbrains.kotlin.plugin.serialization")
+  id("skillbill.kotlin.serialization")
 }
 
 kotlin {

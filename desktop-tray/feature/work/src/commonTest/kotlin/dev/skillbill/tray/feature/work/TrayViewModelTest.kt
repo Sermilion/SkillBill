@@ -121,6 +121,7 @@ class TrayViewModelTest {
     assertEquals("disk full", feedback.message)
 
     vm.onAction(TrayAction.AcknowledgeFeedback(feedback.id))
+    runCurrent()
     assertTrue(vm.state.value.pendingFeedback.isEmpty())
   }
 

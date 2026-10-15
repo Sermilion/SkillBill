@@ -22,10 +22,18 @@ import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.observation.workerOwnership
+import skillbill.engine.work.pagination.CANDIDATE_ROW_LOOKUPS
+import skillbill.engine.work.pagination.GoalPageRead
+import skillbill.engine.work.pagination.ProjectedDetailItem
+import skillbill.engine.work.pagination.RuntimePhasePageRead
+import skillbill.engine.work.pagination.STATUS_READ_ATTEMPTS
 import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
+import skillbill.engine.work.pagination.detailNextAnchors
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
+import skillbill.engine.work.pagination.readStatusStandaloneRecords
+import skillbill.engine.work.pagination.readStatusWorkItems
 import skillbill.engine.work.pagination.workBoardNextCursor
 import skillbill.engine.work.pagination.workBoardPagePosition
 import skillbill.engine.work.pagination.workDetailPagePosition
@@ -119,25 +127,7 @@ class IdeStatusService(
     val currentBranch = branchSource.checkedOutBranch(repository.repoRoot)
     val queryWork = IdeStatusQueryWork()
     return try {
-      // Each attempt is its own read: a collection that saw the store change underneath it is discarded and retried.
-      // A snapshot-isolated store (SQLite WAL or shared read lock) never trips the fence inside one read; it guards
-      // stores whose reads are not one snapshot.
-      repeat(STATUS_READ_ATTEMPTS) { attempt ->
-        if (attempt > 0) queryWork.retry()
-        database.read { unitOfWork ->
-          statusAttempt(unitOfWork, repository, currentBranch, observedAt, queryWork)
-        }?.let { return it }
-      }
-      // shortcut: reuses the published incompatible_record code; a dedicated "changed during read" code would change
-      // ide-status-schema.yaml and its consumers, so add one if clients must tell the two apart.
-      emit(
-        IdeStatusProblemSnapshots.incompatibleRecord(
-          repositoryIdentity = repositoryIdentity,
-          observedAt = observedAt,
-          message = "Work changed during the status read; retry.",
-        ),
-        queryWork,
-      )
+      fencedStatus(repository, currentBranch, observedAt, queryWork)
     } catch (error: SkillBillRuntimeException) {
       when {
         error.code == WorkflowFailureCode.INVALID_WORK_LIST_ROW ->
@@ -163,7 +153,28 @@ class IdeStatusService(
     }
   }
 
-  /** One fenced collection and projection; null when the work store changed between its first and last statement. */
+  private fun fencedStatus(
+    repository: IdeStatusRepositoryResolution.Ok,
+    currentBranch: String?,
+    observedAt: Instant,
+    queryWork: IdeStatusQueryWork,
+  ): IdeStatusResult {
+    repeat(STATUS_READ_ATTEMPTS) { attempt ->
+      if (attempt > 0) queryWork.retry()
+      database.read { unitOfWork ->
+        statusAttempt(unitOfWork, repository, currentBranch, observedAt, queryWork)
+      }?.let { return it }
+    }
+    return emit(
+      IdeStatusProblemSnapshots.incompatibleRecord(
+        repositoryIdentity = repository.identity,
+        observedAt = observedAt,
+        message = "Work changed during the status read; retry.",
+      ),
+      queryWork,
+    )
+  }
+
   private fun statusAttempt(
     unitOfWork: UnitOfWork,
     repository: IdeStatusRepositoryResolution.Ok,
@@ -515,7 +526,6 @@ class IdeStatusService(
     request: WorkDetailRequest,
     position: WorkDetailPagePosition,
   ): ProjectedDetailItem {
-    val offset = position.offset
     val pageSize = request.pageSize
     val projection = projector.project(candidate, context)
     val snapshot = projection.snapshot
@@ -533,17 +543,12 @@ class IdeStatusService(
     val runtimeWorkflowId =
       goalStatus?.currentChildWorkflowId
         ?: item?.takeIf { it.workflowKind == WorkItemKind.FEATURE_TASK_RUNTIME }?.workflowId
-    val runtimeRead = runtimeWorkflowId?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
+    val runtimeRead =
+      runtimeWorkflowId?.takeIf { standalone == null }?.let { detailRuntimeStatus(it, request, position) }
     val runtimeStatus = runtimeRead?.status
     val history =
       if (request.includesDetailList(WorkDetailList.EXECUTIONS)) {
-        workExecutionHistory(
-          context.unitOfWork,
-          standalone,
-          candidate.workflowId,
-          position,
-          pageSize + 1,
-        )
+        workExecutionHistory(context.unitOfWork, standalone, candidate.workflowId, position, pageSize + 1)
       } else {
         emptyList()
       }
@@ -561,16 +566,14 @@ class IdeStatusService(
         snapshot = snapshot,
         executionHistory = shownHistory,
         repositoryRoot = context.repoRoot.toString(),
-        stepPipeline =
-          standalone?.let { standaloneStepPipeline(it.phaseId) }
-            ?: runtimeStatus?.phaseIds.orEmpty(),
+        stepPipeline = standalone?.let { standaloneStepPipeline(it.phaseId) } ?: runtimeStatus?.phaseIds.orEmpty(),
         finishedAt = completion.first,
         finishedAtSource = completion.second,
         goalManifest = goalPage?.manifest,
         goalFinishPipeline = if (goalPage == null) emptyList() else GOAL_FINISH_PIPELINE,
         runtimeStatus = runtimeStatus,
         goalStatus = goalStatus,
-        pageOffset = offset,
+        pageOffset = position.offset,
         pageSize = pageSize,
         hasMore = allMoreLists.isNotEmpty(),
         moreLists = allMoreLists,
@@ -1171,7 +1174,6 @@ private data class ResolvedWorkItem(
   val workflowExecution: IdeStatusWorkflowExecution?,
 )
 
-/** How one collection reads: from rows already resolved by id, or by paging the stores and counting the work. */
 private data class CandidateRead(
   val resolved: ResolvedWorkCandidates? = null,
   val queryWork: IdeStatusQueryWork? = null,

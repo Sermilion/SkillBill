@@ -21,6 +21,7 @@ import dev.nucleusframework.composenativetray.tray.api.Tray
 import dev.skillbill.tray.core.domain.model.DesktopUiScaleConfiguration
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.TrayStatus
+import dev.skillbill.tray.core.domain.model.scaledWindowPixels
 import dev.skillbill.tray.core.ui.rememberEntryViewModelStoreOwner
 import dev.skillbill.tray.core.ui.rememberViewModel
 import dev.skillbill.tray.feature.work.TrayAction

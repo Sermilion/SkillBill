@@ -140,6 +140,7 @@ class WindowNavigatorTest {
 
     val restored = RouteSnapshots.restore(navigator.snapshot(), ref, WorkRoute(ref))
 
-    assertEquals(navigator.stack.entries, restored.routes)
+    // A snapshot-state list has identity equality, so the stack is copied before comparing contents.
+    assertEquals(navigator.stack.entries.toList(), restored.routes)
   }
 }

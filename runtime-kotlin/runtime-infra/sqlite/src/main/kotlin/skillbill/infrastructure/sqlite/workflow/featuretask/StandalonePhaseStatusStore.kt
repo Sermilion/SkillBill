@@ -10,6 +10,7 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
@@ -102,10 +103,9 @@ internal class StandalonePhaseStatusStore(
     repositoryIdentity: String,
     branchCorrelation: String,
     now: Instant,
-    limit: Int,
-    after: StandalonePhaseExecutionAnchor?,
-    slice: StandaloneEligibleSlice?,
+    page: StandaloneEligiblePage,
   ): List<StandalonePhaseStatusRecord> {
+    val (limit, after, slice) = page
     require(limit > 0) { "Eligible status page limit must be positive." }
     val liveFrom = now.minus(LIVE_RETENTION)
     val settledFrom = now.minus(SETTLED_RETENTION)
@@ -622,7 +622,6 @@ internal class StandalonePhaseStatusStore(
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
-    /** Rows strictly after an anchor in (length(run_sequence), run_sequence, invocation_id) descending order. */
     const val AFTER_ANCHOR_SQL: String =
       "(length(run_sequence) < ? OR (length(run_sequence) = ? AND run_sequence < ?) " +
         "OR (length(run_sequence) = ? AND run_sequence = ? AND invocation_id < ?))"

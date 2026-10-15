@@ -58,7 +58,6 @@ internal fun workExecutionHistory(
   page: WorkDetailPagePosition,
   limit: Int,
 ): List<WorkExecutionInstance> {
-  // An anchored page continues after the last run already shown, so it starts at row 0 of what follows the anchor.
   val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
   val offset = if (anchor == null) page.offset else 0
   return if (standalone != null) {

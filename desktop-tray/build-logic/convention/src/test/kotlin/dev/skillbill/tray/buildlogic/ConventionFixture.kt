@@ -38,7 +38,7 @@ internal class ConventionFixture(private val root: File, modules: Map<String, St
   private fun runner(arguments: Array<out String>): GradleRunner = GradleRunner.create()
     .withProjectDir(root)
     .withPluginClasspath()
-    .withArguments(*arguments, "--stacktrace", "--no-daemon")
+    .withArguments(*arguments, "--stacktrace")
 }
 
 internal fun manifestStrings(manifest: String, key: String): List<String> {

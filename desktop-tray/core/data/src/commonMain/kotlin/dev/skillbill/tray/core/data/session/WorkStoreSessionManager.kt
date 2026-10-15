@@ -70,7 +70,7 @@ class WorkStoreSessionManager(
   internal suspend fun settledParts(): SessionParts? =
     (mutableSlot.first { it !is SessionSlot.Switching } as? SessionSlot.Active)?.parts
 
-  override suspend fun selectDatabase(path: String?) = lock.withLock {
+  override suspend fun selectDatabase(path: String?): Unit = lock.withLock {
     check(!closed.value) { "The work store session is closed." }
     val previous = (mutableSlot.value as? SessionSlot.Active)?.parts
     mutableSlot.value = SessionSlot.Switching

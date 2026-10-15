@@ -35,7 +35,7 @@ class HistoryViewModel(
   private val boards: WorkBoardRepository,
   private val settings: SettingsRepository,
 ) : ViewModel() {
-  private val pager = SectionPager(viewModelScope, boards, WorkSection.HISTORY)
+  private val pager = SectionPager(viewModelScope, boards, WorkSection.HISTORY) { true }
   private val local = MutableStateFlow(Local())
   private val feedbackIds = FeedbackIds()
   private val navigation = NavigationEffects<HistoryEffect>()

@@ -36,19 +36,31 @@ internal fun desktopSources(
   return sources
 }
 
-internal fun runtimeSources(): List<Source> {
+internal fun runtimeSources(): List<Source> = runtimeModules().flatMap { module ->
+  val root = module.resolve("src/main/kotlin")
+  assertTrue(Files.isDirectory(root), "Declared runtime source root is missing: $root")
+  val files = readSources(root, null)
+  assertTrue(files.isNotEmpty(), "Declared runtime source root is empty: $root")
+  files
+}
+
+/**
+ * What the build generated next to the governed sources: the desktop modules' KSP, Room and Compose resource output and the
+ * runtime modules' KSP output (the kotlin-inject component factories). Edges resolve into these declarations; none is walked.
+ */
+internal fun generatedSources(manifests: List<ModuleManifest> = loadManifests()): List<Source> {
+  val desktop = manifests.flatMap { manifest -> manifest.generatedDirectories.values.flatten() }.map(desktopRoot::resolve)
+  val runtime = runtimeModules().map { it.resolve("build/generated/ksp/main/kotlin") }
+  return (desktop + runtime).distinct().filter(Files::isDirectory).flatMap { readSources(it, null) }
+}
+
+private fun runtimeModules(): List<Path> {
   val catalog = runtimeRoot.resolve("runtime-core/src/repoTest/kotlin/skillbill/architecture/RuntimeModuleCatalog.kt")
   assertTrue(Files.isRegularFile(catalog), "Runtime module catalog is missing.")
   val modulesBlock = Files.readString(catalog).substringAfter("val declaredGradleModules").substringBefore("val moduleEdgeExpectations")
   val modules = Regex("\"([^\"]+)\"").findAll(modulesBlock).map { it.groupValues[1] }.toList()
   assertTrue(modules.isNotEmpty(), "Runtime module catalog declares no source roots.")
-  return modules.filterNot { it == "runtime-infra" }.flatMap { module ->
-    val root = runtimeRoot.resolve(module.replace(':', '/')).resolve("src/main/kotlin")
-    assertTrue(Files.isDirectory(root), "Declared runtime source root is missing: $root")
-    val files = readSources(root, null)
-    assertTrue(files.isNotEmpty(), "Declared runtime source root is empty: $root")
-    files
-  }
+  return modules.filterNot { it == "runtime-infra" }.map { runtimeRoot.resolve(it.replace(':', '/')) }
 }
 
 internal fun readSources(root: Path, relativeTo: Path?): List<Source> = Files.walk(root).use { paths ->

@@ -192,8 +192,9 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
         )
         item.progressTotal?.let { Text("${item.progressCompleted ?: 0}/$it", color = ink, fontFamily = mono, fontSize = 11.5.sp) }
       }
-      if (!attention && item.progressTotal != null && item.progressTotal > 0) Box(Modifier.fillMaxWidth().height(3.dp).background(surface3, RoundedCornerShape(50))) {
-        Box(Modifier.fillMaxWidth(((item.progressCompleted ?: 0).toFloat() / item.progressTotal).coerceIn(0f, 1f)).fillMaxHeight().background(if (planning) blue else mint))
+      val progressTotal = item.progressTotal
+      if (!attention && progressTotal != null && progressTotal > 0) Box(Modifier.fillMaxWidth().height(3.dp).background(surface3, RoundedCornerShape(50))) {
+        Box(Modifier.fillMaxWidth(((item.progressCompleted ?: 0).toFloat() / progressTotal).coerceIn(0f, 1f)).fillMaxHeight().background(if (planning) blue else mint))
       }
       val note = item.pauseReason ?: when {
         item.lifecycle == Lifecycle.BLOCKED -> "Block reason is not available"

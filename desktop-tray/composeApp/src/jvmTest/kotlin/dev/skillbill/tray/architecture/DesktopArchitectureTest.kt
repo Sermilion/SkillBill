@@ -29,20 +29,16 @@ class DesktopArchitectureTest {
   @Test
   fun `desktop surfaces render runtime policy verdicts and never recompute them`() {
     // The runtime sources resolve the adapter edges the walk follows out of the desktop; they are never roots or reported.
-    assertEquals(emptyList(), SourceRules.policyOwnershipViolations(desktopSources() + runtimeSources()))
+    assertEquals(emptyList(), SourceRules.policyOwnershipViolations(desktopSources() + runtimeSources(), generated = generated()))
   }
 
   @Test
-  fun `work data avoids process adapters and explicit run actions use the runtime launch port`() {
+  fun `explicit run actions use the runtime launch port and the native display query stays approved`() {
     val workDataSources = desktopSources()
     val sources = workDataSources + runtimeSources()
     assertApprovedNativeDisplayQuery(sources)
     assertTrue(workDataSources.isNotEmpty(), "The governed production scan set is empty.")
-    workDataSources.forEach { source ->
-      if (source.path !in approvedNativeHostProcessFiles) {
-        assertFalse(referencesProcessAdapter(source.text), source.path)
-      }
-    }
+    // The process-launching rule itself, with its rejection fixtures, is DeletionRulesTest.
     val launchConsumers = sources.filter { "import skillbill.ports.work.WorkRunLauncher" in it.text }
     assertTrue(launchConsumers.map { it.path.substringAfter("/src/main/kotlin/") }.toSet() == setOf(
       "skillbill/engine/work/control/WorkRunActions.kt",
@@ -51,77 +47,58 @@ class DesktopArchitectureTest {
       "skillbill/di/core/RuntimeContext.kt",
       "skillbill/di/core/RuntimeWorkControlProvides.kt",
     ), "Run launch ownership changed: ${launchConsumers.map { it.path }}")
-    assertNoReachableWorkDataProcessAdapter(sources)
   }
 
   @Test
-  fun `the governed edge walk follows a clean fixture and rejects aliased, extension, unresolved and empty-root edges`() {
-    val infra = "fixture/infra/ProcessRunner.kt" to "package dev.skillbill.fixture.infra\n\nclass ProcessRunner\n"
-
+  fun `the governed edge walk follows a clean fixture and resolves aliased and extension edges, rejecting unresolved and empty-root edges`() {
     val clean = fixtureWalk("fixture/app/Clean.kt" to "package dev.skillbill.fixture.app\n\nfun control() { helper() }\n\nfun helper() {}\n")
     assertEquals(setOf("control", "helper"), clean.map(FunctionBody::name).toSet())
 
-    val aliased = assertFailsWith<AssertionError> {
-      fixtureWalk(
-        infra,
-        "fixture/app/Alias.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.infra.ProcessRunner as Runner\n\nfun control() { Runner() }\n",
-      )
+    // An aliased import reaches the declaration it names, not the alias; a missing target stays unresolved.
+    val aliased = fixtureWalk(
+      "fixture/target/Collaborator.kt" to "package dev.skillbill.fixture.target\n\nfun load() {}\n",
+      "fixture/app/Alias.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.target.load as fetch\n\nfun control() { fetch() }\n",
+    )
+    assertTrue("fixture/target/Collaborator.kt:load" in aliased.map { "${it.path}:${it.name}" }, "The aliased import did not reach its target.")
+    val aliasedMissing = assertFailsWith<IllegalStateException> {
+      fixtureWalk("fixture/app/AliasVanished.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.vanished.load as fetch\n\nfun control() { fetch() }\n")
     }
-    assertTrue("fixture/app/Alias.kt:control" in aliased.message.orEmpty(), aliased.message)
+    assertTrue("Unresolved governed edge at fixture/app/AliasVanished.kt:control: load" in aliasedMissing.message.orEmpty(), aliasedMissing.message)
 
-    val extension = assertFailsWith<AssertionError> {
-      fixtureWalk(
-        infra,
-        "fixture/app/Extension.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.infra.ProcessRunner\n\n" +
-          "fun control() { \"job\".reach() }\n\nfun String.reach() { ProcessRunner() }\n",
-      )
-    }
-    assertTrue("fixture/app/Extension.kt:reach" in extension.message.orEmpty(), extension.message)
+    // An extension call reaches the extension function declared for its receiver.
+    val extension = fixtureWalk(
+      "fixture/target/Collaborator.kt" to "package dev.skillbill.fixture.target\n\nfun String.load() {}\n",
+      "fixture/app/Extension.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.target.load\n\nfun control() { \"job\".load() }\n",
+    )
+    assertTrue("fixture/target/Collaborator.kt:load" in extension.map { "${it.path}:${it.name}" }, "The extension call did not reach its target.")
 
     val unresolved = assertFailsWith<IllegalStateException> {
       fixtureWalk("fixture/app/Vanished.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.vanished.helper\n\nfun control() { helper() }\n")
     }
     assertTrue("Unresolved governed edge at fixture/app/Vanished.kt:control: helper" in unresolved.message.orEmpty(), unresolved.message)
 
+    // An import of generated output resolves to it and ends there; the same import with nothing generated stays unresolved.
+    val usesResources = "fixture/app/Fonts.kt" to "package dev.skillbill.fixture.app\n\nimport dev.skillbill.fixture.generated.Res\n\nfun control() { Res() }\n"
+    val resources = generatedDeclarations(listOf(Source("build/generated/Res.kt", "package dev.skillbill.fixture.generated\n\nobject Res\n")))
+    assertEquals(setOf("dev.skillbill.fixture.generated.Res"), resources)
+    assertEquals(setOf("control"), fixtureWalk(usesResources, generated = resources).map(FunctionBody::name).toSet())
+    assertFailsWith<IllegalStateException> { fixtureWalk(usesResources) }
+
     assertFailsWith<AssertionError> { walkGovernedEdges(emptyList(), emptyList()) }
   }
 
-  private fun fixtureWalk(vararg files: Pair<String, String>): Set<FunctionBody> {
-    val functions = parsedSymbols(files.map { (path, text) -> Source(path, text) })
-    return walkGovernedEdges(functions, functions.filter { it.name == "control" })
+  @Test
+  fun `the generated output the governed sources import is scanned`() {
+    val generated = generated()
+    assertTrue("dev.skillbill.tray.core.designsystem.generated.resources.Res" in generated, "Compose resources were not scanned.")
+    assertTrue("skillbill.di.core.create" in generated, "The runtime's kotlin-inject factories were not scanned.")
   }
 
-  private fun assertNoReachableWorkDataProcessAdapter(sources: List<Source>) {
-    val functions = parsedSymbols(sources)
-    assertTrue(functions.isNotEmpty(), "The governed function scan set is empty.")
-    // The work-data owners that replaced RoomBoardSource: board and detail reads, runtime control, and the runtime adapter seam.
-    listOf(
-      "$DATA_PACKAGE_ROOT/repository/RoomWorkBoardRepository.kt" to "board",
-      "$DATA_PACKAGE_ROOT/repository/RoomWorkDetailRepository.kt" to "detail",
-      "$DATA_PACKAGE_ROOT/repository/RuntimeWorkControlRepository.kt" to "request",
-      "$DATA_PACKAGE_ROOT/runtime/RuntimeWorkAdapter.kt" to "request",
-      "$DATA_PACKAGE_ROOT/runtime/RuntimeWorkAdapter.kt" to "existingSnapshot",
-    ).forEach { (path, name) ->
-      assertTrue(functions.any { it.path.endsWith(path) && it.name == name }, "${path.substringAfterLast('/')}.$name is missing from the parsed graph.")
-    }
-    governedFunctionRoots.forEach { root ->
-      assertTrue(functions.any { it.path.contains(root) }, "The governed function root is missing: $root")
-    }
-    val desktopPaths = sources.filter { it.project != null }.map(Source::path).toSet()
-    val roots = functions.filter { function ->
-      (function.path in desktopPaths &&
-        (governedFunctionRoots.any { function.path.contains(it) } || function.name in controlEntryPoints))
-        || (function.path.endsWith("/skillbill/engine/work/IdeStatusService.kt") && function.name == "board")
-    }
-    val visited = walkGovernedEdges(functions, roots)
-    listOf(
-      "/skillbill/engine/work/IdeStatusService.kt" to "board",
-      "/skillbill/engine/work/IdeStatusService.kt" to "projectBoardSelection",
-      "/skillbill/engine/work/IdeStatusService.kt" to "detail",
-      "/skillbill/engine/work/control/WorkControlService.kt" to "request",
-    ).forEach { (path, name) ->
-      assertTrue(visited.any { it.path.endsWith(path) && it.name == name }, "Unresolved governed adapter edge: $path:$name")
-    }
+  private fun generated(): Set<String> = generatedDeclarations(generatedSources())
+
+  private fun fixtureWalk(vararg files: Pair<String, String>, generated: Set<String> = emptySet()): Set<FunctionBody> {
+    val functions = parsedSymbols(files.map { (path, text) -> Source(path, text) })
+    return walkGovernedEdges(functions, functions.filter { it.name == "control" }, generated)
   }
 
   private fun assertApprovedNativeDisplayQuery(sources: List<Source>) {
@@ -140,19 +117,6 @@ class DesktopArchitectureTest {
     importsAny(source, prefixes) || prefixes.any { prefix ->
       Regex("\\b${Regex.escape(prefix)}(?:\\.[A-Za-z_][A-Za-z0-9_]*)+\\b").containsMatchIn(source)
     }
-
-  private fun referencesProcessAdapter(source: String): Boolean {
-    val forbiddenImports = setOf("java.lang.Process", "java.lang.ProcessBuilder", "java.lang.ProcessHandle", "java.lang.Runtime")
-    val aliases = source.lineSequence().map(String::trim).filter { it.startsWith("import ") && " as " in it }
-      .mapNotNull { line ->
-        val parts = line.removePrefix("import ").split(" as ", limit = 2)
-        parts.lastOrNull()?.takeIf { parts.first() in forbiddenImports }
-      }.toSet()
-    val forbiddenNames = setOf("Process", "ProcessBuilder", "ProcessHandle", "Runtime") + aliases
-    val names = forbiddenNames.joinToString("|") { Regex.escape(it) }
-    return Regex("\\b(?:java\\.lang\\.)?(?:$names)\\b").containsMatchIn(source) ||
-      Regex("\\b(?:java\\.lang\\.)?Runtime\\.getRuntime\\(\\)\\.exec\\b").containsMatchIn(source)
-  }
 
   private companion object {
     val forbiddenStorageImports = listOf(
@@ -186,14 +150,5 @@ class DesktopArchitectureTest {
       "File(",
     )
     val forbiddenCoreTokens = listOf("java.awt", "javax.swing", "androidx.compose", "ComposeWindow")
-    val controlEntryPoints = setOf("control", "pause", "stop", "perform")
-    const val DATA_PACKAGE_ROOT = "/dev/skillbill/tray/core/data"
-    val governedFunctionRoots = setOf("/composition/", "/application/", "/tray/core/data/")
-    val approvedNativeHostProcessFiles = setOf(
-      "$DESKTOP_PACKAGE_ROOT/infrastructure/NativeServicesImpl.kt",
-      "$DESKTOP_PACKAGE_ROOT/infrastructure/NativeTrayHost.kt",
-      "$DESKTOP_PACKAGE_ROOT/infrastructure/TrayPopoverPlacement.kt",
-      "$DESKTOP_PACKAGE_ROOT/infrastructure/macos/MacStatusItemBridge.kt",
-    )
   }
 }

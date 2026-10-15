@@ -14,6 +14,8 @@ class KotlinInjectConventionPlugin : Plugin<Project> {
       sourceSets.getByName("commonMain").dependencies {
         implementation(libs.library("kotlin-inject-runtime"))
         implementation(libs.library("anvil-runtime"))
+        // Owns the `@SingleIn` scope annotation.
+        implementation(libs.library("anvil-runtime-optional"))
       }
     }
     dependencies {

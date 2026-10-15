@@ -1,3 +1,10 @@
+## [2026-10-15] Let desktop reach runtime services that run git
+Context: The governed-edge walk banned any desktop path reaching a runtime process adapter, but the in-process runtime services behind work reads and controls run git.
+Decision: Operator-approved deviation: desktop may reach runtime services that run git or other processes through the in-process graph. The packaged app still never runs an installed CLI, discovers PATH or a login shell, or parses command output.
+Reason: The runtime owns that behavior, and banning it would block shared policy. The ban now sits at the CLI and PATH boundary the app must not cross.
+Alternatives considered: An allow-list entry or skipped root was rejected; the rule was deleted, not suppressed, and no baseline grew.
+Revisit when: the walk reports an unresolved governed edge into runtime code.
+
 ## [2026-10-15] Key navigation entries by database generation
 Context: Windows can outlive a database selection or a same-path file replacement, and saved routes can name rows from the previous database.
 Decision: Every route entry key includes the database generation, and restore drops routes from an obsolete generation or with invalid arguments, falling back to a safe root.
@@ -141,6 +148,7 @@ Reason: Database observation failure must not become periodic data refresh or a 
 Context: Resume and Run again now start work from an explicit desktop action. Reading work still uses Room and shared runtime projections.
 Decision: WorkRunActions validates the selected database, execution revision, process owner, recorded branch, and launch arguments before calling WorkRunLauncher. The desktop cannot use this port directly. Cancellation stays in the runtime and preserves history.
 Reason: Starting work needs a process boundary. The desktop architecture guard continues to forbid CLI read proxies and process adapters in desktop code. It checks the full graph up to the runtime launch port and limits that port to the admission owner, its infrastructure implementation, and DI.
+Superseded by: Let desktop reach runtime services that run git (2026-10-15)
 
 ## [2026-10-13] Start the installed agent harness from desktop controls
 Context: The operator wants Resume and Run again to start the installed headless agent, such as Claude Code or Codex, rather than start the Skill Bill CLI directly.

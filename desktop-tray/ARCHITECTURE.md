@@ -5,7 +5,14 @@ The desktop app uses the `desktop-tray` Gradle build and package prefix
 `../runtime-kotlin`. Work reads and controls run in process. The modules are
 `:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
 `:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
-`:feature:history` and `:feature:settings`, and the `:composeApp` shell.
+`:feature:history` and `:feature:settings`, and the `:composeApp` shell. There is no
+root source set: the root build is an aggregator whose `check` depends on every child
+project's `check` and on the convention build's `:convention:check`, whose `test` runs
+every module's `jvmTest`, and which aliases the `:composeApp` distribution tasks
+(`run`, `createDistributable`, `stageAppImage`, `packageAppImage`, `packagedDataSmoke`).
+[`docs/architecture-parity.md`](docs/architecture-parity.md) holds the module
+inventory, the migration inventory for the retired single-module tree and the Readian
+parity matrix.
 
 Each feature owns one screen's typed `UiState`, `Action` and `Effect` contract, its
 ViewModel and its Compose content, all in `commonMain`. A feature depends only on
@@ -27,7 +34,26 @@ notification coordinator) reads the live and recent sections through its own
 effects keep the newest one and transient effects hold at most four. Feedback the user
 must see travels in `UiState` and stays until acknowledged by id.
 
-SKILL-424 still owns Navigation 3 and the remaining native host integration.
+Four lifetimes are generated with kotlin-inject and Anvil, each with a named owner.
+`AppScope` lives for the process and is owned by `AppOwner`, which ends it in order on
+quit: windows, coordinators, then the database session and settings store.
+`DatabaseSessionScope` lives for one selected database and is owned by the data layer's
+`DatabaseSession`; switching or closing it releases the runtime graph, Room handles and
+observers, and every window resets to the new generation. `WindowScope` lives while a
+window is not disposed and is owned by its `WindowOwner`; hiding keeps it. `EntryScope`
+lives while a route is on a window's back stack, through the entry's ViewModelStore.
+Navigation 3's `NavDisplay` renders each window's `WindowNavigator`; stacks are saved
+as versioned snapshots and restored only for a valid database generation. The tray, the
+notifications and the host intents reach windows through `HostIntentRouter`, which lands
+an intent in the window used last.
+
+Guards run in `:composeApp:jvmTest` over Gradle-supplied manifests, each with nonempty
+input assertions and synthetic rejection fixtures: `ModuleGraphRulesTest` (the settings
+project list and module edges), `DesktopArchitectureTest` and `SourceRulesTest` (source
+rules), `NavigationTypingRulesTest` (typed routes and arguments) and `DeletionRulesTest`
+(no combined work port, no process launcher outside the approved native files, no retired
+`cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature code).
+No baseline, exemption or suppression list backs any of them.
 
 Windows and Linux use `dev.nucleusframework:composenativetray:2.1.6` with an
 app-owned Compose window for the tray popover. Linux uses its
@@ -52,14 +78,18 @@ The typed tray projection gives failed work priority, then actionable work,
 running work, and idle. Windows and Linux render the running count over the
 state icon. macOS uses the app-owned AppKit status item, marks its symbol as a
 template image, and puts the running count in the status title. The macOS
-adapter is built from `src/main/native/macos/MacStatusItemBridge.m` on macOS and
-packaged as an application resource. Its native menu groups the current Goals
-and Phases and exposes the shared app actions.
+adapter source is `composeApp/src/jvmMain/native/macos/MacStatusItemBridge.m`.
+macOS hosts compile it with `:composeApp:compileMacTrayNative` from the
+desktop-application convention plugin, and it is packaged as a jvmMain
+application resource. Its native menu groups the current Goals and Phases and
+exposes the shared app actions.
 
 The main window opens on launch and remains available when its Linux window is
 closed. With a registered tray, closing the main window hides it. Without a
-tray watcher, the app keeps the main window visible. Tray icon anchoring, native rendering, menu behavior, and packaged
-installer behavior still need verification on each supported host.
+tray watcher, the app keeps the main window visible. Tray icon anchoring, native rendering, menu behavior, notification
+display, login-start registration and installer packages are not exercised by any
+automated task on any host; verify them by hand on each supported host. CI runs the
+checks, `createDistributable` and `packagedDataSmoke` on Linux, macOS and Windows runners.
 
 The main window and tray popover follow `design/App/Skill Bill Tray v2.dc.html`.
 Their fonts and icon ship as classpath resources. On Linux, scale detection
@@ -124,7 +154,9 @@ Legacy preferences migrate once after a durable commit. `cliOverride` and
 `pollSeconds` are discarded, and neither becomes a database path. Corrupt files
 remain on disk and report an error. DataStore stores no workflow rows.
 
-The work-data path has no CLI or process adapter. The removed
+The work-data path runs no installed CLI, does no PATH or login-shell discovery, and
+parses no command output. Runtime services reached through the in-process graph
+may run `git` or other processes (operator decision, 2026-10-15). The removed
 `CliBoardSource` call sites in `Main.kt` were first replaced by `RoomBoardSource`,
 which the feature split then retired in favour of per-section board, detail,
 policy and control repositories. The old
@@ -136,9 +168,9 @@ longer expose `cliOverride` or `pollSeconds`; `LegacySettingsMigration` only
 records and discards those saved values. The only process launcher in the
 desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
-Linux AppRun remain host integration code. Replacing host helpers belongs to
-SKILL-424. Desktop CI watches runtime-library changes and builds the composite
-dependencies from source.
+Linux AppRun are host integration code owned by `:composeApp`; `DeletionRulesTest`
+limits process use to four named files. Desktop CI watches runtime-library changes
+and builds the composite dependencies from source.
 
 The runtime owns shared work policy and the desktop renders its typed verdicts.
 `IdeStatusPolicy.work` emits the per-item facts (`controlEligible`, which includes

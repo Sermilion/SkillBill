@@ -150,18 +150,30 @@ class DatabaseSession(
       configurationProblem = Problem(ProblemCode.DATABASE_ACCESS, "The selected database path is invalid.", StorageFailure.ACCESS)
       diagnostics.record("database_path_invalid")
     }
+    if (path != null) configurationProblem = prepareSchema()
     generation = generations.next()
     observationProblem = null
   }
 
-  /** Reconnects after an observer failure; callers hold no lock. */
+  /** Reconnects after an observer failure, and retries a refused upgrade; callers hold no lock. */
   internal suspend fun refresh() = lifecycle.withLock {
     val stale = mutex.withLock { observationProblem != null || current?.observer?.isActive != true }
     if (stale) retire(announce = true)
     mutex.withLock {
+      if (configurationProblem != null && path != null) configurationProblem = prepareSchema()
       observationProblem = null
       invalidate()
     }
+  }
+
+  /** Upgrades an older selected store before anything reads it; a refusal becomes the session's configuration problem. */
+  private suspend fun prepareSchema(): Problem? {
+    configurationProblem = null
+    val outcome = safeRead {
+      withContext(dispatchers.io) { gateway.upgradeExistingStore() }
+      Outcome.Value(Unit)
+    }
+    return (outcome as? Outcome.Failure)?.problem
   }
 
   internal fun workObservation(): StoreObservation = gateway.observation()

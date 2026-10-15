@@ -1,7 +1,7 @@
 plugins {
   id("skillbill.desktop.application")
   id("skillbill.kotlin.inject")
-  id("org.jetbrains.kotlin.plugin.serialization")
+  id("skillbill.kotlin.serialization")
 }
 
 group = "dev.skillbill.tray"
@@ -64,10 +64,21 @@ compose.desktop {
   }
 }
 
+// Launches the distribution against a disposable home and store with an empty PATH, so no CLI can be found or run. It is not part
+// of `check`: it needs a built distribution, so validation and CI invoke it explicitly.
+tasks.register<Exec>("packagedDataSmoke") {
+  group = "verification"
+  description = "Loads work data through the createDistributable image's own launcher, JDK and libraries."
+  dependsOn("createDistributable", ":core:data:compileTestKotlinJvm")
+  val python = if (System.getProperty("os.name").contains("windows", true)) "python" else "python3"
+  commandLine(python, rootDir.resolve("scripts/packaged-data-smoke.py").absolutePath)
+}
+
 tasks.named<Test>("jvmTest") {
   maxHeapSize = "2g"
   systemProperty("desktopRoot", rootDir.absolutePath)
   systemProperty("runtimeRoot", runtimeRoot.absolutePath)
+  inputs.files(rootDir.resolve("settings.gradle.kts"), rootDir.resolve("build.gradle.kts")).withPropertyName("desktopRootBuildScripts")
   inputs.files(fileTree(rootDir) {
     include("**/*.kt")
     exclude("**/build/**", "**/.gradle/**", "build-logic/**")

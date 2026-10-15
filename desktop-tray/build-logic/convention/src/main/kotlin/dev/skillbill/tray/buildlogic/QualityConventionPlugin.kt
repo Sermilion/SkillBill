@@ -29,6 +29,7 @@ private val KNOWN_PLUGIN_IDS = listOf(
   "skillbill.kmp.compose",
   "skillbill.feature",
   "skillbill.kotlin.inject",
+  "skillbill.kotlin.serialization",
   "skillbill.room",
   "skillbill.desktop.application",
 )
@@ -53,14 +54,18 @@ class QualityConventionPlugin : Plugin<Project> {
     val manifestTask = tasks.register<ArchitectureManifestTask>("writeArchitectureManifest") {
       group = "verification"
       description = "Writes this module's Gradle architecture manifest for the architecture guards."
-      projectPath.set(path)
+      // Qualified: inside this block a bare `path` is the task's path.
+      projectPath.set(target.path)
       manifest.set(layout.buildDirectory.file("architecture/manifest.json"))
     }
     configurations.consumable("architectureManifestElements") {
       attributes.attribute(Usage.USAGE_ATTRIBUTE, manifestUsage)
       outgoing.artifact(manifestTask.flatMap { it.manifest })
     }
-    val manifests = configurations.resolvable("architectureManifests") {
+    // Gradle declares dependencies on a dependency-scope configuration and resolves them through one that extends it.
+    val manifestDependencies = configurations.dependencyScope("architectureManifests")
+    val manifests = configurations.resolvable("architectureManifestFiles") {
+      extendsFrom(manifestDependencies.get())
       attributes.attribute(Usage.USAGE_ATTRIBUTE, manifestUsage)
     }
     tasks.withType(Test::class.java).configureEach {
@@ -83,17 +88,18 @@ class QualityConventionPlugin : Plugin<Project> {
       task.sourceSets.set(kotlin.sourceSets.names)
       val desktopRoot = rootProject.projectDir
       val buildDir = layout.buildDirectory.get().asFile
-      // Generated output (KSP, Room) is excluded: it is produced from governed sources and would add bogus roots to the call graph.
-      task.sourceDirectories.set(
-        provider {
-          kotlin.sourceSets.associate { sourceSet ->
-            sourceSet.name to sourceSet.kotlin.srcDirs
-              .filterNot { it.startsWith(buildDir) }
-              .map { it.relativeTo(desktopRoot).invariantSeparatorsPath }
-              .sorted()
-          }
-        },
-      )
+      // Generated output (KSP, Room, Compose resources) is listed apart: it is produced from governed sources and would add bogus
+      // roots to the call graph, so the guards only resolve edges into it.
+      fun directories(generated: Boolean) = provider {
+        kotlin.sourceSets.associate { sourceSet ->
+          sourceSet.name to sourceSet.kotlin.srcDirs
+            .filter { it.startsWith(buildDir) == generated }
+            .map { it.relativeTo(desktopRoot).invariantSeparatorsPath }
+            .sorted()
+        }
+      }
+      task.sourceDirectories.set(directories(generated = false))
+      task.generatedDirectories.set(directories(generated = true))
     }
     RESOLVED_CONFIGURATIONS.forEach { name ->
       configurations.findByName(name)?.let { configuration ->

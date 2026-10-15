@@ -11,7 +11,7 @@ project = Path(__file__).resolve().parents[1]
 image = project / "composeApp/build/compose/binaries/main/app"
 classes = project / "core/data/build/classes/kotlin/jvm/test"
 if not image.is_dir() or not classes.is_dir():
-    raise SystemExit("Run clean check createDistributable before the packaged data smoke.")
+    raise SystemExit("Run `./gradlew packagedDataSmoke` (it builds the distribution and the smoke classes first).")
 
 with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as directory:
     root = Path(directory)

@@ -47,7 +47,7 @@ class SectionPager(
   private val scope: CoroutineScope,
   private val boards: WorkBoardRepository,
   val section: WorkSection,
-  private val accepts: (WorkItem) -> Boolean = { true },
+  private val accepts: (WorkItem) -> Boolean,
 ) {
   private val mutable = MutableStateFlow<PagedListState<WorkItem>>(PagedListState.InitialLoading)
   val state: StateFlow<PagedListState<WorkItem>> = mutable.asStateFlow()

@@ -14,10 +14,19 @@ class ModuleGraphRulesTest {
   }
 
   @Test
-  fun `the desktop root holds no production source files`() {
-    val rootSources = desktopRoot.resolve("src").takeIf(Files::isDirectory)?.let { root -> Files.walk(root).use { paths -> paths.filter(Files::isRegularFile).toList() } }.orEmpty()
-    assertTrue(rootSources.isEmpty(), "Production sources belong to composeApp and core modules: $rootSources")
+  fun `settings include exactly the governed projects`() {
+    val settings = Files.readString(desktopRoot.resolve("settings.gradle.kts"))
+    assertEquals(emptyList(), ModuleGraphRules.settingsViolations(settings))
+
+    val dropped = ModuleGraphRules.settingsViolations(settings.replace("\":feature:history\", ", ""))
+    assertTrue(dropped.any { "does not include :feature:history" in it }, "Got $dropped")
+    val extra = ModuleGraphRules.settingsViolations(settings.replace("\":composeApp\",", "\":composeApp\", \":core:extra\","))
+    assertTrue(extra.any { "includes :core:extra" in it }, "Got $extra")
+    val separate = ModuleGraphRules.settingsViolations(settings.replace("include(", "include(\":core:extra\")\ninclude("))
+    assertTrue(separate.any { "includes :core:extra" in it }, "Got $separate")
   }
+
+  // The root holds no production source and applies no compilation plugin: see DeletionRulesTest.
 
   @Test
   fun `the baseline fixture is clean so every rejection below is caused by its mutation`() {
@@ -111,8 +120,9 @@ class ModuleGraphRulesTest {
       ":core:designsystem has no production consumer" to baseline { _, manifest ->
         manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:designsystem") })
       },
-      ":core:testing has no test consumer" to baseline { project, manifest ->
-        if (project == ":composeApp") manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:testing") }) else manifest
+      // The shell, :core:ui and every feature test against it, so each of their edges goes.
+      ":core:testing has no test consumer" to baseline { _, manifest ->
+        manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:testing") })
       },
     )
     rejected.forEach { (expected, manifests) ->

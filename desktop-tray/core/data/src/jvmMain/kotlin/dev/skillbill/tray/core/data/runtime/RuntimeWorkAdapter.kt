@@ -55,6 +55,10 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
     throw InvalidDatabasePathException(failure)
   }
 
+  override fun upgradeExistingStore() {
+    runtime.databaseSchema.migrateExistingDatabase()
+  }
+
   override fun observation(): StoreObservation = existing { runtime.databaseSession.read { it.workList.observation() } }
     .let { StoreObservation(it.storeId, it.revision) }
 

@@ -27,7 +27,7 @@ class SectionPagerTest {
 
   private fun item(id: String): WorkItem = workItem(id)
 
-  private fun TestScope.pager(): SectionPager = SectionPager(backgroundScope, boards, section).also {
+  private fun TestScope.pager(): SectionPager = SectionPager(backgroundScope, boards, section) { true }.also {
     it.start(query)
     runCurrent()
   }
@@ -166,7 +166,7 @@ class SectionPagerTest {
 
   @Test
   fun `a changed history filter or query clears rows and cannot append the old cursor`() = runTest {
-    val history = SectionPager(backgroundScope, boards, WorkSection.HISTORY)
+    val history = SectionPager(backgroundScope, boards, WorkSection.HISTORY) { true }
     history.start(SectionQuery(Retention.DAY, historyFilter = HistoryFilter.ALL))
     runCurrent()
     boards.emit(WorkSection.HISTORY, Outcome.Value(observedBoard(listOf(item("all")), nextCursor = "all-next")))

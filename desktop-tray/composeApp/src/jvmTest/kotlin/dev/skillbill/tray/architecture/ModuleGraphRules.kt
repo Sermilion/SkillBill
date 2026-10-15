@@ -18,6 +18,8 @@ internal data class ModuleManifest(
   val projectDependencies: List<String>,
   val resolved: Map<String, List<String>>,
   val sourceDirectories: Map<String, List<String>>,
+  /** Build output compiled with the source set (KSP, Room, Compose resources); edges resolve into it but never walk it. */
+  val generatedDirectories: Map<String, List<String>> = emptyMap(),
 ) {
   val productionEdges: Set<String> get() = edgesFor(productionSourceSets)
   val testEdges: Set<String> get() = edgesFor(testSourceSets)
@@ -33,6 +35,8 @@ internal data class ModuleManifest(
 internal fun parseManifest(text: String): ModuleManifest {
   val document = Json.parseToJsonElement(text).jsonObject
   fun strings(name: String): List<String> = document.getValue(name).jsonArray.map { it.jsonPrimitive.content }
+  fun directories(name: String): Map<String, List<String>> =
+    document.getValue(name).jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } }
   return ModuleManifest(
     project = document.getValue("project").jsonPrimitive.content,
     plugins = strings("plugins"),
@@ -41,7 +45,8 @@ internal fun parseManifest(text: String): ModuleManifest {
     kspConfigurations = strings("kspConfigurations"),
     projectDependencies = strings("projectDependencies"),
     resolved = document.getValue("resolved").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
-    sourceDirectories = document.getValue("sourceDirectories").jsonObject.mapValues { (_, value) -> (value as JsonArray).map { it.jsonPrimitive.content } },
+    sourceDirectories = directories("sourceDirectories"),
+    generatedDirectories = directories("generatedDirectories"),
   )
 }
 
@@ -125,6 +130,14 @@ internal object ModuleGraphRules {
       if (manifests.none { it.project != TESTING && it.project != module && module in it.productionEdges }) add("$module has no production consumer.")
     }
     if (manifests.none { it.project != TESTING && TESTING in it.testEdges }) add("$TESTING has no test consumer.")
+  }
+
+  /** `settings.gradle.kts` includes the governed projects and nothing else; the implicit `:core` and `:feature` parents own no build script. */
+  fun settingsViolations(settings: String): List<String> {
+    val declared = Regex("""\binclude\(([^)]*)\)""").findAll(settings)
+      .flatMap { block -> Regex("\"(:[^\"]*)\"").findAll(block.groupValues[1]) }.map { it.groupValues[1] }.toSet()
+    return (expectedProjects - declared).map { "settings.gradle.kts does not include $it." } +
+      (declared - expectedProjects).map { "settings.gradle.kts includes $it, which no architecture rule governs." }
   }
 
   /** A feature is shared UI and presentation: any production source outside `commonMain` is desktop code in the wrong place. */

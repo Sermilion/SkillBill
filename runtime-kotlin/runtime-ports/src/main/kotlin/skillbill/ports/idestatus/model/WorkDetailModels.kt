@@ -25,7 +25,6 @@ data class WorkDetailRequest(
   val cursor: String? = null,
   val startOffset: Int = 0,
   val list: WorkDetailList? = null,
-  /** The identity a [list] page continues after (a prior item's `listAnchors` entry); unfenced, unlike [cursor]. */
   val anchor: String? = null,
 ) {
   init {
@@ -74,7 +73,6 @@ data class WorkDetailItem(
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
   val pauseEligible: Boolean = false,
-  /** Per list, the identity this page started after; absent for a head page. Feed it back as a request anchor. */
   val listAnchors: Map<WorkDetailList, String> = emptyMap(),
 )
 
@@ -84,7 +82,6 @@ data class WorkDetailRuntimeStatus(
   val completeCount: Int,
   val pendingCount: Int,
   val blockedCount: Int,
-  /** Every phase id in pipeline order; [phases] carries only the requested page. */
   val phaseIds: List<String> = phases.map { it.phaseId },
   val totalPhaseCount: Int = phaseIds.size,
 )
@@ -110,7 +107,6 @@ data class WorkExecutionInstance(
   val finishedAt: Instant?,
   val result: String?,
   val restoration: ExecutionReasonRestoration? = null,
-  /** Orders the run among its siblings; with [invocationId] it anchors the next history page on this run. */
   val runSequence: String = "",
 )
 

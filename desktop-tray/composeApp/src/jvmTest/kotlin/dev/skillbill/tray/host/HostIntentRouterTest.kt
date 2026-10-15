@@ -7,12 +7,11 @@ import dev.skillbill.tray.feature.settings.SettingsRoute
 import dev.skillbill.tray.lifetime.SessionTransitionCoordinator
 import dev.skillbill.tray.lifetime.WindowRegistry
 import dev.skillbill.tray.navigation.Section
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -40,7 +39,8 @@ class HostIntentRouterTest {
     val host = host()
     val window = host.windows.openMain()
 
-    withContext(Dispatchers.Default) { host.router.dispatch(HostIntent.OpenWork(item)) }
+    // A joined thread, not a context switch: resuming after withContext would queue behind the router and let it run first.
+    thread { host.router.dispatch(HostIntent.OpenWork(item)) }.join()
     assertNull(window.navigator.selected, "Nothing is applied until the UI dispatcher runs it.")
 
     runCurrent()

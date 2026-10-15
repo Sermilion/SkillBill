@@ -77,7 +77,7 @@ class TrackedBoardSections(
   private val needsYou = SectionPager(scope, boards, WorkSection.NEEDS_YOU, ::isLive)
   private val goals = SectionPager(scope, boards, WorkSection.GOALS, ::isLive)
   private val phases = SectionPager(scope, boards, WorkSection.PHASES, ::isLive)
-  private val recent = SectionPager(scope, boards, WorkSection.RECENT)
+  private val recent = SectionPager(scope, boards, WorkSection.RECENT) { true }
   private val live = listOf(needsYou, goals, phases)
   private val pagers = if (includeRecent) live + recent else live
   private val recentIncluded = includeRecent

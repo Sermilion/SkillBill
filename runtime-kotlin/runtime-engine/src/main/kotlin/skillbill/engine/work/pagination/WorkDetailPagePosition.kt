@@ -9,10 +9,6 @@ import skillbill.ports.work.model.WorkGoalDependencyAnchor
 import skillbill.ports.work.model.WorkStoreObservation
 import java.time.Instant
 
-/**
- * The identity of the last item a list page read, so the next page continues strictly after it whatever was inserted or
- * removed since. Each list has its own anchor kind; one list's anchor is never read as another's.
- */
 internal sealed interface WorkDetailAnchor {
   val list: WorkDetailList
 
@@ -31,10 +27,6 @@ internal sealed interface WorkDetailAnchor {
   }
 }
 
-/**
- * [anchor] is the item the page continues after, null for the head of a list. [offset] is only the page's position hint,
- * and the head page's start when the caller gives a plain [WorkDetailRequest.startOffset].
- */
 internal data class WorkDetailPagePosition(
   val observedAt: Instant,
   val offset: Int,
@@ -46,7 +38,6 @@ private const val POSITION_SEPARATOR = "|"
 private const val ANCHOR_PARTS = 3
 private const val OFFSET_AND_LIST_PARTS = 2
 
-/** The identity string of an anchor: `<list>|<field>|<field>`; it carries no observation fence. */
 internal fun WorkDetailAnchor.encode(): String =
   when (this) {
     is WorkDetailAnchor.Execution -> listOf(list.name, anchor.runSequence, anchor.invocationId)
@@ -55,36 +46,36 @@ internal fun WorkDetailAnchor.encode(): String =
     is WorkDetailAnchor.Phase -> listOf(list.name, afterPhaseId)
   }.joinToString(POSITION_SEPARATOR)
 
-/** Decodes [value] as an anchor of exactly [expected]; a malformed value or another list's anchor is rejected. */
 internal fun decodeWorkDetailAnchor(
   value: String,
   expected: WorkDetailList?,
 ): WorkDetailAnchor {
   val parts = value.split(POSITION_SEPARATOR, limit = ANCHOR_PARTS)
   val list = WorkDetailList.entries.firstOrNull { it.name == parts.first() }
-  if (list == null || list != expected) invalidWorkPaginationRequest("Invalid detail page position.")
   val fields = parts.drop(1)
-  if (fields.any(String::isEmpty)) invalidWorkPaginationRequest("Invalid detail page position.")
+  if (list == null || list != expected || fields.any(String::isEmpty)) {
+    invalidWorkPaginationRequest("Invalid detail page position.")
+  }
+  return anchorOf(list, fields) ?: invalidWorkPaginationRequest("Invalid detail page position.")
+}
+
+private fun anchorOf(
+  list: WorkDetailList,
+  fields: List<String>,
+): WorkDetailAnchor? {
+  val pair = fields.takeIf { it.size == 2 }
   return when (list) {
-    WorkDetailList.EXECUTIONS ->
-      fields.takeIf { it.size == 2 }?.let { WorkDetailAnchor.Execution(StandalonePhaseExecutionAnchor(it[0], it[1])) }
+    WorkDetailList.EXECUTIONS -> pair?.let { WorkDetailAnchor.Execution(StandalonePhaseExecutionAnchor(it[0], it[1])) }
     WorkDetailList.SUBTASKS, WorkDetailList.VALIDATION ->
       fields.singleOrNull()?.toIntOrNull()?.let { WorkDetailAnchor.Subtask(list, it) }
     WorkDetailList.DEPENDENCIES ->
-      fields.takeIf { it.size == 2 }?.let { pair ->
-        val subtask = pair[0].toIntOrNull()
-        val dependency = pair[1].toIntOrNull()
-        if (subtask == null || dependency == null) {
-          null
-        } else {
-          WorkDetailAnchor.Dependency(WorkGoalDependencyAnchor(subtask, dependency))
-        }
+      pair?.mapNotNull(String::toIntOrNull)?.takeIf { it.size == 2 }?.let { (subtask, dependency) ->
+        WorkDetailAnchor.Dependency(WorkGoalDependencyAnchor(subtask, dependency))
       }
     WorkDetailList.PHASES -> fields.singleOrNull()?.let { WorkDetailAnchor.Phase(it) }
-  } ?: invalidWorkPaginationRequest("Invalid detail page position.")
+  }
 }
 
-/** A cursor position is `<offset hint>` for a head page, else `<offset hint>|<anchor>`. */
 private fun encodePosition(
   offset: Int,
   anchor: WorkDetailAnchor?,
@@ -129,11 +120,6 @@ internal fun workDetailCursorSelector(
 
 internal fun WorkDetailRequest.includesDetailList(selected: WorkDetailList): Boolean = list == null || list == selected
 
-/**
- * Builds each list's cursor from its own last-read item ([nextAnchors]); an aggregate request has no single list to
- * anchor, so its next cursor advances every list by offset. The item's list anchors record the identity each list page
- * started after, so a refresh can re-read that page without a store-fenced cursor.
- */
 internal fun workDetailPagedResult(
   result: WorkDetailResult,
   request: WorkDetailRequest,

@@ -16,7 +16,8 @@ dependencies {
   implementation(libs.ksp.gradle.plugin)
 
   testImplementation(gradleTestKit())
-  testImplementation(libs.kotlin.test)
+  // Build logic compiles with Gradle's embedded Kotlin, which cannot read the app's newer kotlin-test metadata.
+  testImplementation(embeddedKotlin("test"))
   testImplementation(libs.junit.jupiter)
   testRuntimeOnly(platform(libs.junit.bom))
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -53,6 +54,10 @@ gradlePlugin {
     register("kotlinInject") {
       id = "skillbill.kotlin.inject"
       implementationClass = "dev.skillbill.tray.buildlogic.KotlinInjectConventionPlugin"
+    }
+    register("kotlinSerialization") {
+      id = "skillbill.kotlin.serialization"
+      implementationClass = "dev.skillbill.tray.buildlogic.KotlinSerializationConventionPlugin"
     }
     register("room") {
       id = "skillbill.room"

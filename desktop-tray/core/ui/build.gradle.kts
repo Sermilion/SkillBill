@@ -1,6 +1,6 @@
 plugins {
   id("skillbill.kmp.compose")
-  id("org.jetbrains.kotlin.plugin.serialization")
+  id("skillbill.kotlin.serialization")
 }
 
 kotlin {

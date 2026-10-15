@@ -110,9 +110,13 @@ internal object SourceRules {
    * and reports each visited desktop function outside the adapter modules that sorts work, judges lifecycle or freshness
    * membership, weighs a time window, or weighs freshness into eligibility itself. Data adapters legitimately order
    * storage pages, so they are walked but not reported. An empty scan, an empty root set, an edge that resolves to no
-   * declaration, and a missing [requiredConsumers] entry each fail loudly instead of passing.
+   * declaration outside [generated], and a missing [requiredConsumers] entry each fail loudly instead of passing.
    */
-  fun policyOwnershipViolations(sources: List<Source>, requiredConsumers: Set<PolicyConsumer> = policyConsumers): List<String> {
+  fun policyOwnershipViolations(
+    sources: List<Source>,
+    requiredConsumers: Set<PolicyConsumer> = policyConsumers,
+    generated: Set<String> = emptySet(),
+  ): List<String> {
     val functions = parsedSymbols(sources)
     if (functions.isEmpty()) throw AssertionError("The governed policy scan set is empty.")
     val bySource = sources.associateBy(Source::path)
@@ -121,9 +125,12 @@ internal object SourceRules {
       source.isDesktopProduction() &&
         (source?.project == ModuleGraphRules.DOMAIN || source?.project in sharedUiModules || policySurfaces.any { it in function.path })
     }
-    val visited = walkGovernedEdges(functions, roots)
+    val visited = walkGovernedEdges(functions, roots, generated)
+    // A consumer's body includes the locals it declares, which are parsed as declarations of their own.
+    fun FunctionBody.bodyCalls(): Set<String> =
+      calls + visited.filter { it.path == path && it.enclosingDeclaration == name }.flatMap(FunctionBody::calls)
     val missing = requiredConsumers.filter { consumer ->
-      visited.none { it.path.endsWith(consumer.pathSuffix) && it.name == consumer.name && (consumer.mustCall == null || consumer.mustCall in it.calls) }
+      visited.none { it.path.endsWith(consumer.pathSuffix) && it.name == consumer.name && (consumer.mustCall == null || consumer.mustCall in it.bodyCalls()) }
     }
     if (missing.isNotEmpty()) throw AssertionError("The policy scan did not reach its governed consumers: $missing")
     return visited.filter { function ->

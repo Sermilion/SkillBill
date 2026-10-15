@@ -3,7 +3,9 @@ name: Desktop tray CI
 on:
   pull_request:
     paths:
+      # Everything but prose, so a reintroduced root source set or a wrapper change still reaches the guards.
       - "desktop-tray/**"
+      - "!desktop-tray/**/*.md"
       - "runtime-kotlin/**"
       - ".github/workflows/desktop-tray-ci.yml"
 
@@ -48,7 +50,7 @@ jobs:
             cat "$error_log"
           done
       - name: Smoke packaged work data without CLI discovery
-        run: python desktop-tray/scripts/packaged-data-smoke.py
+        run: (cd desktop-tray && ./gradlew :composeApp:packagedDataSmoke --no-build-cache)
       - name: Upload desktop snapshot
         uses: actions/upload-artifact@v4
         with:

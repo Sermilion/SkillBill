@@ -23,6 +23,7 @@ val composeAppTaskAliases = listOf(
   "packageRpm",
   "stageAppImage",
   "packageAppImage",
+  "packagedDataSmoke",
 )
 composeAppTaskAliases.forEach { name ->
   tasks.register(name) {

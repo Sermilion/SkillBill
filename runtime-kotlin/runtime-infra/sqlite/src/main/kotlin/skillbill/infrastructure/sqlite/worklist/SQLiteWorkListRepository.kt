@@ -38,9 +38,14 @@ internal class SQLiteWorkListRepository(
     limit: Int,
     completedOnly: Boolean,
     afterSubtaskId: Int?,
-  ): WorkGoalSubtaskPage? = goalSubtasks.page(workflowId, offset, limit, completedOnly, afterSubtaskId = afterSubtaskId)
+  ): WorkGoalSubtaskPage? {
+    val selection = if (completedOnly) WorkGoalSubtaskSelection.Completed else WorkGoalSubtaskSelection.All
+    return goalSubtasks.page(workflowId, offset, limit, selection, afterSubtaskId)
+  }
 
   private val goalSubtasks = WorkGoalSubtaskStore(connection)
+
+  private val goalDependencies = WorkGoalDependencyStore(connection)
 
   override fun observation(): WorkStoreObservation =
     connection.createStatement().use { statement ->
@@ -65,8 +70,7 @@ internal class SQLiteWorkListRepository(
         workflowId,
         0,
         subtaskIds.size,
-        false,
-        subtaskIds,
+        WorkGoalSubtaskSelection.Ids(subtaskIds),
       )?.manifest?.subtasks.orEmpty()
     }
 
@@ -84,7 +88,7 @@ internal class SQLiteWorkListRepository(
     limit: Int,
     subtaskId: Int?,
     after: WorkGoalDependencyAnchor?,
-  ): WorkGoalDependencyPage = readWorkGoalDependencyPage(connection, workflowId, offset, limit, subtaskId, after)
+  ): WorkGoalDependencyPage = goalDependencies.page(workflowId, offset, limit, subtaskId, after)
 
   override fun statusCandidates(query: WorkStatusCandidateQuery): WorkStatusCandidatePage =
     readWorkStatusCandidates(connection, query)
@@ -162,7 +166,6 @@ private fun query(predicate: String = ""): String =
   LIMIT ?
   """.trimIndent()
 
-/** The three workflow tables as one work-item relation; the list and the status candidate pages both read it. */
 internal const val WORK_ITEM_UNION_SQL: String =
   """
     SELECT issue_key,

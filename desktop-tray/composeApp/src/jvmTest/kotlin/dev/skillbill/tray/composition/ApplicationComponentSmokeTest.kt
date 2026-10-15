@@ -24,7 +24,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** Nothing earlier versions wrote: the smoke never reads or cleans the real user's preferences. */
-private object NoLegacyPreferences : LegacyPreferencesSource {
+internal object NoLegacyPreferences : LegacyPreferencesSource {
   override val description: String = "empty"
   override fun string(key: String): String? = null
   override fun boolean(key: String, default: Boolean): Boolean = default

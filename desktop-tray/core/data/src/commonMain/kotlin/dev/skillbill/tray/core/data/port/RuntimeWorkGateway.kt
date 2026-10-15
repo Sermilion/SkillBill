@@ -88,6 +88,12 @@ interface RuntimeWorkGateway {
   /** The resolved database file; throws [InvalidDatabasePathException] when the selection is not a valid path. */
   fun databasePath(): String
 
+  /**
+   * Applies the runtime's supported migrations to an existing older store when it is selected, so its saved work opens. A missing
+   * store stays absent, and a newer or unrecognized schema is refused unchanged.
+   */
+  fun upgradeExistingStore()
+
   fun observation(): StoreObservation
 
   /** Runs [read] in one snapshot of the existing store; a missing store is a typed failure. */

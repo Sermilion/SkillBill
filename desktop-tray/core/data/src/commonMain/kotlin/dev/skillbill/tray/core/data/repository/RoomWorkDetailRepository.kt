@@ -134,6 +134,8 @@ class RoomWorkDetailRepository(
     val parsedAnchor = anchor?.let { CursorCodec.decodeAnchor(it) ?: return@read staleCursor() }
     val generation = session.generation
     val observationSession = session.observationSession
+    // Resolved before the store observation is taken, so a commit made while the time resolves cannot fail the fence check.
+    val observedAt = clock.now()
     repeat(DETAIL_READ_ATTEMPTS) {
       val before = session.workObservation()
       if (parsed != null && parsed.isStale(generation, observationSession, before.storeId, before.revision, identity, list)) {
@@ -143,7 +145,7 @@ class RoomWorkDetailRepository(
         return@read staleCursor()
       }
       val loaded = session.gateway.existingSnapshot {
-        detail(identity, clock.now(), parsed?.runtimeCursor, PAGE_SIZE, parsedAnchor?.runtimeAnchor, list)
+        detail(identity, observedAt, parsed?.runtimeCursor, PAGE_SIZE, parsedAnchor?.runtimeAnchor, list)
       }
       if (!session.currentFileMatches() || session.workObservation() != before) return@repeat
       val found = loaded.detail ?: return@read Outcome.Failure(

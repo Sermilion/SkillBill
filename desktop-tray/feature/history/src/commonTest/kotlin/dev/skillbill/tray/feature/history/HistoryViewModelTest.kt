@@ -164,6 +164,7 @@ class HistoryViewModelTest {
     assertEquals(HistoryFilter.ALL, vm.state.value.historyFilter)
 
     vm.onAction(HistoryAction.AcknowledgeFeedback(feedback.id))
+    runCurrent()
     assertTrue(vm.state.value.pendingFeedback.isEmpty())
   }
 

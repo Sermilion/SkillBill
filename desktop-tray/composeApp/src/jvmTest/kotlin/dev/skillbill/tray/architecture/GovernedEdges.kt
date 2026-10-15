@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.K1Deprecation
 import org.jetbrains.kotlin.cli.extensionsStorage
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import org.jetbrains.kotlin.com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
 import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
@@ -16,6 +17,7 @@ import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtNamedFunction
@@ -24,14 +26,9 @@ import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtValueArgumentList
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 internal const val DESKTOP_PACKAGE_ROOT = "composeApp/src/jvmMain/kotlin/dev/skillbill/tray"
-
-internal val forbiddenWorkDataProcessAdapters = setOf(
-  "CliBoardSource", "CliResolver", "ProcessRunner", "WorkPayloadDecoder", "WorkPayloadKeys",
-)
 
 private val sortCalls = setOf(
   "sortedWith", "sortedBy", "sortedByDescending", "sortWith", "compareBy", "compareByDescending", "thenBy", "thenByDescending",
@@ -63,7 +60,6 @@ internal data class FunctionBody(
   val name: String,
   val path: String,
   val calls: Set<String>,
-  val launchesCommand: Boolean,
   val localOwner: String?,
   val contextOwner: String?,
   val functionDeclaration: Boolean,
@@ -79,6 +75,8 @@ internal data class FunctionBody(
   val callSites: Map<String, List<CallSite>>,
   /** Policy the declaration decides itself: sorting, lifecycle or freshness predicates, time windows, eligibility. */
   val policySites: List<String> = emptyList(),
+  /** The function or property whose body declares this one, for a local; locals are parsed as declarations of their own. */
+  val enclosingDeclaration: String? = null,
 )
 
 /** One call of a name: how many arguments it passes and every type its receiver is, with that type's ancestors. */
@@ -92,15 +90,17 @@ internal fun FunctionBody.accepts(site: CallSite): Boolean {
     (receivers == null || memberOwners.any { it in receivers } || extensionReceiver in receivers)
 }
 
-internal fun isApprovedNativeDisplayQuery(function: FunctionBody): Boolean =
-  function.path.endsWith("/infrastructure/TrayPopoverPlacement.kt") &&
-    function.name in setOf("queryKdeDisplayLayout", "process")
-
 /**
- * Follows every call, reference and type edge from [roots] through the parsed declarations. An empty root set, an edge
- * into project code that resolves to no declaration, and a call to a forbidden process adapter each fail the walk.
+ * Follows every call, reference and type edge from [roots] through the parsed declarations. An empty root set and an edge
+ * into project code that resolves to no declaration each fail the walk. An
+ * explicit import of a [generated] declaration (fully qualified) resolves there and ends: generated code is derived
+ * from the governed sources, which the walk already covers.
  */
-internal fun walkGovernedEdges(functions: List<FunctionBody>, roots: List<FunctionBody>): Set<FunctionBody> {
+internal fun walkGovernedEdges(
+  functions: List<FunctionBody>,
+  roots: List<FunctionBody>,
+  generated: Set<String> = emptySet(),
+): Set<FunctionBody> {
   assertTrue(roots.isNotEmpty(), "No composition, application, data, or control entry points were parsed.")
   val byName = functions.groupBy(FunctionBody::name)
   val sourcePackages = functions.map(FunctionBody::packageName).toSet()
@@ -109,16 +109,10 @@ internal fun walkGovernedEdges(functions: List<FunctionBody>, roots: List<Functi
   while (pending.isNotEmpty()) {
     val (function, trace) = pending.removeFirst()
     if (!visited.add(function)) continue
-    if (function.name in setOf("start", "stop") && "WorkRunLauncher" in function.memberOwners) {
-      assertTrue(function.path.endsWith("/skillbill/ports/work/WorkRunLauncher.kt") ||
-        function.path.endsWith("/skillbill/infrastructure/launcher/work/DetachedWorkRunLauncher.kt"), trace.joinToString(" -> "))
-      continue
-    }
-    assertFalse(function.calls.any { it in forbiddenWorkDataProcessAdapters }, function.path + ":" + function.name)
-    assertFalse(function.launchesCommand && !isApprovedNativeDisplayQuery(function), trace.joinToString(" -> "))
     function.calls.forEach { name ->
       val declarations = byName[name]
       val imported = function.imports[name]
+      if (imported != null && imported in generated) return@forEach
       val importedPackage = imported?.substringBeforeLast('.')
       val projectOwned = (name in function.calledFunctions || declarations.orEmpty().any {
         !it.functionDeclaration && it.packageName == importedPackage && it.memberOwners.isEmpty() && it.localOwner == null
@@ -154,16 +148,32 @@ internal fun walkGovernedEdges(functions: List<FunctionBody>, roots: List<Functi
 }
 
 @OptIn(K1Deprecation::class, CoreEnvironmentDeprecation::class, CompilerConfiguration.Internals::class, ExperimentalCompilerApi::class)
+private fun parseFiles(disposable: Disposable, sources: List<Source>): Map<Source, KtFile> {
+  val environment = KotlinCoreEnvironment.createForProduction(
+    disposable,
+    CompilerConfiguration().apply { extensionsStorage = CompilerPluginRegistrar.ExtensionStorage() },
+    EnvironmentConfigFiles.JVM_CONFIG_FILES,
+  )
+  val factory = KtPsiFactory(environment.project, false)
+  return sources.associateWith { source -> factory.createFile(source.path.substringAfterLast('/'), source.text) }
+}
+
+/** The fully qualified top-level declarations of [sources], the names an import can reach. */
+internal fun generatedDeclarations(sources: List<Source>): Set<String> {
+  val disposable = Disposer.newDisposable()
+  return try {
+    parseFiles(disposable, sources).values.flatMapTo(mutableSetOf()) { file ->
+      file.declarations.filterIsInstance<KtNamedDeclaration>().mapNotNull { it.name }.map { "${file.packageFqName.asString()}.$it" }
+    }
+  } finally {
+    Disposer.dispose(disposable)
+  }
+}
+
 internal fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
   val disposable = Disposer.newDisposable()
   return try {
-    val environment = KotlinCoreEnvironment.createForProduction(
-      disposable,
-      CompilerConfiguration().apply { extensionsStorage = CompilerPluginRegistrar.ExtensionStorage() },
-      EnvironmentConfigFiles.JVM_CONFIG_FILES,
-    )
-    val factory = KtPsiFactory(environment.project, false)
-    val files = sources.associateWith { source -> factory.createFile(source.path.substringAfterLast('/'), source.text) }
+    val files = parseFiles(disposable, sources)
     val governedTypes = files.values.flatMap { PsiTreeUtil.findChildrenOfType(it, KtClassOrObject::class.java) }
       .mapNotNull { it.name }.toSet()
     val propertyTypes = files.values.flatMap { PsiTreeUtil.findChildrenOfType(it, KtProperty::class.java) }
@@ -207,15 +217,25 @@ internal fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
         PsiTreeUtil.findChildrenOfType(file, KtClassOrObject::class.java)).map { declaration ->
         val owner = declaration as? KtClassOrObject
           ?: PsiTreeUtil.getParentOfType(declaration, KtClassOrObject::class.java, true)
+        // The enclosing function's locals (a local val is a declaration of its own), typed by their declaration or by what
+        // initializes them: a constructor or a call with a declared return type.
+        val enclosing = PsiTreeUtil.getParentOfType(declaration, KtNamedFunction::class.java, false)
+        val localTypes = enclosing?.let { ownedChildren(it, KtProperty::class.java) }.orEmpty().mapNotNull { property ->
+          val callee = (property.initializer as? KtCallExpression)?.calleeExpression?.text
+          val type = property.typeReference?.text
+            ?: callee?.let { returnTypes[it] ?: it.takeIf { name -> name.firstOrNull()?.isUpperCase() == true } }
+          type?.let { property.name to it.substringBefore('<').removeSuffix("?").substringAfterLast('.') }
+        }.toMap()
         val typedReceivers = owner?.declarations.orEmpty().filterIsInstance<KtProperty>().mapNotNull { property ->
           val type = property.typeReference?.text ?: (property.initializer as? KtCallExpression)?.calleeExpression?.text
           type?.let { property.name to it.substringBefore('<').removeSuffix("?").substringAfterLast('.') }
         }.toMap() + ((declaration as? KtNamedFunction)?.valueParameters.orEmpty() +
           owner?.primaryConstructorParameters.orEmpty()).mapNotNull { parameter ->
             parameter.typeReference?.text?.let { parameter.name to it.substringBefore('<').removeSuffix("?").substringAfterLast('.') }
-          }.toMap()
+          }.toMap() + localTypes
         fun receiverTypeOf(call: KtCallExpression): String? {
-          val receiver = (call.parent as? KtDotQualifiedExpression)?.receiverExpression
+          // Only a call that is the selector has a receiver; in `f(x).g()` the call `f(x)` is itself the receiver of `g`.
+          val receiver = (call.parent as? KtDotQualifiedExpression)?.takeIf { it.selectorExpression === call }?.receiverExpression
           return typedReceivers[receiver?.text]
             ?: (receiver as? KtCallExpression)?.calleeExpression?.text?.let {
               returnTypes[it] ?: it.takeIf { name -> name.firstOrNull()?.isUpperCase() == true }
@@ -251,8 +271,9 @@ internal fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
               Regex("[A-Za-z_][A-Za-z0-9_]*").findAll(it.text).map(MatchResult::value).toList()
             }.forEach(::add)
           },
-          visibleNames = visibleNames + ownedChildren(declaration, KtNameReferenceExpression::class.java)
-            .flatMap { propertyTypes[it.getReferencedName()].orEmpty() },
+          // A typed receiver brings its members into view even when its type is never named, as with a call's return value.
+          visibleNames = visibleNames + localTypes.values + callSites.values.flatten().flatMap { it.receiverTypes.orEmpty() } +
+            ownedChildren(declaration, KtNameReferenceExpression::class.java).flatMap { propertyTypes[it.getReferencedName()].orEmpty() },
           minArity = parameters?.count { !it.hasDefaultValue() && !it.isVarArg } ?: 0,
           maxArity = if (parameters == null || parameters.any { it.isVarArg }) Int.MAX_VALUE else parameters.size,
           extensionReceiver = (declaration as? KtNamedFunction)?.receiverTypeReference?.text
@@ -262,12 +283,6 @@ internal fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
             .map { aliases[it] ?: it }.toSet() +
             ownedChildren(declaration, KtCallableReferenceExpression::class.java)
               .map { it.callableReference.getReferencedName() }.map { aliases[it] ?: it },
-          launchesCommand = ownedChildren(declaration, KtCallExpression::class.java).any { call ->
-            val expression = PsiTreeUtil.getParentOfType(call, org.jetbrains.kotlin.psi.KtDotQualifiedExpression::class.java)
-              ?.text ?: call.text
-            Regex("\\bProcessBuilder\\b[^;]*\\.start\\s*\\(").containsMatchIn(expression) ||
-              Regex("\\bRuntime\\.getRuntime\\(\\)\\.exec\\s*\\(").containsMatchIn(expression)
-          },
           calls = buildSet {
             actualCalls.mapNotNull { it.calleeExpression?.text?.substringAfterLast('.') }
               .mapTo(this) { aliases[it] ?: it }
@@ -286,6 +301,7 @@ internal fun parsedSymbols(sources: List<Source>): List<FunctionBody> {
               .map { it.callableReference.getReferencedName() }.mapTo(this) { aliases[it] ?: it }
           },
           policySites = policySitesOf(declaration),
+          enclosingDeclaration = PsiTreeUtil.getParentOfType(declaration, true, KtNamedFunction::class.java, KtProperty::class.java)?.name,
         )
       }
     }

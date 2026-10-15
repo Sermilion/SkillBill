@@ -182,6 +182,7 @@ class InstallerShellReconcileTest {
           environment().remove("SKILL_BILL_GOAL_CONTINUATION")
           environment().remove("DISPLAY")
           environment().remove("WAYLAND_DISPLAY")
+          environment().useOfflineDesktopRelease(home)
           if (scenario.reconcileFailOnce) {
             environment()["SKILL_BILL_FAKE_RECONCILE_FAIL_ONCE"] = "1"
           }

@@ -38,7 +38,7 @@ sealed interface WorkControlResult {
   /** The request was admitted; it makes no claim about the lifecycle of the controlled process. */
   data object Accepted : WorkControlResult
 
-  /** A goal pause is durably recorded. The goal runner honours it at its next checkpoint, so nothing has stopped yet. */
+  /** A goal pause is durably recorded. The goal runner honours it at its next checkpoint; nothing has stopped yet. */
   data object IntentRecorded : WorkControlResult
 
   /** A goal stop was recorded and the goal runner's process was confirmed to have exited. */

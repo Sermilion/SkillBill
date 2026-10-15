@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-424"
 feature_name: "readian-architecture-parity-for-the-desktop-app"
 parent_spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-424-readian-architecture-parity-for-the-desktop-app"
@@ -80,12 +80,12 @@ subtasks:
 - id: 6
   name: "Deletion and delivery proof"
   spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_6_deletion-and-delivery-proof.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261015-060657-i53v"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

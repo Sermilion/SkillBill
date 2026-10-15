@@ -8,7 +8,6 @@ import java.sql.Connection
 
 private const val MAX_STATUS_CANDIDATE_BATCH_SIZE = 400
 
-/** Started-at normalised to second precision plus nine fraction digits, so text order is time order. */
 internal fun startedAtKeySql(column: String): String =
   """
   strftime('%Y-%m-%dT%H:%M:%S', $column) || '.' ||
@@ -17,11 +16,6 @@ internal fun startedAtKeySql(column: String): String =
     ELSE '000000000' END
   """.trimIndent()
 
-/**
- * One keyset page of work items ordered live-first, then newest-started, then id. A live row (a state in
- * [WorkStatusCandidateQuery.liveStates]) always sorts ahead of every settled row, so a bounded walk from the head reaches
- * every live workflow before it reaches history, whatever the age of the live row.
- */
 internal fun readWorkStatusCandidates(
   connection: Connection,
   query: WorkStatusCandidateQuery,
@@ -29,9 +23,6 @@ internal fun readWorkStatusCandidates(
   require(query.limit in 1..MAX_STATUS_CANDIDATE_BATCH_SIZE)
   val liveStates = query.liveStates.toList()
   val liveMarks = liveStates.joinToString { "?" }.ifEmpty { "NULL" }
-  // shortcut: every page re-keys and sorts the whole work-item union, since a computed key over a union has no
-  // usable index; the walk is capped by the status candidate budget. Persist the key in an indexed column if the
-  // work list outgrows that.
   val rows =
     connection.prepareStatement(
       """

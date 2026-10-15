@@ -14,27 +14,27 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import java.sql.Connection
 
+/** Which subtasks a page reads: all of them, the completed ones, or exactly the given ids. */
+internal sealed interface WorkGoalSubtaskSelection {
+  data object All : WorkGoalSubtaskSelection
+
+  data object Completed : WorkGoalSubtaskSelection
+
+  data class Ids(val ids: Set<Int>) : WorkGoalSubtaskSelection
+}
+
 internal class WorkGoalSubtaskStore(private val connection: Connection) {
   fun page(
     workflowId: String,
     offset: Int,
     limit: Int,
-    completedOnly: Boolean,
-    subtaskIds: Set<Int>? = null,
+    selection: WorkGoalSubtaskSelection,
     afterSubtaskId: Int? = null,
   ): WorkGoalSubtaskPage? {
     require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
-    require(subtaskIds == null || subtaskIds.size in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
     require(afterSubtaskId == null || offset == 0) { "An anchored subtask page cannot also carry an offset." }
     val idPath = "json_extract(value, '$.${DecompositionPlanningPayloadKeys.ID}')"
-    val matching =
-      if (subtaskIds != null) {
-        listOf("$idPath IN (${subtaskIds.joinToString { "?" }})")
-      } else if (completedOnly) {
-        listOf("json_extract(value, '$.${SharedPayloadKeys.STATUS}') = '${DecompositionStatus.COMPLETE.wireValue}'")
-      } else {
-        emptyList()
-      }
+    val (matching, ids) = selection.filter(idPath)
     val predicate = matching.toWhere()
     val pagePredicate = (matching + listOfNotNull(afterSubtaskId?.let { "$idPath > ?" })).toWhere()
     val manifestPath = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
@@ -67,7 +67,6 @@ internal class WorkGoalSubtaskStore(private val connection: Connection) {
       FROM feature_task_workflows WHERE workflow_id = ?
       """.trimIndent(),
     ).use { statement ->
-      val ids = subtaskIds.orEmpty().toList()
       val after = listOfNotNull(afterSubtaskId)
       statement.bindAll(ids + after + listOf(limit, offset) + ids + ids + after + workflowId)
       statement.executeQuery().use { rows ->
@@ -88,6 +87,19 @@ internal class WorkGoalSubtaskStore(private val connection: Connection) {
     }
   }
 }
+
+private fun WorkGoalSubtaskSelection.filter(idPath: String): Pair<List<String>, List<Int>> =
+  when (this) {
+    is WorkGoalSubtaskSelection.Ids -> {
+      require(ids.size in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
+      val bound = ids.toList()
+      listOf("$idPath IN (${bound.joinToString { "?" }})") to bound
+    }
+    WorkGoalSubtaskSelection.Completed ->
+      listOf("json_extract(value, '$.${SharedPayloadKeys.STATUS}') = '${DecompositionStatus.COMPLETE.wireValue}'") to
+        emptyList()
+    WorkGoalSubtaskSelection.All -> emptyList<String>() to emptyList()
+  }
 
 private fun List<String>.toWhere(): String = if (isEmpty()) "" else "WHERE ${joinToString(" AND ")}"
 
