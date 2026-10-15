@@ -115,6 +115,17 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
+CI repair starts with each failing job's logs and the exact failed command,
+assertion, or error. The repair agent traces that evidence through the repository
+and fixes the cause. A passing local rerun does not resolve a CI failure.
+Intermittent failures require investigation of timing, concurrency, isolation,
+or environment differences as the evidence warrants. Repair completion requires
+a repository fix and passing required local checks. If investigation cannot
+establish a fix, the agent blocks with the failed check URL, inspected evidence,
+and unresolved cause or missing evidence. An unchanged tree and green local
+checks cannot complete repair. The runtime owns commit, push, and subsequent CI
+confirmation. This applies to goal and standalone monitoring.
+
 After all subtasks finish and the goal opens or finds its pull request, parent
 finalization runs the existing monitor and bounded CI repair loop before reporting
 completion. Monitoring belongs to that goal, so it publishes parent progress and
