@@ -41,11 +41,23 @@ jobs:
       - name: Run desktop checks
         run: |
           cd desktop-tray
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run --auto-servernum ./gradlew clean check createDistributable --no-build-cache
-          else
-            ./gradlew clean check createDistributable --no-build-cache
-          fi
+          run_gradle() {
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              xvfb-run --auto-servernum ./gradlew "$@"
+            else
+              ./gradlew "$@"
+            fi
+          }
+          run_gradle clean check --no-build-cache
+          for attempt in 1 2 3; do
+            if run_gradle createDistributable --no-build-cache; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              sleep $((attempt * 5))
+            fi
+          done
+          exit 1
       - name: Print jpackage diagnostics after a failed build
         if: failure()
         shell: bash
