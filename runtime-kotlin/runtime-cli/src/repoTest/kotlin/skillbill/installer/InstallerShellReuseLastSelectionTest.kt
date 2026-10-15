@@ -128,6 +128,7 @@ class InstallerShellReuseLastSelectionTest {
           environment().remove("DISPLAY")
           environment().remove("WAYLAND_DISPLAY")
           environment().remove("SKILL_BILL_GOAL_CONTINUATION")
+          environment().useOfflineDesktopRelease(home)
         }
         .start()
     process.outputStream.bufferedWriter().use { writer -> writer.write("") }

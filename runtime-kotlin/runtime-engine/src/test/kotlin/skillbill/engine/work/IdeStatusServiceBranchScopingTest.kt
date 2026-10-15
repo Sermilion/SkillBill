@@ -19,6 +19,7 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -257,7 +258,8 @@ class IdeStatusServiceBranchScopingTest {
           repositoryIdentity: String,
           branchCorrelation: String,
           now: Instant,
-        ): List<StandalonePhaseStatusRecord> = eligibleStandalones
+          page: StandaloneEligiblePage,
+        ): List<StandalonePhaseStatusRecord> = eligibleStandalones.eligiblePage(page)
       }
     return TrackingDatabase(
       listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, goalUpdatedAt)),

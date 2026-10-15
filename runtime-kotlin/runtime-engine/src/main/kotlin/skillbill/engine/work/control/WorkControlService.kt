@@ -73,11 +73,17 @@ class WorkControlService(
     rejection?.let { return it }
     return when (result.status) {
       GoalRunnerStopStatus.NOT_FOUND -> WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
-      GoalRunnerStopStatus.IDENTITY_MISMATCH -> WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH)
+      GoalRunnerStopStatus.IDENTITY_MISMATCH ->
+        if (result.terminationAttempted) {
+          WorkControlResult.TerminationAttempted
+        } else {
+          WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH)
+        }
       GoalRunnerStopStatus.CHANGED_TARGET -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       GoalRunnerStopStatus.TERMINATION_INCOMPLETE ->
         WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
-      else -> WorkControlResult.Accepted
+      GoalRunnerStopStatus.STOPPED -> WorkControlResult.ExitConfirmed
+      GoalRunnerStopStatus.ALREADY_STOPPED, GoalRunnerStopStatus.NO_LIVE_LEASE -> WorkControlResult.Accepted
     }
   }
 
@@ -89,7 +95,7 @@ class WorkControlService(
       val rejection = validate(target, WorkControlAction.PAUSE, storeIsCurrent)
       rejection ?: when (controls.pause(target.issueKey, target.repositoryRoot, target.workflowId).status) {
         GoalRunnerPauseStatus.NOT_FOUND -> WorkControlResult.Rejected(WorkControlRejection.NOT_FOUND)
-        else -> WorkControlResult.Accepted
+        else -> WorkControlResult.IntentRecorded
       }
     }
     val observation = target.databaseFileObservation ?: return database.transaction(operation)
@@ -129,7 +135,7 @@ class WorkControlService(
       when {
         actual != target.copy(repositoryRoot = target.repositoryRoot.normalize()) ->
           WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
-        !workControlEligible(snapshot) || action == WorkControlAction.PAUSE && snapshot.pauseRequested == true ->
+        !(if (action == WorkControlAction.PAUSE) workPauseEligible(snapshot) else workControlEligible(snapshot)) ->
           WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)
         else -> null
       }

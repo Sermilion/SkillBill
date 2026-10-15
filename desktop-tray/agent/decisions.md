@@ -1,3 +1,74 @@
+## [2026-10-15] Repair Compose redraw state after native peer replacement
+Context: The frozen installed app had a live AWT event queue, active data reads, and a pending Compose recomposition. Its Skiko layer was active, but SurfaceSkiaLayerComponent retained isDisposed=true. Clearing that flag restored the running window. Compose 1.12.1 sets the flag when Skiko removes its peer and never clears it when addNotify recreates the layer.
+Decision: Transform the application and test runtime dependency to clear the wrapper flag after addNotify. Pin the patch to Compose 1.12.1 and reject a changed target class or method. Verify redraws and clicks across repeated real native peer replacement.
+Reason: The patch preserves the existing window, navigation, ViewModels, and GPU renderer. It needs no runtime reflection, redraw timer, or whole-window replacement.
+Revisit when: upgrading Compose. Remove the transform once the dependency handles native peer reattachment itself.
+
+## [2026-10-15] Let desktop reach runtime services that run git
+Context: The governed-edge walk banned any desktop path reaching a runtime process adapter, but the in-process runtime services behind work reads and controls run git.
+Decision: Operator-approved deviation: desktop may reach runtime services that run git or other processes through the in-process graph. The packaged app still never runs an installed CLI, discovers PATH or a login shell, or parses command output.
+Reason: The runtime owns that behavior, and banning it would block shared policy. The ban now sits at the CLI and PATH boundary the app must not cross.
+Alternatives considered: An allow-list entry or skipped root was rejected; the rule was deleted, not suppressed, and no baseline grew.
+Revisit when: the walk reports an unresolved governed edge into runtime code.
+
+## [2026-10-15] Key navigation entries by database generation
+Context: Windows can outlive a database selection or a same-path file replacement, and saved routes can name rows from the previous database.
+Decision: Every route entry key includes the database generation, and restore drops routes from an obsolete generation or with invalid arguments, falling back to a safe root.
+Reason: An entry, its component and its ViewModel can then never survive into the next database.
+
+## [2026-10-15] Allow serializable routes; keep JSON types banned in presentation
+Context: Navigation 3 routes must be @Serializable, but the presentation guard banned all of kotlinx.serialization.
+Decision: The forbidden token narrowed to kotlinx.serialization.json, and a typing scan rejects string-keyed Any maps and unchecked-cast suppressions in navigation sources.
+Reason: Routes stay typed while JSON payload handling stays out of presentation; no exemption or baseline grew.
+
+## [2026-10-15] Share one app-scoped WorkViewModel; relay from the shell
+Context: The work board allows one observer per WorkSection, but the window, sidebar and tray popover all need work state.
+Decision: One app-scoped WorkViewModel serves them all; the composeApp shell relays the history filter and board items to other features.
+Reason: Separate instances per surface would break the single-observer constraint; features stay independent because only the shell connects them.
+Alternatives considered: One ViewModel per surface was rejected for the observer limit; direct sibling-feature dependencies are banned by the source guards.
+
+## [2026-10-15] Must-not-miss feedback lives in UiState, not effects
+Context: One-shot effect channels can drop values when full, which is wrong for notices the user must see.
+Decision: Navigation (capacity 1) and transient (capacity 4) effects are bounded one-shots; anything that must not be missed goes in UiState pendingFeedback (max 8, monotonic ids, acknowledged by id).
+Reason: State survives recomposition and slow collectors; bounded effects cannot grow without limit.
+Revisit when: a feedback kind needs more than eight pending items.
+
+## [2026-10-15] Runtime owns work-control policy; desktop projects it
+Context: The desktop re-derived pause eligibility and collapsed control outcomes into a generic accept, hiding what the runtime had done.
+Decision: The runtime policy emits pauseEligible and typed control results (intent recorded, exit confirmed, accepted); the desktop only projects them.
+Reason: One policy owner keeps CLI, MCP and desktop consistent; typed outcomes let the UI distinguish a recorded pause intent from a confirmed exit.
+Revisit when: the desktop can drop its remaining freshness check beside the runtime facts.
+
+## [2026-10-15] Inject host and legacy preferences into the application component
+Context: The generated component must run in tests without touching the real user home, environment or java.util.prefs.
+Decision: ApplicationComponent takes the host environment and the legacy preferences source as constructor arguments; the factory defaults them to the real process.
+Reason: Providers that read the process directly made the smoke test mutate and clean real user state; constructor arguments let tests supply disposable ones.
+Alternatives considered: Test-only overrides inside providers were rejected as production test hooks.
+
+## [2026-10-15] Keep Room declarations in jvmMain behind a store-access port
+Context: Room 3 types and the runtime gateway are JVM-only, while repositories and paging belong in commonMain.
+Decision: Repositories in commonMain depend on ports (store access, commit signals, runtime gateway, failure classifier); Room and runtime code stay in jvmMain adapters.
+Reason: Keeps commonMain free of runtime, sql and Room imports (enforced by source rules) and lets tests wrap behavior at the port seams instead of adding production hooks.
+Revisit when: Room declarations can be shared in commonMain without JVM-only types.
+
+## [2026-10-15] Scope per-database session components behind app-scoped facades
+Context: Selecting another database must not leak connections or observers from the previous one.
+Decision: A per-database session component is created per selection and held behind app-scoped repository facades, with DatabaseSelection and generation counters app-scoped.
+Reason: Consumers keep stable injected repositories while session lifetimes close cleanly; detail owner registrations end with the detail collector, the rest at session close.
+Alternatives considered: Passing the database as a factory argument to each repository was rejected for churn in injected consumers.
+
+## [2026-10-15] Enforce module boundaries from generated manifests
+Context: SKILL-424 splits the desktop app into core modules, and source-only path checks cannot see Gradle edges, targets or plugins.
+Decision: A quality convention plugin writes each module's targets, plugins, KSP configurations and project dependencies to a manifest. Architecture tests read the manifests plus a PSI scan of imports and qualified names against an allowed-edge table.
+Reason: Manifests and parsed references catch aliased or star imports and wrong edges that text greps miss. Synthetic rejection fixtures prove each rule fails when broken.
+Alternatives considered: Grep-only path tests miss aliased imports; a third-party dependency-rule plugin adds a build dependency for a small ruleset.
+
+## [2026-10-15] Keep core domain free of platform time and file types
+Context: Domain models used java.time and java.nio, which blocks a pure multiplatform domain and the guard that bans platform imports.
+Decision: Domain uses kotlin.time for instants and durations and a DatabaseFileIdentity value (path, file key) for store identity. Conversion to java types happens only in runtime-facing edges such as the runtime mapper and Room board source.
+Reason: The domain stays portable and testable with a fake clock; platform types live where the platform is used.
+Revisit when: Adapters still calling Dispatchers.IO directly move behind the injected DispatcherProvider.
+
 ## [2026-10-12] Read work through the runtime store
 Context: SKILL-423 replaces CLI work-data requests with an in-process view of the runtime-owned database.
 Decision: Room opens an existing compatible store read-only. Shared runtime services project lifecycle and identity facts, admit exact-target controls, and own migrations. DataStore stores app preferences.
@@ -83,6 +154,7 @@ Reason: Database observation failure must not become periodic data refresh or a 
 Context: Resume and Run again now start work from an explicit desktop action. Reading work still uses Room and shared runtime projections.
 Decision: WorkRunActions validates the selected database, execution revision, process owner, recorded branch, and launch arguments before calling WorkRunLauncher. The desktop cannot use this port directly. Cancellation stays in the runtime and preserves history.
 Reason: Starting work needs a process boundary. The desktop architecture guard continues to forbid CLI read proxies and process adapters in desktop code. It checks the full graph up to the runtime launch port and limits that port to the admission owner, its infrastructure implementation, and DI.
+Superseded by: Let desktop reach runtime services that run git (2026-10-15)
 
 ## [2026-10-13] Start the installed agent harness from desktop controls
 Context: The operator wants Resume and Run again to start the installed headless agent, such as Claude Code or Codex, rather than start the Skill Bill CLI directly.

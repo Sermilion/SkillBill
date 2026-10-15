@@ -22,6 +22,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -366,7 +367,7 @@ class CliPhasePlanRuntimeTest {
     private val incompleteFirstBundle: Boolean = false,
     private val authorNothingFirst: Boolean = false,
   ) : AgentRunLauncher {
-    val phaseIds = mutableListOf<String>()
+    val phaseIds = CopyOnWriteArrayList<String>()
 
     override fun resolveLaunchModel(request: AgentRunLaunchModelRequest): EffectiveLaunchModel =
       passThroughResolvedLaunchModel(request)
