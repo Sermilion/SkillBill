@@ -5,6 +5,8 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -260,7 +262,6 @@ internal fun runPrebuiltInstaller(
   reuse: PrebuiltReuse? = null,
   options: PrebuiltOptions = PrebuiltOptions(),
 ): PrebuiltInstallerRun {
-  PrebuiltReleaseStager.assumeReleaseStagingTools()
   if (options.interactiveTty) {
     Assumptions.assumeTrue(
       PrebuiltReleaseStager.toolOnPath("script"),
@@ -793,13 +794,6 @@ internal object PrebuiltReleaseStager {
     return "$os-$arch"
   }
 
-  fun assumeReleaseStagingTools() {
-    Assumptions.assumeTrue(
-      toolOnPath("bsdtar"),
-      "staged-release runtime image zips require bsdtar on PATH",
-    )
-  }
-
   fun toolOnPath(tool: String): Boolean =
     (System.getenv("PATH") ?: "")
       .split(File.pathSeparatorChar)
@@ -871,7 +865,16 @@ internal object PrebuiltReleaseStager {
     val lib = staging.resolve("$base/lib")
     Files.createDirectories(lib)
     Files.writeString(lib.resolve("$base.jar"), "stub")
-    runOrThrow(staging, listOf("bsdtar", "-a", "-cf", zipPath.toString(), base))
+    ZipOutputStream(Files.newOutputStream(zipPath)).use { zip ->
+      Files.walk(staging.resolve(base)).use { paths ->
+        paths.filter(Files::isRegularFile).forEach { path ->
+          val entryName = staging.relativize(path).joinToString("/")
+          zip.putNextEntry(ZipEntry(entryName))
+          Files.copy(path, zip)
+          zip.closeEntry()
+        }
+      }
+    }
   }
 
   private fun writeChecksumSibling(
