@@ -65,6 +65,8 @@ usage() {
   cat <<USAGE
 Usage: ./uninstall.sh [--desktop-app-dir PATH]
 
+Databases, SQLite journals, and backups under ~/.skill-bill are preserved.
+
 Options:
   --desktop-app-dir PATH   Remove the desktop app from a custom install root.
 USAGE
@@ -773,40 +775,23 @@ done
 
 remove_runtime_launchers
 
-remove_state_dir_full() {
-  if [[ -d "$SKILL_BILL_STATE_DIR" ]]; then
-    info "Removing skill-bill state directory."
-    rm -rf "$SKILL_BILL_STATE_DIR"
-    ok "  removed $SKILL_BILL_STATE_DIR"
-  fi
-}
-
-# Pre-install wipe (SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1, set only by
-# install.sh's run_pre_install_uninstall): clear runtime binaries and
-# installed-skills staging so generator changes land on the next install, while
-# PRESERVING the copied-in self-contained source set and durable state DBs:
-#   - skills/, platform-packs/, orchestration/, agent-addons/
-#   - *.db workflow / telemetry / review stores and their SQLite journals
-#   - backups/ for operator database snapshots and maintenance reports
-#   - the RESERVED baseline-manifest path (subtask-2 seam) below
-# An explicit ./uninstall.sh leaves this flag unset and fully removes
-# ~/.skill-bill via remove_state_dir_full.
-remove_state_dir_preserving_source() {
+remove_install_state() {
   if [[ ! -d "$SKILL_BILL_STATE_DIR" ]]; then
     return 0
   fi
-  info "Clearing skill-bill runtime/install state (preserving copied-in source)."
+  info "Clearing skill-bill runtime/install state (preserving databases and backups)."
 
-  # RESERVED SEAM (subtask 2): baseline-manifest.json is part of the preserved
-  # self-contained source set and must survive the pre-install wipe.
-  local preserved=(
-    "skills"
-    "platform-packs"
-    "orchestration"
-    "agent-addons"
-    "baseline-manifest.json"
-    "backups"
-  )
+  local preserved=("backups")
+  if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" == "1" ]]; then
+    preserved+=(
+      "skills"
+      "platform-packs"
+      "orchestration"
+      "agent-addons"
+      "baseline-manifest.json"
+    )
+    info "Preserving copied-in source for reinstall."
+  fi
 
   local is_preserved entry name keep
   for entry in "$SKILL_BILL_STATE_DIR"/* "$SKILL_BILL_STATE_DIR"/.[!.]* "$SKILL_BILL_STATE_DIR"/..?*; do
@@ -827,14 +812,10 @@ remove_state_dir_preserving_source() {
     fi
     rm -rf "$entry"
   done
-  ok "  cleared runtime/install state under $SKILL_BILL_STATE_DIR (source and state DBs preserved)"
+  ok "  cleared runtime/install state under $SKILL_BILL_STATE_DIR (databases and backups preserved)"
 }
 
-if [[ "${SKILL_BILL_PRESERVE_SOURCE_ON_WIPE:-}" == "1" ]]; then
-  remove_state_dir_preserving_source
-else
-  remove_state_dir_full
-fi
+remove_install_state
 
 echo ""
 printf "${GREEN}━━━ Uninstall complete ━━━${NC}\n"

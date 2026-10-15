@@ -142,12 +142,20 @@ class InstallerShellDelegationTest {
   }
 
   @Test
-  fun `explicit uninstall fully removes the state dir even with copied source present`() {
+  fun `explicit uninstall preserves databases and removes copied source and installed artifacts`() {
     val fixtures = seedStateDirForWipe()
     val run = runUninstaller(fixtures, preserveSource = false, goalContinuation = false)
 
     assertEquals(0, run.exitCode, run.output)
-    assertFalse(Files.exists(fixtures.stateDir), "explicit uninstall must fully remove ~/.skill-bill")
+    assertEquals("seed\n", Files.readString(fixtures.stateDb))
+    listOf(
+      fixtures.skillContent,
+      fixtures.packYaml,
+      fixtures.orchestrationPlaybook,
+      fixtures.baselineManifest,
+      fixtures.runtimeBin,
+      fixtures.installedSkill,
+    ).forEach { path -> assertFalse(Files.exists(path), "$path must be removed") }
   }
 
   @Test

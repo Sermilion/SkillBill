@@ -70,7 +70,9 @@ cd SkillBill
 
 Source builds require JDK 21 or newer. Set `SKILL_BILL_JAVA_HOME` if the installer cannot find a suitable JDK. Unsupported prebuilt hosts fall back to the source path and need its prerequisites. Use `bash install.sh --release <tag>` to select a published release; `--from-source` ignores release selection.
 
-The installer always installs the desktop app. Local checkouts build it from source; standalone installs download a matching release build. Desktop installation failures stop the installer. Installation initializes the runtime database so the desktop app can open before the first workflow. An upgrade restarts the app if it is running. `./uninstall.sh` removes the desktop app and its launcher along with Skill Bill.
+The installer always installs the desktop app. Local checkouts build it from source; standalone installs download a matching release build. Desktop installation failures stop the installer. Installation initializes the runtime database so the desktop app can open before the first workflow. An upgrade restarts the app if it is running.
+
+Both `./uninstall.sh` and `skill-bill uninstall` remove the desktop app and its launcher along with Skill Bill. They preserve databases, SQLite journals, and `backups/` under `~/.skill-bill/` so reinstalling retains workflow history and telemetry. To erase that data, remove `~/.skill-bill/` manually after uninstalling.
 
 Runtime files and rendered skills live under `~/.skill-bill/`. User configuration lives at `~/.config/skill-bill/config.json` and survives reinstalling. `SKILL_BILL_CONFIG_PATH` overrides that location. See [Getting Started](docs/getting-started.md) for install paths and troubleshooting.
 
