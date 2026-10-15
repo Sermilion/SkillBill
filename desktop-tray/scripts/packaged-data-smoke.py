@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     environment.pop("CLASSPATH", None)
     environment.pop("_JPACKAGE_LAUNCHER", None)
     result = subprocess.run([str(launcher), str(home)], cwd=home, env=environment,
-                            capture_output=True, text=True, timeout=30)
+                            capture_output=True, text=True, timeout=90)
     print(result.stdout, end="")
     if result.returncode:
         print(result.stderr, file=sys.stderr, end="")

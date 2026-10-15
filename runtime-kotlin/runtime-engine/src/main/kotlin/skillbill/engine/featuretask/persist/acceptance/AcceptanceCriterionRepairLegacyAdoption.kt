@@ -247,9 +247,17 @@ class AcceptanceCriterionRepairLegacyAdoption(
       decodePhaseRecords(original.artifacts)[audit.entryStep]?.outputArtifact
         ?.let { JsonCodec.parseValue(it) as? Map<*, *> }
         ?: return null
-    val treeDigest = output[RepairKeys.TREE_DIGEST] as? String ?: return null
-    val checkpointId = output[RepairKeys.CHECKPOINT_ID] as? String ?: return null
-    return if (checkpointId == proof.checkpointId) HistoricalCheckpointOutput(treeDigest) else null
+    val produced = JsonCodec.anyToStringAnyMap(output[SharedPayloadKeys.PRODUCED_OUTPUTS]) ?: return null
+    return historicalCheckpointOutput(produced, proof)
+  }
+
+  private fun historicalCheckpointOutput(
+    produced: Map<String, Any?>,
+    proof: AcceptanceCriterionRepairLegacyProof,
+  ): HistoricalCheckpointOutput? {
+    val treeDigest = produced[RepairKeys.TREE_DIGEST] as? String ?: return null
+    val checkpointId = produced[RepairKeys.CHECKPOINT_ID] as? String ?: return null
+    return HistoricalCheckpointOutput(treeDigest).takeIf { checkpointId == proof.checkpointId }
   }
 
   private fun sourceWasBoundAtDiscovery(

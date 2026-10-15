@@ -107,6 +107,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
@@ -1996,6 +1997,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
   override fun databaseExists(): Boolean = true
 
   override fun <T> read(block: (UnitOfWork) -> T): T = block(unitOfWork())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unitOfWork())
 

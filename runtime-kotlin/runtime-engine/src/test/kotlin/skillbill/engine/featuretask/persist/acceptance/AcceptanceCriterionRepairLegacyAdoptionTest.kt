@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.execution.ArchivedAuditExecutionPlanFixture
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAdoptionResult
@@ -16,15 +17,22 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -134,7 +142,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
               ArchivedAuditExecutionPlanFixture.archive(execution, mode, revision)
             }
           val descriptor = execution.validator.read(bytes, "archive")
-          val original = pristine(f, descriptor)
+          val original = pristine(f, descriptor, mode)
           val receipt =
             assertNotNull(
               admission.admit(
@@ -217,41 +225,98 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
   private fun pristine(
     f: SerialRepairSqliteFixture,
     descriptor: Map<String, Any?>,
-  ): WorkflowStateSnapshot =
-    f.snapshot().copy(
-      artifacts =
-        DurableWorkflowArtifacts.fromMap(
+    composition: String = "standalone",
+  ): WorkflowStateSnapshot {
+    val identity = f.execution.identity(f.workflowId)
+    val baseArtifacts =
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
           mapOf(
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-              mapOf(
-                "audit" to
-                  phase(
-                    f,
-                  ).asWorkflowArtifactEntry(),
-              ),
-            ),
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RUN_INVARIANTS.entry(
-              FeatureTaskRuntimeRunInvariants(
-                ".feature-specs/SKILL-384/spec.md",
-                acceptanceCriteria = f.binding.authoredCriteria,
-                mandatesAndOverrides = emptyList(),
+            "audit" to
+              phase(
+                f,
               ).asWorkflowArtifactEntry(),
-            ),
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
-              listOf(
-                FeatureTaskRuntimeCheckpointIdentity(
-                  0, "SKILL-384", "standalone", CHECKPOINT, "feature/SKILL-384", "implement", 0,
-                  "a".repeat(
-                    64,
-                  ),
-                  1, COMMIT, f.clock.instant().toString(),
-                ),
-              ).asCheckpointIdentitiesArtifactEntry(),
-            ),
           ),
         ),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RUN_INVARIANTS.entry(
+          FeatureTaskRuntimeRunInvariants(
+            ".feature-specs/SKILL-384/spec.md",
+            acceptanceCriteria = f.binding.authoredCriteria,
+            mandatesAndOverrides = emptyList(),
+          ).asWorkflowArtifactEntry(),
+        ),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+          listOf(
+            FeatureTaskRuntimeCheckpointIdentity(
+              0, "SKILL-384", "standalone", CHECKPOINT, "feature/SKILL-384", "audit", 0,
+              "a".repeat(
+                64,
+              ),
+              1, COMMIT, f.clock.instant().toString(),
+            ),
+          ).asCheckpointIdentitiesArtifactEntry(),
+        ),
+      )
+    val sourceArtifacts =
+      if (composition == "standalone") {
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_SEED.entry(
+            FeatureTaskRuntimePlanSeed(null, FeatureTaskRuntimePlanSpecOrigin.OPERATOR, f.binding.specDigest)
+              .asWorkflowArtifactEntry(),
+          ),
+        )
+      } else {
+        goalChildArtifacts(f, identity, composition)
+      }
+    return f.snapshot().copy(artifacts = DurableWorkflowArtifacts.fromMap(baseArtifacts + sourceArtifacts))
+  }
+
+  private fun goalChildArtifacts(
+    f: SerialRepairSqliteFixture,
+    identity: FeatureTaskExecutionIdentity,
+    composition: String,
+  ): Map<String, Any?> {
+    val gate =
+      if (composition == "goal-child-build") {
+        FeatureTaskRuntimeQualityGateSelection.BUILD
+      } else {
+        FeatureTaskRuntimeQualityGateSelection.VALIDATE
+      }
+    return mapOf(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(
+        FeatureTaskRuntimeGoalPlanningImport(
+          "parent-workflow",
+          identity.normalizedIssueKey,
+          identity.repositoryIdentity,
+          "b".repeat(64),
+          "c".repeat(64),
+          "goal-planning",
+          "0.1",
+          "phase-output",
+          "0.1",
+          1,
+          1,
+          identity.governedSpecPath,
+          f.binding.specDigest,
+          "d".repeat(64),
+          "e".repeat(64),
+        ).asWorkflowArtifactEntry(),
+      ),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
+        FeatureTaskRuntimeGoalContinuationArtifact(
+          identity.normalizedIssueKey,
+          1,
+          true,
+          "feature/SKILL-384",
+          "parent-workflow",
+          CodeReviewExecutionMode.INLINE,
+          ValidationDepth.FULL,
+          gate,
+        ).asWorkflowArtifactEntry(),
+      ),
     )
+  }
 
   private fun phase(f: SerialRepairSqliteFixture) =
     featureTaskRuntimePhaseRecordFor(
@@ -269,6 +334,11 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
             "initial discovery",
             PhaseOutput("AC-001 remains unresolved; AC-002 is source-closed"),
             verdict = "incomplete",
+            runtimeRecord =
+              mapOf(
+                SharedPayloadKeys.PRODUCED_OUTPUTS to
+                  mapOf(Keys.TREE_DIGEST to "d".repeat(64), Keys.CHECKPOINT_ID to CHECKPOINT),
+              ),
           ).canonicalJson,
       ),
       null,

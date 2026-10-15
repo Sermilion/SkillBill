@@ -1,6 +1,7 @@
 package skillbill.contracts.workflow.featuretask
 
 object AcceptanceCriterionRepairPayloadKeys {
+  const val ACCEPTANCE_CRITERION_AUDIT_RESULT = "acceptance_criterion_audit_result"
   const val AUDIT_BINDING_DIGEST = "audit_binding_digest"
   const val PHASE_OUTPUT_CONTRACT_VERSION = "phase_output_contract_version"
   const val CONTRACT_VERSION = "contract_version"

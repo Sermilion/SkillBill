@@ -349,7 +349,7 @@ class AcceptanceCriterionRepairPersistence(
     request: AcceptanceCriterionRepairCommit,
   ): Boolean {
     val discovery = request.mutation is AcceptanceCriterionRepairMutation.Discover && request.phase.attemptCount == 1
-    val currentStep = record.workflowStatus == WorkflowStatus.RUNNING && record.currentStepId == request.phase.phaseId
+    val currentStep = record.workflowStatus == WorkflowStatus.RUNNING && !record.currentStepId.isNullOrBlank()
     val current = decodePhaseRecords(record.artifacts)[request.phase.phaseId]
     val currentPhaseOpen = current == null || current.attemptCount == 1 && current.finishedAt == null
     val stepOpen =

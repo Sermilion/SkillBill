@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
 import skillbill.agent.model.PhaseOutput
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
@@ -11,6 +12,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -21,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 class AcceptanceCriterionRepairPhaseRecorderTest {
   private val git =
@@ -203,10 +206,22 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     prose: String,
   ) {
     if (recorder.accounting.snapshot == null) {
-      val discovery = phase(f, "audit", 0)
+      val discovery = phase(f, "audit", -1)
       assertTrue(recorder.start(discovery) == true)
       assertTrue(
-        recorder.complete(output(discovery, "advance", "The full source audit found a missing caller.")) == true,
+        recorder.complete(
+          output(
+            discovery,
+            "advance",
+            "The full source audit found a missing caller.",
+            f.audit(AcceptanceCriterionRepairMode.INITIAL_DISCOVERY).payload,
+          ),
+        ) == true,
+      )
+      val initialAudit = phase(f, "audit", 0)
+      assertTrue(recorder.start(initialAudit) == true)
+      assertTrue(
+        recorder.complete(output(initialAudit, "advance", "The full source audit found a missing caller.")) == true,
       )
     }
     val phase = phase(f, "audit", attempt)
@@ -236,7 +251,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     f.workflowId,
     id,
     "running",
-    if (id == "audit") attempt + 1 else attempt,
+    if (id == "audit") attempt + 2 else attempt,
     "codex",
     false,
     mutating = id == "audit_implement_fix",
@@ -246,6 +261,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     phase: FeatureTaskRuntimePhaseStateRequest,
     verdict: String,
     prose: String,
+    auditResult: Map<String, Any?>? = null,
   ): FeatureTaskRuntimePhaseStateRequest {
     val normalized =
       NormalizedFeatureTaskRuntimePhaseOutput(
@@ -254,6 +270,13 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         "Audit conclusion",
         PhaseOutput(prose),
         verdict = verdict,
+        runtimeRecord =
+          auditResult?.let {
+            mapOf(
+              SharedPayloadKeys.PRODUCED_OUTPUTS to
+                mapOf(Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT to it),
+            )
+          } ?: emptyMap(),
       )
     return phase.copy(
       status = "completed",
