@@ -20,6 +20,33 @@ internal val installerShellRuntimeRoot: Path =
     }
   }
 
+private fun nativeHostUname(): String =
+  when {
+    System.getProperty("os.name").lowercase().contains("mac") -> "Darwin"
+    System.getProperty("os.name").lowercase().contains("win") -> "MINGW64_NT-10.0"
+    else -> "Linux"
+  }
+
+private fun seedHostUname(
+  binDir: Path,
+  hostUname: String,
+) {
+  val uname = binDir.resolve("uname")
+  Files.writeString(
+    uname,
+    """
+    |#!/usr/bin/env bash
+    |set -euo pipefail
+    |case "${'$'}{1:-}" in
+    |  -s) printf '%s\n' "${'$'}{SKILL_BILL_TEST_HOST_UNAME:?}" ;;
+    |  -m) printf '%s\n' x86_64 ;;
+    |  *) exit 1 ;;
+    |esac
+    """.trimMargin(),
+  )
+  uname.toFile().setExecutable(true)
+}
+
 internal fun assertCopyInPopulatedRealFiles(run: InstallerShellRun) {
   val stateDir = run.home.resolve(".skill-bill")
   val skills = stateDir.resolve("skills")
@@ -49,6 +76,7 @@ internal fun runInstallerShell(input: String): InstallerShellRun = runInstallerS
 internal fun runInstallerShell(
   input: String,
   fromSource: Boolean,
+  hostUname: String? = null,
 ): InstallerShellRun {
   val repoRoot = Files.createTempDirectory("skillbill-installer-shell-repo")
   val home = Files.createTempDirectory("skillbill-installer-shell-home")
@@ -65,6 +93,8 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
   stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
+  val effectiveHostUname = hostUname ?: nativeHostUname()
+  seedHostUname(binDir, effectiveHostUname)
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -81,6 +111,9 @@ internal fun runInstallerShell(
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
         environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
+        environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop-apps").toString()
+        environment()["PATH"] = binDir.toString() + File.pathSeparator + environment()["PATH"].orEmpty()
+        environment()["SKILL_BILL_TEST_HOST_UNAME"] = effectiveHostUname
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
       }
       .start()
@@ -285,6 +318,10 @@ internal fun runPrebuiltInstaller(
   builder.environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
   builder.environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
   builder.environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+  val hostUname = nativeHostUname()
+  seedHostUname(binDir, hostUname)
+  builder.environment()["PATH"] = binDir.toString() + File.pathSeparator + builder.environment()["PATH"].orEmpty()
+  builder.environment()["SKILL_BILL_TEST_HOST_UNAME"] = hostUname
   builder.environment().remove("SKILL_BILL_GOAL_CONTINUATION")
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
@@ -646,7 +683,13 @@ internal object InstallerShellFixtures {
       |#!/usr/bin/env bash
       |set -euo pipefail
       |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-      |app="${'$'}root/build/compose/binaries/main/app/Skill Bill/bin/Skill Bill"
+      |app_root="${'$'}root/build/compose/binaries/main/app"
+      |case "${'$'}(uname -s)" in
+      |  Darwin*) app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill" ;;
+      |  Linux*) app="${'$'}app_root/Skill Bill/bin/Skill Bill" ;;
+      |  MINGW*|MSYS*|CYGWIN*) app="${'$'}app_root/Skill Bill/bin/Skill Bill.bat" ;;
+      |  *) printf '%s\n' 'Unsupported desktop fixture host' >&2; exit 1 ;;
+      |esac
       |mkdir -p "${'$'}(dirname "${'$'}app")"
       |printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${'$'}app"
       |chmod +x "${'$'}app"

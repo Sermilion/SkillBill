@@ -228,6 +228,23 @@ class InstallerShellDelegationTest {
   }
 
   @Test
+  fun `source desktop build installs the host bundle and executable layout`() {
+    val launchers =
+      listOf(
+        "Darwin" to "Skill Bill.app/Contents/MacOS/Skill Bill",
+        "Linux" to "Skill Bill/bin/Skill Bill",
+        "MINGW64_NT-10.0" to "Skill Bill/bin/Skill Bill.bat",
+      )
+    launchers.forEach { (host, launcher) ->
+      val run = runInstallerShell(input = "1\nclaude\noff\nskip\n", fromSource = true, hostUname = host)
+
+      val installed = run.home.resolve("desktop-apps").resolve(launcher)
+      assertTrue(Files.isRegularFile(installed), "Missing desktop launcher for $host: $installed\n${run.output}")
+      if (host != "MINGW64_NT-10.0") assertTrue(Files.isExecutable(installed), installed.toString())
+    }
+  }
+
+  @Test
   fun `prebuilt auto-falls back to source when host token has no matching asset`() {
     val run = runPrebuiltInstaller(releaseValid = true, options = PrebuiltOptions(omitRuntimeAssets = true))
 
