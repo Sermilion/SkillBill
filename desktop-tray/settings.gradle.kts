@@ -39,4 +39,8 @@ dependencyResolutionManagement {
   }
 }
 
-include(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:testing", ":core:data", ":core:datastore")
+include(
+  ":composeApp",
+  ":core:common", ":core:domain", ":core:designsystem", ":core:ui", ":core:testing", ":core:data", ":core:datastore",
+  ":feature:work", ":feature:detail", ":feature:history", ":feature:settings",
+)

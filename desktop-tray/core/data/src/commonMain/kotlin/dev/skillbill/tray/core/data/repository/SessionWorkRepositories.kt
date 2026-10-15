@@ -20,10 +20,13 @@ import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
+import dev.skillbill.tray.core.domain.repository.WorkStoreStatusRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
@@ -83,6 +86,15 @@ class SessionWorkDetailRepository(private val manager: WorkStoreSessionManager) 
 
   override suspend fun detail(identity: WorkIdentity, cursor: String?, list: DetailList?, anchor: String?): Outcome<Detail> =
     manager.settledParts()?.detail?.detail(identity, cursor, list, anchor) ?: noDatabase()
+}
+
+@Inject
+@SingleIn(AppScope::class)
+@ContributesBinding(AppScope::class)
+class SessionWorkStoreStatusRepository(manager: WorkStoreSessionManager) : WorkStoreStatusRepository {
+  // The session binds its path before the manager publishes the slot, so it is final while the slot is Active.
+  override val effectiveDatabasePath: Flow<String?> =
+    manager.slot.map { slot -> (slot as? SessionSlot.Active)?.parts?.session?.path }.distinctUntilChanged()
 }
 
 @Inject

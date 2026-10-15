@@ -27,6 +27,7 @@ private val KNOWN_PLUGIN_IDS = listOf(
   "com.google.devtools.ksp",
   "skillbill.kmp.library",
   "skillbill.kmp.compose",
+  "skillbill.feature",
   "skillbill.kotlin.inject",
   "skillbill.room",
   "skillbill.desktop.application",

@@ -14,7 +14,8 @@ class SourceRulesTest {
   @Test
   fun `every scanned module contributes sources so the rules are not vacuous`() {
     val sources = desktopSources()
-    listOf(":core:common", ":core:domain", ":core:designsystem", ":core:testing", ":core:data", ":core:datastore").forEach { module ->
+    (listOf(":core:common", ":core:domain", ":core:designsystem", ":core:testing", ":core:data", ":core:datastore", ModuleGraphRules.UI) +
+      ModuleGraphRules.features).forEach { module ->
       assertTrue(sources.any { it.project == module && it.sourceSet == "commonMain" }, "No commonMain sources scanned for $module.")
     }
     assertTrue(sources.any { it.project == ":composeApp" && it.sourceSet == "jvmMain" }, "No jvmMain sources scanned for :composeApp.")
@@ -128,7 +129,6 @@ class SourceRulesTest {
       "DataStoreSettingsRepository" to (commonComposition to "fun build() = DataStoreSettingsRepository(handle)"),
       "DataStore" to (dataDi to "fun build() = DataStore()"),
       "RuntimeComponent" to (main to "fun build() = RuntimeComponent()"),
-      "RoomBoardSource" to (main to "fun build() = RoomBoardSource()"),
     )
     rejected.forEach { (expected, case) ->
       val (path, text) = case
@@ -137,6 +137,66 @@ class SourceRulesTest {
     }
     assertEquals(emptyList(), violationsFor(main, "fun build() = HostEnvironment(emptyMap(), \"\", \"\")"))
     assertEquals(emptyList(), violationsFor("composeApp/src/jvmTest/kotlin/dev/skillbill/tray/composition/FooTest.kt", "fun build() = RoomWorkBoardRepository()"))
+  }
+
+  @Test
+  fun `feature and toolkit common sources reject desktop, data, shell and sibling feature references`() {
+    val work = "feature/work/src/commonMain/kotlin/dev/skillbill/tray/feature/work/Bad.kt"
+    val history = "feature/history/src/commonMain/kotlin/dev/skillbill/tray/feature/history/Bad.kt"
+    val toolkit = "core/ui/src/commonMain/kotlin/dev/skillbill/tray/core/ui/Bad.kt"
+    val workTest = "feature/work/src/commonTest/kotlin/dev/skillbill/tray/feature/work/BadTest.kt"
+    val rejected = mapOf(
+      "androidx.compose.ui.window.Popup" to (work to "import androidx.compose.ui.window.Popup\nclass Bad"),
+      "androidx.compose.ui.awt.ComposeWindow" to (history to "class Bad(val window: androidx.compose.ui.awt.ComposeWindow)"),
+      "dev.nucleusframework.application.NucleusBackend" to (work to "import dev.nucleusframework.application.NucleusBackend as Backend\nclass Bad"),
+      "dev.skillbill.tray.core.data.RoomWorkBoardRepository" to (work to "import dev.skillbill.tray.core.data.RoomWorkBoardRepository\nclass Bad"),
+      "dev.skillbill.tray.core.datastore.SettingsStore" to (history to "class Bad(val store: dev.skillbill.tray.core.datastore.SettingsStore)"),
+      "dev.skillbill.tray.application.TrayAvailability" to (work to "import dev.skillbill.tray.application.TrayAvailability\nclass Bad"),
+      "dev.skillbill.tray.ui.MainWindow" to (toolkit to "import dev.skillbill.tray.ui.MainWindow\nclass Bad"),
+      "dev.skillbill.tray.feature.history.HistoryViewModel" to (work to "import dev.skillbill.tray.feature.history.HistoryViewModel\nclass Bad"),
+      "dev.skillbill.tray.feature.work.WorkViewModel" to (history to "class Bad(val work: dev.skillbill.tray.feature.work.WorkViewModel)"),
+      "dev.skillbill.tray.feature.work.WorkUiState" to (toolkit to "import dev.skillbill.tray.feature.work.WorkUiState\nclass Bad"),
+      "dev.skillbill.tray.core.data.Anything" to (workTest to "import dev.skillbill.tray.core.data.Anything\nclass BadTest"),
+      "java.time.ZoneId" to (work to "import java.time.ZoneId\nclass Bad"),
+      "dev.skillbill.tray.core.testing.TestClock" to (work to "import dev.skillbill.tray.core.testing.TestClock\nclass Bad"),
+    )
+    rejected.forEach { (expected, case) ->
+      val (path, text) = case
+      val violations = violationsFor(path, text)
+      assertTrue(violations.any { expected in it }, "Expected a violation mentioning '$expected' for $path but got $violations")
+    }
+    val allowed = listOf(
+      work to "import dev.skillbill.tray.core.ui.PagedListState\nimport dev.skillbill.tray.core.domain.model.WorkItem\nimport dev.skillbill.tray.core.designsystem.ink\nclass Ok",
+      toolkit to "import dev.skillbill.tray.core.domain.model.WorkItem\nclass Ok",
+      workTest to "import dev.skillbill.tray.core.testing.TestClock\nclass OkTest",
+      "core/ui/src/jvmMain/kotlin/dev/skillbill/tray/core/ui/Ok.kt" to "import androidx.compose.ui.window.Popup\nimport java.time.ZoneId\nclass Ok",
+    )
+    allowed.forEach { (path, text) -> assertEquals(emptyList(), violationsFor(path, text), path) }
+  }
+
+  @Test
+  fun `production sources reject array and indexed-cast combine and the retired board types`() {
+    val feature = "feature/work/src/commonMain/kotlin/dev/skillbill/tray/feature/work/Bad.kt"
+    val app = "composeApp/src/jvmMain/kotlin/dev/skillbill/tray/application/Bad.kt"
+    val combine = mapOf(
+      "an indexed cast" to "val state = combine(a, b, c, d, e, f) { values -> values[0] as String }",
+      "an optional indexed cast" to "val state = combine(flows) { values -> values[1] as? Int }",
+      "a collection of flows" to "val state = combine(listOf(a, b)) { it.size }",
+      "an array of flows" to "val state = combine(arrayOf(a, b)) { it.size }",
+    )
+    combine.forEach { (label, text) ->
+      listOf(feature, app).forEach { path ->
+        val violations = violationsFor(path, "class Bad {\n  $text\n}")
+        assertTrue(violations.any { "typed combine overloads" in it }, "Expected a combine violation for $label in $path but got $violations")
+      }
+    }
+    assertEquals(emptyList(), violationsFor(feature, "class Ok {\n  val state = combine(a, b, c) { x, y, z -> Triple(x, y, z) }\n  val first = list[0]\n}"))
+
+    listOf("DashboardController", "DashboardState", "DashboardModel", "BoardSource", "RoomBoardSource").forEach { type ->
+      val violations = violationsFor(app, "class Bad(val source: $type)")
+      assertTrue(violations.any { "retired type $type" in it }, "Expected a retired-type violation for $type but got $violations")
+    }
+    assertEquals(emptyList(), violationsFor(app, "class Ok(val source: CliBoardSourceRetired)"))
   }
 
   @Test

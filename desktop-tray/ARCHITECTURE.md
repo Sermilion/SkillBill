@@ -2,14 +2,32 @@
 
 The desktop app uses the `desktop-tray` Gradle build and package prefix
 `dev.skillbill.tray`. Its composite build links runtime libraries from
-`../runtime-kotlin`. Work reads and controls run in process. Application use
-cases own section subscriptions, selection, settings, control requests, and
-notification transitions. Infrastructure owns Room, DataStore, and host adapters.
-Presentation and UI consume typed models and repository contracts.
+`../runtime-kotlin`. Work reads and controls run in process. The modules are
+`:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
+`:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
+`:feature:history` and `:feature:settings`, and the `:composeApp` shell.
 
-SKILL-424 owns the final KMP module graph, generated application DI, feature
-ViewModels, Navigation 3, and native host integration. This data-layer change
-keeps the existing windows and controller.
+Each feature owns one screen's typed `UiState`, `Action` and `Effect` contract, its
+ViewModel and its Compose content, all in `commonMain`. A feature depends only on
+`:core:common`, `:core:domain`, `:core:designsystem` and `:core:ui`; it never reaches
+`:core:data`, `:core:datastore`, `:core:testing` in production, the shell, or another
+feature. `:core:ui` holds what the screens share: the paged-list state, the section
+pager, effect and feedback delivery, entry-scoped ViewModel stores, formatting and the
+row and pagination components. `:composeApp` composes the windows, owns selection,
+the tray and the notification and store-session coordinators, and builds ViewModels
+through the generated `ViewModelFactory`. Architecture guards in `composeApp` enforce
+these edges with rejection fixtures.
+
+Every section list is a `PagedListState` with separate loading, empty, refreshing,
+read-error and append-error states. The board keeps paging and liveness per
+subscription, so each owner (the main window's `WorkViewModel`, the tray and the
+notification coordinator) reads the live and recent sections through its own
+`TrackedBoardSections`, the detail pane observes the sections it needs directly, and
+`HistoryViewModel` owns history. Effects are per family: navigation
+effects keep the newest one and transient effects hold at most four. Feedback the user
+must see travels in `UiState` and stays until acknowledged by id.
+
+SKILL-424 still owns Navigation 3 and the remaining native host integration.
 
 Windows and Linux use `dev.nucleusframework:composenativetray:2.1.6` with an
 app-owned Compose window for the tray popover. Linux uses its
@@ -107,8 +125,10 @@ Legacy preferences migrate once after a durable commit. `cliOverride` and
 remain on disk and report an error. DataStore stores no workflow rows.
 
 The work-data path has no CLI or process adapter. The removed
-`CliBoardSource` call sites in `Main.kt` now use `RoomBoardSource`; its old
-`CliResolver` and `ProcessRunner` dependencies have no desktop consumers. Its
+`CliBoardSource` call sites in `Main.kt` were first replaced by `RoomBoardSource`,
+which the feature split then retired in favour of per-section board, detail,
+policy and control repositories. The old
+`CliResolver` and `ProcessRunner` dependencies have no desktop consumers. The
 `WorkPayloadDecoder` and `WorkPayloadKeys` transport path is gone because Room
 rows map through `RuntimeWorkMapper`. The old CLI mutation, resolver, process,
 and decoder test files were removed with those adapters. Desktop preferences no
@@ -125,9 +145,9 @@ The runtime owns shared work policy and the desktop renders its typed verdicts.
 freshness, `pauseEligible`, `running`, `recentlyFinishedPhase`, `doneWithinDay`, and
 `membershipDeadline`), and `IdeStatusPolicy.arrange` owns the board order, the
 live and finished phase lists, the counts, and the tray status. The desktop reaches
-it through `WorkPolicyRepository`, keeps the result in `DashboardState.arrangement`,
+it through `WorkPolicyRepository`, keeps the result in `TrayUiState.arrangement`,
 and only resolves identities and renders. A declaration-aware source rule in
-`DesktopArchitectureTest` walks the desktop surfaces and rejects code that sorts
+`DesktopArchitectureTest` walks the desktop and feature surfaces and rejects code that sorts
 work, judges lifecycle or freshness membership, or weighs a time window itself.
 Detail lists page by the identity of their last row (a per-list anchor), never by a
 shared offset, and the desktop refreshes a retained page from that anchor. The status

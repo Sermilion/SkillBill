@@ -1,3 +1,15 @@
+## [2026-10-15] Share one app-scoped WorkViewModel; relay from the shell
+Context: The work board allows one observer per WorkSection, but the window, sidebar and tray popover all need work state.
+Decision: One app-scoped WorkViewModel serves them all; the composeApp shell relays the history filter and board items to other features.
+Reason: Separate instances per surface would break the single-observer constraint; features stay independent because only the shell connects them.
+Alternatives considered: One ViewModel per surface was rejected for the observer limit; direct sibling-feature dependencies are banned by the source guards.
+
+## [2026-10-15] Must-not-miss feedback lives in UiState, not effects
+Context: One-shot effect channels can drop values when full, which is wrong for notices the user must see.
+Decision: Navigation (capacity 1) and transient (capacity 4) effects are bounded one-shots; anything that must not be missed goes in UiState pendingFeedback (max 8, monotonic ids, acknowledged by id).
+Reason: State survives recomposition and slow collectors; bounded effects cannot grow without limit.
+Revisit when: a feedback kind needs more than eight pending items.
+
 ## [2026-10-15] Runtime owns work-control policy; desktop projects it
 Context: The desktop re-derived pause eligibility and collapsed control outcomes into a generic accept, hiding what the runtime had done.
 Decision: The runtime policy emits pauseEligible and typed control results (intent recorded, exit confirmed, accepted); the desktop only projects them.

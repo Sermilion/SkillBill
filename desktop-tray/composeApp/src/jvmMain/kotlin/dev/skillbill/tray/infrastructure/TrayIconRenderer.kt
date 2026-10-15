@@ -14,14 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
-import dev.skillbill.tray.presentation.TrayStateKind
+import dev.skillbill.tray.core.domain.model.TrayStatus
 
 object TrayIconRenderer {
   @Composable
-  fun Content(icon: Painter, state: TrayStateKind, running: Int, showOverlay: Boolean) {
+  fun Content(icon: Painter, state: TrayStatus, running: Int, showOverlay: Boolean) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Image(icon, contentDescription = null, modifier = Modifier.fillMaxSize())
-      if (showOverlay && state == TrayStateKind.RUNNING && running > 0) {
+      if (showOverlay && state == TrayStatus.RUNNING && running > 0) {
         Box(Modifier.align(Alignment.BottomEnd).size(18.dp).background(Color(0xFF3FB950), CircleShape), contentAlignment = Alignment.Center) {
           Text(if (running > 99) "99+" else running.toString(), color = Color.White, style = MaterialTheme.typography.labelSmall)
         }

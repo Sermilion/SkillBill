@@ -77,8 +77,39 @@ class ModuleGraphRulesTest {
       ":core:datastore has a disallowed production edge to :core:data" to baseline { project, manifest ->
         if (project == ":core:datastore") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:data") else manifest
       },
-      ":core:designsystem has no production consumer" to baseline { project, manifest ->
-        if (project == ":composeApp") manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:designsystem") }) else manifest
+      ":feature:work has a disallowed production edge to :core:data" to baseline { project, manifest ->
+        if (project == ":feature:work") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:data") else manifest
+      },
+      ":feature:work has a disallowed production edge to :core:datastore" to baseline { project, manifest ->
+        if (project == ":feature:work") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:datastore") else manifest
+      },
+      ":feature:history has a disallowed production edge to :feature:work" to baseline { project, manifest ->
+        if (project == ":feature:history") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:feature:work") else manifest
+      },
+      ":feature:detail has a disallowed production edge to :composeApp" to baseline { project, manifest ->
+        if (project == ":feature:detail") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:composeApp") else manifest
+      },
+      ":feature:settings depends on :core:testing from a production configuration" to baseline { project, manifest ->
+        if (project == ":feature:settings") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:testing") else manifest
+      },
+      ":feature:settings declares jvmMainImplementation->:core:ui; a feature's production code is commonMain only" to baseline { project, manifest ->
+        if (project == ":feature:settings") manifest.copy(projectDependencies = manifest.projectDependencies + "jvmMainImplementation->:core:ui") else manifest
+      },
+      ":core:ui has a disallowed production edge to :feature:work" to baseline { project, manifest ->
+        if (project == ":core:ui") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:feature:work") else manifest
+      },
+      ":core:ui has a disallowed production edge to :core:data" to baseline { project, manifest ->
+        if (project == ":core:ui") manifest.copy(projectDependencies = manifest.projectDependencies + "commonMainImplementation->:core:data") else manifest
+      },
+      "Missing architecture manifest for :feature:detail" to baseline().filterNot { it.project == ":feature:detail" },
+      ":feature:history has no production consumer" to baseline { project, manifest ->
+        if (project == ":composeApp") manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:feature:history") }) else manifest
+      },
+      ":core:ui has no production consumer" to baseline { _, manifest ->
+        manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:ui") })
+      },
+      ":core:designsystem has no production consumer" to baseline { _, manifest ->
+        manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:designsystem") })
       },
       ":core:testing has no test consumer" to baseline { project, manifest ->
         if (project == ":composeApp") manifest.copy(projectDependencies = manifest.projectDependencies.filterNot { it.endsWith("->:core:testing") }) else manifest
@@ -88,6 +119,23 @@ class ModuleGraphRulesTest {
       val violations = ModuleGraphRules.violations(manifests)
       assertTrue(violations.any { expected in it }, "Expected a violation containing '$expected' but got $violations")
     }
+  }
+
+  @Test
+  fun `every feature keeps its production code in commonMain`() {
+    val manifests = loadManifests()
+    val sources = desktopSources(manifests = manifests)
+    assertEquals(emptyList(), ModuleGraphRules.featureSourceSetViolations(sources))
+    assertEquals(ModuleGraphRules.features.toSet(), sources.filter { it.project in ModuleGraphRules.features }.mapNotNull { it.project }.toSet())
+  }
+
+  @Test
+  fun `a feature source outside commonMain is rejected`() {
+    fun source(project: String, sourceSet: String) = Source("${project.removePrefix(":").replace(':', '/')}/src/$sourceSet/kotlin/A.kt", "", project, sourceSet)
+
+    assertEquals(emptyList(), ModuleGraphRules.featureSourceSetViolations(listOf(source(":feature:work", "commonMain"), source(":core:ui", "jvmMain"))))
+    val violations = ModuleGraphRules.featureSourceSetViolations(listOf(source(":feature:work", "jvmMain")))
+    assertTrue(violations.any { ":feature:work has a jvmMain production source" in it }, "Got $violations")
   }
 
   @Test
@@ -119,14 +167,20 @@ class ModuleGraphRulesTest {
 
   private fun baseline(mutate: (String, ModuleManifest) -> ModuleManifest = { _, manifest -> manifest }): List<ModuleManifest> =
     listOf(
-      manifest(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:data", ":core:datastore", test = listOf(":core:testing")),
+      manifest(
+        ":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:data", ":core:datastore", ":core:ui",
+        ":feature:work", ":feature:detail", ":feature:history", ":feature:settings", test = listOf(":core:testing"),
+      ),
       manifest(":core:common"),
       manifest(":core:domain", ":core:common"),
       manifest(":core:designsystem"),
+      manifest(":core:ui", ":core:common", ":core:domain", ":core:designsystem", test = listOf(":core:testing")),
       manifest(":core:testing", ":core:common", ":core:domain"),
       manifest(":core:data", ":core:common", ":core:domain", ":core:datastore"),
       manifest(":core:datastore", ":core:common", ":core:domain"),
-    ).map { mutate(it.project, it) }
+    ).plus(ModuleGraphRules.features.map { feature ->
+      manifest(feature, ":core:domain", ":core:designsystem", ":core:ui", test = listOf(":core:testing"))
+    }).map { mutate(it.project, it) }
 
   private fun manifest(project: String, vararg production: String, test: List<String> = emptyList()) = ModuleManifest(
     project = project,

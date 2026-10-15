@@ -48,6 +48,12 @@ interface WorkStoreSession {
   suspend fun closeAndJoin()
 }
 
+/** Read-only status of the selected work store. */
+interface WorkStoreStatusRepository {
+  /** The database the application reads, as resolved; null when none is open. */
+  val effectiveDatabasePath: Flow<String?>
+}
+
 /** Preference access. App-scope teardown owns closing the backing store, so there is no `close` here. */
 interface SettingsRepository {
   val settings: Flow<SettingsState>

@@ -18,11 +18,16 @@ class ConventionTargetInventoryTest {
         "lib" to """plugins { id("skillbill.kmp.compose"); id("skillbill.kotlin.inject") }""",
         "store" to """plugins { id("skillbill.kotlin.inject"); id("skillbill.room") }""",
         "app" to """plugins { id("skillbill.desktop.application") }""",
+        "screen" to """plugins { id("skillbill.feature") }""",
       ),
     )
-    fixture.run(":lib:writeArchitectureManifest", ":store:writeArchitectureManifest", ":app:writeArchitectureManifest")
+    fixture.run(
+      ":lib:writeArchitectureManifest", ":store:writeArchitectureManifest", ":app:writeArchitectureManifest",
+      ":screen:writeArchitectureManifest",
+    )
 
-    listOf("lib", "store", "app").forEach { module ->
+    assertTrue("skillbill.feature" in manifestStrings(fixture.manifest("screen"), "plugins"), "The feature convention is not reported in the manifest.")
+    listOf("lib", "store", "app", "screen").forEach { module ->
       val manifest = fixture.manifest(module)
       assertEquals(listOf("jvm:jvm", "metadata:common"), manifestStrings(manifest, "targets"), "$module targets")
       assertTrue(manifestStrings(manifest, "plugins").none { "android" in it.lowercase() }, "$module applies an Android plugin")

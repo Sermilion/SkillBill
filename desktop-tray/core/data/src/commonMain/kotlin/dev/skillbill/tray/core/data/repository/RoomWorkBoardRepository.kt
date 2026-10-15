@@ -93,8 +93,10 @@ private data class PagingQuery(
   val retention: Retention,
   val filter: String,
   val historyFilter: HistoryFilter,
-  val queryEpoch: Long?,
 )
+
+/** One live [RoomWorkBoardRepository.observe] collector. Every board observer owns its retention, paging source and cursors. */
+private data class Subscription(val section: WorkSection, val queryEpoch: Long)
 
 private class PagingEntry(val query: PagingQuery, val source: BoardPagingSource)
 
@@ -123,10 +125,10 @@ class RoomWorkBoardRepository(
   private val monotonicClock: MonotonicClock,
   private val diagnostics: Diagnostics,
 ) : WorkBoardRepository {
-  private val pagingSources = ConcurrentRegistry<WorkSection, PagingEntry>()
+  private val pagingSources = ConcurrentRegistry<Subscription, PagingEntry>()
   private val queryEpochs = Counter()
-  private val latestQueryEpochs = ConcurrentRegistry<WorkSection, Long>()
-  private val activeRetentions = mutableMapOf<WorkSection, ActiveRetention>()
+  private val liveSubscriptions = ConcurrentRegistry<Subscription, Unit>()
+  private val activeRetentions = mutableMapOf<Subscription, ActiveRetention>()
   private val deadlines = mutableMapOf<WorkSection, MutableMap<String, Instant>>()
   private val schedulers = mutableMapOf<Pair<WorkSection, Long>, DeadlineScheduler>()
   private val ownerObservations = mutableMapOf<WorkSection, MutableMap<String, AutoCloseable>>()
@@ -142,14 +144,13 @@ class RoomWorkBoardRepository(
           }
 
         override fun invalidated(sections: Set<WorkSection>) {
-          sections.forEach { pagingSources.remove(it)?.source?.invalidate() }
+          pagingSources.removeAll { it.section in sections }.forEach { it.source.invalidate() }
         }
 
         override fun reset(closed: List<AutoCloseable>) {
           ownerObservations.clear()
           deadlines.clear()
           activeRetentions.clear()
-          latestQueryEpochs.clear()
         }
       },
     )
@@ -163,11 +164,13 @@ class RoomWorkBoardRepository(
     anchor: String?,
   ): Flow<Outcome<Board>> {
     val queryEpoch = queryEpochs.next()
-    latestQueryEpochs.compute(section) { queryEpoch }
     return channelFlow {
       session.acquireSubscriber()
       val scheduler = DeadlineScheduler(clock)
-      session.mutex.withLock { schedulers[section to queryEpoch] = scheduler }
+      session.mutex.withLock {
+        schedulers[section to queryEpoch] = scheduler
+        liveSubscriptions.compute(Subscription(section, queryEpoch)) { }
+      }
       try {
         session.sectionSignals.map { it.getValue(section) }.distinctUntilChanged().collect {
           send(loadPage(section, retention, anchor, filter, historyFilter, refresh = true, queryEpoch = queryEpoch))
@@ -188,9 +191,10 @@ class RoomWorkBoardRepository(
 
   /**
    * Releases the owner registrations, deadlines, retention and paging source that one subscriber's query epoch created.
-   * Later subscribers to the same section carry a newer epoch, so their entries are untouched. Callers hold the session lock.
+   * Concurrent subscribers to the same section carry their own epoch, so their entries are untouched. Callers hold the session lock.
    */
   private fun releaseSubscription(section: WorkSection, queryEpoch: Long) {
+    val subscription = Subscription(section, queryEpoch)
     val prefix = "$section:$queryEpoch:"
     ownerObservations[section]?.let { registrations ->
       registrations.entries.removeAll { (key, registration) ->
@@ -202,9 +206,12 @@ class RoomWorkBoardRepository(
       pageDeadlines.keys.removeAll { it.startsWith(prefix) }
       if (pageDeadlines.isEmpty()) deadlines.remove(section)
     }
-    if (activeRetentions[section]?.queryEpoch == queryEpoch) activeRetentions.remove(section)
-    if (latestQueryEpochs[section] == queryEpoch) pagingSources.remove(section)?.source?.invalidate()
+    activeRetentions.remove(subscription)
+    liveSubscriptions.remove(subscription)
+    pagingSources.remove(subscription)?.source?.invalidate()
   }
+
+  private fun isLive(subscription: Subscription): Boolean = liveSubscriptions[subscription] != null
 
   /** The earliest deadline among the retained pages one subscription owns, or null when none of them has one. */
   private fun ownerEarliest(section: WorkSection, queryEpoch: Long): Instant? {
@@ -218,7 +225,7 @@ class RoomWorkBoardRepository(
    */
   private fun rearm(section: WorkSection, queryEpoch: Long, owner: SessionGeneration) {
     val scheduler = schedulers[section to queryEpoch] ?: return
-    val active = activeRetentions[section]?.takeIf { it.queryEpoch == queryEpoch }
+    val active = activeRetentions[Subscription(section, queryEpoch)]
     scheduler.publish(owner.scope, active?.let { ownerEarliest(section, queryEpoch) }) {
       if (active != null) fireDeadline(section, active)
     }
@@ -227,9 +234,10 @@ class RoomWorkBoardRepository(
   /** Reprojects only [section], and only if [owner] still owns it and its earliest deadline is really due. */
   private suspend fun fireDeadline(section: WorkSection, owner: ActiveRetention) {
     session.mutex.withLock {
-      val active = activeRetentions[section] ?: return@withLock
+      val subscription = Subscription(section, owner.queryEpoch)
+      val active = activeRetentions[subscription] ?: return@withLock
       val due = ownerEarliest(section, owner.queryEpoch)?.let { it <= clock.now() } == true
-      if (active.sameOwner(owner) && latestQueryEpochs[section] == owner.queryEpoch && due) {
+      if (active.sameOwner(owner) && isLive(subscription) && due) {
         session.reprojectSection(section, SessionToken(owner.generation, owner.session))
       }
     }
@@ -256,21 +264,25 @@ class RoomWorkBoardRepository(
   ): Outcome<Board> {
     val readiness = session.read { _ -> session.observationProblem?.let { Outcome.Failure(it) } ?: Outcome.Value(Unit) }
     if (readiness is Outcome.Failure) return readiness
-    val effectiveQueryEpoch = queryEpoch ?: latestQueryEpochs[section]
-    val query = PagingQuery(retention, filter, historyFilter, effectiveQueryEpoch)
-    val paging = pagingSources.compute(section) { current ->
-      if (current?.query == query && !current.source.invalid) {
-        current
-      } else {
-        current?.source?.invalidate()
-        PagingEntry(
-          query,
-          BoardPagingSource { key, rebase ->
-            readPage(section, retention, key, filter, historyFilter, rebase, effectiveQueryEpoch)
-          },
-        )
-      }
-    }.source
+    val effectiveQueryEpoch = queryEpoch ?: cursor?.let { CursorCodec.decodePage(it)?.queryEpoch }?.takeIf { it > 0 }
+    val subscription = effectiveQueryEpoch?.let { Subscription(section, it) }
+    val newSource = {
+      BoardPagingSource { key, rebase -> readPage(section, retention, key, filter, historyFilter, rebase, effectiveQueryEpoch) }
+    }
+    // A read that belongs to no live subscription gets a throwaway source, so it can never supersede a subscriber's.
+    val paging = if (subscription != null && isLive(subscription)) {
+      val query = PagingQuery(retention, filter, historyFilter)
+      pagingSources.compute(subscription) { current ->
+        if (current?.query == query && !current.source.invalid) {
+          current
+        } else {
+          current?.source?.invalidate()
+          PagingEntry(query, newSource())
+        }
+      }.source
+    } else {
+      newSource()
+    }
     val params = if (refresh) {
       PagingSource.LoadParams.Refresh(cursor, 1, false)
     } else {
@@ -302,7 +314,8 @@ class RoomWorkBoardRepository(
         if (parsed != null && cursorIsStale(parsed, generation, section, retention, filter, historyFilter, requestedQueryEpoch, rebase)) {
           return@read staleCursor()
         }
-        val queryEpoch = requestedQueryEpoch ?: parsed?.queryEpoch?.takeIf { it > 0 } ?: queryEpochs.next()
+        // A read outside any subscription carries epoch 0: its cursors chain freely and nothing is retained for it.
+        val queryEpoch = requestedQueryEpoch ?: parsed?.queryEpoch?.takeIf { it > 0 } ?: 0L
         val observedAt = if (rebase) clock.now() else parsed?.observedAt?.let(Instant::parse) ?: clock.now()
         val requestedPageKey = parsed?.let { "$section:$queryEpoch:${it.afterTime}:${it.afterId}" } ?: "$section:$queryEpoch:root"
         val cutoff = observedAt - if (section == WorkSection.RECENT) 24.hours else retention.duration
@@ -414,18 +427,21 @@ class RoomWorkBoardRepository(
           val endObservation = committedObservation ?: startObservation
           if (coherent && committedObservation == startObservation && session.currentFileMatches()) {
             val observationSession = session.observationSession
-            val retainedObservation = ActiveRetention(
-              retention, filter, historyFilter, queryEpoch, generation, observationSession,
-              endObservation.storeId, endObservation.revision,
-            )
-            activeRetentions[section] = retainedObservation
-            if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)) {
-              watchOwners(section, requestedPageKey, result, owner, retainedObservation)
+            val subscription = Subscription(section, queryEpoch)
+            if (isLive(subscription)) {
+              val retainedObservation = ActiveRetention(
+                retention, filter, historyFilter, queryEpoch, generation, observationSession,
+                endObservation.storeId, endObservation.revision,
+              )
+              activeRetentions[subscription] = retainedObservation
+              if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)) {
+                watchOwners(section, requestedPageKey, result, owner, retainedObservation)
+              }
+              val pageDeadlines = deadlines.getOrPut(section) { mutableMapOf() }
+              val pageEarliest = earliest
+              if (pageEarliest == null) pageDeadlines.remove(requestedPageKey) else pageDeadlines[requestedPageKey] = pageEarliest
+              rearm(section, queryEpoch, owner)
             }
-            val pageDeadlines = deadlines.getOrPut(section) { mutableMapOf() }
-            val pageEarliest = earliest
-            if (pageEarliest == null) pageDeadlines.remove(requestedPageKey) else pageDeadlines[requestedPageKey] = pageEarliest
-            rearm(section, queryEpoch, owner)
             val nextCursor = next?.takeIf { !exhausted }?.let { row ->
               CursorCodec.encode(
                 PageCursor(
@@ -491,7 +507,7 @@ class RoomWorkBoardRepository(
     }
     if (rebase) return false
     if (requestedQueryEpoch != null && parsed.queryEpoch != requestedQueryEpoch) return true
-    return latestQueryEpochs[section]?.let { it != parsed.queryEpoch } == true
+    return parsed.queryEpoch > 0 && !isLive(Subscription(section, parsed.queryEpoch))
   }
 
   /**
@@ -512,7 +528,7 @@ class RoomWorkBoardRepository(
       clock.now(),
     ) {
       session.launchIn(owner) {
-        if (activeRetentions[section]?.sameOwner(retained) == true) {
+        if (activeRetentions[Subscription(section, retained.queryEpoch)]?.sameOwner(retained) == true) {
           session.reprojectSection(section, SessionToken(retained.generation, retained.session))
         }
       }
@@ -524,19 +540,21 @@ class RoomWorkBoardRepository(
     val retained = retention.pageKeys.toSet()
     session.launchIn(owner) {
       val section = retention.section
-      if (latestQueryEpochs[section]?.let { it != retention.queryEpoch } == true) return@launchIn
+      val subscription = Subscription(section, retention.queryEpoch)
       val expected = ActiveRetention(
         retention.retention, retention.filter, retention.historyFilter, retention.queryEpoch,
         retention.generation, retention.observationSession, retention.storeId, retention.revision,
       )
-      if (activeRetentions[section] != expected) return@launchIn
+      if (!isLive(subscription) || activeRetentions[subscription] != expected) return@launchIn
+      // Other subscribers of the section keep their own pages under their own epoch prefix.
+      val prefix = "$section:${retention.queryEpoch}:"
       deadlines[section]?.let { current ->
-        current.keys.retainAll(retained)
+        current.keys.removeAll { it.startsWith(prefix) && it !in retained }
         if (current.isEmpty()) deadlines.remove(section)
       }
       val registrations = ownerObservations[section]
       registrations?.entries?.removeAll { (key, registration) ->
-        if (key !in retained) {
+        if (key.startsWith(prefix) && key !in retained) {
           registration.closeOwned(diagnostics, "room_owner_registration_close_failed")
           true
         } else {

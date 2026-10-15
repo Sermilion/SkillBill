@@ -10,8 +10,17 @@ import androidx.compose.ui.window.rememberWindowState
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.composenativetray.tray.api.Tray
-import dev.skillbill.tray.application.DashboardController
-import dev.skillbill.tray.core.domain.model.*
+import dev.skillbill.tray.application.StoreSessionCoordinator
+import dev.skillbill.tray.application.TransitionNotificationCoordinator
+import dev.skillbill.tray.application.TrayAvailability
+import dev.skillbill.tray.core.domain.model.TrayStatus
+import dev.skillbill.tray.core.domain.model.WorkIdentity
+import dev.skillbill.tray.core.ui.rememberEntryViewModelStoreOwner
+import dev.skillbill.tray.core.ui.rememberViewModel
+import dev.skillbill.tray.feature.settings.SettingsRoute
+import dev.skillbill.tray.feature.work.TrayAction
+import dev.skillbill.tray.feature.work.TrayEffect
+import dev.skillbill.tray.feature.work.trayHover
 import dev.skillbill.tray.infrastructure.NativeServicesImpl
 import dev.skillbill.tray.infrastructure.TrayPopoverPlacement
 import dev.skillbill.tray.infrastructure.trayIconAnchor
@@ -21,9 +30,13 @@ import dev.skillbill.tray.infrastructure.resolveDesktopUiScale
 import dev.skillbill.tray.ui.DesignWindow
 import dev.skillbill.tray.ui.MainWindow
 import dev.skillbill.tray.ui.SkillBillTheme
-import dev.skillbill.tray.ui.SettingsWindow
 import dev.skillbill.tray.ui.TrayPopover
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,49 +49,76 @@ fun main() {
     var settingsVisible by remember { mutableStateOf(false) }
     var trayPopoverVisible by remember { mutableStateOf(false) }
     var trayPopoverOpening by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<WorkIdentity?>(null) }
     val trayPopoverWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(380).dp, uiScale.scaledWindowPixels(590).dp))
     val uiScope = rememberCoroutineScope()
     val native = remember { NativeServicesImpl() }
     val trayPlacement = remember { TrayPopoverPlacement() }
-    val model = remember {
-      DashboardController(application.boards, application.details, application.controls, application.policy, application.storeSession,
-        application.settings, native, application.dispatchers, application.clock) { uiScope.launch(Dispatchers.Main) { mainVisible = true } }
+
+    // The tray surfaces (icon, status item, popover) share one tray ViewModel. The main window and the notifications observe the
+    // board through their own state, so no surface's filter or lifecycle decides what another one shows.
+    val applicationOwner = rememberEntryViewModelStoreOwner("application")
+    val trayModel = rememberViewModel(applicationOwner, "tray") { application.viewModels.tray() }
+    val shellScope = remember { CoroutineScope(SupervisorJob() + application.dispatchers.io) }
+    DisposableEffect(shellScope) { onDispose { shellScope.cancel() } }
+    // Single-threaded, because the board sections the notifications read are not synchronised.
+    val notificationScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
+    DisposableEffect(notificationScope) { onDispose { notificationScope.cancel() } }
+    val tray = remember { TrayAvailability(shellScope, native) }
+    val storeSession = remember { StoreSessionCoordinator(shellScope, application.settings, application.storeSession, native) }
+    remember {
+      TransitionNotificationCoordinator(notificationScope, application.boards, application.settings, native) { identity ->
+        uiScope.launch(Dispatchers.Main) {
+          selected = identity
+          mainVisible = true
+        }
+      }
     }
     val quit: () -> Unit = {
       uiScope.launch {
-        model.closeAndJoin()
+        shellScope.coroutineContext[Job]?.cancelAndJoin()
+        notificationScope.coroutineContext[Job]?.cancelAndJoin()
+        applicationOwner.viewModelStore.clear()
         application.shutdown.closeAndJoin()
         exitApplication()
       }
     }
-    val state by model.state.collectAsState()
+    val board by trayModel.state.collectAsState()
+    val trayState by tray.state.collectAsState()
+    LaunchedEffect(trayModel) {
+      trayModel.effects.collect { effect ->
+        if (effect is TrayEffect.OpenDetail) {
+          selected = effect.identity
+          mainVisible = true
+        }
+      }
+    }
+    val storeProblem by storeSession.problem.collectAsState()
     val windowIcon = androidx.compose.ui.res.painterResource("icons/skill-bill.svg")
     val density = LocalDensity.current.density.toDouble()
     val isMac = System.getProperty("os.name").contains("mac", true)
     val isLinux = System.getProperty("os.name").contains("linux", true)
-    LaunchedEffect(isLinux, state.trayProbeComplete) {
-      if (isLinux && !state.trayProbeComplete) {
+    LaunchedEffect(isLinux, trayState.probeComplete) {
+      if (isLinux && !trayState.probeComplete) {
         delay(4000)
-        if (!model.state.value.trayProbeComplete) model.trayUnavailable()
+        if (!tray.state.value.probeComplete) tray.unavailable()
       }
     }
-    val projected = dev.skillbill.tray.presentation.presentPopover(state)
-    val trayState = dev.skillbill.tray.presentation.presentTrayState(state)
-    val trayProblem = state.trayProblem
-    val problem = state.problem
+    val trayProblem = trayState.problem
+    val problem = board.liveProblem
     val tooltip = when {
       trayProblem != null -> trayProblem.summary
       problem != null -> "Skill Bill could not refresh the board · ${problem.summary}"
-      state.stale -> "Skill Bill is showing stale work data"
-      trayState.kind == dev.skillbill.tray.presentation.TrayStateKind.FAILED -> "Skill Bill has a failed goal"
-      trayState.kind == dev.skillbill.tray.presentation.TrayStateKind.NEEDS_YOU -> "Skill Bill needs you"
-      trayState.running > 0 -> "Skill Bill, ${trayState.running} running"
+      board.stale -> "Skill Bill is showing stale work data"
+      board.trayStatus == TrayStatus.FAILED -> "Skill Bill has a failed goal"
+      board.trayStatus == TrayStatus.NEEDS_YOU -> "Skill Bill needs you"
+      board.running > 0 -> "Skill Bill, ${board.running} running"
       else -> "Skill Bill is idle"
     }
 
-    if (isMac) NativeTrayHost.MacStatusItem(trayState.kind, trayState.running, projected.goals, projected.phases,
+    if (isMac) NativeTrayHost.MacStatusItem(board.trayStatus, board.running, board.popoverGoals, board.popoverLivePhases + board.popoverFinishedPhases,
       onPrimary = {
-        model.trayAvailable()
+        tray.available()
         dev.skillbill.tray.infrastructure.macos.MacStatusItemBridge.statusItemAnchor?.let { anchor ->
           val placement = anchor.placePopover(density)
           trayPopoverWindowState.position = placement.position
@@ -87,23 +127,24 @@ fun main() {
         trayPopoverVisible = true
       },
       onMenuAction = { action ->
-        model.trayAvailable()
+        tray.available()
+        val phases = board.popoverLivePhases + board.popoverFinishedPhases
         when {
-          action in 0..7 -> projected.goals.getOrNull(action)?.let { model.select(it.identity); mainVisible = true }
-          action in 1000..1007 -> projected.phases.getOrNull(action - 1000)?.let { model.select(it.identity); mainVisible = true }
+          action in 0..7 -> board.popoverGoals.getOrNull(action)?.let { selected = it.identity; mainVisible = true }
+          action in 1000..1007 -> phases.getOrNull(action - 1000)?.let { selected = it.identity; mainVisible = true }
           action == 2000 -> mainVisible = true
-          action == 2002 -> model.refresh()
+          action == 2002 -> trayModel.onAction(TrayAction.Refresh)
           action == 2003 -> settingsVisible = true
           action == 2004 -> quit()
         }
-      }, model::trayUnavailable, { trayPopoverVisible = false })
+      }, tray::unavailable, { trayPopoverVisible = false })
     else Tray(
       iconContent = {
         val platform = System.getProperty("os.name").lowercase()
-        val nativeState = NativeTrayHost.state(trayState.kind, trayState.running)
+        val nativeState = NativeTrayHost.state(board.trayStatus, board.running)
         TrayIconRenderer.Content(windowIcon, nativeState.kind, nativeState.running, NativeTrayHost.showsOverlay(platform))
       },
-      tooltip = if (isLinux) dev.skillbill.tray.presentation.presentTrayHover(state) else tooltip,
+      tooltip = if (isLinux) board.trayHover() else tooltip,
       primaryAction = {
         if (!trayPopoverOpening) {
           val anchor = trayIconAnchor()
@@ -111,7 +152,7 @@ fun main() {
             trayPopoverOpening = true
             uiScope.launch {
               try {
-                model.trayAvailable()
+                tray.available()
                 trayPopoverWindowState.position = withContext(Dispatchers.IO) {
                   trayPlacement.position(trayPopoverWindowState.size, anchor, uiScale.scaledWindowPixels(16))
                 }
@@ -121,7 +162,7 @@ fun main() {
               }
             }
           } else {
-            model.trayAvailable()
+            tray.available()
             trayPopoverVisible = false
           }
         }
@@ -137,11 +178,11 @@ fun main() {
       resizable = false,
       state = trayPopoverWindowState,
     ) {
-      SkillBillTheme(uiScale) { TrayPopover(model, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }, quit) }
+      SkillBillTheme(uiScale) { TrayPopover(trayModel, selected, { trayPopoverVisible = false }, { mainVisible = true; trayPopoverVisible = false }, { settingsVisible = true; trayPopoverVisible = false }, quit) }
     }
 
     val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
-    val hideMain = { if (state.trayProbeComplete && state.trayProblem == null) mainVisible = false }
+    val hideMain = { if (trayState.canHideToTray) mainVisible = false }
     Window(visible = mainVisible, state = mainWindowState, icon = windowIcon, undecorated = true, transparent = true, onCloseRequest = hideMain, title = "Skill Bill") {
       DisposableEffect(window, uiScale) {
         window.minimumSize = java.awt.Dimension(uiScale.scaledWindowPixels(1060), uiScale.scaledWindowPixels(698))
@@ -149,13 +190,17 @@ fun main() {
       }
       SkillBillTheme(uiScale) {
         DesignWindow(mainWindowState, hideMain) {
-          MainWindow(model, { settingsVisible = true })
+          val windowOwner = rememberEntryViewModelStoreOwner("main-window")
+          val work = rememberViewModel(windowOwner, "work") { application.viewModels.work() }
+          val history = rememberViewModel(windowOwner, "history") { application.viewModels.history() }
+          MainWindow(work, history, application.viewModels, selected, { selected = it }, trayProblem ?: storeProblem, { settingsVisible = true })
         }
       }
     }
     if (settingsVisible) Window(onCloseRequest = { settingsVisible = false }, title = "Skill Bill Settings", resizable = false, state = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(460).dp, uiScale.scaledWindowPixels(680).dp))) {
-      val current by model.state.collectAsState()
-      SkillBillTheme(uiScale) { SettingsWindow(current.settings, model::updateSettings, current.settingsProblem, current.databasePath) { settingsVisible = false } }
+      val settingsOwner = rememberEntryViewModelStoreOwner("settings")
+      val settings = rememberViewModel(settingsOwner, "settings") { application.viewModels.settings() }
+      SkillBillTheme(uiScale) { SettingsRoute(settings) { settingsVisible = false } }
     }
   }
 }

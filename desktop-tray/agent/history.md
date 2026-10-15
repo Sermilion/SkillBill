@@ -1,3 +1,16 @@
+## [2026-10-15] SKILL-424 subtask 4 feature presentation
+Areas: desktop-tray (core/ui, feature/work, feature/detail, feature/history, feature/settings, composeApp, core/data, core/domain, core/testing, build-logic/convention)
+
+- New core:ui plus feature:work, detail, history and settings modules, each with a contract, a ViewModel and its content in commonMain; features depend only on common, domain, designsystem and ui. A FeatureConventionPlugin supplies shared setup (reusable).
+- DashboardController, the combined BoardSource, composeApp UI/presentation files and TrayStateKind are deleted; ViewModels own state, and composeApp keeps the shell (selection, default selection), notification and store-session coordinators, and ViewModelFactory over the generated component.
+- Reusable in core:ui: SectionPager (paging, generation fencing, cursor re-anchoring), PagedListState, NavigationEffects and TransientEffects (bounded one-shot delivery), pendingFeedback in UiState (max 8, monotonic ids, acknowledged by id), shared rows, formatting, footer and tooltip.
+- Typed combine everywhere; guards ban array or indexed-cast combine and retired types, sibling-feature imports and shared-UI forbidden references, and feature modules must be commonMain-only. No baseline or exemption grew.
+- Fixed SectionPager.start leaving the footer at Loading when an in-flight append was restarted (appendCancelled).
+- Tests are barrier-driven (CompletableDeferred hooks on core:testing fakes, setMain with StandardTestDispatcher); ported sidebar scroll, tray hover and transition tracker tests.
+- Limits: nothing compiled or run when written; Readian source was unreachable, so the parent spec table stood in; the governed-edge walk may flag unresolved edges; compose-ui-test must suffice for ImageComposeScene in feature:history. Cancel gives no feedback of its own; historical docs left unchanged.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 4 of SKILL-424)
+
 ## [2026-10-15] SKILL-424 subtask 3 SKILL-423 data repair handoff
 Areas: desktop-tray (composeApp, core/data, core/domain, docs), runtime-kotlin (runtime-domain, runtime-ports, runtime-engine, runtime-infra/sqlite)
 

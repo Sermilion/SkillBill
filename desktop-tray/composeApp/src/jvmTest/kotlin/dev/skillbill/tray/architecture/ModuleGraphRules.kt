@@ -55,21 +55,27 @@ internal object ModuleGraphRules {
   const val DOMAIN = ":core:domain"
   const val DATA = ":core:data"
   const val DATASTORE = ":core:datastore"
-  val expectedProjects = setOf(":composeApp", ":core:common", DOMAIN, ":core:designsystem", TESTING, DATA, DATASTORE)
+  const val UI = ":core:ui"
+  val features = listOf(":feature:work", ":feature:detail", ":feature:history", ":feature:settings")
+  val expectedProjects = setOf(":composeApp", ":core:common", DOMAIN, ":core:designsystem", TESTING, DATA, DATASTORE, UI) + features
   val allowedTargets = setOf("jvm:jvm", "metadata:common")
+
+  /** A feature reaches only these modules: never data, datastore, the shell, testing or another feature. */
+  val featureEdges = setOf(":core:common", DOMAIN, ":core:designsystem", UI)
   val allowedProductionEdges: Map<String, Set<String>> = mapOf(
-    ":composeApp" to setOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE),
+    ":composeApp" to setOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE, UI) + features,
     ":core:common" to emptySet(),
     DOMAIN to setOf(":core:common"),
     ":core:designsystem" to emptySet(),
+    UI to setOf(":core:common", DOMAIN, ":core:designsystem"),
     TESTING to setOf(":core:common", DOMAIN),
     DATA to setOf(":core:common", DOMAIN, DATASTORE),
     DATASTORE to setOf(":core:common", DOMAIN),
-  )
+  ) + features.associateWith { featureEdges }
   val allowedTestEdges: Map<String, Set<String>> = allowedProductionEdges.mapValues { (project, edges) ->
     if (project == TESTING) edges else edges + TESTING
   }
-  val consumedInProduction = listOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE)
+  val consumedInProduction = listOf(":core:common", DOMAIN, ":core:designsystem", DATA, DATASTORE, UI) + features
   val domainClasspathForbidden = listOf(
     "org.jetbrains.compose", "androidx.compose", "org.jetbrains.androidx", "androidx.lifecycle", "androidx.room",
     "androidx.datastore", "androidx.navigation", "androidx.sqlite", "androidx.paging", "dev.nucleusframework",
@@ -108,6 +114,11 @@ internal object ModuleGraphRules {
         }
       }
       if (manifest.directoriesFor(productionSourceSets).isEmpty()) add("$project declares no production Kotlin source directories")
+      if (project in features) {
+        manifest.projectDependencies.map { it.substringBefore("->") to it.substringAfter("->") }
+          .filter { (configuration, _) -> configuration.startsWith("jvmMain") }
+          .forEach { (configuration, target) -> add("$project declares $configuration->$target; a feature's production code is commonMain only") }
+      }
     }
     addAll(cycles(manifests))
     consumedInProduction.forEach { module ->
@@ -115,6 +126,11 @@ internal object ModuleGraphRules {
     }
     if (manifests.none { it.project != TESTING && TESTING in it.testEdges }) add("$TESTING has no test consumer.")
   }
+
+  /** A feature is shared UI and presentation: any production source outside `commonMain` is desktop code in the wrong place. */
+  fun featureSourceSetViolations(sources: List<Source>): List<String> = sources
+    .filter { it.project in features && it.sourceSet != "commonMain" }
+    .map { "${it.project} has a ${it.sourceSet} production source ${it.path}; a feature's production code is commonMain only" }
 
   /**
    * An `api` project edge re-exports the target to every consumer, so it must earn that by showing one of the target's

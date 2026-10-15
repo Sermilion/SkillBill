@@ -1,7 +1,7 @@
 package dev.skillbill.tray.infrastructure.macos
 
+import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.infrastructure.RuntimeDiagnostics
-import dev.skillbill.tray.presentation.TrayStateKind
 import java.nio.file.Files
 
 object MacStatusItemBridge {
@@ -34,7 +34,7 @@ object MacStatusItemBridge {
     }
   }
 
-  fun update(kind: TrayStateKind, count: Int, goals: List<String>, phases: List<String>) {
+  fun update(kind: TrayStatus, count: Int, goals: List<String>, phases: List<String>) {
     if (loaded) nativeUpdate(kind.name.lowercase(), count, goals.toTypedArray(), phases.toTypedArray())
   }
 

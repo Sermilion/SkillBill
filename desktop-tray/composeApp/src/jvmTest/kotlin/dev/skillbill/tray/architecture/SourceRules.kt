@@ -31,7 +31,30 @@ internal object SourceRules {
   )
 
   /** Types composition sources never construct directly; the generated graph owns their creation. */
-  val composedByGraph = Regex("^(?:.+Repository|DataStore|RuntimeComponent|RoomBoardSource)$")
+  val composedByGraph = Regex("^(?:.+Repository|DataStore|RuntimeComponent)$")
+
+  /** The shared UI modules: the feature screens and the UI toolkit under them. Their `commonMain` knows no desktop or data API. */
+  val sharedUiModules = setOf(ModuleGraphRules.UI) + ModuleGraphRules.features
+
+  /** Desktop windowing, the tray host, storage and the shell's own packages; shared UI never reaches them. */
+  val sharedUiForbidden = listOf(
+    "androidx.compose.ui.window", "androidx.compose.ui.awt", "androidx.compose.desktop", "org.jetbrains.compose.desktop",
+    "org.jetbrains.skiko", "dev.nucleusframework", "dev.skillbill.tray.core.data", "dev.skillbill.tray.core.datastore",
+    "dev.skillbill.tray.application", "dev.skillbill.tray.infrastructure", "dev.skillbill.tray.ui",
+    "dev.skillbill.tray.presentation", "dev.skillbill.tray.composition",
+  )
+
+  /** A feature never reaches another feature; the toolkit never reaches any. */
+  fun siblingFeaturePackages(project: String): List<String> =
+    if (project == ModuleGraphRules.UI) listOf("dev.skillbill.tray.feature")
+    else ModuleGraphRules.features.filter { it != project }.map { "dev.skillbill.tray.feature.${it.substringAfterLast(':')}" }
+
+  /** A `combine` over many flows reads its values back by index and cast; the typed overloads keep each flow's type. */
+  private val indexedCastCombine = Regex("""\[\s*\d+\s*]\s*as\??\s""")
+  private val collectionCombine = Regex("""\bcombine\s*\(\s*(?:listOf|arrayOf|setOf)\s*\(""")
+
+  /** Types that were deleted when the screens moved into feature modules; nothing may bring them back. */
+  private val retiredTypes = Regex("""\b(?:DashboardController|DashboardState|DashboardModel|BoardSource|RoomBoardSource)\b""")
 
   fun violations(references: Map<Source, SourceReferences>): List<String> = references.flatMap { (source, found) ->
     val path = source.path
@@ -45,13 +68,25 @@ internal object SourceRules {
       if (project in adapterModules) addAll(adapterForbidden)
       if (production && project !in adapterModules) addAll(adapterOnly)
       if (production) addAll(reflectiveLookup)
+      if (project in sharedUiModules && (sourceSet == "commonMain" || sourceSet == "commonTest")) {
+        addAll(sharedUiForbidden)
+        addAll(siblingFeaturePackages(project))
+      }
     }
     found.referencesAny(forbidden).map { "$path references $it" } +
       found.injectDefaults.map { "$path gives an @Inject constructor parameter a default value: $it" } +
       (if (production) found.collaboratorDefaults else emptyList()).map {
         "$path gives a production constructor collaborator a default value: $it"
       } +
-      compositionConstructions(source, found)
+      compositionConstructions(source, found) +
+      (if (production) productionTextViolations(source) else emptyList())
+  }
+
+  private fun productionTextViolations(source: Source): List<String> = buildList {
+    if (indexedCastCombine.containsMatchIn(source.text) || collectionCombine.containsMatchIn(source.text)) {
+      add("${source.path} combines flows through an array or an indexed cast; use the typed combine overloads")
+    }
+    retiredTypes.findAll(source.text).map { it.value }.distinct().forEach { add("${source.path} references the retired type $it") }
   }
 
   /** A governed consumer the policy scan must reach, and a call it must make on the way (the runtime-owned arrangement). */
@@ -59,18 +94,19 @@ internal object SourceRules {
 
   /** The real surfaces that render the runtime's arrangement; a scan that never reaches them proves nothing. */
   val policyConsumers = setOf(
-    PolicyConsumer("/presentation/TrayPresentation.kt", "presentTrayState"),
-    PolicyConsumer("/presentation/TrayPresentation.kt", "presentPopover"),
-    PolicyConsumer("/application/DashboardController.kt", "observeSelectedDetail"),
-    PolicyConsumer("/application/DashboardController.kt", "publish", mustCall = "arrange"),
+    PolicyConsumer("/feature/work/TrayViewModel.kt", "state", mustCall = "arrange"),
+    PolicyConsumer("/feature/work/TrayPopoverContent.kt", "TrayPopoverContent"),
+    PolicyConsumer("/feature/detail/DetailViewModel.kt", "perform"),
+    PolicyConsumer("/application/TransitionNotifications.kt", "observe"),
+    PolicyConsumer("/application/DefaultSelection.kt", "defaultSelection"),
   )
 
-  private val policySurfaces = listOf("/application/", "/presentation/", "/ui/")
+  private val policySurfaces = listOf("/application/", "/ui/")
 
   private fun Source?.isDesktopProduction(): Boolean = this != null && sourceSet in productionSourceSets
 
   /**
-   * Walks every edge out of the desktop surfaces that render work (application, presentation, ui and the domain model)
+   * Walks every edge out of the surfaces that render work (application, ui, the feature and toolkit modules, the domain model)
    * and reports each visited desktop function outside the adapter modules that sorts work, judges lifecycle or freshness
    * membership, weighs a time window, or weighs freshness into eligibility itself. Data adapters legitimately order
    * storage pages, so they are walked but not reported. An empty scan, an empty root set, an edge that resolves to no
@@ -83,7 +119,7 @@ internal object SourceRules {
     val roots = functions.filter { function ->
       val source = bySource[function.path]
       source.isDesktopProduction() &&
-        (source?.project == ModuleGraphRules.DOMAIN || policySurfaces.any { it in function.path })
+        (source?.project == ModuleGraphRules.DOMAIN || source?.project in sharedUiModules || policySurfaces.any { it in function.path })
     }
     val visited = walkGovernedEdges(functions, roots)
     val missing = requiredConsumers.filter { consumer ->

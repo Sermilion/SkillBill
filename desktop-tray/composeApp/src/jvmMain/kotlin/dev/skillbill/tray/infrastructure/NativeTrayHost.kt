@@ -4,19 +4,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
+import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.WorkItem
-import dev.skillbill.tray.presentation.TrayStateKind
 import dev.skillbill.tray.infrastructure.macos.MacStatusItemBridge
 
-data class NativeTrayState(val kind: TrayStateKind, val running: Int)
+data class NativeTrayState(val kind: TrayStatus, val running: Int)
 
 object NativeTrayHost {
-  fun state(kind: TrayStateKind, running: Int) = NativeTrayState(kind, running.coerceAtLeast(0))
+  fun state(kind: TrayStatus, running: Int) = NativeTrayState(kind, running.coerceAtLeast(0))
   fun showsOverlay(platform: String): Boolean = !platform.contains("mac", true)
 
   @Composable
   fun MacStatusItem(
-    kind: TrayStateKind,
+    kind: TrayStatus,
     running: Int,
     goals: List<WorkItem>,
     phases: List<WorkItem>,

@@ -559,12 +559,17 @@ class WorkStackTest {
       source.selectDatabase(fixture.dbPath.toString())
       try {
         val first = value(withTimeout(10_000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
-        val second = value(withTimeout(10_000) { source.observe(WorkSection.PHASES, Retention.DAY).first() })
-        assertTrue(second.queryEpoch > first.queryEpoch)
-        assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(first.nextCursor)))
-        val appended = value(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(second.nextCursor)))
-        assertEquals(second.queryEpoch, appended.queryEpoch)
-        assertEquals(12, (second.items + appended.items).map { it.identity }.toSet().size)
+        val received = Channel<Outcome<Board>>(Channel.UNLIMITED)
+        val live = launch { source.observe(WorkSection.PHASES, Retention.DAY).collect { received.send(it) } }
+        try {
+          val second = value(withTimeout(10_000) { received.receive() })
+          assertTrue(second.queryEpoch > first.queryEpoch)
+          // The first subscription was released, so its cursor is stale; the live one continues.
+          assertIs<Outcome.Failure>(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(first.nextCursor)))
+          val appended = value(source.board(WorkSection.PHASES, Retention.DAY, assertNotNull(second.nextCursor)))
+          assertEquals(second.queryEpoch, appended.queryEpoch)
+          assertEquals(12, (second.items + appended.items).map { it.identity }.toSet().size)
+        } finally { live.cancelAndJoin() }
       } finally { source.closeAndJoin() }
     }
   }

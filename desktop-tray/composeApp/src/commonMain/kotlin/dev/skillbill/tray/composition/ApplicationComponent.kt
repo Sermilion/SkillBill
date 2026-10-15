@@ -38,6 +38,7 @@ abstract class ApplicationComponent(
   abstract val dispatchers: DispatcherProvider
   abstract val clock: Clock
   abstract val shutdown: ApplicationShutdown
+  abstract val viewModels: ViewModelFactory
 }
 
 /** Releases what the application owns for its whole run: the selected database session and the settings store. */

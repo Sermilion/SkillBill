@@ -16,6 +16,11 @@ kotlin {
     implementation(projects.core.domain)
     implementation(projects.core.data)
     implementation(projects.core.datastore)
+    implementation(projects.core.ui)
+    implementation(projects.feature.work)
+    implementation(projects.feature.history)
+    implementation(projects.feature.detail)
+    implementation(projects.feature.settings)
   }
   sourceSets.jvmMain.dependencies {
     implementation(compose.materialIconsExtended)

@@ -201,13 +201,20 @@ class DatabaseSession(
     owner.scope.launch { mutex.withLock { if (current === owner && !closed) block() } }
   }
 
-  private suspend fun acquireGeneration(): SessionGeneration? = lifecycle.withLock {
-    when (val acquisition = mutex.withLock { planAcquisition() }) {
-      is Acquisition.Reuse -> acquisition.generation
-      Acquisition.Unavailable -> null
-      is Acquisition.Replace -> {
-        dispose(acquisition.retired, announce = true)
-        open(acquisition.path)
+  /**
+   * Checking the file and opening a connection block, and readers call from any dispatcher (screens read from the main thread),
+   * so the acquisition runs on the I/O dispatcher. A replacement is stored in [current] before it returns, so a caller cancelled
+   * at the hand-back never leaks the connection.
+   */
+  private suspend fun acquireGeneration(): SessionGeneration? = withContext(dispatchers.io) {
+    lifecycle.withLock {
+      when (val acquisition = mutex.withLock { planAcquisition() }) {
+        is Acquisition.Reuse -> acquisition.generation
+        Acquisition.Unavailable -> null
+        is Acquisition.Replace -> {
+          dispose(acquisition.retired, announce = true)
+          open(acquisition.path)
+        }
       }
     }
   }

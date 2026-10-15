@@ -72,6 +72,16 @@ internal class ConcurrentRegistry<K, V> {
     return removed
   }
 
+  /** Removes every entry whose key matches [predicate] and returns the removed values. */
+  fun removeAll(predicate: (K) -> Boolean): List<V> {
+    var removed = emptyList<V>()
+    state.update { current ->
+      removed = current.filterKeys(predicate).values.toList()
+      if (removed.isEmpty()) current else current.filterKeys { !predicate(it) }
+    }
+    return removed
+  }
+
   fun compute(key: K, remap: (V?) -> V): V {
     var result: V? = null
     state.update { current ->

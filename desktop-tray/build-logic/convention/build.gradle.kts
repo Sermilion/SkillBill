@@ -46,6 +46,10 @@ gradlePlugin {
       id = "skillbill.kmp.compose"
       implementationClass = "dev.skillbill.tray.buildlogic.KmpComposeConventionPlugin"
     }
+    register("feature") {
+      id = "skillbill.feature"
+      implementationClass = "dev.skillbill.tray.buildlogic.FeatureConventionPlugin"
+    }
     register("kotlinInject") {
       id = "skillbill.kotlin.inject"
       implementationClass = "dev.skillbill.tray.buildlogic.KotlinInjectConventionPlugin"

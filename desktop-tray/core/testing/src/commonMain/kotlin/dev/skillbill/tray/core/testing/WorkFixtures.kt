@@ -4,6 +4,7 @@ import dev.skillbill.tray.core.domain.model.Board
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Freshness
+import dev.skillbill.tray.core.domain.model.HistoryFilter
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.WorkFamily
@@ -56,6 +57,31 @@ fun workItem(
 
 fun board(items: List<WorkItem>, retention: Retention = Retention.DAY, observedAt: Instant = fixtureInstant): Board =
   Board(observedAt, retention, items)
+
+/** A page the way the runtime reports it: tied to one store revision and query, which is what a section accepts. */
+fun observedBoard(
+  items: List<WorkItem>,
+  nextCursor: String? = null,
+  retention: Retention = Retention.DAY,
+  filter: String = "",
+  historyFilter: HistoryFilter = HistoryFilter.ALL,
+  generation: Long = 1,
+  revision: Long = 1,
+  pageKey: String = "root",
+): Board = Board(
+  observedAt = fixtureInstant,
+  finishedWithin = retention,
+  items = items,
+  nextCursor = nextCursor,
+  generation = generation,
+  observationSession = 1,
+  storeId = "store",
+  revision = revision,
+  pageKey = pageKey,
+  queryEpoch = 1,
+  filter = filter,
+  historyFilter = historyFilter,
+)
 
 fun detail(item: WorkItem): Detail =
   Detail(item, listOf("implement"), listOf("pr", "monitor"), "Feature title", "implement", 0, 1, 0, null, null, emptyMap())

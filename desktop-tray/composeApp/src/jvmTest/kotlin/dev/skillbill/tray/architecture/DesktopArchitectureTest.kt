@@ -10,7 +10,9 @@ class DesktopArchitectureTest {
   @Test
   fun `domain and presentation stay outside storage and runtime adapters`() {
     val sources = desktopSources()
-    val presentation = sources.filter { "/presentation/" in it.path || "/ui/" in it.path || it.project == ":core:designsystem" }
+    val presentation = sources.filter {
+      "/ui/" in it.path || it.project in SourceRules.sharedUiModules || it.project == ":core:designsystem"
+    }
     val domain = sources.filter { it.project == ModuleGraphRules.DOMAIN }
     val application = sources.filter { "/application/" in it.path }
 
