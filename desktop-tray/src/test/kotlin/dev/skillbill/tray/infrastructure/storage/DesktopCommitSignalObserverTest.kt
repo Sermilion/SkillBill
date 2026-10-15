@@ -1,5 +1,6 @@
 package dev.skillbill.tray.infrastructure.storage
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
@@ -248,7 +249,7 @@ object ExternalRuntimeWriter {
       JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
         override fun warning(message: String, error: Throwable?) = Unit
         override fun error(message: String, error: Throwable?) = Unit
-      }).currentProcess()
+      }, JdkHostPlatformPort).currentProcess()
     } else null
     try {
       if (mode == "activity") {

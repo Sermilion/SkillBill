@@ -236,4 +236,5 @@ abstract class RuntimeComponent(
 
   abstract val ideStatusService: IdeStatusService
   abstract val databaseSession: DatabaseSessionFactory
+  abstract val databaseSchema: DatabaseSchemaPort
 }

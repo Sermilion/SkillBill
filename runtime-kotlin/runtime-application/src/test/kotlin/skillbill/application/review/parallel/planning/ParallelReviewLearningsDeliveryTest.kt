@@ -105,7 +105,11 @@ class ParallelReviewLearningsDeliveryTest {
     recorder.parentPrompts.forEach { prompt ->
       assertTrue(REPO_RULE !in prompt, "No origin remote means no repo-scoped learning may be launched.")
     }
-    assertEquals(1, recorder.diagnosticWarnings.size, "A missing repo scope is a degradation and must be recorded.")
+    assertEquals(
+      1,
+      recorder.diagnosticWarnings.count { it.startsWith("Review learnings resolved without a repo scope") },
+      "A missing repo scope is a degradation and must be recorded.",
+    )
   }
 
   private fun persistedSessionRow(sessionJson: String): Map<String, Any?> =

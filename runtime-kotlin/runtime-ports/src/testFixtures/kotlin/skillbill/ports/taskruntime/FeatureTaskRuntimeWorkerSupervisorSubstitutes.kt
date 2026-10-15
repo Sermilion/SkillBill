@@ -6,6 +6,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.time.Duration
+import java.time.Instant
 
 object NoopFeatureTaskRuntimeHeartbeat : FeatureTaskRuntimeHeartbeat {
   private const val NAME = "NoopFeatureTaskRuntimeHeartbeat"
@@ -28,6 +29,8 @@ object NoopFeatureTaskRuntimeWorkerSupervisor : FeatureTaskRuntimeWorkerSupervis
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection {
     return FeatureTaskRuntimeProcessInspection.Unsupported("no-op supervisor performs no liveness inspection")
   }
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

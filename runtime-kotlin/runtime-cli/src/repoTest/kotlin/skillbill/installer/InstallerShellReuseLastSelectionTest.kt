@@ -95,8 +95,10 @@ class InstallerShellReuseLastSelectionTest {
     val testRepo = Files.createTempDirectory("skillbill-installer-reuse-repo")
     val home = Files.createTempDirectory("skillbill-installer-reuse-home")
     val binDir = Files.createTempDirectory("skillbill-installer-reuse-bin")
+    val releaseDir = Files.createTempDirectory("skillbill-installer-reuse-release")
     val logPath = Files.createTempFile("skillbill-installer-reuse-runtime", ".log")
     seedRepo(testRepo)
+    stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
     if (options.currentTelemetryLevel != null) {
       val configPath = home.resolve(".config/skill-bill/config.json")
       Files.createDirectories(configPath.parent)
@@ -114,6 +116,7 @@ class InstallerShellReuseLastSelectionTest {
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
           environment()["SKILL_BILL_TEST_REUSE_SELECTION"] = options.reuseSelection
+          environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
           environment()["SKILL_BILL_TEST_REPLAY_TELEMETRY"] = options.replayTelemetryLevel
           options.currentTelemetryLevel?.let { environment()["SKILL_BILL_TEST_CURRENT_TELEMETRY"] = it }
           if (options.telemetryStatusFails) environment()["SKILL_BILL_TEST_TELEMETRY_STATUS_FAILS"] = "1"

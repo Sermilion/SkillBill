@@ -762,7 +762,8 @@ class ParallelCodeReviewSuppliedDiffTest {
         runner.resolveInlineCodeQualityRubric(request.copy(suppliedDiff = modeOnly)),
       )
     assertEquals(
-      "Selected code-quality specialist: bill-kotlin-code-review-code-quality\n\n$rubricBody",
+      "Selected code-quality specialist: bill-kotlin-code-review-code-quality\n" +
+        "Apply this rubric to these changed paths:\n- src/Main.kt\n\n$rubricBody",
       resolved.value,
     )
     assertTrue(recorder.parentLaunches.isEmpty())

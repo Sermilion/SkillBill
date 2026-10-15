@@ -217,6 +217,12 @@ for degradation and fallback; failure must not silently become normal absence.
 
 ### Durable State And Projections
 
+Every durable schema change requires an append-only runtime migration and an
+upgrade test that preserves existing records. Installation and desktop database
+selection apply pending supported migrations before opening read-only consumers.
+Ordinary desktop reads and change observation do not migrate. Upgrade rejects
+newer or unrecognized stores without rewriting their schema or metadata.
+
 Name the authoritative store and the transaction owner for each mutation. Keep
 related database changes atomic. SQLite and a filesystem projection do not share
 a transaction: distinguish committed state from projection success or failure.

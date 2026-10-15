@@ -11,9 +11,15 @@ class SQLiteDatabaseSchema(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
 ) : DatabaseSchemaPort {
+  override fun ensureDatabaseReady() {
+    if (!migrateExistingDatabase()) {
+      DatabaseRuntime.ensureWriteReady(database.resolveDbPath(), diagnostics)
+    }
+  }
+
   override fun migrateExistingDatabase(): Boolean {
     if (!database.databaseExists()) return false
-    DatabaseRuntime.ensureWriteReady(database.resolveDbPath(), diagnostics)
+    DatabaseRuntime.migrateExistingDatabase(database.resolveDbPath(), diagnostics)
     return true
   }
 }

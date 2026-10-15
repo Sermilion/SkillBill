@@ -115,7 +115,7 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
     Column(Modifier.weight(1f).padding(start = 14.dp, end = 16.dp, top = 10.dp, bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         WorkDot(item.lifecycle)
-        Text(FileName(item.repositoryRoot), Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.repositoryTitle(), Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(item.issueKey ?: item.phaseId ?: item.currentStepId, Modifier.border(1.dp, color.copy(alpha = .45f), RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 3.dp), color = color, fontFamily = mono, fontSize = 10.5.sp)
       }
       val planning = item.planningState?.let { it != "prepared" } == true

@@ -51,6 +51,7 @@ internal fun runInstallerShell(
   val repoRoot = Files.createTempDirectory("skillbill-installer-shell-repo")
   val home = Files.createTempDirectory("skillbill-installer-shell-home")
   val binDir = Files.createTempDirectory("skillbill-installer-shell-bin")
+  val releaseDir = Files.createTempDirectory("skillbill-installer-shell-release")
   val logPath = Files.createTempFile("skillbill-installer-shell-runtime", ".log")
   val installScript = installerShellRuntimeRoot.parent.resolve("install.sh")
   Files.writeString(repoRoot.resolve("install.sh"), Files.readString(installScript))
@@ -61,6 +62,7 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+  stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -76,6 +78,7 @@ internal fun runInstallerShell(
         environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+        environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
       }
       .start()
@@ -314,6 +317,7 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
   InstallerShellFixtures.seedFakeGradlew(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
 }
 
 internal fun stageRelease(
@@ -549,6 +553,7 @@ internal object InstallerShellFixtures {
     )
 
   fun seedInstallerRuntime(repoRoot: Path) {
+    seedFakeDesktopGradlew(repoRoot)
     writeFakeRuntimeBins(
       repoRoot,
       fakeRuntimeCliScript(
@@ -626,6 +631,24 @@ internal object InstallerShellFixtures {
       |exit 0
       |RUNTIME_MCP
       |chmod +x "${'$'}cli_bin" "${'$'}mcp_bin"
+      """.trimMargin(),
+    )
+    gradlew.toFile().setExecutable(true)
+  }
+
+  fun seedFakeDesktopGradlew(repoRoot: Path) {
+    val gradlew = repoRoot.resolve("desktop-tray/gradlew")
+    Files.createDirectories(gradlew.parent)
+    Files.writeString(
+      gradlew,
+      """
+      |#!/usr/bin/env bash
+      |set -euo pipefail
+      |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
+      |app="${'$'}root/build/compose/binaries/main/app/Skill Bill/bin/Skill Bill"
+      |mkdir -p "${'$'}(dirname "${'$'}app")"
+      |printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${'$'}app"
+      |chmod +x "${'$'}app"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)
@@ -811,6 +834,28 @@ internal object PrebuiltReleaseStager {
       writeChecksumSibling(cliZip, corrupt = !releaseValid)
       writeChecksumSibling(mcpZip, corrupt = false)
     }
+    writeDesktopArchive(releaseDir, token)
+  }
+
+  private fun writeDesktopArchive(
+    releaseDir: Path,
+    token: String,
+  ) {
+    val os = System.getProperty("os.name").lowercase()
+    val appRoot =
+      when {
+        os.contains("mac") -> "Skill Bill.app/Contents/MacOS"
+        os.contains("win") -> "Skill Bill/bin"
+        else -> "Skill Bill/bin"
+      }
+    val staging = Files.createTempDirectory("skillbill-desktop-image")
+    val launcher = staging.resolve(appRoot).resolve(if (os.contains("win")) "Skill Bill.bat" else "Skill Bill")
+    Files.createDirectories(launcher.parent)
+    Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
+    if (!os.contains("win")) launcher.toFile().setExecutable(true)
+    val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz")
+    runOrThrow(staging, listOf("tar", "-czf", archive.toString(), appRoot.substringBefore('/')))
+    writeChecksumSibling(archive, corrupt = false)
   }
 
   private fun writeRuntimeImageZip(

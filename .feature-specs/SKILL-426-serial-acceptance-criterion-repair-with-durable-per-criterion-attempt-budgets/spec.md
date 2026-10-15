@@ -57,6 +57,12 @@ Implement in the workflow-supplied checkout and preserve unrelated edits. Apply 
 
 The operator's prose requirement overrides the superseded requirement to add schemas. Existing unrelated schema enforcement, architecture guards and project quality checks are outside the correction. Do not weaken them to remove this feature's machinery. Tests use disposable storage and homes, not production workflow data.
 
+Later implementation applies AGENTS.md, docs/runtime-command-guidance.md, docs/architecture-guidelines.md A1-A12/G1-G7/P1-P8, runtime-kotlin/ARCHITECTURE.md Design Principles, docs/code-principles.md and docs/observability-policy.md. Review owns the section 5 checklist with rule IDs. Use narrow typed observations/requests, one authoritative transaction owner, shared keys only for actual multiple consumers, injected Clock/host facts and cancellation propagation. No authored Kotlin line/block comments; KDoc only on interfaces/members. Do not weaken guards, baselines, exemptions, payload budgets or scan fixtures.
+
+Preserve SKILL-422 work, evidence, ACs, retry/workflow rows and checkpoints, plus unrelated desktop edits. Apply implementation and repair edits in the repository checkout supplied by the active workflow briefing. Reconcile separate worktree changes into that checkout before reporting implementation complete. Required review/validate repairs to production wiring, test bodies/setup, formatting and lint remain permitted. Source ownership maps are starting points, not blanket file allowlists.
+
+Experiments use isolated SQLite fixtures, explicit disposable homes/environments, injected time and owned controlled processes. Production databases and incident evidence remain untouched. No tracker is required or contacted.
+
 ## Non-goals
 
 No new command, generic workflow framework, dependency upgrade, speculative UI redesign, automatic incident resume or hidden budget increase. Repair does not rewrite the target workflow's acceptance criteria. This operator-authorized respecification changes SKILL-426's design requirements only.

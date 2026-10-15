@@ -153,17 +153,17 @@ class InstallService(
           telemetryLevelMutator = telemetryLevelMutator,
         ),
       ).result
-    val result = migrateExistingDatabase(applied)
+    val result = prepareDatabase(applied)
     persistSuccessfulInstallSelection(plan, result)
     return result
   }
 
-  private fun migrateExistingDatabase(result: InstallApplyResult): InstallApplyResult {
+  private fun prepareDatabase(result: InstallApplyResult): InstallApplyResult {
     if (result.status == InstallApplyStatus.FAILURE) {
       return result
     }
     return try {
-      databaseSchemaPort.migrateExistingDatabase()
+      databaseSchemaPort.ensureDatabaseReady()
       result
     } catch (error: SkillBillRuntimeException) {
       result.copy(

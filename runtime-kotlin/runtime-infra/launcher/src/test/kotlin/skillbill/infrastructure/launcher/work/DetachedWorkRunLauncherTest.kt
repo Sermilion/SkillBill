@@ -10,6 +10,7 @@ import skillbill.ports.work.model.WorkRunStopRequest
 import skillbill.ports.work.model.WorkRunStopResult
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -130,7 +131,12 @@ class DetachedWorkRunLauncherTest {
   fun `an immediate runner failure exposes its log and releases the launch lock`() {
     val home = Files.createTempDirectory("failed-work-launch")
     executable(home, "#!/bin/sh\nprintf 'invalid intake\\n'\nexit 7\n")
-    val launcher = launcher(home)
+    val launcher =
+      DetachedWorkRunLauncher(
+        EnvironmentContext(environment = emptyMap(), userHome = home),
+        NoopRuntimeDiagnostics,
+        Duration.ofSeconds(10),
+      )
     val request = WorkRunLaunchRequest(home, home.resolve("metrics.db"), "claude", "Resume monitor", "work")
     repeat(2) {
       val result = assertIs<WorkRunLaunchResult.Refused>(launcher.start(request))

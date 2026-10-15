@@ -284,7 +284,7 @@ class WorkRunControlsTest {
         WorkRunTarget(
           "old-goal",
           item.snapshot.repositoryIdentity,
-          fixture.tempDir,
+          Path.of(item.repositoryRoot),
           item.snapshot.execution?.executionId,
           item.snapshot.execution?.statusRevision,
           item.snapshot.updatedAt,

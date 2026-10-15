@@ -3128,6 +3128,8 @@ private object ParentLiveChildDeadSupervisor : FeatureTaskRuntimeWorkerSuperviso
       FeatureTaskRuntimeProcessInspection.ExactLive
     }
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,

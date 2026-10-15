@@ -8,6 +8,7 @@ import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OW
 import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
@@ -75,7 +76,7 @@ internal fun seedLiveWorkerLease(
   fixture: GoalCliFixture,
   workflowId: String,
 ) {
-  val process = JdkFeatureTaskRuntimeWorkerSupervisor(NoopRuntimeDiagnostics).currentProcess()
+  val process = JdkFeatureTaskRuntimeWorkerSupervisor(NoopRuntimeDiagnostics, JdkHostPlatformPort).currentProcess()
   ensureTestDatabase(fixture.dbPath).use { connection ->
     connection.prepareStatement(
       """

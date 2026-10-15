@@ -16,14 +16,19 @@ import skillbill.ports.work.model.WorkRunStopResult
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-@Inject
-class DetachedWorkRunLauncher(
+class DetachedWorkRunLauncher internal constructor(
   private val environment: EnvironmentContext,
   private val diagnostics: RuntimeDiagnostics,
+  private val startupGrace: Duration,
 ) : WorkRunLauncher {
+  @Inject
+  constructor(environment: EnvironmentContext, diagnostics: RuntimeDiagnostics) :
+    this(environment, diagnostics, STARTUP_GRACE)
+
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
     val agent =
       SupportedAgent.entries.firstOrNull { it.id == request.agentId }
@@ -95,29 +100,18 @@ class DetachedWorkRunLauncher(
         ownership().stopStarted(process, unit)
         throw failure
       }
-      val ownedInput = input
-      process.onExit().whenComplete { finished, error ->
-        try {
-          if (error != null || finished?.exitValue() != 0) {
-            diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log", error)
-          }
-        } finally {
-          try {
-            ownership().admitted(
-              request.databasePath,
-              request.ownershipKey,
-              { diagnostics.info("seam=work-run.launch outcome=owner_cleanup_deferred") },
-            ) {
-              ownership().clear(it, process.pid())
-            }
-            ownedInput?.let(Files::deleteIfExists)
-          } catch (failure: IOException) {
-            diagnostics.warning("seam=work-run.launch outcome=owner_cleanup_failed", failure)
-          }
+      var failedEarly = false
+      try {
+        failedEarly = process.waitFor(startupGrace.toMillis(), TimeUnit.MILLISECONDS) && process.exitValue() != 0
+      } finally {
+        if (!failedEarly) {
+          releaseOnExit(process, request, log, input)
+          handedOff = true
         }
       }
-      handedOff = true
-      if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS) && process.exitValue() != 0) {
+      if (failedEarly) {
+        diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log")
+        ownership().clear(owner, process.pid())
         return refuse("The runner exited before starting. See $log")
       }
       diagnostics.info("seam=work-run.launch outcome=started log=$log")
@@ -132,6 +126,34 @@ class DetachedWorkRunLauncher(
     } finally {
       if (!handedOff) {
         input?.let(Files::deleteIfExists)
+      }
+    }
+  }
+
+  private fun releaseOnExit(
+    process: Process,
+    request: WorkRunLaunchRequest,
+    log: Path,
+    input: Path?,
+  ) {
+    process.onExit().whenComplete { finished, error ->
+      try {
+        if (error != null || finished?.exitValue() != 0) {
+          diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log", error)
+        }
+      } finally {
+        try {
+          ownership().admitted(
+            request.databasePath,
+            request.ownershipKey,
+            { diagnostics.info("seam=work-run.launch outcome=owner_cleanup_deferred") },
+          ) {
+            ownership().clear(it, process.pid())
+          }
+          input?.let(Files::deleteIfExists)
+        } catch (failure: IOException) {
+          diagnostics.warning("seam=work-run.launch outcome=owner_cleanup_failed", failure)
+        }
       }
     }
   }
@@ -176,7 +198,7 @@ class DetachedWorkRunLauncher(
   }
 
   private companion object {
-    const val STARTUP_GRACE_MS = 250L
+    val STARTUP_GRACE: Duration = Duration.ofMillis(250)
   }
 
   private fun isWindows(): Boolean = environment.environment["OS"] == "Windows_NT"

@@ -177,13 +177,7 @@ internal object DatabaseRuntime {
       asTypedFailure(dbPath, DatabaseAccessOperation.READ) {
         val state = MigrationLedger.readState(database.connection)
         val latestVersion = DatabaseMigrations.migrations.maxOfOrNull { it.version } ?: 0
-        val currentVersion =
-          database.connection.createStatement().use { statement ->
-            statement.executeQuery("PRAGMA user_version").use { rows ->
-              if (!rows.next()) throw SQLException("PRAGMA user_version returned no row")
-              rows.getInt(1)
-            }
-          }
+        val currentVersion = schemaVersion(database.connection)
         val requiredMigrations = DatabaseMigrations.migrations.map { it.name }.toSet()
         val completeLedger =
           state.tableExists && !state.versionKeyed &&
@@ -204,6 +198,46 @@ internal object DatabaseRuntime {
   ): Connection {
     establishSchemaReadiness(path, diagnostics)
     return openWriteConnectionAt(path, diagnostics)
+  }
+
+  fun migrateExistingDatabase(
+    path: Path,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    val pending =
+      openReadOnlyDb(path, diagnostics).use { database ->
+        asTypedFailure(path, DatabaseAccessOperation.OPEN) {
+          val connection = database.connection
+          val ledger = MigrationLedger.readState(connection)
+          val migrations = DatabaseMigrations.migrations
+          val migrationNames = migrations.map { it.name }
+          val latestVersion = migrations.maxOf { it.version }
+          val version = schemaVersion(connection)
+          if (!ledger.tableExists || ledger.appliedNames.intersect(migrationNames.toSet()).isEmpty() ||
+            version > latestVersion
+          ) {
+            throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
+          }
+          val ledgerVersion =
+            connection.createStatement().use { statement ->
+              statement.executeQuery("SELECT MAX(version) FROM schema_migrations").use { rows ->
+                rows.next()
+                rows.getInt(1)
+              }
+            }
+          val desktopIdentityInstalled =
+            connection.createStatement().use { statement ->
+              statement.executeQuery(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'room_master_table'",
+              ).use { it.next() }
+            }
+          if (ledgerVersion > latestVersion || desktopIdentityInstalled && !hasDesktopReadIdentity(connection)) {
+            throw databaseIncompatible(path.toString(), DatabaseAccessOperation.OPEN)
+          }
+          ledger.hasPendingWork(migrationNames)
+        }
+      }
+    if (pending) establishSchemaReadiness(path, diagnostics)
   }
 
   private fun isSchemaless(dbPath: Path): Boolean =
@@ -332,6 +366,14 @@ private fun Throwable.isSqliteCorrupt(): Boolean =
 private const val SQLITE_PRIMARY_CODE_MASK = 0xFF
 private val SQLITE_CORRUPT_PRIMARY_CODES =
   setOf(SQLiteErrorCode.SQLITE_CORRUPT.code, SQLiteErrorCode.SQLITE_NOTADB.code)
+
+private fun schemaVersion(connection: Connection): Int =
+  connection.createStatement().use { statement ->
+    statement.executeQuery("PRAGMA user_version").use { rows ->
+      if (!rows.next()) throw SQLException("PRAGMA user_version returned no row")
+      rows.getInt(1)
+    }
+  }
 
 private fun hasDesktopReadIdentity(connection: Connection): Boolean {
   val exists =
