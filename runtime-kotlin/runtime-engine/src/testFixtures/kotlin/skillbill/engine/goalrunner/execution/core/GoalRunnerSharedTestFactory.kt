@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -148,6 +149,7 @@ fun testGoalRunnerChildRepairExecutor(
   GoalRunnerChildRepairOperations(
     database,
     testWorkflowSnapshotValidator,
+    featureTaskRuntimeWireArtifactValidatorForTest(),
     gitOperations,
     testDecompositionManifestValidator,
     clock,

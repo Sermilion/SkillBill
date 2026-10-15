@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 
 class AcceptanceCriterionRepairStateTest {
   @Test
-  fun `admission keeps composite identity and follows authored order despite declared dependencies`() {
+  fun `admission keeps composite criterion identity and orders prerequisites before ordinal ties`() {
     val state =
       AcceptanceCriterionRepairState.admit(
         AcceptanceCriterionRepairAdmission(
@@ -26,9 +26,9 @@ class AcceptanceCriterionRepairStateTest {
       )
 
     assertNotNull(state)
-    assertEquals(listOf("AC-001", "AC-002", "AC-003"), state.unresolvedQueue)
+    assertEquals(listOf("AC-001", "AC-003", "AC-002"), state.unresolvedQueue)
     assertEquals("S1-002. First part. Second part.", state.criteria[1].originalText)
-    assertNotNull(
+    assertNull(
       AcceptanceCriterionRepairState.admit(
         AcceptanceCriterionRepairAdmission(
           catalogId = "catalog-1",
@@ -82,7 +82,7 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
-  fun `admission does not require dependency or validation-owner evidence`() {
+  fun `deferred unavailable prerequisites refuse admission while source closed prerequisites remain usable`() {
     val prerequisite =
       criterion("AC-001", 1, "first").copy(
         validationObligation = AcceptanceCriterionValidationObligation.DEFERRED,
@@ -97,8 +97,22 @@ class AcceptanceCriterionRepairStateTest {
         listOf(prerequisite, criterion("AC-002", 2, "second")),
         listOf(dependency("AC-002", "AC-001")),
       )
-    val admitted = assertNotNull(AcceptanceCriterionRepairState.admit(admission))
-    assertEquals("AC-001", admitted.currentCriterionRef)
+    for (disposition in AcceptanceCriterionSourceDisposition.entries) {
+      val candidate =
+        admission.copy(
+          criteria =
+            listOf(
+              prerequisite.copy(sourceDisposition = disposition),
+              admission.criteria[1],
+            ),
+        )
+      val admitted = AcceptanceCriterionRepairState.admit(candidate)
+      if (disposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED) {
+        assertEquals(listOf("AC-002"), assertNotNull(admitted).unresolvedQueue)
+      } else {
+        assertNull(admitted)
+      }
+    }
   }
 
   @Test
@@ -127,7 +141,7 @@ class AcceptanceCriterionRepairStateTest {
         dependencies = listOf(dependency("AC-001", "AC-002")),
       )
     val reopened = assertNotNull(discovered.recordFinalFullAudit(input))
-    assertEquals(listOf("AC-001", "AC-002"), reopened.unresolvedQueue)
+    assertEquals(listOf("AC-002", "AC-001"), reopened.unresolvedQueue)
     assertEquals(reopened, AcceptanceCriterionRepairState.restore(reopened))
     assertEquals(reopened, reopened.recordFinalFullAudit(input))
     assertNull(reopened.recordFinalFullAudit(input.copy(checkpointId = "other-checkpoint")))

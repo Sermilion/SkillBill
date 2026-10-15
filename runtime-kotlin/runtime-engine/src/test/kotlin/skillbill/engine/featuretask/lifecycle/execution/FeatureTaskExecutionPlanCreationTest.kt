@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.slot.artifactValue
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
@@ -151,6 +152,7 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
@@ -179,6 +181,7 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")

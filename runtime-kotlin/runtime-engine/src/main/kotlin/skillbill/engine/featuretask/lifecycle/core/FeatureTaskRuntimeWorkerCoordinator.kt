@@ -149,9 +149,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
             phaseAttempt = 1,
           )
         if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
-          UnownedClaim.Owned(
-            AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedRow.toSnapshot()),
-          )
+          UnownedClaim.Owned(AcquiredWorker(ownership, execution, row.toSnapshot(), 0, false, admittedRow.toSnapshot()))
         } else {
           UnownedClaim.Lost(execution)
         }
@@ -207,21 +205,17 @@ class FeatureTaskRuntimeWorkerCoordinator(
     val previousOwnerStopped = supervisor.inspect(existing) == FeatureTaskRuntimeProcessInspection.NotRunning
     return transferOwned(
       existing,
-      inputs,
-      admitted.identity,
-      reviewSelection,
-      TakeoverEvidence(requireNotNull(original), previousOwnerStopped),
+      admitted,
+      requireNotNull(original),
+      previousOwnerStopped,
     )
   }
 
-  private data class TakeoverEvidence(val original: WorkflowStateSnapshot, val previousOwnerStopped: Boolean)
-
   private fun transferOwned(
     existing: FeatureTaskRuntimeWorkerOwnership,
-    inputs: EffectiveGatePolicyInputs,
-    identity: FeatureTaskExecutionIdentity,
-    reviewSelection: RuntimeReviewSelection?,
-    evidence: TakeoverEvidence,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+    original: WorkflowStateSnapshot,
+    previousOwnerStopped: Boolean,
   ): AcquiredWorker {
     val replacement =
       newOwnership(
@@ -239,9 +233,9 @@ class FeatureTaskRuntimeWorkerCoordinator(
             executionAdmission.admit(
               it,
               existing.workflowId,
-              inputs,
-              identity,
-              reviewSelection,
+              admitted.effectiveInputs,
+              admitted.identity,
+              admitted.plan.reviewSelection,
             )
           transferReceipt = execution.migrationReceipt
           admittedSnapshot = it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId)
@@ -263,9 +257,9 @@ class FeatureTaskRuntimeWorkerCoordinator(
     return AcquiredWorker(
       replacement,
       transferred,
-      evidence.original,
+      original,
       existing.generation,
-      evidence.previousOwnerStopped,
+      previousOwnerStopped,
       requireNotNull(admittedSnapshot),
     )
   }

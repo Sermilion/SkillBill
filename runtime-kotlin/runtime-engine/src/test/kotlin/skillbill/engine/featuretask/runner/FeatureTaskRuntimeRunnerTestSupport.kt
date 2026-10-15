@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
@@ -79,6 +80,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
@@ -867,6 +869,7 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           NoopWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
       ),
   )
@@ -905,7 +908,7 @@ internal fun runnerHarness(
   seedHarnessSpecIntentProjection(runtimeConfig.repoRoot, runtimeConfig.branchSetup.specReference)
   val specScratchStore = RecordingSpecScratchStore()
   val specStatusWriter = RecordingSpecStatusWriter()
-  val database = RuntimeFakeDatabaseSessionFactory(repository, allowOwningWrites = runtimeConfig.allowOwningWrites)
+  val database = RuntimeFakeDatabaseSessionFactory(repository)
   val workflow = harnessWorkflowParts(database)
   val deps =
     HarnessRunnerDeps(
@@ -967,6 +970,20 @@ private data class HarnessRunnerDeps(
   val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   val settlement: FeatureTaskPhaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
 )
+
+private fun harnessAcceptanceRecorder(deps: HarnessRunnerDeps): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(
+    deps.database,
+    deps.runtimeConfig.harnessGitOperations,
+    deps.runtimeConfig.acceptanceCriteria,
+    deps.diagnostics,
+  )
+
+private fun harnessAcceptanceRecorder(
+  database: DatabaseSessionFactory,
+  config: RuntimeHarnessConfig,
+): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(database, config.harnessGitOperations, config.acceptanceCriteria, NoopRuntimeDiagnostics)
 
 private fun harnessGateDependencies(
   deps: HarnessRunnerDeps,
@@ -1073,12 +1090,7 @@ private fun assembleHarnessRunner(
         executePrepared,
         FeatureTaskRuntimeReviewFixBudget(deps.recorder, deps.goalContinuationRecorder),
         FeatureTaskRuntimeAgentContextTelemetry(deps.recorder),
-        harnessAcceptanceRecorder(
-          deps.database,
-          gitOperations,
-          deps.runtimeConfig.acceptanceCriteria,
-          deps.diagnostics,
-        ),
+        harnessAcceptanceRecorder(deps),
       ),
     ),
     strategies,
@@ -1324,7 +1336,7 @@ private fun telemetryHarnessRunner(
             executePrepared,
             reviewFixBudget,
             FeatureTaskRuntimeAgentContextTelemetry(workflow.recorder),
-            runtimeConfig.acceptanceRecorder(database),
+            harnessAcceptanceRecorder(database, runtimeConfig),
           ),
       ),
     strategies = strategies,
@@ -1985,17 +1997,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
   private val repository: InMemoryRuntimeWorkflowRepository,
   private val lifecycle: LifecycleTelemetryRepository = RecordingLifecycleTelemetryRepository(),
   private val knownIssue: Boolean = true,
-  private val allowOwningWrites: Boolean = false,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
-    if (allowOwningWrites) {
-      OwningTransactionResult.Committed(
-        transaction(block),
-      )
-    } else {
-      OwningTransactionResult.ActiveSession
-    }
-
   private val dbPath = Path.of("/fake/metrics.db")
   var transactionCount: Int = 0
   val ledgerRows = mutableListOf<UnaddressedFinding>()
@@ -2026,6 +2028,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
   override fun databaseExists(): Boolean = true
 
   override fun <T> read(block: (UnitOfWork) -> T): T = block(unitOfWork())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
@@ -2516,7 +2521,7 @@ internal object HarnessDeadProcessSupervisor : FeatureTaskRuntimeWorkerSuperviso
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
 
-  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership) = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -2559,6 +2564,3 @@ internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState)
     sharedEvidenceResolver,
     diffResolver,
   )
-
-private fun RuntimeHarnessConfig.acceptanceRecorder(database: DatabaseSessionFactory) =
-  harnessAcceptanceRecorder(database, harnessGitOperations, acceptanceCriteria, diagnostics ?: NoopRuntimeDiagnostics)

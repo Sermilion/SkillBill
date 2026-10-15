@@ -1559,7 +1559,7 @@ internal class RecordingReviewDatabase : DatabaseSessionFactory {
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork)
 
   override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
-    OwningTransactionResult.ActiveSession
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 }
 
 private object NoopReviewLifecycleTelemetry : LifecycleTelemetryRepository {

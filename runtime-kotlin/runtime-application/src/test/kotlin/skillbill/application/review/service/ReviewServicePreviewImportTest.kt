@@ -63,7 +63,8 @@ class ReviewServicePreviewImportTest {
 }
 
 private object PreviewImportBlockingDatabase : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   override fun resolveDbPath(): Path = error("previewImport must not touch the database")
 

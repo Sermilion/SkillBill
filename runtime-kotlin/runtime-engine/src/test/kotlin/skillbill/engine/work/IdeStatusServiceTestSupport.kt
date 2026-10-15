@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -40,7 +41,6 @@ import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -273,15 +273,16 @@ internal fun ideStatusService(
       testHarnessClock,
       NoopRuntimeDiagnostics,
     )
-  val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator)
+  val runtimeWorkflowPersistence =
+    FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, featureTaskRuntimeWireArtifactValidatorForTest())
   val runtimeStatusService =
     FeatureTaskRuntimeStatusService(
       recorder = phaseRecorder,
-      workflowPersistence = workflowPersistence,
+      workflowPersistence = runtimeWorkflowPersistence,
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          workflowPersistence,
+          runtimeWorkflowPersistence,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
@@ -509,8 +510,6 @@ internal class TrackingDatabase(
   internal val controls: GoalRunnerControlRepository = EmptyGoalRunnerControlRepository,
   internal val statusRepository: StandalonePhaseStatusRepository? = null,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
-
   var readCalls: Int = 0
     internal set
   var writeCalls: Int = 0

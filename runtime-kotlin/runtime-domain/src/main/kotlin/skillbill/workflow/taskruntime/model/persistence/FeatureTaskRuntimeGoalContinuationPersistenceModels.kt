@@ -3,6 +3,7 @@ package skillbill.workflow.taskruntime.model.persistence
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 data class FeatureTaskRuntimeGoalContinuationFieldAdoption(
   val field: String,
@@ -161,7 +162,7 @@ data class FeatureTaskRuntimeGoalPlanningImport(
     }
 
   companion object {
-    internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeGoalPlanningImport {
+    fun fromArtifactMap(raw: FeatureTaskRuntimeWorkflowArtifactMap): FeatureTaskRuntimeGoalPlanningImport {
       val allowed = FeatureTaskRuntimeGoalPlanningImportKeys.ALL
       val unknown = raw.keys - allowed
       if (unknown.isNotEmpty()) throw invalidWorkflowStateSchemaError("Goal planning import has unknown fields.")

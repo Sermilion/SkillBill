@@ -91,7 +91,7 @@ private fun AcceptanceCriterionRepairState.canAdmitProseAudit(audit: AcceptanceC
 
 private fun AcceptanceCriterionRepairState.applyFocusedAudit(
   audit: AcceptanceCriterionProseAudit,
-): AcceptanceCriterionRepairState {
+): AcceptanceCriterionRepairState? {
   val previous = criteria.single { it.canonicalRef == audit.criterionRef }
   val disposition =
     if (audit.satisfied) {
@@ -102,7 +102,12 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
   val changed = previous.afterProseAudit(audit, disposition)
   val nextCriteria = criteria.map { if (it.canonicalRef == previous.canonicalRef) changed else it }
   val pending = if (audit.satisfied) pendingAuditRefs.drop(1) else pendingAuditRefs
-  val queue = AcceptanceCriterionRepairState.stableQueue(nextCriteria)
+  val queue =
+    AcceptanceCriterionRepairState.stableQueue(
+      nextCriteria,
+      dependencies,
+      nextCriteria.associateBy { it.canonicalRef },
+    ) ?: return null
   val blocked =
     !audit.satisfied && unsuccessfulTotals.getOrDefault(previous.canonicalRef, 0) >=
       AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES

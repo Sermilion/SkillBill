@@ -148,7 +148,7 @@ class SQLiteDatabaseSessionFactory(
 
   override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> {
     if (activeWrite.get() != null || activeRead.get() != null) {
-      return OwningTransactionResult.ActiveSession
+      return OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
     }
     return OwningTransactionResult.Committed(transaction(block))
   }

@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairAccounting
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
@@ -16,26 +17,13 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import java.math.BigDecimal
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(
     mapOf(
-      Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
-      Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
-      Keys.PROSE_AUDITS to
-        proseAudits.map { audit ->
-          mapOf(
-            Keys.PRODUCING_ID to audit.id,
-            Keys.REVISION to audit.revision,
-            Keys.CRITERION_REF to audit.criterionRef,
-            Keys.SATISFIED to audit.satisfied,
-            Keys.DIGEST to audit.digest,
-            Keys.PROSE to audit.prose,
-            Keys.TREE_DIGEST to audit.treeDigest,
-            Keys.CHECKPOINT_ID to audit.checkpointId,
-          )
-        },
+      Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION,
       Keys.CATALOG_ID to catalogId,
       Keys.EXECUTION_ID to executionId,
       Keys.SPEC_DIGEST to specDigest,
@@ -84,14 +72,23 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
             Keys.AUDIT_BINDING_DIGEST to audit.auditBindingDigest,
           )
         },
+      Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
+      Keys.PROSE_AUDITS to proseAudits.map(::proseAuditWire),
+      Keys.PENDING_CLARIFICATION_QUESTION to pendingClarificationQuestion,
     ),
   )
 
 fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
   sourceLabel: String,
 ): AcceptanceCriterionRepairState {
-  validateRepairWireSize(sourceLabel)
-  return AcceptanceCriterionRepairState.restore(
+  validateDurableSize(sourceLabel)
+  if (!isObject || this[Keys.CONTRACT_VERSION] != ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION) {
+    throw invalidAcceptanceCriterionRepairStateSchema(
+      sourceLabel,
+      "repair state must be an object with the supported contract version.",
+    )
+  }
+  val restored =
     AcceptanceCriterionRepairState(
       catalogId = string(Keys.CATALOG_ID),
       executionId = string(Keys.EXECUTION_ID),
@@ -113,49 +110,49 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       admittedCheckpointId = optionalString(Keys.ADMITTED_CHECKPOINT_ID),
       sourceTransitions = repairTransitions(),
       finalAudits = repairFinalAudits(),
-      pendingAuditRefs = if (containsKey(Keys.PENDING_AUDIT_REFS)) stringList(Keys.PENDING_AUDIT_REFS) else emptyList(),
-      proseAudits =
-        if (containsKey(Keys.PROSE_AUDITS)) {
-          objectList(Keys.PROSE_AUDITS).map { audit ->
-            AcceptanceCriterionProseAudit(
-              audit.requiredString(Keys.PRODUCING_ID),
-              audit.requiredLong(Keys.REVISION),
-              audit.optionalString(Keys.CRITERION_REF),
-              audit.requiredBoolean(Keys.SATISFIED),
-              audit.requiredString(Keys.DIGEST),
-              audit.requiredString(Keys.PROSE),
-              audit.requiredString(Keys.TREE_DIGEST),
-              audit.requiredString(Keys.CHECKPOINT_ID),
-            )
-          }
-        } else {
-          emptyList()
-        },
+      pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
+      proseAudits = repairProseAudits(),
       pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
-    ),
-  ) ?: throw invalidAcceptanceCriterionRepairAccounting(sourceLabel, "repair state is incoherent.")
+    )
+  return AcceptanceCriterionRepairState.restore(restored) ?: throw invalidAcceptanceCriterionRepairStateSchema(
+    sourceLabel,
+    "repair state is incoherent.",
+  )
 }
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.validateRepairWireSize(sourceLabel: String) {
-  if (!isObject) {
-    throw invalidAcceptanceCriterionRepairAccounting(
-      sourceLabel,
-      "repair accounting must be an object.",
-    )
-  }
-  val byteSize = JsonCodec.valueToJsonString(this).encodeToByteArray().size
-  if (byteSize > AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES) {
-    throw invalidAcceptanceCriterionRepairAccounting(sourceLabel, "repair accounting exceeds its durable byte limit.")
+private fun FeatureTaskRuntimeWorkflowArtifactMap.validateDurableSize(sourceLabel: String) {
+  if (
+    JsonCodec.valueToJsonString(this).toByteArray(Charsets.UTF_8).size >
+    AcceptanceCriterionRepairState.MAX_DURABLE_UTF8_BYTES
+  ) {
+    throw invalidAcceptanceCriterionRepairStateSchema(sourceLabel, "Durable serial state exceeds its UTF-8 capacity.")
   }
 }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.string(key: String): String =
-  this[key] as? String ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+  this[key] as? String ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredBoolean(key: String): Boolean =
-  this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+  this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
-private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredLong(key: String): Long = repairLong(this[key], key)
+private fun FeatureTaskRuntimeWorkflowArtifactMap.requiredLong(key: String): Long =
+  (this[key] as? Number)?.toLongIfExact() ?: throw invalidAcceptanceCriterionRepairStateSchema(
+    "serial-repair",
+    "$key is invalid.",
+  )
+
+private fun Number.toLongIfExact(): Long? =
+  when (this) {
+    is Byte, is Short, is Int, is Long -> toLong()
+    else ->
+      try {
+        BigDecimal(toString()).longValueExact()
+      } catch (_: ArithmeticException) {
+        null
+      } catch (_: NumberFormatException) {
+        null
+      }
+  }
 
 private fun <E> FeatureTaskRuntimeWorkflowArtifactMap.requiredEnum(
   key: String,
@@ -163,54 +160,39 @@ private fun <E> FeatureTaskRuntimeWorkflowArtifactMap.requiredEnum(
   wireValue: (E) -> String,
 ): E =
   values.firstOrNull { wireValue(it) == this[key] }
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.objectList(key: String): List<Map<String, Any?>> =
-  repairObjectList(this[key], key)
+  (this[key] as? List<*>)?.map { repairObject(it) }
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.stringList(key: String): List<String> =
   (this[key] as? List<*>)?.map {
-    it as? String ?: throw invalidAcceptanceCriterionRepairAccounting(
+    it as? String ?: throw invalidAcceptanceCriterionRepairStateSchema(
       "serial-repair",
       "$key contains a non-string.",
     )
   }
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.optionalStringList(key: String): List<String> =
+  if (this[key] == null) emptyList() else stringList(key)
 
 private fun Map<String, Any?>.requiredString(key: String): String =
-  this[key] as? String ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+  this[key] as? String ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun Map<String, Any?>.requiredBoolean(key: String): Boolean =
-  this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+  this[key] as? Boolean ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
-private fun Map<String, Any?>.requiredInt(key: String): Int = repairInt(this[key], key)
+private fun Map<String, Any?>.requiredInt(key: String): Int =
+  (this[key] as? Number)?.toLongIfExact()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
-private fun Map<String, Any?>.requiredLong(key: String): Long = repairLong(this[key], key)
-
-private fun repairLong(
-  value: Any?,
-  key: String,
-): Long =
-  (value as? Number)?.toString()?.toLongOrNull()
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an integer within Long range.")
-
-private fun repairInt(
-  value: Any?,
-  key: String,
-): Int {
-  val integer = repairLong(value, key)
-  if (integer !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
-    throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an integer within Int range.")
-  }
-  return integer.toInt()
-}
-
-private fun repairObjectList(
-  value: Any?,
-  key: String,
-): List<Map<String, Any?>> =
-  (value as? List<*>)?.map(::repairObject)
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be an object list.")
+private fun Map<String, Any?>.requiredLong(key: String): Long =
+  (this[key] as? Number)?.toLong() ?: throw invalidAcceptanceCriterionRepairStateSchema(
+    "serial-repair",
+    "$key is invalid.",
+  )
 
 private fun <E> Map<String, Any?>.requiredEnum(
   key: String,
@@ -218,16 +200,16 @@ private fun <E> Map<String, Any?>.requiredEnum(
   wireValue: (E) -> String,
 ): E =
   values.firstOrNull { wireValue(it) == this[key] }
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun Map<String, Any?>.stringList(key: String): List<String> =
   (this[key] as? List<*>)?.map {
-    it as? String ?: throw invalidAcceptanceCriterionRepairAccounting(
+    it as? String ?: throw invalidAcceptanceCriterionRepairStateSchema(
       "serial-repair",
       "$key contains a non-string.",
     )
   }
-    ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key is invalid.")
+    ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key is invalid.")
 
 private fun criterionWire(value: AcceptanceCriterionRepairCriterion): Map<String, Any?> =
   mapOf(
@@ -278,16 +260,28 @@ private fun outcomeWire(value: AcceptanceCriterionRepairOutcome): Map<String, An
 private fun repairObject(raw: Any?): Map<String, Any?> {
   val objectValue =
     raw as? Map<*, *>
-      ?: throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "Expected an object.")
+      ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "Expected an object.")
   return objectValue.entries.associate { (key, value) ->
     (
-      key as? String ?: throw invalidAcceptanceCriterionRepairAccounting(
+      key as? String ?: throw invalidAcceptanceCriterionRepairStateSchema(
         "serial-repair",
         "Expected a string key.",
       )
     ) to value
   }
 }
+
+private fun proseAuditWire(value: AcceptanceCriterionProseAudit): Map<String, Any?> =
+  mapOf(
+    Keys.ID to value.id,
+    Keys.REVISION to value.revision,
+    Keys.CRITERION_REF to value.criterionRef,
+    Keys.SATISFIED to value.satisfied,
+    Keys.DIGEST to value.digest,
+    Keys.PROSE to value.prose,
+    Keys.TREE_DIGEST to value.treeDigest,
+    Keys.CHECKPOINT_ID to value.checkpointId,
+  )
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairCriteria(): List<AcceptanceCriterionRepairCriterion> =
   objectList(Keys.CRITERIA).map { criterion ->
@@ -349,7 +343,7 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairOutcomes(): List<Accepta
           AcceptanceCriterionRepairOutcomeKind.entries,
         ) { it.wireValue },
       evidenceRef = outcome.requiredString(Keys.EVIDENCE_REF),
-      verifiedRevision = outcome[Keys.EXPECTED_REVISION]?.let { repairLong(it, Keys.EXPECTED_REVISION) },
+      verifiedRevision = (outcome[Keys.EXPECTED_REVISION] as? Number)?.toLongIfExact(),
       treeDigest = outcome.optionalString(Keys.TREE_DIGEST),
       checkpointId = outcome.optionalString(Keys.CHECKPOINT_ID),
       auditBindingDigest = outcome.optionalString(Keys.AUDIT_BINDING_DIGEST),
@@ -358,7 +352,12 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairOutcomes(): List<Accepta
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairTotals(): Map<String, Int> =
   repairObject(this[Keys.UNSUCCESSFUL_TOTALS]).entries.associate { (key, value) ->
-    key to repairInt(value, Keys.UNSUCCESSFUL_TOTALS)
+    val ref =
+      key
+    val total =
+      (value as? Number)?.toLongIfExact()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
+        ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "Invalid total.")
+    ref to total
   }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.repairTransitions(): List<AcceptanceCriterionRepairSourceTransition> =
@@ -398,7 +397,8 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairFinalAudits(): List<Acce
       regressedRefs = audit.stringList(Keys.REGRESSED_REFS),
       auditBindingDigest = audit.optionalString(Keys.AUDIT_BINDING_DIGEST),
       dependencies =
-        repairObjectList(audit[Keys.DEPENDENCIES], Keys.DEPENDENCIES).map { edge ->
+        (audit[Keys.DEPENDENCIES] as List<*>).map { raw ->
+          val edge = repairObject(raw)
           AcceptanceCriterionRepairDependency(
             edge.requiredString(Keys.DEPENDENT_REF),
             edge.requiredString(Keys.PREREQUISITE_REF),
@@ -410,6 +410,21 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairFinalAudits(): List<Acce
         },
     )
   }
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.repairProseAudits(): List<AcceptanceCriterionProseAudit> =
+  (this[Keys.PROSE_AUDITS] as? List<*>)?.map { raw ->
+    val audit = repairObject(raw)
+    AcceptanceCriterionProseAudit(
+      id = audit.requiredString(Keys.ID),
+      revision = audit.requiredLong(Keys.REVISION),
+      criterionRef = audit.optionalString(Keys.CRITERION_REF),
+      satisfied = audit.requiredBoolean(Keys.SATISFIED),
+      digest = audit.requiredString(Keys.DIGEST),
+      prose = audit.requiredString(Keys.PROSE),
+      treeDigest = audit.requiredString(Keys.TREE_DIGEST),
+      checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
+    )
+  } ?: emptyList()
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.optionalString(key: String): String? =
   optionalRepairString(
@@ -426,5 +441,5 @@ private fun optionalRepairString(
   if (value == null || value is String) {
     value
   } else {
-    throw invalidAcceptanceCriterionRepairAccounting("serial-repair", "$key must be a string or null.")
+    throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "$key must be a string or null.")
   }

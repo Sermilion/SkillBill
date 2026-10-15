@@ -73,7 +73,8 @@ class AgentActivityStampWriterOwnershipTest {
     val attempts = AtomicInteger(0)
     val database =
       object : DatabaseSessionFactory {
-        override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+          OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
         override fun resolveDbPath() = base.resolveDbPath()
 

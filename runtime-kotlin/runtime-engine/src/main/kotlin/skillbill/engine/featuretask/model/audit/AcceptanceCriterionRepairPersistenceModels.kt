@@ -82,15 +82,20 @@ enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
   EXPECTED_STATE_CHANGED("expected_state_changed"),
   IDENTITY_CHANGED("identity_changed"),
   INVALID_TRANSITION("invalid_transition"),
+  AUDIT_BINDING_CHANGED("audit_binding_changed"),
+  UNSAFE_LEGACY_ADOPTION("unsafe_legacy_adoption"),
   CAPACITY_EXHAUSTED("capacity_exhausted"),
   ACTIVE_SESSION("active_session"),
   HISTORICAL_EVIDENCE_UNPROVABLE("historical_evidence_unprovable"),
+  OWNING_SESSION_UNAVAILABLE("owning_session_unavailable"),
 }
 
 sealed interface AcceptanceCriterionRepairHydration {
   data class Present(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairHydration
 
   data object FreshDiscoveryRequired : AcceptanceCriterionRepairHydration
+
+  data object LegacyAdoptionRequired : AcceptanceCriterionRepairHydration
 
   data object HistoricalAttributionUnavailable : AcceptanceCriterionRepairHydration
 }
@@ -186,3 +191,15 @@ sealed interface AcceptanceCriterionRepairWriteResult {
 }
 
 data class AcceptanceCriterionRepairAuditEvidence(val payload: FeatureTaskRuntimeWorkflowArtifactMap)
+
+sealed interface AcceptanceCriterionRepairAdoptionResult {
+  data class Adopted(val receipt: FeatureTaskRuntimeWorkflowArtifactMap) : AcceptanceCriterionRepairAdoptionResult
+
+  data class Refused(val reason: AcceptanceCriterionRepairRefusal) : AcceptanceCriterionRepairAdoptionResult
+}
+
+data class AcceptanceCriterionRepairLegacyProof(
+  val treeDigest: String,
+  val checkpointId: String,
+  val stoppedGeneration: Long = 0,
+)

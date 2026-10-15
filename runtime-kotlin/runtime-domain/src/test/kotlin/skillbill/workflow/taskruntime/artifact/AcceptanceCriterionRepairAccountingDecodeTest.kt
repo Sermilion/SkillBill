@@ -51,7 +51,7 @@ class AcceptanceCriterionRepairAccountingDecodeTest {
       assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeWorkflowArtifactMap.from(wire).toAcceptanceCriterionRepairState("corrupt")
       }
-    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_PERSISTENCE_SCHEMA, failure.code)
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA, failure.code)
   }
 
   private fun admittedState(): AcceptanceCriterionRepairState =

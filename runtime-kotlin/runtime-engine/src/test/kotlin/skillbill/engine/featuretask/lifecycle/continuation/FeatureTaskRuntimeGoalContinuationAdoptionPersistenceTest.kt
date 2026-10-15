@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -77,6 +78,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()
           }
         },
+        featureTaskRuntimeWireArtifactValidatorForTest(),
       )
 
     assertFailsWith<SkillBillRuntimeException> {
@@ -341,6 +343,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
       )
     return AdoptionHarness(
