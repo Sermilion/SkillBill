@@ -69,6 +69,14 @@ GNOME's stock shell needs its
 AppIndicator extension to expose StatusNotifierItem icons. The app keeps its
 desktop window available when the platform reports no system tray.
 
+The application convention transforms the Compose 1.12.1 runtime jar to reset
+`SurfaceSkiaLayerComponent`'s disposed flag after its native layer reattaches.
+Skiko recreates the native layer on peer replacement, but Compose otherwise keeps
+dropping redraw requests after that replacement. The transform rejects a changed
+Compose version or class shape. `NativeWindowPeerTest` recreates a window peer twice
+and checks state updates and clicks after each replacement. Linux CI runs desktop
+checks under Xvfb so this regression test has a native display.
+
 Native notifications use `dev.nucleusframework:nucleus.notification-common`
 2.5.18. It exposes activation callbacks for opening the exact selected item.
 Start at login uses `nucleus.autolaunch` on macOS and Windows and a per-user XDG

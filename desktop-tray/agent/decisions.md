@@ -1,3 +1,9 @@
+## [2026-10-15] Repair Compose redraw state after native peer replacement
+Context: The frozen installed app had a live AWT event queue, active data reads, and a pending Compose recomposition. Its Skiko layer was active, but SurfaceSkiaLayerComponent retained isDisposed=true. Clearing that flag restored the running window. Compose 1.12.1 sets the flag when Skiko removes its peer and never clears it when addNotify recreates the layer.
+Decision: Transform the application and test runtime dependency to clear the wrapper flag after addNotify. Pin the patch to Compose 1.12.1 and reject a changed target class or method. Verify redraws and clicks across repeated real native peer replacement.
+Reason: The patch preserves the existing window, navigation, ViewModels, and GPU renderer. It needs no runtime reflection, redraw timer, or whole-window replacement.
+Revisit when: upgrading Compose. Remove the transform once the dependency handles native peer reattachment itself.
+
 ## [2026-10-15] Let desktop reach runtime services that run git
 Context: The governed-edge walk banned any desktop path reaching a runtime process adapter, but the in-process runtime services behind work reads and controls run git.
 Decision: Operator-approved deviation: desktop may reach runtime services that run git or other processes through the in-process graph. The packaged app still never runs an installed CLI, discovers PATH or a login shell, or parses command output.

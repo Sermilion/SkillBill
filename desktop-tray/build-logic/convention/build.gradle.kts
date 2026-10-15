@@ -14,6 +14,7 @@ dependencies {
   implementation(libs.kotlin.serialization.gradle.plugin)
   implementation(libs.compose.gradle.plugin)
   implementation(libs.ksp.gradle.plugin)
+  implementation("org.ow2.asm:asm:9.9.1")
 
   testImplementation(gradleTestKit())
   // Build logic compiles with Gradle's embedded Kotlin, which cannot read the app's newer kotlin-test metadata.

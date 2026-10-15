@@ -2,6 +2,9 @@ package dev.skillbill.tray.buildlogic
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.tasks.Exec
 import org.gradle.api.tasks.Sync
 import org.gradle.jvm.toolchain.JavaLanguageVersion
@@ -19,6 +22,7 @@ const val APP_IMAGE_TOOL_VERSION = "1.9.1"
 class DesktopApplicationConventionPlugin : Plugin<Project> {
   override fun apply(target: Project) = with(target) {
     pluginManager.apply(KmpComposeConventionPlugin::class.java)
+    configureComposePeerRecovery()
     val javaHome = extensions.getByType(JavaToolchainService::class.java).launcherFor {
       languageVersion.set(JavaLanguageVersion.of(JVM_TOOLCHAIN_VERSION))
       vendor.set(JvmVendorSpec.ADOPTIUM)
@@ -49,6 +53,19 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
     val isMac = osName.contains("mac", true)
     registerNativeTasks(javaHome, isLinux, isMac)
     registerAppImageTasks(isLinux)
+  }
+
+  private fun Project.configureComposePeerRecovery() {
+    val recovered = Attribute.of("dev.skillbill.compose.peer-recovery", Boolean::class.javaObjectType)
+    dependencies.artifactTypes.getByName(ArtifactTypeDefinition.JAR_TYPE).attributes.attribute(recovered, false)
+    dependencies.registerTransform(ComposePeerRecoveryTransform::class.java) {
+      from.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(recovered, false)
+      to.attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, ArtifactTypeDefinition.JAR_TYPE).attribute(recovered, true)
+    }
+    configurations.matching { it.name == "jvmRuntimeClasspath" || it.name == "jvmTestRuntimeClasspath" }.configureEach {
+      attributes.attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements::class.java, LibraryElements.JAR))
+      attributes.attribute(recovered, true)
+    }
   }
 
   private fun Project.registerNativeTasks(javaHome: String, isLinux: Boolean, isMac: Boolean) {

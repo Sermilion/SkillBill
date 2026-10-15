@@ -37,9 +37,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential pkg-config libsystemd-dev
+          sudo apt-get install --yes build-essential pkg-config libsystemd-dev xvfb xauth
       - name: Run desktop checks
-        run: (cd desktop-tray && ./gradlew clean check createDistributable --no-build-cache)
+        run: |
+          cd desktop-tray
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run --auto-servernum ./gradlew clean check createDistributable --no-build-cache
+          else
+            ./gradlew clean check createDistributable --no-build-cache
+          fi
       - name: Print jpackage diagnostics after a failed build
         if: failure()
         shell: bash
