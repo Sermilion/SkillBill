@@ -11,8 +11,10 @@ includeBuild("../runtime-kotlin") {
 }
 
 pluginManagement {
+  includeBuild("build-logic")
   repositories {
     gradlePluginPortal()
+    google()
     mavenCentral()
   }
 }
@@ -20,6 +22,8 @@ pluginManagement {
 plugins {
   id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -34,3 +38,9 @@ dependencyResolutionManagement {
     mavenCentral()
   }
 }
+
+include(
+  ":composeApp",
+  ":core:common", ":core:domain", ":core:designsystem", ":core:ui", ":core:testing", ":core:data", ":core:datastore",
+  ":feature:work", ":feature:detail", ":feature:history", ":feature:settings",
+)

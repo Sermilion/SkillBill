@@ -6,4 +6,5 @@ data class WorkGoalSubtaskPage(
   val manifest: DecompositionManifest,
   val totalCount: Int,
   val currentWorkflowId: String?,
+  val remainingCount: Int = totalCount,
 )

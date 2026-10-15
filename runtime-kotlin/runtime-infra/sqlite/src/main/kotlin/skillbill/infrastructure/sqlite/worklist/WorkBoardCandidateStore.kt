@@ -43,10 +43,7 @@ internal fun readWorkBoardCandidates(
       )
     ), eligible AS (
       SELECT id, CASE WHEN terminal THEN '0' ELSE '1' END || char(10) ||
-        strftime('%Y-%m-%dT%H:%M:%S', started_at) || '.' ||
-        CASE WHEN substr(started_at, 20, 1) = '.' THEN
-          substr(substr(started_at, 21, instr(substr(started_at, 21), 'Z') - 1) || '000000000', 1, 9)
-        ELSE '000000000' END || char(10) || id AS paging_key
+        ${startedAtKeySql("started_at")} || char(10) || id AS paging_key
       FROM candidates
       WHERE julianday(started_at) <= julianday((SELECT through_value FROM bounds))
         AND (NOT terminal OR finished_at IS NULL OR

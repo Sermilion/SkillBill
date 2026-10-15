@@ -6,7 +6,7 @@ import java.nio.file.Path
 internal object InstallerDesktopFixtures {
   fun seedSource(repoRoot: Path) {
     val desktopRoot = repoRoot.resolve("desktop-tray")
-    seedDistribution(desktopRoot.resolve("build/compose/binaries/main/app"))
+    seedDistribution(desktopRoot.resolve("composeApp/build/compose/binaries/main/app"))
     val gradlew = desktopRoot.resolve("gradlew")
     Files.writeString(gradlew, "#!/usr/bin/env bash\n[[ \"${'$'}*\" == '--no-daemon -q createDistributable' ]]\n")
     gradlew.toFile().setExecutable(true)

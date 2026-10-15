@@ -106,6 +106,21 @@ data class StandalonePhaseStatusRecord(
   val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
+const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
+
+enum class StandaloneEligibleSlice { LIVE, SETTLED }
+
+data class StandalonePhaseExecutionAnchor(
+  val runSequence: String,
+  val invocationId: String,
+)
+
+data class StandaloneEligiblePage(
+  val limit: Int = STANDALONE_ELIGIBLE_PAGE_LIMIT,
+  val after: StandalonePhaseExecutionAnchor? = null,
+  val slice: StandaloneEligibleSlice? = null,
+)
+
 data class StandalonePhaseExecutionQuery(
   val repositoryIdentity: String,
   val phaseId: String,
@@ -113,4 +128,5 @@ data class StandalonePhaseExecutionQuery(
   val startedThrough: Instant,
   val offset: Int,
   val limit: Int,
+  val after: StandalonePhaseExecutionAnchor? = null,
 )

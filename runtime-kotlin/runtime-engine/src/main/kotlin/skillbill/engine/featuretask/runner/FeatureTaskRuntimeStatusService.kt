@@ -51,6 +51,28 @@ class FeatureTaskRuntimeStatusService(
     return buildStatusProjection(request, records, decomposeTerminal, ledger)
   }
 
+  fun phasePage(
+    workflowId: String,
+    afterPhaseId: String?,
+    limit: Int,
+    offset: Int = 0,
+  ): FeatureTaskRuntimePhasePage? {
+    val projection = status(FeatureTaskRuntimeStatusRequest(workflowId)) ?: return null
+    val phaseIds = projection.phases.map { it.phaseId }
+    val start =
+      if (afterPhaseId == null) {
+        offset.coerceIn(0, phaseIds.size)
+      } else {
+        phaseIds.indexOf(afterPhaseId).let { if (it < 0) phaseIds.size else it + 1 }
+      }
+    val end = minOf(start + limit, phaseIds.size)
+    return FeatureTaskRuntimePhasePage(
+      status = projection.copy(phases = projection.phases.subList(start, end)),
+      phaseIds = phaseIds,
+      hasMore = end < phaseIds.size,
+    )
+  }
+
   fun ledgerBlockedPhaseIds(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     durableBlockedPhaseIds: Set<String>,
@@ -270,6 +292,12 @@ class FeatureTaskRuntimeStatusService(
       )
     }
 }
+
+data class FeatureTaskRuntimePhasePage(
+  val status: FeatureTaskRuntimeStatusProjection,
+  val phaseIds: List<String>,
+  val hasMore: Boolean,
+)
 
 private data class StatusProjectionParts(
   val request: FeatureTaskRuntimeStatusRequest,

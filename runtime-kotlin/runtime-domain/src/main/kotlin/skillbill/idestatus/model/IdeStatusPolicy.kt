@@ -64,6 +64,8 @@ data class IdeStatusWorkPolicyFacts(
   val awaitingOperatorDecision: Boolean,
   val planningPrepared: Boolean,
   val controlTargetPresent: Boolean,
+  val pauseRequested: Boolean = false,
+  val observedAt: Instant? = null,
 )
 
 enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES }
@@ -73,12 +75,60 @@ enum class IdeStatusDisplayGroup { GOALS, PHASES }
 data class IdeStatusWorkPolicy(
   val liveSection: IdeStatusLiveSection?,
   val controlEligible: Boolean,
+  val pauseEligible: Boolean,
   val requiresAttention: Boolean,
   val displayGroup: IdeStatusDisplayGroup?,
   val displayPriority: Int,
+  val running: Boolean,
+  val recentlyFinishedPhase: Boolean,
+  val doneWithinDay: Boolean,
+  val membershipDeadline: Instant?,
+)
+
+enum class IdeStatusTrayStatus { FAILED, NEEDS_YOU, RUNNING, IDLE }
+
+data class IdeStatusBoardEntry(
+  val key: String,
+  val repositoryIdentity: String,
+  val lifecycle: IdeStatusLifecycleState,
+  val policy: IdeStatusWorkPolicy,
+)
+
+data class IdeStatusBoardArrangement(
+  val trayStatus: IdeStatusTrayStatus,
+  val running: Int,
+  val needsYou: Int,
+  val doneWithinDay: Int,
+  val goals: List<IdeStatusBoardEntry>,
+  val livePhases: List<IdeStatusBoardEntry>,
+  val finishedPhases: List<IdeStatusBoardEntry>,
 )
 
 object IdeStatusPolicy {
+  fun arrange(entries: List<IdeStatusBoardEntry>): IdeStatusBoardArrangement {
+    val goals =
+      entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.GOALS && it.policy.liveSection != null }
+        .sortedWith(compareBy({ it.policy.displayPriority }, { it.key }, { it.repositoryIdentity }))
+    val phases = entries.filter { it.policy.displayGroup == IdeStatusDisplayGroup.PHASES }
+    val running = entries.count { it.policy.running }
+    val needsYou = entries.count { it.policy.requiresAttention }
+    return IdeStatusBoardArrangement(
+      trayStatus =
+        when {
+          entries.any { it.lifecycle == IdeStatusLifecycleState.FAILED } -> IdeStatusTrayStatus.FAILED
+          needsYou > 0 -> IdeStatusTrayStatus.NEEDS_YOU
+          running > 0 -> IdeStatusTrayStatus.RUNNING
+          else -> IdeStatusTrayStatus.IDLE
+        },
+      running = running,
+      needsYou = needsYou,
+      doneWithinDay = entries.count { it.policy.doneWithinDay },
+      goals = goals,
+      livePhases = phases.filter { it.policy.liveSection != null },
+      finishedPhases = phases.filter { it.policy.recentlyFinishedPhase },
+    )
+  }
+
   fun standaloneLifecycle(state: String): IdeStatusLifecycleState =
     when (state) {
       "active", "running" -> IdeStatusLifecycleState.ACTIVE
@@ -132,19 +182,46 @@ object IdeStatusPolicy {
 
   fun work(facts: IdeStatusWorkPolicyFacts): IdeStatusWorkPolicy {
     val goal = facts.family == IdeStatusWorkflowFamily.FEATURE_GOAL
+    val controlEligible =
+      goal && facts.scope != IdeStatusExecutionScope.STANDALONE_PHASE &&
+        facts.controlTargetPresent && facts.lifecycle == IdeStatusLifecycleState.ACTIVE &&
+        facts.freshness == IdeStatusFreshness.FRESH
+    val liveSection = liveSection(facts, goal)
+    val displayGroup = displayGroup(facts, goal)
+    val recent = windowed(facts, RECENT_PHASE_WINDOW, displayGroup == IdeStatusDisplayGroup.PHASES)
+    val done = windowed(facts, DONE_WINDOW, facts.lifecycle == IdeStatusLifecycleState.TERMINAL)
     return IdeStatusWorkPolicy(
-      liveSection = liveSection(facts, goal),
-      controlEligible =
-        goal && facts.scope != IdeStatusExecutionScope.STANDALONE_PHASE &&
-          facts.controlTargetPresent && facts.lifecycle == IdeStatusLifecycleState.ACTIVE &&
-          facts.freshness == IdeStatusFreshness.FRESH,
+      liveSection = liveSection,
+      controlEligible = controlEligible,
+      pauseEligible = controlEligible && !facts.pauseRequested,
       requiresAttention =
         facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED) ||
           facts.awaitingOperatorDecision,
-      displayGroup = displayGroup(facts, goal),
+      displayGroup = displayGroup,
       displayPriority = displayPriority(facts),
+      running = liveSection == IdeStatusLiveSection.GOALS || liveSection == IdeStatusLiveSection.PHASES,
+      recentlyFinishedPhase = recent.within,
+      doneWithinDay = done.within,
+      membershipDeadline = listOfNotNull(recent.nextChange, done.nextChange).minOrNull(),
     )
   }
+
+  private fun windowed(
+    facts: IdeStatusWorkPolicyFacts,
+    window: Duration,
+    applies: Boolean,
+  ): WindowedFact {
+    val finishedAt = facts.finishedAt
+    val observedAt = facts.observedAt
+    if (!applies || finishedAt == null || observedAt == null) return WindowedFact(false, null)
+    return when {
+      finishedAt.isAfter(observedAt) -> WindowedFact(false, finishedAt)
+      finishedAt.isBefore(observedAt.minus(window)) -> WindowedFact(false, null)
+      else -> WindowedFact(true, finishedAt.plus(window).plusNanos(1))
+    }
+  }
+
+  private data class WindowedFact(val within: Boolean, val nextChange: Instant?)
 
   private fun liveSection(
     facts: IdeStatusWorkPolicyFacts,
@@ -187,6 +264,10 @@ object IdeStatusPolicy {
 
   private const val VERIFY_ABANDONED_AFTER_HOURS = 24L
   val VERIFY_ABANDONED_AFTER: Duration = Duration.ofHours(VERIFY_ABANDONED_AFTER_HOURS)
+  private const val RECENT_PHASE_HOURS = 1L
+  private const val DONE_HOURS = 24L
+  val RECENT_PHASE_WINDOW: Duration = Duration.ofHours(RECENT_PHASE_HOURS)
+  val DONE_WINDOW: Duration = Duration.ofHours(DONE_HOURS)
 
   private const val BLOCKED_PRIORITY = 0
   private const val FAILED_PRIORITY = 1

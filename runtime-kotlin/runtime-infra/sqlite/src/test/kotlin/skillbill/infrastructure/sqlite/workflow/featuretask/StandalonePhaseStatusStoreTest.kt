@@ -4,6 +4,9 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
@@ -159,66 +162,44 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
-  fun `board candidate read keeps live rows across identities and completion bounds inclusive`() {
-    val directory = Files.createTempDirectory("standalone-board-candidates")
+  fun `eligible read pages each slice newest first strictly after an anchor`() {
+    val directory = Files.createTempDirectory("standalone-eligible-pages")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
-    val finishedFrom = Instant.parse("2026-10-10T00:00:00Z")
-    val finishedThrough = Instant.parse("2026-10-11T00:00:00Z")
-    val registrationTime = finishedThrough.minusSeconds(300)
-    val names = listOf("live-old", "lower-bound", "upper-bound", "outside")
+    val now = Instant.parse("2026-10-11T00:00:00Z")
+    val finishedAt = mapOf("settled-old" to now.minusSeconds(7 * 3600), "settled-1" to now.minusSeconds(1800))
+    val names = listOf("live-1", "settled-old", "live-2", "settled-1", "live-3")
     database.transaction {
-      names.forEachIndexed { index, name ->
-        val rootIdentity = if (index % 2 == 0) "repo-a" else "repo-b"
+      names.forEach { name ->
         it.standalonePhaseStatuses.register(
           StandalonePhaseStatusRegistration(
-            repositoryIdentity = rootIdentity,
-            branchCorrelation = "branch-$index",
-            issueKey = null,
-            workflowId = null,
-            invocationId = name,
-            phaseId = "review",
-            executionId = "execution-$name",
-            lifecycleState = "active",
-            currentStep = "review",
-            startedAt = registrationTime.minusSeconds(90_000),
-            leaseOwner = "owner-$name",
-            leaseGeneration = 1,
-            leaseExpiresAt = finishedThrough.plusSeconds(86_400),
+            repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+            invocationId = name, phaseId = "review", executionId = "execution-$name", lifecycleState = "active",
+            currentStep = "review", startedAt = now.minusSeconds(8 * 3600), leaseOwner = "owner-$name",
+            leaseGeneration = 1, leaseExpiresAt = now.plusSeconds(86_400),
           ),
         )
-        if (name != "live-old") {
-          val finishedAt =
-            when (name) {
-              "lower-bound" -> finishedFrom
-              "upper-bound" -> finishedThrough
-              else -> finishedFrom.minusNanos(1)
-            }
+        finishedAt[name]?.let { finished ->
           it.standalonePhaseStatuses.update(
             StandalonePhaseStatusUpdate(
-              executionId = "execution-$name",
-              expectedRevision = "1",
-              leaseOwner = "owner-$name",
-              leaseGeneration = 1,
-              lifecycleState = "terminal",
-              currentStep = "review",
-              currentActivity = null,
-              updatedAt = finishedAt,
-              finishedAt = finishedAt,
-              terminalResult = "done",
+              executionId = "execution-$name", expectedRevision = "1", leaseOwner = "owner-$name",
+              leaseGeneration = 1, lifecycleState = "terminal", currentStep = "review", currentActivity = null,
+              updatedAt = finished, finishedAt = finished, terminalResult = "done",
             ),
           )
         }
       }
     }
 
-    val (candidates, exactOld) =
-      database.read {
-        it.standalonePhaseStatuses.readBoardCandidates(finishedFrom, finishedThrough) to
-          it.standalonePhaseStatuses.readByInvocation("outside")
-      }
+    fun read(page: StandaloneEligiblePage) =
+      database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, page) }.map { it.invocationId }
+    val head = database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, StandaloneEligiblePage(2)) }
 
-    assertEquals(setOf("live-old", "lower-bound", "upper-bound"), candidates.map { it.invocationId }.toSet())
-    assertEquals("outside", exactOld?.invocationId)
+    assertEquals(listOf("live-3", "settled-1"), head.map { it.invocationId })
+    val live = StandaloneEligibleSlice.LIVE
+    assertEquals(listOf("live-3", "live-2", "live-1"), read(StandaloneEligiblePage(slice = live)))
+    assertEquals(listOf("settled-1"), read(StandaloneEligiblePage(slice = StandaloneEligibleSlice.SETTLED)))
+    val anchor = StandalonePhaseExecutionAnchor(head.first().runSequence, head.first().invocationId)
+    assertEquals(listOf("live-2"), read(StandaloneEligiblePage(1, anchor, live)))
   }
 
   @Test

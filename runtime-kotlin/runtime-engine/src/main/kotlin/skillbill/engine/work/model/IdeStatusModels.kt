@@ -55,4 +55,5 @@ data class IdeStatusRequest(
 data class IdeStatusResult(
   val snapshot: IdeStatusSnapshot,
   val exitCode: Int,
+  val queryWork: IdeStatusQueryWorkReport = IdeStatusQueryWorkReport.NONE,
 )

@@ -56,6 +56,11 @@ data class WorkBoardItem(
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
+  val pauseEligible: Boolean = false,
+  val running: Boolean = false,
+  val recentlyFinishedPhase: Boolean = false,
+  val doneWithinDay: Boolean = false,
+  val membershipDeadline: Instant? = null,
 )
 
 data class WorkBoardDiagnostic(

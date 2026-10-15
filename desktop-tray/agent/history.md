@@ -1,3 +1,79 @@
+## [2026-10-15] SKILL-424 subtask 6 deletion and delivery proof
+Areas: desktop-tray (composeApp architecture tests, docs, ARCHITECTURE.md), runtime-kotlin (runtime-cli repoTest installer fixtures, runtime-infra/sqlite worklist stores)
+
+- Removed the desktop process-adapter rule from the governed-edge walk (process assertions, WorkRunLauncher start/stop cut-off, launchesCommand). The approved native display query, the five-file WorkRunLauncher ownership set and DeletionRules (a)-(e) stay.
+- Walker fixtures: alias import and extension call now assert reach, with a negative twin for an alias to a missing declaration that must fail as an unresolved governed edge (reusable).
+- docs/architecture-parity.md gained a Deviations subsection, CI runner and host list, and runtime touched-file notes; the Readian reference moved to current HEAD (old revision unresolvable). ARCHITECTURE.md now bans only installed CLI, PATH or login-shell discovery and command-output parsing.
+- Validate repaired KDoc on a private extension in WorkGoalSubtaskStore, a Spotless violation in WorkGoalDependencyStore, and 14 installer repoTests broken on main by the mandatory desktop install step. Offline desktop fixtures (staged release asset, seeded desktop-tray gradlew, temp-home install dirs) are reusable.
+- Packaged data smoke passed with no CLI and an empty PATH; desktop-tray and runtime-kotlin check passed on macOS arm64.
+- Limits: only macOS arm64 ran locally; install_smoke_test.sh and runtime_package_parity_smoke_test.sh were denied headless, left to CI; featureTaskRuntimeRunEntry has no direct desktop reader but stays exported and pinned by RuntimeEngineInboundApiTest.
+Feature flag: N/A
+Acceptance criteria: not self-reported; audit owns the count (subtask 6 of SKILL-424)
+
+## [2026-10-15] SKILL-424 subtask 5 navigation and host lifetimes
+Areas: desktop-tray (composeApp, core/common, core/data, core/domain, core/testing, core/ui, feature/work, feature/detail, feature/history, feature/settings, gradle catalog)
+
+- Replaced the single MainWindow with Navigation 3: each feature owns a serializable route; composeApp holds a RouteBackStack (root plus at most one detail), polymorphic RouteSnapshots, a per-window WindowNavigator (per-section filter, selection and scroll memory) and a NavDisplay host with central entry adapters.
+- Added DatabaseGenerations (StateFlow, advances on every selection and same-path replacement); AppRoute entry keys carry the generation, and restore drops obsolete-generation or invalid routes and falls back to a safe root (reusable).
+- New scopes AppScope, DatabaseSessionScope, WindowScope, EntryScope; WindowComponent builds per-window and per-entry subcomponents; EntryViewModels.detail takes typed DetailArgs validated into Valid or Rejected, with no Any maps or casts (reusable).
+- Host lifetimes: WindowOwner, WindowRegistry, SessionTransitionCoordinator (serialized, cancel-safe database switches that clear window state first) and HostIntentRouter for tray, menu, popover and notification actions; AppOwner fixes quit order; Main opens multiple windows.
+- Guards: serialization ban narrowed to kotlinx.serialization.json; new alias-aware NavigationTypingRules PSI scan; no baseline or exemption grew.
+- Breaking or behavioral: DispatcherProvider is now (io, ui); sidebar split into Work and History roots with footer links; settings window disposes on close; Cmd/Ctrl+N opens a new window.
+- Limits: nothing compiled or run when written; Nav3, savedstate, subcomponent and compose-ui-test signatures unverified; two-pane layout is a custom layout over two NavDisplays, not a SceneStrategy; Readian root unreadable, so no drift recorded.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 5 of SKILL-424)
+
+## [2026-10-15] SKILL-424 subtask 4 feature presentation
+Areas: desktop-tray (core/ui, feature/work, feature/detail, feature/history, feature/settings, composeApp, core/data, core/domain, core/testing, build-logic/convention)
+
+- New core:ui plus feature:work, detail, history and settings modules, each with a contract, a ViewModel and its content in commonMain; features depend only on common, domain, designsystem and ui. A FeatureConventionPlugin supplies shared setup (reusable).
+- DashboardController, the combined BoardSource, composeApp UI/presentation files and TrayStateKind are deleted; ViewModels own state, and composeApp keeps the shell (selection, default selection), notification and store-session coordinators, and ViewModelFactory over the generated component.
+- Reusable in core:ui: SectionPager (paging, generation fencing, cursor re-anchoring), PagedListState, NavigationEffects and TransientEffects (bounded one-shot delivery), pendingFeedback in UiState (max 8, monotonic ids, acknowledged by id), shared rows, formatting, footer and tooltip.
+- Typed combine everywhere; guards ban array or indexed-cast combine and retired types, sibling-feature imports and shared-UI forbidden references, and feature modules must be commonMain-only. No baseline or exemption grew.
+- Fixed SectionPager.start leaving the footer at Loading when an in-flight append was restarted (appendCancelled).
+- Tests are barrier-driven (CompletableDeferred hooks on core:testing fakes, setMain with StandardTestDispatcher); ported sidebar scroll, tray hover and transition tracker tests.
+- Limits: nothing compiled or run when written; Readian source was unreachable, so the parent spec table stood in; the governed-edge walk may flag unresolved edges; compose-ui-test must suffice for ImageComposeScene in feature:history. Cancel gives no feedback of its own; historical docs left unchanged.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 4 of SKILL-424)
+
+## [2026-10-15] SKILL-424 subtask 3 SKILL-423 data repair handoff
+Areas: desktop-tray (composeApp, core/data, core/domain, docs), runtime-kotlin (runtime-domain, runtime-ports, runtime-engine, runtime-infra/sqlite)
+
+- Pause eligibility is now a runtime policy fact (pauseRequested input, pauseEligible output) projected on board and detail models; desktop WorkItem.pauseEligible replaces its own pause rule. WorkControlService validates through shared eligibility helpers.
+- Control results are typed: IntentRecorded for pause, ExitConfirmed for confirmed stop, Accepted for already-stopped or no-live-lease, plus a distinct incomplete-termination refusal. Desktop gateway, adapter and repositories return Outcome of ControlConfirmation; the dashboard shows action and confirmation notices.
+- Exact runtime reason restoration flows through a ReasonRestoration domain model, mapper and detail-pane note.
+- Tests added: runtime pause policy, control outcomes, forced-retry bounded paging, session barrier replacement and failed initialization, cross-list cursor refusal. The architecture walk gained an extracted governed-edge walker with a rejection fixture (reusable).
+- desktop-tray/docs/skill-423-handoff.md holds one row per obligation (trace, verdict, owner, evidence) plus the Readian HEAD note; ARCHITECTURE.md and data-layer-validation.md link to it (reusable).
+- Limits: nothing compiled or run when written; board still loads the full work list; desktop still checks freshness beside runtime facts; no StoreReplaced refusal, no virtual-time deadline tests, teardown runs under the mutex. No Room migration or schema version bump.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 3 of SKILL-424)
+
+## [2026-10-15] SKILL-424 subtask 2 data, preferences and generated DI
+Areas: desktop-tray (core/data, core/datastore, core/common, core/domain, core/testing, composeApp, build-logic/convention, scripts)
+
+- Moved the Room store, read-only driver, commit-signal observer, runtime adapters, mapper and paging out of composeApp into new core:data (ports in commonMain, JVM adapters in jvmMain); RoomBoardSource became Room board, detail and runtime control repositories behind session facades.
+- New core:datastore owns DataStore settings, the one-time legacy java.util.prefs migration and a diagnostics sink; Preferences.kt was split.
+- composeApp now builds one generated Kotlin-Inject/Anvil ApplicationComponent; hand-built construction is gone. Per-database session components sit behind app-scoped facades with a DatabaseSelection holder (reusable).
+- The component takes host environment and legacy-settings source as constructor arguments, so smoke tests use a disposable home and preferences node (reusable).
+- Guards extended: new module edges, an api-edge rule, runtime/sql/prefs imports confined to data and datastore, no reflection or ServiceLoader, no @Inject defaults, no construction in composition sources.
+- Tests: bounded paging, read-only store, observation lifecycle (child-JVM writer, counters), settings repository, component smoke; old test hooks recreated as port-seam wrappers.
+- Limits: nothing compiled or run when written; Kotlin-Inject/Anvil, Room 3 and PSI call-graph shapes unverified. The api-edge rule is a line heuristic. Component smoke covers AC-005 only partly; zero-connection counts live in core:data tests. ViewModels, navigation and window scopes stay for subtasks 4-6.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 2 of SKILL-424)
+
+## [2026-10-15] SKILL-424 subtask 1 build graph and core foundations
+Areas: desktop-tray (root build, build-logic, composeApp, core/common, core/domain, core/designsystem, core/testing), .github/workflows, install.sh, scripts
+
+- Split the single-module desktop build into JVM-only KMP modules: composeApp (executable, native tray, packaging) plus core:common, core:domain, core:designsystem, core:testing. Root build holds no production classes; check and packaging tasks delegate to subprojects.
+- Added included build-logic with convention plugins for KMP library, Compose, kotlin-inject, quality and desktop application, all reading the desktop version catalog. Quality plugin writes a per-module architecture manifest that tests consume.
+- Core domain is pure: DatabaseFileIdentity replaces java.nio, kotlin.time replaces java.time; java conversions stay at runtime edges (mapper, Room source). DispatcherProvider and Clock are injected into controller and board source.
+- Fonts moved to compose resources with snake_case names. Packaged output paths moved to composeApp/build in install.sh, smoke scripts and both workflows.
+- Architecture guards now read module manifests and parse sources: module-graph rules (targets, forbidden edges, cycles, test-only testing module) and PSI-based source rules (aliased, star and qualified references). Rejection fixtures cover each rule (reusable).
+- Build-logic TestKit fixtures and core:testing fixtures (TestClock, work/board/detail builders) are reusable.
+- Known limits: nothing compiled or run when written; several dependency pins (kotlin-inject, anvil, lifecycle, navigation3, savedstate, junit-bom) unverified. No scope annotations yet; some adapters still use Dispatchers.IO directly. Empty legacy src directories remain. Docs left to subtask 6.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 1 of SKILL-424)
+
 ## [2026-10-12] SKILL-423 desktop app data layer revamp
 Areas: desktop-tray, .github/workflows, runtime-kotlin/runtime-contracts, runtime-kotlin/runtime-domain, runtime-kotlin/runtime-ports, runtime-kotlin/runtime-engine, runtime-kotlin/runtime-core, runtime-kotlin/runtime-infra/sqlite, runtime-kotlin/runtime-cli
 
