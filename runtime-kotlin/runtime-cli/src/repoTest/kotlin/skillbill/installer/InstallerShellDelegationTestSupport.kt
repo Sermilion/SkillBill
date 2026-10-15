@@ -867,11 +867,6 @@ internal object PrebuiltReleaseStager {
     omitRuntimeAssets: Boolean,
   ) {
     val token = hostToken()
-    val desktopStaging = Files.createTempDirectory("skillbill-desktop-release")
-    val desktopApp = InstallerDesktopFixtures.seedDistribution(desktopStaging)
-    val desktopArchive = releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz")
-    runOrThrow(desktopStaging, listOf("bsdtar", "-czf", desktopArchive.toString(), desktopApp.fileName.toString()))
-    writeChecksumSibling(desktopArchive, corrupt = false)
     if (!omitRuntimeAssets) {
       val cliZip = releaseDir.resolve("runtime-cli-$VERSION-$token.zip")
       val mcpZip = releaseDir.resolve("runtime-mcp-$VERSION-$token.zip")
