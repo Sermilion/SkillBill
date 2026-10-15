@@ -1,12 +1,10 @@
 package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.goalRepositoryIdentity
-import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.work.control.workControlEligible
@@ -31,7 +29,6 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
-import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
@@ -90,7 +87,6 @@ class IdeStatusService(
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-  private val manifestStore: GoalRunnerManifestStore,
   private val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService,
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -118,7 +114,6 @@ class IdeStatusService(
           scopeToBranch(
             collectCandidates(unitOfWork, identityResult, currentBranch, observedAt),
             currentBranch,
-            repoRoot,
           )
         val context =
           IdeStatusProjectionContext(
@@ -782,59 +777,37 @@ class IdeStatusService(
   private fun scopeToBranch(
     candidates: List<IdeStatusCandidate>,
     branch: String?,
-    repoRoot: Path,
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
     if (protectedBranchName(branch) != null) return candidates
-    return candidates.filter { candidate -> matchesBranch(candidate, branch, repoRoot) }
+    return candidates.filter { candidate -> matchesBranch(candidate, branch) }
   }
 
   private fun matchesBranch(
     candidate: IdeStatusCandidate,
     branch: String,
-    repoRoot: Path,
   ): Boolean =
-    (
-      candidate.branchCorrelation == null ||
-        candidate.branchCorrelation == "HEAD" ||
-        candidate.branchCorrelation == branch
-    ) &&
-      (
-        candidate.standaloneStatus != null ||
-          isVerifyRegisteredOnBranch(candidate, branch) ||
-          candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
-          isPlanningOnBaseBranch(candidate, branch, repoRoot)
-      )
+    when {
+      candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL -> true
+      candidate.standaloneStatus != null -> registeredOnBranch(candidate, branch)
+      candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY ->
+        registeredOnBranch(candidate, branch) &&
+          (candidate.branchCorrelation == branch || branchReferencesIssueKey(candidate, branch))
+      else -> branchReferencesIssueKey(candidate, branch)
+    }
 
-  private fun isVerifyRegisteredOnBranch(
+  private fun registeredOnBranch(
     candidate: IdeStatusCandidate,
     branch: String,
   ): Boolean =
-    candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY && candidate.branchCorrelation == branch
+    candidate.branchCorrelation == null ||
+      candidate.branchCorrelation == "HEAD" ||
+      candidate.branchCorrelation == branch
 
-  private fun isPlanningOnBaseBranch(
+  private fun branchReferencesIssueKey(
     candidate: IdeStatusCandidate,
     branch: String,
-    repoRoot: Path,
-  ): Boolean {
-    val issueKey = candidate.issueKey
-    if (issueKey == null ||
-      candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
-      candidate.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED)
-    ) {
-      return false
-    }
-    val state = manifestStore.loadDurableByIssueKey(issueKey, repoRoot)
-    if (state == null || state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) {
-      return false
-    }
-    val planning =
-      manifestStore.planningStatus(
-        state.parentWorkflowId,
-        state.manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }.map { it.id },
-      ) ?: return false
-    return planning.state != GoalPlanningStatusState.PREPARED
-  }
+  ): Boolean = candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true
 
   private fun collectCandidates(
     unitOfWork: UnitOfWork,
@@ -958,11 +931,15 @@ class IdeStatusService(
       } else {
         unitOfWork.standalonePhaseStatuses.latestWorkflowExecution(item.workflowId)
       }
-    val branchCorrelation =
-      goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
+    val branchCorrelation = workflowExecution?.branchCorrelation
     val execution =
       workflowExecution
-        ?.takeIf { branch == null || branchCorrelation == branch || branchCorrelation == "HEAD" }
+        ?.takeIf {
+          family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
+            branch == null ||
+            branchCorrelation == branch ||
+            branchCorrelation == "HEAD"
+        }
         ?.let { record ->
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.WORKFLOW,
@@ -985,28 +962,6 @@ class IdeStatusService(
       execution = execution,
       branchCorrelation = branchCorrelation,
     )
-  }
-
-  private fun goalBranchCorrelation(
-    item: WorkItem,
-    family: IdeStatusWorkflowFamily,
-    registeredBranch: String?,
-    currentBranch: String?,
-    repoRoot: Path,
-  ): String? {
-    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL || registeredBranch == null || currentBranch == null) {
-      return registeredBranch
-    }
-    if (registeredBranch == currentBranch || registeredBranch == "HEAD") return registeredBranch
-    val state = item.issueKey?.let { manifestStore.loadDurableByIssueKey(it, repoRoot) }
-    val manifest =
-      state?.manifest?.takeIf {
-        state.parentWorkflowId == item.workflowId
-      }
-    val ownsBranch =
-      manifest != null &&
-        (manifest.featureBranch == currentBranch || manifest.stackBranches.any { it.branch == currentBranch })
-    return if (ownsBranch) currentBranch else registeredBranch
   }
 
   private fun routeScopeFor(

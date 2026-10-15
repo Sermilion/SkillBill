@@ -36,6 +36,18 @@ class MainWindowTest {
   }
 
   @Test
+  fun `sidebar rows lead with the issue key, not the worktree folder`() {
+    val goal = item("goal", Lifecycle.CANCELED, WorkFamily.FEATURE_GOAL).copy(
+      repositoryRoot = "/worktrees/we5116-ai-assistant-operations", issueKey = "WE-5108",
+    )
+    assertEquals(SidebarRowLabels("WE-5108", "we5116-ai-assistant-operations · Canceled"), sidebarRowLabels(goal))
+
+    val keylessPhase = goal.copy(issueKey = null, scope = ExecutionScope.STANDALONE_PHASE, phaseId = "monitor",
+      lifecycle = Lifecycle.PAUSED, currentStepLabel = "runner_interrupted")
+    assertEquals(SidebarRowLabels("we5116-ai-assistant-operations", "monitor · Paused · runner_interrupted"), sidebarRowLabels(keylessPhase))
+  }
+
+  @Test
   fun `finished goals and phases show recorded run time without counting idle gaps`() {
     val finish = Instant.parse("2026-10-13T10:00:00Z")
     for (scope in listOf(ExecutionScope.WORKFLOW, ExecutionScope.STANDALONE_PHASE)) {
@@ -97,7 +109,7 @@ class MainWindowTest {
       val visibleTexts = scene.semanticsOwners.flatMap { it.getAllSemanticsNodes(false) }.flatMap {
         it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text }
       }
-      assertTrue("entry-19" in visibleTexts, visibleTexts.joinToString())
+      assertTrue("SKILL-entry-19" in visibleTexts, visibleTexts.joinToString())
     }
   }
 

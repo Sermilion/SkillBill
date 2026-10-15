@@ -115,3 +115,8 @@ Reason: Clipboard text must contain the recorded failure, and a missing reason m
 Context: An installed desktop app rejected an older runtime store with an incompatible-database message. Installation upgrades the runtime's default store, but the app can select a different store or open one restored after installation.
 Decision: Database selection calls the shared runtime schema port before opening Room or registering observation. The runtime checks the migration ledger, version, and installed Room identity before applying pending migrations. Missing databases stay absent, and newer or unrecognized stores remain unchanged. Ordinary reads and observation retain their read-only behavior.
 Reason: An older supported store should open with its saved work intact. Runtime migrations remain the only schema authority, and upgrading belongs to the connection boundary rather than each read.
+
+## [2026-10-14] Head rows with the run, show the branch as it is now
+Context: Sidebar rows were headed by the worktree folder name, so a WE-5108 goal running in a `we5116-…` worktree read as WE-5116. Goal detail showed the branch recorded when the execution registered and never followed the run.
+Decision: Head each sidebar row with its issue key and move the repository name to the second line. Keyless rows keep the repository name as their heading. Goal detail shows the worktree's checked-out branch at read time and falls back to the recorded branch. Standalone phases keep their recorded branch because it is part of their identity.
+Reason: A run is identified by its issue key, not by where it was started. The branch is display context and must be current.

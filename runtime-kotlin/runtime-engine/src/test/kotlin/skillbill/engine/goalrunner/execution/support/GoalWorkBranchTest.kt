@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.execution.support
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.engine.featuretask.phaserun.StandalonePhaseRegistrationFactory
 import skillbill.engine.goalrunner.manifest
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -61,6 +62,7 @@ class GoalWorkBranchTest {
         Clock.systemUTC(),
         NoopFeatureTaskRuntimeWorkerSupervisor,
         NoopRuntimeDiagnostics,
+        EnvironmentContext(environment = mapOf("PATH" to "/usr/bin")),
       )
     val repoRoot = Files.createTempDirectory("goal-work-branch")
 
