@@ -1,6 +1,6 @@
 # SKILL-425 Subtask 3 - One plan strategy and planning state on the plan workflow
 
-Parent spec: [spec.md](./spec.md). Read its Model, Decisions and Execution rule first.
+Parent spec: [spec.md](spec.md). Read its Model, Decisions and Execution rule first.
 `investigation.md` has the goal planning census.
 Issue key: SKILL-425
 
@@ -91,7 +91,7 @@ Owned paths (elided segments are `...`):
 None. This subtask runs on the current tree. It applies to whatever planning skeleton exists:
 two slots or three, and run by `phase plan` alone or by the full run too. If the full run does not
 yet run the plan skeleton for new keys, imported bundles still reach it through the bundle-without-plan
-rule above. Record the decision in `runtime-kotlin/agent/decisions.md`; it supersedes the SKILL-387
+rule above. Record the decision in `../../../runtime-kotlin/agent/decisions.md`; it supersedes the SKILL-387
 planning handoff entry and SKILL-410's "no goal planning sweep at plan time".
 
 ## Validation Strategy
@@ -107,7 +107,7 @@ Complete the goal and prepare its pull request.
 
 ## Implementation Details
 
-Paths are under `runtime-kotlin/`. `R-engine` is `runtime-engine/src/main/kotlin/skillbill/engine`,
+Paths are under `../../../runtime-kotlin`. `R-engine` is `runtime-engine/src/main/kotlin/skillbill/engine`,
 and `R-domain` is `runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime`. Facts come from the
 preplan digest. Where it lacked a fact, the decision below names the assumption for implement to
 confirm in code before building on it.
@@ -364,14 +364,14 @@ confirm in code before building on it.
       `TestExecutionPlan`, `PhaseModelProfileSelectionTest` and
       `FeatureTaskRuntimeExecutionPlanResolverTest`.
 12. **Decision record.**
-    - Add an entry to `runtime-kotlin/agent/decisions.md`: one plan strategy with two steps,
+    - Add an entry to `../../../runtime-kotlin/agent/decisions.md`: one plan strategy with two steps,
       planning state on the plan workflow, legacy tables read-only, and D9 to D11. The entry
       supersedes the SKILL-387 planning handoff entry and SKILL-410's "no goal planning sweep at
       plan time".
 
 ### Constraints
 
-- Authored Kotlin follows `AGENTS.md`: no line comments, and KDoc only on interfaces.
+- Authored Kotlin follows `../../../AGENTS.md`: no line comments, and KDoc only on interfaces.
 - Keep the generic run loop and the single runner. All plan execution, including re-plan and the
   bundle-without-plan path, goes through `StandalonePlanRun` and `FeatureTaskRuntimeRunEntry`.
 - Persisted rows stay readable: old provenance payloads, recorded strategy ids and phase-record

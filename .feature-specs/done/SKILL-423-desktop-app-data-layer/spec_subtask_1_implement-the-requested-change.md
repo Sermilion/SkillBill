@@ -5,7 +5,7 @@ Issue key: SKILL-423
 
 ## Operator scope transfer on 2026-10-12
 
-The operator transferred the seven remaining reported repair obligations to [SKILL-424](../../SKILL-424-readian-desktop-architecture-parity/spec.md#data-repair-handoff-from-skill-423) and requested completion of this subtask's current `audit_implement_fix` phase by handoff. SKILL-424 AC-28 through AC-34 own the remaining portions of normalized SKILL-423 AC-002, AC-003, AC-004, AC-009, AC-010, AC-011, and AC-017, respectively. Those remaining obligations are excluded from SKILL-423 repair acceptance; preserve all implemented behavior, prior edits, and regression coverage.
+The operator transferred the seven remaining reported repair obligations to [SKILL-424](../SKILL-424-readian-desktop-architecture-parity/spec.md#data-repair-handoff-from-skill-423) and requested completion of this subtask's current `audit_implement_fix` phase by handoff. SKILL-424 AC-28 through AC-34 own the remaining portions of normalized SKILL-423 AC-002, AC-003, AC-004, AC-009, AC-010, AC-011, and AC-017, respectively. Those remaining obligations are excluded from SKILL-423 repair acceptance; preserve all implemented behavior, prior edits, and regression coverage.
 
 This dated instruction supersedes conflicting scope, acceptance, remaining-repair, and Implementation Details text below. The source is workflow `wftr-20261012-112951-so8l`, repair attempt 8, latest report `2026-10-12T16:02:56.524Z`. It records an operator-approved transfer, not a claim that those gaps were fixed or passed a fresh audit. SKILL-424 must reconcile stale report descriptions against current source. AC-005, AC-012, and AC-015 were reported satisfied and remain preserved.
 
@@ -23,7 +23,7 @@ The app shows live work independently of completed history. Refresh preserves th
 
 ## Relationship to SKILL-424
 
-[SKILL-424](../../SKILL-424-readian-desktop-architecture-parity/spec.md) owns the final Readian-style KMP module/source-set graph, desktop build conventions, generated Kotlin-Inject/Anvil composition and scopes, feature ViewModels and typed state/action/effect structure, Navigation 3, entry/window ownership, native host integration, and final architecture guards/inventories.
+[SKILL-424](../SKILL-424-readian-desktop-architecture-parity/spec.md) owns the final Readian-style KMP module/source-set graph, desktop build conventions, generated Kotlin-Inject/Anvil composition and scopes, feature ViewModels and typed state/action/effect structure, Navigation 3, entry/window ownership, native host integration, and final architecture guards/inventories.
 
 SKILL-423 owns working data-layer behavior. Room 3 compatibility, typed shared runtime reads and controls, bounded queries and Paging, external committed-write observation, database generations, DataStore migration, notification correctness, and removal of the CLI work-data path and polling remain requirements here. SKILL-424 consumes and preserves those implementations while placing them in its final architecture.
 

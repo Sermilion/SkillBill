@@ -1,6 +1,6 @@
 # SKILL-425 Subtask 2 - Full run plans first
 
-Parent spec: [spec.md](./spec.md). Read its Model, Decisions and Execution rule first.
+Parent spec: [spec.md](spec.md). Read its Model, Decisions and Execution rule first.
 Issue key: SKILL-425
 
 ## Scope
@@ -75,7 +75,7 @@ Complete the goal and prepare its pull request.
 
 ## Implementation Details
 
-Paths are under `runtime-kotlin/`. `R-engine` is
+Paths are under `../../../runtime-kotlin`. `R-engine` is
 `runtime-engine/src/main/kotlin/skillbill/engine`.
 
 ### Decisions settled in planning

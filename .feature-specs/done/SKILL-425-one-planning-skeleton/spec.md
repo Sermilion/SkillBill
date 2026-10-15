@@ -117,7 +117,7 @@ census. In short:
    workflow, and from the legacy tables for legacy goals.
 10. No command opens a `standalone` workflow, and the `feature-task run` commands are gone. Existing
     `standalone` rows stay readable and abandonable.
-11. The dispatcher skill text, `runtime-kotlin/ARCHITECTURE.md`, user docs and
+11. The dispatcher skill text, `../../../runtime-kotlin/ARCHITECTURE.md`, user docs and
     `runtime-kotlin/agent/decisions.md` describe one planning skeleton.
 12. `./gradlew check` passes.
 
@@ -128,8 +128,8 @@ census. In short:
 - Keep the generic run loop and the single runner. Add no planning-only run path.
 - Persisted rows written before this change must stay readable. Add a named migration for any new
   column, and bump `DesktopReadSchema` when a migration is added.
-- Authored Kotlin follows `AGENTS.md`: no line comments, KDoc only on interfaces.
-- Changing `skills/skill-bill/content.md` requires `./install.sh`.
+- Authored Kotlin follows `../../../AGENTS.md`: no line comments, KDoc only on interfaces.
+- Changing `../../../skills/skill-bill/content.md` requires `./install.sh`.
 
 ## Non-goals
 

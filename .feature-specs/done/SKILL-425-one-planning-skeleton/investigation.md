@@ -1,6 +1,6 @@
 # SKILL-425 investigation
 
-Census taken on 2026-10-13 against `main` at `9e5f26d30`. Paths are under `runtime-kotlin/` unless
+Census taken on 2026-10-13 against `main` at `9e5f26d30`. Paths are under `../../../runtime-kotlin` unless
 they start with another root. Line numbers are anchors at census time; recheck before editing.
 
 ## Trigger
@@ -114,15 +114,15 @@ new key goes straight to `goalRunner.run` and intake writes the one-subtask mani
 
 ## Prior decisions this supersedes
 
-- SKILL-410 (`.feature-specs/done/SKILL-410-durable-standalone-plan/spec.md`): "Nothing creates the
+- SKILL-410 (`../SKILL-410-durable-standalone-plan/spec.md`): "Nothing creates the
   goal parent at plan time and no goal planning sweep runs." The full run resumed only an incomplete
   plan.
-- SKILL-387 (`runtime-kotlin/agent/decisions.md`, "make the governed spec artifact the planning
+- SKILL-387 (`../../../runtime-kotlin/agent/decisions.md`, "make the governed spec artifact the planning
   handoff"): standalone plan authors the bundle; goal planning writes each assigned subtask spec.
 - SKILL-65.1 introduced `suppressDecomposition` so goal children would not author nested bundles.
 
 ## Documentation that describes planning
 
-- `skills/skill-bill/content.md` lines 74-78 (`phase:plan` paragraph).
-- `runtime-kotlin/ARCHITECTURE.md` lines ~347-353 (goal planning, child hydration).
-- `README.md`, `docs/getting-started.md`, `docs/runtime-command-guidance.md` (feature-task commands).
+- `../../../skills/skill-bill/content.md` lines 74-78 (`phase:plan` paragraph).
+- `../../../runtime-kotlin/ARCHITECTURE.md` lines ~347-353 (goal planning, child hydration).
+- `../../../README.md`, `docs/getting-started.md`, `docs/runtime-command-guidance.md` (feature-task commands).
