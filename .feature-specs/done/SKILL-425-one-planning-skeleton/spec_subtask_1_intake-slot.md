@@ -1,6 +1,6 @@
 # SKILL-425 Subtask 1 - Intake slot
 
-Parent spec: [spec.md](./spec.md). Read its Model, Decisions and Execution rule first.
+Parent spec: [spec.md](spec.md). Read its Model, Decisions and Execution rule first.
 Issue key: SKILL-425
 
 ## Scope
@@ -66,7 +66,7 @@ through the same skeleton.
 
 ## Implementation Details
 
-All paths are under `runtime-kotlin/`. `R-engine` is `runtime-engine/src/main/kotlin/skillbill/engine`
+All paths are under `../../../runtime-kotlin`. `R-engine` is `runtime-engine/src/main/kotlin/skillbill/engine`
 and `R-domain` is `runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime`. Lines marked
 **Assumption** are decisions taken without a fact from the preplan digest. Implement confirms each one
 in the code and keeps the stated end state if the code differs.
@@ -251,7 +251,7 @@ in the code and keeps the stated end state if the code differs.
 
 ### Constraints
 
-- Authored Kotlin follows `AGENTS.md`: no line comments, and KDoc only on interfaces. `PhaseIntakeStepBinding`
+- Authored Kotlin follows `../../../AGENTS.md`: no line comments, and KDoc only on interfaces. `PhaseIntakeStepBinding`
   gets KDoc if its sibling bindings carry it.
 - No change to `GoalIntakePreparation.prepare` behavior, the `plan` slot's strategy or steps,
   `PlanDecompositionStop`, or tracker lookup.

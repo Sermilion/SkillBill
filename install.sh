@@ -1626,7 +1626,10 @@ build_source_desktop_app() {
   fi
   ensure_build_jvm || return 1
   info "Building desktop tray app from source."
-  if ! (cd "$desktop_dir" && ./gradlew --no-daemon -q createDistributable); then
+  # --no-daemon still starts a single-use daemon. Keep it outside the shared
+  # registry so another checkout's gradlew --stop cannot cancel this build.
+  if ! (cd "$desktop_dir" && ./gradlew --no-daemon \
+    -Dorg.gradle.daemon.registry.base="$PWD/.gradle/installer-daemon" -q createDistributable); then
     warn "Could not build the desktop app from source; keeping the existing app install."
     DESKTOP_APP_INSTALL_RESULT="build failed"
     return 1

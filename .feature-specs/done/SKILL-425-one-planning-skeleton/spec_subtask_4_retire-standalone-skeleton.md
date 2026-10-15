@@ -1,6 +1,6 @@
 # SKILL-425 Subtask 4 - Retire the standalone skeleton and update docs
 
-Parent spec: [spec.md](./spec.md). Read its Model, Decisions and Execution rule first.
+Parent spec: [spec.md](spec.md). Read its Model, Decisions and Execution rule first.
 Issue key: SKILL-425
 
 ## Scope
@@ -21,19 +21,19 @@ that case: a small feature plans into a one-subtask bundle and runs to a pull re
 
 Update the docs so they describe one planning skeleton:
 
-- `skills/skill-bill/content.md`: the `phase:plan` paragraph says the full run uses the same
+- `../../../skills/skill-bill/content.md`: the `phase:plan` paragraph says the full run uses the same
   planning skeleton for new work, not only to finish an incomplete plan. Run `./install.sh` after.
-- `runtime-kotlin/ARCHITECTURE.md`: the planning, goal planning and child hydration paragraphs.
-- `README.md`, `docs/getting-started.md`, `docs/runtime-command-guidance.md`: drop
+- `../../../runtime-kotlin/ARCHITECTURE.md`: the planning, goal planning and child hydration paragraphs.
+- `../../../README.md`, `docs/getting-started.md`, `docs/runtime-command-guidance.md`: drop
   `feature-task run`, and describe planning as intake, preplan, plan.
-- `runtime-kotlin/agent/decisions.md`: one entry for retiring the standalone skeleton.
+- `../../../runtime-kotlin/agent/decisions.md`: one entry for retiring the standalone skeleton.
 
 Owned paths (elided segments are `...`):
 
 - `runtime-cli/.../featuretask/`, `runtime-cli/.../core/CliCommandGroups.kt`
 - `runtime-domain/.../taskruntime/model/skeleton/SkeletonDefinition.kt`
 - `runtime-engine/.../featuretask/model/continuation/`, `featuretask/runner/`, `featuretask/slot/skeleton/`, `featuretask/slot/plan/AgentPlanStrategy.kt`
-- `skills/skill-bill/content.md`, `runtime-kotlin/ARCHITECTURE.md`, `README.md`, `docs/`
+- `../../../skills/skill-bill/content.md`, `runtime-kotlin/ARCHITECTURE.md`, `README.md`, `docs/`
 
 ## Acceptance Criteria
 
@@ -43,8 +43,8 @@ Owned paths (elided segments are `...`):
 4. Resuming an existing `standalone` row is refused with a message naming `skill-bill <KEY>`.
 5. `AgentPlanStrategy` has no prose-only plan mode.
 6. The route scope `standalone` still admits plan workflows.
-7. The dispatcher skill text, `ARCHITECTURE.md`, `README.md` and the docs describe one planning skeleton and no longer mention `feature-task run`.
-8. `runtime-kotlin/agent/decisions.md` records the retirement.
+7. The dispatcher skill text, `ARCHITECTURE.md`, `../../../README.md` and the docs describe one planning skeleton and no longer mention `feature-task run`.
+8. `../../../runtime-kotlin/agent/decisions.md` records the retirement.
 9. Tests that used the `standalone` skeleton to exercise shared run-loop behaviour use `goal-child` or `plan` instead, and a test covers criteria 3 and 4 with a stored `standalone` row.
 
 ## Non-Goals
@@ -71,7 +71,7 @@ Complete the goal and prepare its pull request.
 
 ## Implementation Details
 
-Paths are under `runtime-kotlin/` unless noted. `R-engine` is
+Paths are under `../../../runtime-kotlin` unless noted. `R-engine` is
 `runtime-engine/src/main/kotlin/skillbill/engine`, and `R-domain` is
 `runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime`. The owned paths above are where the
 work lands. Repairs to tests, fixtures, architecture guards or wiring elsewhere that these changes
@@ -110,7 +110,7 @@ require are in scope.
   - If a live child-launch path still invokes `feature-task run` as a subprocess, do not delete
     that path. Report it as a blocker on AC-001 instead of rerouting goal children.
 - **`./install.sh` is not part of this goal.** The spec asks for `./install.sh` after
-  `skills/skill-bill/content.md` changes, but the goal-continuation rules forbid install commands
+  `../../../skills/skill-bill/content.md` changes, but the goal-continuation rules forbid install commands
   inside a goal child. Implement edits `content.md` only. The operator runs `./install.sh` after
   the branch lands. Mention this in the PR description.
 
@@ -217,22 +217,22 @@ require are in scope.
      first for new work, then executes the bundle. Goal children hydrate from the linked plan
      workflow, and legacy goals hydrate from the read-only `goal_*` tables. `feature-task run` and
      the `standalone` skeleton are retired.
-   - `skills/skill-bill/content.md`: in the `phase:plan` paragraph, the full run uses the same
+   - `../../../skills/skill-bill/content.md`: in the `phase:plan` paragraph, the full run uses the same
      planning skeleton for new work, not only to finish an incomplete plan. Remove any
      `feature-task run` mention.
-   - `runtime-kotlin/ARCHITECTURE.md`: the planning, goal-planning and child-hydration paragraphs.
-   - `README.md`, `docs/getting-started.md` and `docs/runtime-command-guidance.md`: drop
+   - `../../../runtime-kotlin/ARCHITECTURE.md`: the planning, goal-planning and child-hydration paragraphs.
+   - `../../../README.md`, `docs/getting-started.md` and `docs/runtime-command-guidance.md`: drop
      `feature-task run` and describe planning as intake, preplan, plan. If the guidance has a
      retired-names section, add `feature-task run` there and point to `skill-bill <KEY>`.
    - Grep the remaining current-behaviour docs for `feature-task run` and `standalone` skeleton
-     mentions, and update the matches: `docs/capabilities.md`,
+     mentions, and update the matches: `../../../docs/capabilities.md`,
      `docs/model-specific-phase-strategies.md`, `AGENTS.md` and
      `orchestration/workflow-contract/PLAYBOOK.md`.
-   - Leave dated entries in the existing `agent/history.md` and `agent/decisions.md` files, and
+   - Leave dated entries in the existing `../../../agent/history.md` and `agent/decisions.md` files, and
      everything under `.feature-specs/`, as they are. They are records, not current docs.
    - When another subtask already rewrote one of these paragraphs, keep its text and fit this change
      into it.
-9. **Decision record** (AC-008). Add one entry to `runtime-kotlin/agent/decisions.md` in the file's
+9. **Decision record** (AC-008). Add one entry to `../../../runtime-kotlin/agent/decisions.md` in the file's
    existing entry format. It records:
    - that the `standalone` skeleton and the `feature-task run` commands are retired because the full
      run covers single-feature work with a one-subtask bundle;
@@ -244,7 +244,7 @@ require are in scope.
 
 ### Constraints
 
-- Authored Kotlin follows `AGENTS.md`: no line comments, KDoc only on interfaces.
+- Authored Kotlin follows `../../../AGENTS.md`: no line comments, KDoc only on interfaces.
 - No schema change and no migration. Stored rows are read as they are.
 - Do not change `goal-child` or `plan` behaviour, the `FeatureTaskRouteScope` values, or the
   execution identity contract.

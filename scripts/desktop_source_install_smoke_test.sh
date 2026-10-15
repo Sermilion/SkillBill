@@ -29,7 +29,10 @@ launch_desktop_app() { printf '%s\n' "$3" >> "$task_dir/launched"; }
 cat > "$task_dir/checkout/desktop-tray/gradlew" <<'BUILD'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$*" == '--no-daemon -q createDistributable' ]]
+[[ "$#" -eq 4 ]]
+[[ "$1" == '--no-daemon' ]]
+[[ "$2" == "-Dorg.gradle.daemon.registry.base=$PWD/.gradle/installer-daemon" ]]
+[[ "$3" == '-q' && "$4" == 'createDistributable' ]]
 if [[ -f fail-build ]]; then
   exit 23
 fi
