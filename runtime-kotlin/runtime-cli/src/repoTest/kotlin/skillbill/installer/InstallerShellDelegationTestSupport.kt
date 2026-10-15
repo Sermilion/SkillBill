@@ -27,6 +27,8 @@ private fun nativeHostUname(): String =
     else -> "Linux"
   }
 
+private fun nativeHostArch(): String = System.getProperty("os.arch")
+
 private fun seedHostUname(
   binDir: Path,
   hostUname: String,
@@ -39,7 +41,7 @@ private fun seedHostUname(
     |set -euo pipefail
     |case "${'$'}{1:-}" in
     |  -s) printf '%s\n' "${'$'}{SKILL_BILL_TEST_HOST_UNAME:?}" ;;
-    |  -m) printf '%s\n' x86_64 ;;
+    |  -m) printf '%s\n' "${nativeHostArch()}" ;;
     |  *) exit 1 ;;
     |esac
     """.trimMargin(),
