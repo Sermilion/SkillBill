@@ -79,6 +79,7 @@ internal class PhaseAttemptLoopState(
   var outputGateFailures: Int,
   var semanticIteration: Int,
   var continuationSegmentCount: Int,
+  var requiredStartAcknowledged: Boolean = false,
   private var carryForward: PhaseAttemptLoopCarryForward = PhaseAttemptLoopCarryForward(),
 ) {
   var priorOwedFindings: Set<String>? = null
@@ -127,6 +128,7 @@ internal data class FixLoopBranchContext(
   val run: PhaseRun,
   val attempt: AttemptResult,
   val loop: PhaseAttemptLoopState,
+  val serialAcceptanceRepairStep: Boolean,
   val observability: FeatureTaskRuntimeRunObservability,
   val agentId: String,
   val session: FeatureTaskRuntimeRunSessionObservations,

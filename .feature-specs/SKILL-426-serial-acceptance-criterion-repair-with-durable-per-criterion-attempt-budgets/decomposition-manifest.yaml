@@ -3,35 +3,60 @@ contract_version: "0.5"
 issue_key: "SKILL-426"
 feature_name: "serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets"
 parent_spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec.md"
-status: "pending"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
-  name: "Durable serial acceptance repair policy"
+  name: "Durable serial repair admission and transactions"
   spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_1_durable-serial-repair.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261014-120522-76yf"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
-  name: "Read-only criterion repair status and existing presentations"
-  spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_2_criterion-repair-status.md"
-  status: "pending"
+  name: "Focused audit execution and final source gate"
+  spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_2_serial-audit-execution.md"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261014-164823-jaas"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: "Criterion reporting, existing UI consumers and guidance"
+  spec_path: ".feature-specs/SKILL-426-serial-acceptance-criterion-repair-with-durable-per-criterion-attempt-budgets/spec_subtask_3_serial-repair-reporting.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261014-204412-bjz8"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+  - subtask_id: 2
     optional: false
     skipped: false

@@ -191,7 +191,8 @@ private class SpecDriftFixture(
               workerSupervisor = if (live) LiveProcessSupervisor else DeadProcessSupervisor,
             ),
         ),
-      envelopeValidator = FeatureTaskRuntimeWireArtifactValidator(),
+      envelopeValidator =
+        FeatureTaskRuntimeWireArtifactValidator(),
       diagnostics = diagnostics,
     )
 

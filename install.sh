@@ -753,8 +753,8 @@ run_pre_install_uninstall() {
   # orchestration/ + the reserved baseline-manifest path) and durable *.db state
   # across the pre-install wipe, while still clearing runtime/ and
   # installed-skills/.
-  # This flag is ONLY set for the install-driven pre-install uninstall; an
-  # explicit ./uninstall.sh (flag unset) still fully removes ~/.skill-bill.
+  # Explicit uninstall also preserves databases and backups; this flag keeps
+  # copied-in source available for reinstall.
   SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1 SKILL_BILL_PRESERVE_DESKTOP_APP=1 bash "$uninstall_script"
 }
 

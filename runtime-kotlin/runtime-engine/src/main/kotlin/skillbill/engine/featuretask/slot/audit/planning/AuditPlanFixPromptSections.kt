@@ -4,7 +4,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 
 internal object AuditPlanFixPromptSections {
   const val DIRECTIVE: String =
-    "Plan how to repair every production gap in the latest persisted audit. Inspect the current source " +
+    "Plan how to repair every independent production gap in the runtime-selected authored criterion " +
+      "from the latest persisted audit. Inspect the current source " +
       "and original feature plan before proposing changes. Do not edit files, spawn subagents, compile, " +
       "build, run tests, format, lint, or run repository checks. This step plans repairs; the runtime " +
       "saves the plan before audit_implement_fix executes it. Split independent gaps under one " +
@@ -19,14 +20,24 @@ internal object AuditPlanFixPromptSections {
       "When the latest audit output begins with `Operator instructions:`, the operator rejected an audit-confirmed " +
       "no-change claim; treat those instructions as part of this step's fix input and the governing repair scope."
 
-  fun sections(): PhaseStepPromptSections =
+  fun sections(currentCriterion: String? = null): PhaseStepPromptSections =
     PhaseStepPromptSections(
-      taskDirective = DIRECTIVE,
+      taskDirective =
+        DIRECTIVE +
+          (
+            currentCriterion?.let {
+              "\n\nRuntime-selected authored criterion and retained budget:\n$it\nKeep this plan " +
+                "focused on this criterion."
+            } ?: (
+              "\n\nThe runtime did not provide a selected authored criterion. " +
+                "Do not plan a broad repair; report the missing runtime context."
+            )
+          ),
       valueContent =
         "Write the repair plan as prose in execution order. Explain each reported production gap, " +
           "the production paths involved, the changes needed, and any dependencies between fixes. " +
           "Describe how the changes close each gap. Account for completed edits in the current " +
-          "tree. Cover the remaining production criteria and independent findings under them. " +
+          "tree. Shared prerequisite edits are allowed, but other criteria need their own audit. " +
           "This value is the persisted plan delivered to audit_implement_fix; no repair happens " +
           "in this step.",
     )

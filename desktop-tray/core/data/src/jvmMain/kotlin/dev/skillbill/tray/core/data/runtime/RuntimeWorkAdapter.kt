@@ -169,7 +169,9 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
           .copy(databaseFile = work.databaseFileObservation?.toDomain())
         domain.runTarget()?.let(runtime.workControlService::options)
       }
-      val detail: Detail? = result.item?.toDomain(result.observedAt.toKotlinInstant(), null)
+      val detail: Detail? = result.item?.toDomain(result.observedAt.toKotlinInstant(), null)?.let { mapped ->
+        mapped.copy(item = mapped.item.withCheckedOutBranch(runtime.checkedOutBranchSource))
+      }
       return DetailProjection(
         problemCode = result.problem?.code?.wireValue,
         detail = detail,

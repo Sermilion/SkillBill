@@ -3,6 +3,7 @@ package skillbill.engine.worktreeedit
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -204,6 +205,8 @@ private class JournalDatabaseSessionFactory(
   private val journal: WorktreeEditJournalRepository,
   private val busyWrites: Int = 0,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/worktree-edit-journal.db")
   private val writes = AtomicInteger(0)
   val writeAttempts: Int

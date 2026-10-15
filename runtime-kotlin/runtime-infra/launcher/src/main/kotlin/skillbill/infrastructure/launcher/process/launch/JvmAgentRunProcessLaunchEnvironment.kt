@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.host.jvm.applyTo
 
@@ -46,6 +47,4 @@ internal val ISOLATED_LAUNCH_PASSTHROUGH_KEYS: Set<String> =
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
     "XDG_CACHE_HOME",
-    "CLAUDE_CONFIG_DIR",
-    "CODEX_HOME",
-  )
+  ) + AgentHomeEnvironmentKeys.ALL

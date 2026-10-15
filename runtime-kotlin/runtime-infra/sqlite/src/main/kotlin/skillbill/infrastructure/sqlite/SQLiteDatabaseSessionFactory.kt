@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.schema.requireResolvedEnvironmentCon
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.db.model.FencedTransactionResult
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.persistence.UnitOfWork
@@ -143,6 +144,13 @@ class SQLiteDatabaseSessionFactory(
         transactionResult
       }
     }
+  }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> {
+    if (activeWrite.get() != null || activeRead.get() != null) {
+      return OwningTransactionResult.ActiveSession
+    }
+    return OwningTransactionResult.Committed(transaction(block))
   }
 
   override fun <T> transactionFenced(

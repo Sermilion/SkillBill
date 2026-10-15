@@ -115,6 +115,17 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
+CI repair starts with each failing job's logs and the exact failed command,
+assertion, or error. The repair agent traces that evidence through the repository
+and fixes the cause. A passing local rerun does not resolve a CI failure.
+Intermittent failures require investigation of timing, concurrency, isolation,
+or environment differences as the evidence warrants. Repair completion requires
+a repository fix and passing required local checks. If investigation cannot
+establish a fix, the agent blocks with the failed check URL, inspected evidence,
+and unresolved cause or missing evidence. An unchanged tree and green local
+checks cannot complete repair. The runtime owns commit, push, and subsequent CI
+confirmation. This applies to goal and standalone monitoring.
+
 After all subtasks finish and the goal opens or finds its pull request, parent
 finalization runs the existing monitor and bounded CI repair loop before reporting
 completion. Monitoring belongs to that goal, so it publishes parent progress and
@@ -162,33 +173,31 @@ existing recovery paths.
 
 ## Acceptance-audit repair planning
 
-The first acceptance audit inspects all production criteria in `audit`. Later
-rounds inspect only the unresolved criteria in the last accepted report. Satisfied
-criteria stay closed across repairs and resumes. The runtime rejects reports that
-reopen them. Open findings
-enter `audit_plan_fix`, a read-only reasoning step that plans each independent
-gap before repair. Each plan item names the criterion, gap, production path,
-ordered changes and dependencies, and evidence needed to close it. The agent
-writes the plan as prose. The runtime persists it as an ordinary phase output
-without parsing headings, field labels, or criterion coverage.
+The initial `audit` reads every authored acceptance criterion. It records findings
+as ordinary prose and later rounds audit the criterion selected by committed
+accounting. The runtime keeps authored text and aliases with that accounting. It
+does not require headings, field labels, IDs written by the agent, coverage
+markers, or a strict adoption receipt in an audit or repair plan.
 
-`audit_implement_fix` consumes that saved plan and the latest audit findings,
-reconciles completed edits, and executes the remaining planned changes. Repair
-continuations reuse the saved plan. Each new audit round with open findings
-produces a new repair plan. A satisfied audit skips both repair steps. Audit,
-repair planning, and repair do not run builds or tests. Existing audit retry and
-non-shrinking limits still apply. If the comparison baseline is missing after
-repair, the completed audit becomes a fresh baseline and restarts repair planning.
-The second missing-baseline event in the workflow blocks. The phase ledger retains
-this count across process restarts and operator resumes.
+`audit_plan_fix` is a read-only reasoning step. Its prose plan explains the latest
+gap and a focused repair for the selected criterion. A repair may include shared
+prerequisite edits, but those edits do not accept another criterion. Each reserved
+repair cycle records at most one unsuccessful outcome. The third unsuccessful
+outcome blocks that criterion; a successful outcome closes source work for it
+without erasing earlier failures. The final full source audit checks the whole
+authored set. If that audit finds a regression, the criterion reopens with its
+retained failure budget. An ambiguous regression gets the existing read-only
+prose follow-up before reopening; it does not require a phrase or agent-authored
+identifier protocol.
 
-Existing workflows with the exact acceptance-audit revision 1 or 2 composition
-can resume through a checked mapping to revision 3. The runtime retains their
-original execution descriptor, phase records, ledger entries, and checkpoint
-evidence. It verifies the old composition and retry/resume policy digests before
-mapping to prose repair planning. Other strategy, traversal, or effective-policy changes
-still refuse admission. A resumed repair without a completed repair plan starts
-at `audit_plan_fix`. A diagnostic records the mapping at execution admission.
+An empty focused queue still requires the final full source audit. Source
+acceptance does not say that tests, build, or other project-quality work ran.
+Those obligations stay in their existing review, build, and validation phases.
+Status and detail readers report committed facts only. Older aggregate attempts
+without criterion attribution remain unavailable, not zero. Starting prospective
+per-criterion accounting for such a workflow requires a separate explicit
+operator decision. Audit, repair planning, and source repair do not run builds or
+tests.
 
 ## Durable planning migration
 

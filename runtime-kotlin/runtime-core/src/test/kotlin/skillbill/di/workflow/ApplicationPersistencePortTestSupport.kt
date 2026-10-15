@@ -43,6 +43,7 @@ import skillbill.learnings.model.UpdateLearningRequest
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -254,6 +255,9 @@ internal class FakeDatabaseSessionFactory(
     calls += "transaction"
     return block(fakeUnitOfWork())
   }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.ActiveSession
 
   private fun fakeUnitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {

@@ -20,7 +20,7 @@ class UninstallCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,
   private val uninstallService: SkillBillUninstallService,
-) : DocumentedCliCommand("uninstall", "Uninstall Skill Bill from local agents and runtime state.") {
+) : DocumentedCliCommand("uninstall", "Uninstall Skill Bill while preserving databases and backups.") {
   private val yes by option("--yes", "-y", help = "Skip the interactive confirmation prompt.")
     .flag(default = false)
   private val dryRun by option("--dry-run", help = "Show what would be removed without changing files.")
@@ -101,6 +101,7 @@ private fun UninstallPlan.confirmationText(): String =
     appendLine("- ${agentTargets.size} agent target directories")
     appendLine("- ${mcpAgents.size} MCP configurations")
     appendLine("- $stateRoot")
+    appendLine("Databases, SQLite journals, and backups under $stateRoot will be preserved.")
     append("Continue? [y/N] ")
   }
 

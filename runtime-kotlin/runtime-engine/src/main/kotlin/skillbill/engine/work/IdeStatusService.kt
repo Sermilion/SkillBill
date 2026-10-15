@@ -1,7 +1,6 @@
 package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.goalRepositoryIdentity
@@ -43,7 +42,6 @@ import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
-import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
@@ -187,7 +185,6 @@ class IdeStatusService(
       scopeToBranch(
         collectCandidates(unitOfWork, repository, currentBranch, observedAt, CandidateRead(queryWork = queryWork)),
         currentBranch,
-        repository.repoRoot,
       )
     if (unitOfWork.workList.observation().also { queryWork.statement(1) } != before) return null
     val context =
@@ -859,58 +856,10 @@ class IdeStatusService(
   private fun scopeToBranch(
     candidates: List<IdeStatusCandidate>,
     branch: String?,
-    repoRoot: Path,
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
     if (protectedBranchName(branch) != null) return candidates
-    return candidates.filter { candidate -> matchesBranch(candidate, branch, repoRoot) }
-  }
-
-  private fun matchesBranch(
-    candidate: IdeStatusCandidate,
-    branch: String,
-    repoRoot: Path,
-  ): Boolean =
-    (
-      candidate.branchCorrelation == null ||
-        candidate.branchCorrelation == "HEAD" ||
-        candidate.branchCorrelation == branch
-    ) &&
-      (
-        candidate.standaloneStatus != null ||
-          isVerifyRegisteredOnBranch(candidate, branch) ||
-          candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
-          isPlanningOnBaseBranch(candidate, branch, repoRoot)
-      )
-
-  private fun isVerifyRegisteredOnBranch(
-    candidate: IdeStatusCandidate,
-    branch: String,
-  ): Boolean =
-    candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY && candidate.branchCorrelation == branch
-
-  private fun isPlanningOnBaseBranch(
-    candidate: IdeStatusCandidate,
-    branch: String,
-    repoRoot: Path,
-  ): Boolean {
-    val issueKey = candidate.issueKey
-    if (issueKey == null ||
-      candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
-      candidate.lifecycleState in setOf(IdeStatusLifecycleState.TERMINAL, IdeStatusLifecycleState.CANCELED)
-    ) {
-      return false
-    }
-    val state = manifestStore.loadDurableByIssueKey(issueKey, repoRoot)
-    if (state == null || state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) {
-      return false
-    }
-    val planning =
-      manifestStore.planningStatus(
-        state.parentWorkflowId,
-        state.manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }.map { it.id },
-      ) ?: return false
-    return planning.state != GoalPlanningStatusState.PREPARED
+    return candidates.filter { candidate -> IdeStatusBranchScope.matchesCandidate(candidate, branch) }
   }
 
   private fun collectCandidates(
@@ -1043,7 +992,12 @@ class IdeStatusService(
       goalBranchCorrelation(item, family, workflowExecution?.branchCorrelation, branch, repository.repoRoot)
     val execution =
       workflowExecution
-        ?.takeIf { branch == null || branchCorrelation == branch || branchCorrelation == "HEAD" }
+        ?.takeIf {
+          family != IdeStatusWorkflowFamily.FEATURE_VERIFY ||
+            branch == null ||
+            branchCorrelation == branch ||
+            branchCorrelation == "HEAD"
+        }
         ?.let { record ->
           IdeStatusExecutionIdentity(
             scope = IdeStatusExecutionScope.WORKFLOW,

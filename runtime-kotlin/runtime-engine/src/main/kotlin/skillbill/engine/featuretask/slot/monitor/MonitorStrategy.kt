@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.qualitygate.VALIDATE_VALUE_CONTENT
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseCiObservation
@@ -82,7 +81,11 @@ class MonitorStrategy(
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
-    return if (stepId == entryStep) MONITOR_DIRECTIVE else MONITOR_FIX_DIRECTIVE + runtimeOwnedValidateAgentPhaseTask()
+    return if (stepId == entryStep) {
+      MONITOR_DIRECTIVE
+    } else {
+      runtimeOwnedValidateAgentPhaseTask() + " " + MONITOR_FIX_DIRECTIVE
+    }
   }
 
   override fun promptSections(
@@ -97,7 +100,7 @@ class MonitorStrategy(
         taskDirective = directiveFor(stepId),
         stepContext = fixBrief.stepContextFor(inputs.issueKey),
         runsValidationGate = true,
-        valueContent = VALIDATE_VALUE_CONTENT,
+        valueContent = MONITOR_FIX_VALUE_CONTENT,
       )
     }
   }
@@ -139,12 +142,32 @@ class MonitorStrategy(
         "GitHub CLI cannot report checks, monitoring blocks."
 
     private const val MONITOR_FIX_DIRECTIVE: String =
-      "Repair the recorded monitor failure in the working tree. When the brief names a merge conflict, merge " +
-        "the named base branch into the current branch and resolve every conflict. When it names failing " +
-        "checks, read the failing run logs first, for example with `gh run view <run-id> --log-failed`, and " +
-        "fix the cause rather than the symptom. Do not commit or push; the runtime commits and pushes the " +
-        "repair only after you settle completed, so settle completed only once the local project checks below " +
-        "pass on the repaired tree. If the failure cannot be fixed in this repository, such as missing secrets " +
-        "or an infrastructure outage, block with the reason instead. "
+      "Monitor repair completion requires both a repository fix for the recorded failure and passing local " +
+        "project checks. Passing local checks alone does not satisfy this phase, even when discovery finds " +
+        "no applicable checks. When the brief names a merge conflict, merge the named base branch into the " +
+        "current branch and resolve every conflict. When it names failing checks, open each recorded check " +
+        "URL and read that failing job's logs first, for example with " +
+        "`gh run view <run-id> --job <job-id> --log-failed`. Identify the failed command, assertion or error, " +
+        "and relevant CI environment. Trace that evidence through the repository code, tests, and CI " +
+        "configuration before editing, then fix the cause in the working tree. A passing local rerun does " +
+        "not resolve the recorded CI failure. If it does not reproduce locally, investigate timing, " +
+        "concurrency, isolation, and environment differences as the evidence warrants. Fix any identified " +
+        "race or nondeterministic test setup without weakening assertions or skipping coverage, and run " +
+        "targeted proof as well as the required project checks. Do not settle completed with an unchanged " +
+        "tree merely because local checks passed, or use a CI rerun as a substitute for investigating the " +
+        "cause. If investigation cannot establish a repository fix, settle blocked with the failed check " +
+        "URL, the evidence inspected, and the unresolved cause or missing evidence, even if all local checks " +
+        "pass. Unavailable CI logs, missing secrets, or an infrastructure outage also require a block with " +
+        "the concrete obstacle. Do not commit or push. The runtime commits and pushes a completed repair " +
+        "and owns subsequent CI confirmation. Report the CI failure, its cause, the changed files and how " +
+        "they address it, and each validation command's result. Local validation is not a claim that CI " +
+        "passed."
+
+    private const val MONITOR_FIX_VALUE_CONTENT: String =
+      "Report the failed check URL, the failing command or assertion, the root cause, and the repository fix.\n" +
+        "Name the changed files, the targeted proof, and every required project check with its result.\n" +
+        "A passing local rerun with no repository fix is unresolved; settle blocked with the evidence gap.\n" +
+        "The runtime owns commit, push, and subsequent CI confirmation. Do not claim local checks cleared CI.\n" +
+        "Never weaken assertions, suppress findings, disable rules, or skip tests to silence the failure."
   }
 }

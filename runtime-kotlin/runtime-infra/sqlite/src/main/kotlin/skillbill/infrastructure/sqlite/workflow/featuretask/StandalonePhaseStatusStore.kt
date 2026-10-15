@@ -5,6 +5,9 @@ import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
+import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
@@ -64,8 +67,8 @@ internal class StandalonePhaseStatusStore(
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
-        launch_agent_id, launch_arguments_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -92,6 +95,7 @@ internal class StandalonePhaseStatusStore(
           request.processOwner?.processBirthToken,
           request.launchAgentId,
           request.launchArguments?.let(JsonCodec::valueToJsonString),
+          agentEnvironmentJson(request.agentEnvironment),
         ),
       )
       statement.executeUpdate()
@@ -385,8 +389,8 @@ internal class StandalonePhaseStatusStore(
       INSERT INTO ide_status_workflow_execution(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state,
-        started_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?)
+        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -401,6 +405,7 @@ internal class StandalonePhaseStatusStore(
         request.lifecycleState,
         updatedAt,
         updatedAt,
+        agentEnvironmentJson(request.agentEnvironment),
       )
       statement.executeUpdate()
     }
@@ -446,6 +451,7 @@ internal class StandalonePhaseStatusStore(
       lifecycleState = getString("lifecycle_state"),
       startedAt = workflowExecutionInstant("started_at"),
       updatedAt = workflowExecutionInstant("updated_at"),
+      agentEnvironment = readAgentEnvironment("workflow-status"),
     )
 
   private fun ResultSet.workflowExecutionInstant(column: String): Instant {
@@ -564,6 +570,7 @@ internal class StandalonePhaseStatusStore(
       processOwner = readProcessOwner(),
       launchAgentId = getString("launch_agent_id"),
       launchArguments = readLaunchArguments(),
+      agentEnvironment = readAgentEnvironment("standalone-status"),
     )
 
   private fun ResultSet.readLaunchArguments(): List<String>? {

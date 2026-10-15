@@ -5,6 +5,7 @@ import skillbill.application.testHarnessClock
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRejectionRecord
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
@@ -96,6 +97,8 @@ private object NoopRejectionSnapshotValidator : WorkflowSnapshotValidator {
 private class FailingRejectionDatabase(
   private val failure: Throwable,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = Path.of("/fake/goal-planning-rejection.db")
 
   override fun databaseExists(): Boolean = true

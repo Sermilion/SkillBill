@@ -104,6 +104,8 @@ object SkillBillStatusBarPresentation {
             subtaskText = subtaskText,
             progressText = progressText,
             detail = anchored.detail,
+            problemSummary = anchored.problemSummary,
+            stale = anchored.stale,
             elapsedNoun = elapsedNoun(anchored),
             slotFullLine = slotFullLine,
         )
@@ -129,7 +131,7 @@ object SkillBillStatusBarPresentation {
                 elapsedNoun = elapsedNoun(anchored),
                 lastUpdateText = anchored.lastUpdated?.let { lastUpdateFormatter.format(it) },
                 agentActivityText = agentActivityText(anchored),
-                problemSummary = anchored.problemSummary ?: anchored.detail,
+                problemSummary = displayExplanation(anchored.problemSummary, anchored.detail),
                 staleNote = STALE_NOTE.takeIf { anchored.stale },
                 pauseReasonText = pauseReasonText(anchored),
                 pauseActionText = pauseActionText(anchored),
@@ -288,10 +290,7 @@ object SkillBillStatusBarPresentation {
             progressText?.let { append("\nProgress: ").append(it) }
             state.currentActivity?.let { append("\nActivity: ").append(it) }
             state.lastUpdated?.let { append("\nLast update: ").append(lastUpdateFormatter.format(it)) }
-            val problem = state.problemSummary ?: state.detail
-            if (!problem.isNullOrBlank()) {
-                append("\n").append(problem)
-            }
+            displayExplanation(state.problemSummary, state.detail)?.let { append('\n').append(it) }
             if (state.stale) {
                 append('\n').append(STALE_NOTE)
             }
@@ -315,6 +314,8 @@ object SkillBillStatusBarPresentation {
         subtaskText: String,
         progressText: String?,
         detail: String?,
+        problemSummary: String?,
+        stale: Boolean,
         elapsedNoun: String,
         slotFullLine: String?,
     ): String =
@@ -329,8 +330,12 @@ object SkillBillStatusBarPresentation {
             currentActivity?.let { append(" Activity: ").append(it).append('.') }
             append(" Subtask ").append(elapsedNoun).append(": ").append(subtaskText).append('.')
             progressText?.let { append(" Progress: ").append(it).append('.') }
-            detail?.let { append(' ').append(it) }
+            displayExplanation(problemSummary, detail)?.let { append(' ').append(it) }
+            if (stale) append(' ').append(STALE_NOTE)
         }
+
+    private fun displayExplanation(problem: String?, detail: String?): String? =
+        listOfNotNull(problem, detail).distinct().joinToString(" ").takeIf(String::isNotBlank)
 
     
     private fun elapsedNoun(state: SkillBillStatusUiState): String =

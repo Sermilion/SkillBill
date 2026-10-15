@@ -51,6 +51,11 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     session.transitionReentryPair(pendingReentry, pendingReentry)
   }
 
+  fun reenterAcceptanceSteps(phaseIds: Collection<String>) {
+    phaseIds.forEach(progress::reopenForReentry)
+    session.transitionReentryPair(null, null)
+  }
+
   fun invalidateProducerOutputForRegeneration(phaseId: String) {
     progress.invalidateProducerOutput(phaseId)
   }

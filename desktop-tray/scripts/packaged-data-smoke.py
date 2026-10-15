@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 
 project = Path(__file__).resolve().parents[1]
 image = project / "composeApp/build/compose/binaries/main/app"
@@ -26,10 +27,14 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     if len(cfgs) != 1:
         raise SystemExit(f"Expected one launcher configuration, found {len(cfgs)}.")
     cfg = cfgs[0]
+    smoke_jar = cfg.parent / "packaged-data-smoke.jar"
+    with zipfile.ZipFile(smoke_jar, "w") as archive:
+        for class_file in classes.rglob("*.class"):
+            archive.write(class_file, class_file.relative_to(classes))
     content = cfg.read_text()
     content = content.replace("app.mainclass=dev.skillbill.tray.composition.MainKt",
                               "app.mainclass=dev.skillbill.tray.core.data.PackagedDataSmoke")
-    content = content.replace("[JavaOptions]", f"app.classpath={classes}\n\n[JavaOptions]")
+    content = content.replace("[JavaOptions]", "app.classpath=$APPDIR/packaged-data-smoke.jar\n\n[JavaOptions]")
     content += f"\njava-options=-Duser.home={home}\njava-options=-Djava.util.prefs.userRoot={home / 'preferences'}\njava-options=-Djava.io.tmpdir={home / 'tmp'}\n"
     cfg.write_text(content)
     if sys.platform == "darwin":
@@ -41,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     environment = os.environ.copy()
     environment.update(PATH=str(empty_path), HOME=str(home), USERPROFILE=str(home))
     environment.pop("CLASSPATH", None)
-    # shortcut: a fixed ceiling sized for a loaded macOS runner's first launch of an unsigned copy; shrink it if CI launches get consistently fast.
+    environment.pop("_JPACKAGE_LAUNCHER", None)
     try:
         result = subprocess.run([str(launcher), str(home)], cwd=home, env=environment,
                                 capture_output=True, text=True, timeout=180)

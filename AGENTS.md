@@ -22,9 +22,7 @@ Non-negotiable contracts:
 
 ## Worktree ownership
 
-Edit the repository root and branch supplied by the active workflow briefing.
-Keep phase edits in that checkout. Reconcile any separate
-worktree changes into the workflow checkout before reporting implementation complete.
+Keep phase edits in the repository root and branch supplied by the active workflow briefing. Reconcile any separate worktree changes into the workflow checkout before reporting implementation complete.
 
 ## Product Intent
 

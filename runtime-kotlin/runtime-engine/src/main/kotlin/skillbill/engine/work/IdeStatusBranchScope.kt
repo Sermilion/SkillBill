@@ -1,6 +1,32 @@
 package skillbill.engine.work
 
+import skillbill.engine.work.model.IdeStatusCandidate
+import skillbill.idestatus.model.IdeStatusWorkflowFamily
+
 object IdeStatusBranchScope {
+  fun matchesCandidate(
+    candidate: IdeStatusCandidate,
+    branch: String,
+  ): Boolean =
+    when {
+      candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL -> true
+      candidate.standaloneStatus != null ->
+        candidate.branchCorrelation == null ||
+          candidate.branchCorrelation == "HEAD" ||
+          candidate.branchCorrelation == branch
+      candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_VERIFY ->
+        (
+          candidate.branchCorrelation == null ||
+            candidate.branchCorrelation == "HEAD" ||
+            candidate.branchCorrelation == branch
+        ) &&
+          (
+            candidate.branchCorrelation == branch ||
+              candidate.issueKey?.let { branchReferencesIssueKey(branch, it) } == true
+          )
+      else -> candidate.issueKey?.let { branchReferencesIssueKey(branch, it) } == true
+    }
+
   fun branchReferencesIssueKey(
     branch: String,
     issueKey: String,

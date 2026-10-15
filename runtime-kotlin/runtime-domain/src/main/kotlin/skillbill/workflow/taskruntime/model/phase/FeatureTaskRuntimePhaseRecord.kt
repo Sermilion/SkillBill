@@ -111,13 +111,13 @@ data class FeatureTaskRuntimePhaseRecord(
       "record_kind" to "private_phase_record",
       SharedPayloadKeys.PHASE_ID to phaseId,
       SharedPayloadKeys.STATUS to status.wireValue,
-      "attempt_count" to attemptCount,
+      FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT to attemptCount,
       "started_at" to startedAt.toString(),
       "first_started_at" to firstStartedAt.toString(),
       FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID to resolvedAgentId,
       FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN to executionOrigin.wireValue,
     ).apply {
-      finishedAt?.let { put("finished_at", it.toString()) }
+      finishedAt?.let { put(FeatureTaskRuntimePhasePayloadKeys.FINISHED_AT, it.toString()) }
       durationMillis?.let { put("duration_millis", it) }
       outputArtifact?.let { put("output_artifact", it) }
       blockedReason?.let { put(DecompositionManifestPayloadKeys.BLOCKED_REASON, it) }
@@ -189,12 +189,12 @@ data class FeatureTaskRuntimePhaseRecord(
       val status =
         WorkflowStepStatus.fromWire(reader.requiredString(SharedPayloadKeys.STATUS))
           ?: incompatiblePhaseRecord(listOf("unknown status '${raw[SharedPayloadKeys.STATUS]}'"))
-      val attemptCount = reader.requiredInt("attempt_count")
+      val attemptCount = reader.requiredInt(FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT)
       val startedAt = parsePersistedInstantOrNull(reader.requiredString("started_at")) ?: incompatiblePhaseRecord()
       val firstStartedAt =
         parsePersistedInstantOrNull(reader.requiredString("first_started_at")) ?: incompatiblePhaseRecord()
       val finishedAt =
-        reader.optionalString("finished_at")?.let { value ->
+        reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.FINISHED_AT)?.let { value ->
           parsePersistedInstantOrNull(value) ?: incompatiblePhaseRecord()
         }
       val durationMillis = reader.optionalLong("duration_millis")
@@ -245,7 +245,7 @@ data class FeatureTaskRuntimePhaseRecord(
           "record_kind",
           SharedPayloadKeys.PHASE_ID,
           SharedPayloadKeys.STATUS,
-          "attempt_count",
+          FeatureTaskRuntimePhasePayloadKeys.ATTEMPT_COUNT,
           "started_at",
           "first_started_at",
           FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID,
@@ -254,7 +254,7 @@ data class FeatureTaskRuntimePhaseRecord(
       val allowed =
         required +
           setOf(
-            "finished_at",
+            FeatureTaskRuntimePhasePayloadKeys.FINISHED_AT,
             "duration_millis",
             "output_artifact",
             DecompositionManifestPayloadKeys.BLOCKED_REASON,

@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
@@ -28,7 +29,8 @@ class StandalonePhaseStatusStoreTest {
             "'main' AS branch_correlation, 'SKILL-418' AS issue_key, 'workflow' AS workflow_id, " +
             "'invocation' AS invocation_id, 'execution' AS execution_id, 'store' AS status_store_id, " +
             "'1' AS run_sequence, '1' AS status_revision, 'active' AS lifecycle_state, " +
-            "'2026-10-09 05:35:36' AS started_at, '2026-10-09T05:36:00Z' AS updated_at",
+            "'2026-10-09 05:35:36' AS started_at, '2026-10-09T05:36:00Z' AS updated_at, " +
+            "NULL AS agent_environment_json",
         )
       }
       val normalizations = mutableListOf<String>()
@@ -198,6 +200,45 @@ class StandalonePhaseStatusStoreTest {
     assertEquals(listOf("settled-1"), read(StandaloneEligiblePage(slice = StandaloneEligibleSlice.SETTLED)))
     val anchor = StandalonePhaseExecutionAnchor(head.first().runSequence, head.first().invocationId)
     assertEquals(listOf("live-2"), read(StandaloneEligiblePage(1, anchor, live)))
+  }
+
+  @Test
+  fun `recorded agent environment survives the phase and workflow round trip and stays empty when absent`() {
+    val directory = Files.createTempDirectory("standalone-agent-environment")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-14T08:00:00Z")
+    val recorded = mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work")
+    val workflow =
+      IdeStatusWorkflowRegistration(
+        "repo",
+        "main",
+        "SKILL-1",
+        "goal-parent",
+        "workflow-invocation-1",
+        "workflow-execution-1",
+        "active",
+        started,
+      )
+    database.transaction {
+      it.standalonePhaseStatuses.register(monitorRegistration("recorded", started, started.plusSeconds(60)))
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("env", started, started.plusSeconds(60)).copy(agentEnvironment = recorded),
+      )
+      it.standalonePhaseStatuses.registerWorkflow(workflow)
+      it.standalonePhaseStatuses.registerWorkflow(
+        workflow.copy(
+          invocationId = "workflow-invocation-2",
+          executionId = "workflow-execution-2",
+          startedAt = started.plusSeconds(1),
+          agentEnvironment = recorded,
+        ),
+      )
+    }
+    database.read {
+      assertEquals(emptyMap(), it.standalonePhaseStatuses.readByInvocation("run-recorded")?.agentEnvironment)
+      assertEquals(recorded, it.standalonePhaseStatuses.readByInvocation("run-env")?.agentEnvironment)
+      assertEquals(recorded, it.standalonePhaseStatuses.latestWorkflowExecution("goal-parent")?.agentEnvironment)
+    }
   }
 
   private fun monitorRegistration(

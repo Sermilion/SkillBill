@@ -172,6 +172,7 @@ class DatabaseMigrationsTest {
         54 to "separate-agent-activity-revisions",
         55 to "complete-desktop-launch-schema",
         56 to "abandon-stale-verify-workflows",
+        57 to "record-launch-agent-environment",
       ),
       migrationDefinitions,
     )
@@ -333,6 +334,45 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v57 adds nullable agent environment columns to an existing status store`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v57-agent-environment").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-launch-agent-environment'")
+        statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN agent_environment_json")
+        statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN agent_environment_json")
+        statement.executeUpdate(
+          "INSERT INTO ide_status_workflow_execution (execution_id, repository_identity, branch_correlation, " +
+            "workflow_id, invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "started_at, updated_at) VALUES ('legacy-execution', 'repo', 'main', 'legacy-goal', " +
+            "'legacy-invocation', 'store', '1', '1', 'active', '2026-10-13T00:00:00Z', '2026-10-13T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 56")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        listOf("standalone_phase_status", "ide_status_workflow_execution").forEach { table ->
+          statement.executeQuery("SELECT agent_environment_json FROM $table LIMIT 0").use {
+            assertEquals(1, it.metaData.columnCount)
+          }
+        }
+        statement.executeQuery(
+          "SELECT agent_environment_json FROM ide_status_workflow_execution WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals(null, it.getString(1))
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
     }
   }
 

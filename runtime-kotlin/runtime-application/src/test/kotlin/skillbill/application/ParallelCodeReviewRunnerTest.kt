@@ -45,6 +45,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.DiffResolverPortDefaults
 import skillbill.ports.diff.model.ReviewDiffQuery
@@ -1556,6 +1557,9 @@ internal class RecordingReviewDatabase : DatabaseSessionFactory {
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = transaction(block)
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork)
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.ActiveSession
 }
 
 private object NoopReviewLifecycleTelemetry : LifecycleTelemetryRepository {

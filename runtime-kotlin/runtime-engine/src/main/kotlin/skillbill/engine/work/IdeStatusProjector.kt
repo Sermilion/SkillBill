@@ -67,6 +67,7 @@ private data class ChildOptionalContext(
   val currentModel: IdeStatusCurrentModel?,
   val currentPhaseExecution: IdeStatusCurrentPhaseExecution?,
   val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
+  val criterionExplanation: String? = null,
 ) {
   companion object {
     val EMPTY = ChildOptionalContext(currentModel = null, currentPhaseExecution = null)
@@ -275,16 +276,34 @@ class IdeStatusProjector(
         summary =
           planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
             ?.let { goalPlanningSummary(issueKey, it) }
-            ?: goalSummary(
-              issueKey,
-              lifecycle,
-              step.label,
-              projection?.blockedCount ?: 0,
-              childContext.operatorDecisionPause,
-            ),
+            ?: goalSnapshotSummary(issueKey, lifecycle, step.label, projection, childContext),
       )
     return IdeStatusProjection(snapshot, pauseReason.exactText)
   }
+
+  private fun goalSnapshotSummary(
+    issueKey: String,
+    lifecycle: IdeStatusLifecycleState,
+    stepLabel: String,
+    projection: GoalRunnerStatusProjection?,
+    childContext: ChildOptionalContext,
+  ): String =
+    childContext.criterionExplanation?.let {
+      "Acceptance criteria: $it. " +
+        goalSummary(
+          issueKey,
+          lifecycle,
+          stepLabel,
+          projection?.blockedCount ?: 0,
+          childContext.operatorDecisionPause,
+        )
+    } ?: goalSummary(
+      issueKey,
+      lifecycle,
+      stepLabel,
+      projection?.blockedCount ?: 0,
+      childContext.operatorDecisionPause,
+    )
 
   private fun goalPlanningStep(
     planning: IdeStatusPlanning?,
@@ -414,6 +433,7 @@ class IdeStatusProjector(
         },
       currentPhaseExecution = status.currentPhaseExecution,
       operatorDecisionPause = status.operatorDecisionPause,
+      criterionExplanation = status.criterionExplanation,
     )
   }
 
@@ -465,7 +485,15 @@ class IdeStatusProjector(
         updatedAt = updatedAt,
         freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
         summary =
-          familySummary(
+          status.criterionExplanation?.let {
+            "Acceptance criteria: $it. " +
+              familySummary(
+                IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+                candidate.issueKey,
+                candidate.lifecycleState,
+                stepLabel,
+              )
+          } ?: familySummary(
             IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
             candidate.issueKey,
             candidate.lifecycleState,

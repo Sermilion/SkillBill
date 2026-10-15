@@ -10,6 +10,7 @@ import skillbill.ports.idestatus.model.WorkDetailItem
 import java.nio.file.Path
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
+import skillbill.ports.system.CheckedOutBranchSource
 
 internal fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (this) {
   ExecutionReasonRestoration.EXACT -> ReasonRestoration.EXACT
@@ -86,6 +87,10 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     statusRevision = execution?.statusRevision,
   )
 }
+
+internal fun WorkItem.withCheckedOutBranch(branches: CheckedOutBranchSource): WorkItem =
+  if (scope == ExecutionScope.STANDALONE_PHASE) this
+  else branches.checkedOutBranch(Path.of(repositoryRoot))?.let { copy(branch = it) } ?: this
 
 internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Detail {
   val goal = goalStatus

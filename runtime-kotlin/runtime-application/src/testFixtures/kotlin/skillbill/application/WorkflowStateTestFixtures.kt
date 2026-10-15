@@ -3,6 +3,7 @@ package skillbill.application
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -68,6 +69,9 @@ class FakeDatabaseSessionFactory(
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = transaction(block)
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unit())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.ActiveSession
 
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {

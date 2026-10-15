@@ -1,3 +1,8 @@
+## [2026-10-14] Serial source history survives bounded display evidence
+Context: SKILL-426 needs per-criterion unsuccessful totals and source closure/reopening proof to survive restart, while phase and attempt histories already have display limits.
+Decision: Keep accepted outcome identities, verification revision/tree/checkpoint, source transitions and final audits in the durable repair aggregate. Restore and schema admission share typed coherence rules. Refuse history or UTF-8 capacity exhaustion rather than prune authoritative history. State and adoption artifacts have a 12,582,912-byte limit. Reservation requires another 65,536 bytes of state capacity before repair effects. Audit results retain the 196,608-byte planning limit and repair handoffs the 65,536-byte receipt limit.
+Reason: Reconstructing counters from pruned phase history would reset budgets or lose the evidence needed to reject conflicting replay. Reserving capacity before mutation preserves room to settle one repair result.
+
 ## [2026-10-14] Recover review ownership conflicts through the declared fallback
 Context: The operator requires conflicting review lanes to continue through generic review and report an error.
 Decision: Preserve strict ownership classification. A pure resolution policy recovers only typed ambiguous cross-root ownership area by area through the manifest-declared fallback, with all affected paths, hunks and original inputs. Uncontested lanes keep their owners. Resolution returns conflict facts for application error diagnostics. Stack discovery also returns its ownership ties instead of silently selecting fallback.

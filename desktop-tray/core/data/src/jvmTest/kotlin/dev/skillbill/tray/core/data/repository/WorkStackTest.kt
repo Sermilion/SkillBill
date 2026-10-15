@@ -477,7 +477,10 @@ class WorkStackTest {
         val goals = value(source.board(WorkSection.GOALS, Retention.SIX_HOURS))
         assertEquals(listOf("older-goal"), goals.items.map { it.identity.id })
         assertContains(goals.diagnostics, "projection_items=1")
+        Files.createDirectories(fixture.tempDir.resolve(".git"))
+        Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/checked-out-now\n")
         val selectedDetail = (source.detail(goals.items.single().identity) as Outcome.Value).value
+        assertEquals("feat/checked-out-now", selectedDetail.item.branch)
         assertEquals((1..10).toList(), selectedDetail.subtasks.map { it.id })
         assertEquals(1000, selectedDetail.completeCount + selectedDetail.pendingCount + selectedDetail.blockedCount)
         assertNotNull(selectedDetail.cursors[DetailList.SUBTASKS])
