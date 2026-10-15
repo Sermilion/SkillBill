@@ -8,6 +8,7 @@ data class WorkRunLaunchRequest(
   val agentId: String,
   val prompt: String,
   val ownershipKey: String,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
 sealed interface WorkRunLaunchResult {

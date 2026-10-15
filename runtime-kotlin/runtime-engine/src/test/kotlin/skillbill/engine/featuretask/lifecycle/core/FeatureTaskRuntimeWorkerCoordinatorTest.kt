@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
@@ -126,7 +127,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     repository.seedWorkerOwnership(ownership(expiresAt = "2000-01-01T00:00:30Z"))
     val supervisor =
       FakeWorkerSupervisor(
-        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker ownership belongs to a different host."),
+        FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process."),
       )
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
@@ -266,6 +267,8 @@ private class FakeWorkerSupervisor(
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,
@@ -308,6 +311,9 @@ private class FakeWorkerSupervisor(
 private class BumpUpdatedAtAfterReadDatabase(
   private val workflows: InMemoryRuntimeWorkflowRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   private val inner = RuntimeFakeDatabaseSessionFactory(workflows)
 
   override fun resolveDbPath() = inner.resolveDbPath()

@@ -1,5 +1,7 @@
 package dev.skillbill.tray.infrastructure.data
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
+import skillbill.contracts.persistence.DesktopReadSchema
 import dev.skillbill.tray.application.Outcome
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
@@ -355,6 +357,45 @@ class RoomBoardSourceTest {
   }
 
   @Test
+  fun `selecting an older store applies runtime migrations and preserves its saved work`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-upgrade-selected-store").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "saved", now, "main")
+          .copy(lifecycleState = "blocked"))
+      }
+      fixture.connection.createStatement().use { statement ->
+        statement.execute("DELETE FROM schema_migrations WHERE version = 56")
+        statement.execute("PRAGMA user_version = 55")
+      }
+      val source = source(fixture.tempDir, Clock.fixed(now, ZoneOffset.UTC))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        assertEquals(listOf("saved"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY)).items.map { it.identity.id })
+        val migratedAt = fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("SELECT applied_at FROM schema_migrations WHERE version = 56").use { rows ->
+            assertTrue(rows.next())
+            rows.getString(1)
+          }
+        }
+        source.selectDatabase(fixture.dbPath.toString())
+        assertEquals(listOf("saved"), value(source.board(WorkSection.NEEDS_YOU, Retention.DAY)).items.map { it.identity.id })
+        fixture.connection.createStatement().use { statement ->
+          statement.executeQuery("PRAGMA user_version").use { rows ->
+            assertTrue(rows.next())
+            assertEquals(DesktopReadSchema.VERSION, rows.getInt(1))
+          }
+          statement.executeQuery("SELECT applied_at FROM schema_migrations WHERE version = 56").use { rows ->
+            assertTrue(rows.next())
+            assertEquals(migratedAt, rows.getString(1))
+            assertFalse(rows.next())
+          }
+        }
+      } finally { source.close() }
+    }
+  }
+
+  @Test
   fun `live phase behind five thousand terminal records is projected without visiting history`() = runBlocking {
     establishTemporarySchemaReadiness("desktop-history-starvation").use { fixture ->
       val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
@@ -381,7 +422,7 @@ class RoomBoardSourceTest {
         val process = JdkFeatureTaskRuntimeWorkerSupervisor(object : RuntimeDiagnostics {
           override fun warning(message: String, error: Throwable?) = Unit
           override fun error(message: String, error: Throwable?) = Unit
-        }).currentProcess()
+        }, JdkHostPlatformPort).currentProcess()
         unit.goalRunnerControls.persistControlState("older-goal", GoalRunnerControlState(repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}",
           executionLease = GoalRunnerExecutionLease(1, "owned-test", process.hostIdentity, process.bootIdentity, process.pid,
             process.processBirthToken, now, now.plusSeconds(3600))))
@@ -429,7 +470,10 @@ class RoomBoardSourceTest {
         val goals = value(source.board(WorkSection.GOALS, Retention.SIX_HOURS))
         assertEquals(listOf("older-goal"), goals.items.map { it.identity.id })
         assertContains(goals.diagnostics, "projection_items=1")
+        Files.createDirectories(fixture.tempDir.resolve(".git"))
+        Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/checked-out-now\n")
         val selectedDetail = (source.detail(goals.items.single().identity) as Outcome.Value).value
+        assertEquals("feat/checked-out-now", selectedDetail.item.branch)
         assertEquals((1..10).toList(), selectedDetail.subtasks.map { it.id })
         assertEquals(1000, selectedDetail.completeCount + selectedDetail.pendingCount + selectedDetail.blockedCount)
         assertNotNull(selectedDetail.cursors[DetailList.SUBTASKS])

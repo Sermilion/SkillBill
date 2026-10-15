@@ -173,3 +173,24 @@ internal fun removeRecursively(
       recorder.recordFailure("could not remove $path", error)
     }
 }
+
+internal fun removeInstallState(
+  fileSystem: UninstallPathsPort,
+  stateRoot: Path,
+  removed: MutableList<String>,
+  recorder: UninstallMutationRecorder,
+) {
+  val entries =
+    runCatching { fileSystem.listImmediateDirectoryNames(stateRoot) }.getOrElse { error ->
+      error.rethrowIfCooperativeCancellationOrInterruption()
+      recorder.recordFailure("could not list install state under $stateRoot", error)
+      return
+    }
+  entries.filterNot { name ->
+    name == "backups" || DATABASE_STATE_NAME.matches(name)
+  }.forEach { name ->
+    removeRecursively(fileSystem, stateRoot.resolve(name), removed, recorder)
+  }
+}
+
+private val DATABASE_STATE_NAME = Regex(""".*\.db(?:-wal|-shm|-journal)?$""")

@@ -52,9 +52,10 @@ class StandalonePhaseStatusPublisherFactory(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
+    workBranch: String? = null,
   ) {
     runCatching {
-      val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId)
+      val registration = registrations.workflowRegistration(repoRoot, issueKey, workflowId, workBranch)
       database.transaction { unitOfWork -> unitOfWork.standalonePhaseStatuses.registerWorkflow(registration) }
     }.onFailure { error ->
       if (error is CancellationException) throw error

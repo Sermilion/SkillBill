@@ -138,12 +138,15 @@ class RoomBoardSource internal constructor(
   override suspend fun selectDatabase(path: String?) = mutex.withLock {
     check(!closed)
     disposeSession()
+    component = null
+    this.path = null
     configurationProblem = null
     try {
     component = RuntimeComponent::class.create(RuntimeContext(
       EnvironmentContext(path, environment = environment, userHome = userHome, repositoryRoot = repositoryRoot),
       TransportContext(), WorkflowOpsContext(), OptionalCallbacks()))
     this.path = component!!.databaseSession.resolveDbPath()
+    prepareSchema(requireNotNull(component))
     } catch (_: java.nio.file.InvalidPathException) {
       configurationProblem = Problem(ProblemCode.DATABASE_ACCESS, "The selected database path is invalid.", StorageFailure.ACCESS)
       RuntimeDiagnostics.record("database_path_invalid")
@@ -505,7 +508,7 @@ class RoomBoardSource internal constructor(
           }
           val cursors = item.moreLists.map { DetailList.valueOf(it.name) }.associateWith { token(it)!! }
           val mapped = item.toDomain(result.observedAt, token(null)).let { it.copy(
-            item = it.item.copy(databaseGeneration = generation), cursors = cursors) }
+            item = it.item.copy(databaseGeneration = generation).withCheckedOutBranch(runtime.checkedOutBranchSource), cursors = cursors) }
           if (mapped.item.identity != identity) return@safeRead staleCursor()
           return@safeRead Outcome.Value(mapped.copy(runOptions = loaded.second?.let {
             RunOptions(it.canCancel, it.canLaunch, it.launchLabel, it.agentId, it.agentChoices, it.unavailableReason)
@@ -518,8 +521,17 @@ class RoomBoardSource internal constructor(
 
   override suspend fun refresh() = mutex.withLock {
     if (observationProblem != null || observer?.isActive != true) disposeSession()
+    if (configurationProblem != null) component?.let { prepareSchema(it) }
     observationProblem = null
     invalidate()
+  }
+
+  private suspend fun prepareSchema(runtime: RuntimeComponent) {
+    configurationProblem = null
+    configurationProblem = (safeRead {
+      runtime.databaseSchema.migrateExistingDatabase()
+      Outcome.Value(Unit)
+    } as? Outcome.Failure)?.problem
   }
 
   override fun retainPages(retention: BoardRetention) {

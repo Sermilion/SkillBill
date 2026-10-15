@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -51,7 +52,6 @@ import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractWireArtifactValidator
 
 fun goalRunnerDefaultPhaseRecorder(): FeatureTaskRuntimePhaseRecorder =
   testPhaseRecorder(
@@ -149,7 +149,7 @@ fun testGoalRunnerChildRepairExecutor(
   GoalRunnerChildRepairOperations(
     database,
     testWorkflowSnapshotValidator,
-    ContractWireArtifactValidator(),
+    featureTaskRuntimeWireArtifactValidatorForTest(),
     gitOperations,
     testDecompositionManifestValidator,
     clock,

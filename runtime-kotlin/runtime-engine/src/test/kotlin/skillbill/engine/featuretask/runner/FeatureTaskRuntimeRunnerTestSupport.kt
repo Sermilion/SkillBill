@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
@@ -79,6 +80,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
@@ -215,7 +217,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.TimeSource
 import java.lang.Double.TYPE as DoubleTYPE
 import java.lang.Long.TYPE as LongTYPE
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal const val WORKFLOW_ID = "wftr-20260602-test-0001"
 internal const val SESSION_ID = "ftr-test-001"
@@ -856,7 +857,7 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           NoopWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(),
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
       ),
   )
@@ -954,6 +955,20 @@ private data class HarnessRunnerDeps(
   val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   val settlement: FeatureTaskPhaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
 )
+
+private fun harnessAcceptanceRecorder(deps: HarnessRunnerDeps): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(
+    deps.database,
+    deps.runtimeConfig.harnessGitOperations,
+    deps.runtimeConfig.acceptanceCriteria,
+    deps.diagnostics,
+  )
+
+private fun harnessAcceptanceRecorder(
+  database: DatabaseSessionFactory,
+  config: RuntimeHarnessConfig,
+): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(database, config.harnessGitOperations, config.acceptanceCriteria, NoopRuntimeDiagnostics)
 
 private fun harnessGateDependencies(
   deps: HarnessRunnerDeps,
@@ -1059,6 +1074,7 @@ private fun assembleHarnessRunner(
         executePrepared,
         FeatureTaskRuntimeReviewFixBudget(deps.recorder, deps.goalContinuationRecorder),
         FeatureTaskRuntimeAgentContextTelemetry(deps.recorder),
+        harnessAcceptanceRecorder(deps),
       ),
     ),
     strategies,
@@ -1300,6 +1316,7 @@ private fun telemetryHarnessRunner(
             executePrepared,
             reviewFixBudget,
             FeatureTaskRuntimeAgentContextTelemetry(workflow.recorder),
+            harnessAcceptanceRecorder(database, runtimeConfig),
           ),
       ),
     strategies = strategies,
@@ -2468,6 +2485,8 @@ internal object HarnessDeadProcessSupervisor : FeatureTaskRuntimeWorkerSuperviso
     FeatureTaskRuntimeProcessIdentity("harness-host", "harness-boot", 4321, "harness-birth-4321")
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership) = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

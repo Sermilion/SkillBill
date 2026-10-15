@@ -72,6 +72,7 @@ data class WorkItem(
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
+  val repositoryName: String? = null,
 )
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)

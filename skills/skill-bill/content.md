@@ -54,6 +54,11 @@ Pick the route from the operator's explicit request. Without a standalone phase
 or operation request, use the full-run route. `phase:<name>` may come before or
 after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 
+An existing spec file or bundle directory is full-run intake. Planning-only
+instructions recorded in that spec describe the earlier planning invocation;
+they do not turn the current full-run request into `phase:plan`. Only the
+operator's current request selects a standalone phase or operation.
+
 | Invocation | Route | Intake |
 | --- | --- | --- |
 | `/skill-bill <intake>` | full run: Intake, Issue resolution, Launch, Relay | required |
@@ -155,6 +160,14 @@ workflow, or edit database rows. If the persisted workflow references a missing
 spec, launch with the issue reference so the runtime can report its recovery
 requirements. An explicit `phase:plan` reuses a readable local spec but does not
 resume a goal or inspect workflow state.
+
+A decomposition manifest already present is executable intake. Launch the full
+runtime directly, without checking it through `phase plan` or asking the operator
+to run `skill-bill <KEY>`. If this full-run request was mistakenly sent to
+`phase plan` and it refused because the manifest exists, correct the dispatch by
+launching the full runtime with the same intake and forwarded flags. That
+correction needs no new permission and does not apply to an explicit planning-only
+request or to other refusal reasons.
 
 Only when neither a local spec nor a matching persisted workflow exists and
 the operator supplied a tracker reference without requirements, fetch
@@ -348,9 +361,16 @@ phase completes. It also completes when the PR is merged, regardless of failing
 or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
 while other checks are pending. A merge conflict starts the same repair on that
 poll, even when no checks are reported: the fix merges the base branch and
-resolves every conflict. The repair agent then discovers and runs the
-project's local checks, as validation does, and keeps repairing until they
-pass. A repair that blocks is not pushed. Once it completes, the runtime
+resolves every conflict. For failing checks, the repair agent reads each failing
+job's CI logs, identifies the failed command or assertion, and traces the cause
+through the repository before editing. A passing local rerun does not resolve
+the CI failure. Intermittent failures require investigation of timing,
+concurrency, isolation, or environment differences as the evidence warrants.
+Completion requires a repository fix and passing local project checks.
+If investigation cannot establish a fix, the agent blocks with the failed check
+URL, inspected evidence, and unresolved cause or evidence gap. It cannot complete
+with an unchanged tree merely because local checks pass. A repair that blocks is
+not pushed. Once it completes, the runtime
 commits and pushes the repair, and monitor watches again, up to three
 fix attempts. The phase then blocks
 with the last failure and the last fix summary. When the branch has no open PR,

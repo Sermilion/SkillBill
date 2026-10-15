@@ -205,9 +205,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
     val previousOwnerStopped = supervisor.inspect(existing) == FeatureTaskRuntimeProcessInspection.NotRunning
     return transferOwned(
       existing,
-      inputs,
-      admitted.identity,
-      reviewSelection,
+      admitted,
       requireNotNull(original),
       previousOwnerStopped,
     )
@@ -215,9 +213,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
 
   private fun transferOwned(
     existing: FeatureTaskRuntimeWorkerOwnership,
-    inputs: EffectiveGatePolicyInputs,
-    identity: FeatureTaskExecutionIdentity,
-    reviewSelection: RuntimeReviewSelection?,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
     original: WorkflowStateSnapshot,
     previousOwnerStopped: Boolean,
   ): AcquiredWorker {
@@ -237,9 +233,9 @@ class FeatureTaskRuntimeWorkerCoordinator(
             executionAdmission.admit(
               it,
               existing.workflowId,
-              inputs,
-              identity,
-              reviewSelection,
+              admitted.effectiveInputs,
+              admitted.identity,
+              admitted.plan.reviewSelection,
             )
           transferReceipt = execution.migrationReceipt
           admittedSnapshot = it.workflowStates.get(WorkflowFamily.TASK_RUNTIME, existing.workflowId)

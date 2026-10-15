@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.plan
 
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalplanning.readStoredPlanningRecord
@@ -27,7 +28,6 @@ import skillbill.engine.goalrunner.planning.sweep.SweepPlanningLauncher
 import skillbill.engine.goalrunner.planning.sweep.fakeContextDiscovery
 import skillbill.engine.goalrunner.planning.sweep.readySubSpec
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
@@ -61,7 +61,8 @@ class StandalonePlanPreparationTest {
   private val home = Files.createTempDirectory("standalone-plan-handoff-db")
   private val database = sqliteSessionFactoryForTests(home, home.resolve("metrics.db").toString(), emptyMap())
   private val clock = Clock.systemUTC()
-  private val validator = FeatureTaskRuntimeWireArtifactValidator()
+  private val validator =
+    featureTaskRuntimeWireArtifactValidatorForTest()
   private val checkpoint = GoalPlanningPreparationCheckpoint(database, validator)
   private val manifest = manifest(2)
   private val manifestStore = InMemoryGoalManifestStore(manifest)

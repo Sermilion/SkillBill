@@ -30,7 +30,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   private val remainingHint = "- AC-002. Missing production admission before recovery."
 
   @Test
-  fun `unfinished audit repair continues before audit runs again`() {
+  fun `ordinary prose repair output advances to the next audit`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val launcher =
@@ -49,16 +49,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           }
           "audit_implement_fix" -> {
             repairLaunches += 1
-            if (repairLaunches == 1) {
-              facts(
-                defaultPhaseOutput(request).replace(
-                  "audit_repair_complete: true",
-                  "Deliberately not claiming audit_repair_complete: true",
-                ),
-              )
-            } else {
-              facts(defaultPhaseOutput(request))
-            }
+            facts(defaultPhaseOutput(request))
           }
           else -> facts(defaultPhaseOutput(request))
         }
@@ -73,16 +64,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
 
     assertEquals(2, auditLaunches)
-    assertEquals(2, repairLaunches)
+    assertEquals(1, repairLaunches)
     assertEquals(
-      listOf("audit", "audit_implement_fix", "audit_implement_fix", "audit"),
+      listOf("audit", "audit_implement_fix", "audit"),
       harness.launchedPromptPhaseOrder().filter { it == "audit" || it == "audit_implement_fix" },
     )
-    val repairPrompts =
-      harness.launcher.requests
-        .map { requireNotNull(it.skillRunRequest.promptOverride) }
-        .filter { phaseIdFromPrompt(it) == "audit_implement_fix" }
-    assertContains(repairPrompts.last(), "Deliberately not claiming")
   }
 
   @Test
@@ -196,7 +182,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     """"summary":"$value","failure_disposition":"$disposition","produced_outputs":{"value":"$value"}}"""
 
   @Test
-  fun `audit blocks when an unresolved repair recheck stays unshrunk past the cap`() {
+  fun `prose audit and repair preserve configured models and read only execution`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val warnings = mutableListOf<String>()
@@ -224,7 +210,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
             assertTrue(request.skillRunRequest.readOnlyPhase)
             assertEquals("configured-reasoner", request.skillRunRequest.modelOverride)
             assertEquals("high", request.skillRunRequest.effortOverride)
-            facts(auditRemainingAcOutput(remainingHint))
+            facts(if (auditLaunches == 1) auditRemainingAcOutput(remainingHint) else auditSatisfiedOutput())
           }
           "audit_implement_fix" -> {
             repairLaunches += 1
@@ -263,21 +249,21 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           agentAssignment = FeatureTaskRuntimeAgentAssignment(override = "claude"),
         ),
       )
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, report.toString())
-    assertEquals(4, auditLaunches)
-    assertEquals(3, repairLaunches)
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    assertEquals(2, auditLaunches)
+    assertEquals(1, repairLaunches)
     assertEquals(0, warnings.count { "audit_repair" in it && "warning threshold" in it })
     assertEquals(
-      listOf("audit", "audit_implement_fix", "audit", "audit_implement_fix", "audit", "audit_implement_fix", "audit"),
+      listOf("audit", "audit_implement_fix", "audit"),
       harness.launchedPromptPhaseOrder().filter {
         it == "audit" || it == "audit_implement_fix"
       },
     )
-    assertTrue("review" !in harness.launchOrder())
+    assertTrue("review" in harness.launchOrder())
   }
 
   @Test
-  fun `audit repair reenters when JSON aliases identify a shrinking remaining list`() {
+  fun `ordinary prose findings can focus the next audit after repair`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val launcher =
@@ -287,13 +273,8 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           "audit" -> {
             auditLaunches += 1
             when (auditLaunches) {
-              1 -> facts(auditRemainingAcOutput("AC-001 remains; AC-002 remains"))
-              2 ->
-                facts(
-                  auditRemainingAcOutput(
-                    """[{"criterion_id":"AC-002","criterion":"S3-AC6. Guard misses helper access"}]""",
-                  ),
-                )
+              1 -> facts(auditRemainingAcOutput("The first and second criteria still have production gaps."))
+              2 -> facts(auditRemainingAcOutput("The second criterion still lacks the helper access guard."))
               else -> facts(auditSatisfiedOutput())
             }
           }
@@ -320,7 +301,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   }
 
   @Test
-  fun `audit refuses a report that reopens previously satisfied criteria`() {
+  fun `a later prose audit can report a newly demonstrated source regression`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val launcher =
@@ -330,8 +311,10 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
             auditLaunches += 1
             if (auditLaunches == 1) {
               facts(auditRemainingAcOutput("AC-001 remains"))
-            } else {
+            } else if (auditLaunches == 2) {
               facts(auditRemainingAcOutput("AC-001 remains; AC-002 remains"))
+            } else {
+              facts(auditSatisfiedOutput())
             }
           }
           "audit_implement_fix" -> {
@@ -349,16 +332,15 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         ),
       )
 
-    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    val report = assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
 
-    assertContains(report.toString(), "schema-invalid output")
-    assertEquals(2, auditLaunches)
-    assertEquals(1, repairLaunches)
-    assertTrue("review" !in harness.launchOrder())
+    assertEquals(3, auditLaunches)
+    assertEquals(2, repairLaunches)
+    assertTrue(harness.launchOrder().indexOf("review") > harness.launchOrder().lastIndexOf("audit"))
   }
 
   @Test
-  fun `audit prompt requests remaining criteria only as final response`() {
+  fun `audit prompt accepts prose conclusions and distinguishes later test obligations`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
     harness.runner.run(harness.request())
@@ -366,30 +348,19 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       harness.launcher.requests
         .map { requireNotNull(it.skillRunRequest.promptOverride) }
         .first { phaseIdFromPrompt(it) == "audit" }
-    assertContains(auditPrompt, "remaining acceptance criteria")
-    assertContains(auditPrompt, "no production criteria remain")
-    assertContains(auditPrompt, "inspect only the unresolved criteria in the last accepted audit report")
+    assertContains(auditPrompt, "ordinary prose")
+    assertContains(auditPrompt, "test or build obligations")
+    assertFalse(auditPrompt.contains("single line"))
     assertContains(auditPrompt, "Do not spawn subagents")
   }
 
   @Test
-  fun `process failure overrides an empty result and never retries or advances review`() {
+  fun `process failure overrides a satisfied verdict and never retries or advances review`() {
     val outcomes =
       listOf(
-        "satisfied with remaining criteria" to
-          auditFacts(
-            auditRemainingAcOutput(remainingHint).trimEnd().removeSuffix("}") +
-              """, "verdict": "satisfied" }""",
-          ),
         "nonzero exit" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.Exited(1)),
         "timeout" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.TimedOut),
         "interruption" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.Interrupted),
-        "missing final response" to
-          auditFacts(
-            auditSatisfiedOutput().replace("\"value\": \"$AUDIT_SATISFIED_VALUE\"", "\"value_missing\": \"yes\""),
-          ),
-        "whitespace-only final response" to
-          auditFacts(auditSatisfiedOutput().replace("\"value\": \"$AUDIT_SATISFIED_VALUE\"", "\"value\": \"   \"")),
       )
 
     outcomes.forEach { (label, outcome) ->
@@ -506,7 +477,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         auditPrompts += prompt
         auditLaunches += 1
         when (auditLaunches) {
-          1 -> facts(auditRemainingAcOutput(remainingHint))
+          1 -> facts(if (auditLaunches == 1) auditRemainingAcOutput(remainingHint) else auditSatisfiedOutput())
           2 -> auditFacts(auditSatisfiedOutput(), AgentRunTermination.Exited(1))
           else -> facts(auditSatisfiedOutput())
         }
@@ -563,7 +534,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
             if (auditLaunches ==
               1
             ) {
-              facts(auditRemainingAcOutput(remainingHint))
+              facts(if (auditLaunches == 1) auditRemainingAcOutput(remainingHint) else auditSatisfiedOutput())
             } else {
               facts(auditSatisfiedOutput())
             }
@@ -605,7 +576,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         }
         if (phaseId == "audit") {
           auditLaunches += 1
-          facts(auditRemainingAcOutput(remainingHint))
+          facts(if (auditLaunches == 1) auditRemainingAcOutput(remainingHint) else auditSatisfiedOutput())
         } else {
           facts(defaultPhaseOutput(request))
         }

@@ -118,6 +118,7 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.ACTIVE
@@ -3127,6 +3128,8 @@ private object ParentLiveChildDeadSupervisor : FeatureTaskRuntimeWorkerSuperviso
       FeatureTaskRuntimeProcessInspection.ExactLive
     }
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,
@@ -5766,6 +5769,9 @@ private class GoalStatusPhaseLedgerHarness {
 private class GoalStatusSeedableDatabase(
   private val repository: GoalStatusSeedableWorkflowStateRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   private val dbPath = Path.of("/fake/goal-status-phase-ledger.db")
 
   override fun resolveDbPath(): Path = dbPath
@@ -5901,6 +5907,9 @@ private object GoalTestEmptyDatabase : DatabaseSessionFactory {
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = this@GoalTestEmptyDatabase.dbPath
@@ -5943,6 +5952,9 @@ private class GoalTestPlanningDatabase : DatabaseSessionFactory {
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     return block(unitOfWork())
   }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {

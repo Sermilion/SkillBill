@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -50,7 +51,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label()
@@ -78,7 +78,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()
           }
         },
-        ContractSerialArtifactValidator(),
+        featureTaskRuntimeWireArtifactValidatorForTest(),
       )
 
     assertFailsWith<SkillBillRuntimeException> {
@@ -343,7 +343,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(),
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
       )
     return AdoptionHarness(

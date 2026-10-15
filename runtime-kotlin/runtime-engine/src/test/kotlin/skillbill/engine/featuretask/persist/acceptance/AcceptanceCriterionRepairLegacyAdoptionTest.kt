@@ -138,20 +138,21 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
           val receipt =
             assertNotNull(
               admission.admit(
-                original,
-                execution.inputs,
-                f.binding,
-                AcceptanceCriterionRepairLegacyProof(
-                  "d"
-                    .repeat(64),
-                  CHECKPOINT,
-                  0,
+                legacyRequest(
+                  original,
+                  execution,
+                  f,
+                  AcceptanceCriterionRepairLegacyProof("d".repeat(64), CHECKPOINT, 0),
                 ),
-                f.root,
               ),
               "$mode/$revision",
             )
-          AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(receipt, "receipt")
+          AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(
+            receipt,
+            "receipt",
+            execution.validator,
+            ContractFeatureTaskRuntimePhaseOutputMigration(),
+          )
           assertEquals(
             JsonCodec.valueToJsonString(original.artifacts),
             JsonCodec.valueToJsonString(
@@ -175,20 +176,17 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
   ) {
     assertNull(
       admission.admit(
-        original,
-        execution.inputs,
-        f.binding,
-        AcceptanceCriterionRepairLegacyProof("e".repeat(64), CHECKPOINT, 0),
-        f.root,
+        legacyRequest(original, execution, f, AcceptanceCriterionRepairLegacyProof("e".repeat(64), CHECKPOINT, 0)),
       ),
     )
     assertNull(
       admission.admit(
-        original,
-        execution.inputs,
-        f.binding,
-        AcceptanceCriterionRepairLegacyProof("d".repeat(64), "missing-checkpoint", 0),
-        f.root,
+        legacyRequest(
+          original,
+          execution,
+          f,
+          AcceptanceCriterionRepairLegacyProof("d".repeat(64), "missing-checkpoint", 0),
+        ),
       ),
     )
     val repaired =
@@ -211,11 +209,7 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
       )
     assertNull(
       admission.admit(
-        repaired,
-        execution.inputs,
-        f.binding,
-        AcceptanceCriterionRepairLegacyProof("d".repeat(64), CHECKPOINT, 0),
-        f.root,
+        legacyRequest(repaired, execution, f, AcceptanceCriterionRepairLegacyProof("d".repeat(64), CHECKPOINT, 0)),
       ),
     )
   }
@@ -280,6 +274,20 @@ class AcceptanceCriterionRepairLegacyAdoptionTest {
       null,
       f.clock.instant(),
     )
+
+  private fun legacyRequest(
+    original: WorkflowStateSnapshot,
+    execution: ExecutionPlanAdmissionFixture,
+    fixture: SerialRepairSqliteFixture,
+    proof: AcceptanceCriterionRepairLegacyProof,
+  ) = AcceptanceCriterionRepairLegacyAdoption.LegacyAdoptionRequest(
+    original,
+    execution.identity(original.workflowId),
+    execution.inputs,
+    fixture.binding,
+    proof,
+    fixture.root,
+  )
 
   private companion object {
     const val CHECKPOINT = "refs/skill-bill/checkpoints/SKILL-384/standalone/0"

@@ -4,11 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
-import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
@@ -22,9 +17,13 @@ import skillbill.infrastructure.contracts.locator.AcceptanceCriterionAuditResult
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairAdoptionSchemaPaths
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairHandoffSchemaPaths
 import skillbill.infrastructure.contracts.review.MAX_REPORTED_VIOLATIONS
+import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
@@ -32,9 +31,10 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
-import skillbill.workflow.model.WorkflowStepStatus
 import java.security.MessageDigest
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
 
 object AcceptanceCriterionRepairAuxiliarySchemaValidator {
   fun validateAuditResult(
@@ -180,93 +180,186 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
     executionPlans: FeatureTaskRuntimeExecutionPlanValidator,
     phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,
   ): String? {
+    val original = adoptionOriginal(payload) ?: return "adoption original history is invalid."
+    val canonical =
+      adoptionCanonical(payload, original, executionPlans)
+        ?: return "adoption original descriptor is invalid."
+    return adoptionPolicyViolation(payload, canonical)
+      ?: adoptionCompositionViolation(payload, canonical)
+      ?: adoptionVersionViolation(payload, canonical)
+      ?: adoptionDiscoveryViolation(payload, original, canonical, phaseOutputs)
+  }
+
+  private fun adoptionOriginal(payload: Map<String, Any?>): FeatureTaskRuntimeWorkflowArtifactMap? {
     val original = FeatureTaskRuntimeWorkflowArtifactMap.from(payload[Keys.ORIGINAL_ARTIFACTS])
-    if (!original.isObject) return "adoption lacks its original artifacts."
-    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original)
-    val serial =
+    val hasSerialState =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.contains(original) ||
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION.contains(original)
-    if (digest(original) != payload[Keys.PRISTINE_HISTORY_DIGEST]) return "adoption original history digest changed."
-    if (descriptor == null || digest(descriptor) != payload[Keys.DESCRIPTOR_DIGEST]) {
-      return "adoption original descriptor is missing or changed."
+    return original.takeIf {
+      it.isObject && digest(it) == payload[Keys.PRISTINE_HISTORY_DIGEST] && !hasSerialState &&
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it) != null
     }
-    if (serial) return "adoption original history contains serial state."
-    val descriptorBytes = JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8)
-    val canonicalBytes = try {
-      executionPlans.canonicalize(descriptorBytes, sourceLabel = "acceptance-criterion-repair-adoption")
-    } catch (_: SkillBillRuntimeException) {
-      return "adoption original descriptor is invalid."
-    }
-    val canonical =
+  }
+
+  private fun adoptionCanonical(
+    payload: Map<String, Any?>,
+    original: FeatureTaskRuntimeWorkflowArtifactMap,
+    executionPlans: FeatureTaskRuntimeExecutionPlanValidator,
+  ): FeatureTaskRuntimeWorkflowArtifactMap? {
+    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original) ?: return null
+    if (digest(descriptor) != payload[Keys.DESCRIPTOR_DIGEST]) return null
+    val bytes = JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8)
+    val canonicalBytes =
+      try {
+        executionPlans.canonicalize(bytes, sourceLabel = "acceptance-criterion-repair-adoption")
+      } catch (_: SkillBillRuntimeException) {
+        return null
+      }
+    return if (digestBytes(canonicalBytes) == payload[Keys.SKELETON_DIGEST]) {
       FeatureTaskRuntimeWorkflowArtifactMap.from(JsonCodec.parseValue(canonicalBytes.toString(Charsets.UTF_8)))
-    val policies = canonical[PlanKeys.STEP_POLICIES] as? List<*> ?: return "adoption descriptor policies are missing."
-    val policyMap = linkedMapOf<String, String>()
-    for (entry in policies) {
-      val row = entry as? Map<*, *> ?: return "adoption descriptor policy entry is invalid."
-      val step = row[PlanKeys.STEP] as? String ?: return "adoption descriptor policy step is invalid."
-      val identity = row[PlanKeys.IDENTITY] as? String ?: return "adoption descriptor policy identity is invalid."
-      if (policyMap.put(step, identity) != null) return "adoption descriptor has duplicate policy steps."
+    } else {
+      null
     }
-    if (digest(policyMap) != payload[Keys.POLICY_DIGEST]) return "adoption policy digest changed."
-    if (digest(canonicalBytes.toString(Charsets.UTF_8)) != payload[Keys.SKELETON_DIGEST]) {
-      return "adoption skeleton digest changed."
+  }
+
+  private fun adoptionPolicyViolation(
+    payload: Map<String, Any?>,
+    canonical: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val policyDigest =
+      canonicalPolicyDigest(canonical)
+        ?: return "adoption descriptor policies are invalid."
+    return if (policyDigest == payload[Keys.POLICY_DIGEST]) null else "adoption policy digest changed."
+  }
+
+  private fun canonicalPolicyDigest(canonical: FeatureTaskRuntimeWorkflowArtifactMap): String? {
+    val policies = canonical[PlanKeys.STEP_POLICIES] as? List<*> ?: return null
+    val entries =
+      policies.mapNotNull { entry ->
+        val row = entry as? Map<*, *> ?: return@mapNotNull null
+        val step = row[PlanKeys.STEP] as? String ?: return@mapNotNull null
+        val identity = row[PlanKeys.IDENTITY] as? String ?: return@mapNotNull null
+        step to identity
+      }
+    if (entries.size != policies.size || entries.map { it.first }.toSet().size != entries.size) return null
+    return digest(entries.toMap())
+  }
+
+  private fun adoptionCompositionViolation(
+    payload: Map<String, Any?>,
+    canonical: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val composition =
+      canonicalComposition(canonical)
+        ?: return "adoption descriptor composition is unsupported."
+    val revision =
+      canonicalAuditRevision(canonical)
+        ?: return "adoption descriptor audit revision is invalid."
+    return if (payload[Keys.COMPOSITION] == composition &&
+      (payload[Keys.SEMANTIC_REVISION] as? Number)?.toInt() == revision
+    ) {
+      null
+    } else {
+      "adoption composition or semantic revision disagrees with its descriptor."
     }
-    val definition = canonical[PlanKeys.DEFINITION] as? Map<*, *> ?: return "adoption descriptor definition is missing."
-    val definitionId = definition[PlanKeys.ID] as? String ?: return "adoption descriptor definition is invalid."
+  }
+
+  private fun canonicalComposition(canonical: FeatureTaskRuntimeWorkflowArtifactMap): String? {
+    val definition = canonical[PlanKeys.DEFINITION] as? Map<*, *> ?: return null
+    val definitionId = definition[PlanKeys.ID] as? String ?: return null
     val gate = canonical[PlanKeys.QUALITY_GATE_SELECTION] as? String
-    val composition = when {
+    return when {
       definitionId == "standalone" && gate == null -> AcceptanceCriterionRepairAdoptionComposition.STANDALONE.wireValue
       definitionId == "goal-child" && gate == FeatureTaskRuntimeQualityGateSelection.BUILD.wireValue ->
         AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_BUILD.wireValue
       definitionId == "goal-child" && gate == FeatureTaskRuntimeQualityGateSelection.VALIDATE.wireValue ->
         AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE.wireValue
-      else -> return "adoption descriptor composition is unsupported."
+      else -> null
     }
-    val strategies = canonical[PlanKeys.SELECTED_STRATEGIES] as? List<*>
-      ?: return "adoption descriptor strategies are missing."
-    val audits = strategies.mapNotNull { it as? Map<*, *> }.filter { it[PlanKeys.SLOT] == PhaseSlot.AUDIT.wireValue }
-    val revision = audits.singleOrNull()?.get(PlanKeys.SEMANTIC_REVISION) as? Number
-      ?: return "adoption descriptor audit revision is invalid."
-    if (payload[Keys.COMPOSITION] != composition ||
-      (payload[Keys.SEMANTIC_REVISION] as? Number)?.toInt() != revision.toInt()
-    ) {
-      return "adoption composition or semantic revision disagrees with its descriptor."
+  }
+
+  private fun canonicalAuditRevision(canonical: FeatureTaskRuntimeWorkflowArtifactMap): Int? =
+    canonicalAudit(canonical)?.get(PlanKeys.SEMANTIC_REVISION).let { it as? Number }?.toInt()
+
+  private fun canonicalAudit(canonical: FeatureTaskRuntimeWorkflowArtifactMap): Map<*, *>? =
+    (canonical[PlanKeys.SELECTED_STRATEGIES] as? List<*>)
+      ?.mapNotNull { it as? Map<*, *> }
+      ?.singleOrNull { it[PlanKeys.SLOT] == PhaseSlot.AUDIT.wireValue }
+
+  private fun adoptionVersionViolation(
+    payload: Map<String, Any?>,
+    canonical: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val versions =
+      payload[Keys.DECLARED_CONTRACT_VERSIONS] as? Map<*, *>
+        ?: return "adoption declared contract versions are missing."
+    return if (versions[Keys.CONTRACT_VERSION] == canonical[PlanKeys.CONTRACT_VERSION]) {
+      null
+    } else {
+      "adoption execution-plan contract version changed."
     }
-    val versions = payload[Keys.DECLARED_CONTRACT_VERSIONS] as? Map<*, *>
-      ?: return "adoption declared contract versions are missing."
-    if (versions[Keys.CONTRACT_VERSION] != canonical[PlanKeys.CONTRACT_VERSION]) {
-      return "adoption execution-plan contract version changed."
+  }
+
+  private fun adoptionDiscoveryViolation(
+    payload: Map<String, Any?>,
+    original: FeatureTaskRuntimeWorkflowArtifactMap,
+    canonical: FeatureTaskRuntimeWorkflowArtifactMap,
+    phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,
+  ): String? {
+    val discovery =
+      adoptionDiscovery(original, canonical)
+        ?: return "adoption discovery record is invalid."
+    val sourceVersion =
+      phaseOutputVersion(discovery.output, phaseOutputs)
+        ?: return "adoption discovery output version is unsupported."
+    val versions =
+      payload[Keys.DECLARED_CONTRACT_VERSIONS] as? Map<*, *>
+        ?: return "adoption declared contract versions are missing."
+    return if (versions[Keys.PHASE_OUTPUT_CONTRACT_VERSION] == sourceVersion) {
+      null
+    } else {
+      "adoption phase-output contract version changed."
     }
-    val phaseOutput = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(original)
-      as? Map<*, *> ?: return "adoption discovery phase records are missing."
-    val entryStep = audits.single()[PlanKeys.ENTRY_STEP] as? String
-      ?: return "adoption discovery entry step is invalid."
-    val discovery = phaseOutput[entryStep] as? Map<*, *> ?: return "adoption discovery record is missing."
-    if (discovery[SharedPayloadKeys.PHASE_ID] != entryStep ||
-      discovery[SharedPayloadKeys.STATUS] != WorkflowStepStatus.COMPLETED.wireValue ||
-      (discovery[PhaseKeys.ATTEMPT_COUNT] as? Number)?.toInt() != 1 ||
-      (discovery[PhaseKeys.FINISHED_AT] as? String).isNullOrBlank()
-    ) return "adoption discovery record is not a single completed audit entry."
+  }
+
+  private data class AdoptionDiscovery(val output: String)
+
+  private fun adoptionDiscovery(
+    original: FeatureTaskRuntimeWorkflowArtifactMap,
+    canonical: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AdoptionDiscovery? {
+    val entryStep = canonicalAudit(canonical)?.get(PlanKeys.ENTRY_STEP) as? String ?: return null
+    val records =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(original) as? Map<*, *>
+        ?: return null
+    val discovery = records[entryStep] as? Map<*, *> ?: return null
+    val completed =
+      discovery[SharedPayloadKeys.PHASE_ID] == entryStep &&
+        discovery[SharedPayloadKeys.STATUS] == WorkflowStepStatus.COMPLETED.wireValue
+    val singleAttempt = (discovery[PhaseKeys.ATTEMPT_COUNT] as? Number)?.toInt() == 1
+    val finished = !(discovery[PhaseKeys.FINISHED_AT] as? String).isNullOrBlank()
     val output = discovery[SharedPayloadKeys.OUTPUT_ARTIFACT] as? String
-      ?: return "adoption discovery output is missing."
-    val sourceVersion = when (val migrated = phaseOutputs.migrate(output)) {
-      is FeatureTaskRuntimePhaseOutputMigrationResult.Current -> {
-        val source = JsonCodec.parseValue(migrated.payload) as? Map<*, *>
-          ?: return "adoption discovery output is invalid."
-        source[SharedPayloadKeys.CONTRACT_VERSION] as? String
-      }
+    val valid = completed && singleAttempt && finished
+    return if (valid && output != null) AdoptionDiscovery(output) else null
+  }
+
+  private fun phaseOutputVersion(
+    output: String,
+    phaseOutputs: FeatureTaskRuntimePhaseOutputMigration,
+  ): String? =
+    when (val migrated = phaseOutputs.migrate(output)) {
+      is FeatureTaskRuntimePhaseOutputMigrationResult.Current ->
+        (JsonCodec.parseValue(migrated.payload) as? Map<*, *>)?.get(SharedPayloadKeys.CONTRACT_VERSION) as? String
       is FeatureTaskRuntimePhaseOutputMigrationResult.Migrated -> migrated.sourceVersion
       is FeatureTaskRuntimePhaseOutputMigrationResult.Refused -> null
-    } ?: return "adoption discovery output version is unsupported."
-    if (versions[Keys.PHASE_OUTPUT_CONTRACT_VERSION] != sourceVersion) {
-      return "adoption phase-output contract version changed."
     }
-    return null
-  }
 
   private fun digest(value: Any?): String =
     MessageDigest.getInstance("SHA-256")
       .digest(JsonCodec.valueToJsonString(value).toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+  private fun digestBytes(value: ByteArray): String =
+    MessageDigest.getInstance("SHA-256").digest(value).joinToString("") { "%02x".format(it) }
 
   private fun formatReason(errors: Set<ValidationMessage>): String =
     errors.sortedBy { it.instanceLocation?.toString().orEmpty() }

@@ -451,6 +451,7 @@ class CliRuntimeShellCommandsTest {
         listOf("git", "init", repositoryRoot.toString()),
         listOf(
           "git", "-C", repositoryRoot.toString(), "-c", "user.name=Test", "-c", "user.email=test@example.com",
+          "-c", "commit.gpgsign=false",
           "commit", "--allow-empty", "-m", "Initial test repository",
         ),
       )

@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -98,7 +99,6 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal val acceptingIdeStatusSnapshotValidator: WorkflowSnapshotValidator =
   object : WorkflowSnapshotValidator {
@@ -266,13 +266,16 @@ internal fun ideStatusService(
       testHarnessClock,
       NoopRuntimeDiagnostics,
     )
+  val runtimeWorkflowPersistence =
+    FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, featureTaskRuntimeWireArtifactValidatorForTest())
   val runtimeStatusService =
     FeatureTaskRuntimeStatusService(
       recorder = phaseRecorder,
+      workflowPersistence = runtimeWorkflowPersistence,
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, ContractSerialArtifactValidator()),
+          runtimeWorkflowPersistence,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
@@ -307,7 +310,6 @@ internal fun ideStatusService(
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
-    manifestStore = manifestStore,
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,

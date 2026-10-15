@@ -49,6 +49,9 @@ class FeatureTaskRuntimeStatusPresentationTest {
         blockedCount = 0,
         currentPhaseId = "validate",
         validationGateExecutionEvidence = evidence,
+        criterionExplanation =
+          "criterion S3-001; 3 unsuccessful failures retained; 0 failures remaining; " +
+            "queue position 1 of 2. Runtime status explains final full source audit required.",
       )
 
     val status = projection.toRuntimeStatusCliMap("workflow-1")
@@ -71,5 +74,9 @@ class FeatureTaskRuntimeStatusPresentationTest {
     assertTrue(text.contains("validation_gate_checks: runtime-engine|compileKotlin,runtime-engine|test"))
     assertTrue(text.contains("executed_work_units=2"))
     assertTrue(text.contains("checks=runtime-engine|compileKotlin,runtime-engine|test"))
+    assertTrue(text.contains("criterion S3-001"))
+    assertTrue(text.contains("0 failures remaining"))
+    assertTrue(text.contains("final full source audit required"))
+    assertTrue("acceptance_criteria" !in status, "criterion context remains text-only")
   }
 }

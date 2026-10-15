@@ -226,6 +226,26 @@ class GoalRunnerExecutionCoordinatorTest {
   }
 
   @Test
+  fun `a recent live owner with an opaque birth token is waited out then reclaimed`() {
+    val store =
+      InMemoryExecutionLeaseStore(
+        lease(generation = 1, ownerToken = "live-owner", processBirthToken = "linux-start-ticks:12345"),
+      )
+    val supervisor =
+      FakeGoalSupervisor(
+        FeatureTaskRuntimeProcessInspection.ExactLive,
+        processStartedAtValue = fixedClock().instant().minusSeconds(1),
+      )
+    val coordinator = testCoordinator(store, supervisor)
+
+    val result = coordinator.runOwned("parent-1") { "continued" }
+
+    assertEquals(GoalRunnerOwnedRun.Completed("continued"), result)
+    assertEquals(1, supervisor.awaitExitCalls)
+    assertNull(store.executionLeaseValue)
+  }
+
+  @Test
   fun `a duplicate-launch peer that stays live after awaitExit stays blocked`() {
     val store =
       InMemoryExecutionLeaseStore(
@@ -276,7 +296,7 @@ class GoalRunnerExecutionCoordinatorTest {
   }
 
   @Test
-  fun `an unparseable process birth token is not treated as a duplicate launch`() {
+  fun `an unavailable process start time is not treated as a duplicate launch`() {
     val store =
       InMemoryExecutionLeaseStore(
         lease(generation = 1, ownerToken = "live-owner", processBirthToken = "birth-100"),
@@ -641,6 +661,7 @@ private class FakeGoalSupervisor(
   private val markNotRunningAfterAwait: Boolean = true,
   private val heartbeatStartFailure: Throwable? = null,
   private val heartbeatStopFailure: Throwable? = null,
+  private val processStartedAtValue: Instant? = null,
 ) : FeatureTaskRuntimeWorkerSupervisor {
   private var inspection = initialInspection
   private var tick: (() -> FeatureTaskRuntimeHeartbeatTick)? = null
@@ -657,6 +678,9 @@ private class FakeGoalSupervisor(
   override fun currentProcess(): FeatureTaskRuntimeProcessIdentity = current
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection = inspection
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? =
+    processStartedAtValue ?: ownership.processBirthToken.toLongOrNull()?.let(Instant::ofEpochMilli)
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

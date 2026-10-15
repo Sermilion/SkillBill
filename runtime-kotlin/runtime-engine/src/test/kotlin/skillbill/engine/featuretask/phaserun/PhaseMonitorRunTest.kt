@@ -126,7 +126,7 @@ class PhaseMonitorRunTest {
   }
 
   @Test
-  fun `the repair agent must pass the project checks instead of deferring them`() {
+  fun `repair prompt requires CI investigation and blocks unresolved local passes`() {
     initFeatureBranch()
     val failing =
       PullRequestChecksLookup { _, _ ->
@@ -139,6 +139,21 @@ class PhaseMonitorRunTest {
 
     val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
     assertTrue("Run the full project validation" in prompt, prompt)
+    assertTrue("https://ci.example/run" in prompt, prompt)
+    assertTrue("read that failing job's logs first" in prompt, prompt)
+    assertTrue("--job <job-id> --log-failed" in prompt, prompt)
+    assertTrue("Identify the failed command, assertion or error" in prompt, prompt)
+    assertTrue("A passing local rerun does not resolve the recorded CI failure" in prompt, prompt)
+    assertTrue("investigate timing, concurrency, isolation, and environment differences" in prompt, prompt)
+    assertTrue("Do not settle completed with an unchanged tree" in prompt, prompt)
+    assertTrue("If investigation cannot establish a repository fix, settle blocked" in prompt, prompt)
+    assertTrue("A passing local rerun with no repository fix is unresolved" in prompt, prompt)
+    assertTrue("The runtime owns commit, push, and subsequent CI confirmation" in prompt, prompt)
+    assertTrue(
+      prompt.indexOf("Monitor repair completion requires") > prompt.indexOf("Run the full project validation"),
+      prompt,
+    )
+    assertTrue("block only for an external obstacle" !in prompt, prompt)
     assertTrue("## Validation ownership" !in prompt, prompt)
   }
 

@@ -103,7 +103,7 @@ Shared QA composition, verdict semantics, evidence, budgets, repair policy, and 
 
 Apply `docs/runtime-command-guidance.md`, `docs/architecture-guidelines.md` A1 through A12 and G1 through G7, `runtime-kotlin/ARCHITECTURE.md` Design Principles, `docs/code-principles.md`, `docs/observability-policy.md`, and `docs/skill-source-generation.md`. Authored guidance is `content.md`; generated pointers and provider outputs are not committed. Run `./install.sh` when implementing skill, renderer, or support-pointer changes.
 
-Base branch is `main`. SKILL-380 is merged into local `main`; its archived branch restriction no longer applies. This request creates requirements only and does not start implementation or create a decomposition manifest. Planning must use current source and preserve the user's ongoing SKILL-418 work.
+Base branch is `main`. This request creates requirements only and does not start implementation or create a decomposition manifest. Planning must use current source and preserve the user's ongoing SKILL-418 work.
 
 ## Validation strategy
 

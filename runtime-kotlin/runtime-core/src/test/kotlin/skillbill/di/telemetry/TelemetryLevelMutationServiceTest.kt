@@ -9,6 +9,7 @@ import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -316,6 +317,9 @@ private class FakeTelemetryDatabaseSessionFactory(
     calls += "transaction"
     return block(fakeUnitOfWork())
   }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private fun fakeUnitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {

@@ -28,6 +28,7 @@ import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -443,6 +444,8 @@ private class TakeoverSupervisor(
     stopped = true
     return true
   }
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

@@ -37,6 +37,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -156,6 +157,7 @@ class ReviewRecorder {
   val savedSessionLearnings: MutableList<Pair<String, String>> =
     Collections.synchronizedList(mutableListOf())
   val diagnosticWarnings: MutableList<String> = Collections.synchronizedList(mutableListOf())
+  val diagnosticErrors: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
   val parentPrompts: List<String>
     get() = parentLaunches.mapNotNull { it.skillRunRequest.promptOverride }
@@ -241,6 +243,7 @@ fun reviewHarness(
     governedEvidenceEndpointBinder = config.evidenceEndpointBinder,
     originScopeKeyPort = config.originScopeKeyPort,
     learningsDiagnostics = recordingDiagnostics(recorder),
+    routingDiagnostics = recordingDiagnostics(recorder),
   )
 }
 
@@ -265,6 +268,7 @@ fun parallelCodeReviewRunnerOf(
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = CanonicalRepositoryRoot,
   originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
   learningsDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
+  routingDiagnostics: RuntimeDiagnostics = NoopRuntimeDiagnostics,
   clock: Clock = Clock.systemUTC(),
 ): ParallelCodeReviewRunner {
   val persistence = RuntimeOwnedPersistenceBoundary(database, NoopRuntimeDiagnostics)
@@ -281,7 +285,7 @@ fun parallelCodeReviewRunnerOf(
         ParallelCodeReviewRunnerRubricPlanning(
           reviewRubricResolver,
           installedPackCatalog,
-          NoopRuntimeDiagnostics,
+          routingDiagnostics,
         ),
       lanePlanRecording = ParallelCodeReviewRunnerLanePlanRecording(persistence, clock),
       repositoryEnclosingRootPort = repositoryEnclosingRootPort,
@@ -501,6 +505,9 @@ private fun recordingDatabase(
     override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = transaction(block)
 
     override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork)
+
+    override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+      OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
   }
 }
 

@@ -319,7 +319,7 @@ class InstallServiceTest {
   }
 
   @Test
-  fun `apply install migrates the existing database after a successful apply`() {
+  fun `apply install prepares the database after a successful apply`() {
     val home = Path.of("/tmp/skillbill-install-service-migrate-home")
     val plan = installPlan(request(Path.of("/tmp/skillbill-install-service-migrate-repo"), home))
     val schemaPort = RecordingDatabaseSchemaPort()
@@ -705,20 +705,25 @@ class InstallServiceTest {
   }
 
   private object UnsupportedDatabaseSchemaPort : DatabaseSchemaPort {
+    override fun ensureDatabaseReady(): Unit = error("ensureDatabaseReady is not part of this test")
+
     override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
   }
 
   private class RecordingDatabaseSchemaPort : DatabaseSchemaPort {
     var migrateCalls = 0
 
-    override fun migrateExistingDatabase(): Boolean {
+    override fun ensureDatabaseReady() {
       migrateCalls += 1
-      return true
     }
+
+    override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
   }
 
   private class FailingDatabaseSchemaPort(private val failure: SkillBillRuntimeException) : DatabaseSchemaPort {
-    override fun migrateExistingDatabase(): Boolean = throw failure
+    override fun ensureDatabaseReady(): Unit = throw failure
+
+    override fun migrateExistingDatabase(): Boolean = error("migrateExistingDatabase is not part of this test")
   }
 
   private object UnsupportedInstallReconcilePort : InstallReconcilePort {

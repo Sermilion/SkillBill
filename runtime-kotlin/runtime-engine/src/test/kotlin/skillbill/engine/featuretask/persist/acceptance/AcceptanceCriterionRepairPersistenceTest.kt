@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
@@ -226,8 +227,8 @@ class AcceptanceCriterionRepairPersistenceTest {
         for (failure in listOf(IOException("commit rejected"), CancellationException("cancelled before commit"))) {
           val failing =
             object : DatabaseSessionFactory by f.database {
-              override fun <T> transaction(block: (UnitOfWork) -> T): T =
-                f.database.transaction { unit ->
+              override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+                f.database.owningTransaction { unit ->
                   block(unit)
                   assertNotNull(
                     DurableWorkflowArtifactFamily
@@ -300,8 +301,8 @@ class AcceptanceCriterionRepairPersistenceTest {
         val projections = f.projections
         val failing =
           object : DatabaseSessionFactory by f.database {
-            override fun <T> transaction(block: (UnitOfWork) -> T): T =
-              f.database.transaction { unit ->
+            override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+              f.database.owningTransaction { unit ->
                 block(unit)
                 val staged = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, f.workflowId))
                 val state =

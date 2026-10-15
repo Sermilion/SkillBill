@@ -14,10 +14,12 @@ import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.model.ReviewRunLane
 import skillbill.review.plan.ReviewAddonSelectionPolicy
 import skillbill.review.plan.ReviewCrossRootLaneReconciliation
+import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewLaneInclusionPolicy
+import skillbill.review.plan.ReviewLaneOwnershipResolution
 import skillbill.review.plan.ReviewLaunchPlanPolicy
-import skillbill.review.plan.ReviewPerAreaFallbackExclusion
 import skillbill.review.plan.ReviewStackRouting
+import skillbill.review.plan.model.ReviewLaneOwnershipConflict
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewReconciledLane
 import skillbill.review.plan.model.ReviewRootLanes
@@ -32,6 +34,21 @@ class ParallelCodeReviewRunnerRubricPlanning(
   private val diagnostics: RuntimeDiagnostics,
 ) {
   internal fun installedManifests(): List<PlatformManifest> = installedPackCatalog.manifests()
+
+  internal fun routeStack(
+    manifests: List<PlatformManifest>,
+    evidence: ReviewDiffEvidence,
+  ) = ReviewStackRouting.route(manifests, evidence.files.map { ReviewRoutingChangedFile(it.path, it.changedContent) })
+    .also { routing ->
+      routing.ownershipConflicts.groupBy { it.owners to it.fallbackSlug }.forEach { (owners, conflicts) ->
+        diagnostics.error(
+          "seam=review_stack_routing failure_code=AMBIGUOUS_LANE_OWNERSHIP " +
+            "value_expected=unambiguous_owner value_used=${owners.second ?: "horizontal"} " +
+            "conflicting_owners=${diagnosticOwners(owners.first)} " +
+            "owner_count=${owners.first.size} affected_path_count=${conflicts.size}",
+        )
+      }
+    }
 
   internal fun resolvePlannedRubrics(
     evidence: ReviewDiffEvidence,
@@ -60,10 +77,7 @@ class ParallelCodeReviewRunnerRubricPlanning(
       return preserveAcceptedQualityOwner(horizontalPlannedRubrics(evidence), evidence, manifests, acceptedLanes)
     }
     val routing =
-      ReviewStackRouting.route(
-        installed,
-        evidence.files.map { ReviewRoutingChangedFile(it.path, it.changedContent) },
-      )
+      routeStack(installed, evidence)
     return if (routing.routedSlugs.isEmpty()) {
       if (qualityOnly) {
         recordMissingQualityOwner("no_routed_pack")
@@ -91,31 +105,10 @@ class ParallelCodeReviewRunnerRubricPlanning(
     qualityOnly: Boolean,
   ): List<PlannedReviewRubric> {
     val manifests = routing.manifests
-    val depthOffsets =
-      ReviewCrossRootLaneReconciliation
-        .compositionDepthOffsets(routing.routed.map { it.slug }, manifests)
-    val rootLanes =
-      routing.routed.map { root ->
-        val rootOwnedPaths = routing.ownedPathsBySlug[root.slug].orEmpty()
-        val rootFiles = evidence.files.filter { it.path in rootOwnedPaths }
-        val selectedAreas = ReviewLaunchPlanPolicy.composedAreas(root.slug, manifests)
-        val lanes =
-          ReviewLaunchPlanPolicy.flatten(root.slug, manifests, selectedAreas).lanes.also { lanes ->
-            require(lanes.isNotEmpty()) {
-              "Routed pack '${root.slug}' resolved no declared flattened specialist worker."
-            }
-          }.map { lane ->
-            val ownedPaths = if (lane.required) rootOwnedPaths.toList() else laneOwnedPaths(lane, rootFiles)
-            lane.copy(
-              ownedPaths = ownedPaths.distinct().sorted(),
-              changedHunkIds = evidence.hunks.filter { it.path in ownedPaths }.map { it.hunkId },
-            )
-          }
-        ReviewRootLanes(depthOffsets[root.slug] ?: 0, lanes)
-      }
-    val exclusion = ReviewPerAreaFallbackExclusion.partition(rootLanes, manifests)
-    val reconciled =
-      ReviewCrossRootLaneReconciliation.reconcile(exclusion.roots, exclusion.excludedFallbackLanesByArea)
+    val resolution = ReviewLaneOwnershipResolution.reconcile(scopedRootLanes(evidence, routing), manifests)
+    val conflicts = resolution.conflicts
+    conflicts.forEach(::recordOwnershipFallback)
+    val reconciled = resolution.lanes
     if (reconciled.none { it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS }) {
       recordMissingQualityOwner("no_manifest_declared_owner")
     }
@@ -123,8 +116,54 @@ class ParallelCodeReviewRunnerRubricPlanning(
       reconciled
         .filter { it.lane.ownedPaths.isNotEmpty() && (!qualityOnly || it.lane.area in UNIVERSAL_CODE_REVIEW_AREAS) }
         .map { toPlannedRubric(evidence, it, manifests) }
-    return preserveAcceptedQualityOwner(current, evidence, manifests, acceptedLanes)
+    val conflictingAreas = conflicts.map { it.area }.toSet()
+    return preserveAcceptedQualityOwner(
+      current,
+      evidence,
+      manifests,
+      acceptedLanes.filter { it.area !in conflictingAreas },
+    )
   }
+
+  private fun scopedRootLanes(
+    evidence: ReviewDiffEvidence,
+    routing: ParallelCodeReviewStackDetection,
+  ): Map<String, ReviewRootLanes> {
+    val manifests = routing.manifests
+    val depthOffsets =
+      ReviewCrossRootLaneReconciliation
+        .compositionDepthOffsets(routing.routed.map { it.slug }, manifests)
+    return routing.routed.associate { root ->
+      val rootOwnedPaths = routing.ownedPathsBySlug[root.slug].orEmpty()
+      val rootFiles = evidence.files.filter { it.path in rootOwnedPaths }
+      val selectedAreas = ReviewLaunchPlanPolicy.composedAreas(root.slug, manifests)
+      val lanes =
+        ReviewLaunchPlanPolicy.flatten(root.slug, manifests, selectedAreas).lanes.also { lanes ->
+          require(lanes.isNotEmpty()) {
+            "Routed pack '${root.slug}' resolved no declared flattened specialist worker."
+          }
+        }.map { lane ->
+          val ownedPaths = if (lane.required) rootOwnedPaths.toList() else laneOwnedPaths(lane, rootFiles)
+          lane.copy(
+            ownedPaths = ownedPaths.distinct().sorted(),
+            changedHunkIds = evidence.hunks.filter { it.path in ownedPaths }.map { it.hunkId },
+          )
+        }
+      root.slug to ReviewRootLanes(depthOffsets[root.slug] ?: 0, lanes)
+    }
+  }
+
+  private fun recordOwnershipFallback(conflict: ReviewLaneOwnershipConflict) {
+    diagnostics.error(
+      "seam=review_lane_ownership failure_code=AMBIGUOUS_LANE_OWNERSHIP " +
+        "area=${conflict.area} value_expected=unambiguous_owner value_used=${conflict.fallbackOwner} " +
+        "candidate_owners=${diagnosticOwners(conflict.owners)} " +
+        "owner_count=${conflict.owners.size} reason=${conflict.reason.take(MAX_DIAGNOSTIC_REASON_LENGTH)}",
+    )
+  }
+
+  private fun diagnosticOwners(owners: List<String>): String =
+    owners.take(MAX_DIAGNOSTIC_OWNERS).joinToString { it.take(MAX_DIAGNOSTIC_SLUG_LENGTH) }
 
   private fun recordMissingQualityOwner(reason: String) {
     diagnostics.warning(
@@ -138,6 +177,14 @@ class ParallelCodeReviewRunnerRubricPlanning(
     manifests: List<PlatformManifest>,
     acceptedLanes: List<ReviewRunLane>,
   ): List<PlannedReviewRubric> {
+    val qualityOwners =
+      acceptedLanes.filter { it.area in UNIVERSAL_CODE_REVIEW_AREAS }
+        .distinctBy { it.packSlug to it.area }
+    if (qualityOwners.isNotEmpty() &&
+      (qualityOwners.size > 1 || planned.count { it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS } > 1)
+    ) {
+      return preserveMultipleAcceptedQualityOwners(planned, evidence, manifests, qualityOwners)
+    }
     val accepted = acceptedLanes.lastOrNull { it.area in UNIVERSAL_CODE_REVIEW_AREAS } ?: return planned
     val current = planned.singleOrNull { it.descriptor.area == accepted.area }
     if (current?.descriptor?.skillName == accepted.laneSkillName) return planned
@@ -182,6 +229,51 @@ class ParallelCodeReviewRunnerRubricPlanning(
       )
     val preserved = toPlannedRubric(evidence, ReviewReconciledLane(descriptor, listOf(descriptor)), manifests)
     return planned.filterNot { it.descriptor.area == accepted.area } + preserved
+  }
+
+  private fun preserveMultipleAcceptedQualityOwners(
+    planned: List<PlannedReviewRubric>,
+    evidence: ReviewDiffEvidence,
+    manifests: List<PlatformManifest>,
+    qualityOwners: List<ReviewRunLane>,
+  ): List<PlannedReviewRubric> {
+    val fallbackSlug = ReviewFallbackResolver.resolveOptional(manifests)?.slug
+    val fallback =
+      planned.filter {
+        it.descriptor.area in UNIVERSAL_CODE_REVIEW_AREAS && it.descriptor.packSlug == fallbackSlug
+      }
+    val base = planned - fallback.toSet()
+    return qualityOwners.fold(base) { result, accepted ->
+      val current =
+        result.singleOrNull {
+          it.descriptor.area == accepted.area && it.descriptor.packSlug == accepted.packSlug
+        }
+      if (fallback.isEmpty() && (current != null || base.any { it.descriptor.area == accepted.area })) {
+        result
+      } else {
+        val seed = current ?: fallback.firstOrNull { it.descriptor.area == accepted.area }
+        val paths =
+          (
+            current?.descriptor?.ownedPaths.orEmpty() +
+              fallback.flatMap {
+                it.descriptor.ownedPaths
+              }
+          ).distinct().sorted()
+        val scoped =
+          seed?.copy(
+            descriptor =
+              seed.descriptor.copy(
+                ownedPaths = paths,
+                changedHunkIds =
+                  evidence.hunks.filter {
+                    it.path in paths
+                  }.map { it.hunkId },
+              ),
+          )
+        val preserved = preserveAcceptedQualityOwner(listOfNotNull(scoped), evidence, manifests, listOf(accepted))
+        result.filterNot { it === current } + preserved
+      }
+    }
   }
 
   private fun toPlannedRubric(
@@ -245,3 +337,7 @@ class ParallelCodeReviewRunnerRubricPlanning(
       ReviewLaneInclusionPolicy.ownsChangedFile(lane, file.path, file.changedContent)
     }.map { it.path }
 }
+
+private const val MAX_DIAGNOSTIC_OWNERS = 12
+private const val MAX_DIAGNOSTIC_SLUG_LENGTH = 64
+private const val MAX_DIAGNOSTIC_REASON_LENGTH = 1024

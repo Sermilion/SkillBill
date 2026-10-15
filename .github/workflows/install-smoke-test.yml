@@ -31,16 +31,14 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      # The macmini runner reuses ~/.gradle across jobs. A leftover 8g daemon from
-      # an earlier validate/check plus this build's new daemon is enough for the
-      # host to kill the new one ("Gradle build daemon disappeared unexpectedly").
-      # Stop leftovers first, then build without a daemon so this job does not
-      # leave another behind.
+      # Other workflows can build on the same macmini and hold its shared local
+      # build cache. Bypass that cache here. Stop leftover daemons and avoid
+      # starting another so this smoke build does not add more runner pressure.
       - name: Build runtime CLI
         run: |
           cd runtime-kotlin
           ./gradlew --stop
-          ./gradlew --no-daemon -q :runtime-cli:installDist :runtime-mcp:installDist
+          ./gradlew --no-daemon --no-build-cache -q :runtime-cli:installDist :runtime-mcp:installDist
 
       - name: Reject mismatched runtime candidates before promotion
         run: bash scripts/runtime_package_parity_smoke_test.sh

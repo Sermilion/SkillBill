@@ -60,6 +60,7 @@ private fun Project.configureRepoTestSourceSet() {
 private fun Project.governedRepositorySources(): FileCollection {
   val repoRoot = rootProject.layout.projectDirectory.dir("..")
   return files(
+    repoRoot.dir(".github"),
     repoRoot.dir("skills"),
     repoRoot.dir("platform-packs"),
     repoRoot.dir("orchestration"),

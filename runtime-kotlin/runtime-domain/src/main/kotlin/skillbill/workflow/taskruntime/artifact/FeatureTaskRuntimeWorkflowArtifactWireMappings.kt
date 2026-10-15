@@ -27,7 +27,9 @@ fun FeatureTaskRuntimePlanSeed.asWorkflowArtifactEntry(): FeatureTaskRuntimeWork
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodePlanSeedFromArtifact(raw: Any?): FeatureTaskRuntimePlanSeed? =
-  JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimePlanSeed::fromArtifactMap)
+  JsonCodec.anyToStringAnyMap(raw)
+    ?.let(FeatureTaskRuntimeWorkflowArtifactMap::from)
+    ?.let(FeatureTaskRuntimePlanSeed::fromArtifactMap)
 
 fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())

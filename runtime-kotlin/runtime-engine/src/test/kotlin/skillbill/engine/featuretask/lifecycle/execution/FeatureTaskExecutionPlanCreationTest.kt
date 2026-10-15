@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.slot.artifactValue
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
@@ -86,7 +87,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 class FeatureTaskExecutionPlanCreationTest {
   @Test
@@ -149,7 +149,7 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(),
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
@@ -178,7 +178,7 @@ class FeatureTaskExecutionPlanCreationTest {
         FeatureTaskRuntimeWorkflowPersistence(
           database,
           testWorkflowSnapshotValidator,
-          ContractSerialArtifactValidator(),
+          featureTaskRuntimeWireArtifactValidatorForTest(),
         )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")

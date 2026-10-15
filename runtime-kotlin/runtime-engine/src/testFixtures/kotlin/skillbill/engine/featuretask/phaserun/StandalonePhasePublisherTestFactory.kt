@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.application.TestRepositoryEnclosingRoot
+import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.CheckedOutBranchSource
@@ -11,6 +12,7 @@ fun testStandalonePhasePublisher(
   database: DatabaseSessionFactory,
   clock: Clock,
   diagnostics: RuntimeDiagnostics,
+  environment: EnvironmentContext = EnvironmentContext(environment = emptyMap()),
 ): StandalonePhaseStatusPublisherFactory =
   StandalonePhaseStatusPublisherFactory(
     database,
@@ -20,6 +22,7 @@ fun testStandalonePhasePublisher(
       clock,
       NoopFeatureTaskRuntimeWorkerSupervisor,
       diagnostics,
+      environment,
     ),
     clock,
     diagnostics,

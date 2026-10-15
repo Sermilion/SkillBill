@@ -18,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -88,6 +89,9 @@ class GoalRunnerStatusProjectionDegradationTest {
     val diagnostics = RecordingStatusDiagnostics()
     val throwingJournalDatabase =
       object : DatabaseSessionFactory {
+        override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+          OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
         private val dbPath = Path.of("/fake/goal-status-journal-fail.db")
 
         override fun resolveDbPath(): Path = dbPath
@@ -311,6 +315,9 @@ private class StatusJournalDatabaseSessionFactory(
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unit())
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unit())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {

@@ -8,6 +8,7 @@ enum class AcceptanceCriterionRepairMode(val wireValue: String) {
 
 enum class AcceptanceCriterionRepairStage(val wireValue: String) {
   DISCOVERY_ADMITTED("discovery_admitted"),
+  READ_ONLY_AUDIT_REQUIRED("read_only_audit_required"),
   REPAIR_RESERVED("repair_reserved"),
   REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION("repair_completed_awaiting_targeted_verification"),
   FINAL_AUDIT_REQUIRED("final_audit_required"),
@@ -159,7 +160,12 @@ data class AcceptanceCriterionRepairState internal constructor(
   val admittedCheckpointId: String?,
   val sourceTransitions: List<AcceptanceCriterionRepairSourceTransition>,
   val finalAudits: List<AcceptanceCriterionRepairFinalAudit>,
+  val pendingAuditRefs: List<String> = emptyList(),
+  val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
+  val pendingClarificationQuestion: String? = null,
 ) {
+  fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
+
   fun reserve(
     reservationId: String,
     mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
@@ -225,53 +231,75 @@ data class AcceptanceCriterionRepairState internal constructor(
     val changedCriteria = criteriaAfter(outcome)
     val byRef = changedCriteria.associateBy { it.canonicalRef }
     val queue = stableQueue(changedCriteria, dependencies, byRef) ?: return null
-    val current = queue.firstOrNull()
-    val blocked = hasExhaustedUnresolvedCriterion(queue, totals)
-    val acceptedSourceTransitions =
-      if (outcome.successful) {
-        sourceTransitions +
-          AcceptanceCriterionRepairSourceTransition(
-            criterionRef = outcome.criterionRef,
-            revision = revision + 1,
-            fromDisposition = AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
-            toDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
-            producingId = outcome.outcomeId,
-            producingDigest = outcome.digest,
-            evidenceRef = outcome.evidenceRef,
-            treeDigest = admittedTreeDigest,
-            checkpointId = admittedCheckpointId,
-          )
-      } else {
-        sourceTransitions
-      }
+    val pending = if (outcome.successful) pendingAuditRefs - outcome.criterionRef else pendingAuditRefs
+    val current = pending.firstOrNull() ?: queue.firstOrNull()
+    val blocked =
+      !outcome.successful && totals.getOrDefault(
+        outcome.criterionRef,
+        0,
+      ) >= MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
     return copy(
       criteria = changedCriteria,
       unresolvedQueue = queue,
       currentCriterionRef = current,
+      pendingAuditRefs = pending,
       reservation = null,
       outcomes = outcomes + acceptedOutcome,
       unsuccessfulTotals = totals,
-      finalAuditRequired = queue.isEmpty(),
+      finalAuditRequired = queue.isEmpty() && pending.isEmpty(),
       finalAuditDigest = if (queue.isEmpty()) null else finalAuditDigest,
-      mode =
-        if (queue.isEmpty()) {
-          AcceptanceCriterionRepairMode.FINAL_FULL
-        } else {
-          AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-        },
-      stage =
-        when {
-          blocked -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
-          queue.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
-          else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
-        },
+      mode = modeAfterOutcome(pending, queue),
+      stage = stageAfterOutcome(blocked, outcome.successful, pending, queue),
       completedRepairEvidenceRef = null,
       admittedTreeDigest = null,
       admittedCheckpointId = null,
-      sourceTransitions = acceptedSourceTransitions,
+      sourceTransitions = sourceTransitionsAfter(outcome),
       revision = revision + 1,
     )
   }
+
+  private fun modeAfterOutcome(
+    pending: List<String>,
+    queue: List<String>,
+  ): AcceptanceCriterionRepairMode =
+    if (queue.isEmpty() && pending.isEmpty()) {
+      AcceptanceCriterionRepairMode.FINAL_FULL
+    } else {
+      AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
+    }
+
+  private fun stageAfterOutcome(
+    blocked: Boolean,
+    successful: Boolean,
+    pending: List<String>,
+    queue: List<String>,
+  ): AcceptanceCriterionRepairStage =
+    when {
+      blocked -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
+      successful && pending.isNotEmpty() -> AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
+      queue.isEmpty() && pending.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
+      else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
+    }
+
+  private fun sourceTransitionsAfter(
+    outcome: AcceptanceCriterionRepairOutcome,
+  ): List<AcceptanceCriterionRepairSourceTransition> =
+    if (outcome.successful) {
+      sourceTransitions +
+        AcceptanceCriterionRepairSourceTransition(
+          criterionRef = outcome.criterionRef,
+          revision = revision + 1,
+          fromDisposition = AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
+          toDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
+          producingId = outcome.outcomeId,
+          producingDigest = outcome.digest,
+          evidenceRef = outcome.evidenceRef,
+          treeDigest = admittedTreeDigest,
+          checkpointId = admittedCheckpointId,
+        )
+    } else {
+      sourceTransitions
+    }
 
   private fun canRecord(outcome: AcceptanceCriterionRepairOutcome): Boolean {
     val live = reservation ?: return false
@@ -353,7 +381,7 @@ data class AcceptanceCriterionRepairState internal constructor(
         },
       stage =
         when {
-          exhausted != null -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
+          exhausted -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
           ordered.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_ACCEPTED
           else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
         },
@@ -501,6 +529,7 @@ data class AcceptanceCriterionRepairState internal constructor(
       return result
     }
 
+    internal const val MAX_CLARIFICATION_LENGTH: Int = 1024
     internal const val MAX_REPAIR_CRITERIA: Int = 256
     internal const val MAX_REPAIR_DEPENDENCIES: Int = 4096
     internal const val MAX_REPAIR_OUTCOMES: Int = 4096

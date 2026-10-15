@@ -23,6 +23,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
@@ -55,7 +56,6 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
@@ -64,6 +64,7 @@ import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -240,13 +241,13 @@ internal fun testSpecDriftRecovery(
   GoalRunnerSpecDriftRecovery(
     GoalPlanningPreparationCheckpoint(
       TestGoalActivityStampDatabase,
-      FeatureTaskRuntimeWireArtifactValidator(),
+      featureTaskRuntimeWireArtifactValidatorForTest(),
     ),
     manifestStore,
     UnavailableDecompositionManifestStore,
     TestRepositoryEnclosingRoot,
     testGoalRunnerStatusService(manifestStore, outcomeStore),
-    FeatureTaskRuntimeWireArtifactValidator(),
+    featureTaskRuntimeWireArtifactValidatorForTest(),
     NoopRuntimeDiagnostics,
   )
 
@@ -419,6 +420,9 @@ internal fun testGoalRunner(
   )
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   private val dbPath = Path.of("/fake/goal-activity-stamp.db")
 
   override fun resolveDbPath(): Path = dbPath

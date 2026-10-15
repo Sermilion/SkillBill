@@ -19,13 +19,14 @@ import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
 import skillbill.engine.featuretask.persist.workflowStatusFor
+import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.db.model.OwningTransactionResult
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -33,12 +34,19 @@ import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequ
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairFinalAuditInput
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.recordProseAudit
+import skillbill.workflow.taskruntime.model.audit.requireFinalProseAudit
+import skillbill.workflow.taskruntime.model.audit.retainClarification
+import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
@@ -55,7 +63,6 @@ class AcceptanceCriterionRepairPersistence(
   private val diagnostics: RuntimeDiagnostics,
   private val clock: Clock,
   private val adoption: AcceptanceCriterionRepairLegacyAdoption,
-  private val audits: AcceptanceCriterionRepairAuditAdmission,
 ) {
   fun inspectExisting(
     worker: AcquiredFeatureTaskRuntimeWorker,
@@ -137,15 +144,14 @@ class AcceptanceCriterionRepairPersistence(
     proof: AcceptanceCriterionRepairLegacyProof,
     root: Path,
   ): AcceptanceCriterionRepairAdoptionResult {
-    if (!worker.admits(work.workflowStates, clock.instant()) || binding.executionId != worker.workflowId) {
-      return refuseAdoption(worker, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
-    }
-    if (!adoption.sourceMatches(worker, root, binding)) {
-      return refuseAdoption(
-        worker,
-        AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED,
-      )
-    }
+    val preflightRefusal =
+      when {
+        !worker.admits(work.workflowStates, clock.instant()) || binding.executionId != worker.workflowId ->
+          AcceptanceCriterionRepairRefusal.OWNER_CHANGED
+        !adoption.sourceMatches(worker, root, binding) -> AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED
+        else -> null
+      }
+    if (preflightRefusal != null) return refuseAdoption(worker, preflightRefusal)
     val row = requireNotNull(work.workflowStates.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId))
     workflowPersistence.validateSerialArtifacts(row.artifacts)
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_ADOPTION
@@ -156,18 +162,22 @@ class AcceptanceCriterionRepairPersistence(
     }
     val receipt = original?.let { admitLegacy(worker, it, binding, proof, root) }
     val stillOwned = worker.admits(work.workflowStates, clock.instant())
-    return when {
-      receipt == null -> refuseAdoption(worker, AcceptanceCriterionRepairRefusal.UNSAFE_LEGACY_ADOPTION)
-      !stillOwned -> refuseAdoption(worker, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
-      else -> {
-        validator.validate(
-          FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION,
-          receipt,
-          "serial-legacy-adoption",
-        )
-        workflowPersistence.persistAcquiredRepairAdoption(work.workflowStates, row, receipt)
-        AcceptanceCriterionRepairAdoptionResult.Adopted(receipt)
-      }
+    return if (receipt == null || !stillOwned) {
+      val refusal =
+        if (receipt == null) {
+          AcceptanceCriterionRepairRefusal.UNSAFE_LEGACY_ADOPTION
+        } else {
+          AcceptanceCriterionRepairRefusal.OWNER_CHANGED
+        }
+      refuseAdoption(worker, refusal)
+    } else {
+      validator.validate(
+        FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION,
+        receipt,
+        "serial-legacy-adoption",
+      )
+      workflowPersistence.persistAcquiredRepairAdoption(work.workflowStates, row, receipt)
+      AcceptanceCriterionRepairAdoptionResult.Adopted(receipt)
     }
   }
 
@@ -179,7 +189,16 @@ class AcceptanceCriterionRepairPersistence(
     root: Path,
   ): FeatureTaskRuntimeWorkflowArtifactMap? =
     try {
-      adoption.admit(original, worker.effectiveInputs, binding, proof, root)
+      adoption.admit(
+        AcceptanceCriterionRepairLegacyAdoption.LegacyAdoptionRequest(
+          original,
+          worker.identity,
+          worker.effectiveInputs,
+          binding,
+          proof,
+          root,
+        ),
+      )
     } catch (failure: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
@@ -316,19 +335,44 @@ class AcceptanceCriterionRepairPersistence(
     val previous = decode(record.artifacts, binding)
     val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
     val next = transition(previous, request.mutation, digest)
-    val refusal = candidateRefusal(previous, next, request, record, binding, worker, repositoryRoot)
+    val legacySafe =
+      previous != null || !adoption.hasAuditHistory(record) ||
+        freshCurrentAuditDiscovery(record, request) ||
+        adoptionMatches(record.artifacts, binding, worker, repositoryRoot, record)
+    val refusal = candidateRefusal(previous, next, request, binding, legacySafe)
     if (refusal != null) return refuse(worker, previous, refusal)
     return commitCandidate(work, worker, record, requireNotNull(next), request)
+  }
+
+  private fun freshCurrentAuditDiscovery(
+    record: WorkflowStateSnapshot,
+    request: AcceptanceCriterionRepairCommit,
+  ): Boolean {
+    val discovery = request.mutation is AcceptanceCriterionRepairMutation.Discover && request.phase.attemptCount == 1
+    val currentStep = record.workflowStatus == WorkflowStatus.RUNNING && record.currentStepId == request.phase.phaseId
+    val current = decodePhaseRecords(record.artifacts)[request.phase.phaseId]
+    val currentPhaseOpen = current == null || current.attemptCount == 1 && current.finishedAt == null
+    val stepOpen =
+      record.steps.none {
+        it.stepId == request.phase.phaseId &&
+          (it.attemptCount > 1 || it.status !in setOf(WorkflowStepStatus.PENDING, WorkflowStepStatus.RUNNING))
+      }
+    val ledger = decodePhaseLedger(record.artifacts)
+    val auditLedger = ledger.filter { it.phaseId == request.phase.phaseId }
+    val currentLedger =
+      auditLedger.all {
+        it.attemptCount == 1 && it.action == FeatureTaskRuntimePhaseLedgerAction.START
+      }
+    val ledgerIsFresh = auditLedger.isEmpty() || currentLedger && auditLedger.size == 1
+    return discovery && currentStep && currentPhaseOpen && stepOpen && ledgerIsFresh
   }
 
   private fun candidateRefusal(
     previous: AcceptanceCriterionRepairState?,
     next: AcceptanceCriterionRepairState?,
     request: AcceptanceCriterionRepairCommit,
-    record: WorkflowStateSnapshot,
     binding: AcceptanceCriterionRepairBinding,
-    worker: AcquiredFeatureTaskRuntimeWorker,
-    repositoryRoot: Path,
+    legacySafe: Boolean,
   ): AcceptanceCriterionRepairRefusal? {
     if (next == null) return AcceptanceCriterionRepairRefusal.INVALID_TRANSITION
     val replay = previous == next
@@ -342,19 +386,11 @@ class AcceptanceCriterionRepairPersistence(
       } else {
         matches(previous, request.expected)
       }
-    val legacySafe = previous != null || !adoption.hasAuditHistory(record) ||
-      adoptionMatches(record.artifacts, binding, worker, repositoryRoot, record)
     return when {
       !expectedMatches -> AcceptanceCriterionRepairRefusal.EXPECTED_STATE_CHANGED
       !identityMatches(next, binding) -> AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED
       !legacySafe -> AcceptanceCriterionRepairRefusal.UNSAFE_LEGACY_ADOPTION
       !hasReservationCapacity(previous, request.mutation) -> AcceptanceCriterionRepairRefusal.CAPACITY_EXHAUSTED
-      !audits.matches(
-        previous,
-        next,
-        request.mutation,
-        request.evidence,
-      ) -> AcceptanceCriterionRepairRefusal.AUDIT_BINDING_CHANGED
       else -> null
     }
   }
@@ -402,20 +438,14 @@ class AcceptanceCriterionRepairPersistence(
         ),
       ) == next
     if (!replay) {
-      var patch = phases.serialPhasePatch(record.artifacts, request.phase)
-      request.evidence?.let {
-        patch +=
-          mapOf(
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT.entry(it.payload),
-          )
-      }
+      val patch = phases.serialPhasePatch(record.artifacts, request.phase, request.attemptStatus)
       workflowPersistence.persistAcquiredRepairState(
         work.workflowStates,
         record,
         next,
         patch,
         WorkflowRowAdvance(
-          request.phase.phaseId,
+          request.nextSteps[next.stage] ?: request.phase.phaseId,
           workflowStatusFor(request.phase),
           stepUpdatesFrom(decodePhaseRecords(record.artifacts + patch)),
           clock.instant(),
@@ -435,8 +465,9 @@ class AcceptanceCriterionRepairPersistence(
         "serial_repair_projection_recovery",
         "committed authoritative serial snapshot",
       ) { work ->
-        val record = work.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: throw invalidAcceptanceCriterionRepairStateSchema(workflowId, "The workflow is missing.")
+        val record =
+          work.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+            ?: throw invalidAcceptanceCriterionRepairStateSchema(workflowId, "The workflow is missing.")
         workflowPersistence.validateSerialArtifacts(record.artifacts)
         decode(record.artifacts, binding)
       }
@@ -531,6 +562,32 @@ class AcceptanceCriterionRepairPersistence(
     auditDigest: String?,
   ): AcceptanceCriterionRepairState? =
     when (mutation) {
+      is AcceptanceCriterionRepairMutation.ProseAudit,
+      AcceptanceCriterionRepairMutation.KeepProgress,
+      is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      -> proseTransition(state, mutation)
+      else -> repairTransition(state, mutation, auditDigest)
+    }
+
+  private fun proseTransition(
+    state: AcceptanceCriterionRepairState?,
+    mutation: AcceptanceCriterionRepairMutation,
+  ): AcceptanceCriterionRepairState? =
+    when (mutation) {
+      is AcceptanceCriterionRepairMutation.ProseAudit -> state?.recordProseAudit(mutation.audit)
+      AcceptanceCriterionRepairMutation.KeepProgress -> state?.retainProseProgress()
+      is AcceptanceCriterionRepairMutation.Clarification -> state?.retainClarification(mutation.question)
+      AcceptanceCriterionRepairMutation.RequireFinalAudit -> state?.requireFinalProseAudit()
+      else -> null
+    }
+
+  private fun repairTransition(
+    state: AcceptanceCriterionRepairState?,
+    mutation: AcceptanceCriterionRepairMutation,
+    auditDigest: String?,
+  ): AcceptanceCriterionRepairState? =
+    when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> {
         val admitted = AcceptanceCriterionRepairState.admit(mutation.admission)
         if (state == null || state == admitted) admitted else null
@@ -574,6 +631,11 @@ class AcceptanceCriterionRepairPersistence(
             auditBindingDigest = auditDigest,
           ),
         )
+      is AcceptanceCriterionRepairMutation.ProseAudit,
+      AcceptanceCriterionRepairMutation.KeepProgress,
+      is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      -> null
     }
 
   private fun repairCompletedReplays(
@@ -588,6 +650,38 @@ class AcceptanceCriterionRepairPersistence(
   }
 
   private fun replayExpected(
+    state: AcceptanceCriterionRepairState?,
+    expected: ExpectedAcceptanceCriterionRepairState,
+    mutation: AcceptanceCriterionRepairMutation,
+  ): Boolean =
+    when (mutation) {
+      is AcceptanceCriterionRepairMutation.ProseAudit,
+      AcceptanceCriterionRepairMutation.KeepProgress,
+      is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      -> proseReplayExpected(state, expected, mutation)
+      else -> repairReplayExpected(state, expected, mutation)
+    }
+
+  private fun proseReplayExpected(
+    state: AcceptanceCriterionRepairState?,
+    expected: ExpectedAcceptanceCriterionRepairState,
+    mutation: AcceptanceCriterionRepairMutation,
+  ): Boolean =
+    when (mutation) {
+      is AcceptanceCriterionRepairMutation.ProseAudit ->
+        expected.revision == mutation.audit.revision - 1 &&
+          expected.currentCriterionRef == mutation.audit.criterionRef &&
+          expected.reservationId == state?.reservation?.reservationId &&
+          state?.proseAudits?.any { it == mutation.audit } == true
+      AcceptanceCriterionRepairMutation.KeepProgress,
+      is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      -> expected.revision == state?.revision?.minus(1)
+      else -> false
+    }
+
+  private fun repairReplayExpected(
     state: AcceptanceCriterionRepairState?,
     expected: ExpectedAcceptanceCriterionRepairState,
     mutation: AcceptanceCriterionRepairMutation,
@@ -608,6 +702,11 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.FinalAudit ->
         expected.currentCriterionRef == null && expected.reservationId == null &&
           expected.revision == state?.finalAudits?.singleOrNull { it.digest == mutation.digest }?.revision?.minus(1)
+      is AcceptanceCriterionRepairMutation.ProseAudit,
+      AcceptanceCriterionRepairMutation.KeepProgress,
+      is AcceptanceCriterionRepairMutation.Clarification,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      -> false
     }
 
   private fun outcomeExpectedMatches(
@@ -631,8 +730,9 @@ class AcceptanceCriterionRepairPersistence(
     if (!family.contains(artifacts)) return false
     val receipt = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
     validator.validate(FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION, receipt, family.label())
-    val identity = receipt[Keys.CATALOG_ID] == binding.catalogId && receipt[Keys.SPEC_DIGEST] == binding.specDigest &&
-      receipt[Keys.EXECUTION_ID] == binding.executionId
+    val identity =
+      receipt[Keys.CATALOG_ID] == binding.catalogId && receipt[Keys.SPEC_DIGEST] == binding.specDigest &&
+        receipt[Keys.EXECUTION_ID] == binding.executionId
     return identity && adoption.retainedProofMatches(receipt, worker, binding, repositoryRoot, current)
   }
 

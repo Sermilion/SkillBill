@@ -19,7 +19,7 @@ import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.db.DatabaseSessionFactory
@@ -162,7 +162,7 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
     gitOperations: WorkflowGitOperations =
       NoopWorkflowGitOperations,
   ): AcceptanceCriterionRepairPersistence {
-    val validator = FeatureTaskRuntimeWireArtifactValidator()
+    val validator = featureTaskRuntimeWireArtifactValidatorForTest()
     val snapshots = WorkflowStateSchemaValidator()
     return AcceptanceCriterionRepairPersistence(
       RuntimeOwnedPersistenceBoundary(db, diagnostics),
@@ -185,7 +185,6 @@ internal class SerialRepairSqliteFixture(archiveRevision: Int? = null) : AutoClo
         gitOperations,
         source,
       ),
-      AcceptanceCriterionRepairAuditAdmission(validator),
     )
   }
 

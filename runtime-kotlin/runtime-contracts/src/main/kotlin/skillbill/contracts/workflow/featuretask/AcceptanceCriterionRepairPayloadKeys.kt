@@ -77,6 +77,12 @@ object AcceptanceCriterionRepairPayloadKeys {
   const val PRODUCING_ID = "producing_id"
   const val PRODUCING_DIGEST = "producing_digest"
   const val AUDITED_REFS = "audited_refs"
+  const val PENDING_AUDIT_REFS = "pending_audit_refs"
+  const val PROSE_AUDITS = "prose_audits"
+  const val PENDING_CLARIFICATION_QUESTION = "pending_clarification_question"
+  const val ID = "id"
+  const val SATISFIED = "satisfied"
+  const val PROSE = "prose"
 }
 
 const val ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION = "0.1"

@@ -51,6 +51,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class CliInstallPlanApplyRuntimeTest {
@@ -328,13 +329,17 @@ class CliInstallPlanApplyRuntimeTest {
   }
 
   @Test
-  fun `install apply persists detected agents platform packs telemetry and mcp choice`() {
+  fun `fresh install with telemetry off prepares the desktop database and persists choices`() {
     val fixture = installPlanApplyFixture()
     createDetectedAgentHomes(fixture.home)
+    val databasePath = SqliteTestDatabasePaths.defaultDbPath(fixture.home)
+    assertFalse(Files.exists(databasePath))
 
     val result = CliRuntime.run(detectedApplyArguments(fixture), installPlanCliContext(fixture.home))
 
     assertEquals(0, result.exitCode, result.stdout)
+    val database = sqliteSessionFactoryForTests(fixture.home, databasePath.toString(), environment = emptyMap())
+    assertNotNull(database.readIfPresent { it.workList.observation() }, result.stdout + result.stderr)
     val selection = readInstallSelection(fixture.home)
     assertEquals(supportedAgents, (selection["selected_agents"] as List<*>).toSet())
     val platformSelection = selection.mapValue("platform_pack_selection")

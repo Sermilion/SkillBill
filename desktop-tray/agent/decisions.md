@@ -110,3 +110,18 @@ Reason: The sidebar represents work the operator can select. Its activity histor
 Context: Finalization failures kept only a blocked status after the runner exited, so Copy reason copied the generic goal summary.
 Decision: Save the runner's full stopped reason in goal control state and project it separately from the bounded status text. Show blocked goals in Goal activity with the existing three-line preview, delayed tooltip, and copy button. Keep the header summary short. Disable copying when an older attempt has no saved full reason and state that absence in Goal activity.
 Reason: Clipboard text must contain the recorded failure, and a missing reason must remain visible rather than become a generic status sentence.
+
+## [2026-10-14] Apply supported upgrades when selecting a database
+Context: An installed desktop app rejected an older runtime store with an incompatible-database message. Installation upgrades the runtime's default store, but the app can select a different store or open one restored after installation.
+Decision: Database selection calls the shared runtime schema port before opening Room or registering observation. The runtime checks the migration ledger, version, and installed Room identity before applying pending migrations. Missing databases stay absent, and newer or unrecognized stores remain unchanged. Ordinary reads and observation retain their read-only behavior.
+Reason: An older supported store should open with its saved work intact. Runtime migrations remain the only schema authority, and upgrading belongs to the connection boundary rather than each read.
+
+## [2026-10-14] Head rows with the run, show the branch as it is now
+Context: Sidebar rows were headed by the worktree folder name, so a WE-5108 goal running in a `we5116-…` worktree read as WE-5116. Goal detail showed the branch recorded when the execution registered and never followed the run.
+Decision: Head each sidebar row with its issue key and move the repository name to the second line. Keyless rows keep the repository name as their heading. Goal detail shows the worktree's checked-out branch at read time and falls back to the recorded branch. Standalone phases keep their recorded branch because it is part of their identity.
+Reason: A run is identified by its issue key, not by where it was started. The branch is display context and must be current.
+
+## [2026-10-15] Serialize detail subscriptions across cancelled selections
+Context: macOS CI caught overlapping detail reads during rapid reselection. Waiting for the previous selection job lost the original read when an intermediate job was cancelled before its body started.
+Decision: Hold a controller-owned mutex for each detail subscription's lifetime. Cancelled intermediate selections cannot release the active subscription's lock. Inject the controller dispatcher and use a test scheduler to hold the first read through cancellation while two reselections and refresh run.
+Reason: Cancellation requests do not prove a read has finished. The regression must prove the next subscription waits for the active read without depending on thread timing.

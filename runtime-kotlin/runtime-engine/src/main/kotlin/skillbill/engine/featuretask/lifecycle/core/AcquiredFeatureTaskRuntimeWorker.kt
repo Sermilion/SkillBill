@@ -9,8 +9,9 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.time.Instant
 
@@ -27,6 +28,7 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
 
   val workflowId: String get() = ownership.workflowId
   val generation: Long get() = ownership.generation
+  internal val identity: FeatureTaskExecutionIdentity get() = execution.identity
   internal val governedSpecPath: String get() = execution.identity.governedSpecPath
   internal val normalizedIssueKey: String get() = execution.identity.normalizedIssueKey
   internal val repositoryIdentity: String get() = execution.identity.repositoryIdentity

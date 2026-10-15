@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -72,7 +73,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.label()
@@ -1207,7 +1207,11 @@ internal fun statusHarness(): StatusHarness {
   val runInvariantsStore =
     FeatureTaskRuntimeRunInvariantsStore(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator, ContractSerialArtifactValidator()),
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
     )
   return StatusHarness(
     recorder,
@@ -1215,6 +1219,11 @@ internal fun statusHarness(): StatusHarness {
     runInvariantsStore,
     FeatureTaskRuntimeStatusService(
       recorder,
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
       runInvariantsStore,
       decomposeTerminalRecorder,
     ),

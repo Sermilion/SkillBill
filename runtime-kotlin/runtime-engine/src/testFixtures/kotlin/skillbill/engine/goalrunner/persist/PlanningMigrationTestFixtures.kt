@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalplanning.GoalPlanningMigration
 import skillbill.engine.goalplanning.GoalPlanningMigrationImports
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.goal.ContractGoalPlanningPreparationSourceValidator
@@ -12,7 +12,8 @@ import java.time.Clock
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator as WireArtifactValidator
 
 fun planningMigrationForTest(
-  wireValidator: WireArtifactValidator = FeatureTaskRuntimeWireArtifactValidator(),
+  wireValidator: WireArtifactValidator =
+    featureTaskRuntimeWireArtifactValidatorForTest(),
   outputs: FeatureTaskRuntimePhaseOutputMigration = ContractFeatureTaskRuntimePhaseOutputMigration(),
 ): GoalPlanningMigration =
   GoalPlanningMigration(

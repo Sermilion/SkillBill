@@ -12,10 +12,10 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairBinding
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairLegacyProof
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
@@ -25,18 +25,19 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
+import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
-import skillbill.workflow.taskruntime.artifact.decodeGoalContinuationArtifactFromArtifact
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdoptionComposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSeed
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanSpecOrigin
-import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
-import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as RepairKeys
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -44,6 +45,7 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import java.nio.file.Path
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as RepairKeys
 
 @Inject
 class AcceptanceCriterionRepairLegacyAdoption(
@@ -64,35 +66,52 @@ class AcceptanceCriterionRepairLegacyAdoption(
         .catalogId == sha256Hex(JsonCodec.valueToJsonString(binding.authoredCriteria))
   }
 
-  internal fun admit(
-    original: WorkflowStateSnapshot,
-    worker: AcquiredFeatureTaskRuntimeWorker,
-    inputs: EffectiveGatePolicyInputs,
-    binding: AcceptanceCriterionRepairBinding,
-    proof: AcceptanceCriterionRepairLegacyProof,
-    repositoryRoot: Path,
-  ): FeatureTaskRuntimeWorkflowArtifactMap? {
-    val descriptor =
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(
-        original.artifacts,
-      ) ?: return null
-    val bytes = JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8)
-    val recorded = codec.decode(bytes)
-    compatibility.requireSupportedExecution(bytes, inputs)
-    val audit = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
-    val composition = composition(recorded) ?: return null
-    val supported = LegacyTuple(composition, audit.semanticRevision) in SUPPORTED_TUPLES
-    val discoveryOutput = decodePhaseRecords(original.artifacts)[audit.entryStep]?.outputArtifact
-    val phaseOutputVersion = phaseOutputSourceVersion(discoveryOutput) ?: return null
+  internal fun admit(request: LegacyAdoptionRequest): FeatureTaskRuntimeWorkflowArtifactMap? = candidate(request)
+
+  private data class SupportedLegacyPlan(
+    val recorded: ResolvedPhaseExecutionPlan,
+    val audit: ResolvedPhaseStrategyIdentity,
+    val composition: AcceptanceCriterionRepairAdoptionComposition,
+  )
+
+  private fun candidate(request: LegacyAdoptionRequest): FeatureTaskRuntimeWorkflowArtifactMap? {
+    val plan = supportedPlan(request) ?: return null
+    val phaseOutputVersion =
+      phaseOutputSourceVersion(decodePhaseRecords(request.original.artifacts)[plan.audit.entryStep]?.outputArtifact)
+        ?: return null
     val pristine =
-      historyIsPristine(original, recorded, audit) &&
-        sourceWasBoundAtDiscovery(original, worker, binding, audit) &&
-        checkpointMatches(original, recorded, audit, proof, repositoryRoot) && catalogMatches(original, binding)
-    return if (supported && pristine) {
-      receipt(original, recorded, composition, binding, proof, phaseOutputVersion)
+      historyIsPristine(request.original, plan.recorded, plan.audit) &&
+        sourceWasBoundAtDiscovery(request.original, request.identity, request.binding, plan.audit) &&
+        checkpointMatches(request.original, plan.recorded, plan.audit, request.proof, request.repositoryRoot) &&
+        catalogMatches(request.original, request.binding)
+    return if (pristine) {
+      receipt(
+        LegacyReceiptRequest(
+          request.original,
+          plan.recorded,
+          plan.composition,
+          request.binding,
+          request.proof,
+          phaseOutputVersion,
+        ),
+      )
     } else {
       null
     }
+  }
+
+  private fun supportedPlan(request: LegacyAdoptionRequest): SupportedLegacyPlan? {
+    val descriptor =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(
+        request.original.artifacts,
+      ) ?: return null
+    val bytes = JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8)
+    val recorded = codec.decode(bytes)
+    compatibility.requireSupportedExecution(bytes, request.inputs)
+    val audit = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
+    val composition = composition(recorded) ?: return null
+    return SupportedLegacyPlan(recorded, audit, composition)
+      .takeIf { LegacyTuple(composition, audit.semanticRevision) in SUPPORTED_TUPLES }
   }
 
   private fun composition(recorded: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairAdoptionComposition? =
@@ -181,54 +200,106 @@ class AcceptanceCriterionRepairLegacyAdoption(
     proof: AcceptanceCriterionRepairLegacyProof,
     repositoryRoot: Path,
   ): Boolean {
-    val checkpoints = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(original.artifacts)
-      ?: return false
-    val checkpoint = decodeCheckpointIdentitiesFromArtifact(checkpoints).singleOrNull {
-      it.checkpointRef == proof.checkpointId && it.phaseId == audit.entryStep &&
-        it.generation.toLong() == proof.stoppedGeneration
-    } ?: return false
-    val discovery = decodePhaseRecords(original.artifacts)[audit.entryStep] ?: return false
-    val output = discovery.outputArtifact?.let { JsonCodec.parseValue(it) } as? Map<*, *> ?: return false
-    val historicalTree = output[RepairKeys.TREE_DIGEST] as? String ?: return false
-    val historicalCheckpoint = output[RepairKeys.CHECKPOINT_ID] as? String ?: return false
-    if (historicalTree != proof.treeDigest || historicalCheckpoint != proof.checkpointId) return false
-    val resolved = git.resolveCheckpointRef(
-      repositoryRoot,
-      FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE,
-      proof.checkpointId,
-    )
+    val checkpoint = checkpointEvidence(original, audit, proof) ?: return false
+    val resolved =
+      git.resolveCheckpointRef(
+        repositoryRoot,
+        FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE,
+        proof.checkpointId,
+      )
     val fingerprint = git.repositoryFingerprint(repositoryRoot)
     return resolved is WorkflowGitOperationResult.Ok && resolved.value.trim() == checkpoint.commitSha &&
-      fingerprintMatches(fingerprint, historicalTree) &&
+      fingerprint is WorkflowGitOperationResult.Ok && fingerprint.value == checkpoint.treeDigest &&
       recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } == audit
+  }
+
+  private data class CheckpointEvidence(val commitSha: String, val treeDigest: String)
+
+  private fun checkpointEvidence(
+    original: WorkflowStateSnapshot,
+    audit: ResolvedPhaseStrategyIdentity,
+    proof: AcceptanceCriterionRepairLegacyProof,
+  ): CheckpointEvidence? {
+    val checkpoints =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(original.artifacts)
+        ?: return null
+    val checkpoint =
+      decodeCheckpointIdentitiesFromArtifact(checkpoints).singleOrNull {
+        it.checkpointRef == proof.checkpointId && it.phaseId == audit.entryStep &&
+          it.generation.toLong() == proof.stoppedGeneration
+      } ?: return null
+    val historical = historicalCheckpoint(original, audit, proof) ?: return null
+    return if (historical.treeDigest == proof.treeDigest) {
+      CheckpointEvidence(checkpoint.commitSha, historical.treeDigest)
+    } else {
+      null
+    }
+  }
+
+  private data class HistoricalCheckpointOutput(val treeDigest: String)
+
+  private fun historicalCheckpoint(
+    original: WorkflowStateSnapshot,
+    audit: ResolvedPhaseStrategyIdentity,
+    proof: AcceptanceCriterionRepairLegacyProof,
+  ): HistoricalCheckpointOutput? {
+    val output =
+      decodePhaseRecords(original.artifacts)[audit.entryStep]?.outputArtifact
+        ?.let { JsonCodec.parseValue(it) as? Map<*, *> }
+        ?: return null
+    val treeDigest = output[RepairKeys.TREE_DIGEST] as? String ?: return null
+    val checkpointId = output[RepairKeys.CHECKPOINT_ID] as? String ?: return null
+    return if (checkpointId == proof.checkpointId) HistoricalCheckpointOutput(treeDigest) else null
   }
 
   private fun sourceWasBoundAtDiscovery(
     original: WorkflowStateSnapshot,
-    worker: AcquiredFeatureTaskRuntimeWorker,
+    identity: FeatureTaskExecutionIdentity,
     binding: AcceptanceCriterionRepairBinding,
     audit: ResolvedPhaseStrategyIdentity,
   ): Boolean {
-    val planSeed = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_SEED.value(original.artifacts)
-    if (planSeed != null && !worker.goalChild) {
-      val seed = FeatureTaskRuntimePlanSeed.fromArtifactMap(FeatureTaskRuntimeWorkflowArtifactMap.from(planSeed))
-      val discovery = decodePhaseRecords(original.artifacts)[audit.entryStep] ?: return false
-      return seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR &&
-        seed.specSha256 == binding.specDigest && discovery.status == WorkflowStepStatus.COMPLETED
+    return if (identity.routeScope == FeatureTaskRouteScope.STANDALONE) {
+      standaloneSourceWasBoundAtDiscovery(original, binding, audit)
+    } else {
+      goalChildSourceWasBoundAtDiscovery(original, identity, binding, audit)
     }
-    val imported = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(original.artifacts)
-      ?: return false
-    if (!worker.goalChild) return false
+  }
+
+  private fun standaloneSourceWasBoundAtDiscovery(
+    original: WorkflowStateSnapshot,
+    binding: AcceptanceCriterionRepairBinding,
+    audit: ResolvedPhaseStrategyIdentity,
+  ): Boolean {
+    val planSeed =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_SEED.value(
+        original.artifacts,
+      ) ?: return false
+    val seed = FeatureTaskRuntimePlanSeed.fromArtifactMap(FeatureTaskRuntimeWorkflowArtifactMap.from(planSeed))
+    val discovery = decodePhaseRecords(original.artifacts)[audit.entryStep] ?: return false
+    return seed.specOrigin == FeatureTaskRuntimePlanSpecOrigin.OPERATOR &&
+      seed.specSha256 == binding.specDigest && discovery.status == WorkflowStepStatus.COMPLETED
+  }
+
+  private fun goalChildSourceWasBoundAtDiscovery(
+    original: WorkflowStateSnapshot,
+    identity: FeatureTaskExecutionIdentity,
+    binding: AcceptanceCriterionRepairBinding,
+    audit: ResolvedPhaseStrategyIdentity,
+  ): Boolean {
+    val imported =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(original.artifacts)
+        ?: return false
     val evidence =
       FeatureTaskRuntimeGoalPlanningImport.fromArtifactMap(FeatureTaskRuntimeWorkflowArtifactMap.from(imported))
-    val child = decodeGoalContinuationArtifactFromArtifact(
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(original.artifacts),
-    ) ?: return false
+    val child =
+      decodeGoalContinuationArtifactFromArtifact(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.value(original.artifacts),
+      ) ?: return false
     val discovery = decodePhaseRecords(original.artifacts)[audit.entryStep] ?: return false
     return evidence.parentGoalWorkflowId == child.parentWorkflowId &&
-      evidence.normalizedIssueKey == child.issueKey && evidence.normalizedIssueKey == worker.normalizedIssueKey &&
-      evidence.repositoryIdentity == worker.repositoryIdentity && evidence.subtaskId == child.subtaskId &&
-      evidence.governedSubSpecPath == worker.governedSpecPath && evidence.subSpecHash == binding.specDigest &&
+      evidence.normalizedIssueKey == child.issueKey && evidence.normalizedIssueKey == identity.normalizedIssueKey &&
+      evidence.repositoryIdentity == identity.repositoryIdentity && evidence.subtaskId == child.subtaskId &&
+      evidence.governedSubSpecPath == identity.governedSpecPath && evidence.subSpecHash == binding.specDigest &&
       discovery.status == WorkflowStepStatus.COMPLETED
   }
 
@@ -246,53 +317,50 @@ class AcceptanceCriterionRepairLegacyAdoption(
       )
   }
 
-  private fun receipt(
-    original: WorkflowStateSnapshot,
-    recorded: ResolvedPhaseExecutionPlan,
-    composition: AcceptanceCriterionRepairAdoptionComposition,
-    binding: AcceptanceCriterionRepairBinding,
-    proof: AcceptanceCriterionRepairLegacyProof,
-    phaseOutputVersion: String,
-  ): FeatureTaskRuntimeWorkflowArtifactMap {
-    val audit = recorded.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }
-    val originalJson = JsonCodec.valueToJsonString(original.artifacts)
+  private fun receipt(request: LegacyReceiptRequest): FeatureTaskRuntimeWorkflowArtifactMap {
+    val audit = request.recorded.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }
+    val originalJson = JsonCodec.valueToJsonString(request.original.artifacts)
     return FeatureTaskRuntimeWorkflowArtifactMap.from(
       mapOf(
         Keys.CONTRACT_VERSION to ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION,
-        Keys.COMPOSITION to composition.wireValue,
+        Keys.COMPOSITION to request.composition.wireValue,
         Keys.SEMANTIC_REVISION to audit.semanticRevision,
         Keys.DESCRIPTOR_DIGEST to
           sha256Hex(
             JsonCodec.valueToJsonString(
-              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts),
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(request.original.artifacts),
             ),
           ),
-        Keys.POLICY_DIGEST to sha256Hex(JsonCodec.valueToJsonString(recorded.stepPolicyIdentities)),
-        Keys.SKELETON_DIGEST to sha256Hex(String(codec.encode(recorded), Charsets.UTF_8)),
+        Keys.POLICY_DIGEST to sha256Hex(JsonCodec.valueToJsonString(request.recorded.stepPolicyIdentities)),
+        Keys.SKELETON_DIGEST to sha256Hex(String(codec.encode(request.recorded), Charsets.UTF_8)),
         Keys.DECLARED_CONTRACT_VERSIONS to
           mapOf(
-            Keys.CONTRACT_VERSION to recorded.contractVersion,
-            Keys.PHASE_OUTPUT_CONTRACT_VERSION to phaseOutputVersion,
+            Keys.CONTRACT_VERSION to request.recorded.contractVersion,
+            Keys.PHASE_OUTPUT_CONTRACT_VERSION to request.phaseOutputVersion,
           ),
-        Keys.CATALOG_ID to binding.catalogId,
-        Keys.SPEC_DIGEST to binding.specDigest,
-        Keys.EXECUTION_ID to binding.executionId,
-        Keys.TREE_DIGEST to proof.treeDigest,
-        Keys.CHECKPOINT_ID to proof.checkpointId,
-        Keys.STOPPED_OWNER_GENERATION to proof.stoppedGeneration,
+        Keys.CATALOG_ID to request.binding.catalogId,
+        Keys.SPEC_DIGEST to request.binding.specDigest,
+        Keys.EXECUTION_ID to request.binding.executionId,
+        Keys.TREE_DIGEST to request.proof.treeDigest,
+        Keys.CHECKPOINT_ID to request.proof.checkpointId,
+        Keys.STOPPED_OWNER_GENERATION to request.proof.stoppedGeneration,
         Keys.STOPPED_OWNER_EVIDENCE_REF to
-          if (proof.stoppedGeneration == 0L) {
+          if (request.proof.stoppedGeneration == 0L) {
             "ownership_absent:${sha256Hex(
               originalJson,
             )}"
           } else {
-            "stopped_owner:${proof.stoppedGeneration}"
+            "stopped_owner:${request.proof.stoppedGeneration}"
           },
         Keys.PRISTINE_HISTORY_DIGEST to sha256Hex(originalJson),
-        Keys.RETAINED_EVIDENCE_REFS to listOf("original_artifacts:${sha256Hex(originalJson)}", proof.checkpointId),
+        Keys.RETAINED_EVIDENCE_REFS to
+          listOf(
+            "original_artifacts:${sha256Hex(originalJson)}",
+            request.proof.checkpointId,
+          ),
         Keys.PROSPECTIVE_BUDGET to true,
         Keys.STRUCTURED_DISCOVERY_REQUIRED to true,
-        Keys.ORIGINAL_ARTIFACTS to original.artifacts,
+        Keys.ORIGINAL_ARTIFACTS to request.original.artifacts,
       ),
     )
   }
@@ -304,20 +372,43 @@ class AcceptanceCriterionRepairLegacyAdoption(
     repositoryRoot: Path,
     current: WorkflowStateSnapshot,
   ): Boolean {
+    val retained = retainedPlan(receipt, current) ?: return false
+    val proof = retainedProof(receipt) ?: return false
+    return sourceMatches(
+      worker,
+      repositoryRoot,
+      binding,
+    ) && historyIsPristine(retained.original, retained.recorded, retained.audit) &&
+      sourceWasBoundAtDiscovery(retained.original, worker.identity, binding, retained.audit) &&
+      checkpointMatches(retained.original, retained.recorded, retained.audit, proof, repositoryRoot) &&
+      catalogMatches(retained.original, binding)
+  }
+
+  private data class RetainedPlan(
+    val original: WorkflowStateSnapshot,
+    val recorded: ResolvedPhaseExecutionPlan,
+    val audit: ResolvedPhaseStrategyIdentity,
+  )
+
+  private fun retainedPlan(
+    receipt: Map<String, Any?>,
+    current: WorkflowStateSnapshot,
+  ): RetainedPlan? {
     val originalArtifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(receipt[RepairKeys.ORIGINAL_ARTIFACTS])
     val original = current.copy(artifacts = DurableWorkflowArtifacts.fromMap(originalArtifacts))
-    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts)
-      ?: return false
-    val descriptorBytes = JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8)
-    val recorded = codec.decode(descriptorBytes)
-    val audit = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return false
-    val generation = (receipt[RepairKeys.STOPPED_OWNER_GENERATION] as? Number)?.toLong() ?: return false
-    val tree = receipt[RepairKeys.TREE_DIGEST] as? String ?: return false
-    val checkpoint = receipt[RepairKeys.CHECKPOINT_ID] as? String ?: return false
-    val proof = AcceptanceCriterionRepairLegacyProof(tree, checkpoint, generation)
-    return sourceMatches(worker, repositoryRoot, binding) && historyIsPristine(original, recorded, audit) &&
-      sourceWasBoundAtDiscovery(original, worker, binding, audit) &&
-      checkpointMatches(original, recorded, audit, proof, repositoryRoot) && catalogMatches(original, binding)
+    val descriptor =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts)
+        ?: return null
+    val recorded = codec.decode(JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8))
+    val audit = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
+    return RetainedPlan(original, recorded, audit)
+  }
+
+  private fun retainedProof(receipt: Map<String, Any?>): AcceptanceCriterionRepairLegacyProof? {
+    val generation = (receipt[RepairKeys.STOPPED_OWNER_GENERATION] as? Number)?.toLong() ?: return null
+    val tree = receipt[RepairKeys.TREE_DIGEST] as? String ?: return null
+    val checkpoint = receipt[RepairKeys.CHECKPOINT_ID] as? String ?: return null
+    return AcceptanceCriterionRepairLegacyProof(tree, checkpoint, generation)
   }
 
   internal fun historicalEvidenceMatches(
@@ -328,11 +419,12 @@ class AcceptanceCriterionRepairLegacyAdoption(
     repositoryRoot: Path,
   ): Boolean {
     return try {
-      val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts)
-        ?: return false
+      val descriptor =
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(original.artifacts)
+          ?: return false
       val recorded = codec.decode(JsonCodec.valueToJsonString(descriptor).toByteArray(Charsets.UTF_8))
       val audit = recorded.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return false
-      sourceWasBoundAtDiscovery(original, worker, binding, audit) &&
+      sourceWasBoundAtDiscovery(original, worker.identity, binding, audit) &&
         checkpointMatches(original, recorded, audit, proof, repositoryRoot)
     } catch (_: SkillBillRuntimeException) {
       false
@@ -362,6 +454,24 @@ class AcceptanceCriterionRepairLegacyAdoption(
   }
 
   private data class LegacyTuple(val composition: AcceptanceCriterionRepairAdoptionComposition, val revision: Int)
+
+  internal data class LegacyAdoptionRequest(
+    val original: WorkflowStateSnapshot,
+    val identity: FeatureTaskExecutionIdentity,
+    val inputs: EffectiveGatePolicyInputs,
+    val binding: AcceptanceCriterionRepairBinding,
+    val proof: AcceptanceCriterionRepairLegacyProof,
+    val repositoryRoot: Path,
+  )
+
+  private data class LegacyReceiptRequest(
+    val original: WorkflowStateSnapshot,
+    val recorded: ResolvedPhaseExecutionPlan,
+    val composition: AcceptanceCriterionRepairAdoptionComposition,
+    val binding: AcceptanceCriterionRepairBinding,
+    val proof: AcceptanceCriterionRepairLegacyProof,
+    val phaseOutputVersion: String,
+  )
 
   private companion object {
     val SUPPORTED_TUPLES =

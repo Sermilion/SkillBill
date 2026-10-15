@@ -49,9 +49,9 @@ the newest successful complete snapshot set.
 
 The installer installs the desktop app automatically. Local checkouts build it
 from source. Standalone installers download the matching host archive from the
-selected runtime release and verify its checksum. `--no-desktop-app` skips this
-step. A release without a desktop archive completes the runtime install and
-reports the missing desktop package.
+selected runtime release and verify its checksum. Desktop installation is
+required. A missing archive or failed desktop install makes the installer exit
+with an error, without reporting installation complete.
 
 Builds run on host-matched runners because jlink and jpackage cannot
 cross-compile: macOS arm64 on the **self-hosted Apple Silicon Mac mini**

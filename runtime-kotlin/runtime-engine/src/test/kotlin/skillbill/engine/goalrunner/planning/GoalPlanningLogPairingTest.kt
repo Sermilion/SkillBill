@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
 import skillbill.engine.goalrunner.status.completed
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -149,6 +150,9 @@ private class StubOutcomeStore(private val events: List<GoalProgressEvent>) :
 }
 
 private object UnreadableDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   override fun resolveDbPath(): Path = Path.of("/fake/metrics.db")
 
   override fun databaseExists(): Boolean = false

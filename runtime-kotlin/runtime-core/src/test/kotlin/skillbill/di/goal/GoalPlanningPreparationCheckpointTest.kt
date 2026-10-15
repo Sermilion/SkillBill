@@ -1,6 +1,7 @@
 package skillbill.di.goal
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.di.workflow.testWireArtifactValidator
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.error.core.SkillBillRuntimeException
@@ -27,7 +28,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 class GoalPlanningPreparationCheckpointTest {
   @Test
@@ -240,7 +240,7 @@ class GoalPlanningPreparationCheckpointTest {
     val checkpoint =
       GoalPlanningPreparationCheckpoint(
         database = database,
-        envelopeValidator = FeatureTaskRuntimeWireArtifactSchemaValidator(),
+        envelopeValidator = testWireArtifactValidator(),
       )
     return CheckpointHarness(checkpoint, database)
   }

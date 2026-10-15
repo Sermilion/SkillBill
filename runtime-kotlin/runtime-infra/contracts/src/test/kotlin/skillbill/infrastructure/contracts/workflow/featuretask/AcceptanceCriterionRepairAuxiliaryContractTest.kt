@@ -2,6 +2,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_AUDIT_RESULT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_ADOPTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_HANDOFF_CONTRACT_VERSION
@@ -9,7 +10,11 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionAuditResultSchemaPaths
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairAdoptionSchemaPaths
 import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairHandoffSchemaPaths
+import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,6 +22,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys as PhaseKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as PlanKeys
 
 class AcceptanceCriterionRepairAuxiliaryContractTest {
   @Test
@@ -91,19 +98,64 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
 
   @Test
   fun `adoption refuses altered retained history and unsupported historical revisions`() {
-    val descriptor = mapOf(Keys.CONTRACT_VERSION to "0.1")
-    val original = mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor))
+    val descriptor =
+      FeatureTaskRuntimeWorkflowArtifactMap.from(
+        JsonCodec.parseValue(
+          assertNotNull(javaClass.getResourceAsStream("/featuretask/serial-adoption/standalone-r3.json"))
+            .use { it.readBytes().toString(Charsets.UTF_8) },
+        ),
+      )
+    val phaseOutput = JsonCodec.valueToJsonString(mapOf(Keys.CONTRACT_VERSION to "0.7"))
+    val original =
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+          mapOf(
+            "audit" to
+              mapOf(
+                SharedPayloadKeys.PHASE_ID to "audit",
+                SharedPayloadKeys.STATUS to "completed",
+                PhaseKeys.ATTEMPT_COUNT to 1,
+                PhaseKeys.FINISHED_AT to "2026-10-15T00:00:00Z",
+                SharedPayloadKeys.OUTPUT_ARTIFACT to phaseOutput,
+              ),
+          ),
+        ),
+      )
+    val canonicalDescriptor = JsonCodec.valueToJsonString(descriptor)
+    val policies = assertNotNull(descriptor[PlanKeys.STEP_POLICIES] as? List<*>)
+    val policyIdentities =
+      policies.associate {
+        val policy = FeatureTaskRuntimeWorkflowArtifactMap.from(it)
+        policy[PlanKeys.STEP] as String to (policy[PlanKeys.IDENTITY] as String)
+      }
     val valid =
       identity() +
         mapOf(
           Keys.COMPOSITION to "standalone", Keys.SEMANTIC_REVISION to 3, Keys.DESCRIPTOR_DIGEST to digest(descriptor),
-          Keys.POLICY_DIGEST to "a".repeat(64), Keys.SKELETON_DIGEST to "a".repeat(64),
-          Keys.DECLARED_CONTRACT_VERSIONS to mapOf(Keys.CONTRACT_VERSION to "0.1"), Keys.STOPPED_OWNER_GENERATION to 0,
+          Keys.POLICY_DIGEST to
+            digest(policyIdentities),
+          Keys.SKELETON_DIGEST to digestText(canonicalDescriptor),
+          Keys.DECLARED_CONTRACT_VERSIONS to
+            mapOf(
+              Keys.CONTRACT_VERSION to descriptor[PlanKeys.CONTRACT_VERSION],
+              Keys.PHASE_OUTPUT_CONTRACT_VERSION to "0.7",
+            ),
+          Keys.STOPPED_OWNER_GENERATION to 0,
           Keys.STOPPED_OWNER_EVIDENCE_REF to "ownership_absent:proof", Keys.PRISTINE_HISTORY_DIGEST to digest(original),
           Keys.RETAINED_EVIDENCE_REFS to listOf("original:proof"), Keys.PROSPECTIVE_BUDGET to true,
           Keys.STRUCTURED_DISCOVERY_REQUIRED to true, Keys.ORIGINAL_ARTIFACTS to original,
         )
-    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(valid, "valid")
+    AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(
+      valid,
+      "valid",
+      executionPlanValidator(),
+      phaseOutputMigration(),
+    )
+    assertRejectedAdoption(valid)
+  }
+
+  private fun assertRejectedAdoption(valid: Map<String, Any?>) {
     listOf(
       valid + (Keys.CONTRACT_VERSION to "9.0"),
       valid + (Keys.SEMANTIC_REVISION to 4),
@@ -111,7 +163,12 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
     ).forEach { bad ->
       assertFailsWith<SkillBillRuntimeException> {
         AcceptanceCriterionRepairAuxiliarySchemaValidator
-          .validateRepairAdoption(bad, "bad")
+          .validateRepairAdoption(
+            bad,
+            "bad",
+            executionPlanValidator(),
+            phaseOutputMigration(),
+          )
       }
     }
   }
@@ -159,4 +216,22 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
   private fun digest(value: Any): String =
     MessageDigest.getInstance("SHA-256")
       .digest(JsonCodec.valueToJsonString(value).toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+  private fun digestText(value: String): String =
+    MessageDigest.getInstance("SHA-256")
+      .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+  private fun executionPlanValidator(): FeatureTaskRuntimeExecutionPlanValidator =
+    object : FeatureTaskRuntimeExecutionPlanValidator {
+      override fun canonicalize(
+        encoded: ByteArray,
+        sourceLabel: String,
+      ): ByteArray = encoded
+    }
+
+  private fun phaseOutputMigration(): FeatureTaskRuntimePhaseOutputMigration =
+    object : FeatureTaskRuntimePhaseOutputMigration {
+      override fun migrate(payload: String): FeatureTaskRuntimePhaseOutputMigrationResult =
+        FeatureTaskRuntimePhaseOutputMigrationResult.Current(payload)
+    }
 }
