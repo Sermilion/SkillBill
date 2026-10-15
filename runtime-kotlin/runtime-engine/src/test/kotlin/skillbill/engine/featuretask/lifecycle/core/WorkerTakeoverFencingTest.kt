@@ -126,7 +126,7 @@ class WorkerTakeoverFencingTest {
             original.workflowId,
             execution.inputs,
             execution.identity(original.workflowId),
-          ) { launches++ }
+          ) { _, _ -> launches++ }
         }
 
         assertEquals(0, launches, race)
@@ -162,7 +162,14 @@ class WorkerTakeoverFencingTest {
           }
         })
       val coordinator = FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
-      coordinator.runOwned(original.workflowId, execution.inputs, execution.identity(original.workflowId)) { admitted ->
+      coordinator.runOwned(
+        original.workflowId,
+        execution.inputs,
+        execution.identity(
+          original
+            .workflowId,
+        ),
+      ) { admitted, _ ->
         assertEquals(original.workflowId, admitted.identity.workflowId)
         assertContentEquals(execution.encoded, execution.codec.encode(admitted.plan))
         database.read { unit ->
@@ -213,7 +220,7 @@ class WorkerTakeoverFencingTest {
               original.workflowId,
               execution.inputs,
               execution.identity(original.workflowId),
-            ) { launches++ }
+            ) { _, _ -> launches++ }
           }
 
           assertEquals(0, launches)
@@ -243,7 +250,7 @@ class WorkerTakeoverFencingTest {
         identity.copy(governedSpecPath = ".feature-specs/SKILL-384/other.md"),
       ).forEach { expected ->
         assertFailsWith<SkillBillRuntimeException> {
-          coordinator.runOwned(original.workflowId, execution.inputs, expected) { launches++ }
+          coordinator.runOwned(original.workflowId, execution.inputs, expected) { _, _ -> launches++ }
         }
       }
       assertEquals(0, launches)
@@ -281,7 +288,7 @@ class WorkerTakeoverFencingTest {
             original.workflowId,
             execution.inputs,
             execution.identity(original.workflowId),
-          ) { launches++ }
+          ) { _, _ -> launches++ }
         }
 
         assertEquals(0, launches)

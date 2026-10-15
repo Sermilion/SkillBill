@@ -3,8 +3,14 @@ package dev.skillbill.tray.application
 import dev.skillbill.tray.domain.*
 import dev.skillbill.tray.domain.Retention
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -464,11 +470,10 @@ class DashboardControllerTest {
   }
 
   @Test
-  fun `refresh and reselection wait for an in flight detail without overlapping requests`() = runBlocking {
+  @OptIn(ExperimentalCoroutinesApi::class)
+  fun `refresh and reselection wait for an in flight detail without overlapping requests`() = runTest {
     val selected = item("workflow")
-    val firstStarted = CompletableDeferred<Unit>()
     val releaseFirst = CompletableDeferred<Unit>()
-    val retried = CompletableDeferred<Unit>()
     val calls = AtomicInteger()
     val active = AtomicInteger()
     val maximum = AtomicInteger()
@@ -479,33 +484,38 @@ class DashboardControllerTest {
         maximum.updateAndGet { previous -> maxOf(previous, concurrent) }
         try {
           if (calls.incrementAndGet() == 1) {
-            firstStarted.complete(Unit)
-            releaseFirst.await()
-          } else retried.complete(Unit)
+            withContext(NonCancellable) { releaseFirst.await() }
+          }
           Outcome.Value(detail(selected))
         } finally {
           active.decrementAndGet()
         }
       },
     )
-    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative()) {}
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(),
+      dispatcher = StandardTestDispatcher(testScheduler)) {}
     try {
-      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
+      runCurrent()
+      assertFalse(model.state.value.boardLoading)
+      assertEquals(1, calls.get())
       model.select(selected.identity)
-      kotlinx.coroutines.withTimeout(2000) { firstStarted.await() }
       model.select(selected.identity)
       model.refresh()
+      runCurrent()
+      assertEquals(1, calls.get())
+      assertTrue(model.state.value.detailLoading)
+      assertEquals(null, model.state.value.detail)
       releaseFirst.complete(Unit)
-      kotlinx.coroutines.withTimeout(2000) {
-        retried.await()
-        while (model.state.value.detail == null) delay(10)
-      }
+      runCurrent()
+      assertEquals(2, calls.get())
       assertEquals(1, maximum.get())
       assertEquals(selected.identity, model.state.value.detail?.item?.identity)
       assertEquals(null, model.state.value.detailProblem)
+      assertFalse(model.state.value.detailLoading)
     } finally {
       releaseFirst.complete(Unit)
       model.close()
+      runCurrent()
     }
   }
 

@@ -37,6 +37,26 @@ class CommentAndInterfaceKdocArchitectureTest {
   }
 
   @Test
+  fun `apostrophes in escaped identifiers preserve literal and comment detection`() {
+    val fixture =
+      """
+      class Holder {
+        fun `reader's detail`() {
+          val url = "https://ci.example/run"
+          val message = "job's failure"
+        }
+      }
+      """.trimIndent()
+
+    assertEquals(emptyList(), ArchitectureScanSupport.collectCommentPolicyViolations(fixture))
+    assertEquals(
+      listOf("line-comment"),
+      ArchitectureScanSupport.collectCommentPolicyViolations(fixture + "\n" + '/' + '/' + " forbidden")
+        .map { it.kind },
+    )
+  }
+
+  @Test
   fun `line comment outside literals fails the violation collector`() {
     val fixture =
       """

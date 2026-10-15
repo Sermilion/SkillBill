@@ -397,17 +397,17 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertFalse(auditPrompt.contains("VERIFYING phase"), "audit carries no envelope verifying-signal addendum")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Report the remaining acceptance criteria in prose",
+      "Report source gaps and conclusions in ordinary prose",
       "the audit prose signal",
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "the whole value is the single line",
-      "the remaining-criteria completion contract",
+      "Use the existing satisfied verdict",
+      "the source acceptance verdict",
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Only a report that no criteria remain allows downstream review",
+      "Final source acceptance is required before downstream review",
       "the audit-specific advance rule",
     )
     assertFalse(auditPrompt.contains("exactly `[]`"), "audit must not demand a literal empty list")
@@ -425,9 +425,9 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(repairPrompt, "even when a persisted audit finding or the plan explicitly requests tests")
     assertContains(repairPrompt, "record test-only findings as excluded from audit")
     assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
-    assertContains(prompt, "inspect only the unresolved criteria in the last accepted audit report")
+    assertContains(prompt, "inspect only the authored criterion selected by the runtime")
     assertContains(prompt, "Do not spawn subagents or invoke repair skills")
-    assertContains(prompt, "validate owns tests and failures")
+    assertContains(prompt, "state those later test or build obligations separately when relevant")
     assertTrue(!prompt.contains("TEST EXCLUSION"))
     assertTrue(!prompt.contains("free-form note prose"))
   }

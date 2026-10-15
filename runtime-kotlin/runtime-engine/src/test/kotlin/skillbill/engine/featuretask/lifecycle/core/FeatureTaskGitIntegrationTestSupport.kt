@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.contracts.JsonCodec
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
@@ -105,6 +106,8 @@ internal class FeatureTaskGitIntegrationWorkflowRepository : WorkflowStateReposi
 internal class FeatureTaskGitIntegrationDatabase(
   private val repository: FeatureTaskGitIntegrationWorkflowRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/metrics.db")
 
   override fun resolveDbPath(): Path = dbPath

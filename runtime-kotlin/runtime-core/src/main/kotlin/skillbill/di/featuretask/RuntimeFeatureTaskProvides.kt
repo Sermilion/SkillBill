@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runloop.finalization.CommitPushManifestCompl
 import skillbill.engine.featuretask.runloop.finalization.DecompositionManifestCommitCompletion
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.sqlite.SqliteFeatureTaskPhaseSettlementRepository
+import skillbill.infrastructure.workflow.featuretask.FileSystemAcceptanceCriterionRepairProjection
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskImplementationChecklistStore
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeSpecStatusWriter
@@ -15,6 +16,7 @@ import skillbill.infrastructure.workflow.filesystem.FileSystemCheckedOutBranchSo
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.system.CheckedOutBranchSource
+import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
@@ -22,6 +24,11 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.WorkOwnerExitObserver
 
 internal interface RuntimeFeatureTaskProvides {
+  @Provides
+  fun acceptanceCriterionRepairProjection(
+    adapter: FileSystemAcceptanceCriterionRepairProjection,
+  ): AcceptanceCriterionRepairProjection = adapter
+
   @Provides
   fun featureTaskPhaseSettlementRepository(database: DatabaseSessionFactory): FeatureTaskPhaseSettlementRepository =
     SqliteFeatureTaskPhaseSettlementRepository(database)

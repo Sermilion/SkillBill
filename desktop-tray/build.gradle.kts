@@ -49,6 +49,7 @@ dependencies {
   testImplementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.21")
   testImplementation(kotlin("test"))
   testImplementation(libs.junit.jupiter)
+  testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {

@@ -88,6 +88,10 @@ internal object KotlinCommentPolicyScanSupport {
     }
 
     private fun skipLiteralIfPresent(): Boolean {
+      if (source[index] == '`') {
+        index = source.indexOf('`', index + 1).let { closing -> if (closing < 0) source.length else closing + 1 }
+        return true
+      }
       if (source.startsWith("\"\"\"", index)) {
         index = skipTripleQuotedString(source, index + 3)
         return true

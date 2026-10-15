@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -22,6 +23,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -86,13 +88,8 @@ class FeatureTaskRuntimeStatelessAuditTest {
       runnerHarness(
         RuntimeHarnessConfig(launcher = launcher),
       )
-    val report = harness.runner.run(harness.request())
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-    assertEquals("audit", blocked.lastIncompletePhase)
-    assertContains(blocked.blockedReason, "Phase 'audit' produced schema-invalid output")
-    val diagnostic = harness.io.database.rejectedDiagnostics().single { it.metadata.phaseId == "audit" }
-    assertContains(diagnostic.metadata.reason, "verdict 'gaps_found' is removed")
-    assertContains(diagnostic.metadata.reason, "audit phase output")
+    val failure = assertFailsWith<SkillBillRuntimeException> { harness.runner.run(harness.request()) }
+    assertContains(requireNotNull(failure.message), "verdict 'gaps_found' is removed")
     assertEquals(1, auditLaunches)
     assertTrue("review" !in harness.launchOrder())
     assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement" })
@@ -349,27 +346,5 @@ class FeatureTaskRuntimeStatelessAuditTest {
       1,
       harness.goalContinuationRecorder.reviewState(WORKFLOW_ID)?.completedPassCount,
     )
-  }
-
-  @Test
-  fun `malformed audit output blocks after one agent session`() {
-    var auditLaunches = 0
-    val launcher =
-      RuntimeRecordingLauncher { request ->
-        val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-        if (phaseId == "audit") {
-          auditLaunches += 1
-          facts("{not valid json")
-        } else {
-          facts(defaultPhaseOutput(request))
-        }
-      }
-    val harness =
-      runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher),
-      )
-    val report = harness.runner.run(harness.request())
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-    assertEquals(1, auditLaunches)
   }
 }

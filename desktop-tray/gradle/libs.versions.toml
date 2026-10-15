@@ -24,6 +24,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 compose-native-tray = { module = "dev.nucleusframework:composenativetray", version.ref = "tray" }
 nucleus-notification-common = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "native-os" }
 nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "native-os" }

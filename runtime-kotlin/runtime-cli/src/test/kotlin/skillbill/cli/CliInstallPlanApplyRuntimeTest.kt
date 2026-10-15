@@ -339,7 +339,7 @@ class CliInstallPlanApplyRuntimeTest {
 
     assertEquals(0, result.exitCode, result.stdout)
     val database = sqliteSessionFactoryForTests(fixture.home, databasePath.toString(), environment = emptyMap())
-    assertNotNull(database.readIfPresent { it.workList.observation() })
+    assertNotNull(database.readIfPresent { it.workList.observation() }, result.stdout + result.stderr)
     val selection = readInstallSelection(fixture.home)
     assertEquals(supportedAgents, (selection["selected_agents"] as List<*>).toSet())
     val platformSelection = selection.mapValue("platform_pack_selection")

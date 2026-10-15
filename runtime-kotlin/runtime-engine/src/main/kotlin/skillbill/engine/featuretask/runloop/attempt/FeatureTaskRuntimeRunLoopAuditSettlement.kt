@@ -1,10 +1,14 @@
 package skillbill.engine.featuretask.runloop.attempt
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.PauseAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
+import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
+import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
+import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.NO_CHANGE_PAUSE_REASON
@@ -12,8 +16,10 @@ import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationConte
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
@@ -29,6 +35,46 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
       return null
     }
     return progressRejection?.let { blockAuditNoProgress(context, capture, attested, it) }
+  }
+
+  fun settleNoChangeRound(
+    settlement: PhaseOutputSettlementContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    pause: FeatureTaskRuntimeNoChangePause,
+  ): AttemptResult? {
+    val scope =
+      (settlement.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+        ?: return settleNoChangePause(settlement, capture, pause)
+    if (scope.snapshot?.stage != AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED) return null
+    val phase =
+      FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
+        settlement.request,
+        settlement.settlementCoupling().progress,
+        settlement.goalContinuationRecorder,
+        PhaseStateRequestArgs(
+          PhaseStateWriteArgs(capture.run, capture.iteration, "completed", true, attested.canonicalJson),
+          PhaseStateRequestAttachments(normalizedOutput = attested, fileManifest = capture.fileManifest),
+        ),
+      )
+    val output = FeatureTaskRuntimePhaseOutput(capture.run.phaseId, capture.iteration, attested.canonicalJson, attested)
+    if (!settlement.coupledRunTransitions.persistAuthoritativePhaseCompletion(settlement.recorder, phase, output)) {
+      return AttemptResult.settled(
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+          settlement.settlementCoupling().progress,
+          settlement.coupledRunTransitions,
+          settlement.recorder,
+          PhaseBlockRequest(
+            capture.run,
+            capture.iteration,
+            "The final source audit could not be committed.",
+            settlement.observability,
+            failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+          ),
+        ),
+      )
+    }
+    return settleNoChangePause(settlement, capture, pause)
   }
 
   fun settleNoChangePause(

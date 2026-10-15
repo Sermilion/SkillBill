@@ -160,6 +160,7 @@ class InstallerShellReconcileTest {
     val repoRoot = Files.createTempDirectory("skillbill-reconcile-shell-repo")
     val home = reuse?.home ?: Files.createTempDirectory("skillbill-reconcile-shell-home")
     val binDir = reuse?.binDir ?: Files.createTempDirectory("skillbill-reconcile-shell-bin")
+    val releaseDir = Files.createTempDirectory("skillbill-reconcile-shell-release")
     val logPath = Files.createTempFile("skillbill-reconcile-shell-runtime", ".log")
     Files.writeString(repoRoot.resolve("install.sh"), Files.readString(runtimeRoot.parent.resolve("install.sh")))
     repoRoot.resolve("install.sh").toFile().setExecutable(true)
@@ -167,6 +168,7 @@ class InstallerShellReconcileTest {
     InstallerShellFixtures.seedAgentAddon(repoRoot)
     InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
     InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+    stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
     scenario.mutateUpstream?.invoke(repoRoot)
 
     val process =
@@ -180,6 +182,7 @@ class InstallerShellReconcileTest {
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+          environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
           environment().remove("SKILL_BILL_GOAL_CONTINUATION")
           environment().remove("DISPLAY")
           environment().remove("WAYLAND_DISPLAY")

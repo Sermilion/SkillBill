@@ -8,18 +8,7 @@ internal const val AUDIT_GAP_MESSAGE = "AC-002 acceptance criterion is not yet i
 
 internal const val AUDIT_SATISFIED_VALUE = "All acceptance criteria are met; no production criteria remain."
 
-internal fun auditSatisfiedOutput(): String =
-  """
-  {
-    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
-    "phase_id": "audit",
-    "status": "completed",
-    "summary": "Every acceptance criterion is met.",
-    "produced_outputs": {
-      "value": "$AUDIT_SATISFIED_VALUE"
-    }
-  }
-  """.trimIndent()
+internal fun auditSatisfiedOutput(): String = settledAuditSatisfiedRecord()
 
 internal fun settledAuditSatisfiedRecord(): String =
   """
@@ -89,7 +78,7 @@ internal fun satisfiedAuditLauncher(): RuntimeRecordingLauncher =
   }
 
 internal fun auditRepairPlanOutput(prompt: String): String {
-  val audit = prompt.substringAfter("### from: audit\n").substringBefore("### from:").substringBefore("\n## ")
+  val audit = prompt.substringAfter("### from: audit\n", prompt).substringBefore("### from:")
   val openLines = audit.lines().filterNot { it.contains("no remaining production gap", ignoreCase = true) }
   val criteria = Regex("(?:S\\d+-)?AC-?\\d+").findAll(openLines.joinToString("\n")).map { it.value }.distinct().toList()
   return auditRepairPlanFor(criteria)

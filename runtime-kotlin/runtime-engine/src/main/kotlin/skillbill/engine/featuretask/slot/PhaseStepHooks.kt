@@ -32,6 +32,9 @@ import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
 
+  /** Whether the accepted step owns one serial acceptance-repair mutation attempt. */
+  val serialAcceptanceRepairStep: Boolean get() = false
+
   /** The reason the strategy cannot proceed with an agent launch after briefing persistence, or null when it can. */
   fun beforeAgentLaunch(
     run: PhaseRun,

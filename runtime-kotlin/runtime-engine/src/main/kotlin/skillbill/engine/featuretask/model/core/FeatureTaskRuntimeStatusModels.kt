@@ -39,6 +39,7 @@ data class FeatureTaskRuntimeStatusProjection(
   val currentPhaseExecution: IdeStatusCurrentPhaseExecution? = null,
   val degradedDiagnostic: FeatureTaskRuntimeDegradedDiagnosticStatus? = null,
   val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
+  val criterionExplanation: String? = null,
 )
 
 data class FeatureTaskRuntimeOperatorDecisionPause(

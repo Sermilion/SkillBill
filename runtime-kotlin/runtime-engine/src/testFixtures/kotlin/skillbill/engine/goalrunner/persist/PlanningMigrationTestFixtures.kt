@@ -12,7 +12,8 @@ import java.time.Clock
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator as WireArtifactValidator
 
 fun planningMigrationForTest(
-  wireValidator: WireArtifactValidator = FeatureTaskRuntimeWireArtifactValidator(),
+  wireValidator: WireArtifactValidator =
+    FeatureTaskRuntimeWireArtifactValidator(),
   outputs: FeatureTaskRuntimePhaseOutputMigration = ContractFeatureTaskRuntimePhaseOutputMigration(),
 ): GoalPlanningMigration =
   GoalPlanningMigration(

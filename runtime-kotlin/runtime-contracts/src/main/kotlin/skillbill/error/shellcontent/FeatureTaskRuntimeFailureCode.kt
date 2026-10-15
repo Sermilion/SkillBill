@@ -173,6 +173,17 @@ fun invalidFeatureTaskRuntimeReadinessEvidenceSchema(
     cause,
   )
 
+fun invalidAcceptanceCriterionRepairAccounting(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_PERSISTENCE_SCHEMA,
+    "Acceptance criterion repair accounting '${sourceLabel.ifBlank { "<unknown>" }}' is invalid: $reason",
+    cause,
+  )
+
 fun featureTaskRuntimeOperatorDecisionRejected(
   workflowId: String,
   decision: String,

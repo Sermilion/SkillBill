@@ -20,9 +20,10 @@ class DashboardController(
   private val settingsStore: SettingsStore,
   private val native: NativeServices,
   private val clock: Clock = Clock.systemUTC(),
+  dispatcher: CoroutineDispatcher = Dispatchers.IO,
   private val onSelect: (WorkIdentity) -> Unit,
 ) : DashboardModel {
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val scope = CoroutineScope(SupervisorJob() + dispatcher)
   private val mutable = MutableStateFlow(DashboardState(AppSettings()))
   override val state: StateFlow<DashboardState> = mutable.asStateFlow()
   private val subscriptions = ConcurrentHashMap<WorkSection, Job>()
@@ -38,6 +39,7 @@ class DashboardController(
   private val transitions = TransitionTracker()
   private val refreshRequests = Channel<Unit>(Channel.CONFLATED)
   private val settingsMutex = Mutex()
+  private val selectionMutex = Mutex()
   private val detailMutex = Mutex()
   private var selectionJob: Job? = null
   private var detailAppendJob: Job? = null
@@ -475,61 +477,60 @@ class DashboardController(
   }
 
   private fun observeSelectedDetail(identity: WorkIdentity) {
-    val previousSelection = selectionJob
-    previousSelection?.cancel()
+    selectionJob?.cancel()
     val epoch = storeEpoch
     selectionJob = scope.launch {
-      previousSelection?.let { previous -> withContext(NonCancellable) { previous.join() } }
-      currentCoroutineContext().ensureActive()
-      details.observeDetail(identity).collect { observed ->
-        detailMutex.withLock {
-          if (epoch != storeEpoch || mutable.value.selected != identity) return@withLock
-          var result = observed
-          val windows = synchronized(detailWindows) { detailWindows.toMap() }
-          val refreshed = mutableMapOf<DetailList, List<Detail>>()
-          if (observed is Outcome.Value) {
-            var combined = observed.value
-            for (list in DetailList.entries) {
-              val retained = windows[list].orEmpty()
-              val start = retained.firstOrNull()?.pageOffset ?: 0
-              var page = if (start == 0) observed else details.detail(identity, list = list, startOffset = start)
-              val replacement = mutableListOf<Detail>()
-              val cursors = mutableSetOf<String>()
-              while (replacement.size < retained.size.coerceAtLeast(1)) {
-                when (val value = page) {
-                  is Outcome.Failure -> { result = value; break }
-                  is Outcome.Value -> {
-                    if (value.value.item.databaseStoreId != observed.value.item.databaseStoreId ||
-                      value.value.item.databaseRevision != observed.value.item.databaseRevision) {
-                      result = Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "Detail changed during refresh. Retry."))
-                      break
+      selectionMutex.withLock {
+        details.observeDetail(identity).collect { observed ->
+          detailMutex.withLock {
+            if (epoch != storeEpoch || mutable.value.selected != identity) return@withLock
+            var result = observed
+            val windows = synchronized(detailWindows) { detailWindows.toMap() }
+            val refreshed = mutableMapOf<DetailList, List<Detail>>()
+            if (observed is Outcome.Value) {
+              var combined = observed.value
+              for (list in DetailList.entries) {
+                val retained = windows[list].orEmpty()
+                val start = retained.firstOrNull()?.pageOffset ?: 0
+                var page = if (start == 0) observed else details.detail(identity, list = list, startOffset = start)
+                val replacement = mutableListOf<Detail>()
+                val cursors = mutableSetOf<String>()
+                while (replacement.size < retained.size.coerceAtLeast(1)) {
+                  when (val value = page) {
+                    is Outcome.Failure -> { result = value; break }
+                    is Outcome.Value -> {
+                      if (value.value.item.databaseStoreId != observed.value.item.databaseStoreId ||
+                        value.value.item.databaseRevision != observed.value.item.databaseRevision) {
+                        result = Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "Detail changed during refresh. Retry."))
+                        break
+                      }
+                      replacement += value.value
+                      val cursor = value.value.cursors[list]
+                      if (replacement.size < retained.size && cursor != null && cursors.add(cursor)) {
+                        page = details.detail(identity, cursor, list)
+                      } else break
                     }
-                    replacement += value.value
-                    val cursor = value.value.cursors[list]
-                    if (replacement.size < retained.size && cursor != null && cursors.add(cursor)) {
-                      page = details.detail(identity, cursor, list)
-                    } else break
                   }
                 }
+                if (result is Outcome.Failure) break
+                refreshed[list] = replacement
+                combined = replaceDetailList(combined, list, replacement)
               }
-              if (result is Outcome.Failure) break
-              refreshed[list] = replacement
-              combined = replaceDetailList(combined, list, replacement)
+              if (result !is Outcome.Failure) result = Outcome.Value(combined)
             }
-            if (result !is Outcome.Failure) result = Outcome.Value(combined)
-          }
-          if (epoch != storeEpoch || mutable.value.selected != identity) return@withLock
-          when (val settled = result) {
-            is Outcome.Failure -> mutable.update { state -> state.copy(detailProblem = settled.problem,
-              detailLoading = false, detailExtrasStale = state.detail != null,
-              detailLoadStates = state.detailLoadStates.mapValues { (_, loadState) ->
-                if (loadState == ListLoadState.INITIAL_LOADING) ListLoadState.FAILED else loadState
-              }) }
-            is Outcome.Value -> {
-              synchronized(detailWindows) { detailWindows.clear(); detailWindows.putAll(refreshed) }
-              mutable.update { state -> state.copy(detail = settled.value, detailProblem = null, detailLoading = false,
-                detailListLoading = emptySet(), detailExtrasStale = false,
-                detailLoadStates = DetailList.entries.associateWith { list -> stateFor(settled.value, list) }) }
+            if (epoch != storeEpoch || mutable.value.selected != identity) return@withLock
+            when (val settled = result) {
+              is Outcome.Failure -> mutable.update { state -> state.copy(detailProblem = settled.problem,
+                detailLoading = false, detailExtrasStale = state.detail != null,
+                detailLoadStates = state.detailLoadStates.mapValues { (_, loadState) ->
+                  if (loadState == ListLoadState.INITIAL_LOADING) ListLoadState.FAILED else loadState
+                }) }
+              is Outcome.Value -> {
+                synchronized(detailWindows) { detailWindows.clear(); detailWindows.putAll(refreshed) }
+                mutable.update { state -> state.copy(detail = settled.value, detailProblem = null, detailLoading = false,
+                  detailListLoading = emptySet(), detailExtrasStale = false,
+                  detailLoadStates = DetailList.entries.associateWith { list -> stateFor(settled.value, list) }) }
+              }
             }
           }
         }

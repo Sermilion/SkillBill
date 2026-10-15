@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.record
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -44,13 +45,63 @@ import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlo
 import java.time.Clock
 import java.time.Instant
 
+@Inject
 class FeatureTaskRuntimePhaseStateRecorder(
-  val database: DatabaseSessionFactory,
-  val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
-  val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
-  val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
-  val clock: Clock,
+  private val database: DatabaseSessionFactory,
+  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
+  private val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
+  private val clock: Clock,
 ) {
+  internal fun serialPhasePatch(
+    artifacts: Map<String, Any?>,
+    request: FeatureTaskRuntimePhaseStateRequest,
+    implementationStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
+  ): Map<String, Any?> {
+    val records = decodePhaseRecords(artifacts)
+    val now = clock.instant()
+    val updated =
+      LinkedHashMap(records).apply {
+        put(request.phaseId, featureTaskRuntimePhaseRecordFor(request, records[request.phaseId], now))
+      }
+    val ledger = decodePhaseLedger(artifacts)
+    val entry =
+      FeatureTaskRuntimePhaseLedgerEntry(
+        action =
+          when (request.status.workflowStepStatus()) {
+            WorkflowStepStatus.BLOCKED -> FeatureTaskRuntimePhaseLedgerAction.BLOCKED
+            WorkflowStepStatus.COMPLETED -> COMPLETE
+            else -> FeatureTaskRuntimePhaseLedgerAction.START
+          },
+        sequenceNumber = (ledger.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+        timestamp = now.toString(),
+        phaseId = request.phaseId,
+        attemptCount = request.attemptCount,
+        resolvedAgentId = request.resolvedAgentId,
+        loopId = request.loopId,
+        edgeIteration = request.edgeIteration,
+      )
+    return mapOf(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+        updated.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+      ),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(
+        appendBoundedHistoryBySequence(
+          workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
+          workflowArtifactEntryMap(entry.asWorkflowArtifactEntry()),
+          FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
+        ),
+      ),
+    ) +
+      implementationAttemptPatch(
+        artifacts,
+        request,
+        implementationStatus ?: attemptStatusFor(
+          request,
+        ),
+      ) + findingVerificationCheckpointPatch(request)
+  }
+
   fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
     if (recordPhaseState(request)) {
       RequiredPhaseWrite.Acknowledged
@@ -72,7 +123,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       val existingRecords = decodePhaseRecords(artifacts)
       val now = clock.instant()
       val previous = existingRecords[request.phaseId]
-      val phaseRecord = phaseRecordFor(request, previous, now)
+      val phaseRecord = featureTaskRuntimePhaseRecordFor(request, previous, now)
       val updatedRecords = LinkedHashMap(existingRecords).apply { put(request.phaseId, phaseRecord) }
       val patch =
         mapOf(
@@ -178,6 +229,139 @@ class FeatureTaskRuntimePhaseStateRecorder(
         }
       retry.takeUnless { settledAfterRetry }
     }
+
+  private fun implementationAttemptsFrom(artifacts: Map<String, Any?>): List<FeatureTaskRuntimeImplementationAttempt> {
+    val raw =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(artifacts)
+        ?: return emptyList()
+    return decodeImplementationAttemptsFromArtifact(raw)
+  }
+
+  private fun implementationAttemptPatch(
+    artifacts: Map<String, Any?>,
+    request: FeatureTaskRuntimePhaseStateRequest,
+    attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus,
+  ): Map<String, Any?> {
+    if (!request.mutating) return emptyMap()
+    val produced =
+      request.normalizedOutput?.envelopeWireMap()
+        ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
+    val value = produced?.get(SharedPayloadKeys.VALUE)?.toString()?.trim().orEmpty()
+    if (produced == null || value.isBlank()) return emptyMap()
+    val prompt = produced[SharedPayloadKeys.PROMPT]?.toString()?.trim()?.takeIf(String::isNotBlank)
+    val existing = implementationAttemptsFrom(artifacts)
+    val appended =
+      featureTaskRuntimeAppendImplementationAttempt(
+        existing = existing,
+        entry =
+          FeatureTaskRuntimeImplementationAttempt(
+            sequenceNumber = (existing.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+            phaseId = request.phaseId,
+            attemptNumber = request.attemptCount,
+            agentId = request.resolvedAgentId,
+            status = attemptStatus,
+            recordedAt = clock.instant().toString(),
+            value = value,
+            loopId = request.loopId,
+            edgeIteration = request.edgeIteration,
+            failureDisposition = request.failureDisposition,
+            prompt = prompt,
+          ),
+      )
+    val wire = implementationAttemptRecordWorkflowArtifact(appended)
+    implementationAttemptValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
+    )
+    return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.entry(wire))
+  }
+
+  private fun findingVerificationCheckpointPatch(request: FeatureTaskRuntimePhaseStateRequest): Map<String, Any?> {
+    val output = request.normalizedOutput?.envelopeWireMap()
+    if (
+      request.finished &&
+      request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED &&
+      FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(output)
+    ) {
+      val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(output)
+      return buildMap {
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.putInto(this, null)
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION.putInto(this, null)
+        if (dispositions.isNotEmpty()) {
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS.putInto(
+            this,
+            dispositions.map { it.asWorkflowArtifactEntry() },
+          )
+        }
+      }
+    }
+    val checkpoint = request.findingVerificationCheckpoint?.takeIf { it.isNotEmpty() } ?: return emptyMap()
+    return mapOf(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.entry(
+        checkpoint.map { it.asWorkflowArtifactEntry() },
+      ),
+    )
+  }
+
+  private fun recordCompletedPhaseWrite(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
+    runtimeOwnedPersistence.requiredWrite(
+      seam = "FeatureTaskRuntimePhaseRecorder.recordCompletedPhase",
+      expected = "runtime-owned completed phase state",
+    ) { unitOfWork ->
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
+          ?: return@requiredWrite false
+      val artifacts = record.artifacts
+      val existingRecords = decodePhaseRecords(artifacts)
+      val updatedRecords =
+        LinkedHashMap(existingRecords).apply {
+          put(
+            request.phaseId,
+            featureTaskRuntimePhaseRecordFor(
+              request,
+              existingRecords[request.phaseId],
+              clock.instant(),
+            ),
+          )
+        }
+      val ledger = decodePhaseLedger(artifacts)
+      val completion =
+        FeatureTaskRuntimePhaseLedgerEntry(
+          action = COMPLETE,
+          sequenceNumber = (ledger.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
+          timestamp = clock.instant().toString(),
+          phaseId = request.phaseId,
+          attemptCount = request.attemptCount,
+          resolvedAgentId = request.resolvedAgentId,
+          loopId = request.loopId,
+          edgeIteration = request.edgeIteration,
+        )
+      val updatedLedger =
+        appendBoundedHistoryBySequence(
+          workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
+          workflowArtifactEntryMap(completion.asWorkflowArtifactEntry()),
+          FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
+        )
+      workflowPersistence.persistArtifactsPatch(
+        unitOfWork.workflowStates,
+        record,
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+            updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+          ),
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(updatedLedger),
+        ) + implementationAttemptPatch(artifacts, request, FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED) +
+          findingVerificationCheckpointPatch(request),
+        WorkflowRowAdvance(
+          request.phaseId,
+          workflowStatusFor(request),
+          stepUpdatesFrom(updatedRecords),
+          clock.instant(),
+        ),
+      )
+      true
+    }
 }
 
 fun featureTaskRuntimePhaseRecordFor(
@@ -236,136 +420,3 @@ fun featureTaskRuntimePhaseRecordFor(
   previous: FeatureTaskRuntimePhaseRecord?,
   now: String,
 ): FeatureTaskRuntimePhaseRecord = featureTaskRuntimePhaseRecordFor(request, previous, Instant.parse(now))
-
-fun FeatureTaskRuntimePhaseStateRecorder.implementationAttemptsFrom(
-  artifacts: Map<String, Any?>,
-): List<FeatureTaskRuntimeImplementationAttempt> {
-  val raw =
-    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(artifacts)
-      ?: return emptyList()
-  return decodeImplementationAttemptsFromArtifact(raw)
-}
-
-fun FeatureTaskRuntimePhaseStateRecorder.implementationAttemptPatch(
-  artifacts: Map<String, Any?>,
-  request: FeatureTaskRuntimePhaseStateRequest,
-  attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus,
-): Map<String, Any?> {
-  if (!request.mutating) return emptyMap()
-  val produced =
-    request.normalizedOutput?.envelopeWireMap()
-      ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
-  val value = produced?.get(SharedPayloadKeys.VALUE)?.toString()?.trim().orEmpty()
-  if (produced == null || value.isBlank()) return emptyMap()
-  val prompt = produced[SharedPayloadKeys.PROMPT]?.toString()?.trim()?.takeIf(String::isNotBlank)
-  val existing = implementationAttemptsFrom(artifacts)
-  val appended =
-    featureTaskRuntimeAppendImplementationAttempt(
-      existing = existing,
-      entry =
-        FeatureTaskRuntimeImplementationAttempt(
-          sequenceNumber = (existing.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
-          phaseId = request.phaseId,
-          attemptNumber = request.attemptCount,
-          agentId = request.resolvedAgentId,
-          status = attemptStatus,
-          recordedAt = clock.instant().toString(),
-          value = value,
-          loopId = request.loopId,
-          edgeIteration = request.edgeIteration,
-          failureDisposition = request.failureDisposition,
-          prompt = prompt,
-        ),
-    )
-  val wire = implementationAttemptRecordWorkflowArtifact(appended)
-  implementationAttemptValidator.validate(
-    FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT,
-    FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
-    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
-  )
-  return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.entry(wire))
-}
-
-fun FeatureTaskRuntimePhaseStateRecorder.findingVerificationCheckpointPatch(
-  request: FeatureTaskRuntimePhaseStateRequest,
-): Map<String, Any?> {
-  val output = request.normalizedOutput?.envelopeWireMap()
-  if (
-    request.finished &&
-    request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED &&
-    FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(output)
-  ) {
-    val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(output)
-    return buildMap {
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.putInto(this, null)
-      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION.putInto(this, null)
-      if (dispositions.isNotEmpty()) {
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS.putInto(
-          this,
-          dispositions.map { it.asWorkflowArtifactEntry() },
-        )
-      }
-    }
-  }
-  val checkpoint = request.findingVerificationCheckpoint?.takeIf { it.isNotEmpty() } ?: return emptyMap()
-  return mapOf(
-    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.entry(
-      checkpoint.map { it.asWorkflowArtifactEntry() },
-    ),
-  )
-}
-
-fun FeatureTaskRuntimePhaseStateRecorder.recordCompletedPhaseWrite(
-  request: FeatureTaskRuntimePhaseStateRequest,
-): Boolean =
-  runtimeOwnedPersistence.requiredWrite(
-    seam = "FeatureTaskRuntimePhaseRecorder.recordCompletedPhase",
-    expected = "runtime-owned completed phase state",
-  ) { unitOfWork ->
-    val record =
-      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
-        ?: return@requiredWrite false
-    val artifacts = record.artifacts
-    val existingRecords = decodePhaseRecords(artifacts)
-    val updatedRecords =
-      LinkedHashMap(existingRecords).apply {
-        put(request.phaseId, phaseRecordFor(request, existingRecords[request.phaseId], clock.instant()))
-      }
-    val ledger = decodePhaseLedger(artifacts)
-    val completion =
-      FeatureTaskRuntimePhaseLedgerEntry(
-        action = COMPLETE,
-        sequenceNumber = (ledger.maxOfOrNull { it.sequenceNumber } ?: -1) + 1,
-        timestamp = clock.instant().toString(),
-        phaseId = request.phaseId,
-        attemptCount = request.attemptCount,
-        resolvedAgentId = request.resolvedAgentId,
-        loopId = request.loopId,
-        edgeIteration = request.edgeIteration,
-      )
-    val updatedLedger =
-      appendBoundedHistoryBySequence(
-        workflowArtifactEntryMaps(ledger.map { it.asWorkflowArtifactEntry() }),
-        workflowArtifactEntryMap(completion.asWorkflowArtifactEntry()),
-        FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT,
-      )
-    workflowPersistence.persistArtifactsPatch(
-      unitOfWork.workflowStates,
-      record,
-      mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-          updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
-        ),
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(updatedLedger),
-      ) + implementationAttemptPatch(artifacts, request, FeatureTaskRuntimeImplementationAttemptStatus.COMPLETED) +
-        findingVerificationCheckpointPatch(request),
-      WorkflowRowAdvance(request.phaseId, workflowStatusFor(request), stepUpdatesFrom(updatedRecords), clock.instant()),
-    )
-    true
-  }
-
-fun FeatureTaskRuntimePhaseStateRecorder.phaseRecordFor(
-  request: FeatureTaskRuntimePhaseStateRequest,
-  previous: FeatureTaskRuntimePhaseRecord?,
-  now: Instant,
-): FeatureTaskRuntimePhaseRecord = featureTaskRuntimePhaseRecordFor(request, previous, now)
