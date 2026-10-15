@@ -363,9 +363,16 @@ phase completes. It also completes when the PR is merged, regardless of failing
 or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
 while other checks are pending. A merge conflict starts the same repair on that
 poll, even when no checks are reported: the fix merges the base branch and
-resolves every conflict. The repair agent then discovers and runs the
-project's local checks, as validation does, and keeps repairing until they
-pass. A repair that blocks is not pushed. Once it completes, the runtime
+resolves every conflict. For failing checks, the repair agent reads each failing
+job's CI logs, identifies the failed command or assertion, and traces the cause
+through the repository before editing. A passing local rerun does not resolve
+the CI failure. Intermittent failures require investigation of timing,
+concurrency, isolation, or environment differences as the evidence warrants.
+Completion requires a repository fix and passing local project checks.
+If investigation cannot establish a fix, the agent blocks with the failed check
+URL, inspected evidence, and unresolved cause or evidence gap. It cannot complete
+with an unchanged tree merely because local checks pass. A repair that blocks is
+not pushed. Once it completes, the runtime
 commits and pushes the repair, and monitor watches again, up to three
 fix attempts. The phase then blocks
 with the last failure and the last fix summary. When the branch has no open PR,

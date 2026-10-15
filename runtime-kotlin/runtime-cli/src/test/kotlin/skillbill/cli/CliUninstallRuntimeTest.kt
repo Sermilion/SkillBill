@@ -92,19 +92,41 @@ class CliUninstallRuntimeTest {
       )
 
     assertEquals(0, result.exitCode, result.stdout)
-    assertFalse(Files.exists(selected.stateRoot))
+    assertFalse(Files.exists(selected.stateRoot.resolve("runtime")))
+    assertFalse(Files.exists(selected.stateRoot.resolve("installed-skills")))
     assertFalse(Files.exists(contextHome.resolve(".skill-bill")))
   }
 
   @Test
   fun `uninstall removes managed install artifacts and preserves user files`() {
     val fixture = uninstallFixture()
+    val retainedPaths =
+      listOf(
+        "workflow.db",
+        "review-metrics.db",
+        ".custom.db",
+        "workflow.db-wal",
+        "workflow.db-shm",
+        "workflow.db-journal",
+        "backups/snapshot.db",
+        "backups/maintenance-report.json",
+      ).map { name -> fixture.stateRoot.resolve(name) }
+    retainedPaths.forEach { path ->
+      Files.createDirectories(path.parent)
+      Files.writeString(path, "retained ${path.fileName}")
+    }
+    val staleCache = fixture.stateRoot.resolve(".stale-cache/entry")
+    Files.createDirectories(staleCache.parent)
+    Files.writeString(staleCache, "stale install state")
 
     val result = runUninstall(fixture.home, "--yes")
 
     assertEquals(0, result.exitCode, result.stdout)
     assertContains(result.stdout, "uninstall_status: completed")
-    assertFalse(Files.exists(fixture.stateRoot))
+    retainedPaths.forEach { path -> assertEquals("retained ${path.fileName}", Files.readString(path)) }
+    assertFalse(Files.exists(fixture.stateRoot.resolve("runtime")))
+    assertFalse(Files.exists(fixture.stateRoot.resolve("installed-skills")))
+    assertFalse(Files.exists(staleCache.parent))
     assertFalse(Files.exists(fixture.managedSkillDir))
     assertFalse(Files.exists(fixture.legacySkillDir))
     assertFalse(Files.exists(fixture.ownedSymlink))

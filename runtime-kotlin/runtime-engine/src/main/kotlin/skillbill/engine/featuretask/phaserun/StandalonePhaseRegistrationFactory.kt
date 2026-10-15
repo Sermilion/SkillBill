@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -22,6 +24,7 @@ class StandalonePhaseRegistrationFactory(
   private val clock: Clock,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val environment: EnvironmentContext,
 ) {
   fun workflowRegistration(
     repoRoot: Path,
@@ -39,6 +42,7 @@ class StandalonePhaseRegistrationFactory(
       executionId = "workflow-$workflowId-${UUID.randomUUID()}",
       lifecycleState = "active",
       startedAt = clock.instant(),
+      agentEnvironment = agentEnvironment(),
     )
   }
 
@@ -65,8 +69,14 @@ class StandalonePhaseRegistrationFactory(
       leaseGeneration = 1L,
       leaseExpiresAt = now.plus(LEASE_DURATION),
       processOwner = processOwner(),
+      agentEnvironment = agentEnvironment(),
     )
   }
+
+  private fun agentEnvironment(): Map<String, String> =
+    AgentHomeEnvironmentKeys.ALL.mapNotNull { key ->
+      environment.environment[key]?.takeIf(String::isNotBlank)?.let { key to it }
+    }.toMap()
 
   private fun processOwner(): FeatureTaskRuntimeProcessIdentity? =
     runCatching {

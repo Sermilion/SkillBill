@@ -38,6 +38,18 @@ data class CachedDisplaySnapshot(
     }
 }
 
+fun boundedDisplaySummary(value: String): String {
+    if (value.length <= CachedDisplaySnapshot.MAX_SUMMARY_CHARS) return value
+    val suffix = " Summary abbreviated; full detail omitted."
+    var contentEnd = CachedDisplaySnapshot.MAX_SUMMARY_CHARS - suffix.length
+    if (contentEnd > 0 && contentEnd < value.length &&
+        Character.isHighSurrogate(value[contentEnd - 1]) && Character.isLowSurrogate(value[contentEnd])
+    ) {
+        contentEnd -= 1
+    }
+    return value.substring(0, contentEnd) + suffix
+}
+
 fun SkillBillStatusOutcome.toCacheSnapshotOrNull(): LastKnownDisplayCache? =
     when (this) {
         is SkillBillStatusOutcome.Active ->

@@ -195,7 +195,7 @@ private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
       """{"value":"### AC-001\nGap: Missing admission.\nProduction path: src/Foo.kt.\n""" +
       """Changes: Guard the mutation.\nClosure evidence: Mutation follows admission."}""",
     "audit_implement_fix" to
-      """{"value": "Repaired the reported audit criteria.\naudit_repair_complete: true"}""",
+      """{"value": "Repaired the reported production gaps and recorded the affected paths."}""",
     "audit" to """{"value": "[]"}""",
     "verify_findings" to """{"finding_dispositions": []}""",
     "pr" to """{"value": "Opened the pull request for the branch."}""",

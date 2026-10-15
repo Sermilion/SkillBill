@@ -27,7 +27,11 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_BLOCKED
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
@@ -142,12 +146,53 @@ class FeatureTaskRuntimeWorkflowPersistence
         record.artifacts
       }
 
+    fun readAcceptanceCriterionRepairState(
+      workflowId: String,
+      expectedCatalogId: String,
+      expectedExecutionId: String,
+    ): AcceptanceCriterionRepairState =
+      database.read { unitOfWork ->
+        val record =
+          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+            ?: throw invalidWorkflowStateSchemaError("Workflow '$workflowId' is missing its serial repair state.")
+        workflowSnapshotValidator.validate(record, record.workflowName)
+        val artifacts = record.artifacts
+        val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+        if (!family.contains(artifacts)) {
+          throw invalidWorkflowStateSchemaError("Workflow '$workflowId' has no admitted serial repair state.")
+        }
+        val payload = FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+        val state = payload.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+        if (state.catalogId != expectedCatalogId || state.executionId != expectedExecutionId) {
+          throw invalidWorkflowStateSchemaError(
+            "Workflow '$workflowId' serial repair identity does not match the admitted execution.",
+          )
+        }
+        state
+      }
+
+    fun readAcceptanceCriterionRepairState(workflowId: String): AcceptanceCriterionRepairState? =
+      database.read { unitOfWork ->
+        val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+        workflowSnapshotValidator.validate(record, record.workflowName)
+        val artifacts = record.artifacts
+        val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+        if (!family.contains(artifacts)) return@read null
+        FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+          .toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+      }
+
     internal fun persistArtifactsPatch(
       workflowStates: WorkflowStateRepository,
       record: WorkflowStateSnapshot,
       patch: Map<String, Any?>,
       advance: WorkflowRowAdvance = WorkflowRowAdvance.keepFrom(record),
     ) {
+      if (DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.label() in patch) {
+        throw invalidWorkflowStateSchemaError(
+          "Serial repair artifacts require the acquired-owner persistence operation.",
+        )
+      }
       val updated =
         engine.updateRecord(
           WorkflowFamily.TASK_RUNTIME.definition,
@@ -170,6 +215,44 @@ class FeatureTaskRuntimeWorkflowPersistence
         )
       workflowSnapshotValidator.validate(updated, updated.workflowName)
       workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+    }
+
+    internal fun persistAcquiredRepairState(
+      states: WorkflowStateRepository,
+      record: WorkflowStateSnapshot,
+      state: AcceptanceCriterionRepairState,
+      coupledPatch: Map<String, Any?>,
+      advance: WorkflowRowAdvance,
+    ) {
+      val patch =
+        coupledPatch +
+          mapOf(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR.entry(
+              state.asRepairWireMap(),
+            ),
+          )
+      val updated =
+        engine.updateRecord(
+          WorkflowFamily.TASK_RUNTIME.definition,
+          record,
+          WorkflowUpdateInput(
+            terminalInstant = advance.terminalInstant,
+            workflowStatus =
+              WorkflowStatus.fromWire(advance.workflowStatus)
+                ?: throw invalidWorkflowStateSchemaError("Serial repair workflow status is invalid."),
+            currentStepId = advance.currentStepId,
+            stepUpdates =
+              WorkflowStepUpdates.from(
+                advance.stepUpdates?.map(
+                  FeatureTaskRuntimePhaseStepWireUpdate::toWireMap,
+                ),
+              ),
+            artifactsPatch = WorkflowArtifactPatch.from(patch),
+            sessionId = record.sessionId.orEmpty(),
+          ),
+        )
+      workflowSnapshotValidator.validate(updated, updated.workflowName)
+      states.save(WorkflowFamily.TASK_RUNTIME, updated)
     }
 
     internal fun persistRunInvariantsPatch(

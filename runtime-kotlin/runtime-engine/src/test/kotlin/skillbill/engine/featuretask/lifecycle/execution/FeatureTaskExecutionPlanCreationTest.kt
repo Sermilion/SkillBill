@@ -147,7 +147,11 @@ class FeatureTaskExecutionPlanCreationTest {
       val bytes = execution.encoded.copyOf()
       val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(bytes, execution.validator)
       bytes.fill(0)
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+        )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
@@ -171,7 +175,11 @@ class FeatureTaskExecutionPlanCreationTest {
   @Test
   fun `direct executable workflow creation without a descriptor leaves no row`() =
     withDatabase { database ->
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+        )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")
       }

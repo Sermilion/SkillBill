@@ -13,7 +13,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
-  private val validator = FeatureTaskRuntimeWireArtifactValidator()
+  private val validator =
+    FeatureTaskRuntimeWireArtifactValidator()
 
   @Test
   fun `every closed wire artifact kind dispatches to its schema validator`() {

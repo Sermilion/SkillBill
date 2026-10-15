@@ -11,6 +11,7 @@ import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.model.EnvironmentContext
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
@@ -194,7 +195,11 @@ class WorkRunControlsTest {
       val arguments = listOf("phase", "monitor", "https://example.test/pr/42", "--agent", "claude")
       component.databaseSession.transaction {
         it.standalonePhaseStatuses.register(
-          registration(fixture.tempDir).copy(launchAgentId = "claude", launchArguments = arguments),
+          registration(fixture.tempDir).copy(
+            launchAgentId = "claude",
+            launchArguments = arguments,
+            agentEnvironment = mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"),
+          ),
         )
       }
       val target = target(component)
@@ -215,6 +220,7 @@ class WorkRunControlsTest {
       assertContains(launched.single().prompt, "https://example.test/pr/42")
       assertContains(launched.single().prompt, "Selected agent: codex")
       assertEquals(fixture.dbPath, launched.single().databasePath)
+      assertEquals(mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"), launched.single().agentEnvironment)
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/other\n")
       assertEquals(
         WorkControlResult.Rejected(WorkControlRejection.BRANCH_CHANGED),
@@ -308,6 +314,134 @@ class WorkRunControlsTest {
         component.ideStatusService.detail(WorkDetailRequest("old-goal")).item?.snapshot?.lifecycleState !=
           IdeStatusLifecycleState.CANCELED,
       )
+    }
+  }
+
+  @Test
+  fun `goal launch ignores the branch its execution was registered on`() {
+    establishTemporarySchemaReadiness("goal-other-branch").use { fixture ->
+      Files.createDirectory(fixture.tempDir.resolve(".git"))
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/SKILL-777-goal-branch\n")
+      ensureTestDatabase(fixture.dbPath).use { connection ->
+        connection.prepareStatement(
+          """
+          INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status, last_activity_at)
+          VALUES ('stacked-goal', 'SKILL-777', ?, 'failed', ?)
+          """.trimIndent(),
+        ).use { statement ->
+          val time = Instant.now().minusSeconds(60).toString()
+          statement.setString(1, time)
+          statement.setString(2, time)
+          statement.executeUpdate()
+        }
+      }
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launches += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("goal.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      val identity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState(
+          "stacked-goal",
+          GoalRunnerControlState(repositoryIdentity = identity),
+        )
+        unit.standalonePhaseStatuses.registerWorkflow(
+          IdeStatusWorkflowRegistration(
+            identity,
+            "feat/OTHER-1-launched-from-here",
+            "SKILL-777",
+            "stacked-goal",
+            "goal-invocation",
+            "goal-execution",
+            "active",
+            Instant.now().minusSeconds(120),
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("stacked-goal")).item)
+      assertEquals("goal-execution", item.snapshot.execution?.executionId)
+      val target =
+        WorkRunTarget(
+          "stacked-goal",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target, "codex"))
+      assertContains(launches.single().prompt, "/skill-bill SKILL-777")
+      assertFalse(launches.single().prompt.contains("feat/OTHER-1-launched-from-here"))
+    }
+  }
+
+  @Test
+  fun `goal relaunch carries the agent home recorded by the latest parent workflow execution`() {
+    establishTemporarySchemaReadiness("goal-agent-environment").use { fixture ->
+      ensureTestDatabase(fixture.dbPath).use { connection ->
+        connection.prepareStatement(
+          """
+          INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status, last_activity_at)
+          VALUES ('env-goal', 'SKILL-778', ?, 'failed', ?)
+          """.trimIndent(),
+        ).use { statement ->
+          val time = Instant.now().minusSeconds(60).toString()
+          statement.setString(1, time)
+          statement.setString(2, time)
+          statement.executeUpdate()
+        }
+      }
+      val launches = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launches += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("goal.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      val repository = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      val started = Instant.now().minusSeconds(50)
+      val first =
+        IdeStatusWorkflowRegistration(
+          repository, "HEAD", "SKILL-778", "env-goal", "goal-run-1", "goal-execution-1", "active", started,
+          mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-old"),
+        )
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState("env-goal", GoalRunnerControlState(repositoryIdentity = repository))
+        unit.standalonePhaseStatuses.registerWorkflow(first)
+        unit.standalonePhaseStatuses.registerWorkflow(
+          first.copy(
+            invocationId = "goal-run-2",
+            executionId = "goal-execution-2",
+            startedAt = started.plusSeconds(1),
+            agentEnvironment = mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"),
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("env-goal")).item)
+      val target =
+        WorkRunTarget(
+          "env-goal",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target, "claude"))
+      assertEquals(mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"), launches.single().agentEnvironment)
     }
   }
 

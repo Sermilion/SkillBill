@@ -23,16 +23,19 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairSession
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -40,6 +43,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -60,8 +64,23 @@ internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  private val acceptance: AcceptanceCriterionRepairSession? = null,
 ) : PhaseRunRecords,
   PhasePlanRecords by DurablePhasePlanRecords(decomposeTerminalRecorder),
+  AcceptanceCriterionRepairCycleRecords by (
+    acceptance ?: object : AcceptanceCriterionRepairCycleRecords {
+      override fun requiresExplicitStart(phaseId: String): Boolean = false
+
+      override fun isRepairStep(phaseId: String): Boolean = false
+
+      override fun settleUnsuccessfulRepair(
+        phase: FeatureTaskRuntimePhaseStateRequest,
+        kind: AcceptanceCriterionRepairOutcomeKind,
+      ): Boolean? = null
+
+      override fun requireFinalAudit(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? = null
+    }
+  ),
   FeatureTaskRuntimeNoChangePausePort by recorder {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -77,10 +96,21 @@ internal class DurablePhaseRunRecords(
     recorder.recordPhaseState(request)
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
-    recorder.recordRequiredPhaseStart(request)
+    when (acceptance?.start(request)) {
+      true -> RequiredPhaseWrite.Acknowledged
+      false ->
+        RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.START,
+          request.workflowId,
+          request.phaseId,
+          request.attemptCount,
+        )
+      null -> recorder.recordRequiredPhaseStart(request)
+    }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
-    recorder.recordCompletedPhase(request)
+    acceptance?.complete(request)
+      ?: recorder.recordCompletedPhase(request)
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordIncompleteImplementationAttempt(request)

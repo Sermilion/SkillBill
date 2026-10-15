@@ -3,6 +3,7 @@ package skillbill.application.review.service
 import skillbill.application.review.snapshot.HARNESS_ORIGIN_UNAVAILABLE
 import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.preparation.ReviewAttributionPort
@@ -62,6 +63,8 @@ class ReviewServicePreviewImportTest {
 }
 
 private object PreviewImportBlockingDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   override fun resolveDbPath(): Path = error("previewImport must not touch the database")
 
   override fun databaseExists(): Boolean = error("previewImport must not touch the database")

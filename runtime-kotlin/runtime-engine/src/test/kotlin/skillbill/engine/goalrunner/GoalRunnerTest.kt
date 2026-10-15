@@ -116,6 +116,7 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.ACTIVE
@@ -5720,6 +5721,8 @@ private class GoalStatusPhaseLedgerHarness {
 private class GoalStatusSeedableDatabase(
   private val repository: GoalStatusSeedableWorkflowStateRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/goal-status-phase-ledger.db")
 
   override fun resolveDbPath(): Path = dbPath
@@ -5855,6 +5858,9 @@ private object GoalTestEmptyDatabase : DatabaseSessionFactory {
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = this@GoalTestEmptyDatabase.dbPath
@@ -5897,6 +5903,9 @@ private class GoalTestPlanningDatabase : DatabaseSessionFactory {
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     return block(unitOfWork())
   }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {

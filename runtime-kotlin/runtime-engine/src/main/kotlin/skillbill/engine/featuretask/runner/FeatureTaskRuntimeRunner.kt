@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runner
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -16,7 +17,15 @@ class FeatureTaskRuntimeRunner(
   private val preparation: FeatureTaskRuntimeRunPreparation,
   private val execute: FeatureTaskRuntimeRunnerExecute,
 ) {
-  fun run(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport {
+  fun intakeCompleted(workflowId: String): Boolean = execute.intakeCompleted(workflowId)
+
+  fun run(
+    request: FeatureTaskRuntimeRunRequest,
+    repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
+  ): FeatureTaskRuntimeRunReport {
+    check(request.acceptanceCriterionRepair == null || repairWorker != null) {
+      "Serial repair requires its acquired worker capability."
+    }
     execute.foreignModeWorkflowBlock(request)?.let { return it }
     execute.terminalWorkflowBlock(request)?.let { return it }
     val admittedRequest = request.copy(admittedExecution = startup.admit(request))
@@ -24,7 +33,12 @@ class FeatureTaskRuntimeRunner(
     val reconciliation = startup.reconcile()
     return when (val prepared = this.preparation.prepare(admittedRequest)) {
       is FeatureTaskRuntimePreparation.PreparationBlocked -> prepared.report
-      is FeatureTaskRuntimePreparation.Prepared -> execute.executePreparedRun(prepared.request, reconciliation)
+      is FeatureTaskRuntimePreparation.Prepared ->
+        execute.executePreparedRun(
+          prepared.request,
+          reconciliation,
+          repairWorker,
+        )
     }
   }
 

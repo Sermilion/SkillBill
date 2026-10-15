@@ -73,7 +73,8 @@ class FeatureTaskRuntimePhaseRecorder
       FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
     ) {
     val phaseQuery = FeatureTaskRuntimePhaseQuery(database)
-    private val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
+    private val workflowPersistence =
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
     private val runtimeOwnedPersistence = RuntimeOwnedPersistenceBoundary(database, diagnostics)
     private val rejectedOutput =
       FeatureTaskRuntimeRejectedOutputRecorder(

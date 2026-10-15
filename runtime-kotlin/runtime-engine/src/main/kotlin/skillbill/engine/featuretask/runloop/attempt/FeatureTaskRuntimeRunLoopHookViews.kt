@@ -194,7 +194,12 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     ): AttemptResult? {
       val checked = capture.also { check(it.run === acceptedRun) }
       if (noChangePause != null) {
-        return FeatureTaskRuntimeRunLoopAuditSettlement.settleNoChangePause(settlement, checked, noChangePause)
+        return FeatureTaskRuntimeRunLoopAuditSettlement.settleNoChangeRound(
+          settlement,
+          checked,
+          attested,
+          noChangePause,
+        )
       }
       return FeatureTaskRuntimeRunLoopAuditSettlement.settleCompletedRound(
         remediation,

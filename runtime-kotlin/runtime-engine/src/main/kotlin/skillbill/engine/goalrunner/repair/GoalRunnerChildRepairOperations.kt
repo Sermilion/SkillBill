@@ -23,7 +23,8 @@ class GoalRunnerChildRepairOperations(
   private val clock: Clock,
 ) : GoalRunnerChildRepairRunnerPort {
   private val engine = WorkflowEngine()
-  private val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
+  private val workflowPersistence =
+    FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator)
   private val wedgeDiagnosis = GoalRunnerChildRepairWedgeDiagnosis(gitOperations, clock)
   private val wedgeApplyLoop =
     GoalRunnerChildRepairWedgeApplyLoop(

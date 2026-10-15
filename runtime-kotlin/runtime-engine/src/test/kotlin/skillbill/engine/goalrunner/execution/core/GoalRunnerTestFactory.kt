@@ -40,6 +40,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
@@ -363,6 +364,8 @@ internal fun testGoalRunner(
   )
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+
   private val dbPath = Path.of("/fake/goal-activity-stamp.db")
 
   override fun resolveDbPath(): Path = dbPath

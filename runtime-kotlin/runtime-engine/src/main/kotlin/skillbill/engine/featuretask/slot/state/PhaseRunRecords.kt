@@ -15,6 +15,7 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionCon
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
@@ -234,4 +235,17 @@ internal interface PhaseLaunchRecords {
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   )
+}
+
+internal interface AcceptanceCriterionRepairCycleRecords {
+  fun requiresExplicitStart(phaseId: String): Boolean
+
+  fun isRepairStep(phaseId: String): Boolean
+
+  fun settleUnsuccessfulRepair(
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    kind: AcceptanceCriterionRepairOutcomeKind,
+  ): Boolean?
+
+  fun requireFinalAudit(phase: FeatureTaskRuntimePhaseStateRequest): Boolean?
 }

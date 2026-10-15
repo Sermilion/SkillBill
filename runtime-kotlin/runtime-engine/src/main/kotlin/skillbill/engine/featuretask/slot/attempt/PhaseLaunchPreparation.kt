@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
@@ -426,6 +427,7 @@ object PhaseLaunchPreparation {
             progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
               .output?.normalizedOutput?.envelopeWireMap(),
           ),
+        currentAcceptanceCriterion = acceptanceCriterionContext(run),
         noChangeClaim = auditNoChangeClaim(run),
         operatorBlockRetry =
           session.operatorBlockRetry
@@ -465,4 +467,7 @@ object PhaseLaunchPreparation {
       else -> null
     }
   }
+
+  private fun acceptanceCriterionContext(run: PhaseRun): String? =
+    (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.currentCriterionContext
 }

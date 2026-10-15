@@ -44,6 +44,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchCollaboration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
@@ -219,6 +220,19 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
         loopId = reentry?.loopId,
         edgeIteration = reentry?.edgeIteration,
       )
+    val serial = environment.recorder as? AcceptanceCriterionRepairCycleRecords
+    if (serial?.requiresExplicitStart(stepId) == true) {
+      val start =
+        phaseState.copy(
+          status = STATUS_RUNNING,
+          finished = false,
+          normalizedOutput = null,
+          outputArtifact = null,
+        )
+      check(environment.recorder.recordRequiredPhaseStart(start) is RequiredPhaseWrite.Acknowledged) {
+        "Runtime-authored completion could not acquire its accounting start."
+      }
+    }
     val persisted =
       environment.coupledRunTransitions.persistCarriedForwardPhaseCompletion(
         recorder = environment.recorder,

@@ -83,6 +83,7 @@ import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -179,6 +180,7 @@ abstract class RuntimeComponent(
   abstract val resolvedEnvironmentContext: EnvironmentContext
 
   abstract val repositoryEnclosingRootPort: RepositoryEnclosingRootPort
+  abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService

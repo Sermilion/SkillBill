@@ -508,7 +508,7 @@ class RoomBoardSource internal constructor(
           }
           val cursors = item.moreLists.map { DetailList.valueOf(it.name) }.associateWith { token(it)!! }
           val mapped = item.toDomain(result.observedAt, token(null)).let { it.copy(
-            item = it.item.copy(databaseGeneration = generation), cursors = cursors) }
+            item = it.item.copy(databaseGeneration = generation).withCheckedOutBranch(runtime.checkedOutBranchSource), cursors = cursors) }
           if (mapped.item.identity != identity) return@safeRead staleCursor()
           return@safeRead Outcome.Value(mapped.copy(runOptions = loaded.second?.let {
             RunOptions(it.canCancel, it.canLaunch, it.launchLabel, it.agentId, it.agentChoices, it.unavailableReason)

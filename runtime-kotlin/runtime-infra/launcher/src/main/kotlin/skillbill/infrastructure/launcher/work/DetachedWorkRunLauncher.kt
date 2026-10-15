@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.agentrun.AgentRunCommand
 import skillbill.infrastructure.launcher.agentrun.workRunHarnessCommand
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
@@ -33,10 +34,11 @@ class DetachedWorkRunLauncher internal constructor(
     val agent =
       SupportedAgent.entries.firstOrNull { it.id == request.agentId }
         ?: return refuse("The selected agent is not supported.")
+    val launchEnvironment = launchEnvironment(request)
     val executable =
       resolveExecutable(agent)
         ?: return refuse("The ${agent.id} harness is not installed or is not on PATH.")
-    val built = workRunHarnessCommand(request, agent, environment.environment)
+    val built = workRunHarnessCommand(request, agent, launchEnvironment)
     val ownership = ownership()
     return try {
       ownership.admitted(
@@ -47,7 +49,12 @@ class DetachedWorkRunLauncher internal constructor(
         if (ownership.running(owner)) {
           refuse("A run is already starting or running for this work.")
         } else {
-          startInstalled(built.copy(command = listOf(executable.toString()) + built.command.drop(1)), request, owner)
+          startInstalled(
+            built.copy(command = listOf(executable.toString()) + built.command.drop(1)),
+            request,
+            owner,
+            launchEnvironment,
+          )
         }
       }
     } catch (failure: IOException) {
@@ -76,10 +83,14 @@ class DetachedWorkRunLauncher internal constructor(
 
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
+  private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> =
+    environment.environment + request.agentEnvironment.filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+
   private fun startInstalled(
     built: AgentRunCommand,
     request: WorkRunLaunchRequest,
     owner: Path,
+    launchEnvironment: Map<String, String>,
   ): WorkRunLaunchResult {
     val directory = environment.userHome.resolve(".skill-bill/desktop/runs")
     var input: Path? = null
@@ -92,7 +103,7 @@ class DetachedWorkRunLauncher internal constructor(
           Files.createTempFile(directory, "prompt-", ".txt").also { Files.writeString(it, prompt) }
         }
       val command = launchCommand(built.command)
-      val process = startProcess(built.copy(command = command), request, input, log)
+      val process = startProcess(built.copy(command = command), request, input, log, launchEnvironment)
       val unit = command.firstOrNull { it.startsWith("--unit=") }?.removePrefix("--unit=")?.plus(".scope")
       try {
         ownership().save(owner, process, unit)
@@ -163,13 +174,14 @@ class DetachedWorkRunLauncher internal constructor(
     request: WorkRunLaunchRequest,
     input: Path?,
     log: Path,
+    launchEnvironment: Map<String, String>,
   ): Process =
     ProcessBuilder(built.command)
       .directory(request.repositoryRoot.toFile())
       .redirectInput(ProcessBuilder.Redirect.from((input ?: Path.of(if (isWindows()) "NUL" else "/dev/null")).toFile()))
       .redirectErrorStream(true).redirectOutput(log.toFile())
       .apply {
-        environment().putAll(this@DetachedWorkRunLauncher.environment.environment)
+        environment().putAll(launchEnvironment)
         environment().putAll(built.environment)
         environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
       }.start()

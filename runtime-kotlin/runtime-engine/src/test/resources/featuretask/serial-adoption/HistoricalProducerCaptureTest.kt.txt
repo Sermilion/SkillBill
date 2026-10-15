@@ -1,0 +1,32 @@
+package skillbill.engine.featuretask.lifecycle.execution
+
+import org.junit.jupiter.api.Test
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Files
+import java.nio.file.Path
+
+class HistoricalProducerCaptureTest {
+  @Test
+  fun captureUnnormalizedProducerDescriptors() {
+    val root = Path.of(requireNotNull(System.getenv("SKILL426_CAPTURE_DIR")))
+    val fixtures = mapOf(
+      "standalone" to ExecutionPlanAdmissionFixture(),
+      "goal-child-build" to ExecutionPlanAdmissionFixture(
+        definition = SkeletonDefinition.GOAL_CHILD,
+        qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
+      ),
+      "goal-child-validate" to ExecutionPlanAdmissionFixture(
+        definition = SkeletonDefinition.GOAL_CHILD,
+        qualityGate = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+      ),
+    )
+    fixtures.forEach { (mode, fixture) ->
+      val revision = fixture.plan.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision
+      val output = root.resolve("r$revision")
+      Files.createDirectories(output)
+      Files.write(output.resolve("$mode.json"), fixture.encoded)
+    }
+  }
+}

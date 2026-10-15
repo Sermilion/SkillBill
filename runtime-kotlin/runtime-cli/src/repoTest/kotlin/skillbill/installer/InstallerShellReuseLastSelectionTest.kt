@@ -95,8 +95,10 @@ class InstallerShellReuseLastSelectionTest {
     val testRepo = Files.createTempDirectory("skillbill-installer-reuse-repo")
     val home = Files.createTempDirectory("skillbill-installer-reuse-home")
     val binDir = Files.createTempDirectory("skillbill-installer-reuse-bin")
+    val releaseDir = Files.createTempDirectory("skillbill-installer-reuse-release")
     val logPath = Files.createTempFile("skillbill-installer-reuse-runtime", ".log")
     seedRepo(testRepo)
+    stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
     if (options.currentTelemetryLevel != null) {
       val configPath = home.resolve(".config/skill-bill/config.json")
       Files.createDirectories(configPath.parent)
@@ -111,10 +113,12 @@ class InstallerShellReuseLastSelectionTest {
         .apply {
           environment()["HOME"] = home.toString()
           environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+          environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
           environment()["SKILL_BILL_RELEASE_DIR"] = PrebuiltReleaseStager.stageDesktopOnlyRelease().toString()
           environment()["SKILL_BILL_TEST_REUSE_SELECTION"] = options.reuseSelection
+          environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
           environment()["SKILL_BILL_TEST_REPLAY_TELEMETRY"] = options.replayTelemetryLevel
           options.currentTelemetryLevel?.let { environment()["SKILL_BILL_TEST_CURRENT_TELEMETRY"] = it }
           if (options.telemetryStatusFails) environment()["SKILL_BILL_TEST_TELEMETRY_STATUS_FAILS"] = "1"
@@ -133,6 +137,8 @@ class InstallerShellReuseLastSelectionTest {
   }
 
   private fun seedRepo(testRepo: Path) {
+    InstallerShellFixtures.seedFakeGradlew(testRepo)
+    InstallerDesktopFixtures.seedSource(testRepo)
     Files.writeString(testRepo.resolve("install.sh"), Files.readString(repoRoot.resolve("install.sh")))
     testRepo.resolve("install.sh").toFile().setExecutable(true)
 

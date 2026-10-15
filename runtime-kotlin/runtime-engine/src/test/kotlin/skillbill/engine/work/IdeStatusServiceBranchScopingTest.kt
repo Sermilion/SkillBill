@@ -119,17 +119,20 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `base branch registration does not expose a goal on another branch with the same issue key`() {
-    val fixture = gitRepoFixture("ide-status-goal-unowned-branch", branch = "feat/SKILL-148-other")
+  fun `goal registered on a branch it does not own keeps its execution identity on any checkout`() {
+    val checkout = "feat/OTHER-9-stack-base"
+    val fixture = gitRepoFixture("ide-status-goal-unowned-branch", branch = checkout)
     val identity = testGoalRepositoryIdentity(fixture)
     val result =
       ideStatusService(
-        registeredGoalDatabase(identity, "main"),
+        registeredGoalDatabase(identity, "feat/OTHER-8-launch-branch"),
         manifestStore = StubGoalManifestStore(goalManifestState(fixture, identity, childWorkflowId = "w-child")),
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
-    assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
-    assertNull(result.snapshot.workflowId)
+    assertNull(result.snapshot.problem)
+    assertEquals("goal-1", result.snapshot.workflowId)
+    assertEquals("parent-execution", result.snapshot.execution?.executionId)
+    assertEquals(checkout, result.snapshot.branchCorrelation)
   }
 
   @Test
@@ -313,7 +316,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `base branch planning visibility does not expose unrelated or already prepared goals`() {
+  fun `goals stay visible on prepared base branches and branches that do not name their issue key`() {
     val baseBranch = "base/SKILL-380-phase-slot-strategies"
     listOf(
       baseBranch to GoalPlanningStatusState.PREPARED,
@@ -330,8 +333,8 @@ class IdeStatusServiceBranchScopingTest {
             StubGoalManifestStore(state, planning = planningSnapshot(planningState), lease = liveLease()),
         ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
-      assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
-      assertNull(result.snapshot.workflowId)
+      assertNull(result.snapshot.problem, branch)
+      assertEquals("goal-1", result.snapshot.workflowId, branch)
     }
   }
 
@@ -668,6 +671,46 @@ class IdeStatusServiceBranchScopingTest {
 
     assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
     assertEquals("No recent Skill Bill work for branch 'feat/OTHER-9-unrelated'.", result.snapshot.summary)
+  }
+
+  @Test
+  fun `feature task registered before its branch was created stays selected on its issue branch`() {
+    val fixture = gitRepoFixture("ide-status-runtime-registered-on-main", branch = "feat/SKILL-148-fixture")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveFeatureTaskWorkflow(runtimeRecord("w-active", "2026-08-06T10:00:00Z"), PROSE)
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-active", identity))
+    val work = listOf(workItem("w-active", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T10:00:00Z"))
+    val statuses =
+      object : StandalonePhaseStatusRepository by TrackingDatabase(
+        work,
+        workflows,
+      ).unitOfWork().standalonePhaseStatuses {
+        override fun latestWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
+          IdeStatusWorkflowExecution(
+            repositoryIdentity = identity,
+            branchCorrelation = "main",
+            issueKey = "SKILL-148",
+            workflowId = "w-active",
+            invocationId = "runtime-invocation",
+            executionId = "runtime-execution",
+            statusStoreId = "status-store",
+            runSequence = "1",
+            statusRevision = "1",
+            lifecycleState = "active",
+            startedAt = ideStatusObservedAt.minusSeconds(600),
+            updatedAt = ideStatusObservedAt,
+          ).takeIf { workflowId == "w-active" }
+      }
+
+    val result =
+      ideStatusService(TrackingDatabase(work, workflows, statusRepository = statuses)).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertNull(result.snapshot.problem)
+    assertEquals("w-active", result.snapshot.workflowId)
+    assertEquals("runtime-execution", result.snapshot.execution?.executionId)
   }
 
   @Test

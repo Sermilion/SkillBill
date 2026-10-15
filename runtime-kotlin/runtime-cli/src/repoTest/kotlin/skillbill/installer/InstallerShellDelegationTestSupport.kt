@@ -5,6 +5,8 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -17,6 +19,35 @@ internal val installerShellRuntimeRoot: Path =
       workingDir
     }
   }
+
+private fun nativeHostUname(): String =
+  when {
+    System.getProperty("os.name").lowercase().contains("mac") -> "Darwin"
+    System.getProperty("os.name").lowercase().contains("win") -> "MINGW64_NT-10.0"
+    else -> "Linux"
+  }
+
+private fun nativeHostArch(): String = System.getProperty("os.arch")
+
+private fun seedHostUname(
+  binDir: Path,
+  hostUname: String,
+) {
+  val uname = binDir.resolve("uname")
+  Files.writeString(
+    uname,
+    """
+    |#!/usr/bin/env bash
+    |set -euo pipefail
+    |case "${'$'}{1:-}" in
+    |  -s) printf '%s\n' "${'$'}{SKILL_BILL_TEST_HOST_UNAME:?}" ;;
+    |  -m) printf '%s\n' "${nativeHostArch()}" ;;
+    |  *) exit 1 ;;
+    |esac
+    """.trimMargin(),
+  )
+  uname.toFile().setExecutable(true)
+}
 
 internal fun assertCopyInPopulatedRealFiles(run: InstallerShellRun) {
   val stateDir = run.home.resolve(".skill-bill")
@@ -47,10 +78,12 @@ internal fun runInstallerShell(input: String): InstallerShellRun = runInstallerS
 internal fun runInstallerShell(
   input: String,
   fromSource: Boolean,
+  hostUname: String? = null,
 ): InstallerShellRun {
   val repoRoot = Files.createTempDirectory("skillbill-installer-shell-repo")
   val home = Files.createTempDirectory("skillbill-installer-shell-home")
   val binDir = Files.createTempDirectory("skillbill-installer-shell-bin")
+  val releaseDir = Files.createTempDirectory("skillbill-installer-shell-release")
   val logPath = Files.createTempFile("skillbill-installer-shell-runtime", ".log")
   val installScript = installerShellRuntimeRoot.parent.resolve("install.sh")
   Files.writeString(repoRoot.resolve("install.sh"), Files.readString(installScript))
@@ -61,8 +94,11 @@ internal fun runInstallerShell(
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "kotlin")
   InstallerShellFixtures.seedInstallerPlatformPack(repoRoot, "python")
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
-  InstallerShellFixtures.seedFakeDesktopTray(repoRoot)
-  val releaseDir = PrebuiltReleaseStager.stageDesktopOnlyRelease()
+  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
+  stageRelease(releaseDir, releaseValid = true, omitRuntimeAssets = false)
+  val effectiveHostUname = hostUname ?: nativeHostUname()
+  seedHostUname(binDir, effectiveHostUname)
+  val desktopReleaseDir = PrebuiltReleaseStager.stageDesktopOnlyRelease()
 
   val command = mutableListOf("bash", repoRoot.resolve("install.sh").toString())
   if (fromSource) {
@@ -75,10 +111,15 @@ internal fun runInstallerShell(
       .apply {
         environment()["HOME"] = home.toString()
         environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+        environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
         environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
-        if (!fromSource) environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
+        environment()["SKILL_BILL_RELEASE_DIR"] =
+          if (fromSource) releaseDir.toString() else desktopReleaseDir.toString()
+        environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop-apps").toString()
+        environment()["PATH"] = binDir.toString() + File.pathSeparator + environment()["PATH"].orEmpty()
+        environment()["SKILL_BILL_TEST_HOST_UNAME"] = effectiveHostUname
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
       }
       .start()
@@ -260,7 +301,6 @@ internal fun runPrebuiltInstaller(
   reuse: PrebuiltReuse? = null,
   options: PrebuiltOptions = PrebuiltOptions(),
 ): PrebuiltInstallerRun {
-  PrebuiltReleaseStager.assumeReleaseStagingTools()
   if (options.interactiveTty) {
     Assumptions.assumeTrue(
       PrebuiltReleaseStager.toolOnPath("script"),
@@ -282,8 +322,13 @@ internal fun runPrebuiltInstaller(
       .redirectErrorStream(true)
   builder.environment()["HOME"] = home.toString()
   builder.environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+  builder.environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
   builder.environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
   builder.environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
+  val hostUname = nativeHostUname()
+  seedHostUname(binDir, hostUname)
+  builder.environment()["PATH"] = binDir.toString() + File.pathSeparator + builder.environment()["PATH"].orEmpty()
+  builder.environment()["SKILL_BILL_TEST_HOST_UNAME"] = hostUname
   builder.environment().remove("SKILL_BILL_GOAL_CONTINUATION")
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
@@ -317,7 +362,7 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
   InstallerShellFixtures.seedFakeGradlew(repoRoot)
-  InstallerShellFixtures.seedFakeDesktopTray(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
 }
 
 internal fun stageRelease(
@@ -553,6 +598,9 @@ internal object InstallerShellFixtures {
     )
 
   fun seedInstallerRuntime(repoRoot: Path) {
+    seedFakeGradlew(repoRoot)
+    InstallerDesktopFixtures.seedSource(repoRoot)
+    seedFakeDesktopGradlew(repoRoot)
     writeFakeRuntimeBins(
       repoRoot,
       fakeRuntimeCliScript(
@@ -635,36 +683,29 @@ internal object InstallerShellFixtures {
     gradlew.toFile().setExecutable(true)
   }
 
-  /** A checkout whose `desktop-tray` build writes a runnable stub app, so the required desktop step succeeds. */
-  fun seedFakeDesktopTray(repoRoot: Path) {
-    val desktopDir = repoRoot.resolve("desktop-tray")
-    val gradlew = desktopDir.resolve("gradlew")
+  fun seedFakeDesktopGradlew(repoRoot: Path) {
+    val gradlew = repoRoot.resolve("desktop-tray/gradlew")
     Files.createDirectories(gradlew.parent)
-    val appRelative = "build/compose/binaries/main/app/${desktopAppName(currentDesktopOs())}"
-    val executable = desktopAppExecutable(currentDesktopOs())
     Files.writeString(
       gradlew,
       """
       |#!/usr/bin/env bash
       |set -euo pipefail
       |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-      |launcher="${'$'}root/$appRelative/$executable"
-      |mkdir -p "${'$'}(dirname "${'$'}launcher")"
-      |printf '#!/usr/bin/env bash\nexit 0\n' > "${'$'}launcher"
-      |chmod +x "${'$'}launcher"
+      |app_root="${'$'}root/build/compose/binaries/main/app"
+      |case "${'$'}(uname -s)" in
+      |  Darwin*) app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill" ;;
+      |  Linux*) app="${'$'}app_root/Skill Bill/bin/Skill Bill" ;;
+      |  MINGW*|MSYS*|CYGWIN*) app="${'$'}app_root/Skill Bill/bin/Skill Bill.bat" ;;
+      |  *) printf '%s\n' 'Unsupported desktop fixture host' >&2; exit 1 ;;
+      |esac
+      |mkdir -p "${'$'}(dirname "${'$'}app")"
+      |printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "${'$'}app"
+      |chmod +x "${'$'}app"
       """.trimMargin(),
     )
     gradlew.toFile().setExecutable(true)
   }
-
-  fun desktopAppName(os: String): String = if (os == "macos") "Skill Bill.app" else "Skill Bill"
-
-  fun desktopAppExecutable(os: String): String =
-    when (os) {
-      "macos" -> "Contents/MacOS/Skill Bill"
-      "windows" -> "bin/Skill Bill.bat"
-      else -> "bin/Skill Bill"
-    }
 
   fun seedDesktopInstall(
     desktopRoot: Path,
@@ -805,13 +846,6 @@ internal object PrebuiltReleaseStager {
     return "$os-$arch"
   }
 
-  fun assumeReleaseStagingTools() {
-    Assumptions.assumeTrue(
-      toolOnPath("bsdtar"),
-      "staged-release runtime image zips require bsdtar on PATH",
-    )
-  }
-
   fun toolOnPath(tool: String): Boolean =
     (System.getenv("PATH") ?: "")
       .split(File.pathSeparatorChar)
@@ -846,25 +880,33 @@ internal object PrebuiltReleaseStager {
       writeChecksumSibling(cliZip, corrupt = !releaseValid)
       writeChecksumSibling(mcpZip, corrupt = false)
     }
-    writeDesktopArchive(releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz"))
+    writeDesktopArchive(releaseDir, token)
   }
 
-  /** A release directory holding only the desktop archive, for installs that skip the runtime download. */
   fun stageDesktopOnlyRelease(): Path =
     Files.createTempDirectory("skillbill-desktop-release").also {
       stage(it, releaseValid = true, omitRuntimeAssets = true)
     }
 
-  private fun writeDesktopArchive(archivePath: Path) {
-    val os = InstallerShellFixtures.currentDesktopOs()
-    val staging = Files.createTempDirectory("skillbill-image-desktop")
-    val appName = InstallerShellFixtures.desktopAppName(os)
-    val launcher = staging.resolve(appName).resolve(InstallerShellFixtures.desktopAppExecutable(os))
+  private fun writeDesktopArchive(
+    releaseDir: Path,
+    token: String,
+  ) {
+    val os = System.getProperty("os.name").lowercase()
+    val appRoot =
+      when {
+        os.contains("mac") -> "Skill Bill.app/Contents/MacOS"
+        os.contains("win") -> "Skill Bill/bin"
+        else -> "Skill Bill/bin"
+      }
+    val staging = Files.createTempDirectory("skillbill-desktop-image")
+    val launcher = staging.resolve(appRoot).resolve(if (os.contains("win")) "Skill Bill.bat" else "Skill Bill")
     Files.createDirectories(launcher.parent)
     Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
-    launcher.toFile().setExecutable(true)
-    runOrThrow(staging, listOf("tar", "-czf", archivePath.toString(), appName))
-    writeChecksumSibling(archivePath, corrupt = false)
+    if (!os.contains("win")) launcher.toFile().setExecutable(true)
+    val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz")
+    runOrThrow(staging, listOf("tar", "-czf", archive.toString(), appRoot.substringBefore('/')))
+    writeChecksumSibling(archive, corrupt = false)
   }
 
   private fun writeRuntimeImageZip(
@@ -880,7 +922,16 @@ internal object PrebuiltReleaseStager {
     val lib = staging.resolve("$base/lib")
     Files.createDirectories(lib)
     Files.writeString(lib.resolve("$base.jar"), "stub")
-    runOrThrow(staging, listOf("bsdtar", "-a", "-cf", zipPath.toString(), base))
+    ZipOutputStream(Files.newOutputStream(zipPath)).use { zip ->
+      Files.walk(staging.resolve(base)).use { paths ->
+        paths.filter(Files::isRegularFile).forEach { path ->
+          val entryName = staging.relativize(path).joinToString("/")
+          zip.putNextEntry(ZipEntry(entryName))
+          Files.copy(path, zip)
+          zip.closeEntry()
+        }
+      }
+    }
   }
 
   private fun writeChecksumSibling(

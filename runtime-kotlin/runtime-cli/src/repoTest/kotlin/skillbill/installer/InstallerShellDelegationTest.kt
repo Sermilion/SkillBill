@@ -142,12 +142,20 @@ class InstallerShellDelegationTest {
   }
 
   @Test
-  fun `explicit uninstall fully removes the state dir even with copied source present`() {
+  fun `explicit uninstall preserves databases and removes copied source and installed artifacts`() {
     val fixtures = seedStateDirForWipe()
     val run = runUninstaller(fixtures, preserveSource = false, goalContinuation = false)
 
     assertEquals(0, run.exitCode, run.output)
-    assertFalse(Files.exists(fixtures.stateDir), "explicit uninstall must fully remove ~/.skill-bill")
+    assertEquals("seed\n", Files.readString(fixtures.stateDb))
+    listOf(
+      fixtures.skillContent,
+      fixtures.packYaml,
+      fixtures.orchestrationPlaybook,
+      fixtures.baselineManifest,
+      fixtures.runtimeBin,
+      fixtures.installedSkill,
+    ).forEach { path -> assertFalse(Files.exists(path), "$path must be removed") }
   }
 
   @Test
@@ -225,6 +233,23 @@ class InstallerShellDelegationTest {
 
     assertContains(run.output, "Installing runtime from source (--from-source)")
     assertFalse(run.output.contains("verified checksum:"), "from-source must not verify release checksums")
+  }
+
+  @Test
+  fun `source desktop build installs the host bundle and executable layout`() {
+    val launchers =
+      listOf(
+        "Darwin" to "Skill Bill.app/Contents/MacOS/Skill Bill",
+        "Linux" to "Skill Bill/bin/Skill Bill",
+        "MINGW64_NT-10.0" to "Skill Bill/bin/Skill Bill.bat",
+      )
+    launchers.forEach { (host, launcher) ->
+      val run = runInstallerShell(input = "1\nclaude\noff\nskip\n", fromSource = true, hostUname = host)
+
+      val installed = run.home.resolve("desktop-apps").resolve(launcher)
+      assertTrue(Files.isRegularFile(installed), "Missing desktop launcher for $host: $installed\n${run.output}")
+      if (host != "MINGW64_NT-10.0") assertTrue(Files.isExecutable(installed), installed.toString())
+    }
   }
 
   @Test
