@@ -50,6 +50,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label()
@@ -77,6 +78,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             DurableWorkflowArtifacts.fromMap(snapshot.artifacts).goalContinuationArtifact()
           }
         },
+        ContractSerialArtifactValidator(),
       )
 
     assertFailsWith<SkillBillRuntimeException> {
@@ -338,7 +340,11 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
     val runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(
         database,
-        FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator),
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(),
+        ),
       )
     return AdoptionHarness(
       repository = repository,

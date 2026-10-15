@@ -86,6 +86,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 class FeatureTaskExecutionPlanCreationTest {
   @Test
@@ -144,7 +145,12 @@ class FeatureTaskExecutionPlanCreationTest {
       val bytes = execution.encoded.copyOf()
       val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(bytes, execution.validator)
       bytes.fill(0)
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(),
+        )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
@@ -168,7 +174,12 @@ class FeatureTaskExecutionPlanCreationTest {
   @Test
   fun `direct executable workflow creation without a descriptor leaves no row`() =
     withDatabase { database ->
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(),
+        )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")
       }

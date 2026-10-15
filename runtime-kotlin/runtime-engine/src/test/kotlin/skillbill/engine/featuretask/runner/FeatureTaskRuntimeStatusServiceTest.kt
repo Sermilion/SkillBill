@@ -72,6 +72,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 private val FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.label()
@@ -1206,7 +1207,7 @@ internal fun statusHarness(): StatusHarness {
   val runInvariantsStore =
     FeatureTaskRuntimeRunInvariantsStore(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator),
+      FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator, ContractSerialArtifactValidator()),
     )
   return StatusHarness(
     recorder,

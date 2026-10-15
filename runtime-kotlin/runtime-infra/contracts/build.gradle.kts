@@ -158,6 +158,21 @@ governedResources {
     "SKILL-426: canonical acceptance-criterion repair-state schema",
   )
   copy(
+    "copyAcceptanceCriterionAuditResultSchema",
+    "acceptance-criterion-audit-result-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion audit-result schema",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairHandoffSchema",
+    "acceptance-criterion-repair-handoff-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-handoff schema",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairAdoptionSchema",
+    "acceptance-criterion-repair-adoption-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-adoption schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeReadinessEvidenceSchema",
     "feature-task-runtime-readiness-evidence-schema.yaml",
     "SKILL-364: canonical readiness-evidence schema",

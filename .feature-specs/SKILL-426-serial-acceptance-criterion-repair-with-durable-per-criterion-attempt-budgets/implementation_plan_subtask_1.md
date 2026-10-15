@@ -60,3 +60,28 @@ S1-001/S1-002 cover all initial catalog/dependency facts of AC-001. S1-003 defin
 ## Validation ownership
 
 No execution here. tests_executed is empty. Implement authors tests; audit reads source. Only build owns the pack build command. Validate discovers and runs required full repository/pack checks, packaged schema/parity, architecture/repo and isolated SQLite regressions, then repairs failures. Required architecture guards and real past regressions cannot be dropped for test minimalism. Runtime owns later exact-tree review/history/commit/PR/monitor.
+
+
+## Direct repair verification, 2026-10-14
+
+The direct repair completes S1-001 through S1-008. Audit strategy revision 4, runner activation and reporting remain assigned to subtasks 2 and 3.
+
+| Criteria | Implementation and evidence |
+| --- | --- |
+| S1-001, S1-002 | Typed admission retains authored composite identities and explicit source/validation facts. Domain tests prove prerequisite ordering and refusal of deferred unavailable prerequisites. |
+| S1-003 | Reservations, awaiting-verification, once-only outcomes, retained unsuccessful totals and final-only reopening live in the domain aggregate. Empty discovery requires final proof; conflicting final digest reuse is refused. Domain restore and wire admission share history coherence rules. |
+| S1-004, S1-005 | Acquired worker capability and one required transaction fence owner and expected state, couple serial/phase/ledger/attempt/workflow writes and return committed facts. Production SQLite tests prove takeover/escaped-capability refusal, stale revision/source refusal, restart replay, conflicting replay refusal, coupled rollback and no closure publication after a failed commit. Projection failure retains committed state; recovery regenerates the projection without another transition. |
+| S1-006 | All four 0.1 schemas have strict shapes, owning versions/keys/kinds/families, packaged resources, typed rejection and parity/rejection tests. Ordinary artifact patches refuse serial-family writes and validate retained artifacts. Run entry validates retained state against the authored catalog and distinguishes absent discovery from legacy history. |
+| S1-007 | Adoption explicitly admits the nine archived composition/revision tuples only after historical compatibility, pristine history, source and Git checkpoint/tree checks. Tests cover all nine tuples and SQLite adoption/replay at standalone revisions 1, 2 and 3. Separate provenance retains original artifacts while the live descriptor remains normalized. |
+| S1-008 | Four domain regressions, six production SQLite persistence regressions and two adoption regressions pass alongside contract tests, existing runtime tests and architecture guards. Cancellation propagates; attributed refusal, rollback, recovery and projection degradation records remain bounded. |
+
+Validation passed in the repair worktree with `./gradlew check detekt spotlessCheck`, `npx --yes agnix --strict .` and `scripts/validate_agent_configs`. The repository validator reports 106 skills, 16 governed add-on files, 9 platform packs and 96 native agents. No guard, baseline, exemption, dependency version or installed runtime changed.
+
+The architecture review applied the section 5 checklist from docs/architecture-guidelines.md.
+
+- A1, A2, A4. Domain owns aggregate policy; engine owns transactions; infrastructure owns schema/filesystem adapters; core binds the purpose-built projection port. Shared keys and projection types have production consumers in multiple modules.
+- A3, A5. New injected collaborators are private. The acquired worker exposes no lease token or repository. Phase-state extension implementations became private members so injection does not expose a collaborator bag. The phase-record forwarder and duplicated map-based state coherence checks were deleted.
+- A6, A7, A8. Governed wire keys and enums retain one owner. Existing typed failure codes cover rejection; cancellation propagates; projection I/O failure reports committed degradation. Time comes from the injected clock.
+- A9, A10, A11, A12. Persistence, domain and artifact responsibilities remain in their owning packages. Regression tests mirror those owners. The worker constructor is engine-scoped, restored state construction stays domain-scoped and wire decoding returns typed state through the governed artifact wrapper.
+- G1 through G7. The full architecture suite passes. No scanner, proving fixture, baseline or exemption was widened. Archived fixture extraction preserves the prior mapping assertions.
+- P1, P2, P3, P5, P6, P7, P8. This review checks the implemented end states and the existing source changes. It preserves the three-subtask bundle and removes duplicate authority instead of relocating it. The repair responds to the supplied production findings and records decisions beside the owners. P4 post-merge verification remains a later runtime-owned step because this repair has not been merged.

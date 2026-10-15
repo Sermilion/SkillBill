@@ -215,6 +215,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.TimeSource
 import java.lang.Double.TYPE as DoubleTYPE
 import java.lang.Long.TYPE as LongTYPE
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal const val WORKFLOW_ID = "wftr-20260602-test-0001"
 internal const val SESSION_ID = "ftr-test-001"
@@ -852,7 +853,11 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
     runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(
         database,
-        FeatureTaskRuntimeWorkflowPersistence(database, NoopWorkflowSnapshotValidator),
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          NoopWorkflowSnapshotValidator,
+          ContractSerialArtifactValidator(),
+        ),
       ),
   )
 

@@ -51,6 +51,7 @@ import skillbill.ports.workflow.goalstate.GoalRuntimeStateFileStore
 import skillbill.ports.workflow.goalstate.UnavailableGoalRuntimeStateFileStore
 import skillbill.scaffold.model.PlatformManifest
 import java.time.Clock
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractWireArtifactValidator
 
 fun goalRunnerDefaultPhaseRecorder(): FeatureTaskRuntimePhaseRecorder =
   testPhaseRecorder(
@@ -148,6 +149,7 @@ fun testGoalRunnerChildRepairExecutor(
   GoalRunnerChildRepairOperations(
     database,
     testWorkflowSnapshotValidator,
+    ContractWireArtifactValidator(),
     gitOperations,
     testDecompositionManifestValidator,
     clock,

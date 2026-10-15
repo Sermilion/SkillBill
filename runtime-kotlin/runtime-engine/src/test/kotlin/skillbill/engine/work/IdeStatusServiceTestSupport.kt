@@ -98,6 +98,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as ContractSerialArtifactValidator
 
 internal val acceptingIdeStatusSnapshotValidator: WorkflowSnapshotValidator =
   object : WorkflowSnapshotValidator {
@@ -271,7 +272,7 @@ internal fun ideStatusService(
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator),
+          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, ContractSerialArtifactValidator()),
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )

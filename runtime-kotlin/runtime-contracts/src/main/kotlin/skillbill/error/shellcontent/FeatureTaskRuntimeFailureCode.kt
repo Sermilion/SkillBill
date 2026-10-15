@@ -20,6 +20,9 @@ enum class FeatureTaskRuntimeFailureCode : RuntimeFailureCode {
   INVALID_VALIDATION_EVIDENCE_SCHEMA,
   INVALID_READINESS_EVIDENCE_SCHEMA,
   INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA,
+  INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
+  INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA,
+  INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA,
   INVALID_EXECUTION_IDENTITY_SCHEMA,
   INVALID_WORKER_OWNERSHIP_SCHEMA,
   FEATURE_TASK_RUNTIME_CONTRACT_REJECTED,
@@ -182,6 +185,39 @@ fun invalidAcceptanceCriterionRepairStateSchema(
   SkillBillRuntimeException(
     FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA,
     "Acceptance criterion repair state '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidAcceptanceCriterionAuditResultSchema(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA,
+    "Acceptance criterion audit result '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidAcceptanceCriterionRepairHandoffSchema(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA,
+    "Acceptance criterion repair handoff '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+    cause,
+  )
+
+fun invalidAcceptanceCriterionRepairAdoptionSchema(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA,
+    "Acceptance criterion repair adoption '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 

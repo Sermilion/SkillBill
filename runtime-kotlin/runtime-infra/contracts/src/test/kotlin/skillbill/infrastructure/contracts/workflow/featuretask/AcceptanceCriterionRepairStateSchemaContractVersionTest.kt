@@ -1,12 +1,12 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
+import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairStateSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import skillbill.contracts.workflow.featuretask.ACCEPTANCE_CRITERION_REPAIR_STATE_CONTRACT_VERSION
-import skillbill.infrastructure.contracts.locator.AcceptanceCriterionRepairStateSchemaPaths
 
 class AcceptanceCriterionRepairStateSchemaContractVersionTest {
   @Test
