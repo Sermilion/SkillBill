@@ -65,6 +65,7 @@ private fun runtimeModules(): List<Path> {
 
 internal fun readSources(root: Path, relativeTo: Path?): List<Source> = Files.walk(root).use { paths ->
   paths.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".kt") }
-    .map { path -> Source((relativeTo?.relativize(path) ?: path).toString().replace('\\', '/'), Files.readString(path)) }
+    // A Windows checkout applies CRLF (`* text=auto`), which the governed edge walk does not resolve; scan LF text everywhere.
+    .map { path -> Source((relativeTo?.relativize(path) ?: path).toString().replace('\\', '/'), Files.readString(path).replace("\r\n", "\n")) }
     .toList()
 }
