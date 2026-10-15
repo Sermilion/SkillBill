@@ -118,6 +118,7 @@ internal fun runInstallerShell(
         environment()["PATH"] = binDir.toString() + File.pathSeparator + environment()["PATH"].orEmpty()
         environment()["SKILL_BILL_TEST_HOST_UNAME"] = effectiveHostUname
         environment().remove("SKILL_BILL_GOAL_CONTINUATION")
+        environment().useOfflineDesktopRelease(home)
       }
       .start()
   process.outputStream.bufferedWriter().use { writer -> writer.write(input) }
@@ -327,6 +328,7 @@ internal fun runPrebuiltInstaller(
   builder.environment()["PATH"] = binDir.toString() + File.pathSeparator + builder.environment()["PATH"].orEmpty()
   builder.environment()["SKILL_BILL_TEST_HOST_UNAME"] = hostUname
   builder.environment().remove("SKILL_BILL_GOAL_CONTINUATION")
+  builder.environment().installDesktopUnder(home)
   if (options.skipPreinstallUninstall) {
     builder.environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
   }
@@ -358,6 +360,21 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   repoRoot.resolve("uninstall.sh").toFile().setExecutable(true)
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
+  InstallerShellFixtures.seedFakeGradlew(repoRoot)
+  InstallerDesktopFixtures.seedSource(repoRoot)
+  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
+}
+
+internal fun MutableMap<String, String>.useOfflineDesktopRelease(home: Path) {
+  val releaseDir = Files.createTempDirectory("skillbill-desktop-release")
+  PrebuiltReleaseStager.stageDesktopApp(releaseDir)
+  this["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
+  installDesktopUnder(home)
+}
+
+internal fun MutableMap<String, String>.installDesktopUnder(home: Path) {
+  this["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop-apps").toString()
+  this["XDG_DATA_HOME"] = home.resolve(".local/share").toString()
 }
 
 internal fun stageRelease(
@@ -687,7 +704,7 @@ internal object InstallerShellFixtures {
       |#!/usr/bin/env bash
       |set -euo pipefail
       |root="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
-      |app_root="${'$'}root/build/compose/binaries/main/app"
+      |app_root="${'$'}root/composeApp/build/compose/binaries/main/app"
       |case "${'$'}(uname -s)" in
       |  Darwin*) app="${'$'}app_root/Skill Bill.app/Contents/MacOS/Skill Bill" ;;
       |  Linux*) app="${'$'}app_root/Skill Bill/bin/Skill Bill" ;;
@@ -874,6 +891,7 @@ internal object PrebuiltReleaseStager {
       writeRuntimeImageZip(mcpZip, "runtime-mcp")
       writeChecksumSibling(cliZip, corrupt = !releaseValid)
       writeChecksumSibling(mcpZip, corrupt = false)
+      stageDesktopApp(releaseDir)
     }
     writeDesktopArchive(releaseDir, token)
   }
@@ -898,6 +916,25 @@ internal object PrebuiltReleaseStager {
     runOrThrow(staging, listOf("tar", "-czf", archive.toString(), appRoot.substringBefore('/')))
     writeChecksumSibling(archive, corrupt = false)
   }
+
+  fun stageDesktopApp(releaseDir: Path) {
+    val staging = Files.createTempDirectory("skillbill-desktop-app")
+    val launcherPath = desktopLauncherPath()
+    val launcher = staging.resolve(launcherPath)
+    Files.createDirectories(launcher.parent)
+    Files.writeString(launcher, "#!/usr/bin/env bash\nexit 0\n")
+    launcher.toFile().setExecutable(true)
+    val archive = releaseDir.resolve("skill-bill-desktop-$VERSION-${hostToken()}.tar.gz")
+    runOrThrow(staging, listOf("tar", "-czf", archive.toString(), launcherPath.substringBefore('/')))
+    writeChecksumSibling(archive, corrupt = false)
+  }
+
+  fun desktopLauncherPath(): String =
+    when (hostToken().substringBefore('-')) {
+      "macos" -> "Skill Bill.app/Contents/MacOS/Skill Bill"
+      "windows" -> "Skill Bill/bin/Skill Bill.bat"
+      else -> "Skill Bill/bin/Skill Bill"
+    }
 
   private fun writeRuntimeImageZip(
     zipPath: Path,

@@ -13,6 +13,9 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -104,61 +107,51 @@ internal class StandalonePhaseStatusStore(
     repositoryIdentity: String,
     branchCorrelation: String,
     now: Instant,
+    page: StandaloneEligiblePage,
   ): List<StandalonePhaseStatusRecord> {
+    val (limit, after, slice) = page
+    require(limit > 0) { "Eligible status page limit must be positive." }
     val liveFrom = now.minus(LIVE_RETENTION)
     val settledFrom = now.minus(SETTLED_RETENTION)
+    val liveStates = LIVE_STATES.joinToString(", ") { "'$it'" }
+    val live =
+      "(lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})"
+    val settled = "(finished_at IS NOT NULL AND ${instantAfterBoundSql("finished_at", "settled_from")})"
+    val eligible =
+      when (slice) {
+        StandaloneEligibleSlice.LIVE -> live
+        StandaloneEligibleSlice.SETTLED -> "($settled AND NOT $live)"
+        null -> "($live OR $settled)"
+      }
     return connection.prepareStatement(
       """
       WITH bounds(live_from, settled_from) AS (VALUES (?, ?))
       SELECT * FROM standalone_phase_status
       WHERE repository_identity = ? AND branch_correlation = ?
-        AND (
-          (lifecycle_state IN (${LIVE_STATES.joinToString(", ") { "'$it'" }})
-            AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})
-          OR (finished_at IS NOT NULL
-            AND ${instantAfterBoundSql("finished_at", "settled_from")})
-        )
-      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
+        AND $eligible
+        ${if (after == null) "" else "AND $AFTER_ANCHOR_SQL"}
+      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ?
       """.trimIndent(),
     ).use { statement ->
-      statement.bindAll(listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation))
+      statement.bindAll(
+        listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation) +
+          after.anchorBindings() + limit,
+      )
       statement.executeQuery().use { rows ->
         buildList { while (rows.next()) add(rows.toRecord()) }
       }
     }
   }
 
-  override fun readBoardCandidates(
-    finishedFrom: Instant,
-    finishedThrough: Instant,
-  ): List<StandalonePhaseStatusRecord> =
-    connection.prepareStatement(
-      """
-      WITH bounds(from_value, through_value) AS (VALUES (?, ?))
-      SELECT * FROM standalone_phase_status
-      WHERE workflow_id IS NOT NULL
-         OR lifecycle_state NOT IN (${BOARD_FINISHED_STATES.joinToString(", ") { "'$it'" }})
-         OR finished_at IS NULL
-         OR (
-           ${instantAtOrAfterBoundSql("finished_at", "from_value")}
-           AND ${instantAtOrBeforeBoundSql("finished_at", "through_value")}
-         )
-      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
-      """.trimIndent(),
-    ).use { statement ->
-      statement.bindAll(listOf(finishedFrom.toString(), finishedThrough.toString()))
-      statement.executeQuery().use { rows ->
-        buildList { while (rows.next()) add(rows.toRecord()) }
-      }
-    }
-
   override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> {
     require(query.offset >= 0 && query.limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    require(query.after == null || query.offset == 0) { "An anchored history page cannot also carry an offset." }
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM standalone_phase_status " +
         "WHERE repository_identity = ? AND phase_id = ? " +
         "AND COALESCE(upper(issue_key), workflow_id, branch_correlation) = ? " +
         "AND ${instantAtOrBeforeSql("started_at")} " +
+        (if (query.after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
     ).use { statement ->
       statement.bindAll(
@@ -167,9 +160,7 @@ internal class StandalonePhaseStatusStore(
           query.repositoryIdentity,
           query.phaseId,
           query.phaseGroup,
-          query.limit,
-          query.offset,
-        ),
+        ) + query.after.anchorBindings() + listOf(query.limit, query.offset),
       )
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toRecord()) } }
     }
@@ -180,17 +171,27 @@ internal class StandalonePhaseStatusStore(
     startedThrough: Instant,
     offset: Int,
     limit: Int,
+    after: StandalonePhaseExecutionAnchor?,
   ): List<IdeStatusWorkflowExecution> {
     require(offset >= 0 && limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    require(after == null || offset == 0) { "An anchored history page cannot also carry an offset." }
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM ide_status_workflow_execution " +
         "WHERE workflow_id = ? AND ${instantAtOrBeforeSql("started_at")} " +
+        (if (after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
     ).use { statement ->
-      statement.bindAll(listOf(startedThrough.toString(), workflowId, limit, offset))
+      statement.bindAll(listOf(startedThrough.toString(), workflowId) + after.anchorBindings() + listOf(limit, offset))
       statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toWorkflowExecution()) } }
     }
   }
+
+  private fun StandalonePhaseExecutionAnchor?.anchorBindings(): List<Any> =
+    if (this == null) {
+      emptyList()
+    } else {
+      listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
+    }
 
   private fun instantAtOrBeforeSql(columnName: String): String =
     "(unixepoch($columnName) < unixepoch((SELECT value FROM cutoff)) OR " +
@@ -212,14 +213,6 @@ internal class StandalonePhaseStatusStore(
     "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
       "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
       "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
-
-  private fun instantAtOrBeforeBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) < unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
 
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
@@ -636,7 +629,9 @@ internal class StandalonePhaseStatusStore(
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
-    val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed", "canceled")
+    const val AFTER_ANCHOR_SQL: String =
+      "(length(run_sequence) < ? OR (length(run_sequence) = ? AND run_sequence < ?) " +
+        "OR (length(run_sequence) = ? AND run_sequence = ? AND invocation_id < ?))"
     val LIVE_RETENTION: Duration = Duration.ofHours(24)
     val SETTLED_RETENTION: Duration = Duration.ofHours(6)
     val UPDATE_STATUS_REGISTRY_SQL =
