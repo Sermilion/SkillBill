@@ -668,6 +668,7 @@ object PrincipleEnforcementInventory {
     listOf(
       "agentRunLauncher",
       "agentRunService",
+      "checkedOutBranchSource",
       "configResolutionService",
       "databaseSchema",
       "databaseSession",

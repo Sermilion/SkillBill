@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
@@ -78,7 +79,7 @@ internal val CODEX_PROVIDER_PASSTHROUGH_KEYS: Set<String> =
   setOf(
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
-    "CODEX_HOME",
+    AgentHomeEnvironmentKeys.CODEX_HOME,
   ) + PROXY_PASSTHROUGH_KEYS
 
 internal val JUNIE_PROVIDER_PASSTHROUGH_KEYS: Set<String> = PROXY_PASSTHROUGH_KEYS

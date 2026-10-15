@@ -178,6 +178,7 @@ class InstallerShellReconcileTest {
         .apply {
           environment()["HOME"] = home.toString()
           environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+          environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()

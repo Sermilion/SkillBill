@@ -109,6 +109,7 @@ internal fun runInstallerShell(
       .apply {
         environment()["HOME"] = home.toString()
         environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+        environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
         environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
         environment()["SKILL_BILL_SKIP_PREINSTALL_UNINSTALL"] = "1"
         environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
@@ -318,6 +319,7 @@ internal fun runPrebuiltInstaller(
       .redirectErrorStream(true)
   builder.environment()["HOME"] = home.toString()
   builder.environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+  builder.environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
   builder.environment()["SKILL_BILL_RELEASE_DIR"] = releaseDir.toString()
   builder.environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
   val hostUname = nativeHostUname()
@@ -356,8 +358,6 @@ internal fun seedPrebuiltRepo(repoRoot: Path) {
   repoRoot.resolve("uninstall.sh").toFile().setExecutable(true)
   InstallerShellFixtures.seedAuthoredSource(repoRoot)
   InstallerShellFixtures.seedInstallerRuntime(repoRoot)
-  InstallerShellFixtures.seedFakeGradlew(repoRoot)
-  InstallerShellFixtures.seedFakeDesktopGradlew(repoRoot)
 }
 
 internal fun stageRelease(
@@ -593,6 +593,8 @@ internal object InstallerShellFixtures {
     )
 
   fun seedInstallerRuntime(repoRoot: Path) {
+    seedFakeGradlew(repoRoot)
+    InstallerDesktopFixtures.seedSource(repoRoot)
     seedFakeDesktopGradlew(repoRoot)
     writeFakeRuntimeBins(
       repoRoot,
@@ -865,6 +867,11 @@ internal object PrebuiltReleaseStager {
     omitRuntimeAssets: Boolean,
   ) {
     val token = hostToken()
+    val desktopStaging = Files.createTempDirectory("skillbill-desktop-release")
+    val desktopApp = InstallerDesktopFixtures.seedDistribution(desktopStaging)
+    val desktopArchive = releaseDir.resolve("skill-bill-desktop-$VERSION-$token.tar.gz")
+    runOrThrow(desktopStaging, listOf("bsdtar", "-czf", desktopArchive.toString(), desktopApp.fileName.toString()))
+    writeChecksumSibling(desktopArchive, corrupt = false)
     if (!omitRuntimeAssets) {
       val cliZip = releaseDir.resolve("runtime-cli-$VERSION-$token.zip")
       val mcpZip = releaseDir.resolve("runtime-mcp-$VERSION-$token.zip")

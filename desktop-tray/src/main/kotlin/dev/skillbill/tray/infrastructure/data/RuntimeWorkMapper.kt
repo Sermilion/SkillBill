@@ -5,6 +5,8 @@ import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkDetailItem
+import skillbill.ports.system.CheckedOutBranchSource
+import java.nio.file.Path
 import java.time.Instant
 
 internal fun WorkBoardItem.toDomain(): WorkItem = snapshot.toDomain(repositoryRoot, finishedAt, finishedAtSource?.wireValue).copy(
@@ -67,6 +69,10 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     statusRevision = execution?.statusRevision,
   )
 }
+
+internal fun WorkItem.withCheckedOutBranch(branches: CheckedOutBranchSource): WorkItem =
+  if (scope == ExecutionScope.STANDALONE_PHASE) this
+  else branches.checkedOutBranch(Path.of(repositoryRoot))?.let { copy(branch = it) } ?: this
 
 internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Detail {
   val goal = goalStatus
