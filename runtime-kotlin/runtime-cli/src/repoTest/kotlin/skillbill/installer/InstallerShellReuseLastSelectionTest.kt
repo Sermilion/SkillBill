@@ -111,6 +111,7 @@ class InstallerShellReuseLastSelectionTest {
         .apply {
           environment()["HOME"] = home.toString()
           environment()["SKILL_BILL_BIN_DIR"] = binDir.toString()
+          environment()["SKILL_BILL_DESKTOP_APP_DIR"] = home.resolve("desktop").toString()
           environment()["SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD"] = "1"
           environment()["SKILL_BILL_TEST_RUNTIME_LOG"] = logPath.toString()
           environment()["SKILL_BILL_TEST_REUSE_SELECTION"] = options.reuseSelection
@@ -132,6 +133,8 @@ class InstallerShellReuseLastSelectionTest {
   }
 
   private fun seedRepo(testRepo: Path) {
+    InstallerShellFixtures.seedFakeGradlew(testRepo)
+    InstallerDesktopFixtures.seedSource(testRepo)
     Files.writeString(testRepo.resolve("install.sh"), Files.readString(repoRoot.resolve("install.sh")))
     testRepo.resolve("install.sh").toFile().setExecutable(true)
 

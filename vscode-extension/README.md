@@ -10,7 +10,7 @@ and source-of-truth rules.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+
 - A `skill-bill` CLI on `PATH`, in `${SKILL_BILL_BIN_DIR:-~/.local/bin}`, or
   named by the `skillBill.cliPath` workspace setting
 
