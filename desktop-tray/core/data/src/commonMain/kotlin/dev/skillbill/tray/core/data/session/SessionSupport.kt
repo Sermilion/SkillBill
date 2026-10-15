@@ -2,6 +2,8 @@ package dev.skillbill.tray.core.data.session
 
 import dev.skillbill.tray.core.common.di.AppScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import me.tatarka.inject.annotations.Inject
@@ -47,8 +49,20 @@ internal class Counter {
 @SingleIn(AppScope::class)
 class DatabaseGenerations {
   private val counter = Counter()
+  private val published = MutableStateFlow(0L)
 
   internal fun next(): Long = counter.next()
+
+  /**
+   * The generation of the database the app reads, as the navigation layer sees it. It advances once when the selected
+   * database changes (including a selection of the same path) and once when a live connection is found replaced, and never
+   * on the routine opening of a connection, so a screen is invalidated exactly when what it shows can no longer be trusted.
+   */
+  val current: StateFlow<Long> = published.asStateFlow()
+
+  internal fun publishReplacement() {
+    published.update { it + 1 }
+  }
 }
 
 /** Whole milliseconds to wait for [remaining], rounded up so a timer never fires before its deadline. */

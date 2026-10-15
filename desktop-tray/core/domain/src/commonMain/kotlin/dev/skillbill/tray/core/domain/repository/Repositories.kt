@@ -16,6 +16,7 @@ import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.WorkSection
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 interface WorkBoardRepository {
   val refreshEvents: Flow<Set<WorkSection>>
@@ -43,6 +44,13 @@ interface WorkControlRepository {
 }
 
 interface WorkStoreSession {
+  /**
+   * The generation of the database the app reads. It advances after every selection, including a selection of the same
+   * path, and when a live connection is found to sit on a replaced file; a screen or route made under an earlier value must
+   * not be shown against a later one.
+   */
+  val generation: StateFlow<Long>
+
   suspend fun selectDatabase(path: String?)
   fun close()
   suspend fun closeAndJoin()

@@ -1,5 +1,6 @@
 plugins {
   id("skillbill.kmp.compose")
+  id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
@@ -9,8 +10,10 @@ kotlin {
     api(compose.ui)
     api(compose.material3)
     api(libs.kotlinx.coroutines.core)
+    api(libs.kotlinx.serialization.core)
     api(libs.lifecycle.viewmodel)
     api(libs.lifecycle.viewmodel.compose)
+    api(libs.navigation3.runtime)
     api(projects.core.domain)
     implementation(projects.core.common)
     implementation(projects.core.designsystem)

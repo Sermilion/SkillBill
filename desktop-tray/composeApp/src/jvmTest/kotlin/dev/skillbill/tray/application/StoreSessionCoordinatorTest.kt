@@ -4,7 +4,6 @@ import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.SettingsState
-import dev.skillbill.tray.core.domain.repository.WorkStoreSession
 import dev.skillbill.tray.core.testing.FakeSettingsRepository
 import dev.skillbill.tray.core.testing.FakeWorkStoreSession
 import kotlinx.coroutines.test.TestScope
@@ -21,8 +20,8 @@ class StoreSessionCoordinatorTest {
   private val session = FakeWorkStoreSession()
   private val native = FakeNativeServices()
 
-  private fun TestScope.coordinator(store: WorkStoreSession = session): StoreSessionCoordinator =
-    StoreSessionCoordinator(backgroundScope, settings, store, native).also { runCurrent() }
+  private fun TestScope.coordinator(switch: suspend (String?) -> Unit = session::selectDatabase): StoreSessionCoordinator =
+    StoreSessionCoordinator(backgroundScope, settings, switch, native).also { runCurrent() }
 
   private fun TestScope.change(transform: (AppSettings) -> AppSettings) {
     current = transform(current)
@@ -84,16 +83,7 @@ class StoreSessionCoordinatorTest {
 
   @Test
   fun `a database that cannot be opened is reported and does not stop later preferences`() = runTest {
-    val failing = object : WorkStoreSession {
-      override suspend fun selectDatabase(path: String?) {
-        throw IllegalStateException("cannot open $path")
-      }
-
-      override fun close() = Unit
-
-      override suspend fun closeAndJoin() = Unit
-    }
-    val coordinator = coordinator(failing)
+    val coordinator = coordinator { path -> throw IllegalStateException("cannot open $path") }
     assertEquals(ProblemCode.DATABASE_ACCESS, coordinator.problem.value?.code)
 
     change { it.copy(startAtLogin = false) }

@@ -1,3 +1,13 @@
+## [2026-10-15] Key navigation entries by database generation
+Context: Windows can outlive a database selection or a same-path file replacement, and saved routes can name rows from the previous database.
+Decision: Every route entry key includes the database generation, and restore drops routes from an obsolete generation or with invalid arguments, falling back to a safe root.
+Reason: An entry, its component and its ViewModel can then never survive into the next database.
+
+## [2026-10-15] Allow serializable routes; keep JSON types banned in presentation
+Context: Navigation 3 routes must be @Serializable, but the presentation guard banned all of kotlinx.serialization.
+Decision: The forbidden token narrowed to kotlinx.serialization.json, and a typing scan rejects string-keyed Any maps and unchecked-cast suppressions in navigation sources.
+Reason: Routes stay typed while JSON payload handling stays out of presentation; no exemption or baseline grew.
+
 ## [2026-10-15] Share one app-scoped WorkViewModel; relay from the shell
 Context: The work board allows one observer per WorkSection, but the window, sidebar and tray popover all need work state.
 Decision: One app-scoped WorkViewModel serves them all; the composeApp shell relays the history filter and board items to other features.

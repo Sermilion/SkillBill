@@ -177,7 +177,8 @@ class DesktopArchitectureTest {
       "java.sql",
     )
     val forbiddenPresentationTokens = listOf(
-      "kotlinx.serialization",
+      // Routes are @Serializable for saved state; the JSON tree types stay out of presentation.
+      "kotlinx.serialization.json",
       "JsonObject",
       "JsonElement",
       "java.io.File",

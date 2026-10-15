@@ -81,7 +81,8 @@ private sealed interface Acquisition {
   /** The session is closed, or its observer failed and the user has to refresh before it reconnects. */
   data object Unavailable : Acquisition
 
-  class Replace(val path: String, val retired: SessionGeneration?) : Acquisition
+  /** [fileReplaced] is true when the file behind a live connection is no longer the one it opened, not merely when it reconnects. */
+  class Replace(val path: String, val retired: SessionGeneration?, val fileReplaced: Boolean) : Acquisition
 }
 
 /**
@@ -213,6 +214,7 @@ class DatabaseSession(
         Acquisition.Unavailable -> null
         is Acquisition.Replace -> {
           dispose(acquisition.retired, announce = true)
+          if (acquisition.fileReplaced) generations.publishReplacement()
           open(acquisition.path)
         }
       }
@@ -227,9 +229,10 @@ class DatabaseSession(
         Acquisition.Reuse(existing)
       existing == null && observationProblem != null -> Acquisition.Unavailable
       else -> {
+        val fileReplaced = existing != null && !existing.connection.isCurrent()
         val retired = detach(announce = true)
         observationProblem = null
-        Acquisition.Replace(requireNotNull(path), retired)
+        Acquisition.Replace(requireNotNull(path), retired, fileReplaced)
       }
     }
   }

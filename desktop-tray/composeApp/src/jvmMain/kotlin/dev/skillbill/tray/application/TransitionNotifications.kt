@@ -44,6 +44,18 @@ class TransitionNotificationCoordinator(
   private var needsBaseline = true
   private var baselineSession: Long? = null
   @Volatile private var epoch = 0L
+  @Volatile private var resets = 0L
+  private var appliedResets = 0L
+
+  /**
+   * Starts the baseline over now, from any thread: a notification already queued is dropped when it would be sent, and the next
+   * settled read is silent. A database switch calls it before the new session renders, so work of the previous store never
+   * notifies and the new store's first state never does either.
+   */
+  fun resetBaseline() {
+    epoch++
+    resets++
+  }
 
   init {
     scope.launch {
@@ -57,6 +69,11 @@ class TransitionNotificationCoordinator(
 
   internal fun observe(state: TrackedSections) {
     val store = state.store
+    if (resets != appliedResets) {
+      appliedResets = resets
+      tracker.clear()
+      needsBaseline = true
+    }
     if (store?.place() != observedStore?.place()) {
       if (observedStore != null) epoch++
       tracker.clear()

@@ -111,6 +111,22 @@ class TransitionNotificationCoordinatorTest {
   }
 
   @Test
+  fun `a baseline reset drops what is queued and makes the next settled read silent, even from the same store`() = runTest {
+    coordinator()
+    show(settled(item(Lifecycle.ACTIVE)))
+    show(settled(item(Lifecycle.FAILED, minutes = 1)))
+    assertEquals(1, native.queued)
+
+    subject.resetBaseline()
+    native.authorizeAll()
+    assertTrue(native.notified.isEmpty(), "A switch drops a notification the previous session queued.")
+
+    show(settled(item(Lifecycle.ACTIVE, minutes = 2)))
+    show(settled(item(Lifecycle.FAILED, minutes = 3)))
+    assertEquals(1, native.queued, "The read right after the reset is a baseline; only the change after it notifies.")
+  }
+
+  @Test
   fun `a notification turned off before it is sent is not sent`() = runTest {
     coordinator()
     show(settled(item(Lifecycle.ACTIVE)))

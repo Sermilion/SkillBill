@@ -49,8 +49,14 @@ internal sealed interface SessionSlot {
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
-class WorkStoreSessionManager(private val factory: SessionFactory) : WorkStoreSession {
+class WorkStoreSessionManager(
+  private val factory: SessionFactory,
+  private val generations: DatabaseGenerations,
+) : WorkStoreSession {
   private val lock = Mutex()
+
+  override val generation: StateFlow<Long> = generations.current
+
   private val closed = MutableStateFlow(false)
   private val mutableSlot = MutableStateFlow<SessionSlot>(SessionSlot.Idle)
   private val switchEvents = MutableSharedFlow<Set<WorkSection>>(extraBufferCapacity = 1)
@@ -83,6 +89,8 @@ class WorkStoreSessionManager(private val factory: SessionFactory) : WorkStoreSe
       if (closed.value) parts.session.close()
     } finally {
       if (!published) mutableSlot.value = SessionSlot.Idle
+      // The previous database is gone whether or not the new one opened, so everything bound to it is out of date.
+      generations.publishReplacement()
     }
     switchEvents.tryEmit(WorkSection.entries.toSet())
   }

@@ -11,12 +11,12 @@ import software.amazon.lastmile.kotlin.inject.anvil.ContributesBinding
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 
-/** The I/O dispatcher only the application can name; the environment and home directory arrive with the component. */
+/** The I/O and UI dispatchers only the application can name; the environment and home directory arrive with the component. */
 @ContributesTo(AppScope::class)
 interface HostProviders {
   @Provides
   @SingleIn(AppScope::class)
-  fun dispatcherProvider(): DispatcherProvider = DispatcherProvider(io = Dispatchers.IO)
+  fun dispatcherProvider(): DispatcherProvider = DispatcherProvider(io = Dispatchers.IO, ui = Dispatchers.Main)
 }
 
 /** Routes data-layer diagnostics to the desktop log. */

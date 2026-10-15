@@ -49,7 +49,7 @@ internal class SettingsFixture(val home: Path, legacy: LegacyPreferencesSource =
     legacy,
     SettingsMigrationSink { reports += it },
     IgnoredDiagnostics,
-    DispatcherProvider(io = Dispatchers.IO),
+    DispatcherProvider(io = Dispatchers.IO, ui = Dispatchers.IO),
   )
   val repository = DataStoreSettingsRepository(handle)
 

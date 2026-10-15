@@ -27,6 +27,7 @@ import dev.skillbill.tray.core.domain.repository.WorkStoreStatusRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 // Test doubles for the domain repository ports. They hold no logic of their own: a test pushes what the "runtime" reports
@@ -165,14 +166,33 @@ class FakeWorkPolicyRepository : WorkPolicyRepository {
 
 class FakeWorkStoreSession : WorkStoreSession {
   val selectedPaths = mutableListOf<String?>()
+  private val generations = MutableStateFlow(0L)
+
+  override val generation: StateFlow<Long> = generations.asStateFlow()
+
+  /** Runs inside [selectDatabase] before the generation advances; park it on a barrier to hold a switch open. */
+  var onSelect: suspend (String?) -> Unit = {}
+  var closes = 0
+    private set
 
   override suspend fun selectDatabase(path: String?) {
     selectedPaths += path
+    onSelect(path)
+    generations.value += 1
   }
 
-  override fun close() = Unit
+  /** A same-path replacement the data layer found on its own: the generation advances with no selection. */
+  fun replaceInPlace() {
+    generations.value += 1
+  }
 
-  override suspend fun closeAndJoin() = Unit
+  override fun close() {
+    closes += 1
+  }
+
+  override suspend fun closeAndJoin() {
+    closes += 1
+  }
 }
 
 class FakeWorkStoreStatusRepository(initial: String? = null) : WorkStoreStatusRepository {

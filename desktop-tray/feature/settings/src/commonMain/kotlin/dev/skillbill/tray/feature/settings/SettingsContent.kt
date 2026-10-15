@@ -39,7 +39,7 @@ private const val SAVED_NOTICE_MILLIS = 2_000L
 
 /** The settings window; it shows the store the board is reading right now from its own state. */
 @Composable
-fun SettingsRoute(viewModel: SettingsViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun SettingsScreen(viewModel: SettingsViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
   val state by viewModel.state.collectAsState()
   var saved by remember { mutableStateOf(false) }
   LaunchedEffect(viewModel) {

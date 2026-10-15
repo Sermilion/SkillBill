@@ -5,7 +5,6 @@ import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.SettingsState
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
-import dev.skillbill.tray.core.domain.repository.WorkStoreSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,13 +14,13 @@ import kotlinx.coroutines.launch
 
 /**
  * Applies the preferences that act on the machine rather than on a screen: which database the application reads, and whether
- * it starts at login. The screens react to the same preferences on their own; the data layer holds back reads while the
- * selected database is being switched.
+ * it starts at login. A database switch goes through [switchDatabase], which the app's transition coordinator owns so every
+ * window leaves the old database before it closes. The screens react to the same preferences on their own.
  */
 class StoreSessionCoordinator(
   scope: CoroutineScope,
   settings: SettingsRepository,
-  private val storeSession: WorkStoreSession,
+  private val switchDatabase: suspend (String?) -> Unit,
   private val native: NativeServices,
 ) {
   private val mutableProblem = MutableStateFlow<Problem?>(null)
@@ -49,7 +48,7 @@ class StoreSessionCoordinator(
 
   private suspend fun select(path: String?) {
     try {
-      storeSession.selectDatabase(path)
+      switchDatabase(path)
     } catch (failure: CancellationException) {
       throw failure
     } catch (failure: Exception) {

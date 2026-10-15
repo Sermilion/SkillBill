@@ -67,12 +67,12 @@ subtasks:
 - id: 5
   name: "Navigation and host lifetimes"
   spec_path: ".feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec_subtask_5_navigation-and-host-lifetimes.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261015-024325-edhq"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

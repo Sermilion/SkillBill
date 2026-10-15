@@ -1,6 +1,7 @@
 plugins {
   id("skillbill.desktop.application")
   id("skillbill.kotlin.inject")
+  id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 group = "dev.skillbill.tray"
@@ -12,6 +13,13 @@ kotlin {
   // The merged application component is generated from the contributions of every module it depends on.
   sourceSets.commonMain.dependencies {
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.core)
+    implementation(libs.savedstate)
+    implementation(libs.navigation3.runtime)
+    implementation(libs.navigation3.ui)
+    implementation(libs.lifecycle.viewmodel)
+    implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.viewmodel.navigation3)
     implementation(projects.core.common)
     implementation(projects.core.domain)
     implementation(projects.core.data)
@@ -39,6 +47,7 @@ kotlin {
     implementation("dev.skillbill:runtime-infra-host")
     implementation("dev.skillbill:runtime-infra-contracts")
     implementation(libs.kotlin.compiler.embeddable)
+    implementation(libs.compose.ui.test)
     implementation(projects.core.testing)
   }
 }

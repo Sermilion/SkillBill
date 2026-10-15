@@ -1,5 +1,6 @@
 plugins {
   id("skillbill.feature")
+  id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {

@@ -57,7 +57,7 @@ object PackagedDataSmoke {
       JavaPreferencesLegacySource.forNode(legacy),
       DiagnosticsMigrationSink(source.diagnostics),
       source.diagnostics,
-      DispatcherProvider(io = Dispatchers.IO),
+      DispatcherProvider(io = Dispatchers.IO, ui = Dispatchers.IO),
     )
     val settings = DataStoreSettingsRepository(settingsHandle)
     try {

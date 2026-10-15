@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
@@ -87,33 +88,38 @@ import kotlin.time.Instant
  * the load, and whether run controls are offered from [DetailUiState.controllable].
  */
 @Composable
-fun DetailRoute(viewModel: DetailViewModel, modifier: Modifier = Modifier) {
+fun DetailRoute(viewModel: DetailViewModel, modifier: Modifier = Modifier, onBackToList: (() -> Unit)? = null) {
   val state by viewModel.state.collectAsState()
   val now by tickingNow()
-  DetailContent(state, now, viewModel::onAction, modifier)
+  DetailContent(state, now, viewModel::onAction, modifier, onBackToList)
 }
 
+/** [onBackToList], when given, is offered next to Refresh where the item cannot be read, so a missing item never strands the pane. */
 @Composable
 fun DetailContent(
   state: DetailUiState,
   now: Instant,
   onAction: (DetailAction) -> Unit,
   modifier: Modifier = Modifier,
+  onBackToList: (() -> Unit)? = null,
 ) {
   when (val load = state.load) {
-    DetailLoad.Loading -> DetailMessage("Loading work detail", "Fetching phases, subtasks, and history.", null, modifier)
-    is DetailLoad.Failed -> DetailMessage("Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, modifier)
+    DetailLoad.Loading -> DetailMessage("Loading work detail", "Fetching phases, subtasks, and history.", null, null, modifier)
+    is DetailLoad.Failed -> DetailMessage("Work detail unavailable", load.problem.summary, { onAction(DetailAction.Refresh) }, onBackToList, modifier)
     is DetailLoad.Loaded -> LoadedDetail(state, load, now, onAction, modifier)
   }
 }
 
 @Composable
-private fun DetailMessage(title: String, message: String, onRefresh: (() -> Unit)?, modifier: Modifier) {
+private fun DetailMessage(title: String, message: String, onRefresh: (() -> Unit)?, onBackToList: (() -> Unit)?, modifier: Modifier) {
   Box(modifier.fillMaxWidth().background(canvas), contentAlignment = Alignment.Center) {
     Column(Modifier.widthIn(max = 380.dp).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(title, color = ink, style = MaterialTheme.typography.titleLarge)
       Text(message, color = muted, style = MaterialTheme.typography.bodyMedium)
-      if (onRefresh != null) Button(onClick = onRefresh) { Text("Refresh") }
+      if (onRefresh != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onRefresh) { Text("Refresh") }
+        if (onBackToList != null) OutlinedButton(onClick = onBackToList) { Text("Back to list") }
+      }
     }
   }
 }

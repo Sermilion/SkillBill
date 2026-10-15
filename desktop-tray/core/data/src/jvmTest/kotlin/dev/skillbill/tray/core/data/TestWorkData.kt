@@ -105,7 +105,7 @@ fun workStack(
   val openConnections = AtomicInteger()
   val ownerRegistrations = AtomicInteger()
   val signalRegistrations = AtomicInteger()
-  val dispatchers = DispatcherProvider(io = Dispatchers.IO)
+  val dispatchers = DispatcherProvider(io = Dispatchers.IO, ui = Dispatchers.IO)
   val generations = DatabaseGenerations()
   // A non-empty map: an empty one makes the runtime fall back to the host environment.
   val host = HostEnvironment(mapOf("SKILL_BILL_TEST" to "1"), home.toString(), home.toString())
@@ -124,7 +124,7 @@ fun workStack(
       RuntimeWorkControlRepository(session, diagnostics),
     )
   }
-  val manager = WorkStoreSessionManager(sessions)
+  val manager = WorkStoreSessionManager(sessions, generations)
   return WorkStack(
     SessionWorkBoardRepository(manager),
     SessionWorkDetailRepository(manager),

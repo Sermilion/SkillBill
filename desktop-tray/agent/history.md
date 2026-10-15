@@ -1,3 +1,16 @@
+## [2026-10-15] SKILL-424 subtask 5 navigation and host lifetimes
+Areas: desktop-tray (composeApp, core/common, core/data, core/domain, core/testing, core/ui, feature/work, feature/detail, feature/history, feature/settings, gradle catalog)
+
+- Replaced the single MainWindow with Navigation 3: each feature owns a serializable route; composeApp holds a RouteBackStack (root plus at most one detail), polymorphic RouteSnapshots, a per-window WindowNavigator (per-section filter, selection and scroll memory) and a NavDisplay host with central entry adapters.
+- Added DatabaseGenerations (StateFlow, advances on every selection and same-path replacement); AppRoute entry keys carry the generation, and restore drops obsolete-generation or invalid routes and falls back to a safe root (reusable).
+- New scopes AppScope, DatabaseSessionScope, WindowScope, EntryScope; WindowComponent builds per-window and per-entry subcomponents; EntryViewModels.detail takes typed DetailArgs validated into Valid or Rejected, with no Any maps or casts (reusable).
+- Host lifetimes: WindowOwner, WindowRegistry, SessionTransitionCoordinator (serialized, cancel-safe database switches that clear window state first) and HostIntentRouter for tray, menu, popover and notification actions; AppOwner fixes quit order; Main opens multiple windows.
+- Guards: serialization ban narrowed to kotlinx.serialization.json; new alias-aware NavigationTypingRules PSI scan; no baseline or exemption grew.
+- Breaking or behavioral: DispatcherProvider is now (io, ui); sidebar split into Work and History roots with footer links; settings window disposes on close; Cmd/Ctrl+N opens a new window.
+- Limits: nothing compiled or run when written; Nav3, savedstate, subcomponent and compose-ui-test signatures unverified; two-pane layout is a custom layout over two NavDisplays, not a SceneStrategy; Readian root unreadable, so no drift recorded.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 5 of SKILL-424)
+
 ## [2026-10-15] SKILL-424 subtask 4 feature presentation
 Areas: desktop-tray (core/ui, feature/work, feature/detail, feature/history, feature/settings, composeApp, core/data, core/domain, core/testing, build-logic/convention)
 
