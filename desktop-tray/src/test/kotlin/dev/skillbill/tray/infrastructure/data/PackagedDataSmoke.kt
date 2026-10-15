@@ -58,6 +58,6 @@ object PackagedDataSmoke {
       check(settings.update { it.copy(databasePath = database.toString(), retention = Retention.WEEK) } is Outcome.Value)
       check(((settings.settings.first() as Outcome.Value).value).retention == Retention.WEEK)
       println("Packaged Room, SQLite runtime projection, detail and DataStore passed without CLI discovery.")
-    } finally { source.close(); settings.close(); legacy.removeNode() }
+    } finally { source.closeAndJoin(); settings.closeAndJoin(); legacy.removeNode() }
   }
 }
