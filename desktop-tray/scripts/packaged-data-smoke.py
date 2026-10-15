@@ -41,8 +41,14 @@ with tempfile.TemporaryDirectory(prefix="skillbill-packaged-smoke-") as director
     environment = os.environ.copy()
     environment.update(PATH=str(empty_path), HOME=str(home), USERPROFILE=str(home))
     environment.pop("CLASSPATH", None)
-    result = subprocess.run([str(launcher), str(home)], cwd=home, env=environment,
-                            capture_output=True, text=True, timeout=30)
+    # shortcut: a fixed ceiling sized for a loaded macOS runner's first launch of an unsigned copy; shrink it if CI launches get consistently fast.
+    try:
+        result = subprocess.run([str(launcher), str(home)], cwd=home, env=environment,
+                                capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired as timeout:
+        for stream in (timeout.stdout, timeout.stderr):
+            print(stream.decode() if isinstance(stream, bytes) else stream or "", file=sys.stderr, end="")
+        raise SystemExit("The packaged launcher did not finish within 180 seconds; its captured output is above.")
     print(result.stdout, end="")
     if result.returncode:
         print(result.stderr, file=sys.stderr, end="")
