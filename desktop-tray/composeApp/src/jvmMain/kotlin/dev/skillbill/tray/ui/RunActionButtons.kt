@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.application.DashboardModel
 import dev.skillbill.tray.core.designsystem.*
 import dev.skillbill.tray.core.domain.model.Detail
-import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.eligibleForControl
 
 @Composable
@@ -28,8 +27,8 @@ internal fun RunActionButtons(detail: Detail, model: DashboardModel, busy: Boole
   var selectedAgent by remember(item.identity, options?.agentId) { mutableStateOf(options?.agentId) }
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (item.freshness == Freshness.FRESH && item.eligibleForControl()) {
-        DesignButton(if (item.pauseRequested) "Pause requested" else "Pause after subtask", enabled = !busy && !item.pauseRequested) {
+      if (item.eligibleForControl()) {
+        DesignButton(if (item.pauseRequested) "Pause requested" else "Pause after subtask", enabled = !busy && item.pauseEligible) {
           model.perform("pause", item.identity)
         }
         DesignButton("Stop goal", enabled = !busy, danger = true) { model.perform("stop", item.identity) }

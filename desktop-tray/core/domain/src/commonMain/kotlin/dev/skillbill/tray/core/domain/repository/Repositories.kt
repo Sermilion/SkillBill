@@ -2,7 +2,9 @@ package dev.skillbill.tray.core.domain.repository
 
 import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.Board
+import dev.skillbill.tray.core.domain.model.BoardArrangement
 import dev.skillbill.tray.core.domain.model.BoardRetention
+import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.HistoryFilter
@@ -25,12 +27,17 @@ interface WorkBoardRepository {
 
 interface WorkDetailRepository {
   fun observeDetail(identity: WorkIdentity): Flow<Outcome<Detail>>
-  suspend fun detail(identity: WorkIdentity, cursor: String? = null, list: DetailList? = null, startOffset: Int = 0): Outcome<Detail>
+  suspend fun detail(identity: WorkIdentity, cursor: String? = null, list: DetailList? = null, anchor: String? = null): Outcome<Detail>
+}
+
+/** The runtime's board policy: grouping, ordering, counts and aggregate status for items the runtime already judged. */
+interface WorkPolicyRepository {
+  fun arrange(items: List<WorkItem>): BoardArrangement
 }
 
 interface WorkControlRepository {
-  suspend fun pause(item: WorkItem): Outcome<Unit>
-  suspend fun stop(item: WorkItem): Outcome<Unit>
+  suspend fun pause(item: WorkItem): Outcome<ControlConfirmation>
+  suspend fun stop(item: WorkItem): Outcome<ControlConfirmation>
   suspend fun cancel(item: WorkItem): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Cancellation is unavailable."))
   suspend fun launch(item: WorkItem, agentId: String?): Outcome<Unit> = Outcome.Failure(Problem(ProblemCode.UNKNOWN, "Launching is unavailable."))
 }

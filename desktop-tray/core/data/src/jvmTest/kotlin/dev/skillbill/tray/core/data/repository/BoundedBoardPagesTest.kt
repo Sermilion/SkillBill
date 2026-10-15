@@ -14,6 +14,7 @@ import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import java.nio.file.Path
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -45,7 +46,11 @@ class BoundedBoardPagesTest {
           )
         }
       }
-      val stack = workStack(fixture.tempDir.toRealPath(), TestClock(now.toKotlinInstant()))
+      val beforeNextSelection = AtomicReference<(() -> Unit)?>(null)
+      val stack = workStack(
+        fixture.tempDir.toRealPath(), TestClock(now.toKotlinInstant()),
+        onCandidateQuery = { beforeNextSelection.getAndSet(null)?.invoke() },
+      )
       try {
         stack.selectDatabase(fixture.dbPath.toString())
         val phases = value(stack.board(WorkSection.PHASES, Retention.DAY))
@@ -72,6 +77,21 @@ class BoundedBoardPagesTest {
         val morePhases = value(stack.board(WorkSection.PHASES, Retention.DAY, assertNotNull(phases.nextCursor)))
         assertEquals(LIVE - PAGE, morePhases.items.size)
         assertEquals(LIVE, (phases.items + morePhases.items).map { it.identity }.toSet().size)
+
+        // A commit landing while a page is selected forces one coherence retry. The retry is bounded too, and the
+        // request-wide accounting counts both attempts instead of reporting only the last one.
+        beforeNextSelection.set {
+          factory.transaction { unit ->
+            unit.standalonePhaseStatuses.register(registration(fixture.tempDir, "late-live", now.minusSeconds(10), "late-branch", "SKILL-3000"))
+          }
+        }
+        val retried = value(stack.board(WorkSection.PHASES, Retention.DAY))
+        assertEquals(PAGE, retried.items.size)
+        assertEquals("late-live", retried.items.first().identity.id)
+        val retriedRead = stack.diagnostics.requests.last { (category, _) -> category == "board_read_phases_success" }.second
+        assertEquals(2, retriedRead.getValue("attempts").toInt())
+        assertEquals(2, retriedRead.getValue("selection_statements").toInt())
+        assertTrue(retriedRead.getValue("selected_rows").toInt() <= 2 * CANDIDATE_BUDGET, retriedRead.toString())
       } finally {
         stack.closeAndJoin()
       }

@@ -1,13 +1,12 @@
 package dev.skillbill.tray.presentation
 
 import dev.skillbill.tray.application.DashboardState
-import dev.skillbill.tray.application.project
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
 
 fun presentTrayHover(state: DashboardState): String {
-  val board = state.board ?: return "Loading your work…"
-  val view = project(board, board.observedAt)
+  if (state.board == null) return "Loading your work…"
+  val view = presentPopover(state)
   return buildString {
     append("<p><font color=\"#3FB950\">${view.running} running</font> · ")
     append("<font color=\"#E2703C\">${view.needsYou} need you</font></p>")

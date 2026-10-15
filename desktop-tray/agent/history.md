@@ -1,3 +1,15 @@
+## [2026-10-15] SKILL-424 subtask 3 SKILL-423 data repair handoff
+Areas: desktop-tray (composeApp, core/data, core/domain, docs), runtime-kotlin (runtime-domain, runtime-ports, runtime-engine, runtime-infra/sqlite)
+
+- Pause eligibility is now a runtime policy fact (pauseRequested input, pauseEligible output) projected on board and detail models; desktop WorkItem.pauseEligible replaces its own pause rule. WorkControlService validates through shared eligibility helpers.
+- Control results are typed: IntentRecorded for pause, ExitConfirmed for confirmed stop, Accepted for already-stopped or no-live-lease, plus a distinct incomplete-termination refusal. Desktop gateway, adapter and repositories return Outcome of ControlConfirmation; the dashboard shows action and confirmation notices.
+- Exact runtime reason restoration flows through a ReasonRestoration domain model, mapper and detail-pane note.
+- Tests added: runtime pause policy, control outcomes, forced-retry bounded paging, session barrier replacement and failed initialization, cross-list cursor refusal. The architecture walk gained an extracted governed-edge walker with a rejection fixture (reusable).
+- desktop-tray/docs/skill-423-handoff.md holds one row per obligation (trace, verdict, owner, evidence) plus the Readian HEAD note; ARCHITECTURE.md and data-layer-validation.md link to it (reusable).
+- Limits: nothing compiled or run when written; board still loads the full work list; desktop still checks freshness beside runtime facts; no StoreReplaced refusal, no virtual-time deadline tests, teardown runs under the mutex. No Room migration or schema version bump.
+Feature flag: N/A
+Acceptance criteria: not self-reported by implement; audit owns the count (subtask 3 of SKILL-424)
+
 ## [2026-10-15] SKILL-424 subtask 2 data, preferences and generated DI
 Areas: desktop-tray (core/data, core/datastore, core/common, core/domain, core/testing, composeApp, build-logic/convention, scripts)
 

@@ -90,6 +90,9 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
     }
     return when (result) {
       WorkControlResult.Accepted -> ControlResult.Accepted
+      WorkControlResult.IntentRecorded -> ControlResult.IntentRecorded
+      WorkControlResult.ExitConfirmed -> ControlResult.ExitConfirmed
+      WorkControlResult.TerminationAttempted -> ControlResult.TerminationAttempted
       is WorkControlResult.LaunchFailed -> ControlResult.LaunchFailed(result.reason)
       is WorkControlResult.Rejected -> ControlResult.Rejected(result.reason.name.lowercase(), result.reason.toRefusal())
     }
@@ -144,7 +147,7 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
       observedAt: Instant,
       cursor: String?,
       pageSize: Int,
-      startOffset: Int,
+      anchor: String?,
       list: DetailList?,
     ): DetailProjection {
       val result = runtime.ideStatusService.detail(
@@ -153,8 +156,8 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
           observedAt = observedAt.toJavaInstant(),
           cursor = cursor,
           pageSize = pageSize,
-          startOffset = startOffset,
           list = list?.let { WorkDetailList.valueOf(it.name) },
+          anchor = anchor,
         ),
       )
       val options = result.item?.let { work ->
@@ -168,6 +171,7 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
         detail = detail,
         runtimeCursor = result.nextCursor,
         listCursors = result.listCursors.entries.associate { DetailList.valueOf(it.key.name) to it.value },
+        listAnchors = result.item?.listAnchors.orEmpty().entries.associate { DetailList.valueOf(it.key.name) to it.value },
         moreLists = result.item?.moreLists?.map { DetailList.valueOf(it.name) }.orEmpty(),
         runOptions = options?.let {
           RunOptions(it.canCancel, it.canLaunch, it.launchLabel, it.agentId, it.agentChoices, it.unavailableReason)

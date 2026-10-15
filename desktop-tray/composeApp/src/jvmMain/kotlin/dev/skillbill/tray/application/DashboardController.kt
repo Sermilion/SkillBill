@@ -11,13 +11,13 @@ import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 class DashboardController(
   private val boards: WorkBoardRepository,
   private val details: WorkDetailRepository,
   private val controls: WorkControlRepository,
+  private val policy: WorkPolicyRepository,
   private val storeSession: WorkStoreSession,
   private val settingsRepository: SettingsRepository,
   private val native: NativeServices,
@@ -94,8 +94,8 @@ class DashboardController(
               baselineSections += LIVE_SECTIONS + WorkSection.RECENT
               needsTransitionBaseline = true
               synchronized(detailWindows) { detailWindows.clear() }
-              mutable.update { it.copy(board = null, sections = emptyMap(), selected = null, detail = null,
-                problem = null, detailProblem = null, actionProblem = null, displayDurations = emptyMap(), boardLoading = true,
+              mutable.update { it.copy(board = null, arrangement = null, sections = emptyMap(), selected = null, detail = null,
+                problem = null, detailProblem = null, actionProblem = null, actionNotice = null, displayDurations = emptyMap(), boardLoading = true,
                 detailLoading = false, detailListLoading = emptySet(), detailExtrasStale = false,
                 sectionLoading = OBSERVED_SECTIONS.toSet(),
                 sectionLoadStates = emptyMap(), sectionProblems = emptyMap(), stale = false,
@@ -263,10 +263,10 @@ class DashboardController(
       synchronized(detailWindows) { detailWindows.clear() }
       storeGeneration = board.generation
       restartSubscriptions()
-      mutable.update { it.copy(sections = emptyMap(), board = null, boardLoading = true,
+      mutable.update { it.copy(sections = emptyMap(), board = null, arrangement = null, boardLoading = true,
         sectionLoading = OBSERVED_SECTIONS.toSet(),
         selected = null, detail = null, detailLoading = false, detailListLoading = emptySet(), detailExtrasStale = false,
-        displayDurations = emptyMap(), actionProblem = null, sectionLoadStates = emptyMap(), detailLoadStates = emptyMap(),
+        displayDurations = emptyMap(), actionProblem = null, actionNotice = null, sectionLoadStates = emptyMap(), detailLoadStates = emptyMap(),
         sectionProblems = emptyMap(), problem = null, stale = false, detailProblem = null) }
     }
     storeGeneration = board.generation
@@ -278,12 +278,13 @@ class DashboardController(
           item
         }
       }
-      val reconciled = board.copy(items = incoming.filter { section !in LIVE_SECTIONS || it.lifecycle != Lifecycle.CANCELED })
+      val reconciled = board.copy(items = incoming.filter { section !in LIVE_SECTIONS || it.liveSection != null })
       val sections = state.sections + (section to reconciled)
       val live = LIVE_SECTIONS.flatMap { sections[it]?.items.orEmpty() }.distinctBy { it.identity }
       val recent = sections[WorkSection.RECENT]?.items.orEmpty()
       val loading = state.sectionLoading - section
-      state.copy(sections = sections, databasePath = board.databasePath, board = board.copy(items = (live + recent).distinctBy { it.identity }, nextCursor = null),
+      val combined = board.copy(items = (live + recent).distinctBy { it.identity }, nextCursor = null)
+      state.copy(sections = sections, databasePath = board.databasePath, board = combined, arrangement = policy.arrange(combined.items),
         sectionLoading = loading, boardLoading = LIVE_SECTIONS.any { it in loading && it !in sections },
         sectionProblems = state.sectionProblems - section,
         sectionLoadStates = state.sectionLoadStates + (section to when {
@@ -495,8 +496,10 @@ class DashboardController(
             var combined = observed.value
             for (list in DetailList.entries) {
               val retained = windows[list].orEmpty()
-              val start = retained.firstOrNull()?.pageOffset ?: 0
-              var page = if (start == 0) observed else details.detail(identity, list = list, startOffset = start)
+              // The first retained page is re-read from the identity it started after, so rows inserted or removed ahead
+              // of it never shift the window; a head page has no anchor and is the observed page itself.
+              val anchor = retained.firstOrNull()?.anchors?.get(list)
+              var page = if (anchor == null) observed else details.detail(identity, list = list, anchor = anchor)
               val replacement = mutableListOf<Detail>()
               val cursors = mutableSetOf<String>()
               while (replacement.size < retained.size.coerceAtLeast(1)) {
@@ -614,8 +617,7 @@ class DashboardController(
       val eligible = when (actionName) {
         "cancel" -> options?.canCancel == true
         "launch" -> options?.canLaunch == true
-        else -> item.freshness == Freshness.FRESH && item.eligibleForControl() &&
-          !(actionName == "pause" && item.pauseRequested)
+        else -> if (actionName == "pause") item.pauseEligible else item.eligibleForControl()
       }
       if (switchingStore || identity in controlJobs || current.stale || !eligible || item.databaseGeneration != generation) return
       val epoch = storeEpoch
@@ -634,7 +636,10 @@ class DashboardController(
           val published = synchronized(this@DashboardController) {
             if (!isCurrentControlLocked(identity, owner, epoch, generation)) false
             else {
-              mutable.update { it.copy(actionProblem = (result as? Outcome.Failure)?.problem) }
+              val confirmation = (result as? Outcome.Value<*>)?.value as? ControlConfirmation
+              mutable.update {
+                it.copy(actionProblem = (result as? Outcome.Failure)?.problem, actionNotice = confirmation?.let(::confirmationNotice))
+              }
               true
             }
           }
@@ -654,7 +659,7 @@ class DashboardController(
           }
         }
       }
-      mutable.update { it.copy(actionsInProgress = it.actionsInProgress + identity, actionProblem = null) }
+      mutable.update { it.copy(actionsInProgress = it.actionsInProgress + identity, actionProblem = null, actionNotice = null) }
       controlJobs[identity] = controlJob
       controlJob.invokeOnCompletion {
         synchronized(this@DashboardController) {
@@ -671,7 +676,8 @@ class DashboardController(
 
   private suspend fun confirmCancellation(item: WorkItem) {
     val canceled = item.copy(lifecycle = Lifecycle.CANCELED, finishedAt = clock.now(), updatedAt = clock.now(),
-      requiresAttention = false, liveSection = null, controlEligible = false)
+      requiresAttention = false, liveSection = null, controlEligible = false, pauseEligible = false,
+      running = false, doneWithinDay = false)
     synchronized(this) {
       canceledItems[item.identity] = canceled
       mutable.update { state ->
@@ -679,9 +685,10 @@ class DashboardController(
           board.copy(items = board.items.map { if (it.identity == item.identity) canceled else it }
             .filter { section !in LIVE_SECTIONS || it.identity != item.identity })
         }
-        state.copy(sections = sections, board = state.board?.copy(items = state.board.items.map {
+        val board = state.board?.copy(items = state.board.items.map {
           if (it.identity == item.identity) canceled else it
-        }))
+        })
+        state.copy(sections = sections, board = board, arrangement = board?.let { policy.arrange(it.items) })
       }
     }
     val confirmed = details.detail(item.identity)
@@ -701,7 +708,7 @@ class DashboardController(
             } == true
           } else {
             candidate.identity == item.identity && candidate.updatedAt > item.updatedAt &&
-              (candidate.executionId != item.executionId || candidate.lifecycle in setOf(Lifecycle.ACTIVE, Lifecycle.TERMINAL))
+              (candidate.executionId != item.executionId || candidate.hasStartedOrFinished())
           }
       } }.filterNotNull().first()
     }
@@ -738,6 +745,15 @@ class DashboardController(
   }
 }
 
+/** Feedback for a goal control that succeeded; each wording claims only what the runtime confirmed. */
+private fun confirmationNotice(confirmation: ControlConfirmation): String = when (confirmation) {
+  ControlConfirmation.INTENT_RECORDED -> "Pause recorded. The goal pauses at its next checkpoint."
+  ControlConfirmation.REQUEST_ACCEPTED -> "Request accepted. No running goal process needed stopping."
+  ControlConfirmation.EXIT_CONFIRMED -> "Stop confirmed. The goal runner has exited."
+  ControlConfirmation.TERMINATION_ATTEMPTED ->
+    "Stop signal sent. The goal runner's exit was not confirmed; refresh and check it before retrying."
+}
+
 fun enabledTransitions(events: List<Pair<WorkItem, String>>, settings: AppSettings): List<Pair<WorkItem, String>> =
   events.filter { (_, transition) -> transition in allowedTransitions && settings.notifications[transition] == true }
 
@@ -749,7 +765,7 @@ class TransitionTracker {
 
   fun baseline(board: Board) {
     last.clear()
-    board.items.filter { it.freshness == Freshness.FRESH }.forEach { item ->
+    board.items.filter { it.isFresh() }.forEach { item ->
       val key = Key(item.identity, item.executionId ?: item.invocationId)
       last.remove(key)
       last[key] = observation(item)
@@ -759,7 +775,7 @@ class TransitionTracker {
 
   fun observe(board: Board): List<Pair<WorkItem, String>> = buildList {
     board.items.forEach { item ->
-      if (item.freshness != Freshness.FRESH) return@forEach
+      if (!item.isFresh()) return@forEach
       val key = Key(item.identity, item.executionId ?: item.invocationId)
       val prior = last[key]
       if (prior != null && !isNewer(item, prior)) return@forEach
@@ -799,28 +815,6 @@ class TransitionTracker {
     }
     return item.updatedAt > prior.updatedAt
   }
-}
-
-data class BoardProjection(
-  val running: Int,
-  val needsYou: Int,
-  val done24h: Int,
-  val goals: List<WorkItem>,
-  val phases: List<WorkItem>,
-  val livePhases: List<WorkItem> = phases,
-  val finishedPhases: List<WorkItem> = emptyList(),
-)
-
-fun project(board: Board, now: Instant): BoardProjection {
-  val goals = board.items.filter { it.displayGroup == WorkSection.GOALS && it.liveSection != null }.sortedWith(
-    compareBy<WorkItem> { it.displayPriority }.thenBy { it.identity.id }.thenBy { it.identity.repositoryIdentity }
-  )
-  val phaseItems = board.items.filter { it.isPhase() }
-  val finished = phaseItems.filter { it.finishedAt?.let { end -> end >= now - 1.hours && end <= now } == true }
-  val live = phaseItems.filter { it.liveSection != null }
-  return BoardProjection(board.items.count { it.liveSection in setOf(WorkSection.GOALS, WorkSection.PHASES) }, board.items.count {
-    it.needsAttention()
-  }, board.items.count { it.lifecycle == Lifecycle.TERMINAL && it.finishedAt?.let { done -> done >= board.observedAt - 24.hours && done <= board.observedAt } == true }, goals, live + finished, live, finished)
 }
 
 fun displayedDuration(baseMs: Long?, asOf: Instant?, now: Instant, freshness: Freshness, live: Boolean): Long? {

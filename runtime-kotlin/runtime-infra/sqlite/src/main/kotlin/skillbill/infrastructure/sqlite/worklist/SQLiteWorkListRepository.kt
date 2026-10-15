@@ -8,11 +8,14 @@ import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
+import skillbill.ports.work.model.WorkGoalDependencyAnchor
 import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.ports.work.model.WorkGoalParentCandidate
 import skillbill.ports.work.model.WorkGoalSubtaskPage
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkStatusCandidatePage
+import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.work.model.WorkStoreObservation
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.WorkflowStatus
@@ -34,7 +37,8 @@ internal class SQLiteWorkListRepository(
     offset: Int,
     limit: Int,
     completedOnly: Boolean,
-  ): WorkGoalSubtaskPage? = goalSubtasks.page(workflowId, offset, limit, completedOnly)
+    afterSubtaskId: Int?,
+  ): WorkGoalSubtaskPage? = goalSubtasks.page(workflowId, offset, limit, completedOnly, afterSubtaskId = afterSubtaskId)
 
   private val goalSubtasks = WorkGoalSubtaskStore(connection)
 
@@ -79,7 +83,11 @@ internal class SQLiteWorkListRepository(
     offset: Int,
     limit: Int,
     subtaskId: Int?,
-  ): WorkGoalDependencyPage = readWorkGoalDependencyPage(connection, workflowId, offset, limit, subtaskId)
+    after: WorkGoalDependencyAnchor?,
+  ): WorkGoalDependencyPage = readWorkGoalDependencyPage(connection, workflowId, offset, limit, subtaskId, after)
+
+  override fun statusCandidates(query: WorkStatusCandidateQuery): WorkStatusCandidatePage =
+    readWorkStatusCandidates(connection, query)
 
   override fun list(limit: Int?): List<WorkItem> {
     require(limit == null || limit > 0) { "Work-list limit must be positive." }
@@ -148,7 +156,15 @@ private fun query(predicate: String = ""): String =
   """
   SELECT issue_key, workflow_kind, workflow_id, started_at, current_state,
          state_entered_at, state_entered_at_estimated
-  FROM (
+  FROM ($WORK_ITEM_UNION_SQL)
+  $predicate
+  ORDER BY unixepoch(started_at) DESC, ${fractionalSecondsSql("started_at")} DESC, workflow_id DESC
+  LIMIT ?
+  """.trimIndent()
+
+/** The three workflow tables as one work-item relation; the list and the status candidate pages both read it. */
+internal const val WORK_ITEM_UNION_SQL: String =
+  """
     SELECT issue_key,
            CASE mode
              WHEN 'prose' THEN 'feature-task-prose'
@@ -179,11 +195,7 @@ private fun query(predicate: String = ""): String =
            state_entered_at,
            state_entered_at_estimated
     FROM goal_issue_progress
-  )
-  $predicate
-  ORDER BY unixepoch(started_at) DESC, ${fractionalSecondsSql("started_at")} DESC, workflow_id DESC
-  LIMIT ?
-  """.trimIndent()
+  """
 
 internal fun fractionalSecondsSql(columnName: String): String =
   """
@@ -205,7 +217,7 @@ internal fun fractionalSecondsSql(columnName: String): String =
   END
   """.trimIndent()
 
-private fun ResultSet.toWorkItem(): WorkItem {
+internal fun ResultSet.toWorkItem(): WorkItem {
   val workflowId = required("workflow_id")
   val kindValue = required("workflow_kind")
   val kind =

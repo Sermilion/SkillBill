@@ -54,6 +54,48 @@ internal object SourceRules {
       compositionConstructions(source, found)
   }
 
+  /** A governed consumer the policy scan must reach, and a call it must make on the way (the runtime-owned arrangement). */
+  data class PolicyConsumer(val pathSuffix: String, val name: String, val mustCall: String? = null)
+
+  /** The real surfaces that render the runtime's arrangement; a scan that never reaches them proves nothing. */
+  val policyConsumers = setOf(
+    PolicyConsumer("/presentation/TrayPresentation.kt", "presentTrayState"),
+    PolicyConsumer("/presentation/TrayPresentation.kt", "presentPopover"),
+    PolicyConsumer("/application/DashboardController.kt", "observeSelectedDetail"),
+    PolicyConsumer("/application/DashboardController.kt", "publish", mustCall = "arrange"),
+  )
+
+  private val policySurfaces = listOf("/application/", "/presentation/", "/ui/")
+
+  private fun Source?.isDesktopProduction(): Boolean = this != null && sourceSet in productionSourceSets
+
+  /**
+   * Walks every edge out of the desktop surfaces that render work (application, presentation, ui and the domain model)
+   * and reports each visited desktop function outside the adapter modules that sorts work, judges lifecycle or freshness
+   * membership, weighs a time window, or weighs freshness into eligibility itself. Data adapters legitimately order
+   * storage pages, so they are walked but not reported. An empty scan, an empty root set, an edge that resolves to no
+   * declaration, and a missing [requiredConsumers] entry each fail loudly instead of passing.
+   */
+  fun policyOwnershipViolations(sources: List<Source>, requiredConsumers: Set<PolicyConsumer> = policyConsumers): List<String> {
+    val functions = parsedSymbols(sources)
+    if (functions.isEmpty()) throw AssertionError("The governed policy scan set is empty.")
+    val bySource = sources.associateBy(Source::path)
+    val roots = functions.filter { function ->
+      val source = bySource[function.path]
+      source.isDesktopProduction() &&
+        (source?.project == ModuleGraphRules.DOMAIN || policySurfaces.any { it in function.path })
+    }
+    val visited = walkGovernedEdges(functions, roots)
+    val missing = requiredConsumers.filter { consumer ->
+      visited.none { it.path.endsWith(consumer.pathSuffix) && it.name == consumer.name && (consumer.mustCall == null || consumer.mustCall in it.calls) }
+    }
+    if (missing.isNotEmpty()) throw AssertionError("The policy scan did not reach its governed consumers: $missing")
+    return visited.filter { function ->
+      val source = bySource[function.path]
+      source.isDesktopProduction() && source?.project !in adapterModules
+    }.flatMap { function -> function.policySites.distinct().map { "${function.path}:${function.name} $it" } }.sorted()
+  }
+
   private fun compositionConstructions(source: Source, found: SourceReferences): List<String> =
     if (source.sourceSet !in productionSourceSets || !isComposition(source.path)) {
       emptyList()

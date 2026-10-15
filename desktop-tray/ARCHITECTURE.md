@@ -71,13 +71,16 @@ completion.
 Needs you, live goals, live phases, History, and recent completions have separate
 desktop queries. Search runs in SQL before the ten-row result limit. The desktop
 can inspect up to forty candidate rows per request and retries up to three times
-when another process changes the observed snapshot. These limits do not bound the
-shared runtime projection: `IdeStatusService.board` still loads the full work
-list and standalone candidate set before selecting a page. The Room query and
-the JDBC projection also use separate connections. History has its own retention
-and family filter. Sidebar, history, and detail cursors are separate at the
-desktop boundary, and retained windows cap at five pages. The shared detail
-service still materializes some growing collections before paging them.
+when another process changes the observed snapshot. The shared status read is
+bounded too: it takes at most 500 workflows and 500 eligible standalone rows per
+request. Standalone execution history pages by a run-sequence anchor, so newer
+runs recorded between reads neither repeat nor skip a row, and detail phases are
+projected one page at a time. The Room query and the JDBC projection use
+separate connections. History has its own retention and family filter. Sidebar,
+history, and detail cursors are separate at the desktop boundary, and retained
+windows cap at five pages. Detail cursors carry the store id, revision,
+repository identity, list, and page size; a cursor from another store, list, or
+revision is refused and the read retries against one coherent snapshot.
 Generation-bound cursors reject stale appends and details after a path change or
 same-path replacement. Failed reads retain prior data with a stale indication.
 
@@ -91,7 +94,11 @@ query coherence. Rollbacks and unrelated table commits publish nothing.
 Registration and reconnect read a fresh baseline; watcher overflow rereads the latest signal.
 An observer failure leaves the last view stale until explicit refresh reconnects.
 Lease and retention deadlines schedule one invalidation at the known boundary.
-Elapsed-duration display ticks without database reads.
+Each board section and each detail owner has its own `DeadlineScheduler`, and a
+fired deadline reprojects only that owner. The runtime stamps time-windowed
+facts with a `membershipDeadline`, so a surface rereads at the flip instant
+instead of judging the window itself. Elapsed-duration display ticks without
+database reads.
 
 DataStore 1.2.1 stores app preferences in the injected settings file. Typed Flow
 publishes committed settings. Atomic field updates preserve concurrent choices.
@@ -113,11 +120,30 @@ Linux AppRun remain host integration code. Replacing host helpers belongs to
 SKILL-424. Desktop CI watches runtime-library changes and builds the composite
 dependencies from source.
 
-The source does not yet meet every intended data-layer boundary. In particular,
-the desktop still owns grouping and control-eligibility checks, Room projection
-uses a separate runtime JDBC snapshot, and the shared live-board query still
-walks historical rows. The validation record tracks the remaining query,
-invalidation, pagination, cursor, and lifecycle gaps.
+The runtime owns shared work policy and the desktop renders its typed verdicts.
+`IdeStatusPolicy.work` emits the per-item facts (`controlEligible`, which includes
+freshness, `pauseEligible`, `running`, `recentlyFinishedPhase`, `doneWithinDay`, and
+`membershipDeadline`), and `IdeStatusPolicy.arrange` owns the board order, the
+live and finished phase lists, the counts, and the tray status. The desktop reaches
+it through `WorkPolicyRepository`, keeps the result in `DashboardState.arrangement`,
+and only resolves identities and renders. A declaration-aware source rule in
+`DesktopArchitectureTest` walks the desktop surfaces and rejects code that sorts
+work, judges lifecycle or freshness membership, or weighs a time window itself.
+Detail lists page by the identity of their last row (a per-list anchor), never by a
+shared offset, and the desktop refreshes a retained page from that anchor. The status
+read pages live work first within a fixed budget and counts the storage work it
+spends. The database session
+owner is `DatabaseSession`: it detaches under its mutex and disposes outside it,
+and a separate lifecycle lock serialises replacement and teardown. Control
+results reach the desktop as distinct outcomes (`IntentRecorded`, `Accepted`,
+`ExitConfirmed`, `TerminationAttempted`, and a typed incomplete-termination
+refusal). Some boundaries are still open: Room projection uses a separate runtime
+JDBC snapshot, the desktop and runtime candidate queries still evaluate a union of
+every work table before filtering and rely on SQLite to push the predicates down,
+and the residuals listed in the SKILL-423 handoff record remain.
+[`docs/skill-423-handoff.md`](docs/skill-423-handoff.md) holds the per-obligation
+verdicts, owners, and regression evidence; the validation record keeps the
+measured results.
 
 The disposable repository tests include 5,000 terminal records, a live goal
 with a real manifest and process lease, exact control rejection, external JVM

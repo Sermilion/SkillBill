@@ -2,6 +2,7 @@ package dev.skillbill.tray.core.data.runtime
 
 import dev.skillbill.tray.core.domain.model.*
 import skillbill.ports.filesystem.model.DatabaseFileObservation
+import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.ports.idestatus.model.WorkBoardItem
@@ -10,6 +11,15 @@ import java.nio.file.Path
 import kotlin.time.Instant
 import kotlin.time.toKotlinInstant
 
+internal fun ExecutionReasonRestoration.toDomain(): ReasonRestoration = when (this) {
+  ExecutionReasonRestoration.EXACT -> ReasonRestoration.EXACT
+  ExecutionReasonRestoration.RESTORED -> ReasonRestoration.RESTORED
+  ExecutionReasonRestoration.MISSING -> ReasonRestoration.MISSING
+  ExecutionReasonRestoration.AMBIGUOUS -> ReasonRestoration.AMBIGUOUS
+  ExecutionReasonRestoration.BUDGET_EXCEEDED -> ReasonRestoration.BUDGET_EXCEEDED
+  ExecutionReasonRestoration.MISSING_CONTENT -> ReasonRestoration.MISSING_CONTENT
+}
+
 internal fun DatabaseFileObservation.toDomain(): DatabaseFileIdentity = DatabaseFileIdentity(path.toString(), fileKey)
 
 internal fun DatabaseFileIdentity.toObservation(): DatabaseFileObservation = DatabaseFileObservation(Path.of(path), fileKey)
@@ -17,9 +27,11 @@ internal fun DatabaseFileIdentity.toObservation(): DatabaseFileObservation = Dat
 internal fun WorkBoardItem.toDomain(): WorkItem = snapshot.toDomain(repositoryRoot, finishedAt?.toKotlinInstant(), finishedAtSource?.wireValue).copy(
   controlLeaseOwner = controlLease?.ownerToken, controlLeaseGeneration = controlLease?.generation,
   databaseStoreId = observation?.storeId, databaseRevision = observation?.revision,
-  liveSection = liveSection?.let { WorkSection.valueOf(it.name) }, controlEligible = controlEligible, requiresAttention = requiresAttention,
+  liveSection = liveSection?.let { WorkSection.valueOf(it.name) }, controlEligible = controlEligible, pauseEligible = pauseEligible, requiresAttention = requiresAttention,
   displayGroup = displayGroup?.let { WorkSection.valueOf(it.name) }, displayPriority = displayPriority,
-  exactPauseReason = exactPauseReason, databaseFile = databaseFileObservation?.toDomain())
+  exactPauseReason = exactPauseReason, running = running, recentlyFinishedPhase = recentlyFinishedPhase,
+  doneWithinDay = doneWithinDay, membershipDeadline = membershipDeadline?.toKotlinInstant(),
+  databaseFile = databaseFileObservation?.toDomain())
 
 internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, completionSource: String?): WorkItem {
   val scope = execution?.scope
@@ -81,7 +93,7 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
     item = snapshot.toDomain(repositoryRoot, finishedAt?.toKotlinInstant(), finishedAtSource?.wireValue).copy(
       databaseStoreId = observation?.storeId, databaseRevision = observation?.revision,
       liveSection = liveSection?.let { WorkSection.valueOf(it.name) }, controlEligible = controlEligible,
-      requiresAttention = requiresAttention, displayGroup = displayGroup?.let { WorkSection.valueOf(it.name) },
+      pauseEligible = pauseEligible, requiresAttention = requiresAttention, displayGroup = displayGroup?.let { WorkSection.valueOf(it.name) },
       displayPriority = displayPriority, exactPauseReason = exactPauseReason,
       databaseFile = databaseFileObservation?.toDomain()),
     stepPipeline = stepPipeline,
@@ -118,7 +130,8 @@ internal fun WorkDetailItem.toDomain(observedAt: Instant, cursor: String?): Deta
       edit = goal?.latestWorktreeEdit?.let { WorktreeEdit(it.recordedAt?.toKotlinInstant(), it.pathSample, it.netInsertions, it.netDeletions, it.phaseId) },
     ),
     executionHistory = executionHistory.map { ExecutionInstance(it.invocationId, it.executionId, it.lifecycleState,
-      it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(), it.finishedAt?.toKotlinInstant(), it.result) },
+      it.startedAt.toKotlinInstant(), it.updatedAt.toKotlinInstant(), it.finishedAt?.toKotlinInstant(), it.result,
+      it.restoration?.toDomain()) },
     observedAt = observedAt,
     nextCursor = cursor,
     pageOffset = pageOffset,

@@ -29,11 +29,29 @@ internal data class PageCursor(
 internal data class DetailCursor(
   val generation: Long,
   val session: Long,
+  val storeId: String,
   val revision: Long,
   val id: String,
   val repositoryIdentity: String,
   val runtimeCursor: String,
+  val pageSize: Int,
   val list: DetailList? = null,
+)
+
+/**
+ * Where a detail list page started, by the identity of the row before it. Unlike a [DetailCursor] it carries no store
+ * revision, so a refresh can re-read the page after the store changed; it still only continues the same connection,
+ * database, item and list.
+ */
+@Serializable
+internal data class DetailAnchor(
+  val generation: Long,
+  val session: Long,
+  val storeId: String,
+  val id: String,
+  val repositoryIdentity: String,
+  val list: DetailList,
+  val runtimeAnchor: String,
 )
 
 /** Cursors are opaque URL-safe Base64 JSON; anything that does not decode back is treated as a stale cursor. */
@@ -44,6 +62,10 @@ internal object CursorCodec {
   fun encode(cursor: PageCursor): String = base64.encode(Json.encodeToString(cursor).encodeToByteArray())
 
   fun encode(cursor: DetailCursor): String = base64.encode(Json.encodeToString(cursor).encodeToByteArray())
+
+  fun encode(anchor: DetailAnchor): String = base64.encode(Json.encodeToString(anchor).encodeToByteArray())
+
+  fun decodeAnchor(token: String): DetailAnchor? = decode(token) { Json.decodeFromString<DetailAnchor>(it) }
 
   fun decodePage(token: String): PageCursor? = decode(token) { Json.decodeFromString<PageCursor>(it) }
 

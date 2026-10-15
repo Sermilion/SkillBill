@@ -2,6 +2,7 @@ package skillbill.engine.work
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
@@ -56,16 +57,20 @@ internal fun workExecutionHistory(
   workflowId: String,
   page: WorkDetailPagePosition,
   limit: Int,
-): List<WorkExecutionInstance> =
-  if (standalone != null) {
+): List<WorkExecutionInstance> {
+  // An anchored page continues after the last run already shown, so it starts at row 0 of what follows the anchor.
+  val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
+  val offset = if (anchor == null) page.offset else 0
+  return if (standalone != null) {
     unitOfWork.standalonePhaseStatuses.readPhaseExecutions(
       StandalonePhaseExecutionQuery(
         standalone.repositoryIdentity,
         standalone.phaseId,
         phaseGroupIdentity(standalone).third,
         page.observedAt,
-        page.offset,
+        offset,
         limit,
+        anchor,
       ),
     )
       .map {
@@ -79,21 +84,26 @@ internal fun workExecutionHistory(
           it.finishedAt,
           reason.text,
           reason.restoration,
+          it.runSequence,
         )
       }
   } else {
-    unitOfWork.standalonePhaseStatuses.readWorkflowExecutions(workflowId, page.observedAt, page.offset, limit).map {
-      WorkExecutionInstance(
-        it.invocationId,
-        it.executionId,
-        it.lifecycleState,
-        it.startedAt,
-        it.updatedAt,
-        null,
-        null,
-      )
-    }
+    unitOfWork.standalonePhaseStatuses
+      .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
+      .map {
+        WorkExecutionInstance(
+          it.invocationId,
+          it.executionId,
+          it.lifecycleState,
+          it.startedAt,
+          it.updatedAt,
+          null,
+          null,
+          runSequence = it.runSequence,
+        )
+      }
   }
+}
 
 internal data class ResolvedExecutionReason(
   val text: String?,

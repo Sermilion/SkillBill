@@ -12,7 +12,6 @@ import dev.skillbill.tray.core.data.port.RuntimeFailure
 import dev.skillbill.tray.core.data.port.RuntimeWorkGateway
 import dev.skillbill.tray.core.data.port.StoreObservation
 import dev.skillbill.tray.core.data.port.WorkStoreAccess
-import dev.skillbill.tray.core.data.port.WorkStoreConnection
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
 import dev.skillbill.tray.core.domain.model.StorageFailure
@@ -21,16 +20,21 @@ import dev.skillbill.tray.core.domain.repository.Outcome
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -67,9 +71,27 @@ internal fun AutoCloseable?.closeOwned(diagnostics: Diagnostics, event: String) 
 internal fun <T> staleCursor(): Outcome<T> =
   Outcome.Failure(Problem(ProblemCode.STALE_TARGET, "The database or query changed. Refresh this view.", StorageFailure.STALE_QUERY))
 
+private fun <T> closedFailure(): Outcome<T> =
+  Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "The data connection is closed.", StorageFailure.ACCESS))
+
+/** What [DatabaseSession.acquireGeneration] decided about the connection while it held the state lock. */
+private sealed interface Acquisition {
+  class Reuse(val generation: SessionGeneration) : Acquisition
+
+  /** The session is closed, or its observer failed and the user has to refresh before it reconnects. */
+  data object Unavailable : Acquisition
+
+  class Replace(val path: String, val retired: SessionGeneration?) : Acquisition
+}
+
 /**
- * Everything bound to one selected database: its runtime gateway, the read-only connection, the commit-signal
- * observation, and the generation that fences views taken from an older connection. Closing it releases all of them.
+ * Everything bound to one selected database: its runtime gateway and one [SessionGeneration] at a time (the read-only
+ * connection, its commit-signal observation and the scope that owner callbacks, timers and reads run in). Closing or
+ * replacing a generation joins everything it launched before readiness is published again.
+ *
+ * Two locks keep that safe. [mutex] guards session and repository state and is what cleanup callbacks take; nothing
+ * ever waits for a generation's work while holding it. [lifecycle] serialises replacement and teardown and is never
+ * taken by a callback, so a teardown may join callbacks that are waiting for [mutex].
  */
 @Inject
 @SingleIn(DatabaseSessionScope::class)
@@ -83,9 +105,12 @@ class DatabaseSession(
   private val diagnostics: Diagnostics,
 ) {
   internal val mutex = Mutex()
-  internal val scope = CoroutineScope(SupervisorJob() + dispatchers.io)
+  private val lifecycle = Mutex()
+  private val sessionScope = CoroutineScope(SupervisorJob() + dispatchers.io)
+  private val closerScope = CoroutineScope(SupervisorJob() + dispatchers.io)
   internal val sectionSignals = MutableStateFlow(WorkSection.entries.associateWith { 0L })
   internal val detailSignals = MutableStateFlow(mapOf(WorkSection.GOALS to 0L, WorkSection.PHASES to 0L))
+  private val detailOwnerSignals = MutableStateFlow(emptyMap<Long, Long>())
   private val mutableRefreshEvents = MutableSharedFlow<Set<WorkSection>>(extraBufferCapacity = 1)
   internal val refreshEvents: Flow<Set<WorkSection>> = mutableRefreshEvents.asSharedFlow()
   internal var path: String? = null
@@ -94,8 +119,9 @@ class DatabaseSession(
     private set
   internal var observationSession = 0L
     private set
-  private var connection: WorkStoreConnection? = null
-  private var observer: Job? = null
+
+  @Volatile
+  private var current: SessionGeneration? = null
   private var subscribers = 0
   private val closedFlag = MutableStateFlow(false)
   private val closeCompletion = CompletableDeferred<Unit>()
@@ -128,42 +154,102 @@ class DatabaseSession(
   }
 
   /** Reconnects after an observer failure; callers hold no lock. */
-  internal suspend fun refresh() = mutex.withLock {
-    if (observationProblem != null || observer?.isActive != true) disposeSession()
-    observationProblem = null
-    invalidate()
+  internal suspend fun refresh() = lifecycle.withLock {
+    val stale = mutex.withLock { observationProblem != null || current?.observer?.isActive != true }
+    if (stale) retire(announce = true)
+    mutex.withLock {
+      observationProblem = null
+      invalidate()
+    }
   }
 
   internal fun workObservation(): StoreObservation = gateway.observation()
 
-  internal fun requireConnection(): WorkStoreConnection = checkNotNull(connection)
+  internal fun currentFileMatches(): Boolean = current?.connection?.isCurrent() == true
 
-  internal fun currentFileMatches(): Boolean = connection?.isCurrent() == true
+  /** The generation the session currently exposes, for owners that are registered outside a read. */
+  internal fun currentGeneration(): SessionGeneration? = current
 
-  /** Opens the connection and its change observer if they are absent or stale. Callers hold [mutex]. */
-  internal suspend fun ensureSession() {
-    val selected = requireNotNull(path)
-    if (connection != null && currentFileMatches() && (observationProblem != null || observer?.isActive == true)) return
-    if (connection != null && !currentFileMatches()) generation = generations.next()
-    disposeSession()
-    observationProblem = null
-    gateway.existingSnapshot { }
-    connection = store.open(selected)
-    observationSession++
-    val ready = CompletableDeferred<Unit>()
-    val ownerSession = observationSession
-    observer = scope.launch { observe(selected, ready, ownerSession) }
+  /** Identifies the generation and observation session a deadline or callback is created in. Callers hold [mutex]. */
+  internal fun token(): SessionToken = SessionToken(generation, observationSession)
+
+  /** True while [token] still names the live generation of an open session. Callers hold [mutex]. */
+  internal fun isCurrent(token: SessionToken): Boolean =
+    !closed && token.generation == generation && token.observationSession == observationSession
+
+  /**
+   * Runs [block] under the state lock inside the scope of the usable generation, opening or replacing the connection
+   * first. The read is a job of the generation, so retiring the generation joins it before the connection closes.
+   */
+  internal suspend fun <T> read(block: suspend (SessionGeneration) -> Outcome<T>): Outcome<T> = safeRead {
+    val acquired = acquireGeneration() ?: return@safeRead observationProblem?.let { Outcome.Failure(it) } ?: closedFailure()
+    val reading = acquired.scope.async {
+      mutex.withLock { if (current === acquired) block(acquired) else staleCursor() }
+    }
     try {
-      ready.await()
-    } catch (error: ObservationUnavailableException) {
-      throw error
-    } catch (error: Exception) {
-      if (classifier.isObserverFailure(error)) throw ObservationUnavailableException(error)
-      throw error
+      reading.await()
+    } catch (_: CancellationException) {
+      // Either this caller was cancelled, which ensureActive rethrows, or the generation was retired under the read.
+      reading.cancel()
+      currentCoroutineContext().ensureActive()
+      staleCursor()
     }
   }
 
-  private suspend fun observe(selected: String, ready: CompletableDeferred<Unit>, ownerSession: Long) {
+  /** Runs [block] under the state lock in [owner]'s scope; it is dropped when that generation was retired. */
+  internal fun launchIn(owner: SessionGeneration, block: suspend () -> Unit) {
+    owner.scope.launch { mutex.withLock { if (current === owner && !closed) block() } }
+  }
+
+  private suspend fun acquireGeneration(): SessionGeneration? = lifecycle.withLock {
+    when (val acquisition = mutex.withLock { planAcquisition() }) {
+      is Acquisition.Reuse -> acquisition.generation
+      Acquisition.Unavailable -> null
+      is Acquisition.Replace -> {
+        dispose(acquisition.retired, announce = true)
+        open(acquisition.path)
+      }
+    }
+  }
+
+  private fun planAcquisition(): Acquisition {
+    val existing = current
+    return when {
+      closed -> Acquisition.Unavailable
+      existing != null && existing.connection.isCurrent() && (observationProblem != null || existing.observer?.isActive == true) ->
+        Acquisition.Reuse(existing)
+      existing == null && observationProblem != null -> Acquisition.Unavailable
+      else -> {
+        val retired = detach(announce = true)
+        observationProblem = null
+        Acquisition.Replace(requireNotNull(path), retired)
+      }
+    }
+  }
+
+  /** Opens the connection and its change observer; any failure disposes what was opened before it is rethrown. */
+  private suspend fun open(selected: String): SessionGeneration {
+    gateway.existingSnapshot { }
+    val connection = store.open(selected)
+    val session = mutex.withLock { ++observationSession }
+    val opened = SessionGeneration(connection, session, CoroutineScope(SupervisorJob(sessionScope.coroutineContext.job) + dispatchers.io))
+    val ready = CompletableDeferred<Unit>()
+    opened.observer = opened.scope.launch { observe(selected, ready, opened) }
+    try {
+      ready.await()
+    } catch (error: Throwable) {
+      dispose(opened, announce = false)
+      throw when {
+        error is CancellationException || error is ObservationUnavailableException -> error
+        error is Exception && classifier.isObserverFailure(error) -> ObservationUnavailableException(error)
+        else -> error
+      }
+    }
+    mutex.withLock { current = opened }
+    return opened
+  }
+
+  private suspend fun observe(selected: String, ready: CompletableDeferred<Unit>, owner: SessionGeneration) {
     val topics = commitSignals.topics
     var deliveredRevisions = emptyMap<String, Long>()
     try {
@@ -184,10 +270,10 @@ class DatabaseSession(
           if (topics.goals in affected) add(WorkSection.GOALS)
           if (topics.phases in affected) add(WorkSection.PHASES)
         }
-        if (ownerSession == observationSession) observationProblem = null
+        if (owner.observationSession == observationSession) observationProblem = null
         invalidate(sections)
       }
-      if (currentFileMatches()) throw ObservationEndedException()
+      if (owner.connection.isCurrent()) throw ObservationEndedException()
     } catch (error: CancellationException) {
       throw error
     } catch (error: Exception) {
@@ -201,7 +287,7 @@ class DatabaseSession(
         "observation_unavailable_${classifier.diagnosticName(error)}",
         providerCode?.let { mapOf("sqlite_error_code" to it) }.orEmpty(),
       )
-      if (ownerSession != observationSession) return
+      if (owner.observationSession != observationSession) return
       observationProblem = Problem(
         ProblemCode.OBSERVATION_UNAVAILABLE,
         "Database change observation is unavailable. Refresh to reconnect.",
@@ -228,6 +314,39 @@ class DatabaseSession(
     detailSignals.update { current -> current.mapValues { (_, revision) -> revision + 1 } }
   }
 
+  /**
+   * Re-reads [section] because a deadline owned by [token] passed. Only that section is touched: every section that
+   * depends on a deadline arms its own, so no other section, detail or paging source is re-read. Returns false, doing
+   * nothing, when [token] no longer names the live generation. Callers hold [mutex].
+   */
+  internal fun reprojectSection(section: WorkSection, token: SessionToken): Boolean {
+    if (!isCurrent(token)) return false
+    val sections = setOf(section)
+    mutableRefreshEvents.tryEmit(sections)
+    participants.forEach { it.invalidated(sections) }
+    sectionSignals.update { current ->
+      current.mapValues { (name, revision) -> if (name in sections) revision + 1 else revision }
+    }
+    return true
+  }
+
+  /** Emits a value whenever [owner]'s own deadline asks for its detail to be re-read. */
+  internal fun detailReprojections(owner: Long): Flow<Long> = detailOwnerSignals.map { it[owner] ?: 0L }.distinctUntilChanged()
+
+  /** Re-reads only the detail subscription [owner]; false, doing nothing, when [token] is no longer live. Callers hold [mutex]. */
+  internal fun reprojectDetail(owner: Long, token: SessionToken): Boolean {
+    if (!isCurrent(token)) return false
+    detailOwnerSignals.update { it + (owner to ((it[owner] ?: 0L) + 1)) }
+    return true
+  }
+
+  /** Closes one owner registration, reporting a failure under [event] instead of throwing it. */
+  internal fun closeRegistration(registration: AutoCloseable?, event: String) = registration.closeOwned(diagnostics, event)
+
+  internal fun releaseDetailOwner(owner: Long) {
+    detailOwnerSignals.update { it - owner }
+  }
+
   /** Marks one board or detail collector as active; the connection and observer stay open while any is. */
   internal suspend fun acquireSubscriber() {
     mutex.withLock { subscribers++ }
@@ -236,69 +355,92 @@ class DatabaseSession(
   /** Ends one collector; the last one out releases the connection, observer and registrations without announcing a change. */
   internal suspend fun releaseSubscriber() {
     withContext(NonCancellable) {
-      mutex.withLock {
-        subscribers = (subscribers - 1).coerceAtLeast(0)
-        if (subscribers == 0 && !closed) tearDown(announce = false)
+      lifecycle.withLock {
+        var idle = false
+        val retired = mutex.withLock {
+          subscribers = (subscribers - 1).coerceAtLeast(0)
+          idle = subscribers == 0 && !closed
+          if (idle) detach(announce = false).also { observationProblem = null } else null
+        }
+        if (idle) dispose(retired, announce = false)
       }
     }
   }
 
-  private suspend fun disposeSession() = tearDown(announce = true)
+  /**
+   * Takes the current generation out of service so nothing new can start on it. [announce] also advances the generation
+   * number; an idle release skips it because the next open bumps [observationSession], which already fences older
+   * cursors. Callers hold [mutex]; the caller must pass the result to [dispose] after releasing it.
+   */
+  private fun detach(announce: Boolean): SessionGeneration? {
+    val retired = current
+    current = null
+    if (announce) generation = generations.next()
+    return retired
+  }
+
+  private suspend fun retire(announce: Boolean) = dispose(mutex.withLock { detach(announce) }, announce)
 
   /**
-   * Releases the connection, observer and registrations. [announce] also advances the generation and invalidates views;
-   * an idle release skips it because the next open bumps [observationSession], which already fences older cursors.
+   * Stops a detached generation without holding [mutex]: its scope (observer, owner callbacks, timers and in-flight
+   * reads) is cancelled and joined first, then its registrations and connection close, and only then is state reset and
+   * [announce] told to subscribers. Callers hold [lifecycle].
    */
-  private suspend fun tearDown(announce: Boolean) {
-    val tornDownObserver = observer
-    val tornDownConnection = connection
-    val registrations = participants.flatMap { it.registrations() }
-    if (announce) {
-      generation = generations.next()
-      if (tornDownConnection != null || tornDownObserver != null) invalidate()
-    }
+  private suspend fun dispose(retired: SessionGeneration?, announce: Boolean) {
     withContext(dispatchers.io + NonCancellable) {
       try {
-        tornDownObserver?.cancelAndJoin()
+        retired?.scope?.coroutineContext?.job?.cancelAndJoin()
       } catch (_: Exception) {
         diagnostics.record("room_observer_teardown_failed")
       }
+      val registrations = mutex.withLock { participants.flatMap { it.registrations() } }
       registrations.forEach { it.closeable.closeOwned(diagnostics, it.failureEvent) }
       try {
-        tornDownConnection?.close()
+        retired?.connection?.close()
       } catch (_: Exception) {
         diagnostics.record("room_session_close_failed")
       }
-      if (observer === tornDownObserver) observer = null
-      if (connection === tornDownConnection) connection = null
-      val closedRegistrations = registrations.map { it.closeable }
-      participants.forEach { it.reset(closedRegistrations) }
-    }
-  }
-
-  /** Stops observing, releases every registration and the connection. Idempotent. */
-  fun close() {
-    if (!closedFlag.compareAndSet(false, true)) return
-    participants.forEach { it.invalidated(WorkSection.entries.toSet()) }
-    scope.launch {
-      try {
-        mutex.withLock { disposeSession() }
-      } finally {
-        scope.cancel()
-        closeCompletion.complete(Unit)
+      mutex.withLock {
+        val closedRegistrations = registrations.map { it.closeable }
+        participants.forEach { it.reset(closedRegistrations) }
+        if (announce && retired != null) invalidate()
       }
     }
   }
 
+  private fun beginClose(): Boolean {
+    if (!closedFlag.compareAndSet(false, true)) return false
+    participants.forEach { it.invalidated(WorkSection.entries.toSet()) }
+    return true
+  }
+
+  /** Stops observing, releases every registration and the connection without waiting for it. Idempotent. */
+  fun close() {
+    if (beginClose()) closerScope.launch { shutdown() }
+  }
+
+  /** Closes the session and returns only after its generation, registrations, connection and scope have stopped. */
   suspend fun closeAndJoin() {
-    close()
+    if (beginClose()) shutdown()
     closeCompletion.await()
+  }
+
+  private suspend fun shutdown() {
+    withContext(NonCancellable) {
+      try {
+        lifecycle.withLock { retire(announce = true) }
+      } finally {
+        sessionScope.coroutineContext.job.cancelAndJoin()
+        closeCompletion.complete(Unit)
+        closerScope.cancel()
+      }
+    }
   }
 
   /** Runs [block] against a usable session, turning provider and runtime failures into typed outcomes. */
   internal suspend fun <T> safeRead(block: suspend () -> Outcome<T>): Outcome<T> = try {
     if (closed) {
-      Outcome.Failure(Problem(ProblemCode.DATABASE_ACCESS, "The data connection is closed.", StorageFailure.ACCESS))
+      closedFailure()
     } else {
       configurationProblem?.let { Outcome.Failure(it) } ?: block()
     }

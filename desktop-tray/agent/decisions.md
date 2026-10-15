@@ -1,3 +1,9 @@
+## [2026-10-15] Runtime owns work-control policy; desktop projects it
+Context: The desktop re-derived pause eligibility and collapsed control outcomes into a generic accept, hiding what the runtime had done.
+Decision: The runtime policy emits pauseEligible and typed control results (intent recorded, exit confirmed, accepted); the desktop only projects them.
+Reason: One policy owner keeps CLI, MCP and desktop consistent; typed outcomes let the UI distinguish a recorded pause intent from a confirmed exit.
+Revisit when: the desktop can drop its remaining freshness check beside the runtime facts.
+
 ## [2026-10-15] Inject host and legacy preferences into the application component
 Context: The generated component must run in tests without touching the real user home, environment or java.util.prefs.
 Decision: ApplicationComponent takes the host environment and the legacy preferences source as constructor arguments; the factory defaults them to the real process.

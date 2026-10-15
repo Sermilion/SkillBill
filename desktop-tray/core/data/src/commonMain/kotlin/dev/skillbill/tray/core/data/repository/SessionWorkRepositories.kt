@@ -5,6 +5,7 @@ import dev.skillbill.tray.core.data.session.SessionSlot
 import dev.skillbill.tray.core.data.session.WorkStoreSessionManager
 import dev.skillbill.tray.core.domain.model.Board
 import dev.skillbill.tray.core.domain.model.BoardRetention
+import dev.skillbill.tray.core.domain.model.ControlConfirmation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
 import dev.skillbill.tray.core.domain.model.HistoryFilter
@@ -80,17 +81,19 @@ class SessionWorkDetailRepository(private val manager: WorkStoreSessionManager) 
     if (slot is SessionSlot.Active) slot.parts.detail.observeDetail(identity) else emptyFlow()
   }
 
-  override suspend fun detail(identity: WorkIdentity, cursor: String?, list: DetailList?, startOffset: Int): Outcome<Detail> =
-    manager.settledParts()?.detail?.detail(identity, cursor, list, startOffset) ?: noDatabase()
+  override suspend fun detail(identity: WorkIdentity, cursor: String?, list: DetailList?, anchor: String?): Outcome<Detail> =
+    manager.settledParts()?.detail?.detail(identity, cursor, list, anchor) ?: noDatabase()
 }
 
 @Inject
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
 class SessionWorkControlRepository(private val manager: WorkStoreSessionManager) : WorkControlRepository {
-  override suspend fun pause(item: WorkItem): Outcome<Unit> = manager.settledParts()?.control?.pause(item) ?: noDatabase()
+  override suspend fun pause(item: WorkItem): Outcome<ControlConfirmation> =
+    manager.settledParts()?.control?.pause(item) ?: noDatabase()
 
-  override suspend fun stop(item: WorkItem): Outcome<Unit> = manager.settledParts()?.control?.stop(item) ?: noDatabase()
+  override suspend fun stop(item: WorkItem): Outcome<ControlConfirmation> =
+    manager.settledParts()?.control?.stop(item) ?: noDatabase()
 
   override suspend fun cancel(item: WorkItem): Outcome<Unit> = manager.settledParts()?.control?.cancel(item) ?: noDatabase()
 

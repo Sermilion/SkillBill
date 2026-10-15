@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.Clock
 
 fun main() {
   val uiScale = resolveDesktopUiScale()
@@ -42,7 +41,7 @@ fun main() {
     val native = remember { NativeServicesImpl() }
     val trayPlacement = remember { TrayPopoverPlacement() }
     val model = remember {
-      DashboardController(application.boards, application.details, application.controls, application.storeSession,
+      DashboardController(application.boards, application.details, application.controls, application.policy, application.storeSession,
         application.settings, native, application.dispatchers, application.clock) { uiScope.launch(Dispatchers.Main) { mainVisible = true } }
     }
     val quit: () -> Unit = {
@@ -63,7 +62,7 @@ fun main() {
         if (!model.state.value.trayProbeComplete) model.trayUnavailable()
       }
     }
-    val projected = state.board?.let { dev.skillbill.tray.application.project(it, Clock.System.now()) }
+    val projected = dev.skillbill.tray.presentation.presentPopover(state)
     val trayState = dev.skillbill.tray.presentation.presentTrayState(state)
     val trayProblem = state.trayProblem
     val problem = state.problem
@@ -77,7 +76,7 @@ fun main() {
       else -> "Skill Bill is idle"
     }
 
-    if (isMac) NativeTrayHost.MacStatusItem(trayState.kind, trayState.running, projected?.goals.orEmpty(), projected?.phases.orEmpty(),
+    if (isMac) NativeTrayHost.MacStatusItem(trayState.kind, trayState.running, projected.goals, projected.phases,
       onPrimary = {
         model.trayAvailable()
         dev.skillbill.tray.infrastructure.macos.MacStatusItemBridge.statusItemAnchor?.let { anchor ->
@@ -90,8 +89,8 @@ fun main() {
       onMenuAction = { action ->
         model.trayAvailable()
         when {
-          action in 0..7 -> projected?.goals?.getOrNull(action)?.let { model.select(it.identity); mainVisible = true }
-          action in 1000..1007 -> projected?.phases?.getOrNull(action - 1000)?.let { model.select(it.identity); mainVisible = true }
+          action in 0..7 -> projected.goals.getOrNull(action)?.let { model.select(it.identity); mainVisible = true }
+          action in 1000..1007 -> projected.phases.getOrNull(action - 1000)?.let { model.select(it.identity); mainVisible = true }
           action == 2000 -> mainVisible = true
           action == 2002 -> model.refresh()
           action == 2003 -> settingsVisible = true

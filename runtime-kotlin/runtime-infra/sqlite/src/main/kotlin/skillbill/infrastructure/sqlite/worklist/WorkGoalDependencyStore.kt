@@ -6,20 +6,27 @@ import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.error.shellcontent.invalidWorkListRowError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.work.model.WorkGoalDependency
+import skillbill.ports.work.model.WorkGoalDependencyAnchor
 import skillbill.ports.work.model.WorkGoalDependencyPage
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.sql.Connection
 import java.sql.ResultSet
 
+/**
+ * One page of dependency edges keyed by `(subtask id, target id)`. A target listed twice under one subtask is one edge:
+ * only its first listing is read, so the strict anchor never skips a sibling row.
+ */
 internal fun readWorkGoalDependencyPage(
   connection: Connection,
   workflowId: String,
   offset: Int,
   limit: Int,
   subtaskId: Int?,
+  after: WorkGoalDependencyAnchor? = null,
 ): WorkGoalDependencyPage {
   require(offset >= 0 && limit in 1..WorkPaginationLimits.MAX_PAGE_SIZE)
+  require(after == null || offset == 0) { "An anchored dependency page cannot also carry an offset." }
   val manifestPath = "$.${DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()}"
   val path = "$manifestPath.${DecompositionPlanningPayloadKeys.SUBTASKS}"
   return connection.prepareStatement(
@@ -36,10 +43,20 @@ internal fun readWorkGoalDependencyPage(
       json_each(artifacts_json, '$path') AS subtask,
       json_each(subtask.value, '$.${DecompositionPlanningPayloadKeys.DEPENDENCIES}') AS dependency
     WHERE workflow_id = ? AND (? IS NULL OR json_extract(subtask.value, '$.${DecompositionPlanningPayloadKeys.ID}') = ?)
-    ORDER BY CAST(subtask.key AS INTEGER), CAST(dependency.key AS INTEGER) LIMIT ? OFFSET ?
+      AND (? IS NULL OR (json_extract(subtask.value, '$.${DecompositionPlanningPayloadKeys.ID}'),
+        json_extract(dependency.value, '$.${SharedPayloadKeys.SUBTASK_ID}')) > (?, ?))
+      AND dependency.key = (SELECT MIN(first_listing.key)
+        FROM json_each(subtask.value, '$.${DecompositionPlanningPayloadKeys.DEPENDENCIES}') AS first_listing
+        WHERE json_extract(first_listing.value, '$.${SharedPayloadKeys.SUBTASK_ID}') =
+          json_extract(dependency.value, '$.${SharedPayloadKeys.SUBTASK_ID}'))
+    ORDER BY json_extract(subtask.value, '$.${DecompositionPlanningPayloadKeys.ID}'),
+      json_extract(dependency.value, '$.${SharedPayloadKeys.SUBTASK_ID}'),
+      CAST(subtask.key AS INTEGER), CAST(dependency.key AS INTEGER) LIMIT ? OFFSET ?
     """.trimIndent(),
   ).use { statement ->
-    statement.bindAll(workflowId, subtaskId, subtaskId, limit + 1, offset)
+    statement.bindAll(
+      workflowId, subtaskId, subtaskId, after?.subtaskId, after?.subtaskId, after?.dependencyId, limit + 1, offset,
+    )
     statement.executeQuery().use { rows ->
       val entries =
         buildList {

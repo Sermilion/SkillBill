@@ -55,4 +55,6 @@ data class IdeStatusRequest(
 data class IdeStatusResult(
   val snapshot: IdeStatusSnapshot,
   val exitCode: Int,
+  /** Storage work the request spent; Kotlin-only, never part of the wire snapshot. */
+  val queryWork: IdeStatusQueryWorkReport = IdeStatusQueryWorkReport.NONE,
 )

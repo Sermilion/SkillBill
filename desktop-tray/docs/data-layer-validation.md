@@ -3,7 +3,10 @@
 The desktop reads the runtime store through read-only Room and shared runtime
 projection. Controls use the existing runtime graph. DataStore owns app
 preferences. SKILL-424 retains the final module, DI, ViewModel, Navigation 3 and
-native host work described in its separate spec.
+native host work described in its separate spec. The per-obligation verdicts
+for the SKILL-423 data gaps that SKILL-424 took over are in
+[skill-423-handoff.md](skill-423-handoff.md); this record keeps the measured
+results.
 
 ## Checks
 

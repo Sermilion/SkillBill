@@ -28,6 +28,8 @@ class DetailProjection(
   val detail: Detail?,
   val runtimeCursor: String?,
   val listCursors: Map<DetailList, String>,
+  /** The runtime's own per-list start anchors; the repository wraps each before it reaches the caller. */
+  val listAnchors: Map<DetailList, String>,
   val moreLists: List<DetailList>,
   val runOptions: RunOptions?,
 )
@@ -41,7 +43,7 @@ interface SnapshotReads {
     observedAt: Instant,
     cursor: String?,
     pageSize: Int,
-    startOffset: Int,
+    anchor: String?,
     list: DetailList?,
   ): DetailProjection
 }
@@ -57,7 +59,17 @@ enum class ControlAction { PAUSE, STOP, CANCEL, LAUNCH }
 enum class ControlRefusal { AGENT_REQUIRED, BRANCH_CHANGED, TERMINATION_INCOMPLETE, OWNERSHIP_MISMATCH, OTHER }
 
 sealed interface ControlResult {
+  /** The request was admitted; it makes no claim about the controlled process. */
   data object Accepted : ControlResult
+
+  /** A goal pause is durably recorded; the runner honours it at its next checkpoint. */
+  data object IntentRecorded : ControlResult
+
+  /** A goal stop was recorded and the runner's exit was confirmed. */
+  data object ExitConfirmed : ControlResult
+
+  /** A goal stop signal was sent, but the runner's exit could not be confirmed; it may still be running. */
+  data object TerminationAttempted : ControlResult
 
   /** The item no longer identifies a controllable target. */
   data object Stale : ControlResult

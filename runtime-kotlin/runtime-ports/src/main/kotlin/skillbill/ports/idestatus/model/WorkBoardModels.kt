@@ -56,6 +56,15 @@ data class WorkBoardItem(
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
+  val pauseEligible: Boolean = false,
+  /** Live in a goals or phases section; surfaces count this as running. */
+  val running: Boolean = false,
+  /** A phase that finished within the recent-phase window of the observation. */
+  val recentlyFinishedPhase: Boolean = false,
+  /** Work that completed successfully within a day of the observation. */
+  val doneWithinDay: Boolean = false,
+  /** When [recentlyFinishedPhase] or [doneWithinDay] next changes, so a surface re-reads at that instant. */
+  val membershipDeadline: Instant? = null,
 )
 
 data class WorkBoardDiagnostic(

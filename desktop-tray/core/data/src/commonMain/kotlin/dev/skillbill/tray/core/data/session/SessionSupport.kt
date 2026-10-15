@@ -9,6 +9,7 @@ import me.tatarka.inject.annotations.Provides
 import software.amazon.lastmile.kotlin.inject.anvil.ContributesTo
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.TimeSource
 
 /** Monotonic nanosecond reading for measuring durations; only differences between readings are meaningful. */
@@ -48,6 +49,12 @@ class DatabaseGenerations {
   private val counter = Counter()
 
   internal fun next(): Long = counter.next()
+}
+
+/** Whole milliseconds to wait for [remaining], rounded up so a timer never fires before its deadline. */
+internal fun waitMillis(remaining: Duration): Long {
+  val nanos = remaining.inWholeNanoseconds
+  return (nanos.floorDiv(1_000_000L) + if (nanos % 1_000_000L == 0L) 0 else 1).coerceAtLeast(1)
 }
 
 /** A small concurrent map for state that is touched from several coroutines without a shared lock. */

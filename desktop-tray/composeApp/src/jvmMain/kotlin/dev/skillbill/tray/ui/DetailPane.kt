@@ -83,12 +83,15 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
         Text("${item.repositoryTitle()} · ${item.branch ?: "no branch"} · ${displayPath(item.repositoryRoot)}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         listOfNotNull(problem, state.actionProblem).forEach { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
+        state.actionNotice?.let { Text(it, color = green, style = MaterialTheme.typography.bodySmall) }
         if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
           Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
               ReasonTooltip(if (item.family == WorkFamily.FEATURE_GOAL) item.summary else blockReason, Modifier.weight(1f), color = amber, fontSize = 13.sp, lineHeight = 19.sp)
               DesignButton("Copy reason", enabled = copyReason != null) { copyReason?.let { clipboard.setText(AnnotatedString(it)) } }
             }
+            val restoration = detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.restoration
+            restorationNote(restoration)?.let { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
           }
         }
       }
@@ -324,6 +327,14 @@ private fun rememberAnchoredListState(
     previousKeys = keys
   }
   return state
+}
+
+/** Says so when a legacy reason could not be recovered in full; an exact or restored reason needs no note. */
+private fun restorationNote(restoration: ReasonRestoration?): String? = when (restoration) {
+  null, ReasonRestoration.EXACT, ReasonRestoration.RESTORED -> null
+  ReasonRestoration.MISSING, ReasonRestoration.MISSING_CONTENT -> "The full original reason is unavailable; this text may be shortened."
+  ReasonRestoration.AMBIGUOUS -> "Several records matched this older reason, so the full text could not be restored; this text may be shortened."
+  ReasonRestoration.BUDGET_EXCEEDED -> "The full original reason was not restored within the read budget; this text may be shortened."
 }
 
 private fun formatInstant(value: Instant, pattern: String) = DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault()).format(value.toJavaInstant())

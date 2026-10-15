@@ -71,10 +71,18 @@ data class WorkItem(
   val databaseRevision: Long? = null,
   val liveSection: WorkSection? = null,
   val controlEligible: Boolean = false,
+  /** The runtime's verdict on a pause: [controlEligible] and no pause already pending. */
+  val pauseEligible: Boolean = false,
   val requiresAttention: Boolean = false,
   val displayGroup: WorkSection? = null,
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
+  /** Runtime verdicts about the observation this item was read at; the app renders them and never recomputes them. */
+  val running: Boolean = false,
+  val recentlyFinishedPhase: Boolean = false,
+  val doneWithinDay: Boolean = false,
+  /** When [recentlyFinishedPhase] or [doneWithinDay] next changes, so the board is re-read then. */
+  val membershipDeadline: Instant? = null,
   val databaseFile: DatabaseFileIdentity? = null,
   val repositoryName: String? = null,
 )
@@ -106,6 +114,8 @@ data class Detail(
   val nextCursor: String? = null,
   val pageOffset: Int = 0,
   val cursors: Map<DetailList, String> = emptyMap(),
+  /** Per list, the opaque identity this page started after; absent for a head page. Pass it back to refresh the page. */
+  val anchors: Map<DetailList, String> = emptyMap(),
   val dependencies: List<SubtaskDependency> = emptyList(),
   val freshnessDeadline: Instant? = null,
   val runOptions: RunOptions? = null,
@@ -177,6 +187,20 @@ data class Board(
   val historyFilter: HistoryFilter = HistoryFilter.ALL,
 )
 
+/** Aggregate status of a board, decided by the runtime; the app only renders it. */
+enum class TrayStatus { FAILED, NEEDS_YOU, RUNNING, IDLE }
+
+/** The runtime's grouping, ordering and counts for a board; the lists are already in display order. */
+data class BoardArrangement(
+  val trayStatus: TrayStatus,
+  val running: Int,
+  val needsYou: Int,
+  val doneWithinDay: Int,
+  val goals: List<WorkIdentity>,
+  val livePhases: List<WorkIdentity>,
+  val finishedPhases: List<WorkIdentity>,
+)
+
 data class BoardRetention(
   val section: WorkSection,
   val retention: Retention,
@@ -221,6 +245,21 @@ enum class ProblemCode(val wireValue: String) {
 
 data class Problem(val code: ProblemCode, val summary: String, val storageFailure: StorageFailure? = null)
 
+/** What a goal control request achieved. Feedback names exactly this and never implies a stronger lifecycle change. */
+enum class ControlConfirmation {
+  /** The control is durably recorded; the runner has not acted on it yet. */
+  INTENT_RECORDED,
+
+  /** The request was admitted with no process to wait for. */
+  REQUEST_ACCEPTED,
+
+  /** The runner's process was confirmed to have exited. */
+  EXIT_CONFIRMED,
+
+  /** A stop signal was sent but the runner's exit could not be confirmed. */
+  TERMINATION_ATTEMPTED,
+}
+
 enum class HistoryFilter { ALL, GOALS, PHASES }
 
 data class AppSettings(
@@ -253,8 +292,17 @@ fun WorkItem.needsAttention(): Boolean =
 
 fun WorkItem.isPhase(): Boolean = displayGroup == WorkSection.PHASES
 
+/** Whether a relaunched attempt has begun running or finished; used only to recognise a launch's successor, never to group work. */
+fun WorkItem.hasStartedOrFinished(): Boolean = lifecycle == Lifecycle.ACTIVE || lifecycle == Lifecycle.TERMINAL
+
+/** The runtime's freshness verdict read as a typed fact; transition detection only trusts fresh observations. */
+fun WorkItem.isFresh(): Boolean = freshness == Freshness.FRESH
+
 fun WorkItem.eligibleForControl(): Boolean =
   controlEligible
+
+/** How an execution's durable reason was recovered; only [EXACT] and [RESTORED] carry the full original text. */
+enum class ReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }
 
 data class ExecutionInstance(
   val invocationId: String,
@@ -264,6 +312,7 @@ data class ExecutionInstance(
   val updatedAt: Instant,
   val finishedAt: Instant?,
   val result: String?,
+  val restoration: ReasonRestoration? = null,
 )
 
 data class SubtaskDependency(val subtaskId: Int, val dependency: WorkDependency)

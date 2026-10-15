@@ -557,8 +557,8 @@ class DashboardControllerTest {
     val requested = item("requested").copy(pauseRequested = true, controlEligible = true)
     val phase = item("phase").copy(family = WorkFamily.FEATURE_VERIFY, scope = ExecutionScope.STANDALONE_PHASE)
     val source = FakeSource(boardCall = { Outcome.Value(board(it, listOf(requested, phase))) },
-      pauseAction = { pauseCalls.incrementAndGet(); Outcome.Value(Unit) },
-      stopAction = { stopped.complete(it.identity); Outcome.Value(Unit) })
+      pauseAction = { pauseCalls.incrementAndGet(); Outcome.Value(ControlConfirmation.INTENT_RECORDED) },
+      stopAction = { stopped.complete(it.identity); Outcome.Value(ControlConfirmation.EXIT_CONFIRMED) })
     val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
     try {
       kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
@@ -568,6 +568,27 @@ class DashboardControllerTest {
       assertFalse(stopped.isCompleted)
       model.perform("stop", requested.identity)
       assertEquals(requested.identity, kotlinx.coroutines.withTimeout(2000) { stopped.await() })
+    } finally { model.close() }
+  }
+
+  @Test
+  fun `a recorded pause is reported as intent while a confirmed stop is reported as an exit`() = runBlocking {
+    val goal = item("goal").copy(controlEligible = true, pauseEligible = true)
+    val source = FakeSource(boardCall = { Outcome.Value(board(it, listOf(goal))) })
+    val model = DashboardController(source, source, source, source, MemorySettings(), QuietNative(), testDispatchers(), startedClock()) {}
+    try {
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.boardLoading) delay(10) }
+      model.perform("pause", goal.identity)
+      val pauseNotice = kotlinx.coroutines.withTimeout(2000) {
+        while (model.state.value.actionNotice == null) delay(10)
+        model.state.value.actionNotice
+      }
+      assertEquals("Pause recorded. The goal pauses at its next checkpoint.", pauseNotice)
+      kotlinx.coroutines.withTimeout(2000) { while (goal.identity in model.state.value.actionsInProgress) delay(10) }
+      model.perform("stop", goal.identity)
+      val stopNotice = "Stop confirmed. The goal runner has exited."
+      kotlinx.coroutines.withTimeout(2000) { while (model.state.value.actionNotice != stopNotice) delay(10) }
+      assertEquals(stopNotice, model.state.value.actionNotice)
     } finally { model.close() }
   }
 
@@ -685,8 +706,8 @@ class DashboardControllerTest {
 private class FakeSource(
   private val boardCall: suspend (Retention) -> Outcome<Board>,
   private val detailCall: suspend (WorkIdentity) -> Outcome<Detail> = { Outcome.Failure(Problem(ProblemCode.UNKNOWN_WORK_ITEM, "missing")) },
-  private val pauseAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
-  private val stopAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
+  private val pauseAction: suspend (WorkItem) -> Outcome<ControlConfirmation> = { Outcome.Value(ControlConfirmation.INTENT_RECORDED) },
+  private val stopAction: suspend (WorkItem) -> Outcome<ControlConfirmation> = { Outcome.Value(ControlConfirmation.EXIT_CONFIRMED) },
   private val cancelAction: suspend (WorkItem) -> Outcome<Unit> = { Outcome.Value(Unit) },
   private val launchAction: suspend (WorkItem, String?) -> Outcome<Unit> = { _, _ -> Outcome.Value(Unit) },
   private val boardPageCall: (suspend (Retention, String?) -> Outcome<Board>)? = null,

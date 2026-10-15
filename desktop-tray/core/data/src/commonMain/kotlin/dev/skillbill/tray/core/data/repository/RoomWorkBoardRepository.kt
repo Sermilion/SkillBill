@@ -13,10 +13,13 @@ import dev.skillbill.tray.core.data.session.ConcurrentRegistry
 import dev.skillbill.tray.core.data.session.Counter
 import dev.skillbill.tray.core.data.session.CursorCodec
 import dev.skillbill.tray.core.data.session.DatabaseSession
+import dev.skillbill.tray.core.data.session.DeadlineScheduler
 import dev.skillbill.tray.core.data.session.MonotonicClock
 import dev.skillbill.tray.core.data.session.OwnedRegistration
 import dev.skillbill.tray.core.data.session.PageCursor
+import dev.skillbill.tray.core.data.session.SessionGeneration
 import dev.skillbill.tray.core.data.session.SessionParticipant
+import dev.skillbill.tray.core.data.session.SessionToken
 import dev.skillbill.tray.core.data.session.closeOwned
 import dev.skillbill.tray.core.data.session.staleCursor
 import dev.skillbill.tray.core.domain.model.Board
@@ -32,27 +35,17 @@ import dev.skillbill.tray.core.domain.model.WorkSection
 import dev.skillbill.tray.core.domain.repository.Outcome
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import me.tatarka.inject.annotations.Inject
 import software.amazon.lastmile.kotlin.inject.anvil.SingleIn
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Instant
@@ -114,7 +107,11 @@ private data class ActiveRetention(
   val session: Long,
   val storeId: String?,
   val revision: Long?,
-)
+) {
+  /** Same subscription query in the same generation and observation session, whatever store revision it last read. */
+  fun sameOwner(other: ActiveRetention): Boolean =
+    copy(storeId = null, revision = null) == other.copy(storeId = null, revision = null)
+}
 
 /** Board pages for one selected database: SQL-selected candidates, runtime projection, and page/lease bookkeeping. */
 @Inject
@@ -129,9 +126,9 @@ class RoomWorkBoardRepository(
   private val pagingSources = ConcurrentRegistry<WorkSection, PagingEntry>()
   private val queryEpochs = Counter()
   private val latestQueryEpochs = ConcurrentRegistry<WorkSection, Long>()
-  private val deadlineRevision = MutableStateFlow(0L)
   private val activeRetentions = mutableMapOf<WorkSection, ActiveRetention>()
   private val deadlines = mutableMapOf<WorkSection, MutableMap<String, Instant>>()
+  private val schedulers = mutableMapOf<Pair<WorkSection, Long>, DeadlineScheduler>()
   private val ownerObservations = mutableMapOf<WorkSection, MutableMap<String, AutoCloseable>>()
 
   override val refreshEvents: Flow<Set<WorkSection>> get() = session.refreshEvents
@@ -153,7 +150,6 @@ class RoomWorkBoardRepository(
           deadlines.clear()
           activeRetentions.clear()
           latestQueryEpochs.clear()
-          deadlineRevision.update { it + 1 }
         }
       },
     )
@@ -170,18 +166,20 @@ class RoomWorkBoardRepository(
     latestQueryEpochs.compute(section) { queryEpoch }
     return channelFlow {
       session.acquireSubscriber()
-      var timer: Job? = null
+      val scheduler = DeadlineScheduler(clock)
+      session.mutex.withLock { schedulers[section to queryEpoch] = scheduler }
       try {
         session.sectionSignals.map { it.getValue(section) }.distinctUntilChanged().collect {
-          timer?.cancelAndJoin()
-          val result = loadPage(section, retention, anchor, filter, historyFilter, refresh = true, queryEpoch = queryEpoch)
-          send(result)
-          if (result is Outcome.Value) timer = launch { awaitBoardDeadline(section) }
+          send(loadPage(section, retention, anchor, filter, historyFilter, refresh = true, queryEpoch = queryEpoch))
         }
       } finally {
-        timer?.cancel()
         withContext(NonCancellable) {
-          session.mutex.withLock { releaseSubscription(section, queryEpoch) }
+          // Unregister before stopping so a concurrent rearm cannot start a timer that nothing stops.
+          session.mutex.withLock {
+            schedulers.remove(section to queryEpoch)
+            releaseSubscription(section, queryEpoch)
+          }
+          scheduler.stop()
           session.releaseSubscriber()
         }
       }
@@ -201,35 +199,39 @@ class RoomWorkBoardRepository(
       if (registrations.isEmpty()) ownerObservations.remove(section)
     }
     deadlines[section]?.let { pageDeadlines ->
-      if (pageDeadlines.keys.removeAll { it.startsWith(prefix) }) deadlineRevision.update { it + 1 }
+      pageDeadlines.keys.removeAll { it.startsWith(prefix) }
       if (pageDeadlines.isEmpty()) deadlines.remove(section)
     }
     if (activeRetentions[section]?.queryEpoch == queryEpoch) activeRetentions.remove(section)
     if (latestQueryEpochs[section] == queryEpoch) pagingSources.remove(section)?.source?.invalidate()
   }
 
-  private suspend fun awaitBoardDeadline(section: WorkSection) {
-    var deadlineVersion = deadlineRevision.value
-    while (currentCoroutineContext().isActive) {
-      val nextDeadline = session.mutex.withLock { deadlines[section]?.values?.minOrNull() }
-      if (nextDeadline == null) {
-        deadlineVersion = deadlineRevision.first { it != deadlineVersion }
-        continue
+  /** The earliest deadline among the retained pages one subscription owns, or null when none of them has one. */
+  private fun ownerEarliest(section: WorkSection, queryEpoch: Long): Instant? {
+    val prefix = "$section:$queryEpoch:"
+    return deadlines[section]?.filterKeys { it.startsWith(prefix) }?.values?.minOrNull()
+  }
+
+  /**
+   * Publishes the subscription's recomputed earliest deadline to its single timer, which runs in [owner]'s scope. Every
+   * change to the owned range (a read, an eviction, a refresh, a replacement) calls it. Callers hold the session lock.
+   */
+  private fun rearm(section: WorkSection, queryEpoch: Long, owner: SessionGeneration) {
+    val scheduler = schedulers[section to queryEpoch] ?: return
+    val active = activeRetentions[section]?.takeIf { it.queryEpoch == queryEpoch }
+    scheduler.publish(owner.scope, active?.let { ownerEarliest(section, queryEpoch) }) {
+      if (active != null) fireDeadline(section, active)
+    }
+  }
+
+  /** Reprojects only [section], and only if [owner] still owns it and its earliest deadline is really due. */
+  private suspend fun fireDeadline(section: WorkSection, owner: ActiveRetention) {
+    session.mutex.withLock {
+      val active = activeRetentions[section] ?: return@withLock
+      val due = ownerEarliest(section, owner.queryEpoch)?.let { it <= clock.now() } == true
+      if (active.sameOwner(owner) && latestQueryEpochs[section] == owner.queryEpoch && due) {
+        session.reprojectSection(section, SessionToken(owner.generation, owner.session))
       }
-      val wait = waitMillis(nextDeadline - clock.now())
-      val changed = withTimeoutOrNull(wait) { deadlineRevision.first { it != deadlineVersion } }
-      if (changed != null) {
-        deadlineVersion = changed
-        continue
-      }
-      session.invalidate(
-        if (section in setOf(WorkSection.GOALS, WorkSection.PHASES)) {
-          setOf(section, WorkSection.NEEDS_YOU)
-        } else {
-          setOf(section)
-        },
-      )
-      return
     }
   }
 
@@ -252,12 +254,7 @@ class RoomWorkBoardRepository(
     refresh: Boolean,
     queryEpoch: Long? = null,
   ): Outcome<Board> {
-    val readiness = session.mutex.withLock {
-      session.safeRead {
-        session.ensureSession()
-        session.observationProblem?.let { Outcome.Failure(it) } ?: Outcome.Value(Unit)
-      }
-    }
+    val readiness = session.read { _ -> session.observationProblem?.let { Outcome.Failure(it) } ?: Outcome.Value(Unit) }
     if (readiness is Outcome.Failure) return readiness
     val effectiveQueryEpoch = queryEpoch ?: latestQueryEpochs[section]
     val query = PagingQuery(retention, filter, historyFilter, effectiveQueryEpoch)
@@ -298,173 +295,171 @@ class RoomWorkBoardRepository(
   ): Outcome<Board> {
     val accounting = ReadPageAccounting(section)
     return try {
-      val outcome = session.mutex.withLock {
-        session.safeRead {
-          session.ensureSession()
-          session.observationProblem?.let { return@safeRead Outcome.Failure(it) }
-          val parsed = cursor?.let { CursorCodec.decodePage(it) ?: return@safeRead staleCursor() }
-          val generation = session.generation
-          if (parsed != null && cursorIsStale(parsed, generation, section, retention, filter, historyFilter, requestedQueryEpoch, rebase)) {
-            return@safeRead staleCursor()
+      val outcome = session.read { owner ->
+        session.observationProblem?.let { return@read Outcome.Failure(it) }
+        val parsed = cursor?.let { CursorCodec.decodePage(it) ?: return@read staleCursor() }
+        val generation = session.generation
+        if (parsed != null && cursorIsStale(parsed, generation, section, retention, filter, historyFilter, requestedQueryEpoch, rebase)) {
+          return@read staleCursor()
+        }
+        val queryEpoch = requestedQueryEpoch ?: parsed?.queryEpoch?.takeIf { it > 0 } ?: queryEpochs.next()
+        val observedAt = if (rebase) clock.now() else parsed?.observedAt?.let(Instant::parse) ?: clock.now()
+        val requestedPageKey = parsed?.let { "$section:$queryEpoch:${it.afterTime}:${it.afterId}" } ?: "$section:$queryEpoch:root"
+        val cutoff = observedAt - if (section == WorkSection.RECENT) 24.hours else retention.duration
+        var selectionStatements = 0
+        var selectedRows = 0
+        var projectedItems = 0
+        var selectionNanos = 0L
+        var projectionNanos = 0L
+        val attemptMetrics = mutableListOf<String>()
+        repeat(READ_ATTEMPTS) {
+          accounting.attemptCount++
+          val startObservation = session.workObservation()
+          if (parsed != null && !rebase && (parsed.storeId != startObservation.storeId || parsed.storeRevision != startObservation.revision)) {
+            return@read staleCursor()
           }
-          val queryEpoch = requestedQueryEpoch ?: parsed?.queryEpoch?.takeIf { it > 0 } ?: queryEpochs.next()
-          val observedAt = if (rebase) clock.now() else parsed?.observedAt?.let(Instant::parse) ?: clock.now()
-          val requestedPageKey = parsed?.let { "$section:$queryEpoch:${it.afterTime}:${it.afterId}" } ?: "$section:$queryEpoch:root"
-          val cutoff = observedAt - if (section == WorkSection.RECENT) 24.hours else retention.duration
-          var selectionStatements = 0
-          var selectedRows = 0
-          var projectedItems = 0
-          var selectionNanos = 0L
-          var projectionNanos = 0L
-          val attemptMetrics = mutableListOf<String>()
-          repeat(READ_ATTEMPTS) {
-            accounting.attemptCount++
-            val startObservation = session.workObservation()
-            if (parsed != null && !rebase && (parsed.storeId != startObservation.storeId || parsed.storeRevision != startObservation.revision)) {
-              return@safeRead staleCursor()
-            }
-            val result = mutableListOf<WorkItem>()
-            var next: CandidateRow? = null
-            val attemptRowsBefore = selectedRows
-            val attemptProjectedBefore = projectedItems
-            val attemptSelectionBefore = selectionNanos
-            val attemptProjectionBefore = projectionNanos
-            var earliest: Instant? = null
-            fun noteDeadline(candidate: Instant) {
-              val current = earliest
-              if (current == null || candidate < current) earliest = candidate
-            }
-            var committedObservation: StoreObservation? = startObservation
-            val selectionStarted = monotonicClock.nanos()
-            val candidates = try {
-              val selected = session.requireConnection().candidates(
-                CandidateRequest(
-                  section, cutoff.toString(), observedAt.toString(), parsed?.afterTime, parsed?.afterId,
-                  filter, CANDIDATE_BUDGET, historyFilter,
-                ),
-              )
-              accounting.accessPlanIndexSearches = selected.planIndexSearches
-              accounting.accessPlanScans = selected.planScans
-              selected.rows
-            } finally {
-              val elapsed = (monotonicClock.nanos() - selectionStarted).coerceAtLeast(0)
-              selectionNanos += elapsed
-              accounting.selectionNanos += elapsed
-              selectionStatements++
-              accounting.selectionStatements++
-            }
-            selectedRows += candidates.size
-            accounting.selectedRows += candidates.size
-            if (startObservation != session.workObservation()) return@repeat
-            val batches = candidates.chunked(CANDIDATE_PAGE_SIZE)
-            val projectionStarted = monotonicClock.nanos()
-            val projections = try {
-              session.gateway.existingSnapshot {
-                buildList {
-                  var accepted = 0
-                  for (rows in batches) {
-                    accounting.projectionSubmitted += rows.size
-                    val projection = projectBoard(rows.map { it.id }, retention, observedAt, CANDIDATE_PAGE_SIZE)
-                    add(projection)
-                    if (projection.items.any { it.incompatible }) break
-                    accepted += projection.items.count { belongs(it.item, section, cutoff, observedAt) }
-                    if (accepted >= PAGE_SIZE) break
-                  }
+          val result = mutableListOf<WorkItem>()
+          var next: CandidateRow? = null
+          val attemptRowsBefore = selectedRows
+          val attemptProjectedBefore = projectedItems
+          val attemptSelectionBefore = selectionNanos
+          val attemptProjectionBefore = projectionNanos
+          var earliest: Instant? = null
+          fun noteDeadline(candidate: Instant) {
+            val current = earliest
+            if (current == null || candidate < current) earliest = candidate
+          }
+          var committedObservation: StoreObservation? = startObservation
+          val selectionStarted = monotonicClock.nanos()
+          val candidates = try {
+            val selected = owner.connection.candidates(
+              CandidateRequest(
+                section, cutoff.toString(), observedAt.toString(), parsed?.afterTime, parsed?.afterId,
+                filter, CANDIDATE_BUDGET, historyFilter,
+              ),
+            )
+            accounting.accessPlanIndexSearches = selected.planIndexSearches
+            accounting.accessPlanScans = selected.planScans
+            selected.rows
+          } finally {
+            val elapsed = (monotonicClock.nanos() - selectionStarted).coerceAtLeast(0)
+            selectionNanos += elapsed
+            accounting.selectionNanos += elapsed
+            selectionStatements++
+            accounting.selectionStatements++
+          }
+          selectedRows += candidates.size
+          accounting.selectedRows += candidates.size
+          if (startObservation != session.workObservation()) return@repeat
+          val batches = candidates.chunked(CANDIDATE_PAGE_SIZE)
+          val projectionStarted = monotonicClock.nanos()
+          val projections = try {
+            session.gateway.existingSnapshot {
+              buildList {
+                var accepted = 0
+                for (rows in batches) {
+                  accounting.projectionSubmitted += rows.size
+                  val projection = projectBoard(rows.map { it.id }, retention, observedAt, CANDIDATE_PAGE_SIZE)
+                  add(projection)
+                  if (projection.items.any { it.incompatible }) break
+                  accepted += projection.items.count { belongs(it.item, section, cutoff, observedAt) }
+                  if (accepted >= PAGE_SIZE) break
                 }
               }
-            } finally {
-              val elapsed = (monotonicClock.nanos() - projectionStarted).coerceAtLeast(0)
-              projectionNanos += elapsed
-              accounting.projectionNanos += elapsed
             }
-            for ((index, projection) in projections.withIndex()) {
-              val rows = batches[index]
-              projection.diagnosticReasons.forEach { reason ->
-                diagnostics.record("work_data_$reason")
-                attemptMetrics += reason
+          } finally {
+            val elapsed = (monotonicClock.nanos() - projectionStarted).coerceAtLeast(0)
+            projectionNanos += elapsed
+            accounting.projectionNanos += elapsed
+          }
+          for ((index, projection) in projections.withIndex()) {
+            val rows = batches[index]
+            projection.diagnosticReasons.forEach { reason ->
+              diagnostics.record("work_data_$reason")
+              attemptMetrics += reason
+            }
+            projectedItems += projection.items.size
+            accounting.projectionReturned += projection.items.size
+            if (projection.items.any { it.incompatible }) return@read session.failure("incompatible_record")
+            committedObservation = projection.observation
+            projection.items.mapNotNull { it.freshnessDeadline }.filter { it > clock.now() }.minOrNull()?.let(::noteDeadline)
+            projection.items.mapNotNull { it.item.membershipDeadline }.filter { it > clock.now() }.minOrNull()?.let(::noteDeadline)
+            val projected = projection.items.map { it.item.copy(databaseGeneration = generation) }.associateBy { it.identity.id }
+            for (row in rows) {
+              next = row
+              val item = projected[row.id]
+              if (item != null && belongs(item, section, cutoff, observedAt)) {
+                result += item
+                if (section in setOf(WorkSection.HISTORY, WorkSection.RECENT)) {
+                  val expires = item.finishedAt!! + (if (section == WorkSection.RECENT) 24.hours else retention.duration) + 1.nanoseconds
+                  noteDeadline(expires)
+                }
               }
-              projectedItems += projection.items.size
-              accounting.projectionReturned += projection.items.size
-              if (projection.items.any { it.incompatible }) return@safeRead session.failure("incompatible_record")
-              committedObservation = projection.observation
-              projection.items.mapNotNull { it.freshnessDeadline }.filter { it > clock.now() }.minOrNull()?.let(::noteDeadline)
-              val projected = projection.items.map { it.item.copy(databaseGeneration = generation) }.associateBy { it.identity.id }
-              for (row in rows) {
-                next = row
-                val item = projected[row.id]
-                if (item != null && belongs(item, section, cutoff, observedAt)) {
-                  result += item
-                  if (section in setOf(WorkSection.HISTORY, WorkSection.RECENT)) {
-                    val expires = item.finishedAt!! + (if (section == WorkSection.RECENT) 24.hours else retention.duration) + 1.nanoseconds
-                    noteDeadline(expires)
-                  }
-                }
-                row.deadline?.takeIf { section in setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.NEEDS_YOU) }?.let { raw ->
-                  val time = Instant.parse(raw)
-                  if (time > clock.now()) noteDeadline(time)
-                }
-                if (result.size == PAGE_SIZE) break
+              row.deadline?.takeIf { section in setOf(WorkSection.GOALS, WorkSection.PHASES, WorkSection.NEEDS_YOU) }?.let { raw ->
+                val time = Instant.parse(raw)
+                if (time > clock.now()) noteDeadline(time)
               }
               if (result.size == PAGE_SIZE) break
             }
-            val exhausted = next == candidates.lastOrNull() && candidates.size < CANDIDATE_BUDGET
-            val coherent = projections.all { it.observation == startObservation }
-            val attemptNumber = attemptMetrics.size + 1
-            val attemptRows = selectedRows - attemptRowsBefore
-            val attemptProjected = projectedItems - attemptProjectedBefore
-            attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected," +
-              "selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore}," +
-              "coherent=$coherent"
-            val endObservation = committedObservation ?: startObservation
-            if (coherent && committedObservation == startObservation && session.currentFileMatches()) {
-              val observationSession = session.observationSession
-              val retainedObservation = ActiveRetention(
-                retention, filter, historyFilter, queryEpoch, generation, observationSession,
-                endObservation.storeId, endObservation.revision,
-              )
-              activeRetentions[section] = retainedObservation
-              if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)) {
-                watchOwners(section, requestedPageKey, result, generation, retainedObservation)
-              }
-              val pageDeadlines = deadlines.getOrPut(section) { mutableMapOf() }
-              val pageEarliest = earliest
-              if (pageEarliest == null) pageDeadlines.remove(requestedPageKey) else pageDeadlines[requestedPageKey] = pageEarliest
-              deadlineRevision.update { it + 1 }
-              val nextCursor = next?.takeIf { !exhausted }?.let { row ->
-                CursorCodec.encode(
-                  PageCursor(
-                    generation, observationSession, section, observedAt.toString(), retention.cliValue, filter, historyFilter,
-                    row.sortTime, row.id, endObservation.storeId, endObservation.revision, queryEpoch,
-                  ),
-                )
-              }
-              return@safeRead Outcome.Value(
-                Board(
-                  observedAt, retention, result,
-                  diagnostics = attemptMetrics + listOf(
-                    "selection_statements=$selectionStatements", "selection_rows=$selectedRows",
-                    "selection_duration_ns=$selectionNanos", "projection_items=$projectedItems",
-                    "projection_duration_ns=$projectionNanos",
-                    "candidate_plan_index_searches=${accounting.accessPlanIndexSearches}",
-                    "candidate_plan_scans=${accounting.accessPlanScans}",
-                  ),
-                  nextCursor = nextCursor,
-                  generation = generation,
-                  observationSession = observationSession,
-                  databasePath = session.path,
-                  storeId = committedObservation?.storeId,
-                  revision = committedObservation?.revision,
-                  pageKey = requestedPageKey,
-                  queryEpoch = queryEpoch,
-                  filter = filter,
-                  historyFilter = historyFilter,
+            if (result.size == PAGE_SIZE) break
+          }
+          val exhausted = next == candidates.lastOrNull() && candidates.size < CANDIDATE_BUDGET
+          val coherent = projections.all { it.observation == startObservation }
+          val attemptNumber = attemptMetrics.size + 1
+          val attemptRows = selectedRows - attemptRowsBefore
+          val attemptProjected = projectedItems - attemptProjectedBefore
+          attemptMetrics += "selection_attempt=$attemptNumber,rows=$attemptRows,projected=$attemptProjected," +
+            "selection_ns=${selectionNanos - attemptSelectionBefore},projection_ns=${projectionNanos - attemptProjectionBefore}," +
+            "coherent=$coherent"
+          val endObservation = committedObservation ?: startObservation
+          if (coherent && committedObservation == startObservation && session.currentFileMatches()) {
+            val observationSession = session.observationSession
+            val retainedObservation = ActiveRetention(
+              retention, filter, historyFilter, queryEpoch, generation, observationSession,
+              endObservation.storeId, endObservation.revision,
+            )
+            activeRetentions[section] = retainedObservation
+            if (section in setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES)) {
+              watchOwners(section, requestedPageKey, result, owner, retainedObservation)
+            }
+            val pageDeadlines = deadlines.getOrPut(section) { mutableMapOf() }
+            val pageEarliest = earliest
+            if (pageEarliest == null) pageDeadlines.remove(requestedPageKey) else pageDeadlines[requestedPageKey] = pageEarliest
+            rearm(section, queryEpoch, owner)
+            val nextCursor = next?.takeIf { !exhausted }?.let { row ->
+              CursorCodec.encode(
+                PageCursor(
+                  generation, observationSession, section, observedAt.toString(), retention.cliValue, filter, historyFilter,
+                  row.sortTime, row.id, endObservation.storeId, endObservation.revision, queryEpoch,
                 ),
               )
             }
+            return@read Outcome.Value(
+              Board(
+                observedAt, retention, result,
+                diagnostics = attemptMetrics + listOf(
+                  "selection_statements=$selectionStatements", "selection_rows=$selectedRows",
+                  "selection_duration_ns=$selectionNanos", "projection_items=$projectedItems",
+                  "projection_duration_ns=$projectionNanos",
+                  "candidate_plan_index_searches=${accounting.accessPlanIndexSearches}",
+                  "candidate_plan_scans=${accounting.accessPlanScans}",
+                ),
+                nextCursor = nextCursor,
+                generation = generation,
+                observationSession = observationSession,
+                databasePath = session.path,
+                storeId = committedObservation?.storeId,
+                revision = committedObservation?.revision,
+                pageKey = requestedPageKey,
+                queryEpoch = queryEpoch,
+                filter = filter,
+                historyFilter = historyFilter,
+              ),
+            )
           }
-          diagnostics.record("query_snapshot_changed")
-          Outcome.Failure(Problem(ProblemCode.BUSY, "Work changed during this read. Retry to get a coherent snapshot.", StorageFailure.BUSY))
         }
+        diagnostics.record("query_snapshot_changed")
+        Outcome.Failure(Problem(ProblemCode.BUSY, "Work changed during this read. Retry to get a coherent snapshot.", StorageFailure.BUSY))
       }
       accounting.outcome = if (outcome is Outcome.Value) "success" else "failure"
       outcome
@@ -499,12 +494,15 @@ class RoomWorkBoardRepository(
     return latestQueryEpochs[section]?.let { it != parsed.queryEpoch } == true
   }
 
-  /** Replaces the owner registration for one page so that an owner exit invalidates the section. Callers hold the session lock. */
+  /**
+   * Replaces the owner registration for one page so that an owner exit reprojects the section. The callback runs in the
+   * generation's scope, so retiring the generation joins it. Callers hold the session lock.
+   */
   private fun watchOwners(
     section: WorkSection,
     pageKey: String,
     items: List<WorkItem>,
-    ownerGeneration: Long,
+    owner: SessionGeneration,
     retained: ActiveRetention,
   ) {
     val registrations = ownerObservations.getOrPut(section) { mutableMapOf() }
@@ -513,43 +511,40 @@ class RoomWorkBoardRepository(
       items.filter { it.lifecycle == Lifecycle.ACTIVE }.map { it.identity.id },
       clock.now(),
     ) {
-      session.scope.launch {
-        session.mutex.withLock {
-          if (ownerGeneration == session.generation && activeRetentions[section] == retained && !session.closed) {
-            session.invalidate(setOf(section, WorkSection.NEEDS_YOU))
-          }
+      session.launchIn(owner) {
+        if (activeRetentions[section]?.sameOwner(retained) == true) {
+          session.reprojectSection(section, SessionToken(retained.generation, retained.session))
         }
       }
     }
   }
 
   override fun retainPages(retention: BoardRetention) {
+    val owner = session.currentGeneration() ?: return
     val retained = retention.pageKeys.toSet()
-    session.scope.launch {
-      session.mutex.withLock {
-        val section = retention.section
-        if (latestQueryEpochs[section]?.let { it != retention.queryEpoch } == true) return@withLock
-        val expected = ActiveRetention(
-          retention.retention, retention.filter, retention.historyFilter, retention.queryEpoch,
-          retention.generation, retention.observationSession, retention.storeId, retention.revision,
-        )
-        if (activeRetentions[section] != expected) return@withLock
-        val current = deadlines[section]
-        if (current != null) {
-          if (current.keys.retainAll(retained)) deadlineRevision.update { it + 1 }
-          if (current.isEmpty()) deadlines.remove(section)
-        }
-        val registrations = ownerObservations[section]
-        registrations?.entries?.removeAll { (key, registration) ->
-          if (key !in retained) {
-            registration.closeOwned(diagnostics, "room_owner_registration_close_failed")
-            true
-          } else {
-            false
-          }
-        }
-        if (registrations?.isEmpty() == true) ownerObservations.remove(section)
+    session.launchIn(owner) {
+      val section = retention.section
+      if (latestQueryEpochs[section]?.let { it != retention.queryEpoch } == true) return@launchIn
+      val expected = ActiveRetention(
+        retention.retention, retention.filter, retention.historyFilter, retention.queryEpoch,
+        retention.generation, retention.observationSession, retention.storeId, retention.revision,
+      )
+      if (activeRetentions[section] != expected) return@launchIn
+      deadlines[section]?.let { current ->
+        current.keys.retainAll(retained)
+        if (current.isEmpty()) deadlines.remove(section)
       }
+      val registrations = ownerObservations[section]
+      registrations?.entries?.removeAll { (key, registration) ->
+        if (key !in retained) {
+          registration.closeOwned(diagnostics, "room_owner_registration_close_failed")
+          true
+        } else {
+          false
+        }
+      }
+      if (registrations?.isEmpty() == true) ownerObservations.remove(section)
+      rearm(section, retention.queryEpoch, owner)
     }
   }
 
@@ -557,9 +552,4 @@ class RoomWorkBoardRepository(
     WorkSection.HISTORY, WorkSection.RECENT -> item.finishedAt?.let { it >= cutoff && it <= through } == true
     WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES -> item.liveSection == section
   }
-}
-
-internal fun waitMillis(remaining: Duration): Long {
-  val nanos = remaining.inWholeNanoseconds
-  return (nanos.floorDiv(1_000_000L) + if (nanos % 1_000_000L == 0L) 0 else 1).coerceAtLeast(1)
 }

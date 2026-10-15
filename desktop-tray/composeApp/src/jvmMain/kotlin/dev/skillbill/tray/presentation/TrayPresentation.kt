@@ -1,9 +1,7 @@
 package dev.skillbill.tray.presentation
 
 import dev.skillbill.tray.application.DashboardState
-import dev.skillbill.tray.application.project
 import dev.skillbill.tray.core.domain.model.*
-import kotlin.time.Instant
 
 data class PopoverView(
   val running: Int,
@@ -19,20 +17,25 @@ data class PopoverView(
   val selectedTab: String,
 )
 
-fun presentPopover(state: DashboardState, now: Instant): PopoverView {
+/** Renders the runtime's arrangement of the board: identities are looked up on the board, their order is kept. */
+fun presentPopover(state: DashboardState): PopoverView {
   val board = state.board
-  val projected = board?.let { project(it, now) }
+  val arrangement = state.arrangement
+  val byIdentity = board?.items.orEmpty().associateBy { it.identity }
+  fun List<WorkIdentity>.items(): List<WorkItem> = mapNotNull(byIdentity::get)
+  val livePhases = arrangement?.livePhases?.items().orEmpty()
+  val finishedPhases = arrangement?.finishedPhases?.items().orEmpty()
   return PopoverView(
-    running = projected?.running ?: 0,
-    needsYou = projected?.needsYou ?: 0,
-    done24h = projected?.done24h ?: 0,
-    goals = projected?.goals.orEmpty(),
-    phases = projected?.phases.orEmpty(),
-    livePhases = projected?.livePhases.orEmpty(),
-    finishedPhases = projected?.finishedPhases.orEmpty(),
+    running = arrangement?.running ?: 0,
+    needsYou = arrangement?.needsYou ?: 0,
+    done24h = arrangement?.doneWithinDay ?: 0,
+    goals = arrangement?.goals?.items().orEmpty(),
+    phases = livePhases + finishedPhases,
+    livePhases = livePhases,
+    finishedPhases = finishedPhases,
     problem = state.problem ?: state.trayProblem ?: board?.problem,
     stale = state.stale,
-    attention = (projected?.needsYou ?: 0) > 0,
+    attention = (arrangement?.needsYou ?: 0) > 0,
     selectedTab = state.settings.lastPopoverTab,
   )
 }
@@ -41,15 +44,8 @@ enum class TrayStateKind { IDLE, RUNNING, NEEDS_YOU, FAILED }
 data class TrayState(val kind: TrayStateKind, val running: Int)
 
 fun presentTrayState(state: DashboardState): TrayState {
-  val projection = state.board?.let { project(it, it.observedAt) }
-  val failed = state.board?.items?.any { it.lifecycle == Lifecycle.FAILED } == true
-  val kind = when {
-    failed -> TrayStateKind.FAILED
-    (projection?.needsYou ?: 0) > 0 -> TrayStateKind.NEEDS_YOU
-    (projection?.running ?: 0) > 0 -> TrayStateKind.RUNNING
-    else -> TrayStateKind.IDLE
-  }
-  return TrayState(kind, projection?.running ?: 0)
+  val arrangement = state.arrangement ?: return TrayState(TrayStateKind.IDLE, 0)
+  return TrayState(TrayStateKind.valueOf(arrangement.trayStatus.name), arrangement.running)
 }
 
 fun effectiveFreshness(item: WorkItem, boardStale: Boolean, detailExtrasStale: Boolean = false): Freshness =

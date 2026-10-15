@@ -489,6 +489,8 @@ class WorkStackTest {
         val nextDependencies = (source.detail(goals.items.single().identity, dependenciesCursor,
           DetailList.DEPENDENCIES) as Outcome.Value).value
         assertEquals((11..20).toList(), nextDependencies.dependencies.map { it.dependency.subtaskId })
+        // A continuation belongs to its own list: presenting it for another list is refused, never applied to that list.
+        assertIs<Outcome.Failure>(source.detail(goals.items.single().identity, dependenciesCursor, DetailList.SUBTASKS))
         val target = goals.items.single()
         assertIs<Outcome.Failure>(source.pause(target.copy(repositoryRoot = "/wrong-repository")))
         assertIs<Outcome.Failure>(source.pause(target.copy(databaseGeneration = target.databaseGeneration + 1)))
@@ -498,7 +500,7 @@ class WorkStackTest {
         }
         assertIs<Outcome.Failure>(source.pause(target))
         val current = value(source.board(WorkSection.GOALS, Retention.SIX_HOURS)).items.single()
-        assertIs<Outcome.Value<Unit>>(source.pause(current))
+        assertEquals(Outcome.Value(ControlConfirmation.INTENT_RECORDED), source.pause(current))
         assertIs<Outcome.Failure>(source.pause(current))
         assertIs<Outcome.Failure>(source.stop(current))
         assertFalse(factory.read { it.goalRunnerControls.controlState("older-goal").goalCompletedAt != null })

@@ -38,7 +38,7 @@ import kotlin.time.Instant
 fun WindowScope.TrayPopover(model: DashboardModel, onClose: () -> Unit, openMain: () -> Unit, openSettings: () -> Unit, onQuit: () -> Unit) {
   val state by model.state.collectAsState()
   val now by tickingNow()
-  val view = presentPopover(state, now)
+  val view = presentPopover(state)
   Column(Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(panel).border(1.dp, border, RoundedCornerShape(14.dp))) {
     WindowDraggableArea {
       Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(mint.copy(alpha = .07f), Color.Transparent))).padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {

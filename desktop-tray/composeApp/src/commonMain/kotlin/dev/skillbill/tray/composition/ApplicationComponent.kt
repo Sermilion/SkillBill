@@ -9,6 +9,7 @@ import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
+import dev.skillbill.tray.core.domain.repository.WorkPolicyRepository
 import dev.skillbill.tray.core.domain.repository.WorkStoreSession
 import me.tatarka.inject.annotations.Inject
 import me.tatarka.inject.annotations.Provides
@@ -31,6 +32,7 @@ abstract class ApplicationComponent(
   abstract val boards: WorkBoardRepository
   abstract val details: WorkDetailRepository
   abstract val controls: WorkControlRepository
+  abstract val policy: WorkPolicyRepository
   abstract val storeSession: WorkStoreSession
   abstract val settings: SettingsRepository
   abstract val dispatchers: DispatcherProvider

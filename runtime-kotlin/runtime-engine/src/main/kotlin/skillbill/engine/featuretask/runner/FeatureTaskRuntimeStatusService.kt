@@ -44,6 +44,34 @@ class FeatureTaskRuntimeStatusService(
     return buildStatusProjection(request, records, decomposeTerminal, ledger)
   }
 
+  /**
+   * One bounded page of phase statuses in definition order, strictly after [afterPhaseId], or from [offset] when no
+   * anchor is given. The summary (counts, current phase, every phase id) is read once from the definition-bound phase
+   * records, so the full projection is built before slicing; only the returned page is bounded to [limit] statuses.
+   * The phase count is fixed by the pipeline definition, which keeps that cost small.
+   */
+  fun phasePage(
+    workflowId: String,
+    afterPhaseId: String?,
+    limit: Int,
+    offset: Int = 0,
+  ): FeatureTaskRuntimePhasePage? {
+    val projection = status(FeatureTaskRuntimeStatusRequest(workflowId)) ?: return null
+    val phaseIds = projection.phases.map { it.phaseId }
+    val start =
+      if (afterPhaseId == null) {
+        offset.coerceIn(0, phaseIds.size)
+      } else {
+        phaseIds.indexOf(afterPhaseId).let { if (it < 0) phaseIds.size else it + 1 }
+      }
+    val end = minOf(start + limit, phaseIds.size)
+    return FeatureTaskRuntimePhasePage(
+      status = projection.copy(phases = projection.phases.subList(start, end)),
+      phaseIds = phaseIds,
+      hasMore = end < phaseIds.size,
+    )
+  }
+
   fun ledgerBlockedPhaseIds(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     durableBlockedPhaseIds: Set<String>,
@@ -199,6 +227,13 @@ class FeatureTaskRuntimeStatusService(
       )
     }
 }
+
+/** [status] carries only the requested page of phases; [phaseIds] lists every phase in pipeline order. */
+data class FeatureTaskRuntimePhasePage(
+  val status: FeatureTaskRuntimeStatusProjection,
+  val phaseIds: List<String>,
+  val hasMore: Boolean,
+)
 
 private data class StatusProjectionParts(
   val request: FeatureTaskRuntimeStatusRequest,

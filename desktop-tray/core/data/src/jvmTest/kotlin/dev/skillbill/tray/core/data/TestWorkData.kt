@@ -6,6 +6,8 @@ import dev.skillbill.tray.core.common.HostEnvironment
 import dev.skillbill.tray.core.data.port.CandidateRequest
 import dev.skillbill.tray.core.data.port.CandidateResult
 import dev.skillbill.tray.core.data.port.CommitSignalSource
+import dev.skillbill.tray.core.data.port.ControlAction
+import dev.skillbill.tray.core.data.port.ControlResult
 import dev.skillbill.tray.core.data.port.OwnerRegistration
 import dev.skillbill.tray.core.data.port.RuntimeWorkGateway
 import dev.skillbill.tray.core.data.port.SignalTopics
@@ -32,6 +34,7 @@ import dev.skillbill.tray.core.data.session.TimeSourceMonotonicClock
 import dev.skillbill.tray.core.data.session.WorkStoreSessionManager
 import dev.skillbill.tray.core.data.signal.DesktopCommitSignalSource
 import dev.skillbill.tray.core.data.store.JvmWorkStoreAccess
+import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.domain.repository.WorkControlRepository
 import dev.skillbill.tray.core.domain.repository.WorkDetailRepository
@@ -94,6 +97,8 @@ fun workStack(
   commitSignals: (Diagnostics) -> CommitSignalSource = { DesktopCommitSignalSource(it) },
   /** Runs at the start of every candidate query, so a test can hold a board read open or count page reads. */
   onCandidateQuery: () -> Unit = {},
+  /** Answers a control request in place of the runtime when it returns a result, so a test can script an outcome. */
+  scriptedControl: (ControlAction) -> ControlResult? = { null },
 ): WorkStack {
   val diagnostics = RecordingDiagnostics()
   val readWork = AtomicInteger()
@@ -110,7 +115,7 @@ fun workStack(
   val sessions = SessionFactory { path ->
     val selection = DatabaseSelection().also { it.choose(path) }
     val runtime = object : RuntimeSessionProviders {}.runtimeComponent(selection, host)
-    val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations)
+    val gateway = CountingGateway(RuntimeWorkAdapter(runtime), readWork, ownerRegistrations, scriptedControl)
     val session = DatabaseSession(gateway, store, signals, classifier, generations, dispatchers, diagnostics)
     SessionParts(
       session,
@@ -156,7 +161,11 @@ private class CountingGateway(
   private val delegate: RuntimeWorkGateway,
   private val readWork: AtomicInteger,
   private val ownerRegistrations: AtomicInteger,
+  private val scriptedControl: (ControlAction) -> ControlResult?,
 ) : RuntimeWorkGateway by delegate {
+  override fun request(item: WorkItem, action: ControlAction, agentId: String?, stillCurrent: () -> Boolean): ControlResult =
+    scriptedControl(action) ?: delegate.request(item, action, agentId, stillCurrent)
+
   override fun <T : Any> existingSnapshot(read: SnapshotReads.() -> T): T {
     readWork.incrementAndGet()
     return delegate.existingSnapshot(read)
