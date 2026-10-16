@@ -20,6 +20,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertIs
 
 internal const val FEATURE_BRANCH = "feat/SKILL-427"
@@ -120,3 +121,39 @@ internal fun acquireFor(
 
 internal fun acquiredFence(acquisition: MonitorAcquisition): MonitorFence =
   assertIs<MonitorAcquisition.Acquired>(acquisition).fence
+
+private const val LOCK_PROBE_CONTENDED = 0
+private const val LOCK_PROBE_ACQUIRED = 1
+private const val LOCK_PROBE_TIMEOUT_SECONDS = 60L
+
+internal fun lockHeldByAnotherProcess(
+  lockFile: Path,
+  scratch: Path,
+): Boolean {
+  val source = scratch.resolve("LockProbe.java")
+  Files.writeString(
+    source,
+    """
+    import java.nio.channels.FileChannel;
+    import java.nio.file.Path;
+    import java.nio.file.StandardOpenOption;
+
+    public class LockProbe {
+      public static void main(String[] args) throws Exception {
+        try (FileChannel channel = FileChannel.open(Path.of(args[0]), StandardOpenOption.WRITE)) {
+          System.exit(channel.tryLock() == null ? $LOCK_PROBE_CONTENDED : $LOCK_PROBE_ACQUIRED);
+        }
+      }
+    }
+    """.trimIndent(),
+  )
+  val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+  val process = ProcessBuilder(java, source.toString(), lockFile.toString()).redirectErrorStream(true).start()
+  val output = process.inputStream.bufferedReader().readText()
+  check(process.waitFor(LOCK_PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) { "The lock probe did not finish." }
+  return when (process.exitValue()) {
+    LOCK_PROBE_CONTENDED -> true
+    LOCK_PROBE_ACQUIRED -> false
+    else -> error("The lock probe failed: $output")
+  }
+}

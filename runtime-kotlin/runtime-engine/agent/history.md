@@ -1,3 +1,14 @@
+## [2026-10-16] SKILL-427 subtask 1: standalone monitor target resolution and owned worktree preparation
+Areas: runtime-engine featuretask/phaserun/monitor; runtime-ports ports/monitor; runtime-infra workflow/monitor, host, contracts; runtime-contracts; runtime-core di; orchestration/contracts
+- MonitorTargetResolver and MonitorTargetPolicy resolve a PR from intake: strict https PR URL, token-exact issue key, branch match. A URL mismatch is refused before any lookup; merged, closed, missing and ambiguous targets never reach admission.
+- StandaloneMonitorExecutionPreparer admits the target, fetches into an owned worktree and settles ownership after any failure or cancellation, keeping the primary error. MonitorCleanupOwnership is idempotent and registers a JVM shutdown hook.
+- New typed ports MonitorPullRequestSource, StandaloneMonitorResources and MonitorProcessInspector, with gh, git and JDK adapters. reusable: JdkMonitorProcessInspector shares inspectRecordedProcess with the worker supervisor.
+- Ownership is a versioned schema (standalone-monitor-ownership-schema.yaml, contract 1.0) read by a strict codec; admission uses a lock file plus atomic ownership.json keyed by canonical common git dir and PR.
+- Cleanup removes only a verified owned, clean, fully published worktree without force; otherwise it retains with a reason and path. Stale recovery needs the expected token and positive exact-process death evidence.
+- Limits: not yet wired to a public route or tracker lookup; the legacy GhPullRequestIdentityLookup is untouched. Cross-process lock contention and symlinked-worktree retention are untested; git 2.29+ is assumed.
+Feature flag: N/A
+Acceptance criteria: implemented per the subtask spec; count deferred to the audit phase
+
 ## [2026-10-14] SKILL-425 subtask 1: intake slot opens the PLAN skeleton
 Areas: runtime-engine featuretask (slot/intake, slot/skeleton, slot/state, runner, lifecycle/execution, phase/core, runloop) and goalrunner (intake, plan, persist); runtime-domain PhaseSlot, SkeletonDefinition, phase workflow definition/graph/projection; runtime-core RuntimeFeatureTaskSlotProvides; orchestration/contracts/workflow-state-schema.yaml
 - PhaseSlot.INTAKE is first in canonical order with the single step `intake`. SkeletonDefinition.PLAN is now INTAKE, PREPLAN, PLAN, and the workflow definition and graph carry a first "Phase 0: Intake" step with no required artifacts.

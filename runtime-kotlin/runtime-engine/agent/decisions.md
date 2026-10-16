@@ -1,3 +1,15 @@
+## [2026-10-16] Standalone monitor worktrees live under the common git dir and are removed only when provably safe
+Context: Concurrent standalone monitors of different PRs must not collide, and a monitor must never destroy work it did not publish.
+Decision: Admission is keyed by the canonical common git dir and target PR, so linked worktrees contend on one lock. The worktree, branch and refs are invocation-specific under skill-bill/standalone-monitor in the common dir, and cleanup removes only an owned, clean, fully published worktree, never with force.
+Reason: A common-dir key makes linked worktrees see the same owner, and invocation tokens stop two runs sharing refs. Retaining with an exact reason and path is safer than guessing.
+Alternatives considered: Worktrees beside the caller checkout, rejected because they pollute it and are not keyed to the shared repository.
+
+## [2026-10-16] Stale monitor recovery requires positive death evidence of the exact owner
+Context: A crashed monitor leaves ownership state that blocks the same PR forever, but stealing it from a live or unknown owner would run two monitors on one worktree.
+Decision: Recovery needs the expected owner token, an acquirable lock and positive exact-process death evidence. Live or unknown owners and retained unfinished work are refused, and the fence is checked in memory and on disk.
+Reason: Unknown must read as alive, since a false takeover costs more than a manual reset.
+Revisit when: A cross-process contention test or a heartbeat lease gives a safer liveness signal.
+
 ## [2026-10-14] SKILL-425: the engine drops the goal planning sweep
 Context: The goal runner ran a planning sweep over `GoalPlanningPhaseRunState` and wrote `goal_*` checkpoints.
 Decision: The goal runner asks `GoalPlanningSource` for planning (plan workflow, then read-only legacy tables, then `StandalonePlanRun`). Status reads planning progress from the latest plan workflow bundle and falls back to the legacy tables, and `GoalChildPlanningHydrator` reads either source. The full decision is in runtime-kotlin/agent/decisions.md.

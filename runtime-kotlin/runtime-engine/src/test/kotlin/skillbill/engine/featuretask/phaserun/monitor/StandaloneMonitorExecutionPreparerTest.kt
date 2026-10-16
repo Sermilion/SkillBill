@@ -21,6 +21,8 @@ import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.monitor.model.MonitorWorktree
+import skillbill.ports.process.ShutdownHookPort
+import skillbill.ports.process.ShutdownHookRegistration
 import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import kotlin.test.Test
@@ -112,11 +114,22 @@ private class RecordingResources : StandaloneMonitorResources {
   }
 }
 
+private class RecordingShutdownHooks : ShutdownHookPort {
+  val registered = mutableListOf<() -> Unit>()
+
+  override fun register(action: () -> Unit): ShutdownHookRegistration {
+    registered += action
+    return ShutdownHookRegistration { registered.remove(action) }
+  }
+}
+
 class StandaloneMonitorExecutionPreparerTest {
   private val source = FakeMonitorPullRequestSource(lookup = { MonitorPullRequestLookup.Found(pullRequest(it)) })
   private val resources = RecordingResources()
   private val diagnostics = RecordingDiagnostics()
-  private val preparer = StandaloneMonitorExecutionPreparer(MonitorTargetResolver(source), resources, diagnostics)
+  private val shutdownHooks = RecordingShutdownHooks()
+  private val preparer =
+    StandaloneMonitorExecutionPreparer(MonitorTargetResolver(source), resources, diagnostics, shutdownHooks)
 
   private fun prepare(
     intake: String? = PR_URL,
@@ -138,6 +151,19 @@ class StandaloneMonitorExecutionPreparerTest {
     assertEquals(CALLER_ROOT, prepared.context.callerRoot)
 
     assertEquals(MonitorSettlement.Released, prepared.cleanup.settle())
+  }
+
+  @Test
+  fun `runtime exit settles a handed-off invocation through its shutdown hook and settling unregisters it`() {
+    val prepared = assertIs<MonitorPreparation.Prepared>(prepare())
+    val exitHook = shutdownHooks.registered.single()
+
+    exitHook()
+
+    assertEquals(1, resources.calls.count { it == "settle" })
+    assertTrue(shutdownHooks.registered.isEmpty())
+    assertEquals(MonitorSettlement.Released, prepared.cleanup.settle())
+    assertEquals(1, resources.calls.count { it == "settle" })
   }
 
   @Test

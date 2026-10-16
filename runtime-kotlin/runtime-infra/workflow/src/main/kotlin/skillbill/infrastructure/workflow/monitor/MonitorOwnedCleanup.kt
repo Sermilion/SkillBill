@@ -37,12 +37,32 @@ internal class MonitorOwnedCleanup {
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget?,
   ): MonitorSettlement.Retained? {
-    val path =
-      record.executionPath?.let(Path::of)?.takeIf { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }
-        ?: return null
-    return unownedRetention(directory, path, record)
-      ?: dirtyRetention(path)
-      ?: publicationRetention(path, record, target)
+    namespaceRetention(record)?.let { return it }
+    val path = record.executionPath?.let(Path::of)?.takeIf { Files.exists(it, LinkOption.NOFOLLOW_LINKS) }
+    return if (path == null) {
+      orphanedBranchRetention(record, target)
+    } else {
+      unownedRetention(directory, path, record)
+        ?: dirtyRetention(path)
+        ?: publicationVerdict(path, "the worktree", monitorGit(path, "rev-parse", "HEAD"), record, target)
+          ?.let { (reason, detail) -> MonitorSettlement.Retained(reason, path, detail) }
+    }
+  }
+
+  private fun namespaceRetention(record: MonitorOwnershipRecord): MonitorSettlement.Retained? {
+    val namespace = monitorRefNamespace(record.ownerToken)
+    val ownedBranch = monitorBranchName(record.ownerToken)
+    val foreignRef = record.ownedRefs.firstOrNull { it !in setOf("$namespace/head", "$namespace/base") }
+    val problem =
+      when {
+        record.executionBranch != null && record.executionBranch != ownedBranch ->
+          "the recorded branch ${record.executionBranch} is not the owned branch $ownedBranch"
+        foreignRef != null -> "the recorded ref $foreignRef is outside the owned namespace $namespace"
+        else -> null
+      }
+    return problem?.let {
+      MonitorSettlement.Retained(MonitorRetentionReason.UNOWNED_RESOURCE, record.executionPath?.let(Path::of), it)
+    }
   }
 
   private fun unownedRetention(
@@ -79,36 +99,47 @@ internal class MonitorOwnedCleanup {
     return reason?.let { MonitorSettlement.Retained(it, path, detail) }
   }
 
-  private fun publicationRetention(
-    path: Path,
+  private fun orphanedBranchRetention(
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget?,
   ): MonitorSettlement.Retained? {
-    val head = monitorGit(path, "rev-parse", "HEAD")
-    val verdict =
-      when {
-        !head.ok -> unknown("the worktree head could not be read: ${head.output}")
-        head.output in setOfNotNull(record.pinnedHeadSha, record.lastPublishedSha) -> null
-        target == null -> unknown("published state cannot be verified without the target remote")
-        else -> remotePublication(path, record, target, head.output)
-      }
-    return verdict?.let { (reason, detail) -> MonitorSettlement.Retained(reason, path, detail) }
+    val branch = record.executionBranch ?: return null
+    val primaryRoot = Path.of(record.primaryRoot)
+    if (!monitorGit(primaryRoot, "show-ref", "--verify", "--quiet", "refs/heads/$branch").ok) return null
+    val tip = monitorGit(primaryRoot, "rev-parse", "--verify", "refs/heads/$branch^{commit}")
+    return publicationVerdict(primaryRoot, "the owned branch $branch", tip, record, target)
+      ?.let { (reason, detail) -> MonitorSettlement.Retained(reason, record.executionPath?.let(Path::of), detail) }
   }
 
+  private fun publicationVerdict(
+    gitRoot: Path,
+    subject: String,
+    tip: GitRun,
+    record: MonitorOwnershipRecord,
+    target: MonitorResolvedTarget?,
+  ): Pair<MonitorRetentionReason, String>? =
+    when {
+      !tip.ok -> unknown("the head of $subject could not be read: ${tip.output}")
+      tip.output in setOfNotNull(record.pinnedHeadSha, record.lastPublishedSha) -> null
+      target == null -> unknown("published state cannot be verified without the target remote")
+      else -> remotePublication(gitRoot, subject, record, target, tip.output)
+    }
+
   private fun remotePublication(
-    path: Path,
+    gitRoot: Path,
+    subject: String,
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget,
     headSha: String,
   ): Pair<MonitorRetentionReason, String>? {
     val headRef = "${monitorRefNamespace(record.ownerToken)}/head"
     val fetch = monitorFetchBranch(Path.of(record.primaryRoot), target.head.fetchUrl, target.head.tip.ref, headRef)
-    val ancestor = if (fetch.ok) monitorGit(path, "merge-base", "--is-ancestor", headSha, headRef) else null
+    val ancestor = if (fetch.ok) monitorGit(gitRoot, "merge-base", "--is-ancestor", headSha, headRef) else null
     return when {
       ancestor == null -> unknown("the remote head could not be fetched: ${fetch.output}")
       ancestor.ok -> null
       ancestor.exitCode == NOT_ANCESTOR_EXIT_CODE ->
-        MonitorRetentionReason.UNPUBLISHED_COMMITS to "the worktree has commits missing from the remote head"
+        MonitorRetentionReason.UNPUBLISHED_COMMITS to "$subject has commits missing from the remote head"
       else -> unknown("publication could not be verified: ${ancestor.output}")
     }
   }
@@ -197,5 +228,4 @@ internal class MonitorOwnedCleanup {
     )
     return retention
   }
-
 }

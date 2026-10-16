@@ -14,26 +14,28 @@ import kotlin.test.assertTrue
 private val REPO = MonitorRepositoryIdentity.canonical("github.com", "acme", "repo")
 private const val SHA = "0123456789abcdef0123456789abcdef01234567"
 
+private const val HEAD_REF = "feat/SKILL-427"
+private const val TITLE = "SKILL-427 monitor"
+
 private fun pullRequestJson(
   number: Int,
   state: String = "open",
   headRepo: String? = "acme/repo",
-  headRef: String = "feat/SKILL-427",
-  title: String = "SKILL-427 monitor",
   push: Boolean? = true,
   maintainerCanModify: Boolean? = false,
-  merged: Boolean = false,
 ): String {
+  val merged = state == "merged"
+  val wireState = if (merged) "closed" else state
   val permissions = push?.let { ""","permissions":{"push":$it}""" }.orEmpty()
   val head =
     if (headRepo == null) {
-      """{"ref":"$headRef","sha":"$SHA","repo":null}"""
+      """{"ref":"$HEAD_REF","sha":"$SHA","repo":null}"""
     } else {
       val repo = """{"full_name":"$headRepo","clone_url":"https://github.com/$headRepo.git"$permissions}"""
-      """{"ref":"$headRef","sha":"$SHA","repo":$repo}"""
+      """{"ref":"$HEAD_REF","sha":"$SHA","repo":$repo}"""
     }
   val modify = maintainerCanModify?.let { ""","maintainer_can_modify":$it""" }.orEmpty()
-  return """{"number":$number,"state":"$state","merged":$merged,"title":"$title","body":null,"head":$head,""" +
+  return """{"number":$number,"state":"$wireState","merged":$merged,"title":"$TITLE","body":null,"head":$head,""" +
     """"base":{"ref":"main","sha":"$SHA","repo":{"full_name":"acme/repo"}}$modify}"""
 }
 
@@ -87,7 +89,7 @@ class GhMonitorPullRequestSourceTest {
 
   @Test
   fun `closed pull requests map to merged or closed from the merged flag`() {
-    val merged = source(stdout = pullRequestJson(3, state = "closed", merged = true)).pullRequest(REPO, 3)
+    val merged = source(stdout = pullRequestJson(3, state = "merged")).pullRequest(REPO, 3)
     val closed = source(stdout = pullRequestJson(4, state = "closed")).pullRequest(REPO, 4)
 
     assertEquals(MonitorPullRequestState.MERGED, assertIs<MonitorPullRequestLookup.Found>(merged).pullRequest.state)
@@ -104,7 +106,7 @@ class GhMonitorPullRequestSourceTest {
 
   @Test
   fun `a paginated listing concatenates every page and asks for all states`() {
-    val pages = "[${pullRequestJson(1)}]\n[${pullRequestJson(2, state = "closed", merged = true)}]"
+    val pages = "[${pullRequestJson(1)}]\n[${pullRequestJson(2, state = "merged")}]"
 
     val listing = assertIs<MonitorPullRequestListing.Complete>(source(stdout = pages).pullRequests(REPO))
 

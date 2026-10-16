@@ -20,13 +20,16 @@ private const val LISTING_OUTPUT_BYTES: Long = 256L * 1024 * 1024
 private const val LISTING_DEADLINE_SECONDS: Long = 300
 private const val PAGE_SIZE = "100"
 private const val NOT_FOUND_MARKER = "HTTP 404"
-private val REMOTE_URL = Regex("^(?:https://|ssh://git@|git@)([^/:@]+)[/:]([^/]+)/([^/]+?)(?:\\.git)?/?$")
+private val REMOTE_URL =
+  Regex("^(?:https://(?:[^/@]+@)?|ssh://git@|git@)([^/:@]+)(?::\\d+)?[/:]([^/]+)/([^/]+?)(?:\\.git)?/?$")
 
 class GhMonitorPullRequestSource internal constructor(
   private val gh: GhCommandRunner,
 ) : MonitorPullRequestSource {
   @Inject
-  constructor() : this(ProcessGhCommandRunner(LISTING_OUTPUT_BYTES, LISTING_DEADLINE_SECONDS))
+  constructor() : this(
+    ProcessGhCommandRunner(maxOutputBytes = LISTING_OUTPUT_BYTES, deadlineSeconds = LISTING_DEADLINE_SECONDS),
+  )
 
   private val mapper: ObjectMapper by lazy { ObjectMapper() }
 
@@ -86,9 +89,9 @@ class GhMonitorPullRequestSource internal constructor(
     repository: MonitorRepositoryIdentity,
   ): List<MonitorPullRequestSummary>? {
     val summaries = mutableListOf<MonitorPullRequestSummary>()
-    mapper.readerFor(JsonNode::class.java).readValues<JsonNode>(stdout).use { pages ->
-      while (pages.hasNextValue()) {
-        val page = pages.nextValue().takeIf(JsonNode::isArray) ?: return null
+    mapper.factory.createParser(stdout).use { parser ->
+      while (parser.nextToken() != null) {
+        val page = mapper.readTree<JsonNode>(parser).takeIf(JsonNode::isArray) ?: return null
         for (entry in page) summaries += parseMonitorPullRequestSummary(entry, repository) ?: return null
       }
     }

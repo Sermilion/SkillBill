@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.workflow.identity.task.STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.infrastructure.workflow.monitor.StandaloneMonitorOwnershipKeys as Keys
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
@@ -14,6 +13,7 @@ import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import skillbill.infrastructure.workflow.monitor.StandaloneMonitorOwnershipKeys as Keys
 
 private const val MIN_OWNER_TOKEN_LENGTH = 16
 private val OBJECT_ID = Regex("^[0-9a-f]{40,64}$")

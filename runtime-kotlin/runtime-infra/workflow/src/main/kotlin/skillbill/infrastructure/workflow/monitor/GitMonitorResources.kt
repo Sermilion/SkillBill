@@ -52,7 +52,7 @@ class GitMonitorResources(
     return if (probe.ok && lines.size == 2) {
       try {
         val root = Path.of(lines[0]).toRealPath()
-        val common = root.resolve(lines[1]).normalize().toRealPath()
+        val common = callerRoot.toAbsolutePath().resolve(lines[1]).normalize().toRealPath()
         val primary = if (common.fileName?.toString() == ".git") common.parent else common
         MonitorContextResolution.Resolved(MonitorRepositoryContext(root, primary, common))
       } catch (failure: IOException) {
@@ -97,16 +97,17 @@ class GitMonitorResources(
     val block = existing?.let(::admissionBlock)
     if (block != null) {
       admission.close()
-      return MonitorAcquisition.Blocked(block, directory, blockDetail(existing, block), existing?.let(::summaryOf))
+      return MonitorAcquisition.Blocked(block, directory, blockDetail(existing, block), summaryOf(existing))
     }
     val generation = (existing?.generation ?: 0) + 1
-    return try {
+    var admitted = false
+    try {
       MonitorAdmissionFiles.write(directory, acquiringRecord(request, generation))
       held[directory] = HeldOwnership(admission, request.ownerToken, generation)
-      MonitorAcquisition.Acquired(MonitorFence(directory, request.ownerToken, generation))
-    } catch (failure: SkillBillRuntimeException) {
-      admission.close()
-      throw failure
+      admitted = true
+      return MonitorAcquisition.Acquired(MonitorFence(directory, request.ownerToken, generation))
+    } finally {
+      if (!admitted) admission.close()
     }
   }
 
@@ -160,7 +161,10 @@ class GitMonitorResources(
     val record = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
     val branch = monitorBranchName(fence.ownerToken)
     val path = fence.directory.resolve("worktree-${fence.ownerToken}")
-    persist(fence, record.copy(executionPath = path.toString(), executionBranch = branch, updatedAt = monitorNow(record)))
+    persist(
+      fence,
+      record.copy(executionPath = path.toString(), executionBranch = branch, updatedAt = monitorNow(record)),
+    )
     monitorGit(Path.of(record.primaryRoot), "worktree", "add", "-b", branch, path.toString(), refs.headRef)
       .valueOrThrow("create the owned worktree at $path")
     val head = monitorGit(path, "rev-parse", "HEAD").valueOrThrow("read the owned worktree head")
@@ -197,14 +201,22 @@ class GitMonitorResources(
     val ownership = held[fence.directory]?.takeIf { it.matches(fence) }
     val record = ownership?.let { runCatching { MonitorAdmissionFiles.read(fence.directory) }.getOrNull() }
     if (ownership == null || record == null || !record.isOwnedBy(fence)) {
+      ownership?.let { release(fence, it) }
       return MonitorSettlement.FenceLost("The ownership of ${fence.directory} is no longer held by this invocation.")
     }
     return try {
       cleanup.settle(fence.directory, record, ownership.target)
     } finally {
-      held.remove(fence.directory, ownership)
-      ownership.admission.close()
+      release(fence, ownership)
     }
+  }
+
+  private fun release(
+    fence: MonitorFence,
+    ownership: HeldOwnership,
+  ) {
+    held.remove(fence.directory, ownership)
+    ownership.admission.close()
   }
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery {
@@ -330,14 +342,14 @@ class GitMonitorResources(
     }
 
   private fun blockDetail(
-    record: MonitorOwnershipRecord?,
+    record: MonitorOwnershipRecord,
     block: MonitorAdmissionBlock,
   ): String =
     when (block) {
       MonitorAdmissionBlock.RETAINED_WORK ->
-        "Work from a previous invocation is retained: ${record?.retention?.detail ?: "no detail recorded"}."
+        "Work from a previous invocation is retained: ${record.retention?.detail ?: "no detail recorded"}."
       else ->
-        "A previous invocation (owner ${record?.ownerToken}) ended without releasing its ownership; " +
+        "A previous invocation (owner ${record.ownerToken}) ended without releasing its ownership; " +
           "recover it explicitly with that owner token."
     }
 
@@ -352,5 +364,4 @@ class GitMonitorResources(
 
   private fun MonitorOwnershipRecord.isOwnedBy(fence: MonitorFence): Boolean =
     ownerToken == fence.ownerToken && generation == fence.generation
-
 }

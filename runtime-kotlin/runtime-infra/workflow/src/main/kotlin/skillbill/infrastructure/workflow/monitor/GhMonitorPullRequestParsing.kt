@@ -17,8 +17,6 @@ internal fun parseMonitorPullRequest(
   repository: MonitorRepositoryIdentity,
 ): MonitorPullRequest? {
   val identity = identityOf(node, repository) ?: return null
-  val state = stateOf(node) ?: return null
-  val base = tipOf(node.path("base"), repository.host) ?: return null
   val headNode = node.path("head").takeIf(JsonNode::isObject) ?: return null
   val head =
     if (headNode.path("repo").isObject) {
@@ -26,17 +24,16 @@ internal fun parseMonitorPullRequest(
     } else {
       null
     }
-  return MonitorPullRequest(identity, state, head, base)
+  val state = stateOf(node)
+  val base = tipOf(node.path("base"), repository.host)
+  return if (state == null || base == null) null else MonitorPullRequest(identity, state, head, base)
 }
 
 internal fun parseMonitorPullRequestSummary(
   node: JsonNode,
   repository: MonitorRepositoryIdentity,
 ): MonitorPullRequestSummary? {
-  val identity = identityOf(node, repository) ?: return null
-  val state = stateOf(node) ?: return null
   val headNode = node.path("head").takeIf(JsonNode::isObject) ?: return null
-  val headRef = text(headNode, "ref") ?: return null
   val headRepositoryNode = headNode.path("repo")
   val headRepository =
     if (headRepositoryNode.isObject) {
@@ -44,14 +41,21 @@ internal fun parseMonitorPullRequestSummary(
     } else {
       null
     }
-  return MonitorPullRequestSummary(
-    identity = identity,
-    state = state,
-    title = node.path("title").takeIf(JsonNode::isTextual)?.asText().orEmpty(),
-    body = node.path("body").takeIf(JsonNode::isTextual)?.asText().orEmpty(),
-    headRef = headRef,
-    headRepository = headRepository,
-  )
+  val identity = identityOf(node, repository)
+  val state = stateOf(node)
+  val headRef = text(headNode, "ref")
+  return if (identity == null || state == null || headRef == null) {
+    null
+  } else {
+    MonitorPullRequestSummary(
+      identity = identity,
+      state = state,
+      title = node.path("title").takeIf(JsonNode::isTextual)?.asText().orEmpty(),
+      body = node.path("body").takeIf(JsonNode::isTextual)?.asText().orEmpty(),
+      headRef = headRef,
+      headRepository = headRepository,
+    )
+  }
 }
 
 private fun identityOf(

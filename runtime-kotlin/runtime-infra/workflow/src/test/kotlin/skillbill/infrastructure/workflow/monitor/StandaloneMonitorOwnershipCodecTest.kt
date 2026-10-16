@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.StandaloneMonitorOwnershipSchemaPaths
-import skillbill.infrastructure.workflow.monitor.StandaloneMonitorOwnershipKeys as Keys
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
@@ -17,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import skillbill.infrastructure.workflow.monitor.StandaloneMonitorOwnershipKeys as Keys
 
 private const val SHA = "0123456789abcdef0123456789abcdef01234567"
 private const val WORKTREE = "/work/repo/.git/skill-bill/worktree"

@@ -5,23 +5,25 @@ import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import java.io.IOException
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
-import java.nio.channels.OverlappingFileLockException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 private const val ADMISSION_HASH_CHARS = 32
 
 internal class HeldAdmission(
   val directory: Path,
+  private val lockFile: Path,
   private val channel: FileChannel,
   private val lock: FileLock,
 ) : AutoCloseable {
   override fun close() {
     runCatching { lock.release() }
     runCatching { channel.close() }
+    MonitorAdmissionFiles.unreserve(lockFile)
   }
 }
 
@@ -32,34 +34,56 @@ internal sealed interface AdmissionAttempt {
 }
 
 internal object MonitorAdmissionFiles {
+  private val reservedLockFiles = ConcurrentHashMap.newKeySet<Path>()
+
   fun directoryFor(
     commonDir: Path,
     target: MonitorPullRequestIdentity,
-  ): Path =
-    commonDir.resolve("skill-bill").resolve("standalone-monitor").resolve(hashOf(target.targetKey))
+  ): Path = commonDir.resolve("skill-bill").resolve("standalone-monitor").resolve(hashOf(target.targetKey))
 
   fun recordFile(directory: Path): Path = directory.resolve("ownership.json")
 
-  fun tryLock(directory: Path): AdmissionAttempt =
-    try {
-      Files.createDirectories(directory)
-      val channel =
-        FileChannel.open(directory.resolve("admission.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-      val lock =
-        try {
-          channel.tryLock()
-        } catch (_: OverlappingFileLockException) {
-          null
-        }
-      if (lock == null) {
-        channel.close()
-        AdmissionAttempt.Contended
-      } else {
-        AdmissionAttempt.Held(HeldAdmission(directory, channel, lock))
+  fun tryLock(directory: Path): AdmissionAttempt {
+    val lockFile =
+      try {
+        Files.createDirectories(directory)
+        directory.toRealPath().resolve("admission.lock")
+      } catch (failure: IOException) {
+        throw ioFailure("lock the admission file in $directory", failure)
       }
+    if (!reservedLockFiles.add(lockFile)) return AdmissionAttempt.Contended
+    return try {
+      lockReserved(directory, lockFile)
     } catch (failure: IOException) {
+      unreserve(lockFile)
       throw ioFailure("lock the admission file in $directory", failure)
     }
+  }
+
+  private fun lockReserved(
+    directory: Path,
+    lockFile: Path,
+  ): AdmissionAttempt {
+    val channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+    val lock =
+      try {
+        channel.tryLock()
+      } catch (failure: IOException) {
+        channel.close()
+        throw failure
+      }
+    return if (lock == null) {
+      channel.close()
+      unreserve(lockFile)
+      AdmissionAttempt.Contended
+    } else {
+      AdmissionAttempt.Held(HeldAdmission(directory, lockFile, channel, lock))
+    }
+  }
+
+  internal fun unreserve(lockFile: Path) {
+    reservedLockFiles.remove(lockFile)
+  }
 
   fun read(directory: Path): MonitorOwnershipRecord? {
     val file = recordFile(directory)

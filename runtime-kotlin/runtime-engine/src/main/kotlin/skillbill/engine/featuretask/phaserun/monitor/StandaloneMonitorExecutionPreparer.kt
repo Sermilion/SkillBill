@@ -14,6 +14,7 @@ import skillbill.ports.monitor.model.MonitorRepositoryContext
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
+import skillbill.ports.process.ShutdownHookPort
 import java.util.UUID
 
 @Inject
@@ -21,6 +22,7 @@ class StandaloneMonitorExecutionPreparer(
   private val resolver: MonitorTargetResolver,
   private val resources: StandaloneMonitorResources,
   private val diagnostics: RuntimeDiagnostics,
+  private val shutdownHooks: ShutdownHookPort,
 ) {
   fun prepare(request: MonitorPreparationRequest): MonitorPreparation =
     when (val parsed = parseMonitorIntake(request.intake, request.currentBranch)) {
@@ -89,7 +91,7 @@ class StandaloneMonitorExecutionPreparer(
     context: MonitorRepositoryContext,
     target: MonitorResolvedTarget,
   ): MonitorPreparation {
-    val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics)
+    val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics, shutdownHooks)
     var handedOff = false
     try {
       val prepared = createWorkspace(fence, context, target, cleanup)
@@ -110,8 +112,10 @@ class StandaloneMonitorExecutionPreparer(
       is MonitorFetchResult.Rejected ->
         MonitorPreparation.Blocked(fetchBlockKind(fetched.reason), fetched.detail, target.pullRequest)
       is MonitorFetchResult.Fetched -> {
-        val worktree = resources.createWorktree(fence, target, fetched.refs)
-        resources.markPrepared(fence, target, worktree)
+        val worktree =
+          cleanup.exclusive {
+            resources.createWorktree(fence, target, fetched.refs).also { resources.markPrepared(fence, target, it) }
+          }
         MonitorPreparation.Prepared(
           MonitorExecutionContext(target, context.callerRoot, worktree, fence.ownerToken, fence.generation),
           cleanup,

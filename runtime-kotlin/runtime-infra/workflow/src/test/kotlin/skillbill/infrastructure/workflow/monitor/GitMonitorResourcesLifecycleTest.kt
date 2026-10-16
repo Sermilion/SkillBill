@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.monitor
 import org.junit.jupiter.api.io.TempDir
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.git.runGit
+import skillbill.ports.monitor.MonitorProcessInspector
 import skillbill.ports.monitor.model.MonitorAcquisition
 import skillbill.ports.monitor.model.MonitorAdmissionBlock
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
@@ -140,14 +141,75 @@ class GitMonitorResourcesLifecycleTest {
     val linkedContext = fixture.context(linked)
 
     assertEquals(fixture.context().commonDir, linkedContext.commonDir)
+    val nested = Files.createDirectories(linked.resolve("nested/deeper"))
+    assertEquals(linkedContext, fixture.context(nested))
+    assertEquals(fixture.context(), fixture.context(Files.createDirectories(fixture.caller.resolve("sub/dir"))))
     val second = acquireFor(GitMonitorResources(inspector), fixture, linkedContext)
     val duplicate = assertIs<MonitorAcquisition.Blocked>(second)
 
     assertEquals(MonitorAdmissionBlock.LIVE_OWNER, duplicate.reason)
     assertEquals(first.ownerToken, duplicate.owner?.ownerToken)
     assertEquals(MonitorSettlement.Released, resources.settle(first))
-    val second = acquiredFence(acquireFor(resources, fixture, linkedContext))
-    assertEquals(first.generation + 1, second.generation)
+    val next = acquiredFence(acquireFor(resources, fixture, linkedContext))
+    assertEquals(first.generation + 1, next.generation)
+  }
+
+  @Test
+  fun `a same-JVM duplicate admission or recovery keeps the holder's lock against other processes`() {
+    val fixture = fixture()
+    val first = acquiredFence(acquireFor(resources, fixture))
+    val lockFile = first.directory.resolve("admission.lock")
+
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(GitMonitorResources(inspector), fixture))
+    assertRefusal(MonitorRecoveryRefusal.LIVE_OWNER, resources.recoverStale(staleRequest(fixture, first.ownerToken)))
+
+    assertTrue(lockHeldByAnotherProcess(lockFile, temp))
+    assertEquals(MonitorSettlement.Released, resources.settle(first))
+    assertFalse(lockHeldByAnotherProcess(lockFile, temp))
+  }
+
+  @Test
+  fun `an owned branch whose worktree vanished keeps its unpublished commits`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("local.txt", "x", worktree.path)
+    val localSha = runGit(worktree.path, "rev-parse", "HEAD")
+    worktree.path.toFile().deleteRecursively()
+
+    val settlement = assertIs<MonitorSettlement.Retained>(resources.settle(fence))
+
+    assertEquals(MonitorRetentionReason.UNPUBLISHED_COMMITS, settlement.reason)
+    assertEquals(localSha, runGit(fixture.caller, "rev-parse", "refs/heads/${worktree.branch}"))
+  }
+
+  @Test
+  fun `cleanup retains a record naming refs or a branch outside the owned namespace`() {
+    val fixture = fixture()
+    val mainSha = runGit(fixture.caller, "rev-parse", "refs/heads/main")
+    val directory = craftStaleOwnership(fixture, STALE_TOKEN, listOf("refs/heads/main"))
+
+    assertRefusal(
+      MonitorRecoveryRefusal.RETAINED_UNFINISHED,
+      resources.recoverStale(staleRequest(fixture, STALE_TOKEN)),
+    )
+
+    assertEquals(mainSha, runGit(fixture.caller, "rev-parse", "refs/heads/main"))
+    val record = assertNotNull(MonitorAdmissionFiles.read(directory))
+    assertEquals(MonitorRetentionReason.UNOWNED_RESOURCE, record.retention?.reason)
+
+    val branchFixture = fixture("branch")
+    val branchMainSha = runGit(branchFixture.caller, "rev-parse", "refs/heads/main")
+    val branchDirectory = craftStaleOwnership(branchFixture, STALE_TOKEN, emptyList(), executionBranch = "main")
+    assertRefusal(
+      MonitorRecoveryRefusal.RETAINED_UNFINISHED,
+      resources.recoverStale(staleRequest(branchFixture, STALE_TOKEN)),
+    )
+    assertEquals(branchMainSha, runGit(branchFixture.caller, "rev-parse", "refs/heads/main"))
+    assertEquals(
+      MonitorRetentionReason.UNOWNED_RESOURCE,
+      assertNotNull(MonitorAdmissionFiles.read(branchDirectory)).retention?.reason,
+    )
   }
 
   @Test
@@ -203,6 +265,24 @@ class GitMonitorResourcesLifecycleTest {
   }
 
   @Test
+  fun `a failure while recording the acquiring owner frees the admission for the next invocation`() {
+    val fixture = fixture()
+    val failing =
+      object : MonitorProcessInspector {
+        override fun currentProcess(): FeatureTaskRuntimeProcessIdentity = error("no process-birth evidence")
+
+        override fun inspect(recorded: FeatureTaskRuntimeProcessIdentity): FeatureTaskRuntimeProcessInspection =
+          FeatureTaskRuntimeProcessInspection.NotRunning
+      }
+
+    assertFailsWith<IllegalStateException> { acquireFor(GitMonitorResources(failing), fixture) }
+
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    assertEquals(1, fence.generation)
+    assertEquals(MonitorSettlement.Released, resources.settle(fence))
+  }
+
+  @Test
   fun `unreadable ownership blocks admission and recovery as corrupt without holding the lock`() {
     val fixture = fixture()
     val directory = MonitorAdmissionFiles.directoryFor(fixture.context().commonDir, fixture.target().pullRequest)
@@ -252,6 +332,7 @@ class GitMonitorResourcesLifecycleTest {
     fixture: MonitorRepoFixture,
     token: String,
     refs: List<String>,
+    executionBranch: String? = null,
   ): Path {
     val context = fixture.context()
     val target = fixture.target().pullRequest
@@ -267,6 +348,7 @@ class GitMonitorResourcesLifecycleTest {
         primaryRoot = context.primaryRoot.toString(),
         commonDir = context.commonDir.toString(),
         ownedRefs = refs,
+        executionBranch = executionBranch,
       ),
     )
     return directory

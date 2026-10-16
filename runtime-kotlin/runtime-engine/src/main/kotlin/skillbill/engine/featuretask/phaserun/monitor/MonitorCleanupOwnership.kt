@@ -5,18 +5,20 @@ import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.monitor.model.MonitorSettlement
+import skillbill.ports.process.ShutdownHookPort
+import skillbill.ports.process.ShutdownHookRegistration
 
 class MonitorCleanupOwnership internal constructor(
   private val fence: MonitorFence,
   private val resources: StandaloneMonitorResources,
   private val diagnostics: RuntimeDiagnostics,
+  shutdownHooks: ShutdownHookPort,
 ) {
-  private val exitHook = Thread({ settle() }, "skill-bill-monitor-cleanup")
   private var settlement: MonitorSettlement? = null
+  private val exitHook: ShutdownHookRegistration = shutdownHooks.register { settle() }
 
-  init {
-    Runtime.getRuntime().addShutdownHook(exitHook)
-  }
+  // Holds the settle lock so the exit hook cannot clean up while an external worktree mutation is in flight.
+  fun <T> exclusive(block: () -> T): T = synchronized(this, block)
 
   @Synchronized
   fun settle(): MonitorSettlement {
@@ -30,7 +32,7 @@ class MonitorCleanupOwnership internal constructor(
         )
       }
     settlement = result
-    runCatching { Runtime.getRuntime().removeShutdownHook(exitHook) }
+    runCatching { exitHook.unregister() }
     report(result)
     return result
   }
