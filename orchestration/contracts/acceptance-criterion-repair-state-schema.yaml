@@ -46,8 +46,8 @@ properties:
         source_disposition: { enum: [not_applicable, source_closed, source_unresolved] }
         validation_obligation: { enum: [required, deferred, not_required] }
         validation_owner_available: { type: boolean }
-        evidence_ref: { type: string, minLength: 1, maxLength: 512 }
-        closure_evidence_ref: { type: [string, 'null'], minLength: 1, maxLength: 512 }
+        evidence_ref: { type: string, minLength: 1 }
+        closure_evidence_ref: { type: [string, 'null'], minLength: 1 }
         closure_tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         closure_checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
   dependencies:
@@ -62,7 +62,7 @@ properties:
         prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
         reason: { type: string, minLength: 1, maxLength: 1024 }
         declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
-        source_evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
   unresolved_queue:
     type: array
     maxItems: 256
@@ -97,7 +97,7 @@ properties:
         audit_binding_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
-        evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        evidence_ref: { type: string, minLength: 1 }
   unsuccessful_totals:
     type: object
     maxProperties: 256
@@ -109,7 +109,7 @@ properties:
   revision: { type: integer, minimum: 0 }
   mode: { enum: [initial_discovery, current_criterion_targeted, final_full] }
   stage: { enum: [discovery_admitted, read_only_audit_required, repair_reserved, repair_completed_awaiting_targeted_verification, final_audit_required, final_accepted, budget_blocked] }
-  completed_repair_evidence_ref: { type: [string, 'null'], minLength: 1, maxLength: 512 }
+  completed_repair_evidence_ref: { type: [string, 'null'], minLength: 1 }
   admitted_tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
   admitted_checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
   source_transitions:
@@ -126,7 +126,7 @@ properties:
         to_disposition: { enum: [not_applicable, source_closed, source_unresolved] }
         producing_id: { type: string, minLength: 1, maxLength: 256 }
         producing_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
-        evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        evidence_ref: { type: string, minLength: 1 }
         tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
   final_audits:

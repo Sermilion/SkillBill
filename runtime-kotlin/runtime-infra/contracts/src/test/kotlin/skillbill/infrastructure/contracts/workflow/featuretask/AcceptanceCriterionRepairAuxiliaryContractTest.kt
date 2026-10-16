@@ -79,7 +79,11 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
             .STAGE to "repair_completed_awaiting_targeted_verification",
           Keys.RESERVATION_ID to "reservation", Keys.UNSUCCESSFUL_USED to 1, Keys.UNSUCCESSFUL_REMAINING to 2,
           Keys.QUEUE_POSITION to 1, Keys.QUEUE_SIZE to 1, Keys.ACTIONABLE_GAP to "repair missing transaction fence",
-          Keys.EVIDENCE_REF to "source:1", Keys.DEPENDENCIES to emptyList<Any>(),
+          Keys.EVIDENCE_REF to
+            "Source evidence for the acceptance criterion. ".repeat(
+              32,
+            ),
+          Keys.DEPENDENCIES to emptyList<Any>(),
           Keys
             .PREREQUISITE_FACTS to emptyList<Any>(),
         )
@@ -142,8 +146,12 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
               Keys.PHASE_OUTPUT_CONTRACT_VERSION to "0.7",
             ),
           Keys.STOPPED_OWNER_GENERATION to 0,
-          Keys.STOPPED_OWNER_EVIDENCE_REF to "ownership_absent:proof", Keys.PRISTINE_HISTORY_DIGEST to digest(original),
-          Keys.RETAINED_EVIDENCE_REFS to listOf("original:proof"), Keys.PROSPECTIVE_BUDGET to true,
+          Keys.STOPPED_OWNER_EVIDENCE_REF to
+            "ownership_absent:proof".repeat(
+              32,
+            ),
+          Keys.PRISTINE_HISTORY_DIGEST to digest(original),
+          Keys.RETAINED_EVIDENCE_REFS to listOf("original:proof".repeat(64)), Keys.PROSPECTIVE_BUDGET to true,
           Keys.STRUCTURED_DISCOVERY_REQUIRED to true, Keys.ORIGINAL_ARTIFACTS to original,
         )
     AcceptanceCriterionRepairAuxiliarySchemaValidator.validateRepairAdoption(
@@ -197,7 +205,7 @@ class AcceptanceCriterionRepairAuxiliaryContractTest {
       Keys
         .VALIDATION_OBLIGATION to "deferred",
       Keys.VALIDATION_OWNER_AVAILABLE to true,
-      Keys.EVIDENCE_REF to "source:1",
+      Keys.EVIDENCE_REF to "Source evidence for the acceptance criterion. ".repeat(32),
     )
 
   private fun identity(): Map<String, Any?> =

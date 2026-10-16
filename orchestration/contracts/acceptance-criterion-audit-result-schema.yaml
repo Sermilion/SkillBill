@@ -30,7 +30,7 @@ properties:
         source_disposition: { enum: [not_applicable, source_closed, source_unresolved] }
         validation_obligation: { enum: [required, deferred, not_required] }
         validation_owner_available: { type: boolean }
-        evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        evidence_ref: { type: string, minLength: 1 }
   dependencies:
     type: array
     maxItems: 4096
@@ -43,7 +43,7 @@ properties:
         prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
         reason: { type: string, minLength: 1, maxLength: 1024 }
         declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
-        source_evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
   regressed_refs:
     type: array
     maxItems: 256
@@ -61,7 +61,7 @@ properties:
         prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
         reason: { type: string, minLength: 1, maxLength: 1024 }
         declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
-        source_evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
 x-coherence-checks:
   - id: complete-discovery
     description: Initial discovery contains exactly one source and validation disposition for every authored criterion.

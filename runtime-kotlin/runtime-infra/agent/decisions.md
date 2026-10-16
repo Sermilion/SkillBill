@@ -1,5 +1,10 @@
 # Boundary decisions
 
+## [2026-10-16] Acceptance evidence references have no character limit
+Context: SKILL-428 stopped while saving a focused source audit because the runtime copies audit prose into criterion, closure, and transition evidence references. The schema rejected each reference above 512 characters.
+Decision: At the operator's request, remove character limits from evidence references in acceptance audit, repair state, handoff, and adoption schemas. Keep required nonempty values, coherence checks, and aggregate UTF-8 capacity checks. Keep contract version 0.1 because this accepts additional values without changing wire shape or invalidating retained state.
+Reason: Audit prose is retained evidence, and a reference field's character cap must not prevent its persistence or later handoff. The focused-audit regression validates and reloads long evidence unchanged. Auxiliary contract tests use long references while retaining their malformed-state rejection cases.
+
 ## [2026-10-14] Linux worker identity uses kernel start ticks
 Context: The desktop JVM read a live planning runner's start timestamp one second earlier than the CLI had recorded. Exact comparison of those timestamps projected the active run as paused with `runner_interrupted`.
 Decision: On Linux, process birth tokens use field 22 of `/proc/<pid>/stat`, prefixed with `linux-start-ticks:`. Host and boot identity remain separate checks. Other platforms retain JDK start timestamps. Duplicate-launch admission requests the inspected owner's start time through the supervisor port instead of interpreting its identity token as a timestamp.

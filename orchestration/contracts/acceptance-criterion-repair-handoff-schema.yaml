@@ -18,7 +18,7 @@ properties:
   queue_position: { type: integer, minimum: 1, maximum: 256 }
   queue_size: { type: integer, minimum: 1, maximum: 256 }
   actionable_gap: { type: string, minLength: 1, maxLength: 4096 }
-  evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+  evidence_ref: { type: string, minLength: 1 }
   tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
   checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
   dependencies:
@@ -32,7 +32,7 @@ properties:
         prerequisite_ref: { type: string, pattern: '^AC-[0-9]{3}$' }
         reason: { type: string, minLength: 1, maxLength: 1024 }
         declaring_output_ref: { type: string, minLength: 1, maxLength: 512 }
-        source_evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        source_evidence_ref: { type: string, minLength: 1 }
   prerequisite_facts:
     type: array
     maxItems: 256
@@ -45,7 +45,7 @@ properties:
         source_disposition: { enum: [not_applicable, source_closed, source_unresolved] }
         validation_obligation: { enum: [required, deferred, not_required] }
         validation_owner_available: { type: boolean }
-        evidence_ref: { type: string, minLength: 1, maxLength: 512 }
+        evidence_ref: { type: string, minLength: 1 }
 x-coherence-checks:
   - id: current-authority-only
     description: The handoff grants repair authority for exactly the current criterion and carries no mutable owner token.
