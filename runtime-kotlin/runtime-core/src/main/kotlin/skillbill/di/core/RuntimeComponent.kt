@@ -24,8 +24,8 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
-import skillbill.di.featuretask.RuntimeStandaloneMonitorProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
+import skillbill.di.featuretask.RuntimeStandaloneMonitorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
 import skillbill.di.goal.RuntimeGoalRunnerLaunchProvides
 import skillbill.di.goal.RuntimeGoalRunnerStoreProvides

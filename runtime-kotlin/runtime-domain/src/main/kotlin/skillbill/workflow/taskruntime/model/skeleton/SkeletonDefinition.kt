@@ -22,6 +22,7 @@ data class SkeletonDefinition(
   val semanticRevision: Int = 1,
   val stepIds: List<String> = slots.flatMap(PhaseSlot::steps),
   val standaloneInvocable: Boolean = false,
+  val preparedExecutionOf: String? = null,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -94,11 +95,22 @@ data class SkeletonDefinition(
         SkeletonRunStateKind.IN_MEMORY,
         standaloneInvocable = true,
       )
+    val STANDALONE_MONITOR: SkeletonDefinition =
+      SkeletonDefinition(
+        "standalone-monitor",
+        listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.MONITOR),
+        SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = false,
+        preparedExecutionOf = MONITOR.id,
+      )
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR, STANDALONE_MONITOR)
 
     fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
       if (goalContinuation) setOf(GOAL_CHILD) else setOf(PLAN)
+
+    fun preparedExecutionFor(publicId: String): SkeletonDefinition? =
+      entries.singleOrNull { it.preparedExecutionOf == publicId }
 
     fun byId(id: String): SkeletonDefinition =
       entries.firstOrNull { it.id == id }

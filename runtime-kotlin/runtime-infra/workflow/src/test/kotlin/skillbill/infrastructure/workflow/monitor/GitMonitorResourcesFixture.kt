@@ -19,6 +19,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertIs
@@ -91,7 +92,7 @@ internal class MonitorRepoFixture(root: Path) {
 
   fun context(from: Path = caller): MonitorRepositoryContext =
     assertIs<MonitorContextResolution.Resolved>(
-      GitMonitorResources(FakeMonitorProcessInspector()).resolveContext(from),
+      GitMonitorResources(FakeMonitorProcessInspector(), Clock.systemUTC()).resolveContext(from),
     ).context
 
   fun refs(prefix: String): List<String> =

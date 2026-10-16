@@ -11,14 +11,6 @@ import skillbill.ports.monitor.model.MonitorWritability
 import java.net.URI
 import java.net.URISyntaxException
 
-internal sealed interface MonitorCandidateSelection {
-  data class Unique(val summary: MonitorPullRequestSummary) : MonitorCandidateSelection
-
-  data class Ambiguous(val candidateUrls: List<String>) : MonitorCandidateSelection
-
-  data object Absent : MonitorCandidateSelection
-}
-
 private val SAFE_REF_NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 private val OBJECT_ID = Regex("^[0-9a-f]{40}([0-9a-f]{24})?$")
 private val REF_NAME_FORBIDDEN_FRAGMENTS = listOf("..", "//", "/.", "@{")
@@ -63,14 +55,7 @@ private fun uniqueCandidate(pool: List<MonitorPullRequestSummary>): MonitorCandi
 internal fun validatedOpenTarget(pullRequest: MonitorPullRequest): MonitorTargetResolution {
   val head = pullRequest.head
   val base = pullRequest.base
-  val defect =
-    when {
-      head == null -> "the head repository or branch is missing or deleted"
-      base == null -> "the base branch is missing"
-      base.repository != pullRequest.identity.repository -> "the base repository differs from the target repository"
-      head.tip.repository.host != base.repository.host -> "the head repository is on a different host"
-      else -> tipDefect("head", head.tip) ?: tipDefect("base", base) ?: endpointDefect(head)
-    }
+  val defect = targetDefect(pullRequest)
   if (defect != null || head == null || base == null) {
     return MonitorTargetResolution.Refused(
       MonitorTargetRefusal.INCOMPLETE_TARGET,
@@ -99,6 +84,18 @@ internal fun validatedOpenTarget(pullRequest: MonitorPullRequest): MonitorTarget
         MonitorTargetRefusal.NOT_WRITABLE,
         "$label head ${head.tip.repository.slug}:${head.tip.ref} is not writable.",
       )
+  }
+}
+
+private fun targetDefect(pullRequest: MonitorPullRequest): String? {
+  val head = pullRequest.head
+  val base = pullRequest.base
+  return when {
+    head == null -> "the head repository or branch is missing or deleted"
+    base == null -> "the base branch is missing"
+    base.repository != pullRequest.identity.repository -> "the base repository differs from the target repository"
+    head.tip.repository.host != base.repository.host -> "the head repository is on a different host"
+    else -> tipDefect("head", head.tip) ?: tipDefect("base", base) ?: endpointDefect(head)
   }
 }
 

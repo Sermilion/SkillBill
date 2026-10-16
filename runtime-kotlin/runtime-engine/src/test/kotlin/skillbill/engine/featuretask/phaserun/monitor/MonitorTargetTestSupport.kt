@@ -26,21 +26,19 @@ internal fun summary(
   body: String = "",
   headRef: String = "feat/x",
   headRepository: MonitorRepositoryIdentity? = ACME,
-  state: MonitorPullRequestState = MonitorPullRequestState.OPEN,
-) = MonitorPullRequestSummary(identity(number), state, title, body, headRef, headRepository)
+) = MonitorPullRequestSummary(identity(number), MonitorPullRequestState.OPEN, title, body, headRef, headRepository)
 
 internal fun head(
   repository: MonitorRepositoryIdentity = ACME,
   ref: String = "feat/x",
   sha: String = SHA,
-  push: Boolean? = true,
-  maintainerCanModify: Boolean? = false,
+  writeEvidence: MonitorWriteEvidence = MonitorWriteEvidence(true, false),
   url: String = "https://github.com/${repository.slug}.git",
 ) = MonitorPullRequestHead(
   MonitorBranchTip(repository, ref, sha),
   url,
   url,
-  MonitorWriteEvidence(push, maintainerCanModify),
+  writeEvidence,
 )
 
 internal fun pullRequest(

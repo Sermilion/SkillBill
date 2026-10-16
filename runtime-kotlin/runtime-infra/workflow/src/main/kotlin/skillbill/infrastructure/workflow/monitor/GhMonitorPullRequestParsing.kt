@@ -26,7 +26,8 @@ internal fun parseMonitorPullRequest(
     }
   val state = stateOf(node)
   val base = tipOf(node.path("base"), repository.host)
-  return if (state == null || base == null) null else MonitorPullRequest(identity, state, head, base)
+  val conflicting = node.path("mergeable_state").asText() == "dirty" || node.path("mergeable").asText() == "false"
+  return if (state == null || base == null) null else MonitorPullRequest(identity, state, head, base, conflicting)
 }
 
 internal fun parseMonitorPullRequestSummary(

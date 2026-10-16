@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun.monitor
 import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestState
 import skillbill.ports.monitor.model.MonitorWritability
+import skillbill.ports.monitor.model.MonitorWriteEvidence
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -58,7 +59,7 @@ class MonitorTargetPolicyTest {
     assertTrue(summaryMentionsIssueKey(summary(1, headRef = "feat/SKILL-427-monitor"), "SKILL-427"))
     assertTrue(summaryMentionsIssueKey(summary(1, body = "Closes [skill-427]"), "SKILL-427"))
 
-    val merged = summary(1, title = "SKILL-427", state = MonitorPullRequestState.MERGED)
+    val merged = summary(1, title = "SKILL-427").copy(state = MonitorPullRequestState.MERGED)
     val open = summary(2, title = "SKILL-427")
     assertEquals(MonitorCandidateSelection.Unique(open), selectIssueCandidate("SKILL-427", listOf(merged, open)))
     assertEquals(MonitorCandidateSelection.Unique(merged), selectIssueCandidate("SKILL-427", listOf(merged)))
@@ -76,7 +77,7 @@ class MonitorTargetPolicyTest {
     val ours = summary(1)
     val fork = summary(2, headRepository = FORK)
     val other = summary(3, headRef = "feat/y")
-    val closed = summary(4, state = MonitorPullRequestState.CLOSED)
+    val closed = summary(4).copy(state = MonitorPullRequestState.CLOSED)
 
     val all = listOf(ours, fork, other, closed)
     assertEquals(MonitorCandidateSelection.Unique(ours), selectBranchCandidate(all, ACME, "feat/x"))
@@ -91,7 +92,8 @@ class MonitorTargetPolicyTest {
     assertEquals(MonitorWritability.REPOSITORY_PUSH, open.writability)
     assertEquals("https://github.com/acme/repo.git", open.baseFetchUrl)
 
-    val maintainer = validatedOpenTarget(pullRequest(1, head = head(FORK, push = false, maintainerCanModify = true)))
+    val maintainer =
+      validatedOpenTarget(pullRequest(1, head = head(FORK, writeEvidence = MonitorWriteEvidence(false, true))))
     assertEquals(
       MonitorWritability.MAINTAINER_CAN_MODIFY,
       assertIs<MonitorTargetResolution.Open>(maintainer).target.writability,
@@ -105,13 +107,13 @@ class MonitorTargetPolicyTest {
         pullRequest(1, head = head(ref = "a..b")),
         pullRequest(1, head = head(sha = "abc")),
         pullRequest(1, head = head(url = "https://evil.example/acme/repo.git")),
-        pullRequest(1, head = head(push = null)),
-        pullRequest(1, head = head(FORK, push = false, maintainerCanModify = null)),
+        pullRequest(1, head = head(writeEvidence = MonitorWriteEvidence(null, false))),
+        pullRequest(1, head = head(FORK, writeEvidence = MonitorWriteEvidence(false, null))),
       )
     val notWritable =
       listOf(
-        pullRequest(1, head = head(FORK, push = false, maintainerCanModify = false)),
-        pullRequest(1, head = head(push = false)),
+        pullRequest(1, head = head(FORK, writeEvidence = MonitorWriteEvidence(false, false))),
+        pullRequest(1, head = head(writeEvidence = MonitorWriteEvidence(false, false))),
       )
     assertRefused(MonitorTargetRefusal.INCOMPLETE_TARGET, incomplete)
     assertRefused(MonitorTargetRefusal.NOT_WRITABLE, notWritable)

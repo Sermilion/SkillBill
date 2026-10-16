@@ -21,6 +21,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -42,7 +43,7 @@ class GitMonitorResourcesLifecycleTest {
   lateinit var temp: Path
 
   private val inspector = FakeMonitorProcessInspector()
-  private val resources = GitMonitorResources(inspector)
+  private val resources = GitMonitorResources(inspector, Clock.systemUTC())
 
   private fun fixture(name: String = "case") =
     MonitorRepoFixture(Files.createDirectories(temp.toRealPath().resolve(name)))
@@ -144,7 +145,7 @@ class GitMonitorResourcesLifecycleTest {
     val nested = Files.createDirectories(linked.resolve("nested/deeper"))
     assertEquals(linkedContext, fixture.context(nested))
     assertEquals(fixture.context(), fixture.context(Files.createDirectories(fixture.caller.resolve("sub/dir"))))
-    val second = acquireFor(GitMonitorResources(inspector), fixture, linkedContext)
+    val second = acquireFor(GitMonitorResources(inspector, Clock.systemUTC()), fixture, linkedContext)
     val duplicate = assertIs<MonitorAcquisition.Blocked>(second)
 
     assertEquals(MonitorAdmissionBlock.LIVE_OWNER, duplicate.reason)
@@ -160,7 +161,7 @@ class GitMonitorResourcesLifecycleTest {
     val first = acquiredFence(acquireFor(resources, fixture))
     val lockFile = first.directory.resolve("admission.lock")
 
-    assertIs<MonitorAcquisition.Blocked>(acquireFor(GitMonitorResources(inspector), fixture))
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(GitMonitorResources(inspector, Clock.systemUTC()), fixture))
     assertRefusal(MonitorRecoveryRefusal.LIVE_OWNER, resources.recoverStale(staleRequest(fixture, first.ownerToken)))
 
     assertTrue(lockHeldByAnotherProcess(lockFile, temp))
@@ -233,7 +234,10 @@ class GitMonitorResourcesLifecycleTest {
     assertRefusal(MonitorRecoveryRefusal.UNKNOWN_OWNER, resources.recoverStale(request))
     assertRefusal(
       MonitorRecoveryRefusal.UNKNOWN_OWNER,
-      GitMonitorResources(FakeMonitorProcessInspector(hostIdentity = "other-host")).recoverStale(request),
+      GitMonitorResources(
+        FakeMonitorProcessInspector(hostIdentity = "other-host"),
+        Clock.systemUTC(),
+      ).recoverStale(request),
     )
     assertEquals(listOf(staleRef), fixture.refs("refs/skill-bill"))
 
@@ -275,7 +279,7 @@ class GitMonitorResourcesLifecycleTest {
           FeatureTaskRuntimeProcessInspection.NotRunning
       }
 
-    assertFailsWith<IllegalStateException> { acquireFor(GitMonitorResources(failing), fixture) }
+    assertFailsWith<IllegalStateException> { acquireFor(GitMonitorResources(failing, Clock.systemUTC()), fixture) }
 
     val fence = acquiredFence(acquireFor(resources, fixture))
     assertEquals(1, fence.generation)

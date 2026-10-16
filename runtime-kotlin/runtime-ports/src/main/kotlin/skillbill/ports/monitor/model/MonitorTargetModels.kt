@@ -67,6 +67,7 @@ data class MonitorPullRequest(
   val state: MonitorPullRequestState,
   val head: MonitorPullRequestHead?,
   val base: MonitorBranchTip?,
+  val conflicting: Boolean = false,
 )
 
 data class MonitorPullRequestSummary(

@@ -8,6 +8,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
 
 private const val NOT_ANCESTOR_EXIT_CODE = 1
@@ -16,9 +17,14 @@ internal fun monitorRefNamespace(ownerToken: String): String = "refs/skill-bill/
 
 internal fun monitorBranchName(ownerToken: String): String = "skill-bill/monitor/$ownerToken"
 
-internal fun monitorNow(record: MonitorOwnershipRecord): Instant = maxOf(Instant.now(), record.acquiredAt)
+internal fun monitorNow(
+  clock: Clock,
+  record: MonitorOwnershipRecord,
+): Instant = maxOf(clock.instant(), record.acquiredAt)
 
-internal class MonitorOwnedCleanup {
+internal class MonitorOwnedCleanup(
+  private val clock: Clock,
+) {
   fun settle(
     directory: Path,
     record: MonitorOwnershipRecord,
@@ -166,7 +172,7 @@ internal class MonitorOwnedCleanup {
           executionBranch = null,
           ownedRefs = emptyList(),
           retention = null,
-          updatedAt = monitorNow(record),
+          updatedAt = monitorNow(clock, record),
         ),
       )
       MonitorSettlement.Released
@@ -223,7 +229,7 @@ internal class MonitorOwnedCleanup {
       record.copy(
         state = MonitorOwnershipState.RETAINED,
         retention = MonitorRetentionRecord(retention.reason, retention.detail, retention.path?.toString()),
-        updatedAt = monitorNow(record),
+        updatedAt = monitorNow(clock, record),
       ),
     )
     return retention

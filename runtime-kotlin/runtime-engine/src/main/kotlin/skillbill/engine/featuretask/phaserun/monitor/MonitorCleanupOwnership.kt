@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorFence
@@ -17,7 +18,6 @@ class MonitorCleanupOwnership internal constructor(
   private var settlement: MonitorSettlement? = null
   private val exitHook: ShutdownHookRegistration = shutdownHooks.register { settle() }
 
-  // Holds the settle lock so the exit hook cannot clean up while an external worktree mutation is in flight.
   fun <T> exclusive(block: () -> T): T = synchronized(this, block)
 
   @Synchronized
@@ -41,11 +41,15 @@ class MonitorCleanupOwnership internal constructor(
     when (result) {
       MonitorSettlement.Released -> Unit
       is MonitorSettlement.Retained ->
-        diagnostics.warning(
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
           "seam=monitorCleanup retained reason=${result.reason.wireValue} path=${result.path} detail=${result.detail}",
         )
       is MonitorSettlement.FenceLost ->
-        diagnostics.warning("seam=monitorCleanup fence lost detail=${result.detail}")
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=monitorCleanup fence lost detail=${result.detail}",
+        )
     }
   }
 }

@@ -74,12 +74,13 @@ internal fun parseMonitorPullRequestUrl(raw: String): MonitorUrlParse {
     }
   val host = uri.host
   val segments = uri.rawPath.orEmpty().trim('/').split('/')
-  val number = segments.getOrNull(PULL_URL_SEGMENTS - 1)?.takeIf { it.all(Char::isDigit) }?.toIntOrNull()
+  val number =
+    segments.getOrNull(PULL_URL_SEGMENTS - 1)?.takeIf { it.all(Char::isDigit) }?.toIntOrNull()?.takeIf { it > 0 }
   val transportClean = uri.scheme == "https" && uri.rawUserInfo == null && uri.port == -1 && !host.isNullOrBlank()
   val shapeClean =
     uri.rawQuery == null && uri.rawFragment == null && segments.size == PULL_URL_SEGMENTS &&
       segments[2] == PULL_SEGMENT && segments.take(2).none(String::isBlank)
-  return if (transportClean && shapeClean && number != null && number > 0) {
+  return if (transportClean && shapeClean && number != null) {
     MonitorUrlParse.Parsed(
       MonitorPullRequestIdentity(MonitorRepositoryIdentity.canonical(host.orEmpty(), segments[0], segments[1]), number),
     )

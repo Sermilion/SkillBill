@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.state
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
@@ -11,6 +12,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -138,6 +140,76 @@ internal interface PhaseCiObservation {
     issueKey: String,
     baseBranch: String,
   )
+}
+
+/** The accepted standalone monitor and monitor-repair steps; both act only on the invocation's own ledger. */
+internal interface PhaseStandaloneMonitorStepBinding : PhaseAcceptedStepExecution {
+  fun runStandaloneMonitor(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome
+
+  /** The evidence brief for the repair the monitor started, or an empty string when none is pending. */
+  fun standaloneRepairBrief(): String
+
+  /** The reason the repair cannot launch against the current pull request and worktree, or null when it can. */
+  fun guardStandaloneRepairLaunch(operations: PhaseStandaloneMonitorOperations): String?
+
+  /**
+   * The reason the settled repair cannot be published, or null when it was published or nothing was pending. A repair
+   * the agent did not report as fixed is never completed or published.
+   */
+  fun publishStandaloneRepair(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+    reportedFixed: Boolean,
+  ): String?
+}
+
+/** The accepted standalone publication step; its first visit changes nothing. */
+internal interface PhaseStandalonePublicationStepBinding : PhaseAcceptedStepExecution {
+  fun runStandalonePublication(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome
+}
+
+/** Identity-based observation, repair evidence and guarded publication the standalone monitor strategy supplies. */
+internal interface PhaseStandaloneMonitorOperations {
+  /** Watches the pinned pull request until its checks settle, it merges or closes, or it cannot be read. */
+  fun observe(
+    ledger: StandaloneMonitorLedger,
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit,
+  ): PullRequestCiOutcome
+
+  /** The repair brief for [failing] checks on the last head this invocation published. */
+  fun failureEvidence(
+    ledger: StandaloneMonitorLedger,
+    failing: List<PullRequestCheck>,
+  ): String
+
+  /** The repair brief for a merge conflict with the pinned base commit. */
+  fun conflictEvidence(ledger: StandaloneMonitorLedger): String
+
+  /** The reason the pending repair cannot launch, or null when the target and worktree are unchanged. */
+  fun guardRepairLaunch(
+    ledger: StandaloneMonitorLedger,
+    git: WorkflowGitOperations,
+  ): String?
+
+  /** Publishes the completed pending repair, or reports that nothing is pending or why publication blocked. */
+  fun publish(
+    ledger: StandaloneMonitorLedger,
+    git: WorkflowGitOperations,
+  ): StandalonePublication
+}
+
+internal sealed interface StandalonePublication {
+  data object NothingPending : StandalonePublication
+
+  data class Published(val commitSha: String) : StandalonePublication
+
+  data class Blocked(val reason: String) : StandalonePublication
 }
 
 internal sealed interface PullRequestCiOutcome {

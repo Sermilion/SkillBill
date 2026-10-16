@@ -26,7 +26,7 @@ import skillbill.ports.taskruntime.model.isConfirmedDead
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.Instant
+import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 
 private class HeldOwnership(
@@ -42,9 +42,10 @@ private class HeldOwnership(
 @Inject
 class GitMonitorResources(
   private val inspector: MonitorProcessInspector,
+  private val clock: Clock,
 ) : StandaloneMonitorResources {
   private val held = ConcurrentHashMap<Path, HeldOwnership>()
-  private val cleanup = MonitorOwnedCleanup()
+  private val cleanup = MonitorOwnedCleanup(clock)
 
   override fun resolveContext(callerRoot: Path): MonitorContextResolution {
     val probe = monitorGit(callerRoot, "rev-parse", "--show-toplevel", "--git-common-dir")
@@ -121,7 +122,7 @@ class GitMonitorResources(
     val namespace = monitorRefNamespace(fence.ownerToken)
     val refs = MonitorFetchedRefs("$namespace/head", "$namespace/base")
     val primary = Path.of(record.primaryRoot)
-    persist(fence, record.copy(ownedRefs = listOf(refs.headRef, refs.baseRef), updatedAt = monitorNow(record)))
+    persist(fence, record.copy(ownedRefs = listOf(refs.headRef, refs.baseRef), updatedAt = monitorNow(clock, record)))
     val head = monitorFetchBranch(primary, target.head.fetchUrl, target.head.tip.ref, refs.headRef)
     val base = monitorFetchBranch(primary, target.baseFetchUrl, target.base.ref, refs.baseRef)
     val headSha = tipOf(primary, head, refs.headRef)
@@ -140,7 +141,7 @@ class GitMonitorResources(
     val pinned = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
     persist(
       fence,
-      pinned.copy(pinnedHeadSha = target.head.tip.sha, pinnedBaseSha = baseSha, updatedAt = monitorNow(pinned)),
+      pinned.copy(pinnedHeadSha = target.head.tip.sha, pinnedBaseSha = baseSha, updatedAt = monitorNow(clock, pinned)),
     )
     return MonitorFetchResult.Fetched(refs)
   }
@@ -163,7 +164,7 @@ class GitMonitorResources(
     val path = fence.directory.resolve("worktree-${fence.ownerToken}")
     persist(
       fence,
-      record.copy(executionPath = path.toString(), executionBranch = branch, updatedAt = monitorNow(record)),
+      record.copy(executionPath = path.toString(), executionBranch = branch, updatedAt = monitorNow(clock, record)),
     )
     monitorGit(Path.of(record.primaryRoot), "worktree", "add", "-b", branch, path.toString(), refs.headRef)
       .valueOrThrow("create the owned worktree at $path")
@@ -192,7 +193,7 @@ class GitMonitorResources(
         executionPath = worktree.path.toString(),
         executionBranch = worktree.branch,
         lastPublishedSha = record.pinnedHeadSha,
-        updatedAt = monitorNow(record),
+        updatedAt = monitorNow(clock, record),
       ),
     )
   }
@@ -311,7 +312,7 @@ class GitMonitorResources(
     request: MonitorAcquireRequest,
     generation: Long,
   ): MonitorOwnershipRecord {
-    val now = Instant.now()
+    val now = clock.instant()
     return MonitorOwnershipRecord(
       target = request.target.pullRequest,
       invocationId = request.invocationId,

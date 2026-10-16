@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorPullRequestSummary
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 
 enum class MonitorTargetRefusal {
@@ -32,4 +33,12 @@ sealed interface MonitorTargetResolution {
   ) : MonitorTargetResolution
 
   data class Failed(val reason: String) : MonitorTargetResolution
+}
+
+internal sealed interface MonitorCandidateSelection {
+  data class Unique(val summary: MonitorPullRequestSummary) : MonitorCandidateSelection
+
+  data class Ambiguous(val candidateUrls: List<String>) : MonitorCandidateSelection
+
+  data object Absent : MonitorCandidateSelection
 }

@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.PhaseInstructions
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
@@ -76,6 +77,7 @@ internal data class InMemoryPhaseRunFacts(
   val definition: SkeletonDefinition,
   val intake: PhaseRunIntake,
   override val workflowId: String = "",
+  override val monitorExecution: MonitorExecutionContext? = null,
 ) : FeatureTaskRuntimeRunFacts {
   override val issueKey: String = intake.issueKey
   override val runInvariants: FeatureTaskRuntimeRunInvariants = intake.runInvariants

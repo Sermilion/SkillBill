@@ -26,7 +26,7 @@ class GhPullRequestChecksLookup internal constructor(
     return parseChecks(result)
   }
 
-  private fun parseChecks(result: GhCommandResult): PullRequestChecks {
+  internal fun parseChecks(result: GhCommandResult): PullRequestChecks {
     val entries = runCatching { mapper.readTree(result.stdout) }.getOrNull()?.takeIf(JsonNode::isArray)
     return when {
       entries != null -> checksFromEntries(entries)

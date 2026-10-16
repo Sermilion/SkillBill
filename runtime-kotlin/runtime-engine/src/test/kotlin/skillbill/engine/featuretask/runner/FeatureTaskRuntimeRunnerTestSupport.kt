@@ -73,8 +73,10 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
@@ -687,6 +689,7 @@ internal data class RuntimeHarnessConfig(
   val gitOperationsOverride: WorkflowGitOperations? = null,
   val monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
+  val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1027,6 +1030,7 @@ private fun harnessRunner(
       delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
+      standaloneMonitorService = deps.runtimeConfig.standaloneMonitorService,
     )
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
@@ -1292,6 +1296,7 @@ private fun telemetryHarnessRunner(
       delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
+      standaloneMonitorService = runtimeConfig.standaloneMonitorService,
     )
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)
