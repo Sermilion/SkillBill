@@ -43,6 +43,7 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
@@ -588,7 +589,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           phaseState = phaseState,
           inMemoryOutput = inMemoryOutput,
         )
-      if (!persisted) {
+      if (persisted is RequiredPhaseWrite.Rejected) {
         val blockCoupling = context.settlementCoupling()
         return AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -598,7 +599,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             PhaseBlockRequest(
               run = run,
               attemptCount = iteration,
-              reason = "Validated phase output could not be persisted to the authoritative workflow record.",
+              reason = persisted.message,
               observability = observability,
               payload = BlockAndPersistPayload(fileManifest = fileManifest),
               failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,

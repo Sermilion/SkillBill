@@ -323,7 +323,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
         acceptedOutput,
       ),
     qualifiedFailedRepairSha = qualifiedFailedRepairSha,
-  )
+  ) == RequiredPhaseWrite.Acknowledged
 }
 
 internal fun PhaseRuntimeFinalizationContext.finalizationCoupledProgress(): FeatureTaskRuntimeProgressSnapshotAccess =

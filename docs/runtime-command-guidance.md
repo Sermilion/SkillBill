@@ -296,6 +296,11 @@ per-criterion accounting for such a workflow requires a separate explicit
 operator decision. Audit, repair planning, and source repair do not run builds or
 tests.
 
+When a completed phase cannot be admitted, the block report retains the rejected
+completion's reason and attempt. A changed or unreadable bound spec names its
+path and preserves the producer output for recovery. It does not accept the
+audit against a different spec or erase earlier criterion outcomes.
+
 ## Durable planning migration
 
 Readiness and resume admit the declared preparation 0.2, planning 0.2, and

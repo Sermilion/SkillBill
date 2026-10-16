@@ -81,6 +81,7 @@ enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
   OWNER_CHANGED("owner_changed"),
   EXPECTED_STATE_CHANGED("expected_state_changed"),
   IDENTITY_CHANGED("identity_changed"),
+  SPEC_SOURCE_CHANGED("spec_source_changed"),
   INVALID_TRANSITION("invalid_transition"),
   AUDIT_BINDING_CHANGED("audit_binding_changed"),
   UNSAFE_LEGACY_ADOPTION("unsafe_legacy_adoption"),

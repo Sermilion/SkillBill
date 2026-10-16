@@ -318,14 +318,16 @@ class AcceptanceCriterionRepairPersistence(
       return refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
     val identity = phaseIdentityMatches(worker, binding, request.phase)
-    if (!identity ||
-      !adoption.sourceMatches(
+    if (!identity) {
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED)
+    }
+    if (!adoption.sourceMatches(
         worker,
         repositoryRoot,
         binding,
       )
     ) {
-      return refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED)
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED)
     }
     val record =
       states.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId)

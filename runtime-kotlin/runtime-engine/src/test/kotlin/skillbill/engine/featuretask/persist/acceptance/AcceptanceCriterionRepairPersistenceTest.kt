@@ -349,7 +349,7 @@ class AcceptanceCriterionRepairPersistenceTest {
         )
         f.sourceDigest = "e".repeat(64)
         assertEquals(
-          AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED,
+          AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED,
           assertIs<AcceptanceCriterionRepairWriteResult.Refused>(f.write(worker, state, mutation)).reason,
         )
         assertEquals(before, f.snapshot().toRecord())

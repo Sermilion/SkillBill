@@ -124,8 +124,8 @@ internal interface PhaseStepRecords {
   /** Records a required step start, returning the rejection when the write did not apply. */
   fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
 
-  /** Records a completed step atomically with its output. Returns false when the write did not apply. */
-  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
+  /** Records a completed step atomically with its output, retaining the rejection when it did not apply. */
+  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
 
   /** Records an implementation attempt that ended without output. */
   fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean
