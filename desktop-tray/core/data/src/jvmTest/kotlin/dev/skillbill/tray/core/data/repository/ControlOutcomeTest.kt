@@ -62,6 +62,14 @@ class ControlOutcomeTest {
         assertEquals(ProblemCode.STALE_TARGET, incomplete.problem.code)
         assertTrue("has not exited yet" in incomplete.problem.summary, incomplete.problem.summary)
         assertNotEquals(changed.problem.summary, incomplete.problem.summary)
+
+        scripted.set(ControlResult.Rejected("branch_changed", ControlRefusal.BRANCH_CHANGED))
+        val wrongBranch = assertIs<Outcome.Failure>(stack.launch(item, "codex"))
+        scripted.set(ControlResult.Rejected("branch_unavailable", ControlRefusal.BRANCH_UNAVAILABLE))
+        val unavailableBranch = assertIs<Outcome.Failure>(stack.launch(item, "codex"))
+        assertTrue("Restore its checkout" in unavailableBranch.problem.summary, unavailableBranch.problem.summary)
+        assertNotEquals(wrongBranch.problem.summary, unavailableBranch.problem.summary)
+        assertTrue("run_action_branch_unavailable" in stack.diagnostics.categories)
       } finally {
         stack.closeAndJoin()
       }

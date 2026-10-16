@@ -56,8 +56,8 @@ class WorkRunActions(
         (agentId ?: options.agentId)?.takeIf { it in options.agentChoices }
           ?: return@operation WorkControlResult.Rejected(WorkControlRejection.AGENT_REQUIRED)
       val phase = unit.standalonePhaseStatuses.readByInvocation(target.id)
-      if (phase != null && checkoutLeftRecordedBranch(phase, target)) {
-        return@operation WorkControlResult.Rejected(WorkControlRejection.BRANCH_CHANGED)
+      if (phase != null) {
+        checkoutRejection(phase, target)?.let { return@operation WorkControlResult.Rejected(it) }
       }
       val arguments =
         arguments(item, phase, unit, agent)
@@ -86,12 +86,14 @@ class WorkRunActions(
     }
   }
 
-  private fun checkoutLeftRecordedBranch(
+  private fun checkoutRejection(
     phase: StandalonePhaseStatusRecord,
     target: WorkRunTarget,
-  ): Boolean {
+  ): WorkControlRejection? {
     val branch = phase.branchCorrelation
-    return branch.isNotBlank() && branch != "HEAD" && branches.checkedOutBranch(target.repositoryRoot) != branch
+    if (branch.isBlank() || branch == "HEAD") return null
+    val current = branches.checkedOutBranch(target.repositoryRoot) ?: return WorkControlRejection.BRANCH_UNAVAILABLE
+    return WorkControlRejection.BRANCH_CHANGED.takeIf { current != branch }
   }
 
   private fun restartCanceled(

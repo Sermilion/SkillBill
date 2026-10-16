@@ -57,11 +57,9 @@ fun LazyListScope.historySection(state: HistoryUiState, selected: WorkIdentity?,
     PagedListState.InitialLoading -> item(key = "history:loading") { Note("Loading...") }
     is PagedListState.InitialError -> item(key = "history:problem") { Problem(list.problem.summary) { onAction(HistoryAction.Retry) } }
     is PagedListState.LoadedEmpty -> {
-      if (list.refreshing) item(key = "history:refreshing") { Note("Updating...") }
       item(key = "history:empty") { Note(if (state.filter.isNotBlank()) "No matching work" else "No finished work") }
     }
     is PagedListState.Content -> {
-      if (list.refreshing) item(key = "history:refreshing") { Note("Updating...") }
       list.readError?.let { problem -> item(key = "history:problem") { Problem(problem.summary) { onAction(HistoryAction.Retry) } } }
       items(rows, key = { "history:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
         SidebarWorkRow(item, selected == item.identity) { onAction(HistoryAction.Select(item.identity)) }

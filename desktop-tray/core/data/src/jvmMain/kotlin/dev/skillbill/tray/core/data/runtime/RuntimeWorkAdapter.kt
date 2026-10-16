@@ -105,6 +105,7 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
   private fun WorkControlRejection.toRefusal(): ControlRefusal = when (this) {
     WorkControlRejection.AGENT_REQUIRED -> ControlRefusal.AGENT_REQUIRED
     WorkControlRejection.BRANCH_CHANGED -> ControlRefusal.BRANCH_CHANGED
+    WorkControlRejection.BRANCH_UNAVAILABLE -> ControlRefusal.BRANCH_UNAVAILABLE
     WorkControlRejection.TERMINATION_INCOMPLETE -> ControlRefusal.TERMINATION_INCOMPLETE
     WorkControlRejection.OWNERSHIP_MISMATCH -> ControlRefusal.OWNERSHIP_MISMATCH
     else -> ControlRefusal.OTHER

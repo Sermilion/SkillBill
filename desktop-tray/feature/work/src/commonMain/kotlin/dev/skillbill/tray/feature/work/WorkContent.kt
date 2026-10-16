@@ -96,11 +96,9 @@ private fun LazyListScope.workSection(
     PagedListState.InitialLoading -> item(key = "$section:loading") { SectionNote("Loading...") }
     is PagedListState.InitialError -> item(key = "$section:problem") { SectionProblem(list.problem.summary) { onAction(WorkAction.Retry(section)) } }
     is PagedListState.LoadedEmpty -> {
-      if (list.refreshing) item(key = "$section:refreshing") { SectionNote("Updating...") }
       item(key = "$section:empty") { SectionNote(if (filtering) "No matching work" else "No ${title.lowercase()}") }
     }
     is PagedListState.Content -> {
-      if (list.refreshing) item(key = "$section:refreshing") { SectionNote("Updating...") }
       list.readError?.let { problem -> item(key = "$section:problem") { SectionProblem(problem.summary) { onAction(WorkAction.Retry(section)) } } }
       items(rows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
         SidebarWorkRow(item, selected == item.identity) { onAction(WorkAction.Select(item.identity)) }
