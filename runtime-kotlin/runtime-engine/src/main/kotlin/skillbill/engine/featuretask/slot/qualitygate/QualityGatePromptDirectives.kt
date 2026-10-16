@@ -19,6 +19,16 @@ private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
 internal fun runtimeOwnedValidateAgentPhaseTask(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
+    "Before choosing a host or container, read the applicable repository instructions and CI/setup scripts. " +
+    "Before an expensive validation command, check the required toolchain and tools, writable home, cache, " +
+    "and temporary paths, and any required display support. Prefer a known working host or the established " +
+    "isolated setup required by those instructions. Keep useful setup and discovery context in this invocation, " +
+    "and reuse only caches and mutable state this invocation is allowed to own. Never reuse another worktree's " +
+    "mutable state. Do not install packages automatically, stop a shared daemon, or change unrelated jobs. " +
+    "Revisit setup when relevant scripts, configuration, toolchain, or workspace requirements change; " +
+    "an earlier setup does not prove an uninspected change is safe. " +
+    "Setup reuse never skips checks: run every required local check for each repair candidate before publication, " +
+    "preserve clean and cache-bypass requirements, and do not count a previous candidate's pass as current evidence. " +
     "If you find no applicable validation commands after inspecting those sources, print a warning " +
     "that no validation commands were found, then settle completed and allow the workflow to advance. " +
     "Do not invent commands or report checks as passed when none ran. A failed discovery command or " +
@@ -35,7 +45,8 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +
     "rerunning the required checks in this session until they all pass. " +
     "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
-    "the required operator action, and any remaining failures. Wall-clock timeout still stops " +
+    "any setup retries, the required operator action, and any remaining failures in ordinary prose. " +
+    "Use the existing blocked and recovery behavior. Wall-clock timeout still stops " +
     "the subtask. The runtime does not rerun the checks itself. Report each command and its result, " +
     "or the warning when discovery finds none. Never silence findings with annotations, " +
     "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead. " +

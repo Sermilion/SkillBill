@@ -36,14 +36,17 @@ class GhPullRequestIdentityLookupTest {
           exitCode = 0,
           stdout =
             """
-            [{"number":42,"url":"https://github.com/acme/repo/pull/42","title":"[SKILL-380] Rules","state":"OPEN"}]
+            [{"number":42,"url":"https://github.com/acme/repo/pull/42","title":"[SKILL-380] Rules","state":"OPEN","headRefOid":"abc123"}]
             """.trimIndent(),
         )
       }
 
     val identity = lookup.lookup(repoRoot, "feat/SKILL-380")
 
-    assertEquals(PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules"), identity)
+    assertEquals(
+      PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules", headSha = "abc123"),
+      identity,
+    )
     assertEquals(
       listOf(
         "pr",
@@ -53,7 +56,7 @@ class GhPullRequestIdentityLookupTest {
         "--state",
         "all",
         "--json",
-        "url,number,title,state",
+        "url,number,title,state,headRefOid",
         "--limit",
         "1",
       ),
@@ -73,7 +76,7 @@ class GhPullRequestIdentityLookupTest {
     lookup.lookup(repoRoot, "feat/SKILL-380")
 
     val args = calls.single()
-    assertEquals("url,number,title,state,mergeable,mergeStateStatus", args[args.indexOf("--json") + 1])
+    assertEquals("url,number,title,state,headRefOid,mergeable,mergeStateStatus", args[args.indexOf("--json") + 1])
   }
 
   @Test

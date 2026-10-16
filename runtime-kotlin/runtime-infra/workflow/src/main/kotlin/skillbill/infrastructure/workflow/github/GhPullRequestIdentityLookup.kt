@@ -66,7 +66,14 @@ class GhPullRequestIdentityLookup internal constructor(
     val title = first.path("title").takeIf(JsonNode::isTextual)?.asText().orEmpty()
     if (url == null || number == null) return null
     return when (first.path("state").asText()) {
-      "OPEN" -> PullRequestIdentity.Found(url, number, title, conflicting = conflicting(first))
+      "OPEN" ->
+        PullRequestIdentity.Found(
+          url,
+          number,
+          title,
+          conflicting = conflicting(first),
+          headSha = first.path("headRefOid").asText().takeIf(String::isNotBlank),
+        )
       "MERGED" -> PullRequestIdentity.Merged(url, number)
       "CLOSED" -> PullRequestIdentity.Absent
       else -> null
@@ -80,7 +87,7 @@ class GhPullRequestIdentityLookup internal constructor(
   }
 
   private companion object {
-    const val IDENTITY_FIELDS = "url,number,title,state"
+    const val IDENTITY_FIELDS = "url,number,title,state,headRefOid"
     const val MERGE_STATE_FIELDS = "mergeable,mergeStateStatus"
   }
 }

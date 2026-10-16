@@ -10,8 +10,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 internal data class FeatureTaskRuntimePhaseFileManifest(
   val before: List<String>,
   val after: List<String>,
+  val reeditedPaths: List<String> = emptyList(),
 ) {
-  val introduced: List<String> = (after.toSet() - before.toSet()).sorted()
+  val introduced: List<String> = ((after.toSet() - before.toSet()) + reeditedPaths).distinct().sorted()
 }
 
 object FeatureTaskRuntimePhaseSafetyPolicy {

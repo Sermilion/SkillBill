@@ -21,6 +21,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import kotlin.time.DurationUnit
 
@@ -339,7 +340,10 @@ internal class ProcessLifecycleEmitter(
           authoritative = false,
         ),
       )
-    }.onFailure { failure -> degradation.recordLifecyclePublicationFailure(failure) }
+    }.onFailure { failure ->
+      if (failure is CancellationException) throw failure
+      degradation.recordLifecyclePublicationFailure(failure)
+    }
   }
 
   private companion object {

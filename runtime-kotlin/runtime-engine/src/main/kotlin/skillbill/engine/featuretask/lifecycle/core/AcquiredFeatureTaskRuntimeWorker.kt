@@ -26,6 +26,7 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
 ) {
   @Volatile private var active = true
 
+  internal val currentStepId: String get() = admittedSnapshot.currentStepId
   val workflowId: String get() = ownership.workflowId
   val generation: Long get() = ownership.generation
   internal val identity: FeatureTaskExecutionIdentity get() = execution.identity

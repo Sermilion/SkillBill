@@ -31,6 +31,7 @@ data class PhaseRunRequest(
   val specSource: SpecSource = SpecSource.LOCAL,
   val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
+  val activityOutput: ((String, String) -> Unit)? = null,
   val launchArguments: List<String>? = null,
 ) {
   init {

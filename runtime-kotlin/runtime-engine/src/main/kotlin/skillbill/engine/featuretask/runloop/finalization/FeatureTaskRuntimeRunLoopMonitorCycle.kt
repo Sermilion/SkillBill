@@ -6,6 +6,9 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
+import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
+import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
+import skillbill.engine.featuretask.phase.core.RepairPublicationAssociation
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -31,12 +34,14 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
 internal object FeatureTaskRuntimeRunLoopMonitorCycle {
   internal fun PhaseRuntimeFinalizationContext.runDeclaredMonitorCycle(
     run: PhaseRun,
     observation: PhaseCiObservation,
+    repairSteps: MonitorRepairStepRoles,
   ): PhaseOutcome {
     val iteration = progress.phase(run.phaseId).nextIteration
     persistFinalizationRequiredRunning(run, iteration)?.let { return it }
@@ -51,8 +56,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     val outcome =
-      observation.watch(request.repoRoot, branch) { pending ->
-        observability.ciStillRunning(run.phaseId, pending.map(PullRequestCheck::name))
+      observation.watch(request.repoRoot, branch) { pullRequestUrl, pending ->
+        observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
       }
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
@@ -83,16 +88,16 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       PullRequestCiOutcome.NoPullRequest -> settleWithoutPullRequest(run, iteration, branch)
       is PullRequestCiOutcome.Failed -> {
         observation.recordFailingChecks(request.issueKey, outcome.failingChecks)
-        routeToRepair(
-          run,
-          iteration,
-          "CI is failing for the pull request.",
-          failingChecksProse(branch, outcome.failingChecks),
-        )
+        failedCiOutcome(run, iteration, branch, outcome, repairSteps)
       }
       PullRequestCiOutcome.Conflicted -> {
         observation.recordMergeConflict(request.issueKey, baseBranch)
-        routeToRepair(run, iteration, "The pull request has merge conflicts.", conflictProse(branch, baseBranch))
+        routeToRepair(
+          run,
+          iteration,
+          conflictProse(branch, baseBranch),
+          FeatureTaskRuntimeVerdict.PROGRESS,
+        )
       }
       is PullRequestCiOutcome.Blocked -> block(run, iteration, outcome.reason)
       is PullRequestCiOutcome.Unavailable -> {
@@ -105,16 +110,86 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     }
   }
 
+  private fun PhaseRuntimeFinalizationContext.failedCiOutcome(
+    run: PhaseRun,
+    iteration: Int,
+    branch: String,
+    outcome: PullRequestCiOutcome.Failed,
+    repairSteps: MonitorRepairStepRoles,
+  ): PhaseOutcome {
+    val repairAssociation =
+      MonitorRepairAccounting(
+        repairSteps,
+        gitOperations,
+        recorder::producerOutput,
+        phaseSettlementService::findEnvelope,
+        diagnostics,
+      ).publishedRepairCommitSha(
+        request,
+        iteration,
+        recorder.loadPhaseRecords(request.workflowId).orEmpty(),
+        recorder.loadPhaseLedger(request.workflowId).orEmpty(),
+        progress.outputs(),
+      )
+    return when {
+      repairAssociation is RepairPublicationAssociation.NotStarted ->
+        routeToRepair(
+          run,
+          iteration,
+          failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
+          FeatureTaskRuntimeVerdict.PROGRESS,
+        )
+      repairAssociation is RepairPublicationAssociation.Unavailable ->
+        block(run, iteration, "The completed monitor repair lacks evidence to associate a published change.")
+      repairAssociation is RepairPublicationAssociation.Unchanged ->
+        block(run, iteration, "The completed monitor repair did not publish a source or merge change.")
+      outcome.headSha == null ||
+        outcome.headSha != (repairAssociation as RepairPublicationAssociation.Published).commitSha ->
+        block(
+          run,
+          iteration,
+          "The failing CI result could not be associated with the published repair commit " +
+            "'${(repairAssociation as RepairPublicationAssociation.Published).commitSha}'.",
+        )
+      repairAssociation.commitSha in progress.monitorFailedRepairCommitShas ->
+        routeToRepair(
+          run,
+          iteration,
+          failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
+          FeatureTaskRuntimeVerdict.PROGRESS,
+        )
+      else ->
+        routeToRepair(
+          run,
+          iteration,
+          failingChecksProse(branch, outcome.failingChecks, outcome.headSha, publishedRepair = true),
+          FeatureTaskRuntimeVerdict.CI_FAILED,
+          repairAssociation.commitSha,
+        )
+    }
+  }
+
   private fun PhaseRuntimeFinalizationContext.routeToRepair(
     run: PhaseRun,
     iteration: Int,
-    summary: String,
     value: String,
+    verdict: FeatureTaskRuntimeVerdict,
+    qualifiedFailedRepairSha: String? = null,
   ): PhaseOutcome =
     complete(
       run,
       iteration,
-      monitorOutput(run.phaseId, summary, value, verdict = FeatureTaskRuntimeVerdict.CI_FAILED),
+      monitorOutput(
+        run.phaseId,
+        if (verdict == FeatureTaskRuntimeVerdict.CI_FAILED) {
+          "CI confirmed that a published repair failed."
+        } else {
+          "CI or merge repair work is starting."
+        },
+        value,
+        verdict = verdict,
+      ),
+      qualifiedFailedRepairSha,
     )
 
   private fun conflictProse(
@@ -137,14 +212,36 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
 
   internal fun monitorCapExhaustionReason(
     loopId: String,
-    edgeIteration: Int,
     progress: FeatureTaskRuntimeProgressSnapshotAccess?,
   ): String {
+    if (progress?.monitorFailureEvidenceUnavailable == true) {
+      return "Monitoring cannot continue because a completed monitor result lacks retained published-failure " +
+        "association evidence. Recover the existing monitor output evidence before resuming."
+    }
     val edge = FeatureTaskRuntimePhaseWorkflowQueries.backwardEdgeForLoop(loopId)
-    val failingChecks = monitorPhaseProse(progress, edge?.fromPhaseId)
+    val failedCommitShas = progress?.monitorFailedRepairCommitShas.orEmpty()
+    val failedRepairReports =
+      progress
+        ?.outputs()
+        ?.filter { output -> output.phaseId == edge?.fromPhaseId }.orEmpty()
+        .mapNotNull(::monitorPhaseProseFor)
+        .filter { value -> failedCommitShas.any(value::contains) }
+        .distinct()
+    val capSummary =
+      when {
+        failedCommitShas.size >= FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS ->
+          "Monitoring stopped after ${failedCommitShas.size} CI-confirmed failed repair commit(s): " +
+            failedCommitShas.sorted().joinToString(", ") { "'$it'" } + "."
+        failedRepairReports.isNotEmpty() ->
+          "Monitoring stopped at its repair cap with ${failedCommitShas.size} evidenced failed repair commit(s)."
+        else ->
+          "Monitoring stopped at its repair cap, but no commit-associated failure reports were retained."
+      }
+    val failingChecks =
+      failedRepairReports.takeIf { it.isNotEmpty() }?.joinToString(" ")
+        ?: monitorPhaseProse(progress, edge?.fromPhaseId)
     val lastFixSummary = monitorPhaseProse(progress, edge?.destinationPhaseId)
-    return "Monitoring stopped after $edgeIteration fix attempt(s); " +
-      "the run blocks rather than fixing past the cap. Last observed monitor result: " +
+    return "$capSummary The run blocks rather than fixing past the cap. Last observed monitor result: " +
       (failingChecks ?: "The last failing checks were not recorded.") +
       " Last monitor_fix summary: " +
       (lastFixSummary ?: "none recorded.")
@@ -155,15 +252,24 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     phaseId: String?,
   ): String? =
     phaseId?.let { id -> progress?.phase(id)?.output }
-      ?.normalizedOutput
-      ?.envelopeWireMap()
-      ?.let(::auditProseValue)
+      ?.let(::monitorPhaseProseFor)
+
+  private fun monitorPhaseProseFor(output: FeatureTaskRuntimePhaseOutput): String? =
+    output.normalizedOutput?.envelopeWireMap()?.let(::auditProseValue)
 
   private fun failingChecksProse(
     branch: String,
     checks: List<PullRequestCheck>,
+    headSha: String?,
+    publishedRepair: Boolean = false,
   ): String =
-    "CI is failing on branch '$branch'. Failing checks: " +
+    (
+      if (publishedRepair) {
+        "CI confirmed a failed published repair commit '$headSha' on branch '$branch'. "
+      } else {
+        "CI is failing on branch '$branch' at observed commit '${headSha ?: "unknown"}'. "
+      }
+    ) + "Failing checks: " +
       checks.joinToString("; ") { check -> "${check.name} (${check.link})" } + "."
 
   private fun monitorOutput(
@@ -211,6 +317,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     run: PhaseRun,
     iteration: Int,
     outputText: String,
+    qualifiedFailedRepairSha: String? = null,
   ): PhaseOutcome {
     val normalizedOutput =
       runCatching { NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId) }
@@ -221,7 +328,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
             "Runtime-owned monitor settlement did not validate: ${error.message.orEmpty()}",
           )
         }
-    if (!persistFinalizationCompleted(run, iteration, outputText, normalizedOutput)) {
+    if (!persistFinalizationCompleted(run, iteration, outputText, normalizedOutput, qualifiedFailedRepairSha)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         finalizationCoupledProgress(),
         coupledRunTransitions,

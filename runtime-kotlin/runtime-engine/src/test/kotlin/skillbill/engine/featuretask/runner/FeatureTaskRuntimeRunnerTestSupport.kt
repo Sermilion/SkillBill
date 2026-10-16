@@ -989,7 +989,7 @@ private fun harnessGateDependencies(
   deps: HarnessRunnerDeps,
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
 ): RuntimePhaseGatesDeps {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return RuntimePhaseGatesDeps(
     branchSetupRunner =
       FeatureTaskRuntimeBranchSetupRunner(
@@ -1013,7 +1013,7 @@ private fun harnessRunner(
   deps: HarnessRunnerDeps,
   runLoopEntry: FeatureTaskRuntimeRunLoopEntry? = null,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   val specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter)
   val lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database)
   val gateDeps = harnessGateDependencies(deps, lifecycleTelemetry)
@@ -1068,7 +1068,7 @@ private fun assembleHarnessRunner(
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   entry: TestFeatureTaskRuntimeRunLoopEntry,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return AssembledFeatureTaskRuntimeRunner(
     FeatureTaskRuntimeRunner(
       FeatureTaskRuntimeRunStartup(

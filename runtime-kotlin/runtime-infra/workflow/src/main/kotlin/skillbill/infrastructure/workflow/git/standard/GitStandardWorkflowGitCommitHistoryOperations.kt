@@ -2,6 +2,8 @@ package skillbill.infrastructure.workflow.git.standard
 
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentity
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
@@ -13,6 +15,24 @@ internal object GitStandardWorkflowGitCommitHistoryOperations : WorkflowGitCommi
   ): WorkflowGitCommitResult = gitCreateCommit(repoRoot, message)
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult = runGitCommand(repoRoot, "rev-parse", "HEAD")
+
+  override fun commitIdentity(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitCommitIdentityResult {
+    if (!commitSha.matches(Regex("[0-9a-fA-F]{40}|[0-9a-fA-F]{64}"))) {
+      return WorkflowGitCommitIdentityResult.Failed("A full commit SHA is required for commit identity lookup.")
+    }
+    val result = runGitCommand(repoRoot, "show", "-s", "--format=%T%n%P", commitSha)
+    if (result !is WorkflowGitOperationResult.Ok) return WorkflowGitCommitIdentityResult.Failed(result.error)
+    val lines = result.value.orEmpty().lines()
+    val treeSha =
+      lines.firstOrNull()?.takeIf(String::isNotBlank)
+        ?: return WorkflowGitCommitIdentityResult.Failed("Git returned no tree identity for '$commitSha'.")
+    return WorkflowGitCommitIdentityResult.Found(
+      WorkflowGitCommitIdentity(treeSha, lines.getOrElse(1) { "" }.split(' ').filter(String::isNotBlank)),
+    )
+  }
 
   override fun commitCountAhead(
     repoRoot: Path,

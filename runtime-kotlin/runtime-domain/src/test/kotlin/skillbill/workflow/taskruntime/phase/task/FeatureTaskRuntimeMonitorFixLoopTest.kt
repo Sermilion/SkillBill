@@ -20,24 +20,40 @@ class FeatureTaskRuntimeMonitorFixLoopTest {
       resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, edgeIterationCount = 0),
     )
     assertEquals(
-      FeatureTaskRuntimeNextPhase.Next(phaseId = MONITOR_FIX, loopId = MONITOR_FIX_LOOP, edgeIteration = 3),
-      resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, edgeIterationCount = 2),
+      FeatureTaskRuntimeNextPhase.Next(phaseId = MONITOR_FIX, loopId = MONITOR_FIX_LOOP, edgeIteration = 2),
+      resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, edgeIterationCount = 1),
     )
   }
 
   @Test
-  fun `exactly three monitor_fix traversals run and the fourth CI failure blocks`() {
+  fun `an initial failure or merge conflict starts repair without spending the CI failure budget`() {
+    assertEquals(
+      FeatureTaskRuntimeNextPhase.Next(
+        phaseId = MONITOR_FIX,
+        loopId = MONITOR_FIX_TRIGGER_LOOP,
+        edgeIteration = 1,
+      ),
+      resolved(MONITOR, FeatureTaskRuntimeVerdict.PROGRESS, edgeIterationCount = 0),
+    )
+    assertEquals(
+      FeatureTaskRuntimeNextPhase.TerminalAdvance,
+      resolved(MONITOR, FeatureTaskRuntimeVerdict.ADVANCE, edgeIterationCount = 0),
+    )
+  }
+
+  @Test
+  fun `the third CI-confirmed repair failure blocks another repair`() {
     val traversals =
-      (0 until MAX_ATTEMPTS).map { count -> resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, count) }
+      (0 until MAX_FAILURES - 1).map { count -> resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, count) }
 
     assertTrue(traversals.all { it is FeatureTaskRuntimeNextPhase.Next && it.loopId == MONITOR_FIX_LOOP })
     assertEquals(
       FeatureTaskRuntimeNextPhase.TerminalBlock(
         loopId = MONITOR_FIX_LOOP,
-        edgeIteration = MAX_ATTEMPTS,
+        edgeIteration = MAX_FAILURES - 1,
         unresolvedVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
       ),
-      resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, edgeIterationCount = MAX_ATTEMPTS),
+      resolved(MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, edgeIterationCount = MAX_FAILURES - 1),
     )
   }
 
@@ -77,6 +93,7 @@ class FeatureTaskRuntimeMonitorFixLoopTest {
     const val MONITOR_FIX = "monitor_fix"
     const val MONITOR_FIX_LOOP = "monitor_fix"
     const val MONITOR_FIX_COMMIT_LOOP = "monitor_fix_commit"
-    const val MAX_ATTEMPTS = 3
+    const val MONITOR_FIX_TRIGGER_LOOP = "monitor_fix_trigger"
+    const val MAX_FAILURES = 3
   }
 }

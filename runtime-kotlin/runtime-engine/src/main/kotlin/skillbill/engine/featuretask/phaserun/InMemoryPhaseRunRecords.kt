@@ -32,6 +32,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
@@ -54,6 +55,7 @@ internal class InMemoryPhaseRunRecords private constructor(
 
   val acceptedOutputs = mutableMapOf<String, String>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
+  private val phaseLedger = mutableListOf<FeatureTaskRuntimePhaseLedgerEntry>()
   private val validationGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
   private val buildGateProgress = mutableMapOf<String, FeatureTaskRuntimeValidationGateProgress>()
   private val unaddressedLedger = mutableListOf<UnaddressedFinding>()
@@ -103,12 +105,15 @@ internal class InMemoryPhaseRunRecords private constructor(
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
     recordPhaseState(request)
+    phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.START, request)
     return RequiredPhaseWrite.Acknowledged
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     request.normalizedOutput?.output?.value?.let { acceptedOutputs[request.phaseId] = it }
-    return recordPhaseState(request)
+    val recorded = recordPhaseState(request)
+    if (recorded) phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
+    return recorded
   }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean = true
@@ -226,9 +231,35 @@ internal class InMemoryPhaseRunRecords private constructor(
     buildGateProgress[workflowId] = progress.detached()
   }
 
-  override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean = true
+  override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean {
+    phaseLedger +=
+      FeatureTaskRuntimePhaseLedgerEntry(
+        action = request.action,
+        sequenceNumber = phaseLedger.size + 1,
+        timestamp = clock.instant(),
+        phaseId = request.phaseId,
+        attemptCount = request.attemptCount,
+        resolvedAgentId = request.resolvedAgentId,
+        loopId = request.loopId,
+        edgeIteration = request.edgeIteration,
+        blockedReason = request.blockedReason,
+      )
+    return true
+  }
 
-  override fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList()
+  override fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry> = phaseLedger.toList()
+
+  private fun phaseLedgerEntry(
+    action: FeatureTaskRuntimePhaseLedgerAction,
+    request: FeatureTaskRuntimePhaseStateRequest,
+  ) = FeatureTaskRuntimePhaseLedgerEntry(
+    action = action,
+    sequenceNumber = phaseLedger.size + 1,
+    timestamp = clock.instant(),
+    phaseId = request.phaseId,
+    attemptCount = request.attemptCount,
+    resolvedAgentId = request.resolvedAgentId,
+  )
 
   override fun appendQuarantineEntry(
     workflowId: String,

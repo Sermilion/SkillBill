@@ -226,8 +226,19 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   fun `audit repair remains unbounded and review_fix remains bounded`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val transitions = def.transitions
-    assertEquals(4, transitions.backwardEdges.count { !def.isRegenerationLoopId(it.loopId) })
+    assertEquals(
+      setOf(
+        def.AUDIT_REPAIR_LOOP_ID,
+        def.REVIEW_FIX_LOOP_ID,
+        def.MONITOR_FIX_LOOP_ID,
+        def.MONITOR_FIX_TRIGGER_LOOP_ID,
+        def.MONITOR_FIX_COMMIT_LOOP_ID,
+      ),
+      transitions.backwardEdges.filterNot { def.isRegenerationLoopId(it.loopId) }.map { it.loopId }.toSet(),
+    )
     assertEquals(null, transitions.backwardEdges.single { it.fromPhaseId == def.PHASE_AUDIT }.perEdgeCap)
+    assertEquals(1, transitions.backwardEdges.single { it.loopId == def.REVIEW_FIX_LOOP_ID }.perEdgeCap)
+    assertEquals(null, transitions.backwardEdges.single { it.loopId == def.MONITOR_FIX_TRIGGER_LOOP_ID }.perEdgeCap)
   }
 
   @Test

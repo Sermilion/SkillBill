@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.monitor
 
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
+import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -38,7 +39,7 @@ class MonitorStrategy(
       override fun watch(
         repoRoot: Path,
         branch: String,
-        onCiRunning: (List<PullRequestCheck>) -> Unit,
+        onCiRunning: (String, List<PullRequestCheck>) -> Unit,
       ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning)
 
       override fun recordFailingChecks(
@@ -71,6 +72,13 @@ class MonitorStrategy(
           generationScoped = false,
           extendsOwnedInventory = true,
         ),
+    )
+
+  internal override val monitorRepairSteps =
+    MonitorRepairStepRoles(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
     )
 
   override val slot: PhaseSlot = PhaseSlot.MONITOR
@@ -119,7 +127,6 @@ class MonitorStrategy(
         taskDirective = directiveFor(stepId),
         stepContext = fixBrief.stepContextFor(inputs.issueKey),
         runsValidationGate = true,
-        valueContent = MONITOR_FIX_VALUE_CONTENT,
       )
     }
   }
@@ -152,11 +159,17 @@ class MonitorStrategy(
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
         "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
-        "A failed check on an open pull request immediately completes it with verdict ci_failed, " +
-        "which routes to monitor_fix even while other checks are pending. A merge conflict does the same " +
-        "on that poll, even when no checks are reported. Cancelled checks do not start " +
+        "A failed check on an open pull request starts repair even while other checks are pending. " +
+        "The initial failure starts repair but does not count as a failed repair. Only a completed, " +
+        "published repair whose associated commit has a failing CI result counts toward the three-failure cap. " +
+        "A merge conflict starts merge repair without counting as a CI failure. Cancelled checks do not start " +
         "repair. All checks passing, skipped, or cancelled completes the phase only when none is pending. " +
-        "Monitoring waits while checks are running. " +
+        "While checks are pending, report the current pull request and available commit or check links. Describe " +
+        "queued checks as waiting, describe running work only when the observation identifies it, and name the next " +
+        "useful event, such as a check starting or settling. Attribute runner capacity only to observed evidence; " +
+        "if no capacity detail is available, say it is unavailable and do not query administrative APIs. " +
+        "Do not infer a commit link, check state, elapsed time, or runner capacity. " +
+        "Monitoring waits while checks are pending. " +
         "If no check has been reported within an hour, or a " +
         "GitHub CLI cannot report checks, monitoring blocks."
 
@@ -178,15 +191,8 @@ class MonitorStrategy(
         "URL, the evidence inspected, and the unresolved cause or missing evidence, even if all local checks " +
         "pass. Unavailable CI logs, missing secrets, or an infrastructure outage also require a block with " +
         "the concrete obstacle. Do not commit or push. The runtime commits and pushes a completed repair " +
-        "and owns subsequent CI confirmation. Report the CI failure, its cause, the changed files and how " +
-        "they address it, and each validation command's result. Local validation is not a claim that CI " +
-        "passed."
-
-    private const val MONITOR_FIX_VALUE_CONTENT: String =
-      "Report the failed check URL, the failing command or assertion, the root cause, and the repository fix.\n" +
-        "Name the changed files, the targeted proof, and every required project check with its result.\n" +
-        "A passing local rerun with no repository fix is unresolved; settle blocked with the evidence gap.\n" +
-        "The runtime owns commit, push, and subsequent CI confirmation. Do not claim local checks cleared CI.\n" +
-        "Never weaken assertions, suppress findings, disable rules, or skip tests to silence the failure."
+        "and owns subsequent CI confirmation. In natural prose, explain the CI failure, its cause, the repository " +
+        "change, and local check results. Local validation is not a claim that CI passed. Never weaken assertions, " +
+        "suppress findings, disable rules, or skip tests to silence the failure."
   }
 }

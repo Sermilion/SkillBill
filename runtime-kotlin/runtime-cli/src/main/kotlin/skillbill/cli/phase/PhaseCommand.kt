@@ -37,6 +37,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import java.net.URI
 import java.nio.file.Path
 
 @Inject
@@ -104,6 +105,7 @@ class PhaseCommand(
             modelAssignment =
               FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
             eventSink = stdoutSink,
+            activityOutput = { _, activity -> inputs.liveStdout("$activity\n") },
           ),
         )
       } ?: return
@@ -317,5 +319,38 @@ internal fun FeatureTaskRuntimeRunEvent.phaseProgressLine(): String? =
     is FeatureTaskRuntimeRunEvent.PhaseCompleted -> "Phase '$phaseId' completed.\n"
     is FeatureTaskRuntimeRunEvent.PhaseBlocked -> "Phase '$phaseId' blocked: $blockedReason\n"
     is FeatureTaskRuntimeRunEvent.PhasePaused -> "Phase '$phaseId' paused: $pauseReason\n"
+    is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningLine()
     else -> null
   }
+
+private fun FeatureTaskRuntimeRunEvent.CiStillRunning.ciStillRunningLine(): String {
+  val checks =
+    pendingChecks
+      .take(MAX_VISIBLE_PROGRESS_CHECKS)
+      .joinToString(", ") { check ->
+        val name = check.name.filterNot(Char::isISOControl).take(MAX_PROGRESS_NAME_LENGTH)
+        listOf(name, boundedHttpLink(check.link)).filter(String::isNotBlank).joinToString(" ")
+      }
+  val detail = if (checks.isBlank()) "waiting for checks to be reported" else "waiting for $checks"
+  return listOf("CI is $detail", boundedHttpLink(pullRequestUrl))
+    .filter(String::isNotBlank)
+    .joinToString("; ")
+    .take(MAX_PROGRESS_LINE_LENGTH) + "\n"
+}
+
+private fun boundedHttpLink(value: String): String =
+  runCatching {
+    val uri = URI(value)
+    val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
+    val host = uri.host?.takeIf(String::isNotBlank)
+    if (scheme == null || host == null || uri.userInfo != null) {
+      ""
+    } else {
+      URI(scheme, null, host, uri.port, uri.path, null, null).toASCIIString().take(MAX_PROGRESS_LINK_LENGTH)
+    }
+  }.getOrDefault("")
+
+private const val MAX_VISIBLE_PROGRESS_CHECKS = 4
+private const val MAX_PROGRESS_NAME_LENGTH = 48
+private const val MAX_PROGRESS_LINK_LENGTH = 120
+private const val MAX_PROGRESS_LINE_LENGTH = 500

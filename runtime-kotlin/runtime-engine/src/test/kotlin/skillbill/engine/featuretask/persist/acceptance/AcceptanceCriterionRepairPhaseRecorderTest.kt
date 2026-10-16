@@ -11,6 +11,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -21,6 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
@@ -84,8 +86,79 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         )
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(WorkflowStatus.BLOCKED, f.snapshot().workflowStatus)
         assertFalse(recorder.start(phase(f, "audit_implement_fix", 5)) == true)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+      }
+    }
+  }
+
+  @Test
+  fun `clarified incomplete repair clears its report and persists the failed attempt before another cycle`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, true, "The first requirement holds.")
+        audit(f, recorder, 2, false, "The second requirement needs a caller.")
+        val first = phase(f, "audit_implement_fix", 1)
+        assertTrue(recorder.start(first) == true)
+        assertTrue(recorder.complete(output(first, "advance", "Only part of the caller is connected.")) == true)
+        assertNotNull(scope.snapshot?.pendingClarificationQuestion)
+        audit(f, recorder, 3, false, "The caller still needs production work.")
+        assertNull(scope.snapshot?.pendingClarificationQuestion)
+        assertEquals(1, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertEquals(
+          FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE,
+          decodeImplementationAttemptsFromArtifact(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(f.snapshot().artifacts),
+          ).last().status,
+        )
+        assertEquals("audit_plan_fix", f.snapshot().currentStepId)
+        assertTrue(recorder.start(phase(f, "audit_implement_fix", 2)) == true)
+        assertEquals(AcceptanceCriterionRepairStage.REPAIR_RESERVED, scope.snapshot?.stage)
+        assertNull(scope.snapshot?.pendingClarificationQuestion)
+        assertEquals("audit_implement_fix", f.snapshot().currentStepId)
+      }
+    }
+  }
+
+  @Test
+  fun `duplicate starts preserve the live ledger and completed attempts cannot reopen`() {
+    SerialRepairSqliteFixture().use { f ->
+      f.owned { worker ->
+        val scope =
+          AcceptanceCriterionRepairRunState(
+            f.persistence.inspectExisting(worker, f.binding.authoredCriteria, f.binding.specDigest),
+            f.binding,
+          )
+        val recorder =
+          requireNotNull(
+            AcceptanceCriterionRepairPhaseRecorder(f.persistence, git)
+              .session(scope, worker, f.root, AcceptanceAuditStrategy().acceptanceRepairSteps),
+          )
+        audit(f, recorder, 1, true, "The first requirement holds.")
+        val closed = scope.snapshot
+        val closedLedger = decodePhaseLedger(f.snapshot().artifacts)
+        assertFalse(recorder.start(phase(f, "audit", 1)) == true)
+        assertEquals(closed, scope.snapshot)
+        assertEquals(closedLedger, decodePhaseLedger(f.snapshot().artifacts))
+        audit(f, recorder, 2, false, "The second requirement needs a caller.")
+        val first = phase(f, "audit_implement_fix", 1)
+        assertTrue(recorder.start(first) == true)
+        val reserved = scope.snapshot
+        val liveLedger = decodePhaseLedger(f.snapshot().artifacts)
+        assertTrue(recorder.start(first) == true)
+        assertEquals(reserved, scope.snapshot)
+        assertEquals(liveLedger, decodePhaseLedger(f.snapshot().artifacts))
       }
     }
   }

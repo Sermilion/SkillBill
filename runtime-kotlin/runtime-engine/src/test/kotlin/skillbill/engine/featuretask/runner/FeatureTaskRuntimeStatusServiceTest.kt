@@ -24,6 +24,7 @@ import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -1394,6 +1395,9 @@ private class StatusFakeDatabaseSessionFactory(
   override fun <T> read(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unitOfWork())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 

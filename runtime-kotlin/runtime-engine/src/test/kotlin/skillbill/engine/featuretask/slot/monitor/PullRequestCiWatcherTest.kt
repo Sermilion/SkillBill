@@ -121,7 +121,47 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
-  fun `pending checks keep reporting while ci is still running`() {
+  fun `a changed pull request head makes the observed failure unavailable instead of associating stale checks`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          headSha = if (identityCalls == 1) "observed-head" else "new-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    val unavailable = assertIs<PullRequestCiOutcome.Unavailable>(outcome)
+    assertTrue("head changed" in unavailable.reason, unavailable.reason)
+  }
+
+  @Test
+  fun `a merge conflict found while refreshing failed checks routes to conflict repair`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          conflicting = identityCalls == 2,
+          headSha = "same-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Conflicted, outcome)
+  }
+
+  @Test
+  fun `pending checks keep reporting every poll until ci settles`() {
     val pending =
       PullRequestChecks.Reported(
         listOf(check("desktop-build", CheckBucket.PENDING), check("build", CheckBucket.PASS)),
@@ -137,15 +177,15 @@ class PullRequestCiWatcherTest {
           listOf(check("desktop-build", CheckBucket.PASS), check("build", CheckBucket.PASS)),
         ),
       )
-    val reported = mutableListOf<List<String>>()
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
     val outcome =
-      watcher(checks, progressInterval = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
-        reported += pendingChecks.map(PullRequestCheck::name)
+      watcher(checks).watch(REPO_ROOT, BRANCH) { pullRequestUrl, pendingChecks ->
+        reported += pullRequestUrl to pendingChecks
       }
 
     assertEquals(PullRequestCiOutcome.Passed, outcome)
-    assertEquals(listOf(listOf("desktop-build"), listOf("desktop-build"), listOf("desktop-build")), reported)
+    assertEquals(List(5) { PR_URL to listOf(check("desktop-build", CheckBucket.PENDING)) }, reported)
   }
 
   @Test
@@ -160,13 +200,55 @@ class PullRequestCiWatcherTest {
           listOf(check("build", CheckBucket.PASS), check("desktop-build", CheckBucket.PASS)),
         ),
       )
-    val reported = mutableListOf<List<String>>()
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
-    watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
-      reported += pendingChecks.map(PullRequestCheck::name)
+    watcher(
+      checks,
+      progressInterval = Duration.ofMinutes(10),
+    ).watch(REPO_ROOT, BRANCH) { pullRequestUrl, pendingChecks ->
+      reported += pullRequestUrl to pendingChecks
     }
 
-    assertEquals(listOf(listOf("build"), listOf("build", "desktop-build")), reported)
+    assertEquals(
+      listOf(
+        PR_URL to listOf(check("build", CheckBucket.PENDING)),
+        PR_URL to listOf(check("build", CheckBucket.PENDING), check("desktop-build", CheckBucket.PENDING)),
+      ),
+      reported,
+    )
+  }
+
+  @Test
+  fun `progress links omit user info and query parameters`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "build",
+              CheckBucket.PENDING,
+              "https://token@ci.example/run/1?access_token=secret",
+            ),
+          ),
+        ),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
+      )
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
+
+    watcher(
+      checks,
+      identity = PullRequestIdentity.Found("https://token@github.com/acme/repo/pull/42?secret=value", PR_NUMBER),
+    ).watch(REPO_ROOT, BRANCH) { pullRequestUrl, pendingChecks ->
+      reported += pullRequestUrl to pendingChecks
+    }
+
+    assertEquals(
+      listOf(
+        "https://github.com/acme/repo/pull/42" to
+          listOf(PullRequestCheck("build", CheckBucket.PENDING, "https://ci.example/run/1")),
+      ),
+      reported,
+    )
   }
 
   @Test
@@ -359,7 +441,7 @@ class PullRequestCiWatcherTest {
     checks: ScriptedChecks,
     identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER),
     startTimeout: Duration = Duration.ofHours(1),
-    progressInterval: Duration = Duration.ofMinutes(10),
+    progressInterval: Duration = Duration.ofSeconds(30),
     identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
     PullRequestCiWatcher(

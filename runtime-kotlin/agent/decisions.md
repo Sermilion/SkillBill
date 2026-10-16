@@ -2909,3 +2909,63 @@ Context: The desktop Room query Flow cannot receive invalidations from JDBC writ
 Decision: `SQLiteDatabaseSessionFactory` reads the desktop work-topic revisions inside each write transaction and compares them after the use case runs. After commit, it takes a per-store file lock, rereads the latest committed revisions, and atomically replaces a sibling signal file only when those revisions changed. A generation token distinguishes separate commits even if a restored store reaches the same revision numbers. The `DesktopCommitSignal` contract in `runtime-contracts` owns the shared file suffix and revision syntax used by SQLite and desktop. A failed signal write records a warning without changing the result of an already committed use case.
 Reason: The existing runtime revisions identify work-related commits without polling the database or adding schema objects. One coherent transaction produces one complete revision snapshot, and the file lock prevents an older writer from replacing a newer snapshot. Rollbacks and unrelated table writes stay silent.
 Review: A1 clean, the SQLite adapter owns database access. A2 clean, `runtime-infra:sqlite` and `desktop-tray` both consume `DesktopCommitSignal`. A3 clean, the composition root gains no collaborators. A4 clean, no port was added. A5 clean, no forwarding type or function was added. A6 clean, the shared file vocabulary has one owner. A7 clean, publication degradation is recorded and never changes a committed outcome. A8 clean, no ambient time, environment, property, or process read was added. A9 clean, package dependencies remain acyclic. A10 clean, publisher tests remain in `runtime-infra:sqlite`. A11 clean, new declarations stay internal. A12 clean, public inner-layer APIs expose no raw map. G1-G7 clean, no guard, fixture, baseline, or exemption changed.
+
+## [2026-10-16] Restore qualified monitor failures from existing runtime evidence
+
+Context: SKILL-428 live monitoring qualified published repairs, but resume rejected
+every historical CI_FAILED output. The publication transition also invalidates the
+repair's in-memory completion flag, so using that flag classified subsequent CI
+failures as initial failures and repeatedly launched uncharged repairs.
+
+Decision: The monitor strategy declares its accounting roles. MonitorRepairAccounting
+qualifies publications for both live and historical monitoring using those roles. It joins START and COMPLETE entries to generation-zero
+producer evidence, accepted repair completion, pushed baseline and repair outputs,
+and Git ancestry and content. The ledger identifies completed repairs even after
+traversal invalidates their in-memory flags. FeatureTaskRuntimeRunTransitionOwner still owns every
+coupled mutation. A transient map restores qualified monitor attempts into the
+existing distinct failed-commit set.
+
+Historical qualification uses only retained runtime-authored monitor output whose
+existing failed-publication report identifies that exact published commit. It does
+not parse repair-agent prose. That runtime output retains the earlier attribution
+decision after another attempt replaces the latest repair manifest. Reconstruction
+still verifies producer identity, accepted completion, publication, and Git changes.
+Missing or contradictory evidence keeps the existing recovery block and diagnostics;
+it never resets consumed attempts or invents a failed commit. Monitor accounting
+adds no durable field, schema, receipt, migration, or new block category.
+
+The installed feature runtime also carries the published main fixes 8c8cdb308,
+f37339c2d, and a3d0f98c0 for acceptance-audit resume compatibility, plus c9b3376a8
+for the already-installed database schema version 58. Explicit operator
+resume renews that separate acceptance-audit budget while preserving its outcomes.
+It does not reset the monitor's CI-confirmed failed-commit budget.
+
+The Git process adapter preserves porcelain's leading index column. Trimming it
+removed the first character of the first dirty path and prevented source attribution.
+Before/after content identities distinguish a changed pre-dirty path from an
+unrelated dirty path. Identity failures keep the existing capture failure outcomes.
+
+Review: A1-A4 preserve module, effect, and transition ownership. A5 removes duplicate
+reconstruction logic. A6 keeps existing wire owners. A7 preserves typed failures,
+cancellation, and diagnostics. A8 adds no ambient production effects. A9-A12 keep
+package direction, test placement, visibility, and typed accounting. G1-G7 require
+no guard, baseline, or exemption changes.
+
+## [2026-10-16] Keep monitor publication evidence inside the active phase
+
+Context: Main publishes repairs inside the monitor phase. Joining the SKILL-428
+accounting fix must retain that behavior and its completed-phase invariants.
+
+Decision: The existing commit finalization owner records publication START and
+COMPLETE entries and generation-zero producer output around the repair push.
+These records use the existing commit/push envelope and ledger. They leave the
+completed commit/push phase record and workflow position unchanged. Accounting
+reads that producer output when there is no separate phase traversal output, and
+allows publication after the repair starts and before its next CI observation.
+Accepted repair completion and source attribution remain required.
+
+Evidence: PhaseMonitorRunTest covers three published repair failures, an unchanged
+repair, a rejected push, and goal monitoring without reopening completed phases.
+MonitorRepairResumeAccountingTest covers historical identity and failure counts.
+A1-A12 and G1-G7 remain clean. This integration adds no schema, port, guard
+exception, or separate state owner.

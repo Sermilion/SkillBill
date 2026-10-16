@@ -19,6 +19,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -28,6 +29,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.telemetry.estimation.estimateTokens
 import kotlin.time.Duration.Companion.minutes
 
@@ -131,6 +133,9 @@ class DefaultPhaseRunner(
           spawnAuthorization = facts.spawnAuthorization,
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
+          progressEmitter =
+            observation.progressEmitter?.let { callback -> AgentRunProgressEmitter(callback) }
+              ?: AgentRunProgressEmitter.NONE,
         ),
     )
   }
@@ -160,7 +165,28 @@ class DefaultPhaseRunner(
     if (status !is WorkflowGitOperationResult.Ok) return BeforeCapture.Failed("before-file manifest: ${status.error}")
     val commit = gitOperations.runtimePhaseHeadCommit(input.facts.repoRoot)
     if (commit !is WorkflowGitOperationResult.Ok) return BeforeCapture.Failed("before commit: ${commit.error}")
-    return BeforeCapture.Ready(status.value.orEmpty(), commit.value.orEmpty())
+    val statusText = status.value.orEmpty()
+    val paths =
+      (
+        FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(statusText) +
+          FeatureTaskRuntimePhaseSafetyPolicy.deletedPaths(statusText)
+      ).distinct().sorted()
+    val identities =
+      if (input.policy.mutating) {
+        when (val read = gitOperations.pathContentIdentities(input.facts.repoRoot, paths)) {
+          is WorkflowPathContentIdentitiesResult.Resolved -> read.identities
+          is WorkflowPathContentIdentitiesResult.Failed ->
+            return BeforeCapture.Failed("before content identities: ${read.error}")
+        }
+      } else {
+        emptyMap()
+      }
+    return BeforeCapture.Ready(
+      statusText,
+      commit.value.orEmpty(),
+      if (input.policy.mutating) paths else emptyList(),
+      identities,
+    )
   }
 
   private fun captureAfter(
@@ -184,12 +210,35 @@ class DefaultPhaseRunner(
         is WorkflowGitNameListResult.Listed -> changes.names
         is WorkflowGitNameListResult.Failed -> return AfterCapture.Failed("committed file changes: ${changes.error}")
       }
-    return AfterCapture.Ready(
-      PhaseStepFileManifest(
-        before = FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(before.status),
-        after = (FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value) + committed).distinct().sorted(),
-      ),
-    )
+    val afterIdentities =
+      if (before.dirtyPaths.isEmpty()) {
+        WorkflowPathContentIdentitiesResult.Resolved(emptyMap())
+      } else {
+        gitOperations.pathContentIdentities(repoRoot, before.dirtyPaths)
+      }
+    return when (afterIdentities) {
+      is WorkflowPathContentIdentitiesResult.Failed ->
+        AfterCapture.Failed("after content identities: ${afterIdentities.error}")
+      is WorkflowPathContentIdentitiesResult.Resolved ->
+        AfterCapture.Ready(
+          PhaseStepFileManifest(
+            before =
+              (
+                FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(before.status) +
+                  FeatureTaskRuntimePhaseSafetyPolicy.deletedPaths(before.status)
+              ).distinct().sorted(),
+            after =
+              (
+                FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value) +
+                  FeatureTaskRuntimePhaseSafetyPolicy.deletedPaths(status.value) + committed
+              ).distinct().sorted(),
+            reeditedPaths =
+              before.dirtyPaths.filter { path ->
+                before.contentIdentities[path] != afterIdentities.identities[path]
+              },
+          ),
+        )
+    }
   }
 
   private fun classify(
@@ -264,7 +313,12 @@ class DefaultPhaseRunner(
   ) = "Feature-task-runtime phase '$step' could not capture its $detail"
 
   private sealed interface BeforeCapture {
-    data class Ready(val status: String, val commit: String) : BeforeCapture
+    data class Ready(
+      val status: String,
+      val commit: String,
+      val dirtyPaths: List<String>,
+      val contentIdentities: Map<String, String>,
+    ) : BeforeCapture
 
     data class Failed(val detail: String) : BeforeCapture
   }

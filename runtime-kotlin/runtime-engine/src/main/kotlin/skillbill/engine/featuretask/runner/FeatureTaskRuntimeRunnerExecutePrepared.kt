@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
+import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
@@ -120,15 +121,35 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     runRequest: FeatureTaskRuntimeRunRequest,
     executionPlan: ResolvedPhaseExecutionPlan,
     diagnostics: RuntimeDiagnostics,
-  ): FeatureTaskRuntimeRunState =
-    FeatureTaskRuntimeRunState(
-      initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
+  ): FeatureTaskRuntimeRunState {
+    val records = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty()
+    val ledger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty()
+    val roles =
+      executionPlan.selectedStrategies.mapNotNull {
+        strategies.selectedOwnerOf(it.entryStep, executionPlan)?.monitorRepairSteps
+      }.singleOrNull()
+    val history =
+      roles?.let {
+        MonitorRepairAccounting(
+          it,
+          gitOperations,
+          recorder::producerOutput,
+          phaseSettlementService::findEnvelope,
+          diagnostics,
+        ).restore(runRequest, records, ledger)
+      } ?: MonitorRepairAccounting.RestoredHistory(emptyList(), emptyMap(), false)
+    return FeatureTaskRuntimeRunState(
+      initialRecords = records,
       transitions = executionPlan.phaseTraversal(),
-      durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
+      durableInitialLedger = ledger,
+      initialRetainedOutputs = history.outputs,
+      initialMonitorRepairFailures = history.failedRepairs,
+      initialMonitorFailureEvidenceUnavailable = history.evidenceUnavailable,
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
       stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
       resumeRulesFn = strategies.resumeRules(executionPlan),
     )
+  }
 
   internal fun finalizeExecutePreparedRunReport(
     runRequest: FeatureTaskRuntimeRunRequest,

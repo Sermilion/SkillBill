@@ -8,6 +8,7 @@ import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -302,13 +303,14 @@ sealed interface FeatureTaskRuntimeRunEvent {
   ) : FeatureTaskRuntimeRunEvent
 
   /**
-   * Pull request checks are still pending. Emitted so IDE status stays fresh for the whole CI run
-   * instead of going stale after the freshness window with no new phase event.
+   * Pull request checks are pending or have not yet been reported. Emitted so run and IDE progress stays fresh
+   * while CI registration or checks wait, without changing the verdict.
    */
   data class CiStillRunning(
     override val workflowId: String,
     override val phaseId: String,
-    val pendingChecks: List<String>,
+    val pullRequestUrl: String,
+    val pendingChecks: List<PullRequestCheck>,
   ) : FeatureTaskRuntimeRunEvent
 
   data class PhaseCompleted(

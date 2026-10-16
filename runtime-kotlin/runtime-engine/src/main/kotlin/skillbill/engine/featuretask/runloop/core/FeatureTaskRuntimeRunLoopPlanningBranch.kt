@@ -234,7 +234,16 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun effectiveEdgeIterationCount(
     state: FeatureTaskRuntimeProgressSnapshotAccess,
     edge: FeatureTaskRuntimeBackwardEdge,
-  ): Int = state.loop(edge.loopId).iteration
+  ): Int =
+    if (edge.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
+      if (state.monitorFailureEvidenceUnavailable) {
+        edge.perEdgeCap ?: state.monitorFailedRepairCommitShas.size
+      } else {
+        (state.monitorFailedRepairCommitShas.size - 1).coerceAtLeast(0)
+      }
+    } else {
+      state.loop(edge.loopId).iteration
+    }
 
   internal fun capExhaustionReason(args: CapExhaustionReasonArgs): String {
     val request = args.request
@@ -244,7 +253,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     val verdict = args.verdict
     val unresolvedFindings = args.unresolvedFindings
     if (loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
-      return FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason(loopId, edgeIteration, args.progress)
+      return FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason(loopId, args.progress)
     }
     if (FeatureTaskRuntimePhaseWorkflowDefinition.isRegenerationLoopId(loopId)) {
       val producer =

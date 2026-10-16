@@ -2,8 +2,6 @@ package skillbill.engine.featuretask.runloop.state
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.review.model.ParallelCodeReviewResult
-import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
-import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassCompletionRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -29,7 +27,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
-import skillbill.engine.featuretask.runloop.finalization.InMemoryCommitPush
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
@@ -348,15 +345,9 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   PhaseMonitorStepBinding {
   override fun publishRepair(run: PhaseRun): String? {
     requireAcceptedStep(run, acceptedOwner.strategyId)
-    val resolved = environment.recorder.loadResolvedBranch(environment.request.workflowId)
-    val base = environment.gitOperations.baseBranchOrDefault(environment.request.repoRoot, resolved?.baseBranch)
-    val branch = requirePublishableBranch(resolved?.branch, base)
-    val result =
-      InMemoryCommitPush(environment.gitOperations, environment.request.repoRoot).run(
-        branch,
-        environment.request.issueKey,
-      )
-    return result.error.takeUnless { result.ok }
+    return with(FeatureTaskRuntimeRunLoopCommitCycle) {
+      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication)
+    }
   }
 
   override fun runMonitor(
@@ -365,7 +356,7 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   ): PhaseOutcome {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
-      environment.runDeclaredMonitorCycle(run, observation)
+      environment.runDeclaredMonitorCycle(run, observation, requireNotNull(acceptedOwner.monitorRepairSteps))
     }
   }
 }
@@ -878,7 +869,8 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     }
   }
 
-  private fun PhaseStepFileManifest.toPhaseManifest() = FeatureTaskRuntimePhaseFileManifest(before, after)
+  private fun PhaseStepFileManifest.toPhaseManifest() =
+    FeatureTaskRuntimePhaseFileManifest(before, after, reeditedPaths)
 
   private fun requireActiveReviewBinding() {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)

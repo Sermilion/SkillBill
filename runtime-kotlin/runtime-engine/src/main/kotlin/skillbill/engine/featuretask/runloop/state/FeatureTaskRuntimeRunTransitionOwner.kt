@@ -198,10 +198,12 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
     inMemoryOutput: FeatureTaskRuntimePhaseOutput,
+    qualifiedFailedRepairSha: String? = null,
   ): Boolean {
     val persisted = recorder.recordCompletedPhase(phaseState)
     if (persisted) {
-      applyPersistedPhaseCompletion(inMemoryOutput, phaseState.reviewPassNumber)
+      progress.reserveReviewPass(phaseState.reviewPassNumber)
+      progress.recordCompleted(inMemoryOutput, qualifiedFailedRepairSha)
     }
     return persisted
   }

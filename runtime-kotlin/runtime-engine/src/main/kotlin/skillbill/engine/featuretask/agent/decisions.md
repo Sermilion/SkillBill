@@ -1,3 +1,29 @@
+## [2026-10-16] Spend monitor budget from published failed repair evidence
+Context: A commit metadata amend could change SHA without changing repair content, and restored monitor loop ordinals included launches that CI had never rejected.
+Decision: Require the completed repair manifest to intersect source paths changed between the previous and pushed commit, or prove newly integrated merge ancestry from commit parents. Count distinct published SHAs from completed monitor results retained through COMPLETE ledger entries and producer outputs. Missing retained monitor results block cap-sensitive continuation.
+Reason: Commit IDs and backward-edge ordinals describe different facts from source changes and failed published repairs. Runtime-owned monitor and commit outputs use the existing producer-output store so replacement of the current phase record does not discard their reports.
+
+## [2026-10-16] Reuse setup without reusing validation results
+Context: SKILL-428 observed repeated container setup mistakes. Those observations did not establish that required full validation runs were redundant.
+Decision: Retain permitted setup, caches and discovery context within the invocation, revisit changed requirements and run all required checks for each repair candidate. Preserve clean and cache-bypass requirements and invocation resource ownership.
+Reason: A working setup avoids needless reconstruction, but an earlier candidate's pass cannot prove a changed candidate. Discovery context reminds the agent to inspect current requirements rather than trusting cached command results.
+
+## [2026-10-16] Keep environment preparation in existing guidance
+Context: SKILL-428 requires prose guidance without a new environment contract or blocking condition. Missing Git/Python, unwritable Java user.home and Linux display support were concrete SkillBill failures.
+Decision: Extend the shared validation briefing for validation and monitor repair. Keep repository-specific setup examples in runtime command guidance, derive requirements from current instructions and CI, and explain setup retries through existing prose and recovery behavior.
+Reason: Repository CI owns the exact tool and setup requirements. A shared fixed tool list would misapply those requirements to other projects, while a descriptor, discovery service or readiness receipt would add contract surface the operator excluded.
+
+## [2026-10-16] Reuse existing monitor progress channels
+Context: SKILL-428 addresses silent CI waits and repair periods. The operator explicitly required prose reporting without new schemas, structured progress protocols or completion receipts.
+Decision: Forward CI observations and repair activity through existing events, callbacks, CLI/status sinks and goal heartbeat records. Agents report naturally; no consumer parses narration to settle validation or repair.
+Reason: Current facilities already carry the needed facts. Another transport or prescribed report shape would add contract surface and turn visibility into an additional success gate.
+Alternatives considered: The earlier structured-protocol draft was superseded by the operator's prose-first requirement in the parent spec.
+
+## [2026-10-16] Treat monitor liveness as an observation
+Context: Long commands, queued CI and unknown runner capacity can look like stalled work. A live process and passing local checks do not prove source changes or a successful remote CI result.
+Decision: Refresh waiting activity through current facilities at the intended 30-second cadence, bound displayed check details and links, and report only observed facts. Leave absent detail unavailable without an additional refusal or administrative lookup.
+Reason: Visibility must not invent progress, infer success from a changing pending-check sample, reset deadlines or spend repair attempts. Remote CI remains the authority for the PR's CI result.
+
 ## [2026-10-14] Serial acceptance commits use a scoped acquired worker
 Context: SKILL-426's first subtask had domain records but no transaction owner coupling criterion outcomes to workflow evidence. A domain success could otherwise become visible before the database accepted it.
 Decision: The worker coordinator issues a callback-scoped capability carrying its admitted execution and private lease identity. Serial writes check that capability, expected revision, current criterion, reservation and authored source inside one required write transaction. The same transaction stores serial state, phase records, ledger, implementation evidence and workflow advancement. Callers receive detached committed facts after the transaction returns. Filesystem projection follows commit; projection failure returns committed-with-projection-failure and recovery regenerates only that projection.
@@ -52,6 +78,13 @@ Context: A conflicting pull request reports no checks, so the watcher treated it
 Decision: An open pull request is conflicting when GitHub reports `mergeable` `CONFLICTING` or `mergeStateStatus` `DIRTY`. The watcher returns that outcome before reading checks. Monitor completes with verdict `ci_failed`, and `monitor_fix` merges the recorded base branch and resolves the conflicts. Unknown mergeability stays unsettled. The three-attempt cap is unchanged.
 Reason: Conflict repair is the same commit-and-watch cycle as a failed check. A new verdict would duplicate the backward edge and the cap.
 Alternatives considered: Waiting until checks fail, rejected because a conflict often publishes no checks. Treating `UNKNOWN` or `BEHIND` as a conflict, rejected because GitHub has not reported a conflict yet.
+
+## [2026-10-16] Monitor repair budget counts CI-confirmed published commits
+Context: The monitor loop treated a merge conflict as `ci_failed` and spent budget when it launched repair. That could exhaust the cap while the third repair commit still had pending CI.
+Decision: Initial CI failure and merge conflict use the existing `progress` verdict to start uncharged repair. `ci_failed` is reserved for a failed CI result associated by head SHA with a completed repair that changed files and was pushed. The run loop counts that result once per completed repair cycle and observes the third qualifying result before blocking. Cap prose comes from the failed repair monitor outputs retained for that run.
+Reason: Local runs and repeated check polling do not establish that CI rejected a published repair commit. This keeps the loop as the single accounting owner without adding durable fields or a second state store.
+Supersedes: The 2026-10-10 decision that merge conflicts used the `ci_failed` verdict, and the 2026-10-08 decision that the capped edge counted repair entries.
+Revisit when: The existing phase output and loop records can no longer associate a repair result with its published head commit.
 
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
