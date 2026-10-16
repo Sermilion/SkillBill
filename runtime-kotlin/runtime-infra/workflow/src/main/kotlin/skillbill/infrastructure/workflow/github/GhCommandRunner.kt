@@ -24,6 +24,7 @@ internal data class GhCommandResult(
 internal class ProcessGhCommandRunner(
   private val ghExecutableResolver: (Path) -> Path? = ::resolveGhExecutable,
   private val maxOutputBytes: Long = MAX_OUTPUT_BYTES,
+  private val deadlineSeconds: Long = COMMAND_TIMEOUT_SECONDS,
 ) : GhCommandRunner {
   override fun run(
     root: Path,
@@ -39,7 +40,7 @@ internal class ProcessGhCommandRunner(
             argv = listOf(executable.toString()) + args,
             workingDirectory = root,
             mergeEnvironment = mapOf("GIT_TERMINAL_PROMPT" to "0"),
-            deadlineSeconds = COMMAND_TIMEOUT_SECONDS,
+            deadlineSeconds = deadlineSeconds,
             output = BoundedExternalProcessOutput.Captured(maxOutputBytes),
           ),
         )

@@ -3,24 +3,27 @@ contract_version: "0.5"
 issue_key: "SKILL-427"
 feature_name: "concurrent-standalone-pr-monitoring-in-owned-worktrees"
 parent_spec_path: ".feature-specs/SKILL-427-concurrent-standalone-pr-monitoring-in-owned-worktrees/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-427-concurrent-standalone-pr-monitoring-in-owned-worktrees"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "Target resolution and owned execution preparation"
   spec_path: ".feature-specs/SKILL-427-concurrent-standalone-pr-monitoring-in-owned-worktrees/spec_subtask_1_target_resolution_and_owned_preparation.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261016-132735-xgl2"
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Standalone slot execution and guarded repair publication"
@@ -31,6 +34,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -44,6 +50,9 @@ subtasks:
   workflow_id: null
   blocked_reason: null
   last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false

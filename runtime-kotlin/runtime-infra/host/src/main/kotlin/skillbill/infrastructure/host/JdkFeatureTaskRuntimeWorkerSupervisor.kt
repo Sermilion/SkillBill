@@ -99,6 +99,42 @@ private fun bootIdentityIsDecisive(value: String): Boolean =
     value != BOOT_IDENTITY_UNAVAILABLE &&
     !value.startsWith(LEGACY_BOOT_IDENTITY_PREFIX)
 
+internal fun inspectRecordedProcess(
+  recorded: FeatureTaskRuntimeProcessIdentity,
+  local: FeatureTaskRuntimeProcessIdentity,
+  platform: HostPlatformPort,
+  diagnostics: RuntimeDiagnostics,
+): FeatureTaskRuntimeProcessInspection {
+  if (bootIdentitiesConflict(recorded.bootIdentity, local.bootIdentity)) {
+    return FeatureTaskRuntimeProcessInspection.NotRunning
+  }
+  val handle =
+    ProcessHandle.of(recorded.pid).orElse(null)?.takeIf { it.isAlive }
+      ?: return FeatureTaskRuntimeProcessInspection.NotRunning
+  val matches = processBirthMatches(handle, recorded.processBirthToken, platform, diagnostics)
+  return when {
+    matches == null ->
+      FeatureTaskRuntimeProcessInspection.Unsupported("Worker PID has no verifiable birth evidence.")
+    matches -> FeatureTaskRuntimeProcessInspection.ExactLive
+    else -> FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process.")
+  }
+}
+
+internal fun currentProcessIdentity(
+  platform: HostPlatformPort,
+  diagnostics: RuntimeDiagnostics,
+): FeatureTaskRuntimeProcessIdentity {
+  val handle = ProcessHandle.current()
+  return FeatureTaskRuntimeProcessIdentity(
+    hostIdentity = InetAddress.getLocalHost().hostName,
+    bootIdentity = processBootIdentity(diagnostics),
+    pid = handle.pid(),
+    processBirthToken =
+      processBirthToken(handle, platform, diagnostics)
+        ?: error("The current process does not expose process-birth evidence."),
+  )
+}
+
 internal fun processBootIdentity(diagnostics: RuntimeDiagnostics): String {
   val linuxBootId = Path.of("/proc/sys/kernel/random/boot_id")
   if (Files.isReadable(linuxBootId)) {
@@ -123,17 +159,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
   private val diagnostics: RuntimeDiagnostics,
   private val platform: HostPlatformPort,
 ) : FeatureTaskRuntimeWorkerSupervisor, WorkOwnerExitObserver {
-  override fun currentProcess(): FeatureTaskRuntimeProcessIdentity {
-    val handle = ProcessHandle.current()
-    return FeatureTaskRuntimeProcessIdentity(
-      hostIdentity = InetAddress.getLocalHost().hostName,
-      bootIdentity = processBootIdentity(diagnostics),
-      pid = handle.pid(),
-      processBirthToken =
-        processBirthToken(handle, platform, diagnostics)
-          ?: error("The current process does not expose process-birth evidence."),
-    )
-  }
+  override fun currentProcess(): FeatureTaskRuntimeProcessIdentity = currentProcessIdentity(platform, diagnostics)
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection =
     runCatching { currentProcess() }.fold(
@@ -210,22 +236,18 @@ class JdkFeatureTaskRuntimeWorkerSupervisor(
   private fun inspectLocalOwnership(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     local: FeatureTaskRuntimeProcessIdentity,
-  ): FeatureTaskRuntimeProcessInspection {
-    if (bootIdentitiesConflict(ownership.bootIdentity, local.bootIdentity)) {
-      return FeatureTaskRuntimeProcessInspection.NotRunning
-    }
-
-    val handle =
-      ProcessHandle.of(ownership.pid).orElse(null)?.takeIf { it.isAlive }
-        ?: return FeatureTaskRuntimeProcessInspection.NotRunning
-    val matches = processBirthMatches(handle, ownership.processBirthToken, platform, diagnostics)
-    return when {
-      matches == null ->
-        FeatureTaskRuntimeProcessInspection.Unsupported("Worker PID has no verifiable birth evidence.")
-      matches -> FeatureTaskRuntimeProcessInspection.ExactLive
-      else -> FeatureTaskRuntimeProcessInspection.OwnershipMismatch("Worker PID was reused by a different process.")
-    }
-  }
+  ): FeatureTaskRuntimeProcessInspection =
+    inspectRecordedProcess(
+      FeatureTaskRuntimeProcessIdentity(
+        ownership.hostIdentity,
+        ownership.bootIdentity,
+        ownership.pid,
+        ownership.processBirthToken,
+      ),
+      local,
+      platform,
+      diagnostics,
+    )
 
   override fun terminateGracefully(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
     exactHandle(ownership)?.destroy() ?: false

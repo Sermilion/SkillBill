@@ -235,6 +235,7 @@ class WorkRunControlsTest {
         WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET),
         component.launchRun(target.copy(statusRevision = "0"), null),
       )
+      assertNotNull(component.workControlService.options(target.copy(updatedAt = target.updatedAt.minusSeconds(10))))
       Files.delete(fixture.tempDir.resolve(".git/HEAD"))
       assertEquals(
         WorkControlResult.Rejected(WorkControlRejection.BRANCH_UNAVAILABLE),
@@ -364,6 +365,61 @@ class WorkRunControlsTest {
       assertTrue(
         component.ideStatusService.detail(WorkDetailRequest("old-goal")).item?.snapshot?.lifecycleState !=
           IdeStatusLifecycleState.CANCELED,
+      )
+    }
+  }
+
+  @Test
+  fun `cancel accepts a target the runner heartbeat made older but refuses one for another execution`() {
+    establishTemporarySchemaReadiness("heartbeat-cancel").use { fixture ->
+      ensureTestDatabase(fixture.dbPath).use { connection ->
+        connection.prepareStatement(
+          """
+          INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status, last_activity_at)
+          VALUES ('beating-goal', 'SKILL-778', ?, 'failed', ?)
+          """.trimIndent(),
+        ).use { statement ->
+          val time = Instant.now().minusSeconds(60).toString()
+          statement.setString(1, time)
+          statement.setString(2, time)
+          statement.executeUpdate()
+        }
+      }
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult =
+            WorkRunLaunchResult.Started(fixture.tempDir.resolve("goal.log"))
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState(
+          "beating-goal",
+          GoalRunnerControlState(
+            repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}",
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("beating-goal")).item)
+      val rendered =
+        WorkRunTarget(
+          "beating-goal",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt.minusSeconds(10),
+          assertNotNull(item.databaseFileObservation),
+        )
+      assertEquals(
+        WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET),
+        component.cancelRun(rendered.copy(executionId = "another-execution")),
+      )
+      assertEquals(WorkControlResult.Accepted, component.cancelRun(rendered))
+      assertEquals(
+        IdeStatusLifecycleState.CANCELED,
+        component.ideStatusService.detail(WorkDetailRequest("beating-goal")).item?.snapshot?.lifecycleState,
       )
     }
   }

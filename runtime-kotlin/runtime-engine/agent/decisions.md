@@ -238,3 +238,15 @@ Reason: The repairs only clear state the runtime can prove stale, so applying th
 Evidence: `GoalRunnerResumeRepairTest`, `CliGoalRepairRuntimeTest` (`goal resume clears stale runner state before it runs and prints each cleared wedge`).
 
 Revisit when: A wedge class becomes repairable for a completed child in a way that should not block a resume, or repair learns to judge an unexpired lease whose process is gone.
+
+## [2026-10-16] A run target's identity ignores the heartbeat timestamp
+
+Context: The desktop Cancel and Resume build a `WorkRunTarget` from the last rendered work item, and `matchingRun` required its `updatedAt` to equal the current snapshot. A live goal's runner heartbeat moves `updatedAt` about every 10 seconds while `statusRevision` and the execution id stay the same, so a Cancel sent from a view older than the last heartbeat was refused as `CHANGED_TARGET` and the runner kept going.
+
+Decision: `matchingRun` matches a run by id, repository identity, repository root, execution id and status revision, without `updatedAt`. A new execution or a status transition still changes the target; a heartbeat does not.
+
+Reason: `updatedAt` is liveness, not identity. Status revision and execution id already fence real changes, including a restart after cancel.
+
+Evidence: `WorkRunControlsTest` (`cancel accepts a target the runner heartbeat made older but refuses one for another execution`; the run-again test's options call with an older target). Replayed against a live goal on 2026-10-16: a target read just before Cancel was accepted, while `updatedAt` advanced every 10 seconds.
+
+Revisit when: Goal Pause and Stop (`WorkControlService.validate`) get the same treatment. They also compare `updatedAt` and the work store revision, which the heartbeat bumps too.

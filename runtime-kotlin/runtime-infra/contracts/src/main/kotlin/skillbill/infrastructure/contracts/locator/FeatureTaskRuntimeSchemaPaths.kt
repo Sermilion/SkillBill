@@ -171,6 +171,15 @@ object FeatureTaskRuntimeWorkerOwnershipSchemaPaths {
     "https://skill-bill.dev/contracts/feature-task-runtime-worker-ownership-schema.yaml"
 }
 
+object StandaloneMonitorOwnershipSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/standalone-monitor-ownership-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/standalone-monitor-ownership-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/standalone-monitor-ownership-schema.yaml"
+}
+
 object FeatureTaskExecutionIdentitySchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-execution-identity-schema.yaml"
