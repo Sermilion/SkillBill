@@ -823,6 +823,48 @@ class FeatureTaskRuntimeStatusAttributionTest {
   }
 
   @Test
+  fun `a resumed audit whose record still reads completed stays current instead of advancing to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.recordCompleted("audit", attemptCount = 2)
+    harness.recordLedger(START, "audit", attemptCount = 1)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 1)
+    harness.recordLedger(RESUME, "audit", attemptCount = 2)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 2)
+    harness.recordLedger(RESUME, "audit", attemptCount = 3)
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("audit", projection.currentPhaseId)
+    assertEquals("pending", projection.phases.single { it.phaseId == "review" }.status)
+  }
+
+  @Test
+  fun `a settled audit attempt lets the current phase advance to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.recordCompleted("audit", attemptCount = 2)
+    harness.recordLedger(START, "audit", attemptCount = 1)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 1)
+    harness.recordLedger(RESUME, "audit", attemptCount = 2)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 2)
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("review", projection.currentPhaseId)
+  }
+
+  @Test
   fun `legacy blocked audit gap record projects pending not blocked`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
