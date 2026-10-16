@@ -452,7 +452,10 @@ class AcceptanceCriterionRepairLegacyAdoption(
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_AUDIT_RESULT.contains(artifacts) ||
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR_HANDOFF.contains(artifacts) ||
       decodePhaseRecords(artifacts).keys.any { it in auditSteps || it !in recorded.selectedStepIds } ||
-      decodePhaseLedger(artifacts).any { it.phaseId in auditSteps || it.phaseId !in recorded.selectedStepIds } ||
+      decodePhaseLedger(artifacts).any {
+        (it.phaseId in auditSteps && it.action !in UNSETTLED_ATTEMPT_ACTIONS) ||
+          it.phaseId !in recorded.selectedStepIds
+      } ||
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(artifacts)?.let {
         decodeImplementationAttemptsFromArtifact(it).any { attempt ->
           attempt
@@ -493,6 +496,11 @@ class AcceptanceCriterionRepairLegacyAdoption(
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 1),
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 2),
         LegacyTuple(AcceptanceCriterionRepairAdoptionComposition.GOAL_CHILD_VALIDATE, 3),
+      )
+    val UNSETTLED_ATTEMPT_ACTIONS =
+      setOf(
+        FeatureTaskRuntimePhaseLedgerAction.START,
+        FeatureTaskRuntimePhaseLedgerAction.RESUME,
       )
     val FORBIDDEN_HISTORY =
       listOf(
