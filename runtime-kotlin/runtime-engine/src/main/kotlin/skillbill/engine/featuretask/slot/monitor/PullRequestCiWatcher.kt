@@ -7,6 +7,7 @@ import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
+import java.net.URI
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -23,7 +24,7 @@ internal class PullRequestCiWatcher(
   fun watch(
     repoRoot: Path,
     branch: String,
-    onCiRunning: (List<PullRequestCheck>) -> Unit = {},
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
   ): PullRequestCiOutcome {
     val startedAt = now()
     var ciStarted = false
@@ -46,7 +47,14 @@ internal class PullRequestCiWatcher(
                 ciStarted = true
               }
               val verdict = verdictFor(checks.checks)
-              reportRunning(checks.checks, verdict, onCiRunning, lastProgressAt, lastPendingNames)
+              reportRunning(
+                found?.url.orEmpty(),
+                checks.checks,
+                verdict,
+                onCiRunning,
+                lastProgressAt,
+                lastPendingNames,
+              )
                 ?.let { (reportedAt, pendingNames) ->
                   lastProgressAt = reportedAt
                   lastPendingNames = pendingNames
@@ -94,9 +102,10 @@ internal class PullRequestCiWatcher(
     }
 
   private fun reportRunning(
+    pullRequestUrl: String,
     checks: List<PullRequestCheck>,
     verdict: PullRequestCiOutcome?,
-    onCiRunning: (List<PullRequestCheck>) -> Unit,
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit,
     lastProgressAt: Instant?,
     lastPendingNames: List<String>?,
   ): Pair<Instant, List<String>>? {
@@ -106,9 +115,27 @@ internal class PullRequestCiWatcher(
     val names = pending.map(PullRequestCheck::name)
     val due = lastProgressAt == null || Duration.between(lastProgressAt, now()) >= progressInterval
     if (!due && names == lastPendingNames) return null
-    onCiRunning(pending)
+    onCiRunning(progressLink(pullRequestUrl), pending.take(MAX_PROGRESS_CHECKS).map(::progressCheck))
     return now() to names
   }
+
+  private fun progressCheck(check: PullRequestCheck): PullRequestCheck =
+    check.copy(name = check.name.take(MAX_PROGRESS_TEXT_LENGTH), link = progressLink(check.link))
+
+  private fun progressLink(value: String): String =
+    runCatching {
+      val uri = URI(value)
+      val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
+      val host = uri.host?.takeIf(String::isNotBlank)
+      if (scheme == null || host == null) {
+        ""
+      } else {
+        URI(scheme, null, host, uri.port, uri.path, null, null)
+          .toASCIIString()
+          .takeIf { it.length <= MAX_PROGRESS_LINK_LENGTH }
+          .orEmpty()
+      }
+    }.getOrDefault("")
 
   private fun identityVerdict(identity: PullRequestIdentity): PullRequestCiOutcome? =
     when (identity) {
@@ -132,6 +159,9 @@ internal class PullRequestCiWatcher(
   private companion object {
     val DEFAULT_POLL_INTERVAL: Duration = Duration.ofSeconds(30)
     val DEFAULT_START_TIMEOUT: Duration = Duration.ofHours(1)
-    val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofMinutes(10)
+    val DEFAULT_PROGRESS_INTERVAL: Duration = Duration.ofSeconds(30)
+    const val MAX_PROGRESS_CHECKS: Int = 8
+    const val MAX_PROGRESS_TEXT_LENGTH: Int = 160
+    const val MAX_PROGRESS_LINK_LENGTH: Int = 300
   }
 }

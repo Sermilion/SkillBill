@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.runloop.observability
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 
@@ -52,12 +53,14 @@ internal fun FeatureTaskRuntimeRunObservability.continuation(
 
 fun FeatureTaskRuntimeRunObservability.ciStillRunning(
   phaseId: String,
-  pendingChecks: List<String>,
+  pullRequestUrl: String,
+  pendingChecks: List<PullRequestCheck>,
 ) {
   emitSafely(
     FeatureTaskRuntimeRunEvent.CiStillRunning(
       workflowId = observabilityRequest.workflowId,
       phaseId = phaseId,
+      pullRequestUrl = pullRequestUrl,
       pendingChecks = pendingChecks,
     ),
   )

@@ -51,8 +51,8 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
     val outcome =
-      observation.watch(request.repoRoot, branch) { pending ->
-        observability.ciStillRunning(run.phaseId, pending.map(PullRequestCheck::name))
+      observation.watch(request.repoRoot, branch) { pullRequestUrl, pending ->
+        observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
       }
     return when (outcome) {
       PullRequestCiOutcome.Merged ->

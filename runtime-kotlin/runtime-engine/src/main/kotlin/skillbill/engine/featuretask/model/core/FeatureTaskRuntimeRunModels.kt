@@ -8,6 +8,7 @@ import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -308,7 +309,8 @@ sealed interface FeatureTaskRuntimeRunEvent {
   data class CiStillRunning(
     override val workflowId: String,
     override val phaseId: String,
-    val pendingChecks: List<String>,
+    val pullRequestUrl: String,
+    val pendingChecks: List<PullRequestCheck>,
   ) : FeatureTaskRuntimeRunEvent
 
   data class PhaseCompleted(

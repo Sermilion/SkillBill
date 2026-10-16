@@ -378,6 +378,17 @@ fix attempts. The phase then blocks
 with the last failure and the last fix summary. When the branch has no open PR,
 the phase completes and reports that there is nothing to monitor.
 
+While CI is pending, progress reports identify the current PR and include available
+check links. Describe queued checks as waiting, and name running work only when the
+CI observation reports it. Explain the next useful event, such as a check starting
+or settling. Report runner capacity only when an observation provides evidence;
+otherwise say it is unavailable. Do not infer missing commit or check details, or
+use administrative APIs to fill gaps. A live child means the process is active,
+not that source files changed. Local checks can establish a local result, but only
+remote CI observations establish the PR's CI result. Repeated waiting updates can
+refresh progress every 30 seconds; they do not change a verdict, deadline, or repair
+attempt count.
+
 ## Phase Validation
 
 `phase:validation` runs `skill-bill phase validation` from Forms and Routing. A

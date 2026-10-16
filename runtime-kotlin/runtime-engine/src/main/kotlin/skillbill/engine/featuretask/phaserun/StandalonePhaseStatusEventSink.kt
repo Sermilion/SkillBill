@@ -166,7 +166,7 @@ class StandalonePhaseStatusEventSink(
       is FeatureTaskRuntimeRunEvent.PhaseLoopEdge -> "Loop edge: ${event.phaseId}"
       is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration -> "Fix iteration: ${event.phaseId}"
       is FeatureTaskRuntimeRunEvent.ValidationGateProgress -> "Validation gate: ${event.phaseId}"
-      is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningActivity(event.pendingChecks)
+      is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningActivity(event)
       is FeatureTaskRuntimeRunEvent.PhaseCompleted -> "Phase completed: awaiting settlement"
       is FeatureTaskRuntimeRunEvent.PhaseBlocked -> "Phase blocked"
       is FeatureTaskRuntimeRunEvent.PhasePaused -> "Phase paused"
@@ -176,9 +176,9 @@ class StandalonePhaseStatusEventSink(
       is FeatureTaskRuntimeRunEvent.DecomposedAtPlanning -> "Planning decomposed"
     }
 
-  private fun ciStillRunningActivity(pendingChecks: List<String>): String {
-    val names = pendingChecks.filter(String::isNotBlank).distinct()
-    return if (names.isEmpty()) "CI still running" else "CI still running: ${names.joinToString(", ")}"
+  private fun ciStillRunningActivity(event: FeatureTaskRuntimeRunEvent.CiStillRunning): String {
+    val checkActivity = event.pendingChecks.firstOrNull()?.let { "${it.name} ${it.link}".trim() } ?: "checks"
+    return "CI waiting: ${event.pullRequestUrl} $checkActivity; runner capacity unavailable"
   }
 
   private fun incrementDecimal(value: String): String {

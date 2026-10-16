@@ -122,7 +122,7 @@ internal interface PhaseCiObservation {
   fun watch(
     repoRoot: Path,
     branch: String,
-    onCiRunning: (List<PullRequestCheck>) -> Unit = {},
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
