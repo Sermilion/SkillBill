@@ -7,6 +7,64 @@ import kotlin.test.assertNull
 
 class AcceptanceCriterionRepairStateTest {
   @Test
+  fun `a named prose regression focuses verification but repeated unchanged rejection rechecks every criterion`() {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")).map {
+              it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+            },
+            emptyList(),
+          ),
+        ),
+      )
+    val rejection =
+      AcceptanceCriterionProseAudit(
+        "full:1",
+        initial.revision + 1,
+        null,
+        false,
+        "b".repeat(64),
+        "AC-001 is satisfied. AC-002 remains open. The second caller can bypass the reservation.",
+        "c".repeat(64),
+        "source:1",
+      )
+    val focused = assertNotNull(initial.recordProseAudit(rejection))
+    assertEquals(listOf("AC-002"), focused.pendingAuditRefs)
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, focused.stage)
+    val rechecked =
+      assertNotNull(
+        focused.recordProseAudit(
+          rejection.copy(
+            id = "focused:1",
+            revision = focused.revision + 1,
+            criterionRef = "AC-002",
+            satisfied = true,
+            prose = "The second caller already enforces the reservation.",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, rechecked.stage)
+    val repeated =
+      assertNotNull(
+        rechecked.recordProseAudit(
+          rejection.copy(
+            id = "full:2",
+            revision = rechecked.revision + 1,
+          ),
+        ),
+      )
+    assertEquals(listOf("AC-001", "AC-002"), repeated.pendingAuditRefs)
+    val unknown = assertNotNull(initial.recordProseAudit(rejection.copy(prose = "AC-099 remains open.")))
+    assertEquals(listOf("AC-001", "AC-002"), unknown.pendingAuditRefs)
+  }
+
+  @Test
   fun `admission keeps composite criterion identity and orders prerequisites before ordinal ties`() {
     val state =
       AcceptanceCriterionRepairState.admit(

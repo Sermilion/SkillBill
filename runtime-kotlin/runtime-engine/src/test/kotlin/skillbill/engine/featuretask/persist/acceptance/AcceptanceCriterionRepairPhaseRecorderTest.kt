@@ -33,7 +33,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
     }
 
   @Test
-  fun `final regression retains each criterion failure count`() {
+  fun `named final regression skips unrelated audits and retains each criterion failure count`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
         val scope =
@@ -70,9 +70,10 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, scope.snapshot?.stage)
         audit(f, recorder, 5, true, "All production requirements pass. This audit did not run tests.")
         assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
-        audit(f, recorder, 6, false, "A shared edit regressed the second requirement.")
-        assertEquals("AC-001", scope.snapshot?.currentCriterionRef)
-        audit(f, recorder, 7, true, "The first requirement still holds.")
+        audit(f, recorder, 6, false, "AC-001 is satisfied. AC-002 remains open. Its caller has no reservation.")
+        assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
+        assertEquals(listOf("AC-002"), scope.snapshot?.pendingAuditRefs)
+        assertTrue(requireNotNull(scope.currentCriterionContext).contains("Its caller has no reservation."))
         audit(f, recorder, 8, false, "The second caller again has no reservation enforcement.")
         assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
         assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))

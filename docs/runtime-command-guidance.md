@@ -279,6 +279,14 @@ retained failure budget. An ambiguous regression gets the existing read-only
 prose follow-up before reopening; it does not require a phrase or agent-authored
 identifier protocol.
 
+When a full report clearly names an open canonical criterion in prose, its next
+read-only audit checks that criterion first. The mention guides verification;
+it does not reopen or accept source work by itself. The focused context carries
+the full rejection report as its latest evidence, rather than an older acceptance.
+Reports without a recognized reference keep the full recheck. If another full audit rejects the same unchanged
+source after the focused check, the runtime rechecks every criterion to avoid
+repeating a mistaken prose interpretation.
+
 An empty focused queue still requires the final full source audit. Source
 acceptance does not say that tests, build, or other project-quality work ran.
 Those obligations stay in their existing review, build, and validation phases.
