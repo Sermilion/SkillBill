@@ -171,6 +171,105 @@ class FeatureTaskRuntimeSerialRepairTest {
     }
   }
 
+  @Test
+  fun `each authored criterion can succeed on its third repair without sharing the previous criterion budget`() {
+    assertIndependentRepairBudgets(secondCriterionSucceeds = true)
+  }
+
+  @Test
+  fun `the third unsuccessful repair blocks only after the current criterion spends its own budget`() {
+    assertIndependentRepairBudgets(secondCriterionSucceeds = false)
+  }
+
+  private fun assertIndependentRepairBudgets(secondCriterionSucceeds: Boolean) {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val repairsByCriterion = linkedMapOf<String, Int>()
+    val launcher = independentBudgetLauncher(accounting, repairsByCriterion, secondCriterionSucceeds)
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertEquals(mapOf("AC-001" to 3, "AC-002" to 3), repairsByCriterion, "$report; ${scope.snapshot}")
+      assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
+      if (secondCriterionSucceeds) {
+        assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+        assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+        assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+        assertContains(harness.launchOrder(), "review")
+      } else {
+        assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report")
+        assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
+        assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
+        assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
+      }
+    }
+  }
+
+  private fun independentBudgetLauncher(
+    accounting: AtomicReference<AcceptanceCriterionRepairRunState?>,
+    repairsByCriterion: MutableMap<String, Int>,
+    secondCriterionSucceeds: Boolean,
+  ): RuntimeRecordingLauncher {
+    var audit = 0
+    return RuntimeRecordingLauncher { request ->
+      val prompt = assertNotNull(request.skillRunRequest.promptOverride)
+      val phase = phaseIdFromPrompt(prompt)
+      val state = accounting.get()?.snapshot
+      when (phase) {
+        "audit" -> {
+          audit++
+          facts(
+            when {
+              state == null -> serialDiscoveryOutput()
+              prompt.contains("Read-only repair-report admission") -> settledAuditSatisfiedRecord()
+              state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ||
+                state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED ->
+                serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
+              else -> {
+                val refs = state.pendingAuditRefs.ifEmpty { state.unresolvedQueue }.joinToString()
+                auditRemainingAcOutput("$refs remain open because their production callers are missing.").replace(
+                  "\"status\": \"completed\",",
+                  "\"status\": \"completed\", \"verdict\": \"advance\",",
+                )
+              }
+            },
+          )
+        }
+        "audit_plan_fix" -> {
+          val current = assertNotNull(state?.currentCriterionRef)
+          val used = repairsByCriterion.getOrDefault(current, 0)
+          assertContains(prompt, current)
+          assertContains(prompt, "retained failures: $used of 3")
+          facts(defaultPhaseOutput(request))
+        }
+        "audit_implement_fix" -> {
+          val current = assertNotNull(state?.currentCriterionRef)
+          val attempt = repairsByCriterion.getOrDefault(current, 0) + 1
+          repairsByCriterion[current] = attempt
+          assertContains(prompt, current)
+          if (attempt == 3 && (current == "AC-001" || secondCriterionSucceeds)) {
+            facts(defaultPhaseOutput(request))
+          } else {
+            facts(
+              """{
+                  "contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",
+                  "failure_disposition":"retryable","summary":"The selected caller still needs repair.",
+                  "produced_outputs":{"value":"The production caller for $current remains incomplete."}
+                }""",
+            )
+          }
+        }
+        else -> facts(defaultPhaseOutput(request))
+      }
+    }
+  }
+
   private fun runOwnedSerial(
     harness: RunnerHarness,
     action: (

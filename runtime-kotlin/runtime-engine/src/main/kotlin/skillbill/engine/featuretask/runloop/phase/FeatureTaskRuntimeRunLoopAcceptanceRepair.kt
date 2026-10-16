@@ -78,7 +78,8 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
         context.state,
         context.runState.coupledSession(),
         phaseId,
-        "Acceptance criterion repair exhausted its three unsuccessful outcomes. ${scope.currentCriterionContext}",
+        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+          "Other criteria have separate budgets. ${scope.currentCriterionContext}",
       )
       return Routing.Stop
     }

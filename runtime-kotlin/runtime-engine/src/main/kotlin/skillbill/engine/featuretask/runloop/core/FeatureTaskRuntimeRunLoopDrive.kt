@@ -93,7 +93,8 @@ object FeatureTaskRuntimeRunLoopDrive {
     FeatureTaskRuntimeRunLoopAcceptanceRepair.reviewEntryBlockReason(context, phaseId)
       ?: (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.let { scope ->
         if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
-          "Acceptance criterion repair exhausted its three unsuccessful outcomes. ${scope.currentCriterionContext}"
+          "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+            "Other criteria have separate budgets. ${scope.currentCriterionContext}"
         } else {
           null
         }
