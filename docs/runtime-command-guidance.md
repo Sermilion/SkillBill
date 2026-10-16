@@ -54,6 +54,18 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## Blocked-phase operator decisions
+
+To resolve a blocked child phase, use
+`skill-bill feature-task retry-blocked <workflow-id> --phase <phase> --reason <reason>`.
+The reason applies only to that reopened phase. When the operator also supplies a
+decision that later phases must retain, pass `--mandate <decision>`. The runtime
+appends it to the child workflow's existing `mandates_and_overrides` in the same
+transaction that reopens the phase. Later phases and resumes receive the mandate
+through their governed briefings. This does not change the spec, acceptance
+criteria, comparison baseline, or other workflows. A retry without `--mandate`
+does not promote its reason to a run mandate.
+
 ## Model selection at launch
 
 Resume uses the recorded per-step assignment. A later alias, remap, or default

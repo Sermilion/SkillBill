@@ -13,6 +13,7 @@ import skillbill.application.workflow.persist.WorkflowPersistenceContext
 import skillbill.application.workflow.persist.buildUpdateOk
 import skillbill.application.workflow.persist.decodeFeatureTaskRuntimePhaseRecords
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -33,6 +34,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -56,6 +58,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
     workflowId: String,
     phaseId: String,
     reason: String,
+    mandate: String? = null,
   ): WorkflowUpdateResult {
     val normalizedReason = reason.trim()
     if (
@@ -68,6 +71,10 @@ internal class WorkflowServiceBlockedPhaseRetry(
           "1..$FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH characters.",
       )
     }
+    val normalizedMandate = mandate?.trim()
+    if (normalizedMandate != null && normalizedMandate.isEmpty()) {
+      return WorkflowUpdateResult.Error(workflowId, "Operator run mandate must be non-blank.")
+    }
     val normalizedPhaseId = phaseId.trim()
     val family = WorkflowFamily.TASK_RUNTIME
     if (normalizedPhaseId !in family.definition.stepIds) {
@@ -76,7 +83,7 @@ internal class WorkflowServiceBlockedPhaseRetry(
         "Unknown runtime phase '$normalizedPhaseId'. Allowed: ${family.definition.stepIds.joinToString()}.",
       )
     }
-    val request = BlockedPhaseRetryRequest(workflowId, normalizedPhaseId, normalizedReason)
+    val request = BlockedPhaseRetryRequest(workflowId, normalizedPhaseId, normalizedReason, normalizedMandate)
     val persistence =
       database.transaction { unitOfWork ->
         retryInTransaction(unitOfWork, request)
@@ -194,7 +201,37 @@ internal class WorkflowServiceBlockedPhaseRetry(
     request: BlockedPhaseRetryRequest,
     state: BlockedPhaseRetryState,
   ): BlockedPhaseRetryPersistence {
-    val input = blockedPhaseRetryInput(request, state, clock)
+    val retryInput = blockedPhaseRetryInput(request, state, clock)
+    val input =
+      if (request.mandate == null) {
+        retryInput
+      } else {
+        val invariantsFamily = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_RUN_INVARIANTS
+        val raw =
+          invariantsFamily.value(existing.artifacts)
+            ?: return BlockedPhaseRetryPersistence.error(
+              WorkflowUpdateResult.Error(
+                request.workflowId,
+                "Cannot retain an operator run mandate without existing run invariants.",
+                unitOfWork.dbPath.toString(),
+              ),
+            )
+        val invariants =
+          decodeRunInvariantsFromArtifact(raw)
+            ?: throw invalidWorkflowStateSchemaError("Feature-task-runtime run invariants must decode to a map.")
+        val amended =
+          if (request.mandate in invariants.mandatesAndOverrides) {
+            invariants
+          } else {
+            invariants.copy(mandatesAndOverrides = invariants.mandatesAndOverrides + request.mandate)
+          }
+        retryInput.copy(
+          artifactsPatch =
+            WorkflowArtifactPatch.from(
+              retryInput.artifactsPatch.orEmpty() + mapOf(invariantsFamily.entry(amended.asWorkflowArtifactEntry())),
+            ),
+        )
+      }
     val family = WorkflowFamily.TASK_RUNTIME
     val updated = engine.updateRecord(family.definition, existing, input)
     unitOfWork.workflowStates.save(family, updated)
@@ -288,6 +325,7 @@ private data class BlockedPhaseRetryRequest(
   val workflowId: String,
   val phaseId: String,
   val reason: String,
+  val mandate: String?,
 )
 
 private data class BlockedPhaseRetryState(

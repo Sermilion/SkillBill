@@ -2969,3 +2969,29 @@ repair, a rejected push, and goal monitoring without reopening completed phases.
 MonitorRepairResumeAccountingTest covers historical identity and failure counts.
 A1-A12 and G1-G7 remain clean. This integration adds no schema, port, guard
 exception, or separate state owner.
+
+## [2026-10-16] Retain explicit operator mandates across blocked-phase recovery
+
+Context: a blocked-phase retry delivered the operator's prerequisite decision to
+audit_plan_fix, then consumed its phase-scoped reason. The following audit still
+received empty mandates and repeated the scope block. Recording the decision in
+this source log did not amend the workflow's governed briefing.
+
+Decision: `feature-task retry-blocked` accepts an optional `--mandate` supplied
+by the operator. The existing retry transaction appends that directive to the
+workflow's admitted run invariants. Existing mandates, acceptance criteria,
+spec identity and other invariant fields remain intact. Duplicate mandates
+are not appended. Later phases and resumes use the existing mandate briefing
+path. A plain retry reason keeps its existing single-phase lifetime.
+
+Missing run invariants refuse the mandate and retry together. Malformed
+invariants retain their typed admission failure. No new persisted field,
+contract version, migration, phase bypass or acceptance rewrite is involved.
+The decision applies only to the selected child workflow.
+
+Review: A1 and A2 keep the mutation in the application retry transaction and
+briefing delivery in the engine. A3-A5 add no collaborator bag, port or forwarding
+layer. A6 reuses the existing artifact family and codec. A7 retains refusal and
+typed corruption handling. A8 adds no production ambient effects. A9-A12 retain
+package direction, test placement, narrow visibility and typed interfaces.
+G1-G7 require no guard, fixture, baseline or exemption change.
