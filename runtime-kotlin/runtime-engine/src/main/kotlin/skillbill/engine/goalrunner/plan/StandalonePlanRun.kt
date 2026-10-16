@@ -7,11 +7,13 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phaserun.StandalonePhaseLaunch
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusEventSink
 import skillbill.engine.featuretask.phaserun.StandalonePhaseStatusPublisherFactory
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunEntry
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -46,6 +48,24 @@ sealed interface StandalonePlanResult {
   ) : StandalonePlanResult
 }
 
+data class StandalonePlanLaunch(
+  val agentId: String? = null,
+  val scope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+) {
+  fun forPhase(target: String): StandalonePhaseLaunch =
+    StandalonePhaseLaunch(
+      agentId = agentId,
+      arguments =
+        agentId?.let { agent ->
+          when (scope) {
+            IdeStatusLaunchScope.STANDALONE -> listOf("phase", "plan", target, "--agent", agent)
+            IdeStatusLaunchScope.GOAL -> listOf("goal", target, "--agent", agent)
+          }
+        },
+      scope = scope,
+    )
+}
+
 @Inject
 class StandalonePlanRun(
   private val intakePreparation: GoalIntakePreparation,
@@ -74,8 +94,7 @@ class StandalonePlanRun(
         repoRoot = repoRoot,
         issueKey = issueKey,
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS,
-        agentId = replan.agentId,
-        launchArguments = null,
+        launch = StandalonePlanLaunch(replan.agentId, IdeStatusLaunchScope.GOAL).forPhase(issueKey),
       )
     return runCatching {
       reopening.rebasePlanBundle(replan)
@@ -109,7 +128,7 @@ class StandalonePlanRun(
     issueKey: String,
     suppliedIntake: String?,
     repoRoot: Path,
-    agentId: String? = null,
+    launch: StandalonePlanLaunch = StandalonePlanLaunch(),
     inputFor: (specPath: String) -> FeatureTaskRuntimeRunInput,
   ): StandalonePlanResult {
     val publisher =
@@ -117,8 +136,7 @@ class StandalonePlanRun(
         repoRoot = repoRoot,
         issueKey = issueKey,
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-        agentId = agentId,
-        launchArguments = agentId?.let { listOf("phase", "plan", suppliedIntake ?: issueKey, "--agent", it) },
+        launch = launch.forPhase(suppliedIntake ?: issueKey),
       )
     return runCatching {
       runInternal(issueKey, suppliedIntake, repoRoot, publisher) { specPath ->

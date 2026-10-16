@@ -139,6 +139,7 @@ class IdeStatusProjector(
         statusRevision = record.statusRevision,
         invocationId = record.invocationId,
         phaseId = record.phaseId,
+        launchScope = record.launchScope,
       )
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,

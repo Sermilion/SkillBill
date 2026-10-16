@@ -31,6 +31,16 @@ enum class IdeStatusExecutionScope(val wireValue: String) {
   STANDALONE_PHASE("standalone_phase"),
 }
 
+enum class IdeStatusLaunchScope(val wireValue: String) {
+  STANDALONE("standalone"),
+  GOAL("goal"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): IdeStatusLaunchScope? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
 enum class IdeStatusDurableWorkflowState(val wireValue: String) {
   PENDING("pending"),
   RUNNING("running"),
@@ -66,6 +76,7 @@ data class IdeStatusWorkPolicyFacts(
   val controlTargetPresent: Boolean,
   val pauseRequested: Boolean = false,
   val observedAt: Instant? = null,
+  val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
 enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES }
@@ -181,7 +192,7 @@ object IdeStatusPolicy {
   }
 
   fun work(facts: IdeStatusWorkPolicyFacts): IdeStatusWorkPolicy {
-    val goal = facts.family == IdeStatusWorkflowFamily.FEATURE_GOAL
+    val goal = facts.family == IdeStatusWorkflowFamily.FEATURE_GOAL || facts.launchScope == IdeStatusLaunchScope.GOAL
     val controlEligible =
       goal && facts.scope != IdeStatusExecutionScope.STANDALONE_PHASE &&
         facts.controlTargetPresent && facts.lifecycle == IdeStatusLifecycleState.ACTIVE &&

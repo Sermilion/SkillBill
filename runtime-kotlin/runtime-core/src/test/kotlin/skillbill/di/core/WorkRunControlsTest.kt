@@ -6,6 +6,8 @@ import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.idestatus.model.IdeStatusDisplayGroup
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -239,6 +241,44 @@ class WorkRunControlsTest {
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
       assertEquals(WorkControlResult.Accepted, component.launchRun(target, null))
       assertEquals(2, launched.size)
+    }
+  }
+
+  @Test
+  fun `a plan the goal command started shows with goals and relaunches the goal`() {
+    establishTemporarySchemaReadiness("goal-plan").use { fixture ->
+      Files.createDirectory(fixture.tempDir.resolve(".git"))
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
+      val launched = mutableListOf<WorkRunLaunchRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launched += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("run.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction {
+        it.standalonePhaseStatuses.register(
+          registration(fixture.tempDir).copy(
+            issueKey = "SKILL-9",
+            phaseId = "plan",
+            launchAgentId = "claude",
+            launchArguments = listOf("goal", "SKILL-9 Render answers", "--agent", "claude"),
+            launchScope = IdeStatusLaunchScope.GOAL,
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("interrupted")).item)
+      assertEquals(IdeStatusLaunchScope.GOAL, item.snapshot.execution?.launchScope)
+      assertEquals(IdeStatusDisplayGroup.GOALS, item.displayGroup)
+
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
+      val prompt = launched.single().prompt
+      assertContains(prompt, "Run the goal with /skill-bill")
+      assertContains(prompt, "[\"goal\",\"SKILL-9 Render answers\",\"--agent\",\"codex\"]")
     }
   }
 

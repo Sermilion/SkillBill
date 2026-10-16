@@ -14,6 +14,7 @@ import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.PlanSubtasksReplan
+import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
 import skillbill.engine.goalrunner.planning.context.goalPlanningImmutableDecompositionHash
@@ -22,6 +23,7 @@ import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
@@ -159,7 +161,13 @@ class PlanWorkflowGoalPlanningSource(
       }
     val result =
       if (linked == null) {
-        planRun.run(issueKey, null, request.repoRoot, agentId, inputFor)
+        planRun.run(
+          issueKey,
+          null,
+          request.repoRoot,
+          StandalonePlanLaunch(agentId, IdeStatusLaunchScope.GOAL),
+          inputFor,
+        )
           .forceReplanOf(replanned, scope, agentId, inputFor)
       } else {
         planRun.replanSubtasks(

@@ -170,7 +170,7 @@ private fun LoadedDetail(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           StatusChip(if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.lifecycle.name.lowercase(), lifecycleColor(item.lifecycle), item.lifecycle)
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
-          StatusChip(if (item.family == WorkFamily.FEATURE_GOAL) "goal" else "phase", Color(0xFFF49463))
+          StatusChip(if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)

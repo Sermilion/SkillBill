@@ -59,6 +59,7 @@ import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
@@ -286,6 +287,7 @@ class GoalRunCommand(
           timeout = planTimeout(),
           agentAddonSelection = hydratedSelection,
           eventSink = runtimeRunEventSink(inputs, monitor = !noLiveOutput),
+          launchScope = IdeStatusLaunchScope.GOAL,
         ),
       )
     if (planned is StandalonePlanResult.Completed) {

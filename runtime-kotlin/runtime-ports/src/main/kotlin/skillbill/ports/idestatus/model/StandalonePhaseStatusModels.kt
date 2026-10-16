@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.time.Instant
 
@@ -49,6 +50,7 @@ data class StandalonePhaseStatusRegistration(
   val launchAgentId: String? = null,
   val launchArguments: List<String>? = null,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -104,6 +106,7 @@ data class StandalonePhaseStatusRecord(
   val launchAgentId: String? = null,
   val launchArguments: List<String>? = null,
   val agentEnvironment: Map<String, String> = emptyMap(),
+  val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500
