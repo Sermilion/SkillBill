@@ -165,9 +165,7 @@ Monitoring counts distinct published repair commits only after CI fails on those
 commits. Resume reconstructs qualified failures from retained runtime producer,
 completion, publication, and Git evidence. Repeated observations of a commit keep
 one failure. A later repair replacing the latest phase record does not erase a
-previously qualified failure. Missing or contradictory history keeps the existing
-recovery block and never becomes a zero count. Initial CI failure, pending checks,
-and merge conflicts do not consume this budget.
+previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
 files, `CONTRIBUTING.md`, the failing workflow, and any setup scripts it calls.

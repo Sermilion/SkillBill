@@ -55,21 +55,19 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    val outcome =
-      observation.watch(request.repoRoot, branch) { pullRequestUrl, pending ->
-        observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
-      }
+    val outcome = observePublishedHead(run, observation, repairSteps, iteration, branch)
     return when (outcome) {
       PullRequestCiOutcome.Merged ->
         complete(run, iteration, mergedMonitorOutput(run.phaseId, branch))
-      PullRequestCiOutcome.Passed ->
+      is PullRequestCiOutcome.Passed ->
         complete(
           run,
           iteration,
           monitorOutput(
             run.phaseId,
-            "CI passed for the pull request.",
-            "CI passed on branch '$branch': every check on the pull request passed, was skipped, or was cancelled.",
+            "CI passed for published commit '${outcome.headSha}'.",
+            "CI passed for published commit '${outcome.headSha}' on branch '$branch': every check passed, " +
+              "was skipped, or was cancelled.",
             verdict = null,
           ),
         )
@@ -110,6 +108,40 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     }
   }
 
+  private fun PhaseRuntimeFinalizationContext.observePublishedHead(
+    run: PhaseRun,
+    observation: PhaseCiObservation,
+    repairSteps: MonitorRepairStepRoles,
+    iteration: Int,
+    branch: String,
+  ): PullRequestCiOutcome {
+    val ledger = recorder.loadPhaseLedger(request.workflowId).orEmpty()
+    val accounting =
+      MonitorRepairAccounting(
+        repairSteps,
+        gitOperations,
+        recorder::producerOutput,
+        phaseSettlementService::findEnvelope,
+        diagnostics,
+      )
+    val priorOutputs = progress.outputs()
+    val expectedHeadSha = accounting.publishedHeadBeforeMonitor(request, iteration, ledger, priorOutputs)
+    return observation.watch(
+      request.repoRoot,
+      branch,
+      onCiRunning = { pullRequestUrl, pending ->
+        observability.ciStillRunning(run.phaseId, pullRequestUrl, pending)
+      },
+      expectedHeadSha = expectedHeadSha,
+      onInconclusive = { reason ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "Monitor kept polling after an inconclusive CI observation: $reason",
+        )
+      },
+    )
+  }
+
   private fun PhaseRuntimeFinalizationContext.failedCiOutcome(
     run: PhaseRun,
     iteration: Int,
@@ -131,43 +163,53 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
         recorder.loadPhaseLedger(request.workflowId).orEmpty(),
         progress.outputs(),
       )
-    return when {
-      repairAssociation is RepairPublicationAssociation.NotStarted ->
-        routeToRepair(
-          run,
-          iteration,
-          failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
-          FeatureTaskRuntimeVerdict.PROGRESS,
-        )
-      repairAssociation is RepairPublicationAssociation.Unavailable ->
-        block(run, iteration, "The completed monitor repair lacks evidence to associate a published change.")
-      repairAssociation is RepairPublicationAssociation.Unchanged ->
-        block(run, iteration, "The completed monitor repair did not publish a source or merge change.")
-      outcome.headSha == null ||
-        outcome.headSha != (repairAssociation as RepairPublicationAssociation.Published).commitSha ->
-        block(
-          run,
-          iteration,
-          "The failing CI result could not be associated with the published repair commit " +
-            "'${(repairAssociation as RepairPublicationAssociation.Published).commitSha}'.",
-        )
-      repairAssociation.commitSha in progress.monitorFailedRepairCommitShas ->
-        routeToRepair(
-          run,
-          iteration,
-          failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
-          FeatureTaskRuntimeVerdict.PROGRESS,
-        )
-      else ->
-        routeToRepair(
-          run,
-          iteration,
-          failingChecksProse(branch, outcome.failingChecks, outcome.headSha, publishedRepair = true),
-          FeatureTaskRuntimeVerdict.CI_FAILED,
-          repairAssociation.commitSha,
-        )
+    if (repairAssociation == RepairPublicationAssociation.Unchanged) {
+      return block(run, iteration, "The completed repair did not publish a source or merge change.")
+    }
+    val published = repairAssociation as? RepairPublicationAssociation.Published
+    val qualified =
+      published != null && outcome.headSha != null && outcome.headSha == published.commitSha &&
+        published.commitSha !in progress.monitorFailedRepairCommitShas
+    if (!qualified && repairAssociation !is RepairPublicationAssociation.NotStarted) {
+      val reason = repairExclusionReason(repairAssociation, outcome.headSha)
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Monitor excluded a failing CI observation from attempt accounting: $reason.",
+      )
+    }
+    return if (qualified) {
+      routeToRepair(
+        run,
+        iteration,
+        failingChecksProse(branch, outcome.failingChecks, outcome.headSha, publishedRepair = true),
+        FeatureTaskRuntimeVerdict.CI_FAILED,
+        requireNotNull(published).commitSha,
+      )
+    } else {
+      routeToRepair(
+        run,
+        iteration,
+        failingChecksProse(branch, outcome.failingChecks, outcome.headSha),
+        FeatureTaskRuntimeVerdict.PROGRESS,
+      )
     }
   }
+
+  private fun repairExclusionReason(
+    association: RepairPublicationAssociation,
+    observedHeadSha: String?,
+  ): String =
+    when (association) {
+      RepairPublicationAssociation.Unavailable -> "repair publication association is unavailable"
+      RepairPublicationAssociation.Unchanged -> "repair publication has no source or merge change"
+      RepairPublicationAssociation.NotStarted -> "repair failure is not associated with a published commit"
+      is RepairPublicationAssociation.Published ->
+        when (observedHeadSha) {
+          null -> "the observed failing checks have no head identity"
+          association.commitSha -> "the published repair failure was already counted"
+          else -> "the observed failing head differs from the published repair"
+        }
+    }
 
   private fun PhaseRuntimeFinalizationContext.routeToRepair(
     run: PhaseRun,
@@ -214,10 +256,6 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     loopId: String,
     progress: FeatureTaskRuntimeProgressSnapshotAccess?,
   ): String {
-    if (progress?.monitorFailureEvidenceUnavailable == true) {
-      return "Monitoring cannot continue because a completed monitor result lacks retained published-failure " +
-        "association evidence. Recover the existing monitor output evidence before resuming."
-    }
     val edge = FeatureTaskRuntimePhaseWorkflowQueries.backwardEdgeForLoop(loopId)
     val failedCommitShas = progress?.monitorFailedRepairCommitShas.orEmpty()
     val failedRepairReports =

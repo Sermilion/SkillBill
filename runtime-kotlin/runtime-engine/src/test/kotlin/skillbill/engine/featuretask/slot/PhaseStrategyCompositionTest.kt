@@ -60,6 +60,7 @@ import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanErr
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -142,7 +143,7 @@ class PhaseStrategyCompositionTest {
 
   private val monitorStrategy =
     MonitorStrategy(
-      OpenPullRequestIdentityLookup,
+      OpenPullRequestIdentityLookup(NoopWorkflowGitOperations),
       PassingPullRequestChecksLookup,
     )
 

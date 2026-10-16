@@ -40,7 +40,9 @@ class MonitorStrategy(
         repoRoot: Path,
         branch: String,
         onCiRunning: (String, List<PullRequestCheck>) -> Unit,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning)
+        expectedHeadSha: String?,
+        onInconclusive: (String) -> Unit,
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning, expectedHeadSha, onInconclusive)
 
       override fun recordFailingChecks(
         issueKey: String,

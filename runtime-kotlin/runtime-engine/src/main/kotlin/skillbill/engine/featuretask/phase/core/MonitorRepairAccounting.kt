@@ -1,29 +1,23 @@
 package skillbill.engine.featuretask.phase.core
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.execution.RecordedMonitorExecutionSemantics
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.nio.file.Path
 
 internal sealed interface RepairPublicationAssociation {
@@ -36,15 +30,15 @@ internal sealed interface RepairPublicationAssociation {
   data object Unavailable : RepairPublicationAssociation
 }
 
-internal data class MonitorRepairStepRoles(val monitor: String, val repair: String, val publication: String)
-
 internal class MonitorRepairAccounting(
   private val steps: MonitorRepairStepRoles,
   private val gitOperations: WorkflowGitOperations,
-  private val producerOutput: (ProducerOutputQueryArgs) -> FeatureTaskRuntimeProducerOutputRead,
-  private val findEnvelope: (String, String, Int) -> FeatureTaskPhaseSettlementEnvelope?,
+  producerOutput: (ProducerOutputQueryArgs) -> FeatureTaskRuntimeProducerOutputRead,
+  findEnvelope: (String, String, Int) -> FeatureTaskPhaseSettlementEnvelope?,
   private val diagnostics: RuntimeDiagnostics,
 ) {
+  private val evidenceReader = MonitorRepairProducerEvidence(steps, producerOutput, findEnvelope, diagnostics)
+
   internal data class RestoredHistory(
     val outputs: List<FeatureTaskRuntimePhaseOutput>,
     val failedRepairs: Map<Int, String>,
@@ -55,8 +49,9 @@ internal class MonitorRepairAccounting(
     request: FeatureTaskRuntimeRunFacts,
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    recordedSemantics: RecordedMonitorExecutionSemantics?,
+    executionPlan: ResolvedPhaseExecutionPlan,
   ): RestoredHistory {
-    var monitorEvidenceUnavailable = false
     val retainedPhaseIds =
       setOf(
         steps.monitor,
@@ -67,32 +62,72 @@ internal class MonitorRepairAccounting(
       ledger.filter {
         it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE && it.phaseId in retainedPhaseIds
       }.sortedBy { it.sequenceNumber }.mapNotNull { completion ->
-        completedOutput(request.workflowId, completion, ledger, records[completion.phaseId]).also {
-          if (it == null && completion.phaseId == steps.monitor) {
-            monitorEvidenceUnavailable = true
-          }
-        }
+        evidenceReader.completedOutput(request.workflowId, completion, ledger, records[completion.phaseId])
       }.distinctBy { it.phaseId to it.iteration }
     val failedRepairs = mutableMapOf<Int, String>()
+    var evidenceUnavailable = false
     retained.filter { output ->
       output.phaseId == steps.monitor &&
         output.normalizedOutput?.verdict == FeatureTaskRuntimeVerdict.CI_FAILED.wireValue
     }.forEach { output ->
-      val association = publishedRepairCommitSha(request, output.iteration, records, ledger, retained)
-      if (association is RepairPublicationAssociation.Published &&
-        confirmsPublishedFailure(output, association.commitSha)
-      ) {
-        failedRepairs[output.iteration] = association.commitSha
+      if (!steps.hasCorrectedProducerSemantics(recordedSemantics, executionPlan)) {
+        unqualifiedMonitorFailure(output.iteration)
+        evidenceUnavailable = true
       } else {
-        monitorEvidenceUnavailable = true
-        RuntimeDiagnosticsBestEffortWarning.record(
-          diagnostics,
-          "Could not restore monitor failure attempt ${output.iteration}: " +
-            "published repair qualification is unavailable.",
-        )
+        when (
+          val association =
+            historicalFailureCommitSha(request, output.iteration, records, ledger, retained)
+        ) {
+          is RepairPublicationAssociation.Published -> failedRepairs[output.iteration] = association.commitSha
+          RepairPublicationAssociation.NotStarted -> {
+            unqualifiedMonitorFailure(output.iteration)
+            evidenceUnavailable = true
+          }
+          RepairPublicationAssociation.Unavailable, RepairPublicationAssociation.Unchanged -> {
+            unqualifiedMonitorFailure(output.iteration)
+            evidenceUnavailable = true
+          }
+        }
       }
     }
-    return RestoredHistory(retained, failedRepairs, monitorEvidenceUnavailable)
+    return RestoredHistory(retained, failedRepairs, evidenceUnavailable)
+  }
+
+  fun publishedHeadBeforeMonitor(
+    request: FeatureTaskRuntimeRunFacts,
+    monitorAttempt: Int,
+    ledgerEntries: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    outputs: List<FeatureTaskRuntimePhaseOutput>,
+  ): String? {
+    val ledger = ledgerEntries.sortedBy { it.sequenceNumber }
+    val monitorStart =
+      ledger.lastOrNull {
+        it.phaseId == steps.monitor &&
+          it.attemptCount == monitorAttempt && it.action == FeatureTaskRuntimePhaseLedgerAction.START
+      } ?: return unavailablePublicationHead("monitor START is missing")
+    val publication =
+      ledger.lastOrNull {
+        it.phaseId == steps.publication &&
+          it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+          it.sequenceNumber < monitorStart.sequenceNumber
+      } ?: return unavailablePublicationHead("completed publication is missing")
+    val qualified = readPublication(request.workflowId, publication, ledger, outputs)
+    return qualified?.sha ?: unavailablePublicationHead("completed pushed publication is unavailable")
+  }
+
+  private fun unavailablePublicationHead(reason: String): String? {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Monitor repair accounting could not identify the published head: $reason.",
+    )
+    return null
+  }
+
+  private fun unqualifiedMonitorFailure(attempt: Int) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Monitor failure attempt $attempt has no qualified published-repair failure evidence.",
+    )
   }
 
   private data class RepairAttempt(
@@ -104,6 +139,11 @@ internal class MonitorRepairAccounting(
   private data class Publication(val sha: String)
 
   private data class PublishedChange(val sameTree: Boolean, val addedMergeParent: Boolean)
+
+  private data class RepairPublicationEvidence(
+    val repair: RepairAttempt,
+    val publications: Pair<Publication, Publication>,
+  )
 
   fun publishedRepairCommitSha(
     request: FeatureTaskRuntimeRunFacts,
@@ -122,23 +162,67 @@ internal class MonitorRepairAccounting(
       ledger.lastOrNull {
         it.phaseId == steps.repair &&
           it.sequenceNumber < monitorStart.sequenceNumber && it.action == FeatureTaskRuntimePhaseLedgerAction.START
-      } ?: return RepairPublicationAssociation.NotStarted
-    val repair =
-      completedRepair(request.workflowId, repairStart, monitorStart, records, ledger)
+      } ?: return if (hasUnmatchedRepairCompletionBefore(monitorStart, ledger)) {
+        RepairPublicationAssociation.Unavailable
+      } else {
+        RepairPublicationAssociation.NotStarted
+      }
+    val evidence =
+      repairPublicationEvidence(request.workflowId, RepairWindow(repairStart, monitorStart), records, ledger, outputs)
         ?: return RepairPublicationAssociation.Unavailable
-    val publications = publications(request.workflowId, repair, monitorStart, ledger, outputs)
-    return if (publications == null) {
-      RepairPublicationAssociation.Unavailable
-    } else {
-      qualifyChange(
-        request.repoRoot,
-        repair,
-        publications,
-        outputs.singleOrNull {
-          it.phaseId == monitorStart.phaseId && it.iteration == monitorAttempt
-        },
-      )
-    }
+    return qualifyChange(request.repoRoot, evidence.repair, evidence.publications)
+  }
+
+  private fun historicalFailureCommitSha(
+    request: FeatureTaskRuntimeRunFacts,
+    monitorAttempt: Int,
+    records: Map<String, FeatureTaskRuntimePhaseRecord>,
+    ledgerEntries: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    outputs: List<FeatureTaskRuntimePhaseOutput>,
+  ): RepairPublicationAssociation {
+    val ledger = ledgerEntries.sortedBy { it.sequenceNumber }
+    val monitorStart =
+      ledger.lastOrNull {
+        it.phaseId == steps.monitor && it.attemptCount == monitorAttempt &&
+          it.action == FeatureTaskRuntimePhaseLedgerAction.START
+      } ?: return unavailableRepairAssociation("monitor START is missing")
+    val repairStart =
+      ledger.lastOrNull {
+        it.phaseId == steps.repair && it.sequenceNumber < monitorStart.sequenceNumber &&
+          it.action == FeatureTaskRuntimePhaseLedgerAction.START
+      } ?: return if (hasUnmatchedRepairCompletionBefore(monitorStart, ledger)) {
+        RepairPublicationAssociation.Unavailable
+      } else {
+        RepairPublicationAssociation.NotStarted
+      }
+    val evidence =
+      repairPublicationEvidence(request.workflowId, RepairWindow(repairStart, monitorStart), records, ledger, outputs)
+        ?: return RepairPublicationAssociation.Unavailable
+    return publishedChange(request.repoRoot, evidence.publications.first.sha, evidence.publications.second.sha)?.let {
+        change ->
+      if (change.addedMergeParent || !change.sameTree) {
+        RepairPublicationAssociation.Published(evidence.publications.second.sha)
+      } else {
+        RepairPublicationAssociation.Unchanged
+      }
+    } ?: RepairPublicationAssociation.Unavailable
+  }
+
+  private data class RepairWindow(
+    val repairStart: FeatureTaskRuntimePhaseLedgerEntry,
+    val monitorStart: FeatureTaskRuntimePhaseLedgerEntry,
+  )
+
+  private fun repairPublicationEvidence(
+    workflowId: String,
+    window: RepairWindow,
+    records: Map<String, FeatureTaskRuntimePhaseRecord>,
+    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    outputs: List<FeatureTaskRuntimePhaseOutput>,
+  ): RepairPublicationEvidence? {
+    val repair = completedRepair(workflowId, window.repairStart, window.monitorStart, records, ledger) ?: return null
+    val publications = publications(workflowId, repair, window.monitorStart, ledger, outputs) ?: return null
+    return RepairPublicationEvidence(repair, publications)
   }
 
   private fun completedRepair(
@@ -159,9 +243,13 @@ internal class MonitorRepairAccounting(
       return null
     }
     val current = records[start.phaseId]?.takeIf { it.attemptCount == start.attemptCount }
-    val accepted = readRepairCompletion(workflowId, completion, current)
-    val valid = recordMatches(current, completion) && isCompletedEnvelope(accepted, start.phaseId)
-    if (!valid || !producerOutputMatches(workflowId, start, completion)) {
+    val accepted = evidenceReader.readRepairCompletion(workflowId, completion, current)
+    val valid =
+      evidenceReader.recordMatches(
+        current,
+        completion,
+      ) && evidenceReader.isCompletedEnvelope(accepted, start.phaseId)
+    if (!valid || !evidenceReader.producerOutputMatches(workflowId, start, completion)) {
       unavailableRepairAssociation("accepted repair completion is unavailable or contradictory")
       return null
     }
@@ -180,24 +268,17 @@ internal class MonitorRepairAccounting(
       ledger.filter {
         it.phaseId == commitPhase && it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
       }
-    val baseline =
-      readPublication(
-        workflowId,
-        completions.lastOrNull {
-          it.sequenceNumber < repair.start.sequenceNumber
-        },
-        ledger,
-        outputs,
-      )
-    val published =
-      readPublication(
-        workflowId,
-        completions.firstOrNull {
-          it.sequenceNumber in (repair.start.sequenceNumber + 1) until monitorStart.sequenceNumber
-        },
-        ledger,
-        outputs,
-      )
+    val baselineCompletion = completions.lastOrNull { it.sequenceNumber < repair.start.sequenceNumber }
+    val publishedCompletion =
+      completions.firstOrNull {
+        it.sequenceNumber in (repair.start.sequenceNumber + 1) until monitorStart.sequenceNumber
+      }
+    if (baselineCompletion == null || publishedCompletion == null) {
+      unavailableRepairAssociation("baseline or repair publication is missing")
+      return null
+    }
+    val baseline = readPublication(workflowId, baselineCompletion, ledger, outputs)
+    val published = readPublication(workflowId, publishedCompletion, ledger, outputs)
     return if (baseline == null || published == null) null else baseline to published
   }
 
@@ -207,20 +288,22 @@ internal class MonitorRepairAccounting(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     outputs: List<FeatureTaskRuntimePhaseOutput>,
   ): Publication? {
-    val start = completion?.let { matchingStart(it, ledger) }
+    val start = completion?.let { evidenceReader.matchingStart(it, ledger) }
     val output =
-      completion?.let {
-        completedPushedCommitOutput(outputs, it.attemptCount)
-          ?: completedOutput(workflowId, it, ledger, null)?.let { restored ->
-            completedPushedCommitOutput(listOf(restored), it.attemptCount)
-          }
+      completion?.let { entry ->
+        outputs.singleOrNull { it.phaseId == steps.publication && it.iteration == entry.attemptCount }
+          ?: evidenceReader.completedOutput(workflowId, entry, ledger, null)
       }
-    val sha = output?.let(::commitPushSha)
+    val pushedOutput =
+      completion?.let { entry ->
+        output?.let { evidenceReader.completedPushedCommitOutput(listOf(it), entry.attemptCount) }
+      }
+    val sha = pushedOutput?.let(evidenceReader::commitPushSha)
     if (completion == null || start == null || sha == null) {
       unavailableRepairAssociation("pushed publication or its START is missing")
       return null
     }
-    if (!producerOutputMatches(workflowId, start, completion, output)) return null
+    if (!evidenceReader.producerOutputMatches(workflowId, start, completion, output)) return null
     return Publication(sha)
   }
 
@@ -228,27 +311,36 @@ internal class MonitorRepairAccounting(
     repoRoot: Path,
     repair: RepairAttempt,
     publications: Pair<Publication, Publication>,
-    historicalFailure: FeatureTaskRuntimePhaseOutput?,
   ): RepairPublicationAssociation {
     val baseline = publications.first.sha
     val published = publications.second.sha
+    val change = publishedChange(repoRoot, baseline, published) ?: return RepairPublicationAssociation.Unavailable
+    if (change.addedMergeParent) return RepairPublicationAssociation.Published(published)
+    if (change.sameTree) return RepairPublicationAssociation.Unchanged
+    return repair.record?.let { record -> qualifySourceChange(repoRoot, record, publications) }
+      ?: unavailableRepairAssociation("repair source attribution is no longer retained")
+  }
+
+  private fun qualifySourceChange(
+    repoRoot: Path,
+    repairRecord: FeatureTaskRuntimePhaseRecord,
+    publications: Pair<Publication, Publication>,
+  ): RepairPublicationAssociation {
     val changedPaths =
       when (
-        val changes = gitOperations.runtimePhaseChangedPathsBetweenCommits(repoRoot, baseline, published)
+        val changes =
+          gitOperations.runtimePhaseChangedPathsBetweenCommits(
+            repoRoot,
+            publications.first.sha,
+            publications.second.sha,
+          )
       ) {
         is WorkflowGitNameListResult.Listed -> changes.names.filterNot(::isRuntimePrivatePath).toSet()
         is WorkflowGitNameListResult.Failed -> return gitEvidenceUnavailable("published path diff failed")
       }
-    val priorQualification = historicalFailure?.let { confirmsPublishedFailure(it, published) } == true
-    if (repair.record == null && !priorQualification) {
-      return unavailableRepairAssociation("repair source attribution is no longer retained")
-    }
-    val change = publishedChange(repoRoot, baseline, published) ?: return RepairPublicationAssociation.Unavailable
-    val changedSource =
-      changedPaths.any(attributedPaths(repair.record)::contains) ||
-        (repair.record == null && priorQualification && changedPaths.isNotEmpty())
-    return if (change.addedMergeParent || (changedSource && !change.sameTree)) {
-      RepairPublicationAssociation.Published(published)
+    val changedSource = changedPaths.any(attributedPaths(repairRecord)::contains)
+    return if (changedSource) {
+      RepairPublicationAssociation.Published(publications.second.sha)
     } else {
       RepairPublicationAssociation.Unchanged
     }
@@ -334,28 +426,17 @@ internal class MonitorRepairAccounting(
     return result
   }
 
-  private fun matchingStart(
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
+  private fun hasUnmatchedRepairCompletionBefore(
+    monitorStart: FeatureTaskRuntimePhaseLedgerEntry,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  ): FeatureTaskRuntimePhaseLedgerEntry? =
-    ledger.lastOrNull {
-      it.phaseId == completion.phaseId && it.attemptCount == completion.attemptCount &&
-        it.sequenceNumber < completion.sequenceNumber && it.action == FeatureTaskRuntimePhaseLedgerAction.START
-    }
-
-  private fun recordMatches(
-    record: FeatureTaskRuntimePhaseRecord?,
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
   ): Boolean =
-    record?.let {
-      it.phaseId == completion.phaseId && it.resolvedAgentId == completion.resolvedAgentId &&
-        it.status == WorkflowStepStatus.COMPLETED
-    } ?: true
-
-  private fun isCompletedEnvelope(
-    output: NormalizedFeatureTaskRuntimePhaseOutput?,
-    phaseId: String,
-  ): Boolean = output != null && output.phaseId == phaseId && output.status == WorkflowStepStatus.COMPLETED.wireValue
+    ledger.any { completion ->
+      completion.phaseId == steps.repair && completion.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+        completion.sequenceNumber < monitorStart.sequenceNumber && evidenceReader.matchingStart(
+          completion,
+          ledger,
+        ) == null
+    }
 
   private fun producerAssociationUnavailableForGit(reason: String): Boolean? {
     RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "Monitor repair accounting could not prove $reason.")
@@ -377,182 +458,4 @@ internal class MonitorRepairAccounting(
     )
     return RepairPublicationAssociation.Unavailable
   }
-
-  private fun producerOutputMatches(
-    workflowId: String,
-    start: FeatureTaskRuntimePhaseLedgerEntry,
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    expectedOutput: FeatureTaskRuntimePhaseOutput? = null,
-  ): Boolean {
-    val agentId =
-      completion.resolvedAgentId
-        ?: return producerAssociationUnavailable(completion, "missing resolved agent")
-    val read =
-      producerOutput(
-        ProducerOutputQueryArgs(
-          workflowId = workflowId,
-          phaseId = completion.phaseId,
-          attempt = completion.attemptCount,
-          agentId = agentId,
-          generation = 0,
-        ),
-      )
-    val evidence =
-      (read as? FeatureTaskRuntimeProducerOutputRead.Found)?.evidence
-        ?: return producerAssociationUnavailable(completion, "producer output is absent or unreadable")
-    return when (
-      val association =
-        associateMonitorProducer(
-          ProducerOutputQueryArgs(workflowId, completion.phaseId, completion.attemptCount, agentId, 0),
-          start,
-          completion,
-          evidence,
-        )
-    ) {
-      FeatureTaskMonitorProducerAssociation.Matched -> {
-        if (expectedOutput == null) return true
-        val normalized = readEnvelope(completion, evidence.payload?.decodeToString())
-        if (normalized == null || normalized.canonicalJson != expectedOutput.normalizedOutput?.canonicalJson) {
-          producerAssociationUnavailable(completion, "retained producer output contradicts the selected output")
-        } else {
-          true
-        }
-      }
-      is FeatureTaskMonitorProducerAssociation.Unavailable ->
-        producerAssociationUnavailable(completion, association.reason)
-    }
-  }
-
-  private fun producerAssociationUnavailable(
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    reason: String,
-  ): Boolean {
-    RuntimeDiagnosticsBestEffortWarning.record(
-      diagnostics,
-      "Monitor repair accounting could not associate ${completion.phaseId} attempt " +
-        "${completion.attemptCount}: $reason.",
-    )
-    return false
-  }
-
-  private fun commitPushSha(output: FeatureTaskRuntimePhaseOutput): String? =
-    output.normalizedOutput
-      ?.envelopeWireMap()
-      ?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)
-      .let { it as? Map<*, *> }
-      ?.get(FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT)
-      .let { it as? Map<*, *> }
-      ?.get(DecompositionManifestPayloadKeys.COMMIT_SHA)
-      ?.toString()
-      ?.takeIf(String::isNotBlank)
-
-  private fun completedPushedCommitOutput(
-    outputs: List<FeatureTaskRuntimePhaseOutput>,
-    attempt: Int,
-  ): FeatureTaskRuntimePhaseOutput? {
-    val output =
-      outputs
-        .singleOrNull {
-          it.phaseId == steps.publication && it.iteration == attempt
-        }
-        ?: return null
-    val payload = output.normalizedOutput?.envelopeWireMap()?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>
-    val result = payload?.get(FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT) as? Map<*, *>
-    return output.takeIf {
-      it.normalizedOutput?.phaseId == steps.publication &&
-        it.normalizedOutput?.status == WorkflowStepStatus.COMPLETED.wireValue &&
-        result?.get(FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED) == true
-    }
-  }
-
-  private fun readRepairCompletion(
-    workflowId: String,
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    record: FeatureTaskRuntimePhaseRecord?,
-  ): NormalizedFeatureTaskRuntimePhaseOutput? {
-    val text =
-      if (record != null) {
-        record.outputArtifact
-      } else {
-        findEnvelope(workflowId, completion.phaseId, completion.attemptCount)?.envelope?.let(JsonCodec::mapToJsonString)
-      }
-    return readEnvelope(completion, text)
-  }
-
-  private fun readEnvelope(
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    text: String?,
-  ): NormalizedFeatureTaskRuntimePhaseOutput? =
-    text?.let {
-      try {
-        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(it, completion.phaseId)
-      } catch (error: SkillBillRuntimeException) {
-        producerAssociationUnavailable(completion, "accepted output is unreadable: ${error.message}")
-        null
-      }
-    }
-
-  fun completedOutput(
-    workflowId: String,
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-    currentRecord: FeatureTaskRuntimePhaseRecord?,
-  ): FeatureTaskRuntimePhaseOutput? {
-    val start = matchingStart(completion, ledger)
-    if (start == null) {
-      producerAssociationUnavailable(completion, "matching START is missing")
-      return null
-    }
-    val record = currentRecord?.takeIf { it.attemptCount == completion.attemptCount }
-    if (!recordMatches(record, completion) || !producerOutputMatches(workflowId, start, completion)) {
-      producerAssociationUnavailable(completion, "phase record or producer contradicts the selected completion")
-      return null
-    }
-    val output = readCompletedEnvelope(workflowId, completion, record) ?: return null
-    return FeatureTaskRuntimePhaseOutput(completion.phaseId, completion.attemptCount, output.canonicalJson, output)
-  }
-
-  private fun readCompletedEnvelope(
-    workflowId: String,
-    completion: FeatureTaskRuntimePhaseLedgerEntry,
-    record: FeatureTaskRuntimePhaseRecord?,
-  ): NormalizedFeatureTaskRuntimePhaseOutput? {
-    val output =
-      if (completion.phaseId == steps.repair) {
-        readRepairCompletion(workflowId, completion, record)
-      } else {
-        val agent = completion.resolvedAgentId ?: return null
-        val read =
-          producerOutput(
-            ProducerOutputQueryArgs(workflowId, completion.phaseId, completion.attemptCount, agent, 0),
-          )
-        readEnvelope(
-          completion,
-          (read as? FeatureTaskRuntimeProducerOutputRead.Found)?.evidence?.payload?.decodeToString(),
-        )
-      }
-    if (!isCompletedEnvelope(output, completion.phaseId)) {
-      producerAssociationUnavailable(completion, "accepted completed output is unavailable")
-      return null
-    }
-    if (record?.outputArtifact != null &&
-      readEnvelope(completion, record.outputArtifact)?.canonicalJson != output?.canonicalJson
-    ) {
-      producerAssociationUnavailable(completion, "phase record output contradicts the retained output")
-      return null
-    }
-    return output
-  }
-
-  fun confirmsPublishedFailure(
-    output: FeatureTaskRuntimePhaseOutput,
-    commitSha: String,
-  ): Boolean =
-    output.normalizedOutput?.let {
-      it.phaseId == steps.monitor &&
-        it.status == WorkflowStepStatus.COMPLETED.wireValue &&
-        it.verdict == FeatureTaskRuntimeVerdict.CI_FAILED.wireValue &&
-        auditProseValue(it.envelopeWireMap())
-          ?.startsWith("CI confirmed a failed published repair commit '$commitSha'") == true
-    } == true
 }

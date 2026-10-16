@@ -68,7 +68,10 @@ class PhaseMonitorRunTest {
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
-    assertTrue(result.value.orEmpty().contains("CI passed on branch '$FEATURE_BRANCH'"), result.value)
+    assertTrue(
+      result.value.orEmpty().contains("CI passed for published commit '$headBefore' on branch '$FEATURE_BRANCH'"),
+      result.value,
+    )
     assertEquals(emptyList(), launcher.requests)
     assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"))
     database.assertNoDurableWorkflowState()

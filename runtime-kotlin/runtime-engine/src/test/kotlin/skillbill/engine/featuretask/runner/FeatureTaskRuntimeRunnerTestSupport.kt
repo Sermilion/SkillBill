@@ -685,7 +685,8 @@ internal data class RuntimeHarnessConfig(
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
-  val monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  val monitoredPullRequestLookup: PullRequestIdentityLookup =
+    OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations

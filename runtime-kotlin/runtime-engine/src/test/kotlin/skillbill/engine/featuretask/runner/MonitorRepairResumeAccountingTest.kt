@@ -2,21 +2,23 @@ package skillbill.engine.featuretask.runner
 
 import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
+import skillbill.engine.featuretask.phase.core.MonitorRepairProducerEvidence
 import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.core.RepairPublicationAssociation
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.WorkflowStepStatus
@@ -30,7 +32,6 @@ import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -45,7 +46,23 @@ class MonitorRepairResumeAccountingTest {
       RuntimeHarnessConfig(repoRoot = repo, gitOperationsOverride = gitOperations, seedDurableWorkflow = false),
     )
   private val recorder = harness.recorder
+  private val execution =
+    ExecutionPlanAdmissionFixture(
+      definition = SkeletonDefinition.MONITOR,
+      selectedStrategies = harness.strategies,
+      specPath = harness.request().runInvariants.specReference,
+    )
   private val commits = mutableListOf<String>()
+  private val warnings = mutableListOf<String>()
+  private val diagnostics =
+    object : RuntimeDiagnostics by NoopRuntimeDiagnostics {
+      override fun warning(
+        message: String,
+        error: Throwable?,
+      ) {
+        warnings += message
+      }
+    }
 
   @AfterTest
   fun cleanUp() {
@@ -62,8 +79,7 @@ class MonitorRepairResumeAccountingTest {
 
     repeat(2) {
       val state = restoredState()
-      assertEquals(commits.drop(1).toSet(), state.monitorFailedRepairCommitShas)
-      assertFalse(state.monitorFailureEvidenceUnavailable)
+      assertEquals(commits.drop(1).toSet(), state.monitorFailedRepairCommitShas, warnings.joinToString("\n"))
       val reason = FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason("monitor_fix", state)
       commits.drop(1).forEach { assertTrue(it in reason, reason) }
       assertTrue("after 3 CI-confirmed" in reason, reason)
@@ -73,14 +89,15 @@ class MonitorRepairResumeAccountingTest {
   }
 
   @Test
-  fun `a historical failure for a different commit blocks reconstruction without erasing proven failures`() {
+  fun `historical prose naming a different commit cannot alter proven publication accounting`() {
     seedThreeFailures()
     complete("monitor", 5, failedMonitor("a".repeat(40)))
 
     val state = restoredState()
 
-    assertEquals(commits.drop(1).toSet(), state.monitorFailedRepairCommitShas)
-    assertTrue(state.monitorFailureEvidenceUnavailable)
+    assertEquals(commits.drop(1).toSet(), state.monitorFailedRepairCommitShas, warnings.joinToString("\n"))
+    val reason = FeatureTaskRuntimeRunLoopMonitorCycle.monitorCapExhaustionReason("monitor_fix", state)
+    commits.drop(1).forEach { assertTrue(it in reason, reason) }
   }
 
   @Test
@@ -121,17 +138,49 @@ class MonitorRepairResumeAccountingTest {
           ledger.last {
             it.phaseId == phase && it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
           }
-        assertEquals(null, accounting.completedOutput(WORKFLOW_ID, completion, ledger, records[phase]))
+        val evidence =
+          MonitorRepairProducerEvidence(
+            MonitorRepairStepRoles("monitor", "monitor_fix", "commit_push"),
+            { query ->
+              val read = recorder.producerOutput(query)
+              if (query.phaseId == phase && read is FeatureTaskRuntimeProducerOutputRead.Found) {
+                FeatureTaskRuntimeProducerOutputRead.Found(transform(read.evidence))
+              } else {
+                read
+              }
+            },
+            assertNotNull(harness.launcher.settlement)::findEnvelope,
+            NoopRuntimeDiagnostics,
+          )
+        assertEquals(null, evidence.completedOutput(WORKFLOW_ID, completion, ledger, records[phase]))
       }
     }
   }
 
   private fun restoredState(): FeatureTaskRuntimeRunState {
+    val supported =
+      execution.compatibility.requireSupportedExecutionWithRecordedSemantics(
+        execution.encoded,
+        execution.inputs,
+      )
     val request = harness.request().copy(skeletonDefinition = SkeletonDefinition.MONITOR)
-    return harness.executePrepared.createExecutePreparedRunState(
-      request,
-      harness.strategies.executionPlan(strategySelectionFacts(request)),
-      NoopRuntimeDiagnostics,
+    val records = assertNotNull(recorder.loadPhaseRecords(WORKFLOW_ID))
+    val ledger = assertNotNull(recorder.loadPhaseLedger(WORKFLOW_ID))
+    val history =
+      MonitorRepairAccounting(
+        MonitorRepairStepRoles("monitor", "monitor_fix", "commit_push"),
+        gitOperations,
+        recorder::producerOutput,
+        assertNotNull(harness.launcher.settlement)::findEnvelope,
+        diagnostics,
+      ).restore(request, records, ledger, supported.recordedMonitorSemantics, supported.plan)
+    return FeatureTaskRuntimeRunState(
+      initialRecords = records,
+      transitions = supported.plan.traversal,
+      durableInitialLedger = ledger,
+      initialRetainedOutputs = history.outputs,
+      initialMonitorRepairFailures = history.failedRepairs,
+      resumeRulesFn = harness.strategies.resumeRules(supported.plan),
     )
   }
 
@@ -143,6 +192,7 @@ class MonitorRepairResumeAccountingTest {
     git(repo, "config", "commit.gpgsign", "false")
     git(repo, "remote", "add", "origin", origin.toString())
     recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    execution.seed(harness.repository, WORKFLOW_ID, harness.request().issueKey)
     publish(1)
     complete(
       "monitor",
