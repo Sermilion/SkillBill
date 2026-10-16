@@ -31,7 +31,4 @@ internal class AcceptanceCriterionRepairSession(
     phase: FeatureTaskRuntimePhaseStateRequest,
     kind: AcceptanceCriterionRepairOutcomeKind,
   ): Boolean? = recorder.unsuccessful(this, phase, kind)
-
-  override fun requireFinalAudit(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? =
-    recorder.requireFinalAudit(this, phase)
 }

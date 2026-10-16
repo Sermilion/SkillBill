@@ -12,8 +12,6 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeP
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 internal object AcceptanceAuditResumeRules : PhaseResumeRules {
-  override val resumesPastCompletion: Boolean = true
-
   override val invalidatesLaterStepsWhileIncomplete: Boolean = true
 
   override fun resumedRecord(

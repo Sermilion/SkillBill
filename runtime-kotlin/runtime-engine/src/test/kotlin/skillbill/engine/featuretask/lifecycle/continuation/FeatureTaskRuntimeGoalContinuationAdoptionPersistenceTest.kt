@@ -15,7 +15,6 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPrepara
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
-import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
@@ -353,7 +352,6 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
           recorder,
           continuationRecorder,
           runInvariantsStore,
-          statusProjectionPhaseStrategies(),
         ),
     )
   }

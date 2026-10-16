@@ -85,7 +85,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
       FeatureTaskRuntimeBackwardEdge(
         fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
         triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
-        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
         loopId = FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_COMMIT_LOOP_ID,
         perEdgeCap = null,
         capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,

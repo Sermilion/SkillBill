@@ -6,7 +6,10 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
@@ -17,6 +20,7 @@ import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -77,7 +81,22 @@ class MonitorStrategy(
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
   override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
-    if (stepId == entryStep) PhaseExecutionBindingKind.CI_MONITOR else super.executionBindingKind(stepId)
+    PhaseExecutionBindingKind.CI_MONITOR.also { policies.policyOf(stepId) }
+
+  override fun stepHooks(stepId: String): PhaseStepHooks =
+    if (stepId == entryStep) PhaseStepHooks.None else repairPublication
+
+  private val repairPublication =
+    object : PhaseStepHooks {
+      override fun settleCompletedOutput(
+        run: PhaseRun,
+        context: PhaseStepOutputContext,
+        state: PhaseAcceptedStepExecution,
+        outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+      ): PhaseStepOutputCheck =
+        (state as PhaseMonitorStepBinding).publishRepair(run)?.let { PhaseStepOutputCheck.Block(it) }
+          ?: PhaseStepOutputCheck.Accept
+    }
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)

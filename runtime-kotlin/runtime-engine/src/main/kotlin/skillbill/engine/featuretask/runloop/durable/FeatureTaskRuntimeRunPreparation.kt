@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuatio
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -32,7 +31,6 @@ class FeatureTaskRuntimeRunPreparation(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val continuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
-  private val strategies: PhaseStrategyLookup,
 ) {
   fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
     requireNotNull(request.admittedExecution) { "Durable preparation requires transactional execution admission." }
@@ -46,12 +44,11 @@ class FeatureTaskRuntimeRunPreparation(
             .filter { it.status == WorkflowStepStatus.COMPLETED }
             .map { it.phaseId }
         val plan = requireNotNull(request.admittedExecution).plan
-        val transitions = plan.traversal
-        val resumeRules = strategies.resumeRules(plan)
+        val transitions = plan.phaseTraversal()
         val phase =
           transitions.forwardPhaseIds.firstOrNull {
             it !in completedPhases && it !in transitions.loopOnlyPhaseIds
-          } ?: transitions.forwardPhaseIds.first { resumeRules(it).resumesPastCompletion }
+          } ?: transitions.forwardPhaseIds.last()
         return FeatureTaskRuntimePreparation.PreparationBlocked(
           goalContinuationPolicyBlockedReport(
             request,

@@ -42,9 +42,9 @@ class FeatureTaskRuntimeMonitorFixLoopTest {
   }
 
   @Test
-  fun `a completed fix goes back through commit_push before the monitor re-checks`() {
+  fun `a completed fix returns directly to monitoring after its repair publication`() {
     assertEquals(
-      FeatureTaskRuntimeNextPhase.Next(phaseId = COMMIT_PUSH, loopId = MONITOR_FIX_COMMIT_LOOP, edgeIteration = 1),
+      FeatureTaskRuntimeNextPhase.Next(phaseId = MONITOR, loopId = MONITOR_FIX_COMMIT_LOOP, edgeIteration = 1),
       resolved(MONITOR_FIX, FeatureTaskRuntimeVerdict.ADVANCE, edgeIterationCount = 0),
     )
   }
@@ -75,7 +75,6 @@ class FeatureTaskRuntimeMonitorFixLoopTest {
   private companion object {
     const val MONITOR = "monitor"
     const val MONITOR_FIX = "monitor_fix"
-    const val COMMIT_PUSH = "commit_push"
     const val MONITOR_FIX_LOOP = "monitor_fix"
     const val MONITOR_FIX_COMMIT_LOOP = "monitor_fix_commit"
     const val MAX_ATTEMPTS = 3

@@ -19,8 +19,6 @@ import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepair
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPersistence
 import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRecorder
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -29,8 +27,6 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
@@ -93,21 +89,17 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
-  fun `a failed fingerprint after final acceptance blocks instead of reporting completion`() {
+  fun `later phase edits leave accepted phases complete on execution and resume`() {
     val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = "unchanged-source" }
-    var finalAccepted = { false }
-    var acceptedReads = 0
-    val failingGit =
-      object : WorkflowGitOperations by git {
-        override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
-          if (finalAccepted() && ++acceptedReads > 1) {
-            WorkflowGitOperationResult.Failed("Fingerprint unavailable")
-          } else {
-            git.repositoryFingerprint(repoRoot)
-          }
-      }
     val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
-    val launcher = serialLauncher(AtomicInteger()) { currentState.get() }
+    val changedPhases = mutableListOf<String>()
+    val launcher =
+      serialLauncher(AtomicInteger(), validationFailures = 1, onPhase = { phase ->
+        if (phase in setOf("validate", "write_history")) {
+          changedPhases += phase
+          git.repositoryFingerprintValue = "changed-by-$phase"
+        }
+      }) { currentState.get() }
     val harness =
       runnerHarness(
         RuntimeHarnessConfig(
@@ -116,33 +108,20 @@ class FeatureTaskRuntimeSerialRepairTest {
           codeReviewMode = CodeReviewExecutionMode.INLINE,
         ),
       )
-    val runner =
-      harness.withEntry(
-        object : TestFeatureTaskRuntimeRunLoopEntry(gitOperations = failingGit) {
-          override fun run(
-            context: FeatureTaskRuntimeRunLoopContext,
-            beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
-          ): FeatureTaskRuntimeRunReport = super.run(this.context(context.request, context.runState), beforeDrive)
-        },
-      )
     runOwnedSerial(harness) { admitted, worker, scope ->
       currentState.set(scope.snapshot)
-      finalAccepted = { scope.snapshot?.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED }
-      val report =
-        runner.run(
-          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
-          worker,
-        )
-      val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-      assertEquals("audit", blocked.lastIncompletePhase)
-      assertContains(blocked.blockedReason, "source fingerprint could not be verified")
-      assertContains(blocked.blockedReason, "Fingerprint unavailable")
-      assertEquals(
-        1,
-        harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().count {
-          it.blockedReason == blocked.blockedReason
-        },
-      )
+      val request = harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope)
+      val report = harness.runner.run(request, worker)
+      assertEquals("validate", assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report").lastIncompletePhase)
+      assertEquals(listOf("validate"), changedPhases)
+      assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+      val finishedPhases = harness.launchedPromptPhaseOrder().toList()
+      val acceptedAudits = scope.snapshot?.finalAudits
+      val resumed = harness.runner.run(request, worker)
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(resumed, "$resumed")
+      assertEquals(finishedPhases + listOf("validate", "write_history"), harness.launchedPromptPhaseOrder())
+      assertEquals(listOf("validate", "validate", "write_history"), changedPhases)
+      assertEquals(acceptedAudits, scope.snapshot?.finalAudits)
     }
   }
 
@@ -204,12 +183,17 @@ class FeatureTaskRuntimeSerialRepairTest {
 
   private fun serialLauncher(
     repairs: AtomicInteger,
+    validationFailures: Int = 0,
+    onPhase: (String) -> Unit = {},
     currentState: () -> AcceptanceCriterionRepairState?,
   ): RuntimeRecordingLauncher {
     var audit = 0
+    var validations = 0
     return RuntimeRecordingLauncher { request ->
       val prompt = assertNotNull(request.skillRunRequest.promptOverride)
-      when (phaseIdFromPrompt(prompt)) {
+      val phase = phaseIdFromPrompt(prompt)
+      onPhase(phase)
+      when (phase) {
         "audit" -> {
           audit++
           if (audit <= 3) assertContains(prompt, "AC-1")
@@ -257,6 +241,10 @@ class FeatureTaskRuntimeSerialRepairTest {
             facts(defaultPhaseOutput(request))
           }
         }
+        "validate" ->
+          facts(
+            if (validations++ < validationFailures) VALIDATE_BLOCKED_OUTPUT else defaultPhaseOutput(request),
+          )
         else -> facts(defaultPhaseOutput(request))
       }
     }

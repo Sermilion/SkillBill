@@ -123,7 +123,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   ): FeatureTaskRuntimeRunState =
     FeatureTaskRuntimeRunState(
       initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
-      transitions = executionPlan.traversal,
+      transitions = executionPlan.phaseTraversal(),
       durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
       stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),

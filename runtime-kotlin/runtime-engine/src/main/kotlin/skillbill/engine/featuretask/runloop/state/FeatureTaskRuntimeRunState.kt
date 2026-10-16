@@ -365,22 +365,16 @@ internal class FeatureTaskRuntimeRunState(
   }
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
-    val requestedStart = ExplicitResumeStart(requestedPhaseId, reopen = true)
     val phaseId =
-      transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
-        ?: requestedPhaseId
-    if (!resumeRules(phaseId).resumesPastCompletion || phaseId !in completedPhases) {
-      return if (phaseId == requestedPhaseId) {
-        requestedStart
+      if (requestedPhaseId in completedPhases) {
+        requestedPhaseId
       } else {
-        ExplicitResumeStart(phaseId, reopen = phaseId !in completedPhases)
+        transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
+          ?: requestedPhaseId
       }
-    }
-    if (openRepairReentry(phaseId)) {
-      return ExplicitResumeStart(phaseId, reopen = false)
-    }
-    if (phaseId != requestedPhaseId) return requestedStart
-    return completedResumePast(phaseId) ?: requestedStart
+    if (phaseId !in completedPhases) return ExplicitResumeStart(phaseId, reopen = true)
+    if (openRepairReentry(phaseId)) return ExplicitResumeStart(phaseId, reopen = false)
+    return completedResumePast(phaseId) ?: ExplicitResumeStart(phaseId, reopen = false)
   }
 
   internal fun reopenFromExplicitResume(phaseId: String) {

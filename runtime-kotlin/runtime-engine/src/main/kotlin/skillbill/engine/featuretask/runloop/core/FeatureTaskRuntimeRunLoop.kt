@@ -36,6 +36,7 @@ import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -73,6 +74,13 @@ internal class FeatureTaskRuntimeRunLoopContext(
   override val specSource: SpecSource get() = runState.specSource
 
   override val coupledRunTransitions get() = runState.coupledRunTransitions
+
+  fun hasLeftSlot(slot: PhaseSlot): Boolean =
+    transitions.forwardPhaseIds.any { stepId ->
+      val owner = runState.selectedOwnerOf(stepId)
+      owner != null && owner.slot.ordinal > slot.ordinal &&
+        state.phase(stepId).record?.status?.let { it != WorkflowStepStatus.PENDING } == true
+    }
 
   fun acceptedStep(run: PhaseRun): PhaseAcceptedStepExecution {
     requireAcceptedRun(run)

@@ -421,3 +421,8 @@ the subtask launch, which creates it from its base.
 
 Reason: Spec hashes and plan writes refer to the goal branch's files. Reading or
 writing them on another branch produces false drift and cross-branch merges.
+
+## [2026-10-16] Completed workflow phases stay complete
+Context: The final acceptance fingerprint check ran on every forward transition. Validation, history updates, and checkpoint commits repeatedly sent SKILL-428 back to audit. Resume also unconditionally re-entered serial acceptance work, including accepted audits.
+Decision: Phase boundaries are forward-only for every phase. Remove the post-acceptance fingerprint reopening and its recorder API. Resume preserves accepted audits, and stale-evidence hooks cannot reopen a phase after a later phase has started. Cross-phase repair edges do not re-enter their target; a completed phase advances to its next forward step. Existing audit and review repair loops remain within their phase. Monitor repair commits and pushes before its completion is recorded, then returns directly to monitoring instead of reopening commit/push and PR.
+Reason: Later phases own their repairs. An earlier phase's accepted result records work already finished and must not become a new obligation because the checkout changed. This supersedes the older history-to-quality-gate regeneration routes when they attempt to cross a phase boundary.

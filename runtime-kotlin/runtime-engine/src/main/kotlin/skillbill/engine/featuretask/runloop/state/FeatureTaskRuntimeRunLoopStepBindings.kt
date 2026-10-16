@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.runloop.state
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.engine.featuretask.lifecycle.branch.baseBranchOrDefault
+import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassCompletionRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -27,6 +29,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.InMemoryCommitPush
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
@@ -341,8 +344,21 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   run: PhaseRun,
   fanOutUnitId: Int?,
   bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
-) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseMonitorStepBinding {
+  override fun publishRepair(run: PhaseRun): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    val resolved = environment.recorder.loadResolvedBranch(environment.request.workflowId)
+    val base = environment.gitOperations.baseBranchOrDefault(environment.request.repoRoot, resolved?.baseBranch)
+    val branch = requirePublishableBranch(resolved?.branch, base)
+    val result =
+      InMemoryCommitPush(environment.gitOperations, environment.request.repoRoot).run(
+        branch,
+        environment.request.issueKey,
+      )
+    return result.error.takeUnless { result.ok }
+  }
+
   override fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,

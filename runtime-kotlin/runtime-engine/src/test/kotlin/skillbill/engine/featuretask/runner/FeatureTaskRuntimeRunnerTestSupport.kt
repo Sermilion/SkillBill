@@ -1079,7 +1079,6 @@ private fun assembleHarnessRunner(
         deps.recorder,
         deps.goalContinuationRecorder,
         deps.runInvariantsStore,
-        strategies,
       ),
       FeatureTaskRuntimeRunnerExecute(
         runtimeSpecSourceResolver(),
@@ -1324,7 +1323,6 @@ private fun telemetryHarnessRunner(
             workflow.recorder,
             workflow.goalContinuationRecorder,
             workflow.runInvariantsStore,
-            strategies,
           ),
         execute =
           FeatureTaskRuntimeRunnerExecute(
