@@ -26,9 +26,12 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -140,12 +143,14 @@ internal class WorkflowGoalRunnerBlockWrites(
     }
     val artifacts = existing.artifacts
     val phaseRecords = phaseRecordsFromWorkflowArtifacts(artifacts)
+    val repairBudgetPatch = repairBudgetResetPatch(artifacts)
     val blockedRecord =
       operatorReopenablePhaseRecord(
         phaseRecords,
         preferredPhaseId,
         existing.workflowStatus,
-      ) ?: return true
+      ) ?: phaseRecords[preferredPhaseId]?.takeIf { repairBudgetPatch.isNotEmpty() }
+        ?: return true
     unitOfWork.workflowStates.save(
       family,
       engine.updateRecord(
@@ -154,13 +159,23 @@ internal class WorkflowGoalRunnerBlockWrites(
         operatorBlockedPhaseReopenUpdate(
           blockedRecord,
           phaseRecords,
-          phaseLedgerFromWorkflowArtifacts(artifacts),
+          artifacts,
           reason,
-          artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString(),
+          repairBudgetPatch,
         ),
       ),
     )
     return true
+  }
+
+  private fun repairBudgetResetPatch(artifacts: Map<String, Any?>): Map<String, Any?> {
+    val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
+    if (!family.contains(artifacts)) return emptyMap()
+    val state =
+      FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(artifacts))
+        .toAcceptanceCriterionRepairState(family.label())
+    val resumed = state.resetBudgetForOperatorResume()
+    return if (resumed == state) emptyMap() else mapOf(family.entry(resumed.asRepairWireMap()))
   }
 
   private fun operatorReopenablePhaseRecord(
@@ -179,10 +194,11 @@ internal class WorkflowGoalRunnerBlockWrites(
   private fun operatorBlockedPhaseReopenUpdate(
     blockedRecord: FeatureTaskRuntimePhaseRecord,
     phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
-    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    artifacts: Map<String, Any?>,
     reason: String,
-    previousBlockedReason: String?,
+    repairBudgetPatch: Map<String, Any?>,
   ): WorkflowUpdateInput {
+    val ledger = phaseLedgerFromWorkflowArtifacts(artifacts)
     val reopened =
       LinkedHashMap(phaseRecords).apply {
         this[blockedRecord.phaseId] = blockedRecord.asPendingForOperatorResume()
@@ -226,11 +242,13 @@ internal class WorkflowGoalRunnerBlockWrites(
                 SharedPayloadKeys.PHASE_ID to blockedRecord.phaseId,
                 "reason" to reason,
                 "retried_at" to clock.instant().atOffset(ZoneOffset.UTC).toString(),
-                "previous_blocked_reason" to (blockedRecord.blockedReason ?: previousBlockedReason),
+                "previous_blocked_reason" to (
+                  blockedRecord.blockedReason ?: artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString()
+                ),
                 "previous_blocked_record" to blockedRecord.asWorkflowArtifactEntry(),
               ),
             ),
-          ),
+          ) + repairBudgetPatch,
         ),
       sessionId = "",
     )

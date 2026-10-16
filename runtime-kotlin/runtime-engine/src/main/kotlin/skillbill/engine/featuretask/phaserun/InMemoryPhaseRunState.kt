@@ -47,6 +47,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CancellationException
 
@@ -135,7 +136,11 @@ internal class InMemoryPhaseRunState(
         )
     var lastKind: String? = null
     var lastPublishedAt: Instant? = null
-    fun publish(kind: String, activity: String) {
+
+    fun publish(
+      kind: String,
+      activity: String,
+    ) {
       val now = clock.instant()
       if (lastKind == kind && lastPublishedAt?.let { now.isBefore(it.plus(ACTIVITY_REFRESH_INTERVAL)) } == true) return
       lastKind = kind
@@ -153,21 +158,11 @@ internal class InMemoryPhaseRunState(
     }
     val stampSink =
       AgentRunActivityStampSink { label ->
-        val activity =
-          when (label) {
-            AgentActivityLabel.WORKTREE_WRITE ->
-              "Observed file activity during '$stepName'; source progress is not confirmed."
-            AgentActivityLabel.STDOUT, AgentActivityLabel.TOOL_STREAM ->
-              "The '$stepName' child is active and producing output; source progress is not confirmed."
-            AgentActivityLabel.DURABLE_PROGRESS -> "Workflow progress changed during '$stepName'."
-            AgentActivityLabel.EVIDENCE_READ -> "The '$stepName' child is reading review evidence."
-          }
-        publish(label.wireValue, activity)
+        publish(label.wireValue, activityFor(label, stepName))
       }
     val progressEmitter: (AgentRunProgressEmission) -> Unit = { emission ->
       if (emission.processAlive && emission.outcome == GoalProgressOutcome.NONE &&
-        (emission.eventKind == GoalProgressEventKind.OPERATION_STARTED ||
-          emission.eventKind == GoalProgressEventKind.OPERATION_HEARTBEAT)
+        emission.eventKind in setOf(GoalProgressEventKind.OPERATION_STARTED, GoalProgressEventKind.OPERATION_HEARTBEAT)
       ) {
         publish("child_liveness", "The '$stepName' child is active; source progress is not confirmed.")
       }
@@ -178,6 +173,19 @@ internal class InMemoryPhaseRunState(
       progressEmitter = progressEmitter,
     )
   }
+
+  private fun activityFor(
+    label: AgentActivityLabel,
+    stepName: String,
+  ): String =
+    when (label) {
+      AgentActivityLabel.WORKTREE_WRITE ->
+        "Observed file activity during '$stepName'; source progress is not confirmed."
+      AgentActivityLabel.STDOUT, AgentActivityLabel.TOOL_STREAM ->
+        "The '$stepName' child is active and producing output; source progress is not confirmed."
+      AgentActivityLabel.DURABLE_PROGRESS -> "Workflow progress changed during '$stepName'."
+      AgentActivityLabel.EVIDENCE_READ -> "The '$stepName' child is reading review evidence."
+    }
 
   override fun recordTokenUsage(
     stepName: String,
@@ -309,4 +317,5 @@ private enum class QualityCheckResult(
 
 private const val QUALITY_CHECK_ROUTED_SKILL = "bill-code-check"
 private const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
-private val ACTIVITY_REFRESH_INTERVAL = java.time.Duration.ofSeconds(30)
+private const val ACTIVITY_REFRESH_SECONDS = 30L
+private val ACTIVITY_REFRESH_INTERVAL = Duration.ofSeconds(ACTIVITY_REFRESH_SECONDS)

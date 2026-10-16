@@ -173,6 +173,7 @@ class DatabaseMigrationsTest {
         55 to "complete-desktop-launch-schema",
         56 to "abandon-stale-verify-workflows",
         57 to "record-launch-agent-environment",
+        58 to "record-standalone-phase-launch-scope",
       ),
       migrationDefinitions,
     )
@@ -334,6 +335,43 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v58 records existing standalone phases as launched on their own`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v58-launch-scope").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-phase-launch-scope'")
+        statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN launch_scope")
+        statement.executeUpdate(
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-plan', 'plan', 'store', '1', '1', 'active', 'plan', " +
+            "'2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 1, '2026-10-17T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 57")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT launch_scope FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals("standalone", it.getString(1))
+        }
+        assertFailsWith<SQLException> {
+          statement.executeUpdate("UPDATE standalone_phase_status SET launch_scope = 'other'")
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
     }
   }
 

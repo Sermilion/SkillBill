@@ -920,6 +920,7 @@ class IdeStatusService(
               statusRevision = record.statusRevision,
               invocationId = record.invocationId,
               phaseId = record.phaseId,
+              launchScope = record.launchScope,
             ),
           branchCorrelation = record.branchCorrelation,
           standaloneStatus = record,

@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeNumstatResult
@@ -16,6 +17,12 @@ abstract class WorkflowGitOperationsTestBase :
   ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,
   SuppressionEvidenceGitOperations by NoopSuppressionEvidenceGitOperations,
   WorkflowGitReleaseTagOperations by NoopWorkflowGitReleaseTagOperations {
+  override fun commitIdentity(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitCommitIdentityResult =
+    WorkflowGitCommitIdentityResult.Failed("No commit identity was supplied for '$commitSha'.")
+
   override fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult =
     WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
 

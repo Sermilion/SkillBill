@@ -12,6 +12,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.lang.reflect.Proxy
 import java.nio.file.Path
@@ -94,6 +95,83 @@ class DefaultPhaseRunnerTest {
       )
       assertEquals(if (index < 2) 0 else 1, launches)
       assertEquals(if (index < 2) "" else "Merge conflicts resolved.", output.stdout.text)
+      assertNull(output.fileManifest)
+    }
+  }
+
+  @Test
+  fun `a pre-dirty source path is attributed only when the launched repair changes its content or presence`() {
+    for (after in listOf("before", "after", null)) {
+      var reads = 0
+      val git =
+        object : WorkflowGitOperations by NoopWorkflowGitOperations {
+          override fun worktreeStatus(repoRoot: Path) = WorkflowGitOperationResult.Ok(" M source.kt")
+
+          override fun pathContentIdentities(
+            repoRoot: Path,
+            paths: List<String>,
+          ): WorkflowPathContentIdentitiesResult {
+            assertEquals(listOf("source.kt"), paths)
+            val identity = if (reads++ == 0) "before" else after
+            return WorkflowPathContentIdentitiesResult.Resolved(identity?.let { mapOf("source.kt" to it) }.orEmpty())
+          }
+        }
+      val input =
+        input("monitor_fix").let {
+          it.copy(facts = it.facts.copy(attempt = 1), policy = it.policy.copy(mutating = true))
+        }
+
+      val output = DefaultPhaseRunner(launcher("Repair complete."), git).run(input, TrackedPhaseRunState)
+
+      assertNull(output.launchFailure)
+      assertEquals(if (after == "before") emptyList() else listOf("source.kt"), output.fileManifest?.reeditedPaths)
+    }
+  }
+
+  @Test
+  fun `unreadable content identities block attribution before or after the repair without losing its output`() {
+    for (failedRead in listOf(1, 2)) {
+      var reads = 0
+      var launches = 0
+      val git =
+        object : WorkflowGitOperations by NoopWorkflowGitOperations {
+          override fun worktreeStatus(repoRoot: Path) = WorkflowGitOperationResult.Ok(" M source.kt")
+
+          override fun pathContentIdentities(
+            repoRoot: Path,
+            paths: List<String>,
+          ): WorkflowPathContentIdentitiesResult =
+            if (++reads == failedRead) {
+              WorkflowPathContentIdentitiesResult.Failed("object database unreadable")
+            } else {
+              WorkflowPathContentIdentitiesResult.Resolved(mapOf("source.kt" to "before"))
+            }
+        }
+      val input =
+        input("monitor_fix").let {
+          it.copy(facts = it.facts.copy(attempt = 1), policy = it.policy.copy(mutating = true))
+        }
+      val runner =
+        DefaultPhaseRunner(
+          GoalRunnerSubtaskLauncher {
+            launches++
+            agentRunLaunchFacts(SupportedAgent.CLAUDE, stdout = "Repair output.")
+          },
+          git,
+        )
+
+      val output = runner.run(input, TrackedPhaseRunState)
+
+      assertEquals(
+        if (failedRead == 1) {
+          PhaseLaunchFailureKind.BEFORE_CAPTURE_FAILED
+        } else {
+          PhaseLaunchFailureKind.AFTER_CAPTURE_FAILED
+        },
+        output.launchFailure?.kind,
+      )
+      assertEquals(failedRead - 1, launches)
+      assertEquals(if (failedRead == 1) "" else "Repair output.", output.stdout.text)
       assertNull(output.fileManifest)
     }
   }

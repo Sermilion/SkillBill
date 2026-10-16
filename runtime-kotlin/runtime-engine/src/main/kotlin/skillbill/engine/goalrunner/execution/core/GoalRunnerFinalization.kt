@@ -49,6 +49,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -166,24 +167,17 @@ class GoalRunnerFinalization(
     pullRequestUrl: String,
     pullRequestStatus: GoalPullRequestStatus,
   ): GoalRunnerRunReport =
-    monitorBeforeCompletion(state, request, attempted) ?: run {
-      deleteGoalSpecScratchOnSuccess(state.manifest, request)
-      completed(
-        state.manifest,
-        attempted,
-        pullRequestUrl,
-        pullRequestStatus,
-        resolveFindingsLedger(state.manifest.issueKey),
-      )
-    }
-
-  private fun monitorBeforeCompletion(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-    attempted: List<Int>,
-  ): GoalRunnerRunReport.Stopped? =
     when (val result = ciMonitor.monitor(state, request)) {
-      is PhaseRunResult.Completed -> null
+      is PhaseRunResult.Completed -> {
+        deleteGoalSpecScratchOnSuccess(state.manifest, request)
+        completed(
+          state.manifest,
+          attempted,
+          pullRequestUrl,
+          pullRequestStatus,
+          resolveFindingsLedger(state.manifest.issueKey),
+        ).copy(monitoringSummary = acceptedMonitoringSummary(result.completedOutputs))
+      }
       is PhaseRunResult.Blocked ->
         stopped(
           StoppedReportArgs(
@@ -191,12 +185,33 @@ class GoalRunnerFinalization(
             attempted = attempted,
             subtaskId = 0,
             reason = GoalRunnerStopReason.BLOCKED,
-            blockedReason = result.reason,
+            blockedReason =
+              listOf(result.reason, acceptedMonitoringSummary(result.completedOutputs))
+                .filterNotNull()
+                .filter(String::isNotBlank)
+                .joinToString("\n\n"),
             workflowId = state.parentWorkflowId,
             lastResumableStep = result.stepId,
           ),
         )
     }
+
+  private fun acceptedMonitoringSummary(completedOutputs: List<String>): String? =
+    completedOutputs
+      .map { artifact ->
+        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(artifact, "goal monitor completed output")
+      }
+      .mapNotNull { output ->
+        val label =
+          when (output.phaseId) {
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH -> "Published change"
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR -> "CI result"
+            else -> return@mapNotNull null
+          }
+        output.output.value.takeIf(String::isNotBlank)?.let { "$label: $it" }
+      }
+      .takeIf { it.isNotEmpty() }
+      ?.joinToString("\n")
 
   private fun noChangeFinalization(
     manifest: DecompositionManifest,

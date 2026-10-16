@@ -361,10 +361,11 @@ or PR URL intake names the work; it does not switch branches. The phase composes
 first, like `phase:pr`. When every check passes, is skipped, or is cancelled, the
 phase completes. It also completes when the PR is merged, regardless of failing
 or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
-while other checks are pending. A merge conflict starts the same repair on that
-poll, even when no checks are reported: the fix merges the base branch and
-resolves every conflict. For failing checks, the repair agent reads each failing
-job's CI logs, identifies the failed command or assertion, and traces the cause
+while other checks are pending. This initial failure starts repair and does not
+count against the failed repair budget. A merge conflict starts merge repair on
+that poll, even when no checks are reported: the fix merges the base branch and
+resolves every conflict without spending a CI repair attempt. For failing checks,
+the repair agent reads each failing job's CI logs, identifies the failed command or assertion, and traces the cause
 through the repository before editing. A passing local rerun does not resolve
 the CI failure. Intermittent failures require investigation of timing,
 concurrency, isolation, or environment differences as the evidence warrants.
@@ -372,10 +373,13 @@ Completion requires a repository fix and passing local project checks.
 If investigation cannot establish a fix, the agent blocks with the failed check
 URL, inspected evidence, and unresolved cause or evidence gap. It cannot complete
 with an unchanged tree merely because local checks pass. A repair that blocks is
-not pushed. Once it completes, the runtime
-commits and pushes the repair, and monitor watches again, up to three
-fix attempts. The phase then blocks
-with the last failure and the last fix summary. When the branch has no open PR,
+not pushed. Once it completes, the runtime commits and pushes the repair, then
+matches CI results to that published commit. Each published repair commit counts
+once after CI reports a failure. Pending, stale, unassociated, or absent checks
+do not count. The runtime observes the third repair commit's CI result and blocks
+only if that result fails. Merge-only work does not spend a CI repair attempt.
+The cap report names failed repair commits and their check links from recorded
+evidence. When the branch has no open PR,
 the phase completes and reports that there is nothing to monitor.
 
 While CI is pending, progress reports identify the current PR and include available

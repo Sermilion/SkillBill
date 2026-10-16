@@ -52,6 +52,7 @@ data class PhaseStepOutput(
 data class PhaseStepFileManifest(
   val before: List<String>,
   val after: List<String>,
+  val reeditedPaths: List<String> = emptyList(),
 )
 
 data class PhaseStepStdout(

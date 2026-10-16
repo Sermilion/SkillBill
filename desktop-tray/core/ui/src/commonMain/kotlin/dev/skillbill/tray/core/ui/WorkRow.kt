@@ -31,10 +31,10 @@ import dev.skillbill.tray.core.designsystem.muted
 import dev.skillbill.tray.core.designsystem.orange
 import dev.skillbill.tray.core.designsystem.raised
 import dev.skillbill.tray.core.designsystem.sidebar
-import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.needsAttention
+import dev.skillbill.tray.core.domain.model.showsAsStandalonePhase
 
 /** One work item in a sidebar list; the work and history screens share it so both read the same. */
 @Composable
@@ -45,7 +45,7 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
       WorkDot(item.lifecycle)
       Column(Modifier.weight(1f)) {
         Text(item.repositoryTitle(), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 12.5.sp, lineHeight = 16.25.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val status = if (item.scope == ExecutionScope.STANDALONE_PHASE || item.lifecycle == Lifecycle.CANCELED) {
+        val status = if (item.showsAsStandalonePhase() || item.lifecycle == Lifecycle.CANCELED) {
           item.lifecycle.name.lowercase().replaceFirstChar(Char::uppercase)
         } else null
         val step = item.currentStepLabel.takeUnless { item.lifecycle == Lifecycle.CANCELED || status != null && it == item.phaseId }
@@ -54,7 +54,7 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
           color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted,
           fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        if (item.scope == ExecutionScope.STANDALONE_PHASE) {
+        if (item.showsAsStandalonePhase()) {
           val started = item.startedAt?.let { formatInstant(it, "d MMM HH:mm") }
           val invocation = item.invocationId?.removePrefix("phr-")?.take(8)
           Text(listOfNotNull(started, invocation).joinToString(" · "), color = dim, fontFamily = mono, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

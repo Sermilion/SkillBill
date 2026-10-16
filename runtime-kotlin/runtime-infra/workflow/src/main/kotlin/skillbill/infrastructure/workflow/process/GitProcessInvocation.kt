@@ -25,7 +25,12 @@ internal fun invokeGitProcess(
       ),
     )
   return GitProcessResult(
-    output = result.output.trim(),
+    output =
+      if (args.firstOrNull() == "status" && "--porcelain" in args) {
+        result.output.trimEnd()
+      } else {
+        result.output.trim()
+      },
     readFailure = gitReadFailure(result),
     timedOut = result.timedOut,
     exitCode = if (result.timedOut) -1 else result.exitCode,

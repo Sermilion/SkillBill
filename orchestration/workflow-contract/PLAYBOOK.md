@@ -350,9 +350,13 @@ Pilot-specific retry rules:
   `monitor_fix`, which fixes the failure and returns to `commit_push`, then
   `monitor` re-checks the PR. The repair agent runs the project's local checks,
   as validation does, and settles completed only when they pass; a blocked
-  repair is not committed or pushed. At most 3 `monitor_fix` attempts run per subtask.
-  When the pull request still needs repair after the third attempt, the run
-  blocks with the last failure and the last fix summary as the reason.
+  repair is not committed or pushed. The initial CI failure starts repair and
+  does not count against the failed repair budget. Each completed and published
+  repair counts once only after CI fails on that commit. Merge conflicts start
+  merge repair without spending that budget. The runtime observes CI on the
+  third published repair before deciding whether the cap has been reached. It
+  blocks only after three published repair commits have failed CI, and reports
+  their commit identities and check links from existing evidence.
 
 ## Authoring Boundary
 

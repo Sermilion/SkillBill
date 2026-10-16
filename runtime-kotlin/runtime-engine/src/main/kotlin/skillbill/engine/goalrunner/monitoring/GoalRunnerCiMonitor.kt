@@ -62,9 +62,7 @@ class DefaultGoalRunnerCiMonitor(
         state,
         request,
         phaseId = event.phaseId,
-        kind = GoalProgressEventKind.OPERATION_HEARTBEAT,
-        operationName = ciWaitingOperationName(event),
-        expectedLong = true,
+        progress = MonitorProgress(GoalProgressEventKind.OPERATION_HEARTBEAT, ciWaitingOperationName(event), true),
       )
       request.outputSink.write(AgentRunOutputStream.STDERR, "$activity\n")
       return
@@ -85,7 +83,7 @@ class DefaultGoalRunnerCiMonitor(
         is FeatureTaskRuntimeRunEvent.PhasePaused -> GoalProgressOutcome.CANCELLED
         else -> GoalProgressOutcome.NONE
       }
-    recordProgress(state, request, event.phaseId, kind, outcome = outcome)
+    recordProgress(state, request, event.phaseId, MonitorProgress(kind, outcome = outcome))
     request.outputSink.write(AgentRunOutputStream.STDERR, "${event.phaseId}: ${kind.wireValue}\n")
   }
 
@@ -99,21 +97,23 @@ class DefaultGoalRunnerCiMonitor(
       state,
       request,
       phaseId = stepName,
-      kind = GoalProgressEventKind.OPERATION_HEARTBEAT,
-      operationName = activity,
-      expectedLong = true,
+      progress = MonitorProgress(GoalProgressEventKind.OPERATION_HEARTBEAT, activity, true),
     )
     request.outputSink.write(AgentRunOutputStream.STDERR, "$activity\n")
   }
+
+  private data class MonitorProgress(
+    val kind: GoalProgressEventKind,
+    val operationName: String? = null,
+    val expectedLong: Boolean = false,
+    val outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
+  )
 
   private fun recordProgress(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     phaseId: String,
-    kind: GoalProgressEventKind,
-    operationName: String? = null,
-    expectedLong: Boolean = false,
-    outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
+    progress: MonitorProgress,
   ) {
     val persisted =
       outcomeStore.recordProgressEvent(
@@ -122,16 +122,16 @@ class DefaultGoalRunnerCiMonitor(
           issueKey = request.issueKey,
           draft =
             GoalProgressEventDraft(
-              eventKind = kind,
+              eventKind = progress.kind,
               workflowId = state.parentWorkflowId,
               workflowPhase = phaseId,
               processAlive = true,
               timestamp = clock.instant(),
               stepId = phaseId,
-              operationName = operationName?.take(MAX_OPERATION_NAME_LENGTH),
+              operationName = progress.operationName?.take(MAX_OPERATION_NAME_LENGTH),
               operationKind = GOAL_FINALIZATION_OPERATION_KIND,
-              expectedLong = expectedLong,
-              outcome = outcome,
+              expectedLong = progress.expectedLong,
+              outcome = progress.outcome,
             ),
         ),
       )

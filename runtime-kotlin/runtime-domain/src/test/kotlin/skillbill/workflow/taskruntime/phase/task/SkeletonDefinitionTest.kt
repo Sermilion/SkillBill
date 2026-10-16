@@ -94,8 +94,16 @@ class SkeletonDefinitionTest {
           triggeringVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
           destinationPhaseId = "monitor_fix",
           loopId = "monitor_fix",
-          perEdgeCap = 3,
+          perEdgeCap = 2,
           capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        ),
+        FeatureTaskRuntimeBackwardEdge(
+          fromPhaseId = "monitor",
+          triggeringVerdict = FeatureTaskRuntimeVerdict.PROGRESS,
+          destinationPhaseId = "monitor_fix",
+          loopId = "monitor_fix_trigger",
+          perEdgeCap = null,
           capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
         ),
         FeatureTaskRuntimeBackwardEdge(

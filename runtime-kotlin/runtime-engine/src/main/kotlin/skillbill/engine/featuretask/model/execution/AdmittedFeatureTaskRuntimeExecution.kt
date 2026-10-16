@@ -11,6 +11,7 @@ class AdmittedFeatureTaskRuntimeExecution internal constructor(
   val plan: ResolvedPhaseExecutionPlan,
   val effectiveInputs: EffectiveGatePolicyInputs,
   descriptor: Any,
+  internal val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   internal val migrationReceipt: RuntimeMigrationReceipt,
 ) {
   val reviewMode: CodeReviewExecutionMode?

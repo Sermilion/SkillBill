@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
-import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.goalrunner.RecordingOutcomeStore
@@ -38,9 +37,15 @@ class PhaseMonitorRunTest {
   private val home: Path = Files.createTempDirectory("skillbill-phase-monitor-home")
   private val clock: Clock = Clock.systemUTC()
   private val database = phaseRunDatabase(home, clock)
+  private var editSourceOnRepair = true
   private val launcher =
     RuntimeRecordingLauncher { request ->
-      facts(validJsonOutput(phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))))
+      val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+      if (phaseId == MONITOR_FIX && editSourceOnRepair) {
+        val readme = repoRoot.resolve("README.md")
+        Files.writeString(readme, Files.readString(readme) + "repair\n")
+      }
+      facts(validJsonOutput(phaseId))
     }
 
   @AfterTest
@@ -62,7 +67,10 @@ class PhaseMonitorRunTest {
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
-    assertTrue(result.value.orEmpty().contains("CI passed on branch '$FEATURE_BRANCH'"), result.value)
+    assertTrue(
+      result.value.orEmpty().contains("CI passed for published commit '$headBefore' on branch '$FEATURE_BRANCH'"),
+      result.value,
+    )
     assertEquals(emptyList(), launcher.requests)
     assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"))
     database.assertNoDurableWorkflowState()
@@ -82,7 +90,7 @@ class PhaseMonitorRunTest {
   }
 
   @Test
-  fun `monitor blocks with the failing checks after three fix attempts`() {
+  fun `monitor observes three published repair failures before blocking`() {
     initFeatureBranch()
     val failing =
       PullRequestChecksLookup { _, _ ->
@@ -97,32 +105,85 @@ class PhaseMonitorRunTest {
     val result = entry(checks = failing).run(monitorRequest("SKILL-904"))
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
-    assertTrue(blocked.reason.contains("after 3 fix attempt(s)"), blocked.reason)
+    assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
     assertTrue(blocked.reason.contains("validate"), blocked.reason)
+    assertTrue(blocked.reason.contains("https://ci.example/run"), blocked.reason)
+    assertTrue(blocked.reason.contains("CI confirmed a failed published repair commit"), blocked.reason)
     assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
   }
 
   @Test
-  fun `a conflicting pull request starts repair without waiting for checks`() {
+  fun `a completed repair without a source change blocks without claiming a failed repair commit`() {
     initFeatureBranch()
-    val checks = PullRequestChecksLookup { _, _ -> error("A merge conflict settles before checks are read.") }
+    editSourceOnRepair = false
+    val result =
+      entry(checks = { _, _ ->
+        PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
+      }).run(monitorRequest("SKILL-904"))
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result)
+    assertTrue("did not publish a source or merge change" in blocked.reason, blocked.reason)
+    assertTrue("CI-confirmed failed repair" !in blocked.reason, blocked.reason)
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
+  }
+
+  @Test
+  fun `a merge conflict starts repair without spending a CI failure attempt`() {
+    initFeatureBranch()
+    var identityCalls = 0
 
     val result =
       entry(
-        identity = { _, _ -> PullRequestIdentity.Found(PULL_REQUEST_URL, 7, conflicting = true) },
-        checks = checks,
+        identity = { _, _ ->
+          identityCalls += 1
+          PullRequestIdentity.Found(
+            PULL_REQUEST_URL,
+            7,
+            conflicting = identityCalls <= 2,
+            headSha = git(repoRoot, "rev-parse", "HEAD"),
+          )
+        },
+        checks = { _, _ -> PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.PASS, ""))) },
       ).run(monitorRequest("SKILL-904"))
 
-    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
-    assertTrue(blocked.reason.contains("after 3 fix attempt(s)"), blocked.reason)
-    assertTrue(blocked.reason.contains("conflicts with 'main'"), blocked.reason)
-    assertTrue(blocked.reason.contains("Last observed monitor result"), blocked.reason)
-    assertEquals(List(3) { MONITOR_FIX }, launchedPhaseIds())
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
     assertTrue(
       launcher.requests.all { request ->
         "conflicts with 'main'" in request.skillRunRequest.promptOverride.orEmpty()
       },
     )
+  }
+
+  @Test
+  fun `a conflict after the third repair remains unjudged until the merged repair fails CI`() {
+    initFeatureBranch()
+    var checkCalls = 0
+    var identityCalls = 0
+    val checks =
+      PullRequestChecksLookup { _, _ ->
+        checkCalls += 1
+        PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
+      }
+    val identity: PullRequestIdentityLookup = { _, _ ->
+      identityCalls += 1
+      val conflicting = checkCalls == 3 && identityCalls in 7..8
+      PullRequestIdentity.Found(
+        PULL_REQUEST_URL,
+        7,
+        conflicting = conflicting,
+        headSha = git(repoRoot, "rev-parse", "HEAD"),
+      )
+    }
+
+    val result = entry(identity = identity, checks = checks).run(monitorRequest("SKILL-904"))
+
+    val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
+    assertTrue(blocked.reason.contains("https://ci.example/run"), blocked.reason)
+    assertTrue(!blocked.reason.contains("conflicts with 'main'"), blocked.reason)
+    assertEquals(4, checkCalls)
+    assertEquals(List(4) { MONITOR_FIX }, launchedPhaseIds())
   }
 
   @Test
@@ -147,8 +208,8 @@ class PhaseMonitorRunTest {
     assertTrue("investigate timing, concurrency, isolation, and environment differences" in prompt, prompt)
     assertTrue("Do not settle completed with an unchanged tree" in prompt, prompt)
     assertTrue("If investigation cannot establish a repository fix, settle blocked" in prompt, prompt)
-    assertTrue("A passing local rerun with no repository fix is unresolved" in prompt, prompt)
-    assertTrue("The runtime owns commit, push, and subsequent CI confirmation" in prompt, prompt)
+    assertTrue("Local validation is not a claim that CI passed" in prompt, prompt)
+    assertTrue("The runtime commits and pushes a completed repair" in prompt, prompt)
     assertTrue(
       prompt.indexOf("Monitor repair completion requires") > prompt.indexOf("Run the full project validation"),
       prompt,
@@ -274,7 +335,9 @@ class PhaseMonitorRunTest {
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
   private fun entry(
-    identity: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+    identity: PullRequestIdentityLookup = { _, _ ->
+      PullRequestIdentity.Found(PULL_REQUEST_URL, 7, headSha = git(repoRoot, "rev-parse", "HEAD"))
+    },
     checks: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   ): PhaseRunEntry {
     val config =

@@ -139,7 +139,7 @@ private fun LoadedDetail(
   val scroll = rememberScrollState()
   val item = detail.item
   val pipeline = phasePipeline(detail)
-  val planning = item.planningState?.let { it != "prepared" } == true
+  val planning = item.currentStepId == "planning"
   val subtaskKeys = detail.subtasks.map { detail.key("subtask", it.id.toString()) } +
     listOfNotNull(detail.key("goal-finish", "").takeIf { detail.goalFinishPipeline.isNotEmpty() })
   val dependencyKeys = detail.dependencies.map { detail.key("dependency", "${it.subtaskId}:${it.dependency.subtaskId}") } +
@@ -170,7 +170,7 @@ private fun LoadedDetail(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           StatusChip(if (item.lifecycle == Lifecycle.CANCELED) "Canceled" else item.lifecycle.name.lowercase(), lifecycleColor(item.lifecycle), item.lifecycle)
           (item.issueKey ?: item.phaseId)?.let { StatusChip(it, muted) }
-          StatusChip(if (item.family == WorkFamily.FEATURE_GOAL) "goal" else "phase", Color(0xFFF49463))
+          StatusChip(if (item.family == WorkFamily.FEATURE_GOAL || item.goalLaunched) "goal" else "phase", Color(0xFFF49463))
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)

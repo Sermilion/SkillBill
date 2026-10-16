@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-16] Missing monitor accounting evidence stays unknown
+Context: The monitor repair cap was reconstructed from retained producer, completion, publication, and Git evidence. Missing association or an older CI_FAILED report without a published-head statement was converted into a monitor block, even when fewer than three failed repair commits were proven.
+Decision: Count only distinct repair SHAs qualified by the existing completed repair, pushed publication, change, producer, and observed-head evidence. Missing or contradictory accounting evidence emits diagnostics and remains unknown. It neither fabricates a failed attempt nor blocks cap-sensitive resume. Live failures without a qualified repair association keep the existing repair transition as progress. Green completion requires stable PR number and head identity matching the latest completed pushed publication before monitor start; a stale or headless green observation returns to the same watch loop. Merged PR handling and actual lookup failures keep their existing outcomes.
+Reason: Accounting uncertainty cannot prove either a consumed attempt or successful CI. It must not replace the monitor's existing repair, timeout, or recovery owners with a new accounting refusal.
+Preserves: Producer association, accepted completion, publication ownership, change qualification, distinct failed-commit accounting, and the existing monitor transition owner.
+
 ## [2026-10-14] SKILL-425: retire the standalone feature-task skeleton
 Context: With the full run planning through the plan skeleton, a single feature is a one-subtask bundle, so the `standalone` skeleton (all nine feature-run slots, no goal continuation) had no entry left but its own run command and a prose-only plan mode.
 Decision: `SkeletonDefinition.admittedForRun(goalContinuation)` is `{GOAL_CHILD}` for a goal child and `{PLAN}` otherwise, and `forRun` is removed. `STANDALONE` stays declared, in `entries`, and bound in `SkeletonStrategyBindings` as a decode-only binding, so a stored `standalone` plan still decodes, shows in lookup and status, and can be abandoned. No migration rewrites the row. Execution admission and continuation claim refuse a recorded `standalone` plan with `retiredStandaloneWorkflowError` (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`, a coded `SkillBillRuntimeException`, no new exception class); the message says to abandon the workflow and run `skill-bill <KEY>`. The `standalone` route scope stays because plan workflows carry it. `FeatureTaskContinuationLookupQuery.admittedDefinition` has no default, so each caller names the definition it reads. The prose-only plan mode was already gone from `AgentPlanStrategy`. `feature-task run`, its explicit `run` subcommand and the `feature-task-runtime` run alias are removed; `feature-task` and the hidden `feature-task-runtime` alias are command groups only (status, resume, abandon, retry-blocked, repair-identity, lookup). Goal children launch through `feature-task resume <child id>` for every launch, because the goal runner opens the child row under its assigned id before launch; `RUN_SUBCOMMAND` and the `--workflow-id` run option are gone. The slot baseline drops its `standalone` bundle, and the runner test harness defaults to a goal-child continuation.
@@ -2909,3 +2915,91 @@ Context: The desktop Room query Flow cannot receive invalidations from JDBC writ
 Decision: `SQLiteDatabaseSessionFactory` reads the desktop work-topic revisions inside each write transaction and compares them after the use case runs. After commit, it takes a per-store file lock, rereads the latest committed revisions, and atomically replaces a sibling signal file only when those revisions changed. A generation token distinguishes separate commits even if a restored store reaches the same revision numbers. The `DesktopCommitSignal` contract in `runtime-contracts` owns the shared file suffix and revision syntax used by SQLite and desktop. A failed signal write records a warning without changing the result of an already committed use case.
 Reason: The existing runtime revisions identify work-related commits without polling the database or adding schema objects. One coherent transaction produces one complete revision snapshot, and the file lock prevents an older writer from replacing a newer snapshot. Rollbacks and unrelated table writes stay silent.
 Review: A1 clean, the SQLite adapter owns database access. A2 clean, `runtime-infra:sqlite` and `desktop-tray` both consume `DesktopCommitSignal`. A3 clean, the composition root gains no collaborators. A4 clean, no port was added. A5 clean, no forwarding type or function was added. A6 clean, the shared file vocabulary has one owner. A7 clean, publication degradation is recorded and never changes a committed outcome. A8 clean, no ambient time, environment, property, or process read was added. A9 clean, package dependencies remain acyclic. A10 clean, publisher tests remain in `runtime-infra:sqlite`. A11 clean, new declarations stay internal. A12 clean, public inner-layer APIs expose no raw map. G1-G7 clean, no guard, fixture, baseline, or exemption changed.
+
+## [2026-10-16] Restore qualified monitor failures from existing runtime evidence
+
+Context: SKILL-428 live monitoring qualified published repairs, but resume rejected
+every historical CI_FAILED output. The publication transition also invalidates the
+repair's in-memory completion flag, so using that flag classified subsequent CI
+failures as initial failures and repeatedly launched uncharged repairs.
+
+Decision: The monitor strategy declares its accounting roles. MonitorRepairAccounting
+qualifies publications for both live and historical monitoring using those roles. It joins START and COMPLETE entries to generation-zero
+producer evidence, accepted repair completion, pushed baseline and repair outputs,
+and Git ancestry and content. The ledger identifies completed repairs even after
+traversal invalidates their in-memory flags. FeatureTaskRuntimeRunTransitionOwner still owns every
+coupled mutation. A transient map restores qualified monitor attempts into the
+existing distinct failed-commit set.
+
+Historical qualification uses only retained runtime-authored monitor output whose
+existing failed-publication report identifies that exact published commit. It does
+not parse repair-agent prose. That runtime output retains the earlier attribution
+decision after another attempt replaces the latest repair manifest. Reconstruction
+still verifies producer identity, accepted completion, publication, and Git changes.
+Missing or contradictory evidence keeps the existing recovery block and diagnostics;
+it never resets consumed attempts or invents a failed commit. Monitor accounting
+adds no durable field, schema, receipt, migration, or new block category.
+
+The installed feature runtime also carries the published main fixes 8c8cdb308,
+f37339c2d, and a3d0f98c0 for acceptance-audit resume compatibility, plus c9b3376a8
+for the already-installed database schema version 58. Explicit operator
+resume renews that separate acceptance-audit budget while preserving its outcomes.
+It does not reset the monitor's CI-confirmed failed-commit budget.
+
+The Git process adapter preserves porcelain's leading index column. Trimming it
+removed the first character of the first dirty path and prevented source attribution.
+Before/after content identities distinguish a changed pre-dirty path from an
+unrelated dirty path. Identity failures keep the existing capture failure outcomes.
+
+Review: A1-A4 preserve module, effect, and transition ownership. A5 removes duplicate
+reconstruction logic. A6 keeps existing wire owners. A7 preserves typed failures,
+cancellation, and diagnostics. A8 adds no ambient production effects. A9-A12 keep
+package direction, test placement, visibility, and typed accounting. G1-G7 require
+no guard, baseline, or exemption changes.
+
+## [2026-10-16] Govern installed compatibility prerequisites separately from S3-7
+
+Context: SKILL-428 subtask 3 stopped at audit_plan_fix because S3-7 forbids new
+durable formats while the feature checkout carries compatibility changes already
+installed from main. The operator explicitly approved the prerequisite treatment
+in the current session and then authorized resuming the existing goal.
+
+Decision: Govern the compatibility changes from 8c8cdb308, f37339c2d, a3d0f98c0,
+and c9b3376a8 as installed prerequisites outside the S3-7 feature comparison.
+Retain the acceptance-repair budget offset and resume behavior, the removed prose
+length bound, schema version 58, launch-scope persistence, and completed planning
+presentation and controls. Preserve their contracts, supported persisted-state
+admission, and historical outcomes. This boundary covers only those compatibility
+changes. Keep the audit baseline and acceptance text unchanged. It authorizes no
+guard exemption, downgrade, data rewrite, or erasure of evidence.
+
+Monitor accounting and prose-dependent recovery remain within S3-7. The previous
+entry's use of a failed-publication report as historical evidence must be repaired.
+Resume through the existing goal runtime, complete audit_plan_fix, then let the
+runtime own implementation, validation, installation refresh where required, and
+acceptance auditing. Preserve completed work and the existing workflow records.
+
+Repair planning must separate accepted historical failure decisions from live
+publication/change qualification. Investigate the immutable stored execution plan
+and existing admission checks as non-prose evidence of corrected verdict semantics:
+the current traversal has separate PROGRESS and CI_FAILED monitor repair edges,
+while the old traversal conflates failure and conflict. A newly synthesized plan
+or current strategy identity alone cannot establish historical producer semantics.
+Join matched START/COMPLETE and generation-zero producer identities, accepted
+completion, pushed publication results, and Git ancestry/content evidence. Get
+counted SHAs from publication records. Identify evidence for each historical case,
+including replaced repair manifests, before prescribing recovery. Do not count
+ambiguous legacy CI_FAILED records through verdict-only inference.
+
+Delete confirmsPublishedFailure and all prose-dependent attribution fallbacks.
+Keep failingChecksProse as reporting only. Preserve live failed-CI/head/publication
+qualification, distinct-SHA accounting, FeatureTaskRuntimeRunTransitionOwner,
+existing diagnostics and recovery behavior, check links, and optional
+monitoringSummary. Add no field, receipt, protocol, migration, or block category.
+Keep required local validation, runtime publication ownership, private-path
+exclusion, branch restrictions, and existing terminal PR behavior. Apply A1, A2,
+A5, A6, A7 and G1-G7 without weakening enforcement.
+
+This entry records operator authority and planning guidance. It does not claim
+that the production repair or its verification is complete. Other acceptance
+criteria retain their own audit obligations.

@@ -47,6 +47,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val AUDIT_GAP_LOOP_ID: String = "audit_gap"
 
   const val MONITOR_FIX_LOOP_ID: String = "monitor_fix"
+  const val MONITOR_FIX_TRIGGER_LOOP_ID: String = "monitor_fix_trigger"
 
   const val MAX_MONITOR_FIX_ATTEMPTS: Int = 3
   const val MONITOR_FIX_COMMIT_LOOP_ID: String = "monitor_fix_commit"

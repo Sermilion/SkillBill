@@ -2,6 +2,7 @@ package skillbill.engine.work.control
 
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.IdeStatusDisplayGroup
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.idestatus.model.IdeStatusWorkPolicy
 import skillbill.idestatus.model.IdeStatusWorkPolicyFacts
@@ -53,5 +54,6 @@ private fun policy(
     controlTargetPresent = !snapshot.issueKey.isNullOrBlank(),
     pauseRequested = snapshot.pauseRequested == true,
     observedAt = observedAt,
+    launchScope = snapshot.execution?.launchScope ?: IdeStatusLaunchScope.STANDALONE,
   ),
 )

@@ -94,6 +94,10 @@ class CliPhasePlanRuntimeTest {
     assertEquals(0, result.exitCode, result.stdout + result.stderr)
     assertEquals(PLAN_LAUNCHES, launcher.phaseIds)
     assertEquals("Concurrent edit", Files.readString(tempDir.resolve("outside-plan.txt")))
+    assertEquals(
+      listOf("standalone" to listOf("phase", "plan", "$ISSUE_KEY split the work", "--agent", "codex")),
+      planLaunches(),
+    )
   }
 
   @Test
@@ -167,6 +171,10 @@ class CliPhasePlanRuntimeTest {
     assertEquals(1, goal.childLaunches.size)
     assertEquals(1, rowCount("goal_runner_controls"))
     assertTrue(workflowIdsMentioning(planWorkflowId()).isNotEmpty())
+    assertEquals(
+      listOf("goal" to listOf("goal", "$ISSUE_KEY Split the work into two parts.", "--agent", "codex")),
+      planLaunches(),
+    )
   }
 
   @Test
@@ -324,6 +332,23 @@ class CliPhasePlanRuntimeTest {
               phaseId.startsWith("plan_subtasks:") && JsonCodec.anyToStringAnyMap(record)?.get("status") == "completed"
             }.keys
             .sorted()
+        }
+      }
+    }
+
+  private fun planLaunches(): List<Pair<String, List<String>>> =
+    DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT launch_scope, launch_arguments_json FROM standalone_phase_status WHERE phase_id = 'plan' " +
+            "ORDER BY run_sequence",
+        ).use { rows ->
+          buildList {
+            while (rows.next()) {
+              val arguments = JsonCodec.parseValue(rows.getString(2)) as List<*>
+              add(rows.getString(1) to arguments.map { it.toString() })
+            }
+          }
         }
       }
     }

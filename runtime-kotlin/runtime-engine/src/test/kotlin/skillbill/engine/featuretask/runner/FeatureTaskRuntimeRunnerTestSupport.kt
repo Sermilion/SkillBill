@@ -685,7 +685,8 @@ internal data class RuntimeHarnessConfig(
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
-  val monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  val monitoredPullRequestLookup: PullRequestIdentityLookup =
+    OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
@@ -989,7 +990,7 @@ private fun harnessGateDependencies(
   deps: HarnessRunnerDeps,
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
 ): RuntimePhaseGatesDeps {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return RuntimePhaseGatesDeps(
     branchSetupRunner =
       FeatureTaskRuntimeBranchSetupRunner(
@@ -1013,7 +1014,7 @@ private fun harnessRunner(
   deps: HarnessRunnerDeps,
   runLoopEntry: FeatureTaskRuntimeRunLoopEntry? = null,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   val specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter)
   val lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database)
   val gateDeps = harnessGateDependencies(deps, lifecycleTelemetry)
@@ -1068,7 +1069,7 @@ private fun assembleHarnessRunner(
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   entry: TestFeatureTaskRuntimeRunLoopEntry,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return AssembledFeatureTaskRuntimeRunner(
     FeatureTaskRuntimeRunner(
       FeatureTaskRuntimeRunStartup(

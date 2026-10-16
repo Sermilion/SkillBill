@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.monitor
 
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
+import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -35,7 +36,9 @@ class MonitorStrategy(
         repoRoot: Path,
         branch: String,
         onCiRunning: (String, List<PullRequestCheck>) -> Unit,
-      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning)
+        expectedHeadSha: String?,
+        onInconclusive: (String) -> Unit,
+      ): PullRequestCiOutcome = watcher.watch(repoRoot, branch, onCiRunning, expectedHeadSha, onInconclusive)
 
       override fun recordFailingChecks(
         issueKey: String,
@@ -67,6 +70,13 @@ class MonitorStrategy(
           generationScoped = false,
           extendsOwnedInventory = true,
         ),
+    )
+
+  internal override val monitorRepairSteps =
+    MonitorRepairStepRoles(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
     )
 
   override val slot: PhaseSlot = PhaseSlot.MONITOR
@@ -132,9 +142,10 @@ class MonitorStrategy(
     private const val MONITOR_DIRECTIVE: String =
       "This phase does not launch an agent. The runtime watches every check reported for the pull request " +
         "the workflow created. A merged pull request completes monitoring regardless of its checks. " +
-        "A failed check on an open pull request immediately completes it with verdict ci_failed, " +
-        "which routes to monitor_fix even while other checks are pending. A merge conflict does the same " +
-        "on that poll, even when no checks are reported. Cancelled checks do not start " +
+        "A failed check on an open pull request starts repair even while other checks are pending. " +
+        "The initial failure starts repair but does not count as a failed repair. Only a completed, " +
+        "published repair whose associated commit has a failing CI result counts toward the three-failure cap. " +
+        "A merge conflict starts merge repair without counting as a CI failure. Cancelled checks do not start " +
         "repair. All checks passing, skipped, or cancelled completes the phase only when none is pending. " +
         "While checks are pending, report the current pull request and available commit or check links. Describe " +
         "queued checks as waiting, describe running work only when the observation identifies it, and name the next " +

@@ -19,8 +19,8 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class AcceptanceCriterionRepairStateSchemaValidatorTest {
   @Test
-  fun `focused audit retains prose evidence longer than 512 characters through validation and reload`() {
-    val prose = "Source inspection confirms the criterion against its production consumers. ".repeat(32)
+  fun `discovery and focused audits retain prose longer than 8192 characters through validation and reload`() {
+    val prose = "Source inspection confirms the criterion against its production consumers. ".repeat(256)
     val initial =
       assertNotNull(
         AcceptanceCriterionRepairState.admit(
@@ -52,7 +52,7 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
         null,
         false,
         "b".repeat(64),
-        "Source inspection requires a focused audit.",
+        prose,
         "c".repeat(64),
         "checkpoint:discovery",
       )
@@ -78,6 +78,7 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
       FeatureTaskRuntimeWorkflowArtifactMap.from(payload)
         .toAcceptanceCriterionRepairState("long-focused-audit")
     assertEquals(closed, reloaded)
+    assertEquals(listOf(prose, prose), reloaded.proseAudits.map { it.prose })
     assertEquals(prose, reloaded.criteria.single().evidenceRef)
     assertEquals(prose, reloaded.criteria.single().closureEvidenceRef)
     assertEquals(prose, reloaded.sourceTransitions.single().evidenceRef)
@@ -111,7 +112,18 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
       )
     val valid = state.asRepairWireMap()
     AcceptanceCriterionRepairStateSchemaValidator.validate(valid, "valid")
+    val legacy = valid - Keys.BUDGET_START_OUTCOME_INDEX
+    AcceptanceCriterionRepairStateSchemaValidator.validate(legacy, "before-budget-reset-support")
+    assertEquals(
+      state,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(legacy)
+        .toAcceptanceCriterionRepairState("before-budget-reset-support"),
+    )
     listOf(
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to -1),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 1),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 0.5),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to null),
       valid + (Keys.CONTRACT_VERSION to "0.2"),
       valid + (Keys.UNSUCCESSFUL_TOTALS to mapOf("AC-001" to 1)),
       valid + (Keys.CURRENT_CRITERION_REF to "AC-002"),

@@ -19,6 +19,7 @@ class MonitorOpus55Strategy(
   override val strategyId: String = ID
   override val steps: List<String> = canonical.steps
   override val entryStep: String = canonical.entryStep
+  internal override val monitorRepairSteps = canonical.monitorRepairSteps
 
   override fun policyFor(stepId: String): PhaseStepPolicy = canonical.policyFor(stepId)
 

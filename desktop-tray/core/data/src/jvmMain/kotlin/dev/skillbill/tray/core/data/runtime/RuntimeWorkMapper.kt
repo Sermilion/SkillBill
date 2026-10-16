@@ -5,6 +5,7 @@ import skillbill.ports.filesystem.model.DatabaseFileObservation
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.WorkBoardItem
 import skillbill.ports.idestatus.model.WorkDetailItem
 import java.nio.file.Path
@@ -47,6 +48,7 @@ internal fun IdeStatusSnapshot.toDomain(root: String, finished: Instant?, comple
     issueKey = issueKey,
     family = workflowFamily?.let { WorkFamily.valueOf(it.name) },
     scope = scope?.let { ExecutionScope.valueOf(it.name) },
+    goalLaunched = execution?.launchScope == IdeStatusLaunchScope.GOAL,
     phaseId = execution?.phaseId,
     activity = currentActivity,
     lifecycle = Lifecycle.valueOf(lifecycleState.name),

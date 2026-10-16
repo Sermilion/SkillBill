@@ -1449,23 +1449,36 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 
 `monitor` runs after `pr` in the PR skeleton and is excluded from
 goal children. `PullRequestCiWatcher` polls the PR checks through
-`PullRequestChecksLookup`. A failed check immediately sets verdict
-`ci_failed`, even while other checks are pending, and routes backward to
-`monitor_fix` and then to `commit_push`. Cancelled checks do not start repair.
+`PullRequestChecksLookup`. A first failed check starts repair with `progress`;
+it does not spend the failed-repair budget. A later failure spends one attempt
+only when a completed monitor repair changed source or integrated new merge
+ancestry, its commit was pushed, and CI failed on the observed PR head. The
+monitor counts distinct failed commit SHAs, so repeated observations do not
+spend again. Cancelled checks do not start repair.
 A merge conflict (`CONFLICTING` or
 `DIRTY`) does the same on that poll, before checks are read, and the repair
 merges the base branch and resolves the conflicts. The `monitor_fix` prompt carries the agent validation directive, so the repair agent runs the project's local checks and settles completed only when they pass; a blocked repair is not committed. An unknown mergeability
 result is not a conflict. Success requires every check to pass, be skipped,
 or be cancelled with none pending.
+The run state rebuilds distinct monitor failure SHAs from completed ledger
+entries and retained monitor output. Missing or unassociated monitor output stays
+unknown and does not exhaust the cap; historical loop ordinals do not count as
+failed repairs. Runtime-owned monitor and commit-push completions retain output
+through the existing producer output store, while the completion ledger remains
+the settlement authority.
 Goal monitoring requires reported checks. An empty report keeps polling until
 checks arrive or the watch timeout blocks the goal; it does not settle as
 no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
 written after all goal phases finish, rather than completed subtask counts.
 Each poll also reads PR state. A merged PR completes monitoring regardless of
 the CI verdict; a closed unmerged PR does not satisfy goal monitoring.
-The loop is capped at 3 attempts per subtask. Exhausting the cap blocks the run
-through the cap-exhaustion reason. Monitor-owned steps never emit a verdict
-other than `ci_failed` or the default advance.
+The monitor loop stops another CI repair only after three completed, published
+repair commits have failed CI. Initial CI failures trigger repair, and merge
+conflicts trigger merge repair, without spending that failure budget. The third
+published repair remains under observation until CI settles. Exhausting the cap
+blocks through the cap-exhaustion reason. Monitor-owned steps use `ci_failed` only for a
+published repair commit that CI rejected, `progress` for initial-failure or
+merge-conflict repair routing, and the default advance after monitoring succeeds.
 
 Composition:
 

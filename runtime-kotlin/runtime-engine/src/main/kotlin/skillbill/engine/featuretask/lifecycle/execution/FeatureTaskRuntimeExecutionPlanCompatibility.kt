@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.RecordedMonitorExecutionSemantics
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -21,12 +22,26 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   private val codec: FeatureTaskRuntimeExecutionPlanCodec,
   private val strategies: PhaseStrategyLookup,
 ) {
+  internal data class SupportedExecution(
+    val plan: ResolvedPhaseExecutionPlan,
+    val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
+  )
+
   fun requireSupportedExecution(
     encoded: ByteArray?,
     effectiveInputs: EffectiveGatePolicyInputs,
     onMapping: (() -> Unit)? = null,
   ): ResolvedPhaseExecutionPlan {
-    val plan = requireSupportedComposition(encoded)
+    return requireSupportedExecutionWithRecordedSemantics(encoded, effectiveInputs, onMapping).plan
+  }
+
+  internal fun requireSupportedExecutionWithRecordedSemantics(
+    encoded: ByteArray?,
+    effectiveInputs: EffectiveGatePolicyInputs,
+    onMapping: (() -> Unit)? = null,
+  ): SupportedExecution {
+    val composition = requireSupportedCompositionWithRecordedSemantics(encoded)
+    val plan = composition.plan
     val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, effectiveInputs).sortedBy { it.id }
     val supportedById = supported.associateBy { it.id }
     if (plan.effectivePolicies.any { supportedById[it.id]?.semanticRevision != it.semanticRevision }) {
@@ -34,7 +49,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     }
     if (plan.effectivePolicies != supported) incompatible()
     if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
-    return plan
+    return SupportedExecution(plan, composition.recordedMonitorSemantics)
   }
 
   fun requireCompatibleExecution(
@@ -67,8 +82,13 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   }
 
   fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
+    return requireSupportedCompositionWithRecordedSemantics(encoded).plan
+  }
+
+  private fun requireSupportedCompositionWithRecordedSemantics(encoded: ByteArray?): SupportedComposition {
     if (encoded == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
     val recorded = decodePlan(encoded)
+    val recordedMonitorSemantics = RecordedMonitorExecutionSemantics.from(recorded)
     val mapping = strategies.executionPlanMapping(recorded)
     val plan =
       if (mapping == null) {
@@ -99,8 +119,13 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
       }
     if (plan.traversal != traversal) incompatible()
     requireSupportedPolicies(plan.effectivePolicies)
-    return plan
+    return SupportedComposition(plan, recordedMonitorSemantics)
   }
+
+  private data class SupportedComposition(
+    val plan: ResolvedPhaseExecutionPlan,
+    val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
+  )
 
   private fun decodePlan(encoded: ByteArray): ResolvedPhaseExecutionPlan =
     try {

@@ -1,3 +1,20 @@
+## [2026-10-16] Recover failed repairs from recorded execution semantics
+Context: Resume must retain failed repairs after current phase records are replaced. Legacy monitor verdicts conflated CI failure and merge conflict, and report prose cannot establish which occurred.
+Decision: Admit historical CI_FAILED meaning only through the immutable stored monitor selection, dispatch owners and corrected traversal. Join matched START/COMPLETE and generation-zero producer identities, accepted repair completion, pushed baseline/publication outputs and Git ancestry/content evidence. Derive failed SHAs from publication records and restore the distinct failed-commit set.
+Reason: A current or synthesized plan cannot prove a historical producer's semantics. Existing accepted evidence preserves prior attribution when the latest repair manifest changes; parsing narration would invent a second protocol. Missing or contradictory evidence retains diagnostics and existing recovery behavior without resetting known failures or adding durable fields.
+Alternatives considered: Verdict-only legacy inference and prose-dependent attribution were rejected because neither proves commit-associated failed repair semantics.
+
+## [2026-10-16] Count failed repair commits independently of repair launches
+Context: Counting repair entries or merge conflicts could exhaust the budget while the third published repair still had pending CI.
+Decision: Use PROGRESS for initial failures and conflicts. Qualify a completed repair through changed attributed source paths or newly integrated merge ancestry, pushed publication and failed CI on the matching head. Count each published SHA once, observe the third result before refusing another CI repair, and keep coupled mutations with FeatureTaskRuntimeRunTransitionOwner across all monitor routes.
+Reason: A launch, metadata-only amend, local pass or merge conflict does not prove that CI rejected a changed repair. Distinct published commits preserve the accumulated budget across repeated observations and different failure causes. Unchanged publication uses the existing blocked settlement to prevent an uncharged repair loop.
+
+## [2026-10-16] Spend monitor budget from published failed repair evidence
+Context: A commit metadata amend could change SHA without changing repair content, and restored monitor loop ordinals included launches that CI had never rejected.
+Decision: Require the completed repair manifest to intersect source paths changed between the previous and pushed commit, or prove newly integrated merge ancestry from commit parents. Count distinct published SHAs from completed monitor results retained through COMPLETE ledger entries and producer outputs. Missing retained monitor results block cap-sensitive continuation.
+Reason: Commit IDs and backward-edge ordinals describe different facts from source changes and failed published repairs. Runtime-owned monitor and commit outputs use the existing producer-output store so replacement of the current phase record does not discard their reports.
+Superseded by: Recover failed repairs from recorded execution semantics (2026-10-16)
+
 ## [2026-10-16] Reuse setup without reusing validation results
 Context: SKILL-428 observed repeated container setup mistakes. Those observations did not establish that required full validation runs were redundant.
 Decision: Retain permitted setup, caches and discovery context within the invocation, revisit changed requirements and run all required checks for each repair candidate. Preserve clean and cache-bypass requirements and invocation resource ownership.
@@ -73,6 +90,7 @@ Context: A conflicting pull request reports no checks, so the watcher treated it
 Decision: An open pull request is conflicting when GitHub reports `mergeable` `CONFLICTING` or `mergeStateStatus` `DIRTY`. The watcher returns that outcome before reading checks. Monitor completes with verdict `ci_failed`, and `monitor_fix` merges the recorded base branch and resolves the conflicts. Unknown mergeability stays unsettled. The three-attempt cap is unchanged.
 Reason: Conflict repair is the same commit-and-watch cycle as a failed check. A new verdict would duplicate the backward edge and the cap.
 Alternatives considered: Waiting until checks fail, rejected because a conflict often publishes no checks. Treating `UNKNOWN` or `BEHIND` as a conflict, rejected because GitHub has not reported a conflict yet.
+Superseded by: Count failed repair commits independently of repair launches (2026-10-16)
 
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
@@ -80,6 +98,7 @@ Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` 
 Reason: The existing backward-edge machinery already handles this shape. Leaving the return uncapped means the cap counts only failed CI rounds, so exactly three repair runs are possible.
 Alternatives considered: The spec's forward loop-only successor, rejected because the declaration validator refuses it.
 Revisit when: The transition validator accepts a loop-only successor that is not forward, or a second phase needs a monitor-owned repair path.
+Superseded by: Count failed repair commits independently of repair launches (2026-10-16)
 
 ## [2026-10-08] Monitor watches CI through a port and runs without an agent
 Context: The run loop must not import the monitor slot's phase constants, and the architecture guards enforce that. CI watching has to finish without a model session.

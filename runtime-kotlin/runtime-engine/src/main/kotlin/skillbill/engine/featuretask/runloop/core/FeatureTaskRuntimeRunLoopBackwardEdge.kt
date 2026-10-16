@@ -174,7 +174,14 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         }
       }
       return edge
-        ?.takeIf { candidate -> blocksWhenCapExhausted(candidate, iteration) }
+        ?.takeIf { candidate ->
+          if (candidate.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
+            state.monitorFailedRepairCommitShas.size >=
+              FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS
+          } else {
+            blocksWhenCapExhausted(candidate, iteration)
+          }
+        }
         ?.let {
           FeatureTaskRuntimeRunLoopPlanningBranch.capExhaustionReason(
             CapExhaustionReasonArgs(

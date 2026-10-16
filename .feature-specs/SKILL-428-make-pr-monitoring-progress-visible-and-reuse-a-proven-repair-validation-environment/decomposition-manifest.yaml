@@ -3,7 +3,7 @@ contract_version: "0.5"
 issue_key: "SKILL-428"
 feature_name: "make-pr-monitoring-progress-visible-and-reuse-a-proven-repair-validation-environment"
 parent_spec_path: ".feature-specs/SKILL-428-make-pr-monitoring-progress-visible-and-reuse-a-proven-repair-validation-environment/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-428-make-pr-monitoring-progress-visible-and-reuse-a-proven-repair-validation-environment"
@@ -44,12 +44,12 @@ subtasks:
 - id: 3
   name: "CI-confirmed failed repair accounting and reports"
   spec_path: ".feature-specs/SKILL-428-make-pr-monitoring-progress-visible-and-reuse-a-proven-repair-validation-environment/spec_subtask_3_shared_repair_progress.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261016-051445-oyjv"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
