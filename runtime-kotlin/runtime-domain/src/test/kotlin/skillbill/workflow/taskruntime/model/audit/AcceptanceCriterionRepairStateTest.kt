@@ -151,6 +151,57 @@ class AcceptanceCriterionRepairStateTest {
     assertNull(discovered.recordFinalFullAudit(input.copy(evaluatedRefs = setOf("AC-001"))))
   }
 
+  @Test
+  fun `initial discovery stays restorable across clarification and progress until the first audit lands`() {
+    val discovered =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")),
+            emptyList(),
+          ),
+        ),
+      )
+    val clarified = assertNotNull(discovered.retainClarification("Report a verdict for the full audit."))
+    val progressed = clarified.retainProseProgress()
+
+    assertEquals(AcceptanceCriterionRepairMode.INITIAL_DISCOVERY, progressed.mode)
+    assertEquals(2L, progressed.revision)
+    assertEquals(clarified, AcceptanceCriterionRepairState.restore(clarified))
+    assertEquals(progressed, AcceptanceCriterionRepairState.restore(progressed))
+
+    val audited =
+      assertNotNull(
+        progressed.clearPendingClarification().recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "audit:3",
+            3,
+            null,
+            false,
+            "b".repeat(64),
+            "AC-002 is open.",
+            "c".repeat(64),
+            "checkpoint:3",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, audited.stage)
+    assertEquals(audited, AcceptanceCriterionRepairState.restore(audited))
+    assertNull(
+      AcceptanceCriterionRepairState.restore(
+        audited.copy(
+          mode = AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
+          stage = AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+          pendingAuditRefs = emptyList(),
+        ),
+      ),
+    )
+  }
+
   private fun criterion(
     ref: String,
     ordinal: Int,
