@@ -8,8 +8,35 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class FeatureTaskRuntimeAuditFixPlanningTest {
+  @Test
+  fun `a confirmed no-change claim completes audit then runs review and validation without approval`() {
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "implement" -> facts(noChangeImplementationOutput())
+          "audit" -> facts(auditSatisfiedOutput().replace("satisfied", "no_change_confirmed"))
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness = runnerHarness(RuntimeHarnessConfig(launcher = launcher))
+
+    val report = harness.runner.run(harness.request())
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+    val phases = harness.launchOrder()
+    assertContains(phases, "review")
+    assertContains(phases, "validate")
+    assertEquals(1, phases.count { it == "audit" })
+    assertNull(harness.recorder.loadNoChangePause(WORKFLOW_ID))
+    assertContains(
+      assertNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit")?.outputArtifact),
+      "no_change_confirmed",
+    )
+  }
+
   @Test
   fun `malformed no-change repair claim preserves the auditors production finding for the next repair plan`() {
     val finding = "AC-002: Goal monitor resume discards confirmed failed repair commits."

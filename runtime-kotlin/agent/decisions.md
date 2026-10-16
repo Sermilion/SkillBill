@@ -3015,3 +3015,31 @@ and inspected evidence. A3-A4 and A8-A12 add no state, ports, ambient effects or
 module crossings. G1-G7 remain unchanged. A regression exercises a resumed
 malformed repair claim and verifies that the next plan receives both the source
 finding and the rejection reasons.
+
+
+## [2026-10-16] Continue confirmed no-change audits without operator approval
+
+Context: A completed no-change source audit paused a goal until the operator
+accepted it. The operator has removed that approval requirement. Treating the
+old accept command as automatic completion would also skip the child's remaining
+review and quality gate.
+
+Decision: delete the audit pause producer and use normal authoritative completion
+and routing. Keep the no_change_confirmed output and derive satisfied for the
+existing review entry gate after claim validation. Malformed and rejected claims
+still enter repair. Historical undecided pauses resume the child through audit
+without an operator decision. Retain the old artifact decoder and already
+recorded operator choices for compatible recovery. Legacy pause status reports
+resumable, and later pauses cannot inherit an earlier no-change approval state.
+No workflow record rewrite,
+schema change, migration or new marker is needed.
+
+Review checklist: A1 clean, policy remains in engine. A2 clean, no new shared
+owners. A3 clean, no collaborator changes. A4 clean, no new ports. A5 clean,
+active pause code is deleted. A6 clean, existing verdict and artifact vocabulary
+remain. A7 clean, claim rejection and durable completion failures still refuse.
+A8 clean, no ambient effects. A9 and A10 clean, tests stay with their owners.
+A11 and A12 clean, the audit hook loses its pause argument. G1-G7 clean, no guard,
+baseline, exemption or acceptance fixture is weakened. Regressions cover normal
+review and validation after confirmation, serial final source admission, and
+resuming an undecided historical pause without closing its child early.

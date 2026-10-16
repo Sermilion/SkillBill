@@ -46,6 +46,52 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class FeatureTaskRuntimeSerialRepairTest {
   @Test
+  fun `confirmed no-change source acceptance commits before review and continues to validation`() {
+    val accounting = AtomicReference<AcceptanceCriterionRepairRunState?>()
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(assertNotNull(request.skillRunRequest.promptOverride))
+        if (phase == "audit") {
+          val state = accounting.get()?.snapshot
+          val output =
+            if (state == null) {
+              serialDiscoveryOutput().replace(
+                "source_unresolved",
+                "source_closed",
+              ).replace("advance", "no_change_confirmed")
+            } else {
+              serialStructuredAuditOutput(2, state, "All authored production criteria are satisfied.")
+                .replace("satisfied\"", "no_change_confirmed\"")
+            }
+          facts(output)
+        } else {
+          facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
+    harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
+    harness.seedPhase("implement", "completed", 1, "claude", noChangeImplementationOutput())
+
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      accounting.set(scope)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+      assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+      assertContains(harness.launchOrder(), "review")
+      assertContains(harness.launchOrder(), "validate")
+      assertEquals(null, harness.recorder.loadNoChangePause(WORKFLOW_ID))
+    }
+  }
+
+  @Test
   fun `a failed repair returns to focused planning once before the next authored criterion and final audit`() {
     val repairs = AtomicInteger()
     val currentState = AtomicReference<AcceptanceCriterionRepairState?>()

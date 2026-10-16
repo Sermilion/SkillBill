@@ -27,7 +27,6 @@ import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.goalrunner.stopDetail
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
@@ -146,10 +145,9 @@ class GoalRunnerSelectedSubtaskLoop(
         ?: subtask.lastResumableStep?.takeIf(String::isNotBlank)
         ?: "audit"
     return when (pause.operatorDecision?.let { GoalSubtaskOperatorDecision.fromWire(it) }) {
-      null -> NoChangePauseGate.Stopped(awaitingNoChangeDecision(args, workflowId, pause, lastResumableStep, attempted))
       GoalSubtaskOperatorDecision.ACCEPT_AND_ADVANCE ->
         NoChangePauseGate.Stopped(acceptNoChangeAndAdvance(args, workflowId, attempted))
-      GoalSubtaskOperatorDecision.RETRY_FIX ->
+      null, GoalSubtaskOperatorDecision.RETRY_FIX ->
         if (lastResumableStep == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) {
           NoChangePauseGate.Proceed(resumeAtPausedAudit(args.state, subtask.id))
         } else {
@@ -158,33 +156,6 @@ class GoalRunnerSelectedSubtaskLoop(
       GoalSubtaskOperatorDecision.ABANDON_SUBTASK ->
         NoChangePauseGate.Stopped(abandonNoChangeSubtask(args, workflowId, pause, lastResumableStep, attempted))
     }
-  }
-
-  private fun awaitingNoChangeDecision(
-    args: RunSelectedSubtaskArgs,
-    workflowId: String,
-    pause: FeatureTaskRuntimeNoChangePause,
-    lastResumableStep: String,
-    attempted: List<Int>,
-  ): GoalRunnerIterationResult {
-    val subtask = args.selection.decision.subtask
-    return GoalRunnerIterationResult(
-      state = args.state,
-      report =
-        stopped(
-          StoppedReportArgs(
-            issueKey = args.state.manifest.issueKey,
-            attempted = attempted,
-            subtaskId = subtask.id,
-            reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
-            blockedReason = pause.stopDetail(subtask.id),
-            workflowId = workflowId,
-            lastResumableStep = lastResumableStep,
-            noChangeReason = pause.reason.wireValue,
-          ),
-        ),
-      attempted = attempted,
-    )
   }
 
   private fun acceptNoChangeAndAdvance(

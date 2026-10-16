@@ -66,6 +66,18 @@ through their governed briefings. This does not change the spec, acceptance
 criteria, comparison baseline, or other workflows. A retry without `--mandate`
 does not promote its reason to a run mandate.
 
+## Confirmed no-change claims
+
+A validated implementation no-change claim still requires the independent source
+audit. Once that audit confirms the claim, the child continues through review and
+its selected quality gate without operator approval. The audit keeps its
+`no_change_confirmed` output while routing it as satisfied for the existing review
+entry gate. Malformed or rejected claims retain the audit repair path.
+
+An undecided pause recorded by an older runtime resumes its child through audit
+and the remaining phases. Its retained claim, audit evidence and pause artifact
+stay readable. Previously recorded operator decisions retain their behavior.
+
 ## Model selection at launch
 
 Resume uses the recorded per-step assignment. A later alias, remap, or default

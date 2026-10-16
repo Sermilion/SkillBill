@@ -11,6 +11,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 fun terminalOutcomeFor(
   snapshot: WorkflowStateSnapshot,
@@ -30,7 +31,13 @@ fun terminalOutcomeFor(
         outcome.copy(
           workflowId = snapshot.workflowId,
           noChangePause =
-            if (outcome.status == GoalRunnerTerminalStatus.PAUSED) pendingNoChangePause(artifacts) else null,
+            if (outcome.status == GoalRunnerTerminalStatus.PAUSED &&
+              snapshot.currentStepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+            ) {
+              pendingNoChangePause(artifacts)
+            } else {
+              null
+            },
         )
       }
   if (stored != null) {
