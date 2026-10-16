@@ -143,12 +143,14 @@ internal class WorkflowGoalRunnerBlockWrites(
     }
     val artifacts = existing.artifacts
     val phaseRecords = phaseRecordsFromWorkflowArtifacts(artifacts)
+    val repairBudgetPatch = repairBudgetResetPatch(artifacts)
     val blockedRecord =
       operatorReopenablePhaseRecord(
         phaseRecords,
         preferredPhaseId,
         existing.workflowStatus,
-      ) ?: return true
+      ) ?: phaseRecords[preferredPhaseId]?.takeIf { repairBudgetPatch.isNotEmpty() }
+        ?: return true
     unitOfWork.workflowStates.save(
       family,
       engine.updateRecord(
@@ -159,6 +161,7 @@ internal class WorkflowGoalRunnerBlockWrites(
           phaseRecords,
           artifacts,
           reason,
+          repairBudgetPatch,
         ),
       ),
     )
@@ -193,6 +196,7 @@ internal class WorkflowGoalRunnerBlockWrites(
     phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     artifacts: Map<String, Any?>,
     reason: String,
+    repairBudgetPatch: Map<String, Any?>,
   ): WorkflowUpdateInput {
     val ledger = phaseLedgerFromWorkflowArtifacts(artifacts)
     val reopened =
@@ -244,7 +248,7 @@ internal class WorkflowGoalRunnerBlockWrites(
                 "previous_blocked_record" to blockedRecord.asWorkflowArtifactEntry(),
               ),
             ),
-          ) + repairBudgetResetPatch(artifacts),
+          ) + repairBudgetPatch,
         ),
       sessionId = "",
     )

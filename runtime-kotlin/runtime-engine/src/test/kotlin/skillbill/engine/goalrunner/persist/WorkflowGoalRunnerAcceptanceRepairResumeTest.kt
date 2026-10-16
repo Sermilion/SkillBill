@@ -27,68 +27,70 @@ import kotlin.test.assertTrue
 class WorkflowGoalRunnerAcceptanceRepairResumeTest {
   @Test
   fun `explicit resume resets exhausted budget durably and preserves history while retries still stop at three`() {
-    SerialRepairSqliteFixture().use { f ->
-      lateinit var blocked: AcceptanceCriterionRepairState
-      f.owned { worker ->
-        blocked = failThreeRepairs(f, worker, f.discover(worker), "before")
-      }
-      f.database.transaction { unit ->
-        val row = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, f.workflowId))
-        val records = decodePhaseRecords(row.artifacts).toMutableMap()
-        records["audit"] = records.getValue("audit").copy(status = WorkflowStepStatus.BLOCKED)
-        unit.workflowStates.save(
-          WorkflowFamily.TASK_RUNTIME,
-          row.copy(
-            workflowStatus = WorkflowStatus.BLOCKED,
-            currentStepId = "audit",
-            artifacts =
-              DurableWorkflowArtifacts.fromMap(
-                row.artifacts +
-                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-                    records.mapValues { it.value.asWorkflowArtifactEntry() },
-                  ),
-              ),
-          ),
-        )
-      }
-      val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), f.clock)
-
-      fun resume() =
+    for (recordStatus in listOf(WorkflowStepStatus.BLOCKED, WorkflowStepStatus.COMPLETED)) {
+      SerialRepairSqliteFixture().use { f ->
+        lateinit var blocked: AcceptanceCriterionRepairState
+        f.owned { worker ->
+          blocked = failThreeRepairs(f, worker, f.discover(worker), "before")
+        }
         f.database.transaction { unit ->
-          writes.reopenBlockedPhaseForOperatorResume(
-            unit,
-            "audit",
-            "Operator resumed the blocked goal.",
-            f.execution.identity(f.workflowId),
-            ValidatedFeatureTaskRuntimeExecutionPlan.read(f.execution.encoded, f.execution.validator),
+          val row = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, f.workflowId))
+          val records = decodePhaseRecords(row.artifacts).toMutableMap()
+          records["audit"] = records.getValue("audit").copy(status = recordStatus)
+          unit.workflowStates.save(
+            WorkflowFamily.TASK_RUNTIME,
+            row.copy(
+              workflowStatus = WorkflowStatus.BLOCKED,
+              currentStepId = "audit",
+              artifacts =
+                DurableWorkflowArtifacts.fromMap(
+                  row.artifacts +
+                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+                      records.mapValues { it.value.asWorkflowArtifactEntry() },
+                    ),
+                ),
+            ),
           )
         }
-      assertTrue(resume())
-      val resumed =
-        assertIs<AcceptanceCriterionRepairHydration.Present>(
-          f.service().hydrate(f.workflowId, f.binding),
-        ).state
-      assertEquals(0, resumed.unsuccessfulTotals.getOrDefault("AC-001", 0))
-      assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, resumed.stage)
-      assertEquals(blocked.outcomes, resumed.outcomes)
-      assertEquals(blocked.criteria, resumed.criteria)
-      assertEquals(blocked.unresolvedQueue, resumed.unresolvedQueue)
-      assertEquals(blocked.outcomes.size, resumed.budgetStartOutcomeIndex)
-      assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(f.snapshot().artifacts).getValue("audit").status)
-      assertTrue(resume())
-      assertEquals(
-        resumed,
-        assertIs<AcceptanceCriterionRepairHydration.Present>(
-          f.service().hydrate(f.workflowId, f.binding),
-        ).state,
-      )
-      f.owned { worker ->
-        val exhaustedAgain = failThreeRepairs(f, worker, resumed, "after")
-        assertEquals(6, exhaustedAgain.outcomes.size)
-        assertEquals(3, exhaustedAgain.unsuccessfulTotals["AC-001"])
-        assertIs<AcceptanceCriterionRepairWriteResult.Refused>(
-          f.write(worker, exhaustedAgain, AcceptanceCriterionRepairMutation.Reserve("fourth")),
+        val writes = WorkflowGoalRunnerBlockWrites(WorkflowEngine(), f.clock)
+
+        fun resume() =
+          f.database.transaction { unit ->
+            writes.reopenBlockedPhaseForOperatorResume(
+              unit,
+              "audit",
+              "Operator resumed the blocked goal.",
+              f.execution.identity(f.workflowId),
+              ValidatedFeatureTaskRuntimeExecutionPlan.read(f.execution.encoded, f.execution.validator),
+            )
+          }
+        assertTrue(resume())
+        val resumed =
+          assertIs<AcceptanceCriterionRepairHydration.Present>(
+            f.service().hydrate(f.workflowId, f.binding),
+          ).state
+        assertEquals(0, resumed.unsuccessfulTotals.getOrDefault("AC-001", 0))
+        assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, resumed.stage)
+        assertEquals(blocked.outcomes, resumed.outcomes)
+        assertEquals(blocked.criteria, resumed.criteria)
+        assertEquals(blocked.unresolvedQueue, resumed.unresolvedQueue)
+        assertEquals(blocked.outcomes.size, resumed.budgetStartOutcomeIndex)
+        assertEquals(WorkflowStepStatus.PENDING, decodePhaseRecords(f.snapshot().artifacts).getValue("audit").status)
+        assertTrue(resume())
+        assertEquals(
+          resumed,
+          assertIs<AcceptanceCriterionRepairHydration.Present>(
+            f.service().hydrate(f.workflowId, f.binding),
+          ).state,
         )
+        f.owned { worker ->
+          val exhaustedAgain = failThreeRepairs(f, worker, resumed, "after")
+          assertEquals(6, exhaustedAgain.outcomes.size)
+          assertEquals(3, exhaustedAgain.unsuccessfulTotals["AC-001"])
+          assertIs<AcceptanceCriterionRepairWriteResult.Refused>(
+            f.write(worker, exhaustedAgain, AcceptanceCriterionRepairMutation.Reserve("fourth")),
+          )
+        }
       }
     }
   }
