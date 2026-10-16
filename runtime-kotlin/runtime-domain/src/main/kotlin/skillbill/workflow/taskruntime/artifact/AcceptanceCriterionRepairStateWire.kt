@@ -78,6 +78,9 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
     ),
   )
 
+fun FeatureTaskRuntimeWorkflowArtifactMap.isPreContractAcceptanceCriterionRepairState(): Boolean =
+  isObject && !containsKey(Keys.CONTRACT_VERSION)
+
 fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
   sourceLabel: String,
 ): AcceptanceCriterionRepairState {
