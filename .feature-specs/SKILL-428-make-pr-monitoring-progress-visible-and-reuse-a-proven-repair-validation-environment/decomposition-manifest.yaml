@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Practical validation environment reuse guidance"
   spec_path: ".feature-specs/SKILL-428-make-pr-monitoring-progress-visible-and-reuse-a-proven-repair-validation-environment/spec_subtask_2_validation_environment.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261016-044256-rshm"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

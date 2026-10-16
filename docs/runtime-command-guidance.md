@@ -129,6 +129,33 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 
 ## Goal CI monitoring
 
+Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
+files, `CONTRIBUTING.md`, the failing workflow, and any setup scripts it calls.
+Check the selected environment before an expensive command: required toolchain and
+tools, writable `HOME`, Gradle cache and temporary paths, and display support when
+the checks need it. A past repair found containers without Git or Python. Check
+those tools when the selected scripts need them. The Java checks also need a
+writable `user.home`; desktop libraries may create `.skiko` there. On Linux, the
+desktop workflow runs under `xvfb-run` and provisions `xvfb`, `xauth`, and native
+build dependencies. Its Gradle commands include `clean check --no-build-cache`.
+The current `validate-agent-configs.yml` workflow checks out full Git history,
+sets up Node 20 and Temurin Java 21, then runs `./gradlew check --no-build-cache`,
+`npx --yes agnix --strict .`, and `scripts/validate_agent_configs`. Read the
+current workflows and scripts for exact requirements and commands. Do not install
+packages automatically or stop a shared daemon to prepare an environment.
+
+Keep a working setup and useful discovery context within the repair invocation.
+Reuse only caches and mutable state that invocation may own, never another
+worktree's mutable state. Recheck the relevant instructions and scripts after a
+change to their setup, configuration, toolchain, or workspace requirements. A
+previously working setup does not validate a change you have not inspected.
+Setup reuse does not skip checks: run all required local checks for every repair
+candidate before the runtime publishes it. Preserve clean and cache-bypass
+requirements, and do not carry a prior candidate's local pass forward as evidence.
+Explain setup retries and any missing tool, permission, or display problem in the
+phase's ordinary prose, with the concrete obstacle and any needed operator action.
+Use the existing failure and recovery behavior.
+
 CI repair starts with each failing job's logs and the exact failed command,
 assertion, or error. The repair agent traces that evidence through the repository
 and fixes the cause. A passing local rerun does not resolve a CI failure.

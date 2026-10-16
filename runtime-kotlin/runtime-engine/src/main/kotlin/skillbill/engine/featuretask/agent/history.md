@@ -1,5 +1,15 @@
 # featuretask runtime boundary history
 
+## [2026-10-16] SKILL-428 subtask 2 - Reuse a working validation environment
+Areas: runtime-engine featuretask slot/qualitygate, docs/runtime-command-guidance.md
+- Shared validation and monitor-repair guidance reads repository instructions and CI/setup scripts before choosing a host or container, then checks tools, writable home/cache/temp paths and required display support before expensive checks.
+- Keep permitted setup, caches and discovery context within the invocation. Revisit setup after relevant requirements change and run every required local check for each repair candidate, preserving clean and cache-bypass requirements.
+- The existing shared validation briefing remains the reusable instruction owner. Repository guidance records the missing Git/Python, writable Java user.home/.skiko and Linux Xvfb examples against current CI setup.
+- Setup retries use existing prose and recovery behavior. Instructions forbid automatic package installs, shared-daemon shutdown, unrelated job edits and another worktree's mutable state.
+- No breaking contract change, profile, schema, service or additional blocking gate. Setup reuse does not reuse a previous candidate's passing result; CI repair accounting belongs to subtask 3.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for S2-1 through S2-5; parent-feature completion remains outside this subtask.
+
 ## [2026-10-16] SKILL-428 subtask 1 - Explain CI waits through existing progress
 Areas: runtime-engine featuretask monitor/phaserun and goalrunner monitoring, runtime-cli progress/phase output, runtime-infra launcher activity, skills/skill-bill/content.md, docs/runtime-command-guidance.md
 - CI waiting updates use the existing CiStillRunning route every 30 seconds and when pending check names change, including while checks have not registered.

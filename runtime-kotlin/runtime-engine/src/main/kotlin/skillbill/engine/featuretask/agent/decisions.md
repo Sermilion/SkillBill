@@ -1,3 +1,13 @@
+## [2026-10-16] Reuse setup without reusing validation results
+Context: SKILL-428 observed repeated container setup mistakes. Those observations did not establish that required full validation runs were redundant.
+Decision: Retain permitted setup, caches and discovery context within the invocation, revisit changed requirements and run all required checks for each repair candidate. Preserve clean and cache-bypass requirements and invocation resource ownership.
+Reason: A working setup avoids needless reconstruction, but an earlier candidate's pass cannot prove a changed candidate. Discovery context reminds the agent to inspect current requirements rather than trusting cached command results.
+
+## [2026-10-16] Keep environment preparation in existing guidance
+Context: SKILL-428 requires prose guidance without a new environment contract or blocking condition. Missing Git/Python, unwritable Java user.home and Linux display support were concrete SkillBill failures.
+Decision: Extend the shared validation briefing for validation and monitor repair. Keep repository-specific setup examples in runtime command guidance, derive requirements from current instructions and CI, and explain setup retries through existing prose and recovery behavior.
+Reason: Repository CI owns the exact tool and setup requirements. A shared fixed tool list would misapply those requirements to other projects, while a descriptor, discovery service or readiness receipt would add contract surface the operator excluded.
+
 ## [2026-10-16] Reuse existing monitor progress channels
 Context: SKILL-428 addresses silent CI waits and repair periods. The operator explicitly required prose reporting without new schemas, structured progress protocols or completion receipts.
 Decision: Forward CI observations and repair activity through existing events, callbacks, CLI/status sinks and goal heartbeat records. Agents report naturally; no consumer parses narration to settle validation or repair.
