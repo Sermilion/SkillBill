@@ -14,6 +14,7 @@ object AcceptanceCriterionRepairPayloadKeys {
   const val CURRENT_CRITERION_REF = "current_criterion_ref"
   const val RESERVATION = "reservation"
   const val OUTCOMES = "outcomes"
+  const val BUDGET_START_OUTCOME_INDEX = "budget_start_outcome_index"
   const val UNSUCCESSFUL_TOTALS = "unsuccessful_totals"
   const val FINAL_AUDIT_REQUIRED = "final_audit_required"
   const val FINAL_AUDIT_DIGEST = "final_audit_digest"

@@ -197,7 +197,10 @@ markers, or a strict adoption receipt in an audit or repair plan.
 gap and a focused repair for the selected criterion. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
 repair cycle records at most one unsuccessful outcome. The third unsuccessful
-outcome blocks that criterion; a successful outcome closes source work for it
+outcome blocks that criterion. Explicit operator resume of the blocked goal resets
+the active failure counts to zero and grants three new outcomes per criterion,
+while retaining prior outcome identities and source evidence. An ordinary state
+reload does not reset the budget. A successful outcome closes source work for it
 without erasing earlier failures. The final full source audit checks the whole
 authored set. If that audit finds a regression, the criterion reopens with its
 retained failure budget. An ambiguous regression gets the existing read-only

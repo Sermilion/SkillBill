@@ -34,6 +34,7 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
       Keys.RESERVATION to reservation?.let(::reservationWire),
       Keys.OUTCOMES to outcomes.map(::outcomeWire),
       Keys.UNSUCCESSFUL_TOTALS to unsuccessfulTotals,
+      Keys.BUDGET_START_OUTCOME_INDEX to budgetStartOutcomeIndex,
       Keys.FINAL_AUDIT_REQUIRED to finalAuditRequired,
       Keys.FINAL_AUDIT_DIGEST to finalAuditDigest,
       Keys.REVISION to revision,
@@ -103,6 +104,7 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       reservation = repairReservation(),
       outcomes = repairOutcomes(),
       unsuccessfulTotals = repairTotals(),
+      budgetStartOutcomeIndex = repairBudgetStartOutcomeIndex(),
       finalAuditRequired = requiredBoolean(Keys.FINAL_AUDIT_REQUIRED),
       finalAuditDigest = optionalString(Keys.FINAL_AUDIT_DIGEST),
       revision = requiredLong(Keys.REVISION),
@@ -122,6 +124,14 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
     "repair state is incoherent.",
   )
 }
+
+private fun FeatureTaskRuntimeWorkflowArtifactMap.repairBudgetStartOutcomeIndex(): Int =
+  if (containsKey(Keys.BUDGET_START_OUTCOME_INDEX)) {
+    requiredLong(Keys.BUDGET_START_OUTCOME_INDEX).takeIf { it in 0..Int.MAX_VALUE }?.toInt()
+      ?: throw invalidAcceptanceCriterionRepairStateSchema("serial-repair", "Budget start outcome index is invalid.")
+  } else {
+    0
+  }
 
 private fun FeatureTaskRuntimeWorkflowArtifactMap.validateDurableSize(sourceLabel: String) {
   if (

@@ -112,7 +112,18 @@ class AcceptanceCriterionRepairStateSchemaValidatorTest {
       )
     val valid = state.asRepairWireMap()
     AcceptanceCriterionRepairStateSchemaValidator.validate(valid, "valid")
+    val legacy = valid - Keys.BUDGET_START_OUTCOME_INDEX
+    AcceptanceCriterionRepairStateSchemaValidator.validate(legacy, "before-budget-reset-support")
+    assertEquals(
+      state,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(legacy)
+        .toAcceptanceCriterionRepairState("before-budget-reset-support"),
+    )
     listOf(
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to -1),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 1),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to 0.5),
+      valid + (Keys.BUDGET_START_OUTCOME_INDEX to null),
       valid + (Keys.CONTRACT_VERSION to "0.2"),
       valid + (Keys.UNSUCCESSFUL_TOTALS to mapOf("AC-001" to 1)),
       valid + (Keys.CURRENT_CRITERION_REF to "AC-002"),

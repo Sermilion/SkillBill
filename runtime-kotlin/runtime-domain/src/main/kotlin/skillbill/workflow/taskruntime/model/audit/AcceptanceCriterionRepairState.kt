@@ -163,8 +163,24 @@ data class AcceptanceCriterionRepairState internal constructor(
   val pendingAuditRefs: List<String> = emptyList(),
   val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
   val pendingClarificationQuestion: String? = null,
+  val budgetStartOutcomeIndex: Int = 0,
 ) {
   fun clearPendingClarification(): AcceptanceCriterionRepairState = copy(pendingClarificationQuestion = null)
+
+  fun resetBudgetForOperatorResume(): AcceptanceCriterionRepairState {
+    if (stage != AcceptanceCriterionRepairStage.BUDGET_BLOCKED) return this
+    return copy(
+      unsuccessfulTotals = emptyMap(),
+      budgetStartOutcomeIndex = outcomes.size,
+      stage =
+        if (pendingAuditRefs.isEmpty()) {
+          AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
+        } else {
+          AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
+        },
+      revision = revision + 1,
+    )
+  }
 
   fun reserve(
     reservationId: String,

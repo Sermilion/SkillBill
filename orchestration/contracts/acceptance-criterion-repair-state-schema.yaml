@@ -98,6 +98,7 @@ properties:
         tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
         evidence_ref: { type: string, minLength: 1 }
+  budget_start_outcome_index: { type: integer, minimum: 0, maximum: 4096 }
   unsuccessful_totals:
     type: object
     maxProperties: 256
@@ -174,7 +175,7 @@ x-coherence-checks:
   - id: active-position
     description: Current criterion is the first unresolved queue entry; a reservation names that current criterion and at most one reservation is live.
   - id: monotonic-budget
-    description: Unsuccessful totals equal accepted unsuccessful outcomes, never decrease, and do not exceed three per criterion. Budget-blocked state has an exhausted criterion anywhere in the unresolved queue; discovery, reserved, and awaiting-verification stages have no exhausted unresolved criterion.
+    description: Unsuccessful totals equal accepted unsuccessful outcomes at or after budget_start_outcome_index, which defaults to zero and cannot exceed the retained outcome count. Each criterion admits at most three failures per budget. Explicit operator resume of a budget-blocked child advances the index to the retained outcome count and clears the active totals without deleting history. Budget-blocked state has an exhausted criterion anywhere in the unresolved queue; discovery, reserved, and awaiting-verification stages have no exhausted unresolved criterion.
   - id: final-audit
     description: An empty queue requires final audit; only final-full evidence may reopen regressions.
   - id: immutable-transition-history
