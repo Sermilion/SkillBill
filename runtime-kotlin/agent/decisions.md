@@ -3043,3 +3043,31 @@ A11 and A12 clean, the audit hook loses its pause argument. G1-G7 clean, no guar
 baseline, exemption or acceptance fixture is weakened. Regressions cover normal
 review and validation after confirmation, serial final source admission, and
 resuming an undecided historical pause without closing its child early.
+
+
+## [2026-10-16] Admit retained planning evidence after ledger compaction
+
+Context: A resumed child had 200 consecutive phase ledger entries numbered 17
+through 216. Normal bounded-history retention had removed its initial planning
+imports. GoalChildPlanningImportMatcher still required sequence zero at the
+start and reported a stale plan, although the import provenance and settled
+planning records remained intact. Scoped replan would delete that child's audit
+progress and is unnecessary for this case.
+
+Decision: decode ledger entries through the existing durable reader. Validate the
+complete surviving import prefix by sequence number. A prefix that has rolled out
+is admissible only in a full retained window at the existing ledger limit, with
+consecutive sequence numbers throughout. Keep parent planning, provenance, payload
+and settled phase admission unchanged. Do not reconstruct old entries, rewrite
+workflow records or change retention. Incomplete windows, gaps and altered
+surviving imports still fail admission.
+
+Review checklist: A1 and A2 clean, the matcher consumes existing engine decoding
+and domain retention vocabulary. A3 and A4 clean, no new collaborators or ports.
+A5 clean, the permanent sequence-zero assumption is removed at its consumer.
+A6 clean, typed ledger reads replace raw key access. A7 clean, malformed durable
+entries retain typed failures. A8 clean, no ambient reads. A9-A12 clean, no new
+packages, API or raw map boundary. G1-G7 clean, no guard, baseline or exemption
+changes. The regression failed under the old reader and now admits partially and
+fully pruned import prefixes without changing stored child bytes. Rejection cases
+cover incomplete windows, sequence gaps and changed surviving imports.

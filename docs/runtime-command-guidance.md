@@ -241,6 +241,11 @@ An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.
 
+A long-running child's phase ledger retains its latest bounded window. Resume
+checks planning-import entries that remain in that window alongside the durable
+planning provenance and completed phase records. Normal removal of older ledger
+entries does not require replan or discard the child's execution progress.
+
 ## Edited subtask specs on resume
 
 A full goal launch checks unfinished subtask specs against their saved planning hashes
