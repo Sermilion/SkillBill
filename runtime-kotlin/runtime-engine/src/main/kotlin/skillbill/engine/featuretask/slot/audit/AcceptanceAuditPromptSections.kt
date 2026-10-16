@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.PHASE_COMPLETE_SETTLEMENT_TOOL
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 
 internal object AcceptanceAuditPromptSections {
@@ -36,8 +37,9 @@ internal object AcceptanceAuditPromptSections {
       "the criterion open and request read-only clarification. A final full audit inspects " +
       "every authored production requirement in the current source, including " +
       "criteria previously accepted. Apply the same test exclusion. " +
-      "Use the existing satisfied verdict when the inspected production scope is met, and " +
-      "advance when it has source gaps. " +
+      "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
+      "verdict \"satisfied\" when the inspected production scope is met and verdict \"advance\" when it has " +
+      "source gaps. A completion without a verdict is read as a clarification request and repeats this audit. " +
       "When all required production behavior is implemented, say so in ordinary prose, including when only " +
       "test requirements remain. Block with a concrete failure_disposition only when an " +
       "external dependency prevents inspection. " + AUDIT_READONLY_EVIDENCE_SENTENCE

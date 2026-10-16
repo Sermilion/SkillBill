@@ -385,7 +385,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Use the existing satisfied verdict",
+      "pass verdict \"satisfied\" when the inspected production scope is met",
       "the source acceptance verdict",
     )
     assertAuditPromptNamesSignal(
