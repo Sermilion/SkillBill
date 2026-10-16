@@ -46,7 +46,14 @@ class PhaseRunEntry(
         request.invokedAgentId,
         request.launchArguments,
       )
-    val statusRequest = request.copy(eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher))
+    val statusRequest =
+      request.copy(
+        eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher),
+        activityOutput = { stepName, activity ->
+          publisher.publishActivity(stepName, activity)
+          request.activityOutput?.invoke(stepName, activity)
+        },
+      )
     return runCatching { runInternal(statusRequest, invocationId) }
       .onSuccess(publisher::settle)
       .onFailure(publisher::settleFailure)

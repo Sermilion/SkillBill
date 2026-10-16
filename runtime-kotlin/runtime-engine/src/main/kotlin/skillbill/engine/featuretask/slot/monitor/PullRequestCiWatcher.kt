@@ -41,14 +41,28 @@ internal class PullRequestCiWatcher(
         } else {
           when (val checks = checksLookup.lookup(repoRoot, prNumber)) {
             is PullRequestChecks.Unavailable -> PullRequestCiOutcome.Unavailable(checks.reason)
-            PullRequestChecks.NoChecks -> null
+            PullRequestChecks.NoChecks -> {
+              reportRunning(
+                found.url,
+                emptyList(),
+                verdict = null,
+                onCiRunning = onCiRunning,
+                lastProgressAt = lastProgressAt,
+                lastPendingNames = lastPendingNames,
+              )
+                ?.let { (reportedAt, pendingNames) ->
+                  lastProgressAt = reportedAt
+                  lastPendingNames = pendingNames
+                }
+              null
+            }
             is PullRequestChecks.Reported -> {
               if (checks.checks.isNotEmpty()) {
                 ciStarted = true
               }
               val verdict = verdictFor(checks.checks)
               reportRunning(
-                found?.url.orEmpty(),
+                found.url,
                 checks.checks,
                 verdict,
                 onCiRunning,
@@ -111,7 +125,6 @@ internal class PullRequestCiWatcher(
   ): Pair<Instant, List<String>>? {
     if (verdict != null) return null
     val pending = checks.filter { it.bucket == CheckBucket.PENDING }
-    if (pending.isEmpty()) return null
     val names = pending.map(PullRequestCheck::name)
     val due = lastProgressAt == null || Duration.between(lastProgressAt, now()) >= progressInterval
     if (!due && names == lastPendingNames) return null

@@ -33,16 +33,22 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.shellcontent.missingValidationGate
+import skillbill.idestatus.model.AgentActivityLabel
+import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
 import java.time.Instant
+import java.util.concurrent.CancellationException
 
 internal class InMemoryPhaseRunState(
   private val facts: InMemoryPhaseRunFacts,
@@ -120,8 +126,58 @@ internal class InMemoryPhaseRunState(
 
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
-  override fun launchObservation(stepName: String): PhaseLaunchObservation =
-    PhaseLaunchObservation(AgentRunActivityStampSink.NONE, AgentRunWorktreeEditObserver.NONE)
+  override fun launchObservation(stepName: String): PhaseLaunchObservation {
+    val output =
+      facts.request.activityOutput
+        ?: return PhaseLaunchObservation(
+          AgentRunActivityStampSink.NONE,
+          AgentRunWorktreeEditObserver.NONE,
+        )
+    var lastKind: String? = null
+    var lastPublishedAt: Instant? = null
+    fun publish(kind: String, activity: String) {
+      val now = clock.instant()
+      if (lastKind == kind && lastPublishedAt?.let { now.isBefore(it.plus(ACTIVITY_REFRESH_INTERVAL)) } == true) return
+      lastKind = kind
+      lastPublishedAt = now
+      val bounded = boundedIdeStatusActivity(activity) ?: return
+      runCatching { output(stepName, bounded) }
+        .onFailure { error ->
+          if (error is CancellationException) throw error
+          RuntimeDiagnosticsBestEffortWarning.record(
+            diagnostics,
+            "Phase run $invocationId could not publish launch activity for '$stepName'.",
+            error,
+          )
+        }
+    }
+    val stampSink =
+      AgentRunActivityStampSink { label ->
+        val activity =
+          when (label) {
+            AgentActivityLabel.WORKTREE_WRITE ->
+              "Observed file activity during '$stepName'; source progress is not confirmed."
+            AgentActivityLabel.STDOUT, AgentActivityLabel.TOOL_STREAM ->
+              "The '$stepName' child is active and producing output; source progress is not confirmed."
+            AgentActivityLabel.DURABLE_PROGRESS -> "Workflow progress changed during '$stepName'."
+            AgentActivityLabel.EVIDENCE_READ -> "The '$stepName' child is reading review evidence."
+          }
+        publish(label.wireValue, activity)
+      }
+    val progressEmitter: (AgentRunProgressEmission) -> Unit = { emission ->
+      if (emission.processAlive && emission.outcome == GoalProgressOutcome.NONE &&
+        (emission.eventKind == GoalProgressEventKind.OPERATION_STARTED ||
+          emission.eventKind == GoalProgressEventKind.OPERATION_HEARTBEAT)
+      ) {
+        publish("child_liveness", "The '$stepName' child is active; source progress is not confirmed.")
+      }
+    }
+    return PhaseLaunchObservation(
+      activityStampSink = stampSink,
+      worktreeEditObserver = AgentRunWorktreeEditObserver.NONE,
+      progressEmitter = progressEmitter,
+    )
+  }
 
   override fun recordTokenUsage(
     stepName: String,
@@ -253,3 +309,4 @@ private enum class QualityCheckResult(
 
 private const val QUALITY_CHECK_ROUTED_SKILL = "bill-code-check"
 private const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
+private val ACTIVITY_REFRESH_INTERVAL = java.time.Duration.ofSeconds(30)

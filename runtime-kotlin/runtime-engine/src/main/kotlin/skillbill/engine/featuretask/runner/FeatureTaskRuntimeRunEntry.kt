@@ -60,6 +60,10 @@ class FeatureTaskRuntimeRunEntry(
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val repairPersistence: AcceptanceCriterionRepairPersistence,
 ) {
+  private companion object {
+    const val MAX_DIAGNOSTIC_ID = 128
+  }
+
   fun run(
     input: FeatureTaskRuntimeRunInput,
     onOpenFailure: (WorkflowOpenResult.Error) -> Nothing,
@@ -106,6 +110,9 @@ class FeatureTaskRuntimeRunEntry(
       val sourceRead = runInvariantsSource.read(specPath)
       val sourceInvariants = sourceRead.requireInvariants()
       val repairState = inspectRepairState(input, acquiredWorker, sourceRead, admittedExecution)
+      if (repairState?.historicalAttributionUnavailable() == true) {
+        return@runOwned historicalRepairRefusal(input, acquiredWorker, sourceInvariants)
+      }
       runner.run(
         runRequest(
           input,
@@ -194,6 +201,31 @@ class FeatureTaskRuntimeRunEntry(
       repairPersistence.recoverProjection(input.repoRoot, worker.workflowId, requireNotNull(binding))
     }
     return AcceptanceCriterionRepairRunState(hydration, binding)
+  }
+
+  private fun historicalRepairRefusal(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    sourceInvariants: FeatureTaskRuntimeRunInvariants,
+  ): FeatureTaskRuntimeRunReport.Blocked {
+    val reason =
+      "Serial acceptance repair cannot start because this workflow has earlier audit or repair activity, " +
+        "but no per-criterion attribution record. The aggregate attempts and saved prose remain intact. " +
+        "An operator must decide separately whether prospective per-criterion accounting may begin; " +
+        "a generic retry does not make that decision."
+    diagnostics.warning(
+      "seam=serial_acceptance_repair record_kind=refusal workflow=${worker.workflowId.take(MAX_DIAGNOSTIC_ID)} " +
+        "value_expected=criterion_attribution value_used=unavailable",
+    )
+    return FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = input.issueKey,
+      workflowId = worker.workflowId,
+      featureSize = sourceInvariants.featureSize.name,
+      lastIncompletePhase = worker.currentStepId,
+      blockedReason = reason,
+      completedPhaseIds = emptyList(),
+      resolvedBranch = null,
+    )
   }
 
   private fun open(

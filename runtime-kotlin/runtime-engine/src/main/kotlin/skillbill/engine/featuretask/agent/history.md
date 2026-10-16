@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-16] SKILL-428 subtask 1 - Explain CI waits through existing progress
+Areas: runtime-engine featuretask monitor/phaserun and goalrunner monitoring, runtime-cli progress/phase output, runtime-infra launcher activity, skills/skill-bill/content.md, docs/runtime-command-guidance.md
+- CI waiting updates use the existing CiStillRunning route every 30 seconds and when pending check names change, including while checks have not registered.
+- Progress carries the observed PR URL and up to eight pending check records. Names and links are bounded; links omit user info, query parameters and fragments. Invalid or oversized watcher links are omitted.
+- Standalone CLI/status and goal output forward waiting details and repair activity. Status describes bounded pending-check sample changes without claiming that a disappearing check passed.
+- Existing progress events, activity callbacks and goal heartbeat records carry intermediate observations. reusable
+- Monitor guidance uses natural prose, names available evidence and the next useful event, and leaves unavailable runner or commit details unknown without administrative API access.
+- Child liveness does not establish source progress; passing local checks do not establish remote CI success. CI verdicts, deadlines, repair budgets and publication ownership retain their existing meaning.
+- Limits: optional observations remain unavailable when absent. Environment reuse and revised CI repair accounting belong to later SKILL-428 subtasks; no new schema, status store or prose parser was added.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for S1-1 through S1-5; this entry does not assert parent-feature completion.
+
 ## [2026-10-15] SKILL-426 subtask 3 - Criterion reporting through existing text channels
 Areas: runtime-engine featuretask and work projections, runtime-domain taskruntime, runtime-cli featuretask, desktop-tray details, intellij-plugin presentation/cache, docs/runtime-command-guidance.md
 - Status reads committed accounting for the selected workflow and explains authored criterion identity/text, retained and remaining failures, queue position, latest gap and final source-audit state.

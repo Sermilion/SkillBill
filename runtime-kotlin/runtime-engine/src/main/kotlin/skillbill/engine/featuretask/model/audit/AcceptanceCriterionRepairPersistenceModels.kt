@@ -126,7 +126,8 @@ class AcceptanceCriterionRepairRunState internal constructor(
     get() = (accounting as? AcceptanceCriterionRepairHydration.Present)?.state
 
   fun historicalAttributionUnavailable(): Boolean =
-    accounting == AcceptanceCriterionRepairHydration.HistoricalAttributionUnavailable
+    accounting == AcceptanceCriterionRepairHydration.HistoricalAttributionUnavailable ||
+      accounting == AcceptanceCriterionRepairHydration.LegacyAdoptionRequired
 
   fun freshDiscoveryRequired(): Boolean = accounting == AcceptanceCriterionRepairHydration.FreshDiscoveryRequired
 

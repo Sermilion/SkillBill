@@ -17,8 +17,7 @@ interface DatabaseSessionFactory {
 
   fun <T> transaction(block: (UnitOfWork) -> T): T
 
-  fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
-    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.UNSUPPORTED)
+  fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T>
 
   fun <T> transactionFenced(
     expected: DatabaseFileObservation,

@@ -19,6 +19,7 @@ import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -131,6 +132,9 @@ class DefaultPhaseRunner(
           spawnAuthorization = facts.spawnAuthorization,
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
+          progressEmitter =
+            observation.progressEmitter?.let { callback -> AgentRunProgressEmitter(callback) }
+              ?: AgentRunProgressEmitter.NONE,
         ),
     )
   }

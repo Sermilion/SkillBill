@@ -303,8 +303,8 @@ sealed interface FeatureTaskRuntimeRunEvent {
   ) : FeatureTaskRuntimeRunEvent
 
   /**
-   * Pull request checks are still pending. Emitted so IDE status stays fresh for the whole CI run
-   * instead of going stale after the freshness window with no new phase event.
+   * Pull request checks are pending or have not yet been reported. Emitted so run and IDE progress stays fresh
+   * while CI registration or checks wait, without changing the verdict.
    */
   data class CiStillRunning(
     override val workflowId: String,

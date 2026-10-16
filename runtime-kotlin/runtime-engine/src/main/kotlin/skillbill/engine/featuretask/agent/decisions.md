@@ -1,3 +1,14 @@
+## [2026-10-16] Reuse existing monitor progress channels
+Context: SKILL-428 addresses silent CI waits and repair periods. The operator explicitly required prose reporting without new schemas, structured progress protocols or completion receipts.
+Decision: Forward CI observations and repair activity through existing events, callbacks, CLI/status sinks and goal heartbeat records. Agents report naturally; no consumer parses narration to settle validation or repair.
+Reason: Current facilities already carry the needed facts. Another transport or prescribed report shape would add contract surface and turn visibility into an additional success gate.
+Alternatives considered: The earlier structured-protocol draft was superseded by the operator's prose-first requirement in the parent spec.
+
+## [2026-10-16] Treat monitor liveness as an observation
+Context: Long commands, queued CI and unknown runner capacity can look like stalled work. A live process and passing local checks do not prove source changes or a successful remote CI result.
+Decision: Refresh waiting activity through current facilities at the intended 30-second cadence, bound displayed check details and links, and report only observed facts. Leave absent detail unavailable without an additional refusal or administrative lookup.
+Reason: Visibility must not invent progress, infer success from a changing pending-check sample, reset deadlines or spend repair attempts. Remote CI remains the authority for the PR's CI result.
+
 ## [2026-10-14] Serial acceptance commits use a scoped acquired worker
 Context: SKILL-426's first subtask had domain records but no transaction owner coupling criterion outcomes to workflow evidence. A domain success could otherwise become visible before the database accepted it.
 Decision: The worker coordinator issues a callback-scoped capability carrying its admitted execution and private lease identity. Serial writes check that capability, expected revision, current criterion, reservation and authored source inside one required write transaction. The same transaction stores serial state, phase records, ledger, implementation evidence and workflow advancement. Callers receive detached committed facts after the transaction returns. Filesystem projection follows commit; projection failure returns committed-with-projection-failure and recovery regenerates only that projection.
