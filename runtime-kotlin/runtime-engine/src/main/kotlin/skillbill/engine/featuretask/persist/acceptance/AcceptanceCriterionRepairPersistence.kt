@@ -317,11 +317,7 @@ class AcceptanceCriterionRepairPersistence(
     ) {
       return refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
-    val identity =
-      request.phase.workflowId == worker.workflowId && binding.executionId == worker.workflowId &&
-        worker.ownsAuditStep(
-          request.phase.phaseId,
-        )
+    val identity = phaseIdentityMatches(worker, binding, request.phase)
     if (!identity ||
       !adoption.sourceMatches(
         worker,
@@ -345,9 +341,7 @@ class AcceptanceCriterionRepairPersistence(
         val digest = request.evidence?.let { sha256Hex(JsonCodec.valueToJsonString(it.payload)) }
         val next = transition(previous, request.mutation, digest)
         val legacySafe =
-          previous != null || !adoption.hasAuditHistory(record) ||
-            freshCurrentAuditDiscovery(record, request) ||
-            adoptionMatches(record.artifacts, binding, worker, repositoryRoot, record)
+          previous != null || mayAdopt(record, request, binding, worker, repositoryRoot)
         val refusal = candidateRefusal(previous, next, request, binding, legacySafe)
         if (refusal != null) {
           refuse(worker, previous, refusal)
@@ -389,6 +383,24 @@ class AcceptanceCriterionRepairPersistence(
       latest.attemptCount == phase.attemptCount &&
       (latest.status != WorkflowStepStatus.RUNNING || !sameCommittedStart(artifacts, request))
   }
+
+  private fun phaseIdentityMatches(
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    binding: AcceptanceCriterionRepairBinding,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+  ): Boolean =
+    phase.workflowId == worker.workflowId && binding.executionId == worker.workflowId &&
+      worker.ownsAuditStep(phase.phaseId)
+
+  private fun mayAdopt(
+    record: WorkflowStateSnapshot,
+    request: AcceptanceCriterionRepairCommit,
+    binding: AcceptanceCriterionRepairBinding,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    repositoryRoot: Path,
+  ): Boolean =
+    !adoption.hasAuditHistory(record) || freshCurrentAuditDiscovery(record, request) ||
+      adoptionMatches(record.artifacts, binding, worker, repositoryRoot, record)
 
   private fun freshCurrentAuditDiscovery(
     record: WorkflowStateSnapshot,

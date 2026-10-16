@@ -28,8 +28,7 @@ internal class PullRequestCiWatcher(
   ): PullRequestCiOutcome {
     val startedAt = now()
     var ciStarted = false
-    var lastProgressAt: Instant? = null
-    var lastPendingNames: List<String>? = null
+    var progress = CiProgress()
     while (true) {
       val identity = currentIdentity(repoRoot, branch)
       val found = identity as? PullRequestIdentity.Found
@@ -42,18 +41,7 @@ internal class PullRequestCiWatcher(
           when (val checks = checksLookup.lookup(repoRoot, prNumber)) {
             is PullRequestChecks.Unavailable -> PullRequestCiOutcome.Unavailable(checks.reason)
             PullRequestChecks.NoChecks -> {
-              reportRunning(
-                found.url,
-                emptyList(),
-                verdict = null,
-                onCiRunning = onCiRunning,
-                lastProgressAt = lastProgressAt,
-                lastPendingNames = lastPendingNames,
-              )
-                ?.let { (reportedAt, pendingNames) ->
-                  lastProgressAt = reportedAt
-                  lastPendingNames = pendingNames
-                }
+              progress = reportRunning(found.url, emptyList(), null, onCiRunning, progress)
               null
             }
             is PullRequestChecks.Reported -> {
@@ -61,25 +49,14 @@ internal class PullRequestCiWatcher(
                 ciStarted = true
               }
               val verdict = verdictFor(checks.checks)
-              reportRunning(
-                found.url,
-                checks.checks,
-                verdict,
-                onCiRunning,
-                lastProgressAt,
-                lastPendingNames,
-              )
-                ?.let { (reportedAt, pendingNames) ->
-                  lastProgressAt = reportedAt
-                  lastPendingNames = pendingNames
-                }
+              progress = reportRunning(found.url, checks.checks, verdict, onCiRunning, progress)
               verdict
             }
           }
         }
       if (settled != null) {
         return if (settled is PullRequestCiOutcome.Failed || settled is PullRequestCiOutcome.Unavailable) {
-          refreshedFailure(repoRoot, branch, settled)
+          refreshedFailure(repoRoot, branch, settled, found?.headSha)
         } else {
           settled
         }
@@ -107,29 +84,42 @@ internal class PullRequestCiWatcher(
     repoRoot: Path,
     branch: String,
     observed: PullRequestCiOutcome,
+    observedHeadSha: String?,
   ): PullRequestCiOutcome =
     when (val latest = identityLookup.lookup(repoRoot, branch)) {
       is PullRequestIdentity.Merged -> PullRequestCiOutcome.Merged
       is PullRequestIdentity.Unavailable -> PullRequestCiOutcome.Unavailable(latest.reason)
       PullRequestIdentity.Absent -> PullRequestCiOutcome.NoPullRequest
-      is PullRequestIdentity.Found -> observed
+      is PullRequestIdentity.Found ->
+        if (latest.conflicting) {
+          PullRequestCiOutcome.Conflicted
+        } else if (observedHeadSha != null && latest.headSha != observedHeadSha) {
+          PullRequestCiOutcome.Unavailable(
+            "The pull request head changed while its failing checks were being observed.",
+          )
+        } else if (observed is PullRequestCiOutcome.Failed) {
+          observed.copy(headSha = observedHeadSha)
+        } else {
+          observed
+        }
     }
+
+  private data class CiProgress(val at: Instant? = null, val names: List<String>? = null)
 
   private fun reportRunning(
     pullRequestUrl: String,
     checks: List<PullRequestCheck>,
     verdict: PullRequestCiOutcome?,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit,
-    lastProgressAt: Instant?,
-    lastPendingNames: List<String>?,
-  ): Pair<Instant, List<String>>? {
-    if (verdict != null) return null
+    previous: CiProgress,
+  ): CiProgress {
+    if (verdict != null) return previous
     val pending = checks.filter { it.bucket == CheckBucket.PENDING }
     val names = pending.map(PullRequestCheck::name)
-    val due = lastProgressAt == null || Duration.between(lastProgressAt, now()) >= progressInterval
-    if (!due && names == lastPendingNames) return null
+    val due = previous.at == null || Duration.between(previous.at, now()) >= progressInterval
+    if (!due && names == previous.names) return previous
     onCiRunning(progressLink(pullRequestUrl), pending.take(MAX_PROGRESS_CHECKS).map(::progressCheck))
-    return now() to names
+    return CiProgress(now(), names)
   }
 
   private fun progressCheck(check: PullRequestCheck): PullRequestCheck =

@@ -1,5 +1,6 @@
 package skillbill.ports.idestatus.model
 import skillbill.idestatus.model.IdeStatusExecutionScope
+import skillbill.idestatus.model.IdeStatusLaunchScope
 
 data class IdeStatusExecutionIdentity(
   val scope: IdeStatusExecutionScope,
@@ -9,6 +10,7 @@ data class IdeStatusExecutionIdentity(
   val statusRevision: String,
   val invocationId: String? = null,
   val phaseId: String? = null,
+  val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 ) {
   init {
     require(executionId.isNotBlank()) { "executionId must not be blank." }
@@ -19,6 +21,7 @@ data class IdeStatusExecutionIdentity(
       IdeStatusExecutionScope.WORKFLOW -> {
         require(invocationId == null) { "Workflow status cannot carry invocationId." }
         require(phaseId == null) { "Workflow status cannot carry phaseId." }
+        require(launchScope == IdeStatusLaunchScope.STANDALONE) { "Workflow status cannot carry a goal launch." }
       }
       IdeStatusExecutionScope.STANDALONE_PHASE -> {
         require(!invocationId.isNullOrBlank()) { "Standalone phase status requires invocationId." }

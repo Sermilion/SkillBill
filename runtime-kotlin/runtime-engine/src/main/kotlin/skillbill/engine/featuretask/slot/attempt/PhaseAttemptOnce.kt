@@ -220,7 +220,9 @@ object PhaseAttemptOnce {
       else -> Unit
     }
     val fileManifest =
-      requireNotNull(output.fileManifest).let { FeatureTaskRuntimePhaseFileManifest(it.before, it.after) }
+      requireNotNull(output.fileManifest).let {
+        FeatureTaskRuntimePhaseFileManifest(it.before, it.after, it.reeditedPaths)
+      }
     with(context) {
       FeatureTaskRuntimeRunLoopLaunch.capturePhaseContentIdentities(
         request,

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.state
 
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
@@ -33,6 +34,9 @@ internal class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
+  private val initialRetainedOutputs: List<FeatureTaskRuntimePhaseOutput> = emptyList(),
+  private val initialMonitorFailureEvidenceUnavailable: Boolean = false,
+  private val initialMonitorRepairFailures: Map<Int, String> = emptyMap(),
   initialReviewGeneration: Int = 0,
   private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
   private val resumeRulesFn: (String) -> PhaseResumeRules,
@@ -57,6 +61,9 @@ internal class FeatureTaskRuntimeRunState(
     source.durableInitialRecords,
     source.transitions,
     source.durableInitialLedger,
+    source.initialRetainedOutputs,
+    source.initialMonitorFailureEvidenceUnavailable,
+    source.initialMonitorRepairFailures,
     source.reviewGeneration,
     source.stepVerdictRule,
     source.resumeRulesFn,
@@ -72,6 +79,9 @@ internal class FeatureTaskRuntimeRunState(
     )
     outputBuffer.clear()
     outputBuffer.addAll(source.outputBuffer.map(::detachedOutput))
+    monitorFailedRepairCommits.clear()
+    monitorFailedRepairCommits.addAll(source.monitorFailedRepairCommits)
+    monitorFailureEvidenceMissing = source.monitorFailureEvidenceMissing
     completedPhases.replaceFrom(source.completedPhases)
     priorRecords.replaceFrom(source.priorRecords)
     phasesLaunchedThisProcess.replaceFrom(source.phasesLaunchedThisProcess)
@@ -159,6 +169,10 @@ internal class FeatureTaskRuntimeRunState(
 
   private val outputBuffer: MutableList<FeatureTaskRuntimePhaseOutput> = mutableListOf()
 
+  private val monitorFailedRepairCommits: MutableSet<String> = mutableSetOf()
+
+  private var monitorFailureEvidenceMissing: Boolean = false
+
   private val completedPhases: MutableSet<String> =
     this.initialRecords.values
       .filter { it.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED }
@@ -206,6 +220,17 @@ internal class FeatureTaskRuntimeRunState(
           it.phaseId !in completedPhases
       }.filterNot { it.phaseId in gateInvalidatedPhaseIds }
       .toCollection(outputBuffer)
+    initialRetainedOutputs.map(::detachedOutput).forEach { retained ->
+      if (outputBuffer.none { it.phaseId == retained.phaseId && it.iteration == retained.iteration }) {
+        outputBuffer += retained
+      }
+    }
+    monitorFailedRepairCommits.addAll(initialMonitorRepairFailures.values)
+    monitorFailureEvidenceMissing =
+      outputBuffer.filter(::monitorOutputIsCiFailed).any {
+        it.iteration !in initialMonitorRepairFailures
+      }
+    monitorFailureEvidenceMissing = monitorFailureEvidenceMissing || initialMonitorFailureEvidenceUnavailable
   }
 
   override fun validatedRecordToOutput(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseOutput? {
@@ -404,8 +429,18 @@ internal class FeatureTaskRuntimeRunState(
     fixLoopBudgetBaseByPhase[phaseId] = maxOf(nextIteration(phaseId) - 1, 0)
   }
 
-  internal fun recordCompleted(output: FeatureTaskRuntimePhaseOutput) {
+  internal fun recordCompleted(
+    output: FeatureTaskRuntimePhaseOutput,
+    qualifiedFailedRepairSha: String? = null,
+  ) {
     outputBuffer += detachedOutput(output)
+    if (monitorOutputIsCiFailed(output)) {
+      if (!qualifiedFailedRepairSha.isNullOrBlank()) {
+        monitorFailedRepairCommits += qualifiedFailedRepairSha
+      } else {
+        monitorFailureEvidenceMissing = true
+      }
+    }
     completedPhases += output.phaseId
     priorRecords += output.phaseId
     if (resumeRules(output.phaseId).tracksReviewPasses) {
@@ -487,6 +522,12 @@ internal class FeatureTaskRuntimeRunState(
   override fun loop(loopId: String): LoopProgressObservation =
     LoopProgressObservation(edgeIterationByLoop[loopId] ?: 0, loopId in liveClaimedLoops)
 
+  override val monitorFailedRepairCommitShas: Set<String>
+    get() = monitorFailedRepairCommits.toSet()
+
+  override val monitorFailureEvidenceUnavailable: Boolean
+    get() = monitorFailureEvidenceMissing
+
   internal fun recordEdgeIteration(
     loopId: String,
     edgeIteration: Int,
@@ -506,6 +547,10 @@ internal class FeatureTaskRuntimeRunState(
 
   private fun outputFor(phaseId: String): FeatureTaskRuntimePhaseOutput? =
     outputBuffer.filter { it.phaseId == phaseId }.maxByOrNull { it.iteration }?.let(::detachedOutput)
+
+  private fun monitorOutputIsCiFailed(output: FeatureTaskRuntimePhaseOutput): Boolean =
+    output.normalizedOutput?.envelopeWireMap()?.get(SharedPayloadKeys.VERDICT) ==
+      FeatureTaskRuntimeVerdict.CI_FAILED.wireValue
 
   private fun nextIteration(phaseId: String): Int {
     val latestOutputIteration = outputBuffer.filter { it.phaseId == phaseId }.maxOfOrNull { it.iteration } ?: 0

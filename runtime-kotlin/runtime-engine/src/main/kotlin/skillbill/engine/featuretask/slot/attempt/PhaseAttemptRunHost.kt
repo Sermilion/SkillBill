@@ -44,6 +44,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
@@ -55,6 +56,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import java.security.MessageDigest
 import java.time.Clock
 
 internal class PhaseAttemptRunHost(
@@ -272,7 +274,24 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
   iteration: Int,
   outputText: String,
   acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
+  qualifiedFailedRepairSha: String? = null,
 ): Boolean {
+  val outputBytes = outputText.encodeToByteArray()
+  recorder.retainProducerOutput(
+    ProducerOutputEvidence(
+      workflowId = request.workflowId,
+      phaseId = run.phaseId,
+      attempt = iteration,
+      agentId = run.resolvedAgent.resolvedAgentId,
+      model = run.modelDirective?.model ?: "unspecified",
+      recordedAt = clock.instant(),
+      byteSize = outputBytes.size.toLong(),
+      sha256 =
+        MessageDigest.getInstance("SHA-256").digest(outputBytes)
+          .joinToString("") { byte -> "%02x".format(byte) },
+      payload = outputBytes,
+    ),
+  )
   val phaseState =
     FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
       request,
@@ -303,6 +322,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
         acceptedOutput.canonicalJson,
         acceptedOutput,
       ),
+    qualifiedFailedRepairSha = qualifiedFailedRepairSha,
   )
 }
 

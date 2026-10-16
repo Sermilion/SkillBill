@@ -6,8 +6,10 @@ import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
 import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
 import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
+import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
@@ -67,8 +69,8 @@ internal class StandalonePhaseStatusStore(
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
-        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -96,6 +98,7 @@ internal class StandalonePhaseStatusStore(
           request.launchAgentId,
           request.launchArguments?.let(JsonCodec::valueToJsonString),
           agentEnvironmentJson(request.agentEnvironment),
+          request.launchScope.wireValue,
         ),
       )
       statement.executeUpdate()
@@ -571,6 +574,7 @@ internal class StandalonePhaseStatusStore(
       launchAgentId = getString("launch_agent_id"),
       launchArguments = readLaunchArguments(),
       agentEnvironment = readAgentEnvironment("standalone-status"),
+      launchScope = readLaunchScope("standalone-status"),
     )
 
   private fun ResultSet.readLaunchArguments(): List<String>? {

@@ -8,6 +8,7 @@ import dev.skillbill.tray.core.domain.model.HistoryFilter
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
@@ -38,10 +39,10 @@ internal fun candidateQuery(section: WorkSection, cutoff: String, through: Strin
     HistoryFilter.GOALS -> "family = 'goal'"
     HistoryFilter.PHASES -> "family <> 'goal'"
   }
-  val goalPhaseFilter = if (section in setOf(WorkSection.PHASES, WorkSection.NEEDS_YOU)) """
+  val goalPhaseFilter = if (section in setOf(WorkSection.PHASES, WorkSection.NEEDS_YOU, WorkSection.GOALS)) """
         AND NOT EXISTS (
           SELECT 1 FROM standalone_phase_status phase JOIN goals goal ON goal.repository = phase.repository_identity
-          WHERE candidate.family = 'phase' AND phase.invocation_id = candidate.id
+          WHERE candidate.family IN ('phase', 'goal') AND phase.invocation_id = candidate.id
             AND phase.phase_id IN ('${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN}', '${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS}')
             AND (goal.finished_at IS NULL OR julianday(candidate.started_at) <= julianday(goal.finished_at))
             AND goal.repository <> '' AND goal.repository = candidate.repository
@@ -124,7 +125,7 @@ EXISTS (
         ORDER BY length(x.run_sequence) DESC, x.run_sequence DESC LIMIT 1)
       UNION ALL
       SELECT s.invocation_id, s.started_at, s.finished_at,
-             s.lifecycle_state, 'phase',
+             s.lifecycle_state, CASE WHEN s.launch_scope = '${IdeStatusLaunchScope.GOAL.wireValue}' THEN 'goal' ELSE 'phase' END,
              COALESCE(s.issue_key, ''), s.repository_identity, s.lease_expires_at, s.branch_correlation
       FROM standalone_phase_status s
       WHERE NOT $superseded

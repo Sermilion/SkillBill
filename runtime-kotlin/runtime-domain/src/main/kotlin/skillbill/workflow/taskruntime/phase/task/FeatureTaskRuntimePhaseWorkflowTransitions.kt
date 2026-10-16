@@ -78,8 +78,16 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
         triggeringVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
         destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
         loopId = FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID,
-        perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS,
+        perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS - 1,
         capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+        capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+      ),
+      FeatureTaskRuntimeBackwardEdge(
+        fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+        triggeringVerdict = FeatureTaskRuntimeVerdict.PROGRESS,
+        destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+        loopId = FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_TRIGGER_LOOP_ID,
+        perEdgeCap = null,
         capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
       ),
       FeatureTaskRuntimeBackwardEdge(

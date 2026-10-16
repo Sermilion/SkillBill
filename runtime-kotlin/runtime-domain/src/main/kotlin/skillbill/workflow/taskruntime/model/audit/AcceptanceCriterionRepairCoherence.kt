@@ -186,7 +186,8 @@ internal object AcceptanceCriterionRepairCoherence {
           (ref, total) ->
         ref in refs && total in 0..AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES
       }
-    return validTotals && outcomes.filterNot {
+    if (state.budgetStartOutcomeIndex !in 0..outcomes.size) return false
+    return validTotals && outcomes.drop(state.budgetStartOutcomeIndex).filterNot {
       it.successful
     }.groupingBy { it.criterionRef }.eachCount() == totals.filterValues { it > 0 }
   }

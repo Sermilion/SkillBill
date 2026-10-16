@@ -85,6 +85,8 @@ data class WorkItem(
   val membershipDeadline: Instant? = null,
   val databaseFile: DatabaseFileIdentity? = null,
   val repositoryName: String? = null,
+  /** A goal planning before its goal exists: recorded as a standalone phase, shown as the goal. */
+  val goalLaunched: Boolean = false,
 )
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)
@@ -291,6 +293,9 @@ fun WorkItem.needsAttention(): Boolean =
   requiresAttention
 
 fun WorkItem.isPhase(): Boolean = displayGroup == WorkSection.PHASES
+
+/** Whether the item reads as a standalone phase; a goal's plan that runs before its goal exists reads as that goal. */
+fun WorkItem.showsAsStandalonePhase(): Boolean = scope == ExecutionScope.STANDALONE_PHASE && !goalLaunched
 
 /** Whether a relaunched attempt has begun running or finished; used only to recognise a launch's successor, never to group work. */
 fun WorkItem.hasStartedOrFinished(): Boolean = lifecycle == Lifecycle.ACTIVE || lifecycle == Lifecycle.TERMINAL

@@ -121,6 +121,46 @@ class PullRequestCiWatcherTest {
   }
 
   @Test
+  fun `a changed pull request head makes the observed failure unavailable instead of associating stale checks`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          headSha = if (identityCalls == 1) "observed-head" else "new-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    val unavailable = assertIs<PullRequestCiOutcome.Unavailable>(outcome)
+    assertTrue("head changed" in unavailable.reason, unavailable.reason)
+  }
+
+  @Test
+  fun `a merge conflict found while refreshing failed checks routes to conflict repair`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          conflicting = identityCalls == 2,
+          headSha = "same-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+
+    assertEquals(PullRequestCiOutcome.Conflicted, outcome)
+  }
+
+  @Test
   fun `pending checks keep reporting every poll until ci settles`() {
     val pending =
       PullRequestChecks.Reported(
@@ -162,7 +202,10 @@ class PullRequestCiWatcherTest {
       )
     val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
-    watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(REPO_ROOT, BRANCH) { pullRequestUrl, pendingChecks ->
+    watcher(
+      checks,
+      progressInterval = Duration.ofMinutes(10),
+    ).watch(REPO_ROOT, BRANCH) { pullRequestUrl, pendingChecks ->
       reported += pullRequestUrl to pendingChecks
     }
 

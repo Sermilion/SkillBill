@@ -13,6 +13,24 @@ import kotlin.test.assertTrue
 
 class GitProcessInvocationTest {
   @Test
+  fun `porcelain status preserves the leading index column so repair manifests retain the whole path`() {
+    val repoRoot = newRepo("skillbill-git-porcelain")
+    try {
+      Files.writeString(repoRoot.resolve("source.txt"), "before")
+      runGit(repoRoot, "add", "source.txt")
+      runGit(repoRoot, "commit", "-m", "Initial source")
+      Files.writeString(repoRoot.resolve("source.txt"), "after")
+
+      val result = invokeGitProcess(repoRoot, listOf("status", "--porcelain", "-uall"), stdin = null)
+
+      assertEquals(0, result.exitCode)
+      assertEquals(" M source.txt", result.output)
+    } finally {
+      repoRoot.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `stdin reaches git and round trips through the object store`() {
     val repoRoot = newRepo("skillbill-git-process-stdin")
     val payload = "stdin payload\nsecond line\n"

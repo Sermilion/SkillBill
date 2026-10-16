@@ -11,6 +11,7 @@ import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.engine.work.observation.workerOwnership
 import skillbill.goalrunner.model.ExecutionLiveness
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.install.model.SupportedAgent
@@ -182,17 +183,9 @@ class WorkRunActions(
     phase: StandalonePhaseStatusRecord,
     agent: String,
   ): List<String>? {
-    phase.launchArguments?.let { saved ->
-      return saved.takeIf { it.take(2) == listOf("phase", phase.phaseId) }?.let { arguments ->
-        val agentFlag = arguments.indexOf("--agent")
-        if (agentFlag >= 0 && agentFlag + 1 < arguments.size) {
-          arguments.toMutableList().apply { this[agentFlag + 1] = agent }
-        } else {
-          arguments + listOf("--agent", agent)
-        }
-      }
-    }
+    phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
     return when {
+      phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { listOf("goal", it, "--agent", agent) }
       phase.workflowId != null && phase.phaseId == SkeletonDefinition.PLAN.id ->
         phase.issueKey?.let { listOf("phase", "plan", it, "--agent", agent) }
       phase.phaseId in
@@ -207,6 +200,25 @@ class WorkRunActions(
     }
   }
 
+  private fun savedArguments(
+    phase: StandalonePhaseStatusRecord,
+    saved: List<String>,
+    agent: String,
+  ): List<String>? {
+    val prefix =
+      when (phase.launchScope) {
+        IdeStatusLaunchScope.STANDALONE -> listOf("phase", phase.phaseId)
+        IdeStatusLaunchScope.GOAL -> listOf("goal")
+      }
+    if (saved.take(prefix.size) != prefix) return null
+    val agentFlag = saved.indexOf("--agent")
+    return if (agentFlag >= 0 && agentFlag + 1 < saved.size) {
+      saved.toMutableList().apply { this[agentFlag + 1] = agent }
+    } else {
+      saved + listOf("--agent", agent)
+    }
+  }
+
   private fun launchPrompt(
     item: WorkDetailItem,
     phase: StandalonePhaseStatusRecord?,
@@ -215,10 +227,12 @@ class WorkRunActions(
   ): String =
     buildString {
       appendLine("Use the installed skill-bill skill for this explicit operator request.")
-      if (arguments.firstOrNull() == "phase") {
-        appendLine("Invoke /skill-bill phase:${arguments[1]} with the recorded intake and options below.")
-      } else {
-        appendLine("Resume the existing goal with /skill-bill ${item.snapshot.issueKey}.")
+      when {
+        arguments.firstOrNull() == "phase" ->
+          appendLine("Invoke /skill-bill phase:${arguments[1]} with the recorded intake and options below.")
+        phase != null ->
+          appendLine("Run the goal with /skill-bill and the recorded intake below; it finishes planning, then runs.")
+        else -> appendLine("Resume the existing goal with /skill-bill ${item.snapshot.issueKey}.")
       }
       appendLine("Request arguments as JSON: ${JsonCodec.valueToJsonString(arguments)}")
       appendLine("Selected agent: $agent")

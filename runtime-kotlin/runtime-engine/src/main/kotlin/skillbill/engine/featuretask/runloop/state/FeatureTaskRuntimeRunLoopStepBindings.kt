@@ -349,7 +349,7 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   ): PhaseOutcome {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
-      environment.runDeclaredMonitorCycle(run, observation)
+      environment.runDeclaredMonitorCycle(run, observation, requireNotNull(acceptedOwner.monitorRepairSteps))
     }
   }
 }
@@ -862,7 +862,8 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     }
   }
 
-  private fun PhaseStepFileManifest.toPhaseManifest() = FeatureTaskRuntimePhaseFileManifest(before, after)
+  private fun PhaseStepFileManifest.toPhaseManifest() =
+    FeatureTaskRuntimePhaseFileManifest(before, after, reeditedPaths)
 
   private fun requireActiveReviewBinding() {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)

@@ -50,6 +50,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import java.nio.file.Files
@@ -308,6 +309,30 @@ class WorkStackTest {
       try {
         source.selectDatabase(fixture.dbPath.toString())
         assertEquals(listOf("a-newer", "z-older"), value(source.board(WorkSection.PHASES, Retention.DAY)).items.map { it.identity.id })
+      } finally { source.close() }
+    }
+  }
+
+  @Test
+  fun `a plan the goal command started is listed with goal runs and reads as the goal`() = runBlocking {
+    establishTemporarySchemaReadiness("desktop-goal-plan").use { fixture ->
+      val factory = sqliteSessionFactoryForTests(fixture.tempDir, fixture.dbPath.toString(), emptyMap())
+      factory.transaction { unit ->
+        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "goal-plan", now.minusSeconds(10), "main")
+          .copy(phaseId = "plan", currentStep = "plan", launchScope = IdeStatusLaunchScope.GOAL))
+        unit.standalonePhaseStatuses.register(registration(fixture.tempDir.toString(), "phase-plan", now.minusSeconds(5), "main")
+          .copy(issueKey = "SKILL-424", phaseId = "plan", currentStep = "plan"))
+      }
+      val source = source(fixture.tempDir, TestClock(now.toKotlinInstant()))
+      try {
+        source.selectDatabase(fixture.dbPath.toString())
+        val goal = value(source.board(WorkSection.GOALS, Retention.DAY)).items.single()
+        assertEquals("goal-plan", goal.identity.id)
+        assertTrue(goal.goalLaunched)
+        assertFalse(goal.showsAsStandalonePhase())
+        val phase = value(source.board(WorkSection.PHASES, Retention.DAY)).items.single()
+        assertEquals("phase-plan", phase.identity.id)
+        assertTrue(phase.showsAsStandalonePhase())
       } finally { source.close() }
     }
   }

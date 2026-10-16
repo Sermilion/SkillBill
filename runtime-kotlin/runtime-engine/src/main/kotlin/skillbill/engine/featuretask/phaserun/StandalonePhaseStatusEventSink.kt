@@ -204,8 +204,10 @@ class StandalonePhaseStatusEventSink(
     val noLongerVisible = previousSampleNames?.let { it - observedSampleNames }.orEmpty().sorted()
     val sampleChanged = previousSampleNames != null && previousSampleNames != observedSampleNames
     val transitionNames =
-      (newlyVisible.map { "now visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" } +
-        noLongerVisible.map { "no longer visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" })
+      (
+        newlyVisible.map { "now visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" } +
+          noLongerVisible.map { "no longer visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" }
+      )
         .take(MAX_VISIBLE_TRANSITIONS)
         .joinToString("; ")
     val names = (newlyVisible + observedSampleNames.sorted()).distinct().take(MAX_VISIBLE_PENDING_NAMES)

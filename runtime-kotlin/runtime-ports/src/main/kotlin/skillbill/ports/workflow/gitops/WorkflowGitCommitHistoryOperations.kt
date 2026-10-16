@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
@@ -11,6 +12,11 @@ interface WorkflowGitCommitHistoryOperations {
   ): WorkflowGitCommitResult
 
   fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult
+
+  fun commitIdentity(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitCommitIdentityResult
 
   fun commitCountAhead(
     repoRoot: Path,
