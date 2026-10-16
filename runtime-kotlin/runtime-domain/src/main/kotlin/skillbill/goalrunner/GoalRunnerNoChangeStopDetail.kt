@@ -4,7 +4,7 @@ import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePaus
 
 fun FeatureTaskRuntimeNoChangePause.stopDetail(subtaskId: Int): String =
   buildString {
-    appendLine("Subtask $subtaskId paused on a confirmed no-change claim (reason: ${reason.wireValue}).")
+    appendLine("Subtask $subtaskId can resume from its confirmed no-change claim (reason: ${reason.wireValue}).")
     appendLine("Criteria:")
     criteria.forEach { criterion ->
       appendLine("- ${criterion.criterionId}: ${criterion.verdict.wireValue}. Evidence: ${criterion.evidence}")
@@ -13,8 +13,5 @@ fun FeatureTaskRuntimeNoChangePause.stopDetail(subtaskId: Int): String =
     appendLine("Boundary trace: $boundaryTrace")
     owningSystem?.let { appendLine("Owning system: $it") }
     appendLine("Suggested handoff: $suggestedHandoff")
-    append(
-      "Operator choices: accept_and_advance; retry_fix --instructions \"<text>\"; abandon_subtask. " +
-        "Record one with the goal operator-decision command, then resume the goal.",
-    )
+    append("Resume the goal to continue through audit, review and the selected quality gate without approval.")
   }

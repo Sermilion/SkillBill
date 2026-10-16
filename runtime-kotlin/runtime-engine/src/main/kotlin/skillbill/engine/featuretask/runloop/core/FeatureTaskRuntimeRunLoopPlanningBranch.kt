@@ -236,7 +236,11 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     edge: FeatureTaskRuntimeBackwardEdge,
   ): Int =
     if (edge.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
-      (state.monitorFailedRepairCommitShas.size - 1).coerceAtLeast(0)
+      if (state.monitorFailureEvidenceUnavailable) {
+        edge.perEdgeCap ?: state.monitorFailedRepairCommitShas.size
+      } else {
+        (state.monitorFailedRepairCommitShas.size - 1).coerceAtLeast(0)
+      }
     } else {
       state.loop(edge.loopId).iteration
     }

@@ -105,6 +105,15 @@ class ResolvedPhaseExecutionPlan(
       loopOnlySuccessors = immutableMap(traversal.loopOnlySuccessors),
     )
 
+  fun phaseTraversal(): FeatureTaskRuntimeTransitionDeclaration =
+    traversal.copy(
+      backwardEdges =
+        traversal.backwardEdges.filter { edge ->
+          dispatchStrategyByStep.getValue(edge.fromPhaseId).slot ==
+            dispatchStrategyByStep.getValue(edge.destinationPhaseId).slot
+        },
+    )
+
   fun withTraversal(value: FeatureTaskRuntimeTransitionDeclaration): ResolvedPhaseExecutionPlan =
     ResolvedPhaseExecutionPlan(
       definitionId = definitionId,

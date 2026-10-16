@@ -24,6 +24,7 @@ import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
@@ -36,6 +37,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -217,10 +219,11 @@ class WorkRunControlsTest {
           null,
         ),
       )
-      assertEquals("codex", launched.single().agentId)
-      assertContains(launched.single().prompt, "/skill-bill phase:monitor")
-      assertContains(launched.single().prompt, "https://example.test/pr/42")
-      assertContains(launched.single().prompt, "Selected agent: codex")
+      val harness = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind)
+      assertEquals("codex", harness.agentId)
+      assertContains(harness.prompt, "/skill-bill phase:monitor")
+      assertContains(harness.prompt, "https://example.test/pr/42")
+      assertContains(harness.prompt, "Selected agent: codex")
       assertEquals(fixture.dbPath, launched.single().databasePath)
       assertEquals(mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"), launched.single().agentEnvironment)
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/other\n")
@@ -232,6 +235,7 @@ class WorkRunControlsTest {
         WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET),
         component.launchRun(target.copy(statusRevision = "0"), null),
       )
+      assertNotNull(component.workControlService.options(target.copy(updatedAt = target.updatedAt.minusSeconds(10))))
       Files.delete(fixture.tempDir.resolve(".git/HEAD"))
       assertEquals(
         WorkControlResult.Rejected(WorkControlRejection.BRANCH_UNAVAILABLE),
@@ -276,7 +280,7 @@ class WorkRunControlsTest {
       assertEquals(IdeStatusDisplayGroup.GOALS, item.displayGroup)
 
       assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
-      val prompt = launched.single().prompt
+      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
       assertContains(prompt, "Run the goal with /skill-bill")
       assertContains(prompt, "[\"goal\",\"SKILL-9 Render answers\",\"--agent\",\"codex\"]")
     }
@@ -366,7 +370,62 @@ class WorkRunControlsTest {
   }
 
   @Test
-  fun `goal launch ignores the branch its execution was registered on`() {
+  fun `cancel accepts a target the runner heartbeat made older but refuses one for another execution`() {
+    establishTemporarySchemaReadiness("heartbeat-cancel").use { fixture ->
+      ensureTestDatabase(fixture.dbPath).use { connection ->
+        connection.prepareStatement(
+          """
+          INSERT INTO goal_issue_progress (parent_workflow_id, issue_key, first_started_at, status, last_activity_at)
+          VALUES ('beating-goal', 'SKILL-778', ?, 'failed', ?)
+          """.trimIndent(),
+        ).use { statement ->
+          val time = Instant.now().minusSeconds(60).toString()
+          statement.setString(1, time)
+          statement.setString(2, time)
+          statement.executeUpdate()
+        }
+      }
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest) = WorkRunStopResult.NotRunning
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult =
+            WorkRunLaunchResult.Started(fixture.tempDir.resolve("goal.log"))
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      component.databaseSession.transaction { unit ->
+        unit.goalRunnerControls.persistControlState(
+          "beating-goal",
+          GoalRunnerControlState(
+            repositoryIdentity = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}",
+          ),
+        )
+      }
+      val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest("beating-goal")).item)
+      val rendered =
+        WorkRunTarget(
+          "beating-goal",
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt.minusSeconds(10),
+          assertNotNull(item.databaseFileObservation),
+        )
+      assertEquals(
+        WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET),
+        component.cancelRun(rendered.copy(executionId = "another-execution")),
+      )
+      assertEquals(WorkControlResult.Accepted, component.cancelRun(rendered))
+      assertEquals(
+        IdeStatusLifecycleState.CANCELED,
+        component.ideStatusService.detail(WorkDetailRequest("beating-goal")).item?.snapshot?.lifecycleState,
+      )
+    }
+  }
+
+  @Test
+  fun `an existing goal resumes through the runtime command and ignores the branch its execution was registered on`() {
     establishTemporarySchemaReadiness("goal-other-branch").use { fixture ->
       Files.createDirectory(fixture.tempDir.resolve(".git"))
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/SKILL-777-goal-branch\n")
@@ -426,8 +485,12 @@ class WorkRunControlsTest {
           assertNotNull(item.databaseFileObservation),
         )
       assertEquals(WorkControlResult.Accepted, component.launchRun(target, "codex"))
-      assertContains(launches.single().prompt, "/skill-bill SKILL-777")
-      assertFalse(launches.single().prompt.contains("feat/OTHER-1-launched-from-here"))
+      assertEquals(
+        WorkRunLaunchKind.RuntimeCommand(
+          listOf("goal", "SKILL-777", "--agent", "codex", "--repo-root", item.repositoryRoot, "--no-live-output"),
+        ),
+        launches.single().kind,
+      )
     }
   }
 

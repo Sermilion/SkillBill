@@ -54,6 +54,30 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## Blocked-phase operator decisions
+
+To resolve a blocked child phase, use
+`skill-bill feature-task retry-blocked <workflow-id> --phase <phase> --reason <reason>`.
+The reason applies only to that reopened phase. When the operator also supplies a
+decision that later phases must retain, pass `--mandate <decision>`. The runtime
+appends it to the child workflow's existing `mandates_and_overrides` in the same
+transaction that reopens the phase. Later phases and resumes receive the mandate
+through their governed briefings. This does not change the spec, acceptance
+criteria, comparison baseline, or other workflows. A retry without `--mandate`
+does not promote its reason to a run mandate.
+
+## Confirmed no-change claims
+
+A validated implementation no-change claim still requires the independent source
+audit. Once that audit confirms the claim, the child continues through review and
+its selected quality gate without operator approval. The audit keeps its
+`no_change_confirmed` output while routing it as satisfied for the existing review
+entry gate. Malformed or rejected claims retain the audit repair path.
+
+An undecided pause recorded by an older runtime resumes its child through audit
+and the remaining phases. Its retained claim, audit evidence and pause artifact
+stay readable. Previously recorded operator decisions retain their behavior.
+
 ## Model selection at launch
 
 Resume uses the recorded per-step assignment. A later alias, remap, or default
@@ -82,6 +106,14 @@ runtime executes internal phases through its run loop; workers carry out their
 supplied briefing without starting standalone phase or operation commands.
 
 ### Phases
+
+Workflow phases advance in order. Once execution leaves a phase, later edits,
+validation repairs, checkpoint commits, and resume do not reopen it. Repair loops
+stay inside their owning phase, including audit planning and implementation
+repairs, review fixes, and monitor repairs. A request to return to a previous phase
+leaves that phase complete and advances to the next phase. Monitor repair publishes
+its changes inside the monitor phase before observing CI again, without rerunning
+commit/push or PR.
 
 `skill-bill phase review` runs the in-memory, report-only `standalone_review` slot. It prints the findings register and exits 0 for either valid verdict. Invalid, incomplete, or failed reports print available findings and a block reason, then exit 1. It never edits or commits. The `code-review` CLI command remains registered; it is not the driver of `phase review`. Full feature runs keep the `code_review` slot, which verifies findings and can fix Blocker and Major findings before reporting the rest. Validation, `pr`, and `monitor` also run in-memory, with no workflow row, new branch, or checkpoint commit. `phase plan <KEY> [description]` is the one durable standalone phase. It seeds the parent `spec.md` from the intake (an existing spec stays as the operator wrote it, and the plan may not change it), opens a `standalone`/`plan` workflow, and persists its phase records, ledger, and invariants like any run. It stops after the verified implementation-ready spec bundle, retains the standalone preplan and per-subtask implementation plans as durable planning checkpoints, records a completed decompose terminal, and prints the bundle paths, the plan workflow id, and `skill-bill <KEY>`. It creates no branch, ref, commit, or goal. A manifest already present for the key refuses a new plan and names `skill-bill <KEY>`. A key-only retry of a completed standalone plan settles any missing implementation checkpoints without launching an agent or changing the spec bundle. An incomplete plan resumes at `plan` without relaunching `preplan`; a different intake for it is refused and names the plan workflow id. `skill-bill <KEY>` finishes an incomplete plan first and then runs the goal in the same invocation, or exits 1 with the block reason and plan workflow id. It never writes a single-spec manifest over an incomplete plan. A completed plan's manifest is imported as it is on disk, and the new goal parent records the plan workflow id on its `preplan` and `plan` steps. The same transaction transfers the saved planning checkpoints to the goal, so unchanged specs enter implementation without running preplan or plan agents again. Missing checkpoints from older completed plans block with a key-only standalone-plan settlement command; they never silently launch replacement planning. Spec drift and contract validation retain their existing recovery behavior. `skill-bill goal purge` removes the plan workflows and leaves `spec.md` untouched. Implementation and simplification run inside workflows and consume their plan output. `phase pr` composes `commit_push -> pr -> monitor`. It refuses a detached, protected, or base branch before staging. The runtime commits all staged, unstaged, and untracked changes, excluding ignored and runtime-private files, then pushes before creating or updating the pull request. A clean retry pushes the existing commit without creating an empty one. `phase monitor [<issue-key|pr-url>]` composes `commit_push -> monitor` on the checked-out branch. It watches the branch's open pull request and completes when every check passes, is skipped, or is cancelled. Initial CI failures and merge conflicts start repair without spending the failed repair budget. Each completed and published repair counts once only after CI fails on the associated commit. The runtime observes the third repair commit before blocking, and reports failed commit identities and check links from recorded evidence. The repair agent discovers and runs the project's local checks, as validation does, and settles completed only when they pass; the runtime commits and pushes only a completed repair. A branch with no open pull request completes with a report instead of blocking. `commit_push` and the other durable definitions are not runnable on their own.
 Standalone and workflow validation use the same agent strategy. The agent discovers
@@ -133,11 +165,7 @@ Monitoring counts distinct published repair commits only after CI fails on those
 commits. Resume reconstructs qualified failures from retained runtime producer,
 completion, publication, and Git evidence. Repeated observations of a commit keep
 one failure. A later repair replacing the latest phase record does not erase a
-previously qualified failure. Missing or contradictory history stays unknown and
-does not add a failure or exhaust the cap. Initial CI failure, pending checks,
-unassociated observations, and merge conflicts do not consume this budget. Green
-checks complete monitoring only when the observed PR head matches the latest
-completed pushed publication.
+previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
 files, `CONTRIBUTING.md`, the failing workflow, and any setup scripts it calls.
@@ -211,6 +239,11 @@ An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.
 
+A long-running child's phase ledger retains its latest bounded window. Resume
+checks planning-import entries that remain in that window alongside the durable
+planning provenance and completed phase records. Normal removal of older ledger
+entries does not require replan or discard the child's execution progress.
+
 ## Edited subtask specs on resume
 
 A full goal launch checks unfinished subtask specs against their saved planning hashes
@@ -243,6 +276,14 @@ authored set. If that audit finds a regression, the criterion reopens with its
 retained failure budget. An ambiguous regression gets the existing read-only
 prose follow-up before reopening; it does not require a phrase or agent-authored
 identifier protocol.
+
+When a full report clearly names an open canonical criterion in prose, its next
+read-only audit checks that criterion first. The mention guides verification;
+it does not reopen or accept source work by itself. The focused context carries
+the full rejection report as its latest evidence, rather than an older acceptance.
+Reports without a recognized reference keep the full recheck. If another full audit rejects the same unchanged
+source after the focused check, the runtime rechecks every criterion to avoid
+repeating a mistaken prose interpretation.
 
 An empty focused queue still requires the final full source audit. Source
 acceptance does not say that tests, build, or other project-quality work ran.

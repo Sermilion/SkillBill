@@ -48,6 +48,7 @@ enum class GoalRunnerResumeStatus(val wireValue: String) {
   NOT_FOUND("not_found"),
   NOT_PAUSED("not_paused"),
   RESUMED("resumed"),
+  OPERATOR_REQUIRED("operator_required"),
 }
 
 data class GoalRunnerResumeResult(
@@ -55,6 +56,8 @@ data class GoalRunnerResumeResult(
   val parentWorkflowId: String? = null,
   val status: GoalRunnerResumeStatus,
   val clearedPauseReason: String? = null,
+  val appliedRepairs: List<GoalRunnerAppliedRepair> = emptyList(),
+  val refusalReason: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

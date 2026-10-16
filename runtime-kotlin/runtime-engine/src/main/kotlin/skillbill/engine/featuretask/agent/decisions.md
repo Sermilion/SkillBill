@@ -7,14 +7,11 @@ Alternatives considered: Verdict-only legacy inference and prose-dependent attri
 ## [2026-10-16] Count failed repair commits independently of repair launches
 Context: Counting repair entries or merge conflicts could exhaust the budget while the third published repair still had pending CI.
 Decision: Use PROGRESS for initial failures and conflicts. Qualify a completed repair through changed attributed source paths or newly integrated merge ancestry, pushed publication and failed CI on the matching head. Count each published SHA once, observe the third result before refusing another CI repair, and keep coupled mutations with FeatureTaskRuntimeRunTransitionOwner across all monitor routes.
-Reason: A launch, metadata-only amend, local pass or merge conflict does not prove that CI rejected a changed repair. Distinct published commits preserve the accumulated budget across repeated observations and different failure causes. Unchanged publication uses the existing blocked settlement to prevent an uncharged repair loop.
-
-## [2026-10-16] Spend monitor budget from published failed repair evidence
+Reason: A launch, metadata-only amend, local pass or merge conflict does not prove that CI rejected a changed repair. Distinct published commits preserve the accumulated budget across repeated observations and different failure causes. Unchanged publication uses the existing blocked settlement to prevent an uncharged repair loop.## [2026-10-16] Spend monitor budget from published failed repair evidence
 Context: A commit metadata amend could change SHA without changing repair content, and restored monitor loop ordinals included launches that CI had never rejected.
 Decision: Require the completed repair manifest to intersect source paths changed between the previous and pushed commit, or prove newly integrated merge ancestry from commit parents. Count distinct published SHAs from completed monitor results retained through COMPLETE ledger entries and producer outputs. Missing retained monitor results block cap-sensitive continuation.
 Reason: Commit IDs and backward-edge ordinals describe different facts from source changes and failed published repairs. Runtime-owned monitor and commit outputs use the existing producer-output store so replacement of the current phase record does not discard their reports.
 Superseded by: Recover failed repairs from recorded execution semantics (2026-10-16)
-
 ## [2026-10-16] Reuse setup without reusing validation results
 Context: SKILL-428 observed repeated container setup mistakes. Those observations did not establish that required full validation runs were redundant.
 Decision: Retain permitted setup, caches and discovery context within the invocation, revisit changed requirements and run all required checks for each repair candidate. Preserve clean and cache-bypass requirements and invocation resource ownership.
@@ -91,6 +88,13 @@ Decision: An open pull request is conflicting when GitHub reports `mergeable` `C
 Reason: Conflict repair is the same commit-and-watch cycle as a failed check. A new verdict would duplicate the backward edge and the cap.
 Alternatives considered: Waiting until checks fail, rejected because a conflict often publishes no checks. Treating `UNKNOWN` or `BEHIND` as a conflict, rejected because GitHub has not reported a conflict yet.
 Superseded by: Count failed repair commits independently of repair launches (2026-10-16)
+
+## [2026-10-16] Monitor repair budget counts CI-confirmed published commits
+Context: The monitor loop treated a merge conflict as `ci_failed` and spent budget when it launched repair. That could exhaust the cap while the third repair commit still had pending CI.
+Decision: Initial CI failure and merge conflict use the existing `progress` verdict to start uncharged repair. `ci_failed` is reserved for a failed CI result associated by head SHA with a completed repair that changed files and was pushed. The run loop counts that result once per completed repair cycle and observes the third qualifying result before blocking. Cap prose comes from the failed repair monitor outputs retained for that run.
+Reason: Local runs and repeated check polling do not establish that CI rejected a published repair commit. This keeps the loop as the single accounting owner without adding durable fields or a second state store.
+Supersedes: The 2026-10-10 decision that merge conflicts used the `ci_failed` verdict, and the 2026-10-08 decision that the capped edge counted repair entries.
+Revisit when: The existing phase output and loop records can no longer associate a repair result with its published head commit.
 
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
@@ -461,3 +465,8 @@ the subtask launch, which creates it from its base.
 
 Reason: Spec hashes and plan writes refer to the goal branch's files. Reading or
 writing them on another branch produces false drift and cross-branch merges.
+
+## [2026-10-16] Completed workflow phases stay complete
+Context: The final acceptance fingerprint check ran on every forward transition. Validation, history updates, and checkpoint commits repeatedly sent SKILL-428 back to audit. Resume also unconditionally re-entered serial acceptance work, including accepted audits.
+Decision: Phase boundaries are forward-only for every phase. Remove the post-acceptance fingerprint reopening and its recorder API. Resume preserves accepted audits, and stale-evidence hooks cannot reopen a phase after a later phase has started. Cross-phase repair edges do not re-enter their target; a completed phase advances to its next forward step. Existing audit and review repair loops remain within their phase. Monitor repair commits and pushes before its completion is recorded, then returns directly to monitoring instead of reopening commit/push and PR.
+Reason: Later phases own their repairs. An earlier phase's accepted result records work already finished and must not become a new obligation because the checkout changed. This supersedes the older history-to-quality-gate regeneration routes when they attempt to cross a phase boundary.

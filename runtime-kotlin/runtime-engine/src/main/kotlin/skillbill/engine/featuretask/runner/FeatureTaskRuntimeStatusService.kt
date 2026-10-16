@@ -7,6 +7,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDecomposeTerminalStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDegradedDiagnosticStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
@@ -35,6 +36,8 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 private const val MAX_INLINE_CRITERION_ALIAS = 32
+private const val PRE_CONTRACT_REPAIR_EXPLANATION =
+  "Acceptance repair state predates per-criterion repair and cannot resume; abandon this run or reset its subtask"
 
 @Inject
 class FeatureTaskRuntimeStatusService(
@@ -187,8 +190,11 @@ class FeatureTaskRuntimeStatusService(
       degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
       operatorDecisionPause = operatorDecisionPause(parts.records),
       criterionExplanation =
-        workflowPersistence.readAcceptanceCriterionRepairState(request.workflowId)
-          ?.let(::acceptanceCriterionRepairExplanation),
+        when (val repair = workflowPersistence.readAcceptanceCriterionRepairStatus(request.workflowId)) {
+          null -> null
+          is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
+          AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION
+        },
     )
   }
 

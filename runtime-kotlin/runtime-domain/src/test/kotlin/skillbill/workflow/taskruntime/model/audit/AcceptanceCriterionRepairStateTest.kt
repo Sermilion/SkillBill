@@ -7,6 +7,64 @@ import kotlin.test.assertNull
 
 class AcceptanceCriterionRepairStateTest {
   @Test
+  fun `a named prose regression focuses verification but repeated unchanged rejection rechecks every criterion`() {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")).map {
+              it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+            },
+            emptyList(),
+          ),
+        ),
+      )
+    val rejection =
+      AcceptanceCriterionProseAudit(
+        "full:1",
+        initial.revision + 1,
+        null,
+        false,
+        "b".repeat(64),
+        "AC-001 is satisfied. AC-002 remains open. The second caller can bypass the reservation.",
+        "c".repeat(64),
+        "source:1",
+      )
+    val focused = assertNotNull(initial.recordProseAudit(rejection))
+    assertEquals(listOf("AC-002"), focused.pendingAuditRefs)
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, focused.stage)
+    val rechecked =
+      assertNotNull(
+        focused.recordProseAudit(
+          rejection.copy(
+            id = "focused:1",
+            revision = focused.revision + 1,
+            criterionRef = "AC-002",
+            satisfied = true,
+            prose = "The second caller already enforces the reservation.",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, rechecked.stage)
+    val repeated =
+      assertNotNull(
+        rechecked.recordProseAudit(
+          rejection.copy(
+            id = "full:2",
+            revision = rechecked.revision + 1,
+          ),
+        ),
+      )
+    assertEquals(listOf("AC-001", "AC-002"), repeated.pendingAuditRefs)
+    val unknown = assertNotNull(initial.recordProseAudit(rejection.copy(prose = "AC-099 remains open.")))
+    assertEquals(listOf("AC-001", "AC-002"), unknown.pendingAuditRefs)
+  }
+
+  @Test
   fun `admission keeps composite criterion identity and orders prerequisites before ordinal ties`() {
     val state =
       AcceptanceCriterionRepairState.admit(
@@ -149,6 +207,57 @@ class AcceptanceCriterionRepairStateTest {
     assertNull(reopened.recordFinalFullAudit(input.copy(dependencies = emptyList())))
     assertNull(reopened.recordFinalFullAudit(input.copy(auditBindingDigest = "d".repeat(64))))
     assertNull(discovered.recordFinalFullAudit(input.copy(evaluatedRefs = setOf("AC-001"))))
+  }
+
+  @Test
+  fun `initial discovery stays restorable across clarification and progress until the first audit lands`() {
+    val discovered =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")),
+            emptyList(),
+          ),
+        ),
+      )
+    val clarified = assertNotNull(discovered.retainClarification("Report a verdict for the full audit."))
+    val progressed = clarified.retainProseProgress()
+
+    assertEquals(AcceptanceCriterionRepairMode.INITIAL_DISCOVERY, progressed.mode)
+    assertEquals(2L, progressed.revision)
+    assertEquals(clarified, AcceptanceCriterionRepairState.restore(clarified))
+    assertEquals(progressed, AcceptanceCriterionRepairState.restore(progressed))
+
+    val audited =
+      assertNotNull(
+        progressed.clearPendingClarification().recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "audit:3",
+            3,
+            null,
+            false,
+            "b".repeat(64),
+            "AC-002 is open.",
+            "c".repeat(64),
+            "checkpoint:3",
+          ),
+        ),
+      )
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, audited.stage)
+    assertEquals(audited, AcceptanceCriterionRepairState.restore(audited))
+    assertNull(
+      AcceptanceCriterionRepairState.restore(
+        audited.copy(
+          mode = AcceptanceCriterionRepairMode.INITIAL_DISCOVERY,
+          stage = AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+          pendingAuditRefs = emptyList(),
+        ),
+      ),
+    )
   }
 
   private fun criterion(

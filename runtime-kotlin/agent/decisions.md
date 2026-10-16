@@ -3003,3 +3003,124 @@ A5, A6, A7 and G1-G7 without weakening enforcement.
 This entry records operator authority and planning guidance. It does not claim
 that the production repair or its verification is complete. Other acceptance
 criteria retain their own audit obligations.
+
+## [2026-10-16] Keep monitor publication evidence inside the active phase
+
+Context: Main publishes repairs inside the monitor phase. Joining the SKILL-428
+accounting fix must retain that behavior and its completed-phase invariants.
+
+Decision: The existing commit finalization owner records publication START and
+COMPLETE entries and generation-zero producer output around the repair push.
+These records use the existing commit/push envelope and ledger. They leave the
+completed commit/push phase record and workflow position unchanged. Accounting
+reads that producer output when there is no separate phase traversal output, and
+allows publication after the repair starts and before its next CI observation.
+Accepted repair completion and source attribution remain required.
+
+Evidence: PhaseMonitorRunTest covers three published repair failures, an unchanged
+repair, a rejected push, and goal monitoring without reopening completed phases.
+MonitorRepairResumeAccountingTest covers historical identity and failure counts.
+A1-A12 and G1-G7 remain clean. This integration adds no schema, port, guard
+exception, or separate state owner.
+
+## [2026-10-16] Retain explicit operator mandates across blocked-phase recovery
+
+Context: a blocked-phase retry delivered the operator's prerequisite decision to
+audit_plan_fix, then consumed its phase-scoped reason. The following audit still
+received empty mandates and repeated the scope block. Recording the decision in
+this source log did not amend the workflow's governed briefing.
+
+Decision: `feature-task retry-blocked` accepts an optional `--mandate` supplied
+by the operator. The existing retry transaction appends that directive to the
+workflow's admitted run invariants. Existing mandates, acceptance criteria,
+spec identity and other invariant fields remain intact. Duplicate mandates
+are not appended. Later phases and resumes use the existing mandate briefing
+path. A plain retry reason keeps its existing single-phase lifetime.
+
+Missing run invariants refuse the mandate and retry together. Malformed
+invariants retain their typed admission failure. No new persisted field,
+contract version, migration, phase bypass or acceptance rewrite is involved.
+The decision applies only to the selected child workflow.
+
+Review: A1 and A2 keep the mutation in the application retry transaction and
+briefing delivery in the engine. A3-A5 add no collaborator bag, port or forwarding
+layer. A6 reuses the existing artifact family and codec. A7 retains refusal and
+typed corruption handling. A8 adds no production ambient effects. A9-A12 retain
+package direction, test placement, narrow visibility and typed interfaces.
+G1-G7 require no guard, fixture, baseline or exemption change.
+
+## [2026-10-16] Preserve source findings after malformed no-change claims
+
+Context: an audit independently found that goal monitoring lost confirmed repair
+accounting on resume. The preceding repair had submitted a malformed no-change
+claim. AcceptanceAuditRound rejected the claim but replaced the auditor's value
+with formatting errors, so the next repair plan lost the production finding.
+Audit repair also offered the no-change argument without its existing shape.
+
+Decision: keep the auditor's value and append the claim rejection reasons. Keep
+the rejected verdict and all existing claim validation. Audit repair uses the
+same claim guidance as implementation. No contract field, admission exception,
+comparison change or budget bypass is added.
+
+Review: A1, A2 and A5 retain audit settlement and transition ownership. A6 reuses
+the existing prose field and claim vocabulary. A7 preserves both refusal reasons
+and inspected evidence. A3-A4 and A8-A12 add no state, ports, ambient effects or
+module crossings. G1-G7 remain unchanged. A regression exercises a resumed
+malformed repair claim and verifies that the next plan receives both the source
+finding and the rejection reasons.
+
+
+## [2026-10-16] Continue confirmed no-change audits without operator approval
+
+Context: A completed no-change source audit paused a goal until the operator
+accepted it. The operator has removed that approval requirement. Treating the
+old accept command as automatic completion would also skip the child's remaining
+review and quality gate.
+
+Decision: delete the audit pause producer and use normal authoritative completion
+and routing. Keep the no_change_confirmed output and derive satisfied for the
+existing review entry gate after claim validation. Malformed and rejected claims
+still enter repair. Historical undecided pauses resume the child through audit
+without an operator decision. Retain the old artifact decoder and already
+recorded operator choices for compatible recovery. Legacy pause status reports
+resumable, and later pauses cannot inherit an earlier no-change approval state.
+No workflow record rewrite,
+schema change, migration or new marker is needed.
+
+Review checklist: A1 clean, policy remains in engine. A2 clean, no new shared
+owners. A3 clean, no collaborator changes. A4 clean, no new ports. A5 clean,
+active pause code is deleted. A6 clean, existing verdict and artifact vocabulary
+remain. A7 clean, claim rejection and durable completion failures still refuse.
+A8 clean, no ambient effects. A9 and A10 clean, tests stay with their owners.
+A11 and A12 clean, the audit hook loses its pause argument. G1-G7 clean, no guard,
+baseline, exemption or acceptance fixture is weakened. Regressions cover normal
+review and validation after confirmation, serial final source admission, and
+resuming an undecided historical pause without closing its child early.
+
+
+## [2026-10-16] Admit retained planning evidence after ledger compaction
+
+Context: A resumed child had 200 consecutive phase ledger entries numbered 17
+through 216. Normal bounded-history retention had removed its initial planning
+imports. GoalChildPlanningImportMatcher still required sequence zero at the
+start and reported a stale plan, although the import provenance and settled
+planning records remained intact. Scoped replan would delete that child's audit
+progress and is unnecessary for this case.
+
+Decision: decode ledger entries through the existing durable reader. Validate the
+complete surviving import prefix by sequence number. A prefix that has rolled out
+is admissible only in a full retained window at the existing ledger limit, with
+consecutive sequence numbers throughout. Keep parent planning, provenance, payload
+and settled phase admission unchanged. Do not reconstruct old entries, rewrite
+workflow records or change retention. Incomplete windows, gaps and altered
+surviving imports still fail admission.
+
+Review checklist: A1 and A2 clean, the matcher consumes existing engine decoding
+and domain retention vocabulary. A3 and A4 clean, no new collaborators or ports.
+A5 clean, the permanent sequence-zero assumption is removed at its consumer.
+A6 clean, typed ledger reads replace raw key access. A7 clean, malformed durable
+entries retain typed failures. A8 clean, no ambient reads. A9-A12 clean, no new
+packages, API or raw map boundary. G1-G7 clean, no guard, baseline or exemption
+changes. The regression failed under the old reader and now admits partially and
+fully pruned import prefixes without changing stored child bytes. Rejection cases
+cover incomplete windows, sequence gaps and changed surviving imports.

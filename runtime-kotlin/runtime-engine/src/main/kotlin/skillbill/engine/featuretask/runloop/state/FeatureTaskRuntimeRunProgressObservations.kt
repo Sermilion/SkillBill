@@ -46,6 +46,8 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
 
   val monitorFailedRepairCommitShas: Set<String>
 
+  val monitorFailureEvidenceUnavailable: Boolean
+
   val reviewEvidenceGeneration: Int
 
   fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict

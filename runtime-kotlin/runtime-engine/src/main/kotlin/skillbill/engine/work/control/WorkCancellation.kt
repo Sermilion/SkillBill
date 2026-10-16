@@ -296,8 +296,7 @@ internal fun matchingRun(
     it.snapshot.repositoryIdentity == target.repositoryIdentity &&
       Path.of(it.repositoryRoot).toAbsolutePath().normalize() == target.repositoryRoot.toAbsolutePath().normalize() &&
       it.snapshot.execution?.executionId == target.executionId &&
-      it.snapshot.execution?.statusRevision == target.statusRevision &&
-      it.snapshot.updatedAt == target.updatedAt
+      it.snapshot.execution?.statusRevision == target.statusRevision
   }
 
 internal fun workRunOwnershipKey(

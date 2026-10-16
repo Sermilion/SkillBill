@@ -107,6 +107,8 @@ internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
 }
 
 internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
+  fun publishRepair(run: PhaseRun): String?
+
   fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,

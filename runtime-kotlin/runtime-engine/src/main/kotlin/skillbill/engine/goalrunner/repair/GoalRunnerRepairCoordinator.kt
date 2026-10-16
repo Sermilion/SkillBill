@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.repair
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
@@ -17,6 +18,10 @@ import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -98,6 +103,43 @@ class GoalRunnerRepairCoordinator(
           ),
         )
     }
+  }
+
+  fun repairBeforeResume(
+    issueKey: String,
+    repoRoot: Path,
+  ): GoalRunnerRepairResult? {
+    val result =
+      try {
+        repair(GoalRunnerRepairRequest(issueKey = issueKey, apply = true, repoRoot = repoRoot))
+      } catch (failure: SkillBillRuntimeException) {
+        failure.rethrowUnless(failure.isShellContentContractFailure())
+        RuntimeDiagnosticsBestEffortWarning.record(
+          diagnostics,
+          "seam=goal-resume.repair outcome=skipped_unreadable_state issue_key=$issueKey " +
+            "code=${failure.failureCodeLabel()}",
+          failure,
+        )
+        return null
+      }
+    result.appliedRepairs.forEach { applied ->
+      diagnostics.info(
+        "seam=goal-resume.repair outcome=applied issue_key=$issueKey subtask=${applied.subtaskId} " +
+          "wedge=${applied.wedgeClass.wireValue} field=${applied.field} prior=${applied.priorValue ?: "absent"}",
+      )
+    }
+    if (result.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED) {
+      diagnostics.warning(
+        "seam=goal-resume.repair outcome=operator_required issue_key=$issueKey reason=${result.refusalReason}",
+      )
+    }
+    if (result.status == GoalRunnerRepairStatus.LIVE_LEASE_REFUSED) {
+      diagnostics.info(
+        "seam=goal-resume.repair outcome=live_lease_skipped issue_key=$issueKey " +
+          "workflow_id=${result.liveLeaseWorkflowId}",
+      )
+    }
+    return result
   }
 
   private fun notFound(issueKey: String): GoalRunnerRepairResult =

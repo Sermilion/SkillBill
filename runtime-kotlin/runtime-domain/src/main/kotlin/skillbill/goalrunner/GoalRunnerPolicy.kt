@@ -294,7 +294,7 @@ object GoalRunnerOutcomeReconciler {
     val noChangePause = storedOutcome.noChangePause
     return if (noChangePause != null) {
       stop(
-        reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
+        reason = GoalRunnerStopReason.RECONCILED_RESUMABLE,
         blockedReason = noChangePause.stopDetail(subtaskId),
         storedOutcome = storedOutcome,
         liveness = liveness,

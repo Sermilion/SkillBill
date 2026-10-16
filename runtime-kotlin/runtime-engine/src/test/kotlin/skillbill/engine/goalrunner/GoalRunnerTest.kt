@@ -332,6 +332,37 @@ class GoalRunnerTest {
   }
 
   @Test
+  fun `an undecided historical no-change pause resumes its child instead of asking for approval`() {
+    val recorder = goalRunnerDefaultPhaseRecorder()
+    recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
+    val pause = noChangePause()
+    recorder.persistNoChangePause("wfl-1", pause)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 1)
+            .withSubtaskStatus(1, DecompositionStatus.IN_PROGRESS.wireValue, "wfl-1"),
+      )
+    val outcomes = RecordingOutcomeStore().apply { seedReviewState("wfl-1") }
+    val launcher =
+      RecordingSubtaskLauncher {
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(phaseRecorder = recorder),
+      )
+
+    val report = runner.run(runRequest())
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(1, launcher.requests.size)
+    assertEquals("audit", launcher.requests.single().skillRunRequest.goalContinuation?.lastResumableStep)
+    assertEquals(pause, recorder.loadNoChangePause("wfl-1"))
+  }
+
+  @Test
   fun `an accepted no-change pause closes its child without a PR and keeps the pause readable`() {
     val database = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
     val recorder = testPhaseRecorder(database, testWorkflowSnapshotValidator)

@@ -205,7 +205,7 @@ private fun FeatureTaskRuntimeSubtaskFinalisation.publishUnchangedHead(
 
 internal const val NOTHING_TO_COMMIT_REASON: String =
   "the subtask left no repository changes to commit: implement changed nothing and returned no `no_change` " +
-    "claim, so the no-change operator decision never opened. If the repository already satisfies the spec, " +
+    "claim. If the repository already satisfies the spec, " +
     "close the issue as already satisfied; otherwise rerun the subtask so implement makes the change or " +
     "returns a `no_change` claim"
 

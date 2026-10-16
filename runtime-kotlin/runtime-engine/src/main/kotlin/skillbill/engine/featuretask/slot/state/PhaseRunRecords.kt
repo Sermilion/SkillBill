@@ -246,6 +246,4 @@ internal interface AcceptanceCriterionRepairCycleRecords {
     phase: FeatureTaskRuntimePhaseStateRequest,
     kind: AcceptanceCriterionRepairOutcomeKind,
   ): Boolean?
-
-  fun requireFinalAudit(phase: FeatureTaskRuntimePhaseStateRequest): Boolean?
 }

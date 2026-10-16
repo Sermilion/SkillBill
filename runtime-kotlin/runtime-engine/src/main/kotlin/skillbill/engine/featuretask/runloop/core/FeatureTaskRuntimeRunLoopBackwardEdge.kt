@@ -176,7 +176,8 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
       return edge
         ?.takeIf { candidate ->
           if (candidate.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_LOOP_ID) {
-            state.monitorFailedRepairCommitShas.size >=
+            state.monitorFailureEvidenceUnavailable ||
+              state.monitorFailedRepairCommitShas.size >=
               FeatureTaskRuntimePhaseWorkflowDefinition.MAX_MONITOR_FIX_ATTEMPTS
           } else {
             blocksWhenCapExhausted(candidate, iteration)

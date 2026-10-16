@@ -35,6 +35,7 @@ internal class FeatureTaskRuntimeRunState(
   transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
   private val initialRetainedOutputs: List<FeatureTaskRuntimePhaseOutput> = emptyList(),
+  private val initialMonitorFailureEvidenceUnavailable: Boolean = false,
   private val initialMonitorRepairFailures: Map<Int, String> = emptyMap(),
   initialReviewGeneration: Int = 0,
   private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
@@ -61,6 +62,7 @@ internal class FeatureTaskRuntimeRunState(
     source.transitions,
     source.durableInitialLedger,
     source.initialRetainedOutputs,
+    source.initialMonitorFailureEvidenceUnavailable,
     source.initialMonitorRepairFailures,
     source.reviewGeneration,
     source.stepVerdictRule,
@@ -79,6 +81,7 @@ internal class FeatureTaskRuntimeRunState(
     outputBuffer.addAll(source.outputBuffer.map(::detachedOutput))
     monitorFailedRepairCommits.clear()
     monitorFailedRepairCommits.addAll(source.monitorFailedRepairCommits)
+    monitorFailureEvidenceMissing = source.monitorFailureEvidenceMissing
     completedPhases.replaceFrom(source.completedPhases)
     priorRecords.replaceFrom(source.priorRecords)
     phasesLaunchedThisProcess.replaceFrom(source.phasesLaunchedThisProcess)
@@ -168,6 +171,8 @@ internal class FeatureTaskRuntimeRunState(
 
   private val monitorFailedRepairCommits: MutableSet<String> = mutableSetOf()
 
+  private var monitorFailureEvidenceMissing: Boolean = false
+
   private val completedPhases: MutableSet<String> =
     this.initialRecords.values
       .filter { it.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED }
@@ -221,6 +226,11 @@ internal class FeatureTaskRuntimeRunState(
       }
     }
     monitorFailedRepairCommits.addAll(initialMonitorRepairFailures.values)
+    monitorFailureEvidenceMissing =
+      outputBuffer.filter(::monitorOutputIsCiFailed).any {
+        it.iteration !in initialMonitorRepairFailures
+      }
+    monitorFailureEvidenceMissing = monitorFailureEvidenceMissing || initialMonitorFailureEvidenceUnavailable
   }
 
   override fun validatedRecordToOutput(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseOutput? {
@@ -380,22 +390,16 @@ internal class FeatureTaskRuntimeRunState(
   }
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
-    val requestedStart = ExplicitResumeStart(requestedPhaseId, reopen = true)
     val phaseId =
-      transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
-        ?: requestedPhaseId
-    if (!resumeRules(phaseId).resumesPastCompletion || phaseId !in completedPhases) {
-      return if (phaseId == requestedPhaseId) {
-        requestedStart
+      if (requestedPhaseId in completedPhases) {
+        requestedPhaseId
       } else {
-        ExplicitResumeStart(phaseId, reopen = phaseId !in completedPhases)
+        transitions.entryGateViolation(requestedPhaseId, settledVerdictsByPhaseId)?.requiredPhaseId
+          ?: requestedPhaseId
       }
-    }
-    if (openRepairReentry(phaseId)) {
-      return ExplicitResumeStart(phaseId, reopen = false)
-    }
-    if (phaseId != requestedPhaseId) return requestedStart
-    return completedResumePast(phaseId) ?: requestedStart
+    if (phaseId !in completedPhases) return ExplicitResumeStart(phaseId, reopen = true)
+    if (openRepairReentry(phaseId)) return ExplicitResumeStart(phaseId, reopen = false)
+    return completedResumePast(phaseId) ?: ExplicitResumeStart(phaseId, reopen = false)
   }
 
   internal fun reopenFromExplicitResume(phaseId: String) {
@@ -424,8 +428,12 @@ internal class FeatureTaskRuntimeRunState(
     qualifiedFailedRepairSha: String? = null,
   ) {
     outputBuffer += detachedOutput(output)
-    if (monitorOutputIsCiFailed(output) && !qualifiedFailedRepairSha.isNullOrBlank()) {
-      monitorFailedRepairCommits += qualifiedFailedRepairSha
+    if (monitorOutputIsCiFailed(output)) {
+      if (!qualifiedFailedRepairSha.isNullOrBlank()) {
+        monitorFailedRepairCommits += qualifiedFailedRepairSha
+      } else {
+        monitorFailureEvidenceMissing = true
+      }
     }
     completedPhases += output.phaseId
     priorRecords += output.phaseId
@@ -510,6 +518,9 @@ internal class FeatureTaskRuntimeRunState(
 
   override val monitorFailedRepairCommitShas: Set<String>
     get() = monitorFailedRepairCommits.toSet()
+
+  override val monitorFailureEvidenceUnavailable: Boolean
+    get() = monitorFailureEvidenceMissing
 
   internal fun recordEdgeIteration(
     loopId: String,

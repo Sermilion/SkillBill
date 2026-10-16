@@ -49,13 +49,13 @@ internal data class MonitorRepairStepRoles(val monitor: String, val repair: Stri
       )
     val publicationEdges =
       recorded.traversal.backwardEdges.filter {
-        it.fromPhaseId == repair && it.destinationPhaseId == publication
+        it.fromPhaseId == repair && it.destinationPhaseId == monitor
       }
     val expectedPublicationEdge =
       FeatureTaskRuntimeBackwardEdge(
         repair,
         FeatureTaskRuntimeVerdict.ADVANCE,
-        publication,
+        monitor,
         FeatureTaskRuntimePhaseWorkflowDefinition.MONITOR_FIX_COMMIT_LOOP_ID,
         null,
       )

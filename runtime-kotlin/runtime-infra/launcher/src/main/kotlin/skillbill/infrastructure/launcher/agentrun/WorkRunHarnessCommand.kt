@@ -2,10 +2,12 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 
 internal fun workRunHarnessCommand(
   request: WorkRunLaunchRequest,
+  harness: WorkRunLaunchKind.AgentHarness,
   agent: SupportedAgent,
   environment: Map<String, String>,
 ): AgentRunCommand {
@@ -20,7 +22,7 @@ internal fun workRunHarnessCommand(
     SkillRunRequest(
       issueKey = request.ownershipKey,
       repoRoot = request.repositoryRoot,
-      promptOverride = request.prompt,
+      promptOverride = harness.prompt,
       streamProviderOutput = true,
     ),
   )

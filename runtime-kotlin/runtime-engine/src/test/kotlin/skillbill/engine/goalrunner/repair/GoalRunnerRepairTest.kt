@@ -1937,6 +1937,18 @@ internal abstract class GoalRunnerRepairFixtures {
       return controlStateValue
     }
 
+    override fun resume(parentWorkflowId: String): GoalRunnerManifestState {
+      controlStateValue =
+        controlStateValue.copy(
+          paused = false,
+          pauseRequested = false,
+          pauseConsumed = false,
+          pauseReason = null,
+          pausedAt = null,
+        )
+      return loadByIssueKey(ISSUE_KEY, null)
+    }
+
     override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState = state
 
     override fun acquireExecutionLease(

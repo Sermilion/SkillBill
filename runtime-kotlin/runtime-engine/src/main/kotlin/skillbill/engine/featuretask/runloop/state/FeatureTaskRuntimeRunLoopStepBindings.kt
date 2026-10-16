@@ -341,8 +341,15 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   run: PhaseRun,
   fanOutUnitId: Int?,
   bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
-) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseMonitorStepBinding {
+  override fun publishRepair(run: PhaseRun): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopCommitCycle) {
+      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication)
+    }
+  }
+
   override fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,

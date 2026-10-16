@@ -109,7 +109,7 @@ class SkeletonDefinitionTest {
         FeatureTaskRuntimeBackwardEdge(
           fromPhaseId = "monitor_fix",
           triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
-          destinationPhaseId = "commit_push",
+          destinationPhaseId = "monitor",
           loopId = "monitor_fix_commit",
           perEdgeCap = null,
           capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,

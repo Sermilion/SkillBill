@@ -130,12 +130,14 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GOAL_PROGRESS_HISTORY_LIMIT
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleSubtask
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -4086,6 +4088,58 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
   }
 
   @Test
+  fun `resume preserves a hydrated child after bounded ledger retention removes its import prefix`() {
+    for (firstSequence in listOf(1, 2, 17)) {
+      val harness = hydrationHarness()
+      harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+      val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+      val artifacts = parseChildArtifacts(child)
+      val ledger = retainedPlanningLedger(artifacts, firstSequence)
+      artifacts["feature_task_runtime_phase_ledger"] = ledger
+      val before = child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts))
+      harness.workflows.saveFeatureTaskWorkflow(before, RUNTIME)
+      assertEquals(FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT, ledger.size)
+      assertEquals(firstSequence, ledger.first()["sequence_number"])
+
+      assertIs<GoalRunnerChildWorkflowSaveResult.Saved>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      )
+
+      assertEquals(before, harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    }
+  }
+
+  @Test
+  fun `retained planning admission rejects incomplete windows sequence gaps and altered surviving import entries`() {
+    val harness = hydrationHarness()
+    harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+    val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    val artifacts = parseChildArtifacts(child)
+    val ledger = retainedPlanningLedger(artifacts, 1)
+    val damaged =
+      listOf(
+        ledger.dropLast(1),
+        ledger.mapIndexed { index, entry ->
+          if (index == 1) entry + ("sequence_number" to 3) else entry
+        },
+        listOf(ledger.first() + ("action" to "retry")) + ledger.drop(1),
+      )
+    for (window in damaged) {
+      artifacts["feature_task_runtime_phase_ledger"] = window
+      val before = child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts))
+      harness.workflows.saveFeatureTaskWorkflow(before, RUNTIME)
+
+      val conflict =
+        assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+        ).conflict
+
+      assertContains(conflict.reason, "phase ledger no longer opens with the goal planning import prefix")
+      assertEquals(before, harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    }
+  }
+
+  @Test
   fun `resume rejects a child whose planning ledger prefix no longer matches the import`() {
     val harness = hydrationHarness()
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
@@ -4345,6 +4399,31 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       null,
       hydrationHarness().newClockedStore().pauseNow("missing-parent", "operator_stop", PAUSE_CLOCK_INSTANT),
     )
+  }
+
+  private fun retainedPlanningLedger(
+    artifacts: Map<String, Any?>,
+    firstSequence: Int,
+  ): List<Map<String, Any?>> {
+    var ledger =
+      (artifacts["feature_task_runtime_phase_ledger"] as List<*>).map {
+        requireNotNull(JsonCodec.anyToStringAnyMap(it))
+      }
+    repeat(FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT + firstSequence - ledger.size) { attempt ->
+      val entry =
+        ledger.last() +
+          mapOf(
+            "action" to "start",
+            "sequence_number" to 3 + attempt,
+            "phase_id" to "audit",
+            "resolved_agent_id" to "codex",
+            "execution_origin" to "agent-executed",
+          )
+      ledger =
+        appendBoundedHistoryBySequence(ledger, entry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+          .map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
+    }
+    return ledger
   }
 
   private fun hydrationHarness(

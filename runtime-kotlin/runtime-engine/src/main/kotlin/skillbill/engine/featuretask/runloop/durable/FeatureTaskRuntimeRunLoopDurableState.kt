@@ -58,7 +58,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.traversal
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.phaseTraversal()
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
 
   override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)

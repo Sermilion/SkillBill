@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.runloop.phase
 
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -34,7 +33,12 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
   fun resume(context: FeatureTaskRuntimeRunLoopContext): String? {
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
     val state = scope.snapshot ?: return null
-    val steps = scope.steps ?: return null
+    val steps = scope.steps
+    if (steps == null || state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED ||
+      context.hasLeftSlot(PhaseSlot.AUDIT)
+    ) {
+      return null
+    }
     val target =
       if (state.pendingClarificationQuestion != null) {
         steps.audit
@@ -67,14 +71,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     requireNotNull(state)
     requireNotNull(scope)
     requireNotNull(steps)
-    if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
-      return if (!finalAuditMatchesCurrentSource(context, state)) {
-        context.runState.coupledRunTransitions.reenterAcceptanceSteps(listOf(steps.audit))
-        Routing.Reenter(steps.audit)
-      } else {
-        Routing.Continue
-      }
-    }
+    if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) return Routing.Continue
     if (state.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
         context.request,
@@ -133,22 +130,10 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     if (context.runState.selectedOwnerOf(phaseId)?.slot != PhaseSlot.CODE_REVIEW) return null
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
     val state = scope.snapshot ?: return "The authored acceptance catalog has not completed its final source audit."
-    return if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED ||
-      !finalAuditMatchesCurrentSource(context, state)
-    ) {
+    return if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
       "The current source has no committed final acceptance audit. Resume at the full audit before review."
     } else {
       null
     }
-  }
-
-  private fun finalAuditMatchesCurrentSource(
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: AcceptanceCriterionRepairState,
-  ): Boolean {
-    val audit = state.finalAudits.lastOrNull() ?: return false
-    val fingerprint = context.gitOperations.repositoryFingerprint(context.request.repoRoot)
-    return fingerprint.ok && fingerprint.value.isNotBlank() &&
-      sha256Hex(fingerprint.value) == audit.treeDigest
   }
 }

@@ -231,7 +231,21 @@ internal class InMemoryPhaseRunRecords private constructor(
     buildGateProgress[workflowId] = progress.detached()
   }
 
-  override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean = true
+  override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean {
+    phaseLedger +=
+      FeatureTaskRuntimePhaseLedgerEntry(
+        action = request.action,
+        sequenceNumber = phaseLedger.size + 1,
+        timestamp = clock.instant(),
+        phaseId = request.phaseId,
+        attemptCount = request.attemptCount,
+        resolvedAgentId = request.resolvedAgentId,
+        loopId = request.loopId,
+        edgeIteration = request.edgeIteration,
+        blockedReason = request.blockedReason,
+      )
+    return true
+  }
 
   override fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry> = phaseLedger.toList()
 

@@ -145,10 +145,14 @@ internal object AcceptanceCriterionRepairCoherence {
   private fun discoveryIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val mode =
       state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED ||
-        state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY && state.revision == 0L
+        state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY && hasNoRepairHistory(state)
     val budget = !hasExhaustedBudget(state)
     return mode && budget && state.unresolvedQueue.isNotEmpty()
   }
+
+  private fun hasNoRepairHistory(state: AcceptanceCriterionRepairState): Boolean =
+    state.outcomes.isEmpty() && state.proseAudits.isEmpty() && state.sourceTransitions.isEmpty() &&
+      state.finalAudits.isEmpty() && state.pendingAuditRefs.isEmpty()
 
   private fun awaitingIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val evidence = !state.completedRepairEvidenceRef.isNullOrBlank() && !state.admittedCheckpointId.isNullOrBlank()

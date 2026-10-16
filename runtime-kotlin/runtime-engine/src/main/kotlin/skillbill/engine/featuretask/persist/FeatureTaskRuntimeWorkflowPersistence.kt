@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.persist
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeIssueKey
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
@@ -30,6 +31,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.isPreContractAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -180,15 +182,27 @@ class FeatureTaskRuntimeWorkflowPersistence
         state
       }
 
-    fun readAcceptanceCriterionRepairState(workflowId: String): AcceptanceCriterionRepairState? =
+    fun readAcceptanceCriterionRepairStatus(workflowId: String): AcceptanceCriterionRepairStatusRead? =
       database.read { unitOfWork ->
         val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
         workflowSnapshotValidator.validate(record, record.workflowName)
-        validateSerialArtifacts(record.artifacts)
         val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_ACCEPTANCE_CRITERION_REPAIR
-        if (!family.contains(record.artifacts)) return@read null
-        FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(record.artifacts))
-          .toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}")
+        val payload =
+          if (family.contains(record.artifacts)) {
+            FeatureTaskRuntimeWorkflowArtifactMap.from(family.value(record.artifacts))
+          } else {
+            null
+          }
+        if (payload?.isPreContractAcceptanceCriterionRepairState() == true) {
+          validateSerialArtifacts(record.artifacts - family.label())
+          return@read AcceptanceCriterionRepairStatusRead.PreContract
+        }
+        validateSerialArtifacts(record.artifacts)
+        payload?.let {
+          AcceptanceCriterionRepairStatusRead.Current(
+            it.toAcceptanceCriterionRepairState("workflow-artifact:${family.label()}"),
+          )
+        }
       }
 
     internal fun validateSerialArtifacts(artifacts: Map<String, Any?>) {

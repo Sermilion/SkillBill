@@ -109,7 +109,7 @@ class PhaseRunEntry(
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = executionPlan.traversal,
+        transitions = executionPlan.phaseTraversal(),
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
       )

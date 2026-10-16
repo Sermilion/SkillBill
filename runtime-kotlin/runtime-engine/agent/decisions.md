@@ -226,3 +226,27 @@ Reason: One allocator per durable stream removes the duplicate-number class of b
 Evidence: `GoalRunnerDurableSequenceAllocationTest`, `GoalObservabilityModelsTest`, `UnaddressedFindingsLedgerServiceTest`, `GoalPlanningRefreshLivenessTest`, `GoalPlanningPreplanProseReadTest`, `GoalPlanningRejectionRecorderTest`.
 
 Revisit when: Cross-process writers stop relying on SQLite writer serialization, or the remaining best-effort emitters need a durable dead-letter instead of a dropped event.
+
+## [2026-10-16] Goal resume clears known wedges before it runs
+
+Context: A goal runner killed mid goal-finish left a stale execution lease, a `runner_interrupted` pause, and child wedges such as an unreachable remediation base. Each resume then stopped until the operator ran `skill-bill goal repair <KEY> --apply` by hand.
+
+Decision: `GoalRunnerRepairCoordinator.repairBeforeResume` runs the same diagnosis and apply as `goal repair --apply` and records one `seam=goal-resume.repair` diagnostic per applied repair. Two callers use it: `GoalRunnerRunPreparation.prepareStart`, before `skill-bill goal <KEY>` takes the execution lease on an existing goal, and `GoalRunnerStatusControlVerbs.resume`, which serves `goal resume` and the desktop Resume. The goal command prints each cleared wedge through a `GoalRunnerRunEvent.ResumeRepaired` event; `goal resume` lists it in its text and payload. An `OPERATOR_REQUIRED` result stops the goal run with a blocked report and leaves the pause in place on `goal resume` (new status `operator_required`, exit 2). A live or unexpired lease makes repair refuse as before, so a running runner keeps its state. New goals and goals already complete skip the repair. `GoalRunnerRunEvent` joins the pinned engine inbound API because the CLI presenter now reads the event type that the pinned `GoalRunnerEventSink` already carries.
+
+Reason: The repairs only clear state the runtime can prove stale, so applying them on resume removes a manual step without widening what repair may touch. Completed commit SHAs, review history, audit repair state, and planning checkpoints stay untouched.
+
+Evidence: `GoalRunnerResumeRepairTest`, `CliGoalRepairRuntimeTest` (`goal resume clears stale runner state before it runs and prints each cleared wedge`).
+
+Revisit when: A wedge class becomes repairable for a completed child in a way that should not block a resume, or repair learns to judge an unexpired lease whose process is gone.
+
+## [2026-10-16] A run target's identity ignores the heartbeat timestamp
+
+Context: The desktop Cancel and Resume build a `WorkRunTarget` from the last rendered work item, and `matchingRun` required its `updatedAt` to equal the current snapshot. A live goal's runner heartbeat moves `updatedAt` about every 10 seconds while `statusRevision` and the execution id stay the same, so a Cancel sent from a view older than the last heartbeat was refused as `CHANGED_TARGET` and the runner kept going.
+
+Decision: `matchingRun` matches a run by id, repository identity, repository root, execution id and status revision, without `updatedAt`. A new execution or a status transition still changes the target; a heartbeat does not.
+
+Reason: `updatedAt` is liveness, not identity. Status revision and execution id already fence real changes, including a restart after cancel.
+
+Evidence: `WorkRunControlsTest` (`cancel accepts a target the runner heartbeat made older but refuses one for another execution`; the run-again test's options call with an older target). Replayed against a live goal on 2026-10-16: a target read just before Cancel was accepted, while `updatedAt` advanced every 10 seconds.
+
+Revisit when: Goal Pause and Stop (`WorkControlService.validate`) get the same treatment. They also compare `updatedAt` and the work store revision, which the heartbeat bumps too.

@@ -42,6 +42,7 @@ internal class MonitorRepairAccounting(
   internal data class RestoredHistory(
     val outputs: List<FeatureTaskRuntimePhaseOutput>,
     val failedRepairs: Map<Int, String>,
+    val evidenceUnavailable: Boolean,
   )
 
   fun restore(
@@ -64,25 +65,32 @@ internal class MonitorRepairAccounting(
         evidenceReader.completedOutput(request.workflowId, completion, ledger, records[completion.phaseId])
       }.distinctBy { it.phaseId to it.iteration }
     val failedRepairs = mutableMapOf<Int, String>()
+    var evidenceUnavailable = false
     retained.filter { output ->
       output.phaseId == steps.monitor &&
         output.normalizedOutput?.verdict == FeatureTaskRuntimeVerdict.CI_FAILED.wireValue
     }.forEach { output ->
       if (!steps.hasCorrectedProducerSemantics(recordedSemantics, executionPlan)) {
         unqualifiedMonitorFailure(output.iteration)
+        evidenceUnavailable = true
       } else {
         when (
           val association =
             historicalFailureCommitSha(request, output.iteration, records, ledger, retained)
         ) {
           is RepairPublicationAssociation.Published -> failedRepairs[output.iteration] = association.commitSha
-          RepairPublicationAssociation.NotStarted -> unqualifiedMonitorFailure(output.iteration)
-          RepairPublicationAssociation.Unavailable, RepairPublicationAssociation.Unchanged ->
+          RepairPublicationAssociation.NotStarted -> {
             unqualifiedMonitorFailure(output.iteration)
+            evidenceUnavailable = true
+          }
+          RepairPublicationAssociation.Unavailable, RepairPublicationAssociation.Unchanged -> {
+            unqualifiedMonitorFailure(output.iteration)
+            evidenceUnavailable = true
+          }
         }
       }
     }
-    return RestoredHistory(retained, failedRepairs)
+    return RestoredHistory(retained, failedRepairs, evidenceUnavailable)
   }
 
   fun publishedHeadBeforeMonitor(
@@ -260,24 +268,17 @@ internal class MonitorRepairAccounting(
       ledger.filter {
         it.phaseId == commitPhase && it.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE
       }
-    val baseline =
-      readPublication(
-        workflowId,
-        completions.lastOrNull {
-          it.sequenceNumber < repair.start.sequenceNumber
-        },
-        ledger,
-        outputs,
-      )
-    val published =
-      readPublication(
-        workflowId,
-        completions.firstOrNull {
-          it.sequenceNumber in (repair.completion.sequenceNumber + 1) until monitorStart.sequenceNumber
-        },
-        ledger,
-        outputs,
-      )
+    val baselineCompletion = completions.lastOrNull { it.sequenceNumber < repair.start.sequenceNumber }
+    val publishedCompletion =
+      completions.firstOrNull {
+        it.sequenceNumber in (repair.start.sequenceNumber + 1) until monitorStart.sequenceNumber
+      }
+    if (baselineCompletion == null || publishedCompletion == null) {
+      unavailableRepairAssociation("baseline or repair publication is missing")
+      return null
+    }
+    val baseline = readPublication(workflowId, baselineCompletion, ledger, outputs)
+    val published = readPublication(workflowId, publishedCompletion, ledger, outputs)
     return if (baseline == null || published == null) null else baseline to published
   }
 
@@ -288,8 +289,16 @@ internal class MonitorRepairAccounting(
     outputs: List<FeatureTaskRuntimePhaseOutput>,
   ): Publication? {
     val start = completion?.let { evidenceReader.matchingStart(it, ledger) }
-    val output = completion?.let { evidenceReader.completedPushedCommitOutput(outputs, it.attemptCount) }
-    val sha = output?.let(evidenceReader::commitPushSha)
+    val output =
+      completion?.let { entry ->
+        outputs.singleOrNull { it.phaseId == steps.publication && it.iteration == entry.attemptCount }
+          ?: evidenceReader.completedOutput(workflowId, entry, ledger, null)
+      }
+    val pushedOutput =
+      completion?.let { entry ->
+        output?.let { evidenceReader.completedPushedCommitOutput(listOf(it), entry.attemptCount) }
+      }
+    val sha = pushedOutput?.let(evidenceReader::commitPushSha)
     if (completion == null || start == null || sha == null) {
       unavailableRepairAssociation("pushed publication or its START is missing")
       return null

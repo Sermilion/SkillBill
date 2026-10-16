@@ -178,6 +178,13 @@ class AcceptanceCriterionRepairRunState internal constructor(
     }
 }
 
+sealed interface AcceptanceCriterionRepairStatusRead {
+  data class Current(val state: AcceptanceCriterionRepairState) : AcceptanceCriterionRepairStatusRead
+
+  /** Unversioned state from before the serial repair contract; status shows it, resume refuses it. */
+  data object PreContract : AcceptanceCriterionRepairStatusRead
+}
+
 sealed interface AcceptanceCriterionRepairWriteResult {
   data class Committed(
     val state: AcceptanceCriterionRepairState,

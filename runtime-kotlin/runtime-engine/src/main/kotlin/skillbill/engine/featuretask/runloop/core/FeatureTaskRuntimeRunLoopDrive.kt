@@ -49,13 +49,17 @@ object FeatureTaskRuntimeRunLoopDrive {
 
   internal fun reopenStaleSettledSteps(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
+      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
+        rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
+      }
     }
   }
 
   internal fun invalidateStaleEvidence(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
+      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
+        rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
+      }
     }
   }
 
@@ -146,7 +150,7 @@ object FeatureTaskRuntimeRunLoopDrive {
       FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
         rules.routedVerdict(phaseId, verdict, stepState)
       } ?: verdict
-    val edge = FeatureTaskRuntimeRunLoopCheckpoint.matchingBackwardEdge(context.transitions, phaseId, effectiveVerdict)
+    val edge = FeatureTaskRuntimeRunLoopCheckpoint.matchingBackwardEdge(traversal(context), phaseId, effectiveVerdict)
     edge?.let { FeatureTaskRuntimeRunLoopBackwardEdge.resumeInFlightReentry(context, it) }?.let { return it }
     val edgeIterationCount =
       edge?.let {

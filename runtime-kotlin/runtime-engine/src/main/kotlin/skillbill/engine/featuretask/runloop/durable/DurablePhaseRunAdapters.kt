@@ -77,8 +77,6 @@ internal class DurablePhaseRunRecords(
         phase: FeatureTaskRuntimePhaseStateRequest,
         kind: AcceptanceCriterionRepairOutcomeKind,
       ): Boolean? = null
-
-      override fun requireFinalAudit(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? = null
     }
   ),
   FeatureTaskRuntimeNoChangePausePort by recorder {

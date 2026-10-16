@@ -361,7 +361,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `goal with launched child projects child current_phase_execution`() {
+  fun `goal with launched child shows review despite missing goal planning checkpoints`() {
     val fixture = gitRepoFixture("ide-status-goal-child-execution")
     val identity = testGoalRepositoryIdentity(fixture)
     val database =
@@ -388,9 +388,19 @@ class IdeStatusServiceBranchScopingTest {
     val result =
       ideStatusService(
         database,
-        manifestStore = StubGoalManifestStore(goalManifestState(fixture, identity, childWorkflowId = "w-child")),
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            planning =
+              planningSnapshot(GoalPlanningStatusState.NOT_STARTED)
+                .copy(sharedPreplanPrepared = false, plannedSubtaskCount = 0),
+            lease = liveLease(),
+          ),
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
+    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals(GoalPlanningStatusState.NOT_STARTED, result.snapshot.planning?.state)
+    assertEquals("Goal SKILL-148 is active on review.", result.snapshot.summary)
     val execution = requireNotNull(result.snapshot.currentPhaseExecution)
     assertEquals("review", result.snapshot.currentStep.id)
     assertEquals("review", execution.phaseId)

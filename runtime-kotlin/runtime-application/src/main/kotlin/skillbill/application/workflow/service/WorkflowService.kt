@@ -328,7 +328,8 @@ class WorkflowService(
     workflowId: String,
     phaseId: String,
     reason: String,
-  ): WorkflowUpdateResult = blockedPhaseRetry.retry(database, workflowId, phaseId, reason)
+    mandate: String? = null,
+  ): WorkflowUpdateResult = blockedPhaseRetry.retry(database, workflowId, phaseId, reason, mandate)
 
   fun repairFeatureTaskRuntimeIdentity(args: RepairFeatureTaskRuntimeIdentityArgs): WorkflowUpdateResult {
     val workflowId = args.workflowId

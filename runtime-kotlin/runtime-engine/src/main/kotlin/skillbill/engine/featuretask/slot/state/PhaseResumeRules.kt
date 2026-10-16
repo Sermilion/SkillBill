@@ -23,13 +23,6 @@ internal interface PhaseResumeRules {
   val buffersIncompleteOutput: Boolean
     get() = true
 
-  /**
-   * Whether an explicit resume at this completed step starts at the furthest later step instead.
-   * A settled verdict that can still reenter a backward edge stays on this step so that edge runs.
-   */
-  val resumesPastCompletion: Boolean
-    get() = false
-
   /** Whether later forward steps lose their completion while this step is not completed. */
   val invalidatesLaterStepsWhileIncomplete: Boolean
     get() = false

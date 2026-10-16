@@ -153,7 +153,7 @@ Run these from the repository that owns the goal:
 | `skill-bill work status --format json` | Repository work snapshot used by the IDE integrations |
 | `skill-bill goal pause APP-123` | Request a pause after the current subtask |
 | `skill-bill goal stop APP-123` | Record an operator stop and terminate the running goal |
-| `skill-bill goal resume APP-123` | Clear a durable pause without launching work |
+| `skill-bill goal resume APP-123` | Clear known stale resume wedges and the durable pause without launching work |
 
 To continue a paused goal from the CLI, clear its pause and launch it with an explicit agent:
 

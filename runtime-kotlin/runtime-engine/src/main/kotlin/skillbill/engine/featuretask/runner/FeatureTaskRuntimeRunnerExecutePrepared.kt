@@ -143,13 +143,14 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
           runRequest.admittedExecution?.recordedMonitorSemantics,
           executionPlan,
         )
-      } ?: MonitorRepairAccounting.RestoredHistory(emptyList(), emptyMap())
+      } ?: MonitorRepairAccounting.RestoredHistory(emptyList(), emptyMap(), false)
     return FeatureTaskRuntimeRunState(
       initialRecords = records,
-      transitions = executionPlan.traversal,
+      transitions = executionPlan.phaseTraversal(),
       durableInitialLedger = ledger,
       initialRetainedOutputs = history.outputs,
       initialMonitorRepairFailures = history.failedRepairs,
+      initialMonitorFailureEvidenceUnavailable = history.evidenceUnavailable,
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
       stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
       resumeRulesFn = strategies.resumeRules(executionPlan),

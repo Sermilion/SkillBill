@@ -81,12 +81,20 @@ class GoalRunner(
       intakePreparation.prepare(request) == null
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
-    val loadedState =
+    val durableState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
+    val admittedState =
+      durableState
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
-    alreadyCompleteReport(loadedState)?.let { return it }
-    runPreparation.alignGoalBranch(loadedState, request)?.let { return it }
+    alreadyCompleteReport(admittedState)?.let { return it }
+    val loadedState =
+      when (
+        val start = runPreparation.prepareStart(admittedState, request, resumesExistingGoal = durableState != null)
+      ) {
+        is GoalRunPreparation.PreparationBlocked -> return start.report
+        is GoalRunPreparation.Prepared -> start.state
+      }
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     val execute = {
       val state = reconcileStateBeforeRun(loadedState)

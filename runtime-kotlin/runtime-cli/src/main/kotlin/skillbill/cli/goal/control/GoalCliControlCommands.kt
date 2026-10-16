@@ -71,7 +71,11 @@ class GoalResumeCommand(
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
-) : DocumentedCliCommand("resume", "Clear a durable pause for a goal without starting child runs.") {
+) : DocumentedCliCommand(
+    "resume",
+    "Clear known stale resume wedges (as goal repair --apply does) and the durable pause for a goal " +
+      "without starting child runs.",
+  ) {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val repoRoot by option("--repo-root", help = "Repository root that owns the goal.")
 

@@ -178,9 +178,27 @@ private fun AcceptanceCriterionRepairState.beginFinalRecheck(
   val pending =
     criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
       .sortedBy { it.ordinal }.map { it.canonicalRef }
+  val lastSettlement =
+    maxOf(
+      sourceTransitions.maxOfOrNull { it.revision } ?: 0,
+      finalAudits.maxOfOrNull { it.revision } ?: 0,
+    )
+  val repeatedSource =
+    proseAudits.any {
+      it.revision > lastSettlement && it.criterionRef == null && !it.satisfied && it.treeDigest == audit.treeDigest &&
+        it.checkpointId == audit.checkpointId
+    }
+  val named =
+    Regex(
+      "\\b(AC-[0-9]{3})\\b\\s+(?:(?:is|remains|still)\\s+)?" +
+        "(?:open|unresolved|unsatisfied|not\\s+(?:satisfied|met|implemented)|requires\\s+repair)\\b",
+      RegexOption.IGNORE_CASE,
+    ).findAll(audit.prose).map { it.groupValues[1].uppercase() }.toSet()
+  val focused = pending.filter { it in named }.takeUnless { repeatedSource || it.isEmpty() } ?: pending
   return copy(
-    pendingAuditRefs = pending,
-    currentCriterionRef = pending.firstOrNull(),
+    criteria = criteria.map { if (it.canonicalRef in focused) it.copy(evidenceRef = audit.prose) else it },
+    pendingAuditRefs = focused,
+    currentCriterionRef = focused.firstOrNull(),
     finalAuditRequired = false,
     mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
     stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,

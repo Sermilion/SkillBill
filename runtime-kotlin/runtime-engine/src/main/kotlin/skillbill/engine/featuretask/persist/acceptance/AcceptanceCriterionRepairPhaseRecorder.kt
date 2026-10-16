@@ -331,21 +331,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
     )
   }
 
-  internal fun requireFinalAudit(
-    session: AcceptanceCriterionRepairSession,
-    phase: FeatureTaskRuntimePhaseStateRequest,
-  ): Boolean? {
-    if (!session.worker.ownsAuditStep(phase.phaseId)) return null
-    val state = session.accounting.snapshot ?: return false
-    if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED) return false
-    return commit(
-      session,
-      phase,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
-      CommitContext(expectedState = state),
-    )
-  }
-
   private fun invocationState(
     scope: AcceptanceCriterionRepairRunState,
     phase: FeatureTaskRuntimePhaseStateRequest,
