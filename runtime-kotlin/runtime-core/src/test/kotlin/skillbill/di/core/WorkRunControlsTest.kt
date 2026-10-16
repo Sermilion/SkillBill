@@ -230,7 +230,15 @@ class WorkRunControlsTest {
         WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET),
         component.launchRun(target.copy(statusRevision = "0"), null),
       )
+      Files.delete(fixture.tempDir.resolve(".git/HEAD"))
+      assertEquals(
+        WorkControlResult.Rejected(WorkControlRejection.BRANCH_UNAVAILABLE),
+        component.launchRun(target, null),
+      )
       assertEquals(1, launched.size)
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/main\n")
+      assertEquals(WorkControlResult.Accepted, component.launchRun(target, null))
+      assertEquals(2, launched.size)
     }
   }
 

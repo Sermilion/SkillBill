@@ -31,6 +31,9 @@ import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -43,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import dev.skillbill.tray.core.designsystem.DesignButton
 import dev.skillbill.tray.core.designsystem.DesignKv
 import dev.skillbill.tray.core.designsystem.DesignLabel
-import dev.skillbill.tray.core.designsystem.amber
 import dev.skillbill.tray.core.designsystem.blue
 import dev.skillbill.tray.core.designsystem.body
 import dev.skillbill.tray.core.designsystem.canvas
@@ -69,7 +71,6 @@ import dev.skillbill.tray.core.ui.FeedbackTone
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.ReasonTooltip
 import dev.skillbill.tray.core.ui.WorkDot
-import dev.skillbill.tray.core.ui.abbreviateHomeDirectory
 import dev.skillbill.tray.core.ui.age
 import dev.skillbill.tray.core.ui.coerceNonNegative
 import dev.skillbill.tray.core.ui.durationText
@@ -79,7 +80,6 @@ import dev.skillbill.tray.core.ui.label
 import dev.skillbill.tray.core.ui.lifecycleColor
 import dev.skillbill.tray.core.ui.phasePipeline
 import dev.skillbill.tray.core.ui.rememberCopyToClipboard
-import dev.skillbill.tray.core.ui.repositoryTitle
 import dev.skillbill.tray.core.ui.tickingNow
 import kotlin.time.Instant
 
@@ -162,6 +162,7 @@ private fun LoadedDetail(
   val copyReason = if (item.family == WorkFamily.FEATURE_GOAL) item.exactPauseReason else blockReason
   val goalBlocked = item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.BLOCKED
   val goalBlockReason = copyReason.takeIf { goalBlocked }
+  var expandedReason by remember(item.identity, item.invocationId, blockReason) { mutableStateOf(false) }
   val subtaskTime = durationText(item.subtaskActiveDurationMs, item.subtaskActiveDurationAsOf, item, now, frozen)
   Column(modifier.background(canvas)) {
     Row(Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(canvas, mint.copy(alpha = .04f)))).padding(start = 26.dp, end = 26.dp, top = 20.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
@@ -173,8 +174,7 @@ private fun LoadedDetail(
           StatusChip(if (fresh) "fresh" else "stale", if (fresh) green else muted)
         }
         Text(detailTitle(detail), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.8.sp, letterSpacing = (-.48).sp)
-        Text("${item.repositoryTitle()} · ${item.branch ?: "no branch"} · ${abbreviateHomeDirectory(item.repositoryRoot)}", color = muted, fontFamily = mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (load.refreshing) Text("Updating...", color = muted, style = MaterialTheme.typography.bodySmall)
+        RepositoryLocationLinks(item)
         load.readError?.let { Text(it.summary, color = orange, style = MaterialTheme.typography.bodySmall) }
         state.pendingFeedback.forEach { feedback ->
           Text(
@@ -184,12 +184,21 @@ private fun LoadedDetail(
             style = MaterialTheme.typography.bodySmall,
           )
         }
-        if (item.lifecycle == Lifecycle.BLOCKED || item.lifecycle == Lifecycle.PAUSED) {
-          Column(Modifier.fillMaxWidth().background(orange.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, orange.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (item.lifecycle in setOf(Lifecycle.BLOCKED, Lifecycle.PAUSED, Lifecycle.FAILED)) {
+          val reasonColor = if (item.lifecycle == Lifecycle.FAILED) red else orange
+          Column(Modifier.fillMaxWidth().background(reasonColor.copy(alpha = .12f), RoundedCornerShape(10.dp)).border(1.dp, reasonColor.copy(alpha = .4f), RoundedCornerShape(10.dp)).padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (item.lifecycle == Lifecycle.FAILED) "Run failed" else if (item.lifecycle == Lifecycle.BLOCKED) "Run blocked" else "Run paused", color = reasonColor, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-              ReasonTooltip(if (item.family == WorkFamily.FEATURE_GOAL) item.summary else blockReason, Modifier.weight(1f), color = amber, fontSize = 13.sp, lineHeight = 19.sp)
+              if (expandedReason) {
+                SelectionContainer(Modifier.weight(1f).heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                  Text(blockReason, color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
+                }
+              } else {
+                ReasonTooltip(blockReason, Modifier.weight(1f), color = reasonColor, fontSize = 13.sp, lineHeight = 19.sp)
+              }
               DesignButton("Copy reason", enabled = copyReason != null) { copyReason?.let(copy) }
             }
+            DesignButton(if (expandedReason) "Collapse reason" else "Show full reason") { expandedReason = !expandedReason }
             val restoration = detail.executionHistory.firstOrNull { it.invocationId == item.invocationId }?.restoration
             restorationNote(restoration)?.let { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
           }

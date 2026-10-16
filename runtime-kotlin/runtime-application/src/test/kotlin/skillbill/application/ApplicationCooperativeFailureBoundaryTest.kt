@@ -291,7 +291,8 @@ private fun noopReviewContextEnvelopeValidator(): ReviewContextEnvelopeValidator
   }
 
 private class FailingDatabase(private val failure: Throwable) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   var calls = 0
 

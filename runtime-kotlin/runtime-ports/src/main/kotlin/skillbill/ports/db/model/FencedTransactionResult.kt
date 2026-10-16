@@ -9,5 +9,10 @@ sealed interface FencedTransactionResult<out T> {
 sealed interface OwningTransactionResult<out T> {
   data class Committed<T>(val value: T) : OwningTransactionResult<T>
 
-  data object ActiveSession : OwningTransactionResult<Nothing>
+  data class Refused(val reason: Refusal) : OwningTransactionResult<Nothing>
+
+  enum class Refusal {
+    ACTIVE_SESSION,
+    UNSUPPORTED,
+  }
 }

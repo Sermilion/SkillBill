@@ -221,7 +221,8 @@ private fun releaseEntry(
   )
 
 private class TestDatabaseSessionFactory : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private val dbPath = Files.createTempDirectory("skillbill-update-check-db").resolve("metrics.db")
 

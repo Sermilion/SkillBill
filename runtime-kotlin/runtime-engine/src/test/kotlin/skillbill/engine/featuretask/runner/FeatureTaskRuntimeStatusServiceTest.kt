@@ -19,11 +19,11 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -1211,15 +1211,26 @@ internal fun statusHarness(): StatusHarness {
       NoopRuntimeDiagnostics,
     )
   val decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
-  val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator)
-  val runInvariantsStore = FeatureTaskRuntimeRunInvariantsStore(database, workflowPersistence)
+  val runInvariantsStore =
+    FeatureTaskRuntimeRunInvariantsStore(
+      database,
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
+    )
   return StatusHarness(
     recorder,
     decomposeTerminalRecorder,
     runInvariantsStore,
     FeatureTaskRuntimeStatusService(
       recorder,
-      workflowPersistence,
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
       runInvariantsStore,
       decomposeTerminalRecorder,
     ),
@@ -1374,8 +1385,6 @@ internal class StatusHarness(
 private class StatusFakeDatabaseSessionFactory(
   val repository: StatusInMemoryWorkflowRepository,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
-
   private val dbPath = Path.of("/fake/status-metrics.db")
 
   override fun resolveDbPath(): Path = dbPath

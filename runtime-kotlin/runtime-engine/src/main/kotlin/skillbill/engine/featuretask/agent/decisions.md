@@ -1,35 +1,3 @@
-## [2026-10-15] Report committed criterion context through existing prose channels
-Context: SKILL-426 subtask 3 replaces the versioned criterion-status payload design with readable context in existing reports, summaries and details. IntelliJ retains a sanitized 512-character summary limit.
-Decision: Project the selected workflow's committed accounting into detached explanation text. Put identity, failure allowance, queue and final-audit facts before long detail; mark abbreviation and retain stale caveats in cached displays. Readers keep their existing read-only authority.
-Reason: The respecification requires existing transport shapes and versions to remain unchanged. Reusing committed accounting avoids a second counter or selection owner. Early budget facts survive bounded display, while stale caveats prevent cached observations from appearing current. Missing attribution cannot justify invented counts or source acceptance.
-Alternatives considered: A new criterion payload, parser, semantic prose validator or larger cache limit would contradict the supplied scope.
-
-## [2026-10-14] Prose verdicts separate source acceptance from quality evidence
-Context: The SKILL-426 respecification rejects an agent-authored catalog, disposition list, evidence receipt, completion marker or exact remaining-criteria format as a progress requirement.
-Decision: Use ordinary audit prose and existing verdicts through existing phase envelopes. The runtime binds the report to its accepted invocation and checkpoint. Resolve ambiguous conclusions with read-only prose clarification and keep source acceptance separate from later quality obligations.
-Reason: The operator requires prose reporting without another output protocol. Private accounting and transaction preconditions retain ownership and replay checks without making agents reproduce runtime identifiers or fabricate quality evidence.
-
-## [2026-10-14] Serial repairs retain authored focus and unsuccessful budgets
-Context: The revised spec gives each authored criterion one retained allowance of three unsuccessful repair cycles, including after success, restart or regression.
-Decision: Follow authored order and keep planning, repair and targeted verification on the selected criterion. Reserve before mutation; settle incomplete or retryable blocked repair once, or retain a completed repair's reservation until targeted audit. Commit coupled workflow evidence before acknowledging state. Final source acceptance requires a full audit; a failed final audit triggers focused regression checks.
-Reason: Aggregate remaining-list comparisons cannot enforce a criterion's retained allowance. Shared edits can help another criterion but cannot accept it without audit. Read-only inspection, clarification and planning consume no allowance. Existing configured audit and repair models remain separate.
-
-## [2026-10-14] Historical aggregate attempts cannot authorize criterion budgets
-Context: Older workflow prose and aggregate repair attempts lack known per-criterion attribution. The respecification removes feature-specific tuple reconstruction, adoption gates and receipts.
-Decision: Preserve historical outputs and attempts, recover known committed criterion accounting, and explain unavailable attribution. Prospective accounting without known state requires a separate explicit operator decision; otherwise refuse. Do not automatically resume the recorded incidents.
-Reason: Descriptor compatibility cannot establish a criterion's repair history or permission to start a new allowance. Assigning aggregate attempts to criteria or silently starting fresh would invent authorization and could erase retained failures.
-
-## [2026-10-14] Projection writes serialize retained revision checks
-Context: Serial repair projections follow database commit. Concurrent recovery or delayed writers can attempt to replace a newer retained projection.
-Decision: Hold a workflow-scoped file lock across retained revision validation and atomic replacement. Refuse older or conflicting same-revision writes. Diagnose malformed-cache recovery and regenerate from validated committed state without replaying a serial mutation.
-Reason: Atomic replacement alone cannot protect the comparison against another writer. The workflow artifact remains authoritative, so cache recovery must preserve committed counters, outcomes and workflow advancement.
-
-## [2026-10-14] Legacy adoption pins historical producer output
-Context: Archived comparison fixtures normalize digests, and restoreDigests uses the live strategy registry. Reconstructing those fixtures also gave old standalone executions a monitor slot that their original producers did not select.
-Decision: Capture unnormalized descriptors through the production strategies and codec at immutable commits 8527efaee41cfc2beb316be9b6eec4be017f9deb, ef73b9043f4e3e8689237139314be1e17628461c and 132424dc2fda836b1f78ddd3e294a3a097de8d5a. Pin all nine composition/revision shapes and policy digests in AcceptanceCriterionRepairHistoricalTuples. The serial-adoption fixtures record commits, tree identities, capture source, commands and descriptor hashes. Their capture.py reproduces every descriptor without normalized fixtures or current-policy restoration. The callable adoption operation validates these historical shapes directly, including the older standalone shape without monitor. S2 owns admission and executor routing for that historical shape before serial activation. Accept only current phase output or the explicit previous-version migration, and retain its original version and bytes in the receipt.
-Reason: Historical producer output establishes the permitted descriptor definitions. Each actual retained workflow still has to prove its own stopped ownership, pristine history, source and checkpoint. Fixtures never stand in for that history. Gate-command identity and settings remain bound to the acquired execution's admitted inputs. Ambiguous process takeover cannot prove that the previous owner stopped.
-Superseded by: Historical aggregate attempts cannot authorize criterion budgets (2026-10-14)
-
 ## [2026-10-14] Serial acceptance commits use a scoped acquired worker
 Context: SKILL-426's first subtask had domain records but no transaction owner coupling criterion outcomes to workflow evidence. A domain success could otherwise become visible before the database accepted it.
 Decision: The worker coordinator issues a callback-scoped capability carrying its admitted execution and private lease identity. Serial writes check that capability, expected revision, current criterion, reservation and authored source inside one required write transaction. The same transaction stores serial state, phase records, ledger, implementation evidence and workflow advancement. Callers receive detached committed facts after the transaction returns. Filesystem projection follows commit; projection failure returns committed-with-projection-failure and recovery regenerates only that projection.
@@ -39,7 +7,6 @@ Reason: The workflow artifact row remains authoritative. Separate authoritative 
 Context: Historical audit revisions 1 and 2 can normalize during execution admission. Comparing raw artifacts against the normalized row would reject supported pristine runs or encourage dropping original evidence.
 Decision: The acquired worker retains the raw snapshot and the admitted snapshot. Adoption inspects the former and fences against the latter, plus the active owner, source and checkpoint. Only the explicit nine composition/revision tuples with pristine discovery evidence admit a separate provenance receipt. The receipt retains original artifacts and prospective budget semantics. Current descriptor normalization stays intact. No historical serial attempts are invented, and this subtask does not activate audit revision 4.
 Reason: Compatibility of a descriptor alone cannot prove pristine history. Retaining both snapshots allows exact historical inspection without restoring an obsolete descriptor into the live execution.
-Superseded by: Historical aggregate attempts cannot authorize criterion budgets (2026-10-14)
 
 ## [2026-10-12] Validation owns checks, commit_push only publishes
 Context: SKILL-423 completed validation, then commit_push selected an Ubuntu CI dependency-install command and ran it on CachyOS. The operator required commit_push to commit and push without another gate.
@@ -279,21 +246,18 @@ Context: SKILL-388 blocked after one repair because audit reported AC-006 where 
 Decision: A remaining list that shrinks after repair always relaunches repair. An unchanged, replaced, or grown list relaunches repair at most twice per subtask workflow; the third such round blocks. Each allowed non-shrinking round appends an `audit_non_shrinking_round` continuation to the phase ledger, and the cap counts those entries, so it survives process restarts and an operator audit retry does not reset it.
 Reason: Each audit reinspects every criterion, so one non-shrinking round can be fresh evidence rather than a stalled repair. The `audit_repair` edge has no per-edge cap, so the bounded budget keeps the loop finite once shrinking stops.
 Revisit when: the `audit_repair` edge gains a declared per-edge cap, or in-memory phase runs start running audit (their records keep no ledger, so the cap would never fire).
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-17] Audit repair cycles stay in one session and remaining text carries a reason
 Context: Auditors inspected once, emitted remaining ACs with no why, and the runtime relaunched. Three runtime relaunches would recreate the remaining-criteria storm.
 Decision: The audit briefing asks for up to three repair cycles inside the same agent session. Remaining-criteria text that is not `[]` includes a reason per leftover criterion. That briefing is runtime-owned and identical for every dominant platform pack; packs do not author remaining-criteria settlement. The runtime still treats any non-empty remaining text as unstructured prose: no schema on that list, one outer remaining-criteria retry, then block when the text is unchanged.
 Reason: Cycle count and reasons are instructions to the agent. Enforcing them in the envelope would be a new contract. Relaunching the process is the bounded outer retry, not the inner loop.
 Revisit when: remaining-criteria settlement grows a structured per-cycle field.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-17] Remaining-criteria audit retries repair beyond implement owned paths
 Context: Implement can checkpoint a narrow `scoped_owned_paths` list. Audit then treated that list as a write allowlist, re-emitted the same remaining ACs, and the runtime relaunched with the old checkpoint forever.
 Decision: Remaining-criteria text is a focus hint on a fresh audit session that may edit any files those criteria require. Audit extends the owned-path inventory and checkpoints those writes before the next round. The same remaining list as the prior session blocks.
 Reason: The remaining-AC loop is repair, not a frozen re-read of implement. Identical leftover text with no progress is a stall, not another session.
 Revisit when: remaining-criteria settlement is a topology edge with a declared per-edge cap.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-16] commit_push has no extra-files category
 Context: The commit_push briefing told agents never to list `.feature-specs/` in `changed_paths`, and finalisation dropped those paths from the staged set. Agents then emitted two envelopes to "fix" the list, which blocked a non-retrying phase. Spec moves such as `.feature-specs/done/` were left uncommitted.
@@ -350,7 +314,6 @@ Decision: The acceptance-audit slot owns read-only `audit` and mutating `audit_i
 Reason: Inspection and implementation need different configured models and separate resumable attempts. The repair step has a distinct id because code review already owns `implement_fix` and its review-specific receipts. The repair step precedes audit in the internal topology so the existing backward-edge machinery can reopen both steps without adding another state owner. Forward traversal skips this loop-only repair step until audit reports gaps.
 
 Revisit when: Audit requires structured per-criterion findings or a different repair budget.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-29] Audit repair requires decreasing criterion counts
 
@@ -359,16 +322,18 @@ Decision: Resolve remaining finding identities through the saved acceptance crit
 Reason: SKILL-384 repeated capability gaps while changing descriptions and label forms. The previous parser counted standalone S3 labels as one text item and allowed equal counts with different IDs. A suffix completion check also accepted a refusal ending in the marker text. Require the marker as a complete final content line and retain the independent fresh audit after repair.
 
 Superseded by: Audit repair allows two non-shrinking rounds, 2026-10-01. Audit reports findings while the runtime owns repair admission, 2026-10-02.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-29] Unfinished audit repairs block and resume with saved work
+
 Context: SKILL-384 launched eight more repair agents after partial final responses. The incomplete-work branch ignored the step's single-session policy. It saved reports but the audit-repair prompt omitted them. A no-progress audit block also retained the older accepted report instead of the latest valid findings.
+
 Decision: Persist partial repair output and block with needs_user_action when a single-session step ends unfinished. Render saved audit-repair reports on explicit resume. Persist the latest normalized audit output when progress blocks. An operator-authorized audit retry establishes one fresh baseline after criterion identity validation. The normal completion ledger consumes that authorization, so later automatic rounds still require decreasing counts.
+
 Reason: An explicit retry must receive current findings and previous edits. Automatic fresh sessions without those reports repeat work before audit can measure progress. The existing phase records, attempt history, retry artifact, and ledger own this state; no new durable fields are needed.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
+
 ## Audit repair continuation after a partial response
+
 An audit repair response can describe applied edits and unfinished production work without an external blocker. The repair policy continues incomplete output and retryable failures in the same phase under the existing retry budgets. The runtime retains repair reports and applied edits for the next continuation session. A completed repair still requires the final completion marker before a new audit. The audit remains a single read-only pass, and an unchanged or larger remaining-criterion list still blocks. A needs_user_action or non_retryable_policy_conflict disposition still stops for operator action. This supersedes the one-session repair stop described above.
-Superseded by: Serial repairs retain authored focus and unsuccessful budgets (2026-10-14)
 
 ## [2026-09-30] Validation repairs all checks in one agent session
 
@@ -381,15 +346,38 @@ Reason: A formatting recovery cannot measure repair progress. Tests, static anal
 Revisit when: The agent launcher supports a governed continuation inside an existing live session.
 
 ## [2026-10-02] Audit reports findings while the runtime owns repair admission
+
 Context: SKILL-398's audit blocked after AC-005 remained open following a partial repair. Its prompt required decreasing criterion counts even though the runtime already allowed two non-shrinking rounds. The agent's blocked output bypassed that runtime allowance.
-Decision: A finished audit inspection reports completed status and the current production gaps, including repeated or larger remaining lists. The runtime alone applies progress comparison and durable retry limits. The audit agent reports blocked status only when missing or unreadable criteria or an external dependency prevents inspection. Previous reports' retry decisions do not override the current runtime policy. A completed inspection with open criteria routes to repair. Review admission still requires the existing completion parser to establish that no production criteria remain. Audit stays read-only, repair completion requires its existing marker, and runtime failures retain their existing terminal handling.
+
+Decision: A finished audit inspection reports completed status and the current production gaps, including repeated or larger remaining lists. The runtime alone applies progress comparison and durable retry limits. The audit agent reports blocked status only when missing or unreadable criteria or an external dependency prevents inspection. Previous reports' retry decisions do not override the current runtime policy.
+
+A completed inspection with open criteria routes to repair. Review admission still requires the existing completion parser to establish that no production criteria remain. Audit stays read-only, repair completion requires its existing marker, and runtime failures retain their existing terminal handling.
+
 Reason: A criterion can require repairs at several consumers before its count decreases. Agent instructions must not replace the runtime's bounded repair policy with a second stopping rule. The existing ledger and progress owner continue to enforce the limit without new durable state.
+
 Evidence: Historical session blocks and local telemetry include SKILL-384's one-edge cap and growing criterion list, SKILL-389's satisfied rationale rejected as an open finding, SKILL-352's repeated remaining text, schema-invalid audit output, lost durable recovery authority, and checkpoint refusal before review. The change retains progress, parsing, recovery, checkpoint and process-failure enforcement. Existing audit regression tests exercise those boundaries, including captured SKILL-389 and SKILL-393 reports.
-Superseded by: Prose verdicts separate source acceptance from quality evidence (2026-10-14)
+
 ## 2026-10-03: Plan acceptance-criteria repairs before execution
-Context: A repair session can receive several independent production gaps under one criterion and spend its attempts on incidental changes while leaving the required behavior missing.
-Decision: The acceptance-audit slot now owns read-only `audit_plan_fix` between inspection and implementation repair. Its reasoning session plans each reported gap with production paths, ordered changes, dependencies, and closure evidence. The runtime validates criterion coverage and item fields before persisting the plan. `audit_implement_fix` executes that persisted plan. Ordinary phase outputs, handoffs, and the existing audit repair ledger own persistence and resume. The audit strategy revision changes to 2 so admission cannot silently reinterpret an older execution descriptor. The historical interpreter retains the original audit and repair rules and recognizes repair planning as a loop-only step.
-Reason: Planning must finish before repair mutates source, and interruption must retain the plan that justified the repair. This changes the repair loop, not its retry budget, test exclusion, or full-list re-audit requirement. It follows A1, A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts and expected rejection results.
+
+Context: A repair session can receive several independent production gaps under
+one criterion and spend its attempts on incidental changes while leaving the
+required behavior missing.
+
+Decision: The acceptance-audit slot now owns read-only `audit_plan_fix` between
+inspection and implementation repair. Its reasoning session plans each reported
+gap with production paths, ordered changes, dependencies, and closure evidence.
+The runtime validates criterion coverage and item fields before persisting the
+plan. `audit_implement_fix` executes that persisted plan. Ordinary phase outputs,
+handoffs, and the existing audit repair ledger own persistence and resume. The
+audit strategy revision changes to 2 so admission cannot silently reinterpret an
+older execution descriptor. The historical interpreter retains the original audit and repair
+rules and recognizes repair planning as a loop-only step.
+
+Reason: Planning must finish before repair mutates source, and interruption must
+retain the plan that justified the repair. This changes the repair loop, not its
+retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
+A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
+and expected rejection results.
 
 ## [2026-10-10] Owed repair findings continue the round
 

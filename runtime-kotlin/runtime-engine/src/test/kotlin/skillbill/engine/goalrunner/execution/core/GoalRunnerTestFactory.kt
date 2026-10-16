@@ -364,7 +364,8 @@ internal fun testGoalRunner(
   )
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private val dbPath = Path.of("/fake/goal-activity-stamp.db")
 

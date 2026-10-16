@@ -71,7 +71,7 @@ class FakeDatabaseSessionFactory(
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unit())
 
   override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
-    OwningTransactionResult.ActiveSession
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private fun unit(): UnitOfWork =
     object : UnitOfWorkDefaults() {

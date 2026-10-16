@@ -12,13 +12,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import dev.skillbill.tray.core.domain.model.TrayStatus
 
 object TrayIconRenderer {
   @Composable
-  fun Content(icon: Painter, state: TrayStatus, running: Int, showOverlay: Boolean) {
+  fun Content(state: TrayStatus, running: Int, showOverlay: Boolean) {
+    val icon = painterResource("icons/skill-bill.svg")
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       Image(icon, contentDescription = null, modifier = Modifier.fillMaxSize())
       if (showOverlay && state == TrayStatus.RUNNING && running > 0) {

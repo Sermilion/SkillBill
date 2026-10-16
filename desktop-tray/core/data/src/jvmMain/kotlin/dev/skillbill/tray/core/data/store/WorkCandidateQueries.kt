@@ -11,6 +11,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityFamily
 import skillbill.idestatus.model.IdeStatusRepositoryIdentityPolicy
 import skillbill.idestatus.model.IdeStatusRepositoryIdentitySource
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal data class WorkCandidateRow(val id: String, val sort_time: String, val deadline: String?)
 internal data class WorkCandidateQuery(val sql: String, val roomQuery: RoomRawQuery)
@@ -37,6 +38,17 @@ internal fun candidateQuery(section: WorkSection, cutoff: String, through: Strin
     HistoryFilter.GOALS -> "family = 'goal'"
     HistoryFilter.PHASES -> "family <> 'goal'"
   }
+  val goalPhaseFilter = if (section in setOf(WorkSection.PHASES, WorkSection.NEEDS_YOU)) """
+        AND NOT EXISTS (
+          SELECT 1 FROM standalone_phase_status phase JOIN goals goal ON goal.repository = phase.repository_identity
+          WHERE candidate.family = 'phase' AND phase.invocation_id = candidate.id
+            AND phase.phase_id IN ('${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN}', '${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS}')
+            AND (goal.finished_at IS NULL OR julianday(candidate.started_at) <= julianday(goal.finished_at))
+            AND goal.repository <> '' AND goal.repository = candidate.repository
+            AND TRIM(candidate.issue_key) <> ''
+            AND UPPER(TRIM(goal.issue_key)) = UPPER(TRIM(candidate.issue_key))
+        )
+  """.trimIndent() else ""
   val superseded = """
 EXISTS (
         SELECT 1 FROM standalone_phase_status newer
@@ -48,7 +60,7 @@ EXISTS (
       )
   """.trimIndent()
   val sql = """
-    WITH observation(at) AS (SELECT ?), candidates AS (
+    WITH observation(at) AS (SELECT ?), goals AS (
       SELECT g.parent_workflow_id AS id, g.first_started_at AS started_at,
              COALESCE(json_extract(c.control_state_json, '$.goal_completed_at'),
                CASE WHEN g.status IN ('completed', 'abandoned') THEN g.state_entered_at END) AS finished_at,
@@ -65,6 +77,8 @@ EXISTS (
       LEFT JOIN ide_status_workflow_execution e ON e.execution_id = (
         SELECT x.execution_id FROM ide_status_workflow_execution x WHERE x.workflow_id = g.parent_workflow_id
         ORDER BY length(x.run_sequence) DESC, x.run_sequence DESC LIMIT 1)
+    ), candidates AS (
+      SELECT * FROM goals
       UNION ALL
       SELECT w.workflow_id, w.started_at,
              w.finished_at,
@@ -116,8 +130,9 @@ EXISTS (
       WHERE NOT $superseded
     ), eligible AS (
       SELECT id, ${instantOrderingKey(ordering)} AS sort_time, NULLIF(deadline, '') AS deadline
-      FROM candidates
+      FROM candidates candidate
       WHERE $condition AND $familyCondition AND julianday(started_at) <= julianday(?)
+        $goalPhaseFilter
         AND (? = '' OR instr(lower(repository || ' ' || issue_key || ' ' || branch), lower(?)) > 0)
     )
     SELECT id, sort_time, deadline FROM eligible

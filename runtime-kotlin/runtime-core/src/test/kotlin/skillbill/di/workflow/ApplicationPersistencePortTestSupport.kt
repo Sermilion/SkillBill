@@ -33,6 +33,8 @@ import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.missingCompositionLayer
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
 import skillbill.learnings.model.CreateLearningRequest
@@ -257,7 +259,7 @@ internal class FakeDatabaseSessionFactory(
   }
 
   override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
-    OwningTransactionResult.ActiveSession
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private fun fakeUnitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
@@ -1420,10 +1422,16 @@ internal fun testPhaseRecorder(database: DatabaseSessionFactory) =
   featureTaskRuntimePhaseRecorder(
     database,
     WorkflowStateSchemaValidator(),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(),
+    testWireArtifactValidator(),
+    testWireArtifactValidator(),
     Clock.systemUTC(),
     NoopRuntimeDiagnostics,
+  )
+
+internal fun testWireArtifactValidator(): FeatureTaskRuntimeWireArtifactSchemaValidator =
+  FeatureTaskRuntimeWireArtifactSchemaValidator(
+    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+    ContractFeatureTaskRuntimePhaseOutputMigration(),
   )
 
 internal fun openTaskRuntimeWorkflow(database: DatabaseSessionFactory): String =

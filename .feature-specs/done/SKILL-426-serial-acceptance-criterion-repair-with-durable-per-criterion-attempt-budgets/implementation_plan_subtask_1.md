@@ -2,55 +2,86 @@
 
 ## Boundary ownership
 
-The executable spec is spec_subtask_1_durable-serial-repair.md. This checklist follows the operator's prose correction of 2026-10-14. Earlier completion remains recorded; subtask 2 reconciles incompatible implementation already produced. This file does not authorize reopening, resetting or resuming a workflow.
+The executable spec is spec_subtask_1_durable-serial-repair.md. This companion is a checklist, not an additional consumer projection. The current phase briefing requires three subtasks and overrides the parent's obsolete two-subtask allocation. No parent text or acceptance criterion changes.
 
-| Work | Starting owners |
+Use the following digest-backed owners; confirm proposed filenames during implement rather than treating them as existing source.
+
+| Work | Existing owners and proposed additions |
 | --- | --- |
-| Criterion identity/order | runtime-domain workflow/taskruntime/model/audit/FeatureTaskRuntimeAcceptanceCriteria; runtime-engine featuretask/slot/audit/AcceptanceAuditCatalog |
-| Private accounting | runtime-domain workflow/taskruntime/model/audit/AcceptanceCriterionRepairState, simplified to runtime-owned facts |
-| Required settlement | runtime-engine featuretask/persist/acceptance/AcceptanceCriterionRepairPersistence; persist/RuntimeOwnedPersistenceBoundary; phase/record/FeatureTaskRuntimePhaseStateRecorder |
-| Acquired ownership | featuretask/lifecycle/core/FeatureTaskRuntimeWorkerCoordinator and existing run admission |
-| Recovery | Existing durable workflow artifacts and projection recovery, without a separate agent contract |
+| Authored identity/admission | runtime-domain workflow/taskruntime/model/audit/FeatureTaskRuntimeAcceptanceCriteria.kt; runtime-engine featuretask/slot/audit/AcceptanceAuditCatalog.kt; proposed domain AcceptanceCriterionRepairState.kt and admission/topological owner |
+| Wire model | runtime-domain workflow/taskruntime/artifact/AcceptanceCriterionRepairStateWire.kt; runtime-contracts contracts/workflow/featuretask/AcceptanceCriterionRepairPayloadKeys.kt and owning versions |
+| Artifact/schema admission | DurableWorkflowArtifactKeys/Family; FeatureTaskRuntimeWireArtifactKind; runtime-infra/contracts FeatureTaskRuntimeWireArtifactValidator, locator/FeatureTaskRuntimeSchemaPaths and build.gradle.kts governedResources |
+| Transactions | runtime-engine featuretask/phase/record/FeatureTaskRuntimePhaseStateRecorder.kt; model/phase/FeatureTaskRuntimePhaseRecordRequest.kt; persist/FeatureTaskRuntimeWorkflowPersistence.kt and RuntimeOwnedPersistenceBoundary.kt; proposed adjacent AcceptanceCriterionRepairPersistence |
+| Ownership | featuretask/lifecycle/core/FeatureTaskRuntimeWorkerCoordinator.kt; model/execution/AdmittedFeatureTaskRuntimeExecution.kt; lifecycle/execution/AdmittedExecutionRecheck.kt; runtime-ports workflow worker/state repositories through UnitOfWork |
+| Adoption | featuretask/lifecycle/execution/FeatureTaskRuntimeExecutionAdmission.kt; slot/audit/planning/AuditPlanningExecutionPlanMapping.kt; raw records before AcceptanceAuditResumeRules normalization |
 
-Paths abbreviate runtime-kotlin module source roots. Named owners are starting points, not a reason to preserve an unnecessary abstraction.
+Path rows abbreviate the full runtime-kotlin module source roots established by the digest. They do not replace repository architecture ownership.
 
 ## Ordered checklist
 
-1. Retain authored criterion identity, full text and spec order. Keep composite criteria intact. Agents receive this context in prose and do not reproduce an exact catalog response.
-2. Retain only runtime accounting needed for current focus, live cycle/outcome, failures, final-audit requirement and references to existing prose. Drop graph/disposition/evidence-receipt requirements.
-3. Reserve and settle under acquired ownership in the existing transaction, coupling phase, ledger, attempts and workflow changes. Return accepted facts after commit only.
-4. Preserve counts and live cycles on restart. Duplicate outcomes count once. Projection regeneration does not repeat domain mutations.
-5. Preserve historical aggregate attempts and unknown attribution. No descriptor capture, fixed historical allowlist or adoption receipt is required. Do not reconstruct per-criterion failures or silently clear known counts.
-6. Reuse meaningful domain/production-storage regressions. Subtask 2 removes discarded contract code and its dedicated tests while preserving actual accounting/ownership regressions.
+1. Resolve branch/worktree policy through the first mutating runtime owner, preserve unrelated/incident evidence, and read required architecture/code/observability guidance. The manifest's main base is an assumption, not a new git observation.
+2. Define typed catalog, graph, source/validation axes, queue/current position, revision, admission/tree identities, reservation/outcome and final proof. Own wire tokens/keys once. Keep original composite AC text and identity.
+3. Implement pure admission, stable topology and serial transition policy including monotonic failure counters and final-only reopening. Bound display collections without deriving authority from pruned history.
+4. Author four strict 0.1 Draft 2020-12 schemas first; register resources, kinds, families, validators, coherent typed rejection and version parity. Keep existing outer envelopes unless their strict shape actually changes.
+5. Add narrow acquired-owner transaction requests/operations in existing engine persistence. Fence token/generation/lease and expected serial revision/AC/reservation/catalog/tree within the transaction, couple phase/ledger/workflow changes and publish committed facts only afterward.
+6. Make outcome replay once-only and projection recovery projection-only. Preserve critical accepted identities, totals and closure/reopen provenance. Refuse ambiguity or capacity before effects, never truncate authoritative evidence to display bounds.
+7. Implement the explicit stopped-pristine adoption allowlist and provenance without activation. Preserve original descriptors/evidence and require fresh structured discovery before first reservation. Do not broaden semantic mapping based on topology.
+8. Author the obligations below with existing domain/contract tests and production isolated SQLite/public-port fixtures. Deliver domain/persistence operations together, not a contract-only stub. Leave strategy activation to subtask 2.
+
+## Legacy allowlist decision
+
+The allowlist contains standalone revision 1, standalone revision 2, standalone revision 3, goal-child-build revision 1, goal-child-build revision 2, goal-child-build revision 3, goal-child-validate revision 1, goal-child-validate revision 2 and goal-child-validate revision 3 archived audit compositions. Each entry must match exact archived descriptor, historical effective-policy/cap digests, skeleton and expected source/catalog/checkpoint identity. Only current phase-output 0.7 or the existing explicit 0.6 migration is admissible. Existing compatible handoff/persistence versions are admitted through their exact validators, not coerced to new shapes.
+
+The digest supplies modes/revisions and fixture owners, not literal historical digest values. Implement must bind each entry to preserved archived evidence using ExecutionPlanAdmissionFixture and existing reconstruction. If an entry cannot be proven, refuse that entry with typed provenance diagnostics; do not invent a digest or admit a wildcard. Physical stop, no prior source repair, no ambiguous aggregate repair history and no in-flight/no-change operator retry contradiction are mandatory. Revision 4 activation belongs to subtask 2.
 
 ## test_obligations
 
-Name the realistic bug before adding a test and reuse existing coverage where it proves the outcome.
+Each row names the realistic bug before any test is authored. Reuse existing tests when they already assert the outcome. Parameterize distinct refusal branches within one admission boundary suite, rather than duplicate literals or pin internal mapping structure.
 
-| Realistic bug | Observable assertion | Criteria |
+| Named realistic bug | Observable assertion and fixture | Criteria |
 | --- | --- | --- |
-| Success or reopening grants another full allowance | Previous failures survive closure and regression; third failure blocks | S1-003 |
-| Restart or duplicate delivery charges twice or resets failures | Reopened storage recovers the same cycle and count; replay leaves count unchanged | S1-005 |
-| A stale worker settles after takeover | No accounting, phase, ledger or workflow advancement by stale ownership | S1-004 |
-| A late write failure leaves a visible successful closure | Coupled state rolls back and no successful result escapes | S1-004 |
-| Projection regeneration repeats committed outcome | Display recovers without another failure or workflow transition | S1-005 |
+| Initial discovery omits one AC or splits a composite into independent budgets | Complete-catalog admission rejects omission/duplicate/unknown identity and retains one composite identity/original text; pure domain admission boundary | AC-001, AC-006; S1-001 |
+| A source repair follows an invalid or validation-unavailable prerequisite | Graph admission rejects unknown/self/cycle/unavailable-validation edges and returns stable ordinal ordering for independent ties with admitted source-satisfied facts | AC-001; S1-002 |
+| Success or reopening clears prior failures or advances two criteria | Pure transition outcomes retain totals/history and advance only current AC; empty queue/final-only reopen/exhausted refusal are observable results | AC-003, AC-005; S1-003 |
+| A malformed or wrong-version artifact bypasses its canonical validator | Actual packaged validators reject unknown/missing keys, invalid tokens/versions and semantic coverage/reservation/graph incoherence; parity pins each schema ID/version | AC-008; S1-006 |
+| A restarted database grants a fresh budget or repeats an outcome | Production SQLite reopen preserves queue/reservation/totals and identical outcome replay leaves revision/closure/count unchanged; conflicting digest refuses | AC-004; S1-004/S1-005 |
+| A stale owner or stale AC/revision/reservation commits after takeover | Public-port production SQLite transactions reject stale token/generation/lease and each expected-state mismatch, leaving workflow/phase/ledger/serial evidence unchanged | AC-004; S1-004 |
+| A late coupled write failure leaves a successful closure or phase completion published | Inject failure at the existing required persistence seam against production SQLite; observe rollback of serial/phase/ledger/workflow and no success publication | AC-004; S1-004/S1-005 |
+| Projection regeneration repeats committed failure or closure | Commit succeeds then projection write fails; regeneration from committed revision restores projection without new reservation/outcome/counter/workflow mutation | AC-004; S1-005 |
+| Unsafe legacy broad repair is adopted as a pristine zero-budget run | Exact stopped-pristine tuple succeeds with separate provenance/original evidence; prior repair/in-flight/contradictory/policy-digest mismatch or unstopped ownership refuses without evidence loss | AC-008; S1-007 |
+| Required persistence swallows cancellation or returns an empty state after refusal | Existing required-write cancellation/refusal regressions retain propagation and bounded attributable failure facts through the new serial seam | AC-004, AC-010; S1-008 |
 
-Use existing isolated production SQLite/public-port fixtures with disposable homes and injected time. Retain cancellation and real past-bug coverage. No audit-schema, graph-validation, historical-tuple or exact-prose test is added.
+SQLite fixtures are SqliteTestDatabaseFixtures.establishTemporarySchemaReadiness, ensureTestDatabase and sqliteSessionFactoryForTests with explicit disposable home/database/environment and injected Clock. Consumer tests use public ports, not sqlite.core. Existing WorkflowPersistenceSeamTest, ExecutionPlanWriteGuardTest, AuditPlanningExecutionPlanMappingTest and its admission fixture are starting points, not a mandate to duplicate their tests.
 
 ## Coverage and handoff
 
-S1-001/S1-002 cover identity/order and selection. S1-003 covers accounting/final-audit foundations. S1-004/S1-005 cover transaction/recovery. S1-006/S1-007 preserve prose and historical evidence without new contracts. S1-008 carries behavioral coverage and diagnostics. Subtask 2 connects the running executor and removes incompatible code from the prior design.
+S1-001/S1-002 cover all initial catalog/dependency facts of AC-001. S1-003 defines accounting/final/source-validation operations for AC-003/AC-005/AC-006, with activation in subtask 2. S1-004/S1-005 cover authoritative AC-004. S1-006/S1-007 cover new artifact and legacy AC-008. S1-008 carries their AC-009 tests and AC-010 architecture/diagnostics. Read-only observations feed subtask 2, then subtask 3. Review approval, command execution evidence, commits and history belong to their runtime phases, not this checklist.
 
 ## Validation ownership
 
-Respecification executes no runtime checks. Existing build, review and project validation phases retain their normal ownership. Tests use disposable data. Earlier test results are historical evidence, not checks of the corrected design.
+No execution here. tests_executed is empty. Implement authors tests; audit reads source. Only build owns the pack build command. Validate discovers and runs required full repository/pack checks, packaged schema/parity, architecture/repo and isolated SQLite regressions, then repairs failures. Required architecture guards and real past regressions cannot be dropped for test minimalism. Runtime owns later exact-tree review/history/commit/PR/monitor.
 
-## Direct repair evidence, 2026-10-14
 
-The following record is preserved verbatim as historical evidence of work under the superseded structured-contract design. It supplies no current requirement for adoption allowlists, schemas or strategy revision 4 and does not prove the revised criteria. No checks described below were rerun during respecification.
+## Direct repair verification, 2026-10-14
 
-> The earlier claim that S1-001 through S1-008 were all satisfied is withdrawn. The former allowlist reconstruction did not prove the exact historical standalone shape. Subtask acceptance requires a fresh runtime audit against the corrected ownership boundary. Strategy revision 4 and executor activation remain in subtask 2; reporting remains in subtask 3.
->
-> The nine descriptors under `runtime-engine/src/test/resources/featuretask/serial-adoption/` now come from the unnormalized production producers at the immutable commits in `provenance.json`. The checked-in `capture.py` rebuilt all three commits in disposable checkouts and matched every descriptor's SHA-256 identity. It uses neither normalized archives nor current-policy reconstruction. Original workflow history is separate evidence and remains mandatory at adoption.
->
-> Direct repair also addresses prior-owner stop proof, explicit 0.6 output admission with original-version preservation, projection locking, stale/conflicting projection refusal and corrupt-cache recovery. Focused adoption, persistence and projection tests passed. Full repository checks belong to the direct repair's validation evidence; their success does not mark any criterion accepted or reset runtime budgets. The runtime owns the next audit, durable subtask completion and commits.
+The direct repair completes S1-001 through S1-008. Audit strategy revision 4, runner activation and reporting remain assigned to subtasks 2 and 3.
+
+| Criteria | Implementation and evidence |
+| --- | --- |
+| S1-001, S1-002 | Typed admission retains authored composite identities and explicit source/validation facts. Domain tests prove prerequisite ordering and refusal of deferred unavailable prerequisites. |
+| S1-003 | Reservations, awaiting-verification, once-only outcomes, retained unsuccessful totals and final-only reopening live in the domain aggregate. Empty discovery requires final proof; conflicting final digest reuse is refused. Domain restore and wire admission share history coherence rules. |
+| S1-004, S1-005 | Acquired worker capability and one required transaction fence owner and expected state, couple serial/phase/ledger/attempt/workflow writes and return committed facts. Production SQLite tests prove takeover/escaped-capability refusal, stale revision/source refusal, restart replay, conflicting replay refusal, coupled rollback and no closure publication after a failed commit. Projection failure retains committed state; recovery regenerates the projection without another transition. |
+| S1-006 | All four 0.1 schemas have strict shapes, owning versions/keys/kinds/families, packaged resources, typed rejection and parity/rejection tests. Ordinary artifact patches refuse serial-family writes and validate retained artifacts. Run entry validates retained state against the authored catalog and distinguishes absent discovery from legacy history. |
+| S1-007 | Adoption explicitly admits the nine archived composition/revision tuples only after historical compatibility, pristine history, source and Git checkpoint/tree checks. Tests cover all nine tuples and SQLite adoption/replay at standalone revisions 1, 2 and 3. Separate provenance retains original artifacts while the live descriptor remains normalized. |
+| S1-008 | Four domain regressions, six production SQLite persistence regressions and two adoption regressions pass alongside contract tests, existing runtime tests and architecture guards. Cancellation propagates; attributed refusal, rollback, recovery and projection degradation records remain bounded. |
+
+Validation passed in the repair worktree with `./gradlew check detekt spotlessCheck`, `npx --yes agnix --strict .` and `scripts/validate_agent_configs`. The repository validator reports 106 skills, 16 governed add-on files, 9 platform packs and 96 native agents. No guard, baseline, exemption, dependency version or installed runtime changed.
+
+The architecture review applied the section 5 checklist from docs/architecture-guidelines.md.
+
+- A1, A2, A4. Domain owns aggregate policy; engine owns transactions; infrastructure owns schema/filesystem adapters; core binds the purpose-built projection port. Shared keys and projection types have production consumers in multiple modules.
+- A3, A5. New injected collaborators are private. The acquired worker exposes no lease token or repository. Phase-state extension implementations became private members so injection does not expose a collaborator bag. The phase-record forwarder and duplicated map-based state coherence checks were deleted.
+- A6, A7, A8. Governed wire keys and enums retain one owner. Existing typed failure codes cover rejection; cancellation propagates; projection I/O failure reports committed degradation. Time comes from the injected clock.
+- A9, A10, A11, A12. Persistence, domain and artifact responsibilities remain in their owning packages. Regression tests mirror those owners. The worker constructor is engine-scoped, restored state construction stays domain-scoped and wire decoding returns typed state through the governed artifact wrapper.
+- G1 through G7. The full architecture suite passes. No scanner, proving fixture, baseline or exemption was widened. Archived fixture extraction preserves the prior mapping assertions.
+- P1, P2, P3, P5, P6, P7, P8. This review checks the implemented end states and the existing source changes. It preserves the three-subtask bundle and removes duplicate authority instead of relocating it. The repair responds to the supplied production findings and records decisions beside the owners. P4 post-merge verification remains a later runtime-owned step because this repair has not been merged.

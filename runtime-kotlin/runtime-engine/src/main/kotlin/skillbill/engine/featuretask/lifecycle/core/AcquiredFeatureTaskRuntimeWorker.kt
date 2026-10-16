@@ -9,6 +9,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -25,17 +26,13 @@ class AcquiredFeatureTaskRuntimeWorker internal constructor(
 ) {
   @Volatile private var active = true
 
-  internal val currentStepId: String get() = admittedSnapshot.currentStepId
   val workflowId: String get() = ownership.workflowId
   val generation: Long get() = ownership.generation
+  internal val identity: FeatureTaskExecutionIdentity get() = execution.identity
   internal val governedSpecPath: String get() = execution.identity.governedSpecPath
   internal val normalizedIssueKey: String get() = execution.identity.normalizedIssueKey
   internal val repositoryIdentity: String get() = execution.identity.repositoryIdentity
   internal val goalChild: Boolean get() = execution.identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD
-
-  internal fun auditStepIds(): Set<String> =
-    execution.plan.dispatchStrategyByStep
-      .filterValues { it.slot == PhaseSlot.AUDIT }.keys
 
   internal fun ownsAuditStep(phaseId: String): Boolean =
     execution.plan.dispatchStrategyByStep[phaseId]?.slot == PhaseSlot.AUDIT

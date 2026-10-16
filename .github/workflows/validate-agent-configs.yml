@@ -64,7 +64,7 @@ jobs:
           java-version: "21"
 
       - name: Run Kotlin runtime checks
-        run: (cd runtime-kotlin && ./gradlew check)
+        run: (cd runtime-kotlin && ./gradlew check --no-build-cache)
 
       - name: Run agnix
         run: |

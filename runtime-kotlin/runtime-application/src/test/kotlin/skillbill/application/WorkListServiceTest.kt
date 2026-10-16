@@ -151,7 +151,8 @@ private class WorkListDatabase(
   private val workflows: WorkflowStateRepository,
   private val work: List<WorkItem>,
 ) : DatabaseSessionFactory {
-  override fun <T> owningTransaction(block: (UnitOfWork) -> T) = OwningTransactionResult.ActiveSession
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   override fun resolveDbPath(): Path = Path.of("/fake/work-list.db")
 

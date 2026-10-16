@@ -24,6 +24,8 @@ import dev.skillbill.tray.core.domain.model.TrayStatus
 import dev.skillbill.tray.core.domain.model.scaledWindowPixels
 import dev.skillbill.tray.core.ui.rememberEntryViewModelStoreOwner
 import dev.skillbill.tray.core.ui.rememberViewModel
+import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
+import dev.skillbill.tray.core.ui.RepositoryNavigation
 import dev.skillbill.tray.feature.work.TrayAction
 import dev.skillbill.tray.feature.work.TrayEffect
 import dev.skillbill.tray.feature.work.trayHover
@@ -129,7 +131,7 @@ fun main() {
       iconContent = {
         val platform = System.getProperty("os.name").lowercase()
         val nativeState = NativeTrayHost.state(board.trayStatus, board.running)
-        TrayIconRenderer.Content(windowIcon, nativeState.kind, nativeState.running, NativeTrayHost.showsOverlay(platform))
+        TrayIconRenderer.Content(nativeState.kind, nativeState.running, NativeTrayHost.showsOverlay(platform))
       },
       tooltip = if (isLinux) board.trayHover() else tooltip,
       primaryAction = {
@@ -183,7 +185,7 @@ fun main() {
         if (windowOwner.navigator.section == null) {
           SettingsWindow(owner, windowOwner, uiScale)
         } else {
-          MainWindow(owner, windowOwner, uiScale, windowIcon, isMac, trayState.canHideToTray, shellProblem)
+          MainWindow(owner, windowOwner, uiScale, windowIcon, isMac, trayState.canHideToTray, shellProblem, native)
         }
       }
     }
@@ -203,6 +205,7 @@ private fun MainWindow(
   isMac: Boolean,
   canHideToTray: Boolean,
   shellProblem: Problem?,
+  repositoryNavigation: RepositoryNavigation,
 ) {
   val mainWindowState = rememberWindowState(size = DpSize(uiScale.scaledWindowPixels(1060).dp, uiScale.scaledWindowPixels(698).dp))
   val session by owner.transitions.state.collectAsState()
@@ -238,15 +241,17 @@ private fun MainWindow(
       onDispose { window.removeWindowListener(listener) }
     }
     FocusOnRequest(windowOwner, window)
-    SkillBillTheme(uiScale) {
-      DesignWindow(mainWindowState, closeRequest) {
-        SkillBillNavHost(
-          window = windowOwner,
-          session = session,
-          shellProblem = shellProblem,
-          onOpenSettings = { owner.router.dispatch(HostIntent.OpenSettings) },
-          onCloseWindow = closeRequest,
-        )
+    CompositionLocalProvider(LocalRepositoryNavigation provides repositoryNavigation) {
+      SkillBillTheme(uiScale) {
+        DesignWindow(mainWindowState, closeRequest) {
+          SkillBillNavHost(
+            window = windowOwner,
+            session = session,
+            shellProblem = shellProblem,
+            onOpenSettings = { owner.router.dispatch(HostIntent.OpenSettings) },
+            onCloseWindow = closeRequest,
+          )
+        }
       }
     }
   }

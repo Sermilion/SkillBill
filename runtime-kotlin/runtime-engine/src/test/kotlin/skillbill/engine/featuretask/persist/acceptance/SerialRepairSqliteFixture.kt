@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseStateRec
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
@@ -30,6 +31,8 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.AcceptanceCriterionRepairProjectionRequest
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeRunInvariantsRead
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
@@ -159,7 +162,7 @@ internal class SerialRepairSqliteFixture(
         execution.descriptor()
       } else {
         execution.validator.read(
-          ArchivedAuditExecutionPlanFixture.historicalAdoptionArchive(archiveMode, archiveRevision),
+          ArchivedAuditExecutionPlanFixture.legacyAuditPlan(execution, archiveRevision),
           "archive",
         )
       }
@@ -169,24 +172,35 @@ internal class SerialRepairSqliteFixture(
   fun owned(block: (AcquiredFeatureTaskRuntimeWorker) -> Unit) =
     coordinator.runOwned(workflowId, execution.inputs, execution.identity(workflowId)) { _, worker -> block(worker) }
 
-  fun service(db: DatabaseSessionFactory = database): AcceptanceCriterionRepairPersistence {
-    val validator =
-      FeatureTaskRuntimeWireArtifactValidator()
+  fun service(
+    db: DatabaseSessionFactory = database,
+    gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
+  ): AcceptanceCriterionRepairPersistence {
+    val phaseOutputs = ContractFeatureTaskRuntimePhaseOutputMigration()
+    val validator = FeatureTaskRuntimeWireArtifactValidator(execution.validator, phaseOutputs)
     val snapshots = WorkflowStateSchemaValidator()
+    val workflowPersistence = FeatureTaskRuntimeWorkflowPersistence(db, snapshots, validator)
     return AcceptanceCriterionRepairPersistence(
       RuntimeOwnedPersistenceBoundary(db, diagnostics),
-      FeatureTaskRuntimeWorkflowPersistence(db, snapshots),
+      workflowPersistence,
       FeatureTaskRuntimePhaseStateRecorder(
         db,
-        FeatureTaskRuntimeWorkflowPersistence(db, snapshots),
+        workflowPersistence,
         RuntimeOwnedPersistenceBoundary(db, diagnostics),
         validator,
         clock,
       ),
+      validator,
       projection,
       diagnostics,
       clock,
-      source,
+      AcceptanceCriterionRepairLegacyAdoption(
+        execution.codec,
+        execution.compatibility,
+        phaseOutputs,
+        gitOperations,
+        source,
+      ),
     )
   }
 

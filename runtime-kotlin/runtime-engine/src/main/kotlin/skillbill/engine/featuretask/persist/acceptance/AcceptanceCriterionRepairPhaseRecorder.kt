@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.persist.acceptance
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairAuditEvidence
@@ -28,8 +29,10 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDispo
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionValidationObligation
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.audit.originalAcceptanceCriterionAlias
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import java.nio.file.Path
+import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayloadKeys as Keys
 
 @Inject
 class AcceptanceCriterionRepairPhaseRecorder(
@@ -54,41 +57,83 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): Boolean? {
     val scope = session.accounting
     if (!session.worker.ownsAuditStep(phase.phaseId)) return null
-    val state = scope.snapshot
-    val mutation =
-      when {
-        state == null -> {
-          if (phase.phaseId != session.steps.audit) return false
-          discover(scope)
-        }
-        phase.phaseId == session.steps.repair ->
-          when (state.stage) {
-            AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> {
-              val cycle = "${phase.workflowId}:${state.currentCriterionRef}:${state.revision + 1}"
-              AcceptanceCriterionRepairMutation.Reserve(cycle)
-            }
-            AcceptanceCriterionRepairStage.REPAIR_RESERVED -> AcceptanceCriterionRepairMutation.KeepProgress
-            else -> return false
-          }
-        state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED ->
-          AcceptanceCriterionRepairMutation.RequireFinalAudit
-        else -> AcceptanceCriterionRepairMutation.KeepProgress
+    val state = scope.snapshot ?: return true
+    val mutation = startMutation(state, session.steps, phase) ?: return false
+    val committed =
+      if (mutation == AcceptanceCriterionRepairMutation.KeepProgress &&
+        state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
+      ) {
+        true
+      } else {
+        commit(session, phase, mutation)
       }
-    val committed = commit(session, phase, mutation)
     if (committed) scope.acknowledgeStarted(phase)
     return committed
   }
+
+  private fun startMutation(
+    state: AcceptanceCriterionRepairState,
+    steps: AcceptanceCriterionRepairStepRoles,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+  ): AcceptanceCriterionRepairMutation? =
+    when {
+      phase.phaseId == steps.repair ->
+        when (state.stage) {
+          AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> {
+            val cycle = "${phase.workflowId}:${state.currentCriterionRef}:${state.revision + 1}"
+            AcceptanceCriterionRepairMutation.Reserve(cycle)
+          }
+          AcceptanceCriterionRepairStage.REPAIR_RESERVED -> AcceptanceCriterionRepairMutation.KeepProgress
+          else -> null
+        }
+      state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED ->
+        AcceptanceCriterionRepairMutation.RequireFinalAudit
+      else -> AcceptanceCriterionRepairMutation.KeepProgress
+    }
 
   internal fun complete(
     session: AcceptanceCriterionRepairSession,
     phase: FeatureTaskRuntimePhaseStateRequest,
   ): Boolean? {
     val scope = session.accounting
-    val inactive = scope.snapshot == null || !session.worker.ownsAuditStep(phase.phaseId)
+    val inactive = !session.worker.ownsAuditStep(phase.phaseId)
     if (inactive || phase.phaseId == session.steps.planning) return null
-    val state = invocationState(scope, phase)
     val envelope = phase.normalizedOutput?.envelopeWireMap()
-    if (state == null || envelope == null) return false
+    if (envelope == null) return false
+    val state = invocationState(scope, phase) ?: scope.snapshot
+    return if (state == null) {
+      completeDiscovery(
+        session,
+        phase,
+        envelope,
+      )
+    } else {
+      completeExisting(session, phase, envelope, state)
+    }
+  }
+
+  private fun completeDiscovery(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): Boolean {
+    if (phase.phaseId != session.steps.audit) return false
+    if (gitOperations.repositoryFingerprint(session.root).let { !it.ok || it.value.isBlank() }) return false
+    val mutation = discover(session.accounting)
+    return commit(
+      session,
+      phase,
+      mutation,
+      CommitContext(auditEvidence = auditEvidence(mutation, envelope), expectedState = null),
+    )
+  }
+
+  private fun completeExisting(
+    session: AcceptanceCriterionRepairSession,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+    state: AcceptanceCriterionRepairState,
+  ): Boolean {
     val prose = auditProseValue(envelope) ?: phase.outputArtifact.orEmpty()
     val checkpoint =
       gitOperations.repositoryFingerprint(session.root).takeIf { it.ok && it.value.isNotBlank() }?.value
@@ -110,7 +155,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         session,
         phase,
         mutation,
-        expectedState = state,
+        CommitContext(auditEvidence(mutation, envelope), expectedState = state),
       )
     } ?: false
   }
@@ -132,6 +177,12 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val checkpoint: String,
     val satisfied: Boolean,
     val clarification: Boolean,
+  )
+
+  private data class CommitContext(
+    val auditEvidence: AcceptanceCriterionRepairAuditEvidence? = null,
+    val expectedState: AcceptanceCriterionRepairState? = null,
+    val attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
   )
 
   private fun completionMutation(
@@ -266,16 +317,17 @@ class AcceptanceCriterionRepairPhaseRecorder(
         kind,
         prose,
       )
-    return commit(
-      session,
-      phase,
-      AcceptanceCriterionRepairMutation.Outcome(outcome),
+    val attemptStatus =
       if (kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE) {
         FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
       } else {
         FeatureTaskRuntimeImplementationAttemptStatus.BLOCKED
-      },
-      expectedState = state,
+      }
+    return commit(
+      session,
+      phase,
+      AcceptanceCriterionRepairMutation.Outcome(outcome),
+      CommitContext(expectedState = state, attemptStatus = attemptStatus),
     )
   }
 
@@ -286,7 +338,12 @@ class AcceptanceCriterionRepairPhaseRecorder(
     if (!session.worker.ownsAuditStep(phase.phaseId)) return null
     val state = session.accounting.snapshot ?: return false
     if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED) return false
-    return commit(session, phase, AcceptanceCriterionRepairMutation.RequireFinalAudit, expectedState = state)
+    return commit(
+      session,
+      phase,
+      AcceptanceCriterionRepairMutation.RequireFinalAudit,
+      CommitContext(expectedState = state),
+    )
   }
 
   private fun invocationState(
@@ -320,6 +377,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
         binding.specDigest,
         binding.authoredCriteria,
         criteria,
+        emptyList(),
       ),
     )
   }
@@ -334,7 +392,13 @@ class AcceptanceCriterionRepairPhaseRecorder(
       AcceptanceCriterionRepairStage.REPAIR_RESERVED to
         if (mutation is AcceptanceCriterionRepairMutation.Clarification) steps.audit else steps.repair,
       AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED to
-        steps.audit,
+        if (mutation is AcceptanceCriterionRepairMutation.Outcome &&
+          mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+        ) {
+          steps.planning
+        } else {
+          steps.audit
+        },
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION to
         steps.audit,
       AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED to
@@ -345,8 +409,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     session: AcceptanceCriterionRepairSession,
     phase: FeatureTaskRuntimePhaseStateRequest,
     mutation: AcceptanceCriterionRepairMutation,
-    attemptStatus: FeatureTaskRuntimeImplementationAttemptStatus? = null,
-    expectedState: AcceptanceCriterionRepairState? = session.accounting.snapshot,
+    context: CommitContext = CommitContext(expectedState = session.accounting.snapshot),
   ): Boolean {
     val additionalPhaseId =
       session.steps.repair.takeIf {
@@ -354,7 +417,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
           mutation.outcome.kind == AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
       }
     val scope = session.accounting
-    val state = expectedState
+    val state = context.expectedState
     val result =
       persistence.write(
         session.worker,
@@ -367,8 +430,8 @@ class AcceptanceCriterionRepairPhaseRecorder(
           ),
           mutation,
           phase,
-          phase.normalizedOutput?.envelopeWireMap()?.let(::AcceptanceCriterionRepairAuditEvidence),
-          attemptStatus,
+          context.auditEvidence,
+          context.attemptStatus,
           serialNextSteps(session.steps, mutation),
           additionalPhaseId,
           FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE.takeIf { additionalPhaseId != null },
@@ -383,5 +446,25 @@ class AcceptanceCriterionRepairPhaseRecorder(
       }
     scope.acknowledgeCommitted(committed)
     return true
+  }
+
+  private fun auditEvidence(
+    mutation: AcceptanceCriterionRepairMutation,
+    envelope: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AcceptanceCriterionRepairAuditEvidence? {
+    val requiresEvidence =
+      mutation is AcceptanceCriterionRepairMutation.Discover ||
+        mutation is AcceptanceCriterionRepairMutation.FinalAudit ||
+        mutation is AcceptanceCriterionRepairMutation.Outcome && mutation.outcome.kind in
+        setOf(
+          AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
+          AcceptanceCriterionRepairOutcomeKind.TARGETED_FAILURE,
+        )
+    if (!requiresEvidence) return null
+    val outputs = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]) ?: return null
+    val payload = JsonCodec.anyToStringAnyMap(outputs[Keys.ACCEPTANCE_CRITERION_AUDIT_RESULT]) ?: return null
+    return AcceptanceCriterionRepairAuditEvidence(
+      FeatureTaskRuntimeWorkflowArtifactMap.from(payload),
+    )
   }
 }

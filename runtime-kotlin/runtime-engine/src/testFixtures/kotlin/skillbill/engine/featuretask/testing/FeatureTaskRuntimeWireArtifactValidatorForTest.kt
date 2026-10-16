@@ -1,0 +1,11 @@
+package skillbill.engine.featuretask.testing
+
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
+
+fun featureTaskRuntimeWireArtifactValidatorForTest(): FeatureTaskRuntimeWireArtifactValidator =
+  FeatureTaskRuntimeWireArtifactValidator(
+    FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+    ContractFeatureTaskRuntimePhaseOutputMigration(),
+  )

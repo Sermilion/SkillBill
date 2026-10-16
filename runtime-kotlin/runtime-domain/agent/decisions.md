@@ -3,24 +3,6 @@ Context: SKILL-426 needs per-criterion unsuccessful totals and source closure/re
 Decision: Keep accepted outcome identities, verification revision/tree/checkpoint, source transitions and final audits in the durable repair aggregate. Restore and schema admission share typed coherence rules. Refuse history or UTF-8 capacity exhaustion rather than prune authoritative history. State and adoption artifacts have a 12,582,912-byte limit. Reservation requires another 65,536 bytes of state capacity before repair effects. Audit results retain the 196,608-byte planning limit and repair handoffs the 65,536-byte receipt limit.
 Reason: Reconstructing counters from pruned phase history would reset budgets or lose the evidence needed to reject conflicting replay. Reserving capacity before mutation preserves room to settle one repair result.
 
-## [2026-10-14] Recover review ownership conflicts through the declared fallback
-Context: The operator requires conflicting review lanes to continue through generic review and report an error.
-Decision: Preserve strict ownership classification. A pure resolution policy recovers only typed ambiguous cross-root ownership area by area through the manifest-declared fallback, with all affected paths, hunks and original inputs. Uncontested lanes keep their owners. Resolution returns conflict facts for application error diagnostics. Stack discovery also returns its ownership ties instead of silently selecting fallback.
-Supersession: Production uses recovery instead of blocking on the overlap and same-composition conflicts described in the preceding decision. Low-level rejecting fixtures still prove conflict detection. Invalid manifest and missing fallback contracts remain strict.
-Evidence: Domain recovery regression and application delegated, inline and discovery-tie regressions. No architecture baseline or exemption changes.
-
-## [2026-10-14] Independent review packs keep separate area owners
-Context: A Python capture fixture made a Kotlin review fail because both packs declared the same area.
-Decision: Reconcile manifest-connected composition roots together. Keep independent owners on separate file scopes, merge identical shared fallback owners and reject distinct owners assigning the same path. Within each composition, existing depth and ownership checks remain authoritative.
-Reason: The stack-routing playbook requires delegated review for each independent matching pack. Project-level validation still selects its dominant pack separately.
-Evidence: Domain scope and overlap regressions, application launch/accounting and quality follow-up regressions, shipped-pack serial-adoption fixture reproduction. The repository decision dated 2026-10-14 records the superseded cross-root uniqueness test.
-
-## [2026-10-14] Match review routing content signals at identifier boundaries
-Context: Bare `expect` and `actual` content signals selected KMP for JVM identifiers such as `ExpectedState` and `actualOwner`.
-Decision: Compile literal manifest content signals with Unicode letter, digit and underscore boundaries at identifier endpoints. Path ownership still admits candidates before content breaks ties. Composition and cross-root ownership checks retain their existing behavior.
-Reason: The stack-routing contract requires lexical boundaries. Manifest-driven matching avoids adding a Kotlin parser or platform-specific routing rules.
-Evidence: `ReviewStackRoutingTest` rejects identifier substrings and retains composed ownership for declaration tokens.
-
 ## [2026-10-10] Measure review quality from prose without constraining reviewers
 Context: SKILL-414 needs precision and recall per review lane, but reviewers write prose findings and review completion must not depend on extracting metadata.
 Decision: Keep the scorer and on-demand runner in the runtime-domain test source set and use ReviewParser.parseReview only as a best-effort reader. Prepend placeholder run/session ids when they are missing. Route uninterpretable text and unlocated findings to curation and label the scores partial.

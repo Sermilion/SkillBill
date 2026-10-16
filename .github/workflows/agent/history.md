@@ -1,5 +1,9 @@
 # .github/workflows — Boundary History
 
+## [2026-10-15] SKILL-426 — avoid shared Gradle build-cache contention
+Areas: .github/workflows/validate-agent-configs.yml
+- The self-hosted `validate` job runs `./gradlew check --no-build-cache`. Other workflows can use the Mac mini's shared Gradle build cache at the same time; a cache lock timeout failed Spotless tasks in SKILL-426. The install smoke workflow already bypasses this shared cache for the same reason.
+
 ## [2026-09-22] SKILL-368 subtask 1 — spotless ratchet fetch retired
 Areas: .github/workflows/validate-agent-configs.yml
 - `ratchetFrom("origin/main")` is gone from `Quality.kt`, so the `Fetch origin/main for Spotless ratchet` step has no consumer and is removed. This supersedes `[2026-08-26] spotless-ratchet-origin-main-fetch` and `[2026-09-04] spotless-ratchet-fetch-must-not-shallow`; both entries stay for the record and neither applies to the current workflow.

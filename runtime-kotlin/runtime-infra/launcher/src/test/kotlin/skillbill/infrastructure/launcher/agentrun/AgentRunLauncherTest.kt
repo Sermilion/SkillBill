@@ -35,7 +35,7 @@ class SupervisorProcessLoopEndToEndTest {
     val result =
       JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
         testAgentRunProcessRequest(
-          listOf("sh", "-c", "sleep 0.8"),
+          listOf("sh", "-c", "sleep 2"),
           Path.of(".").toAbsolutePath().normalize(),
         ) {
           timeout = 3.seconds

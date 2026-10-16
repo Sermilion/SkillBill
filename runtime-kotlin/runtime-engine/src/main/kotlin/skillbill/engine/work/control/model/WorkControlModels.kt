@@ -32,6 +32,7 @@ enum class WorkControlRejection {
   TERMINATION_INCOMPLETE,
   AGENT_REQUIRED,
   BRANCH_CHANGED,
+  BRANCH_UNAVAILABLE,
 }
 
 sealed interface WorkControlResult {

@@ -319,7 +319,7 @@ private class FakeTelemetryDatabaseSessionFactory(
   }
 
   override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
-    OwningTransactionResult.ActiveSession
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
 
   private fun fakeUnitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
