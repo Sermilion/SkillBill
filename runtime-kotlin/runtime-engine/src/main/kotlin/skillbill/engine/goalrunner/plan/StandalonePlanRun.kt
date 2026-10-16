@@ -106,7 +106,7 @@ class StandalonePlanRun(
         )
       }
       val identity = repositories.repositoryIdentity(repoRoot)
-      val found = planLookup.lookup(issueKey, identity)
+      val found = planLookup.lookup(issueKey, identity, planWorkflowId)
       if (found !is FeatureTaskContinuationLookupResult.Resumable || found.candidate.workflowId != planWorkflowId) {
         return@runCatching refused(
           publisher,
