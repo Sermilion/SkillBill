@@ -4,7 +4,8 @@ Collect and confirm:
 
 - issue key
 - intended outcome
-- acceptance criteria
+- acceptance criteria, as production end states only; route every test expectation to test obligations,
+  never to a criterion
 - known constraints and non-goals
 
 If the issue key is missing, stop and ask for it. Do not invent one.

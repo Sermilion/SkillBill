@@ -262,6 +262,9 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
 
     assertContains(prompt, "## Subtask Sizing")
     assertContains(prompt, "## Spec Format Contract")
+    assertContains(prompt, "A criterion MUST NOT require tests.")
+    assertContains(prompt, "tests are never acceptance criteria and")
+    assertFalse(prompt.contains("a named test exists"), "a test must never be offered as an acceptance criterion")
     assertContains(prompt, "Spec bundle planning requirement")
     assertContains(prompt, "Write nothing outside that")
     assertContains(prompt, "Do not write an Implementation")

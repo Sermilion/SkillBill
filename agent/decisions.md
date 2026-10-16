@@ -1,3 +1,10 @@
+## [2026-10-16] Acceptance criteria never include tests
+Context: Plan-authored specs turned test expectations into acceptance criteria (for example "T3/T6 tests exist"). Audit already excludes test-only criteria, so such criteria could never be accepted by audit, stayed open until validate, and kept implementation and audit loops chasing work that belongs to later phases.
+Decision: Acceptance criteria describe production end states only. The plan spec contract (`feature-spec-directive.md`), the plan feasibility constraint and the preplan intake forbid test-only criteria and criteria that name a test, test class, fixture, coverage, regression case or a guard's synthetic-violation case. Required tests go under a `## Test Obligations` section, and validate runs them.
+Reason: Every criterion must be checkable by audit against production source; tests are evidence produced and run by later phases, not end states of the change.
+Alternatives considered: Keeping test criteria and teaching audit to defer them was rejected because it already does, and the criteria still blocked acceptance and confused repair loops.
+Revisit when: A change's deliverable is itself test infrastructure, such as a new architecture guard, and needs criteria of its own.
+
 ## [2026-07-15] Full local installs are the default for maintainer work
 Context: Non-interactive `./install.sh --from-source` falls back to detected agents, base-only platform packs, and anonymous telemetry, which can leave follow-up validation without routed platform-pack coverage or full diagnostic telemetry.
 Decision: Maintainer install refreshes in this repo should use the full install shape: detected agents, every platform pack (`platform-mode=all`), MCP registration, and full telemetry unless the user explicitly asks for a narrower install.
