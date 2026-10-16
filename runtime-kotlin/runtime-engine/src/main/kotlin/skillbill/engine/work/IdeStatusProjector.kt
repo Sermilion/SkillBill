@@ -224,8 +224,8 @@ class IdeStatusProjector(
         projection?.hasUnfinishedSubtasks() != true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
-    val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
+    val planningStep = goalPlanningStep(planning, preliminaryLifecycle).takeIf { childContext.currentPhaseId == null }
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)

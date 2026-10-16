@@ -139,7 +139,7 @@ private fun LoadedDetail(
   val scroll = rememberScrollState()
   val item = detail.item
   val pipeline = phasePipeline(detail)
-  val planning = item.planningState?.let { it != "prepared" } == true
+  val planning = item.currentStepId == "planning"
   val subtaskKeys = detail.subtasks.map { detail.key("subtask", it.id.toString()) } +
     listOfNotNull(detail.key("goal-finish", "").takeIf { detail.goalFinishPipeline.isNotEmpty() })
   val dependencyKeys = detail.dependencies.map { detail.key("dependency", "${it.subtaskId}:${it.dependency.subtaskId}") } +
