@@ -79,6 +79,11 @@ sealed interface GoalRunnerRunEvent {
     val findings: List<GoalSubtaskReviewCompactFinding>,
   ) : GoalRunnerRunEvent
 
+  data class ResumeRepaired(
+    override val issueKey: String,
+    val repairs: List<GoalRunnerAppliedRepair>,
+  ) : GoalRunnerRunEvent
+
   data class Completed(
     override val issueKey: String,
     val completedCount: Int,

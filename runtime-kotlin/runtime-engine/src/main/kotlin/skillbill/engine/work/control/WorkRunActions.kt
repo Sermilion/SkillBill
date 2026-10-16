@@ -24,6 +24,7 @@ import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -68,9 +69,8 @@ class WorkRunActions(
           WorkRunLaunchRequest(
             target.repositoryRoot,
             unit.dbPath,
-            agent,
-            launchPrompt(item, phase, arguments, agent),
             workRunOwnershipKey(item, phase),
+            launchKind(item, phase, arguments, agent, target),
             recordedAgentEnvironment(item, phase, unit),
           ),
         )
@@ -219,30 +219,47 @@ class WorkRunActions(
     }
   }
 
-  private fun launchPrompt(
+  private fun launchKind(
     item: WorkDetailItem,
     phase: StandalonePhaseStatusRecord?,
+    arguments: List<String>,
+    agent: String,
+    target: WorkRunTarget,
+  ): WorkRunLaunchKind =
+    if (phase == null) {
+      WorkRunLaunchKind.RuntimeCommand(runtimeResumeArguments(arguments, target))
+    } else {
+      WorkRunLaunchKind.AgentHarness(agent, launchPrompt(item, phase, arguments, agent))
+    }
+
+  private fun runtimeResumeArguments(
+    arguments: List<String>,
+    target: WorkRunTarget,
+  ): List<String> =
+    if (arguments.first() == "goal") {
+      arguments + listOf("--repo-root", target.repositoryRoot.toString(), "--no-live-output")
+    } else {
+      arguments
+    }
+
+  private fun launchPrompt(
+    item: WorkDetailItem,
+    phase: StandalonePhaseStatusRecord,
     arguments: List<String>,
     agent: String,
   ): String =
     buildString {
       appendLine("Use the installed skill-bill skill for this explicit operator request.")
-      when {
-        arguments.firstOrNull() == "phase" ->
-          appendLine("Invoke /skill-bill phase:${arguments[1]} with the recorded intake and options below.")
-        phase != null ->
-          appendLine("Run the goal with /skill-bill and the recorded intake below; it finishes planning, then runs.")
-        else -> appendLine("Resume the existing goal with /skill-bill ${item.snapshot.issueKey}.")
+      if (arguments.firstOrNull() == "phase") {
+        appendLine("Invoke /skill-bill phase:${arguments[1]} with the recorded intake and options below.")
+      } else {
+        appendLine("Run the goal with /skill-bill and the recorded intake below; it finishes planning, then runs.")
       }
       appendLine("Request arguments as JSON: ${JsonCodec.valueToJsonString(arguments)}")
       appendLine("Selected agent: $agent")
       appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
       appendLine("Repository: ${item.repositoryRoot}")
-      if (phase != null) {
-        appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
-      } else {
-        appendLine("Keep the branches and PR the runtime recorded for ${item.snapshot.issueKey}.")
-      }
+      appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
       append("Read durable state before continuing. Do not create another branch or PR for this work.")
     }
 

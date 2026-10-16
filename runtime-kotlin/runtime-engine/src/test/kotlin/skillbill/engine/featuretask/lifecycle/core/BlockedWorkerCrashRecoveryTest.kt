@@ -6,6 +6,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
+import skillbill.engine.goalrunner.execution.core.testGoalRunnerRepairCoordinator
+import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -61,6 +63,10 @@ class BlockedWorkerCrashRecoveryTest {
           reconciler,
           testStandalonePhasePublisher(database, testHarnessClock, NoopRuntimeDiagnostics),
           NoopWorkflowGitOperations,
+          testGoalRunnerRepairCoordinator(
+            TestNoopGoalPlanningManifestStore,
+            testWorkflowGoalRunnerOutcomeStore(database),
+          ),
         )
       val manifest =
         DecompositionManifest(

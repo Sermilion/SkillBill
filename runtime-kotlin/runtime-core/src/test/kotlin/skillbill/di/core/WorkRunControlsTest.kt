@@ -24,6 +24,7 @@ import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
@@ -36,6 +37,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -217,10 +219,11 @@ class WorkRunControlsTest {
           null,
         ),
       )
-      assertEquals("codex", launched.single().agentId)
-      assertContains(launched.single().prompt, "/skill-bill phase:monitor")
-      assertContains(launched.single().prompt, "https://example.test/pr/42")
-      assertContains(launched.single().prompt, "Selected agent: codex")
+      val harness = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind)
+      assertEquals("codex", harness.agentId)
+      assertContains(harness.prompt, "/skill-bill phase:monitor")
+      assertContains(harness.prompt, "https://example.test/pr/42")
+      assertContains(harness.prompt, "Selected agent: codex")
       assertEquals(fixture.dbPath, launched.single().databasePath)
       assertEquals(mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work"), launched.single().agentEnvironment)
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/other\n")
@@ -276,7 +279,7 @@ class WorkRunControlsTest {
       assertEquals(IdeStatusDisplayGroup.GOALS, item.displayGroup)
 
       assertEquals(WorkControlResult.Accepted, component.launchRun(target(component), "codex"))
-      val prompt = launched.single().prompt
+      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
       assertContains(prompt, "Run the goal with /skill-bill")
       assertContains(prompt, "[\"goal\",\"SKILL-9 Render answers\",\"--agent\",\"codex\"]")
     }
@@ -366,7 +369,7 @@ class WorkRunControlsTest {
   }
 
   @Test
-  fun `goal launch ignores the branch its execution was registered on`() {
+  fun `an existing goal resumes through the runtime command and ignores the branch its execution was registered on`() {
     establishTemporarySchemaReadiness("goal-other-branch").use { fixture ->
       Files.createDirectory(fixture.tempDir.resolve(".git"))
       Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/SKILL-777-goal-branch\n")
@@ -426,8 +429,12 @@ class WorkRunControlsTest {
           assertNotNull(item.databaseFileObservation),
         )
       assertEquals(WorkControlResult.Accepted, component.launchRun(target, "codex"))
-      assertContains(launches.single().prompt, "/skill-bill SKILL-777")
-      assertFalse(launches.single().prompt.contains("feat/OTHER-1-launched-from-here"))
+      assertEquals(
+        WorkRunLaunchKind.RuntimeCommand(
+          listOf("goal", "SKILL-777", "--agent", "codex", "--repo-root", item.repositoryRoot, "--no-live-output"),
+        ),
+        launches.single().kind,
+      )
     }
   }
 

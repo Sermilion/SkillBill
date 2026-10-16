@@ -160,6 +160,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.goalrunner.model.GoalRunnerResetSnapshot",
         "skillbill.engine.goalrunner.model.GoalRunnerResumeResult",
         "skillbill.engine.goalrunner.model.GoalRunnerResumeStatus",
+        "skillbill.engine.goalrunner.model.GoalRunnerRunEvent",
         "skillbill.engine.goalrunner.model.GoalRunnerRunRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerStatusRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerStopStatus",

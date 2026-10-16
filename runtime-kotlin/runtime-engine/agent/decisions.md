@@ -226,3 +226,15 @@ Reason: One allocator per durable stream removes the duplicate-number class of b
 Evidence: `GoalRunnerDurableSequenceAllocationTest`, `GoalObservabilityModelsTest`, `UnaddressedFindingsLedgerServiceTest`, `GoalPlanningRefreshLivenessTest`, `GoalPlanningPreplanProseReadTest`, `GoalPlanningRejectionRecorderTest`.
 
 Revisit when: Cross-process writers stop relying on SQLite writer serialization, or the remaining best-effort emitters need a durable dead-letter instead of a dropped event.
+
+## [2026-10-16] Goal resume clears known wedges before it runs
+
+Context: A goal runner killed mid goal-finish left a stale execution lease, a `runner_interrupted` pause, and child wedges such as an unreachable remediation base. Each resume then stopped until the operator ran `skill-bill goal repair <KEY> --apply` by hand.
+
+Decision: `GoalRunnerRepairCoordinator.repairBeforeResume` runs the same diagnosis and apply as `goal repair --apply` and records one `seam=goal-resume.repair` diagnostic per applied repair. Two callers use it: `GoalRunnerRunPreparation.prepareStart`, before `skill-bill goal <KEY>` takes the execution lease on an existing goal, and `GoalRunnerStatusControlVerbs.resume`, which serves `goal resume` and the desktop Resume. The goal command prints each cleared wedge through a `GoalRunnerRunEvent.ResumeRepaired` event; `goal resume` lists it in its text and payload. An `OPERATOR_REQUIRED` result stops the goal run with a blocked report and leaves the pause in place on `goal resume` (new status `operator_required`, exit 2). A live or unexpired lease makes repair refuse as before, so a running runner keeps its state. New goals and goals already complete skip the repair. `GoalRunnerRunEvent` joins the pinned engine inbound API because the CLI presenter now reads the event type that the pinned `GoalRunnerEventSink` already carries.
+
+Reason: The repairs only clear state the runtime can prove stale, so applying them on resume removes a manual step without widening what repair may touch. Completed commit SHAs, review history, audit repair state, and planning checkpoints stay untouched.
+
+Evidence: `GoalRunnerResumeRepairTest`, `CliGoalRepairRuntimeTest` (`goal resume clears stale runner state before it runs and prints each cleared wedge`).
+
+Revisit when: A wedge class becomes repairable for a completed child in a way that should not block a resume, or repair learns to judge an unexpired lease whose process is gone.

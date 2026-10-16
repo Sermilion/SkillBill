@@ -238,6 +238,13 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         crashReconciler,
         testStandalonePhasePublisher(TestGoalActivityStampDatabase, wiring.clock, wiring.diagnostics),
         wiring.gitOperations,
+        testGoalRunnerRepairCoordinator(
+          wiring.manifestStore,
+          wiring.outcomeStore,
+          wiring.phaseRecorder,
+          wiring.clock,
+          GoalRunnerStatusTestPorts(gitOperations = wiring.gitOperations, diagnostics = wiring.diagnostics),
+        ),
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,

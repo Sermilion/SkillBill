@@ -13,7 +13,10 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
+import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
@@ -39,8 +42,71 @@ class GoalRunnerRunPreparation(
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
   private val gitOperations: WorkflowGitOperations,
+  private val repairCoordinator: GoalRunnerRepairCoordinator,
 ) {
-  internal fun alignGoalBranch(
+  internal fun prepareStart(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+    resumesExistingGoal: Boolean,
+  ): GoalRunPreparation {
+    val startState =
+      if (resumesExistingGoal) {
+        when (val repaired = repairBeforeResume(state, request)) {
+          is GoalRunPreparation.PreparationBlocked -> return repaired
+          is GoalRunPreparation.Prepared -> repaired.state
+        }
+      } else {
+        state
+      }
+    return alignGoalBranch(startState, request)?.let(GoalRunPreparation::PreparationBlocked)
+      ?: GoalRunPreparation.Prepared(startState, request)
+  }
+
+  private fun repairBeforeResume(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunPreparation {
+    val issueKey = state.manifest.issueKey
+    val repair =
+      repairCoordinator.repairBeforeResume(issueKey, request.repoRoot)
+        ?: return GoalRunPreparation.Prepared(state, request)
+    if (repair.appliedRepairs.isNotEmpty()) {
+      request.eventSink.emit(GoalRunnerRunEvent.ResumeRepaired(issueKey, repair.appliedRepairs))
+    }
+    if (repair.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED) {
+      val subtaskId = state.manifest.currentSubtaskIntent.subtaskId
+      return GoalRunPreparation.PreparationBlocked(
+        stopped(
+          StoppedReportArgs(
+            issueKey = issueKey,
+            attempted = emptyList(),
+            subtaskId = subtaskId,
+            reason = GoalRunnerStopReason.BLOCKED,
+            blockedReason =
+              "Goal '$issueKey' has a resume wedge the runtime will not clear on its own: " +
+                (repair.refusalReason ?: "operator action required.") +
+                " Inspect it with: skill-bill goal repair $issueKey",
+            workflowId = state.manifest.workflowIdFor(subtaskId),
+            lastResumableStep =
+              state.manifest.subtasks
+                .firstOrNull { it.id == subtaskId }
+                ?.lastResumableStep
+                .orEmpty()
+                .ifBlank { "plan" },
+          ),
+        ),
+      )
+    }
+    val repaired =
+      if (repair.appliedRepairs.isEmpty()) {
+        state
+      } else {
+        manifestStore.loadDurableByIssueKey(issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot) ?: state
+      }
+    return GoalRunPreparation.Prepared(repaired, request)
+  }
+
+  private fun alignGoalBranch(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
   ): GoalRunnerRunReport? {

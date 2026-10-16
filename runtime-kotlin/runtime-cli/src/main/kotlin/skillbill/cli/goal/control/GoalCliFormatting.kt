@@ -1,5 +1,6 @@
 package skillbill.cli.goal.control
 
+import skillbill.cli.goal.run.toAppliedRepairCliMap
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
@@ -64,17 +65,7 @@ internal fun GoalRunnerRepairResult.toGoalRepairCliMap(): Map<String, Any?> =
             },
         )
       },
-    "applied_repairs" to
-      appliedRepairs.map { repair ->
-        linkedMapOf(
-          SharedPayloadKeys.SUBTASK_ID to repair.subtaskId,
-          SharedPayloadKeys.WORKFLOW_ID to repair.workflowId,
-          "wedge_class" to repair.wedgeClass.wireValue,
-          "field" to repair.field,
-          "prior_value" to repair.priorValue,
-          "new_value" to repair.newValue,
-        )
-      },
+    "applied_repairs" to appliedRepairs.map(GoalRunnerAppliedRepair::toAppliedRepairCliMap),
   )
 
 internal fun goalRepairText(result: GoalRunnerRepairResult): String =

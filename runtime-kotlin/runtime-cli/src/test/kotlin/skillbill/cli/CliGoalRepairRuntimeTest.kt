@@ -256,6 +256,35 @@ class CliGoalRepairRuntimeTest {
     assertEquals(WorkflowStepStatus.PENDING, repairedRecords.getValue("implement_fix").status)
   }
 
+  @Test
+  fun `goal resume clears stale runner state before it runs and prints each cleared wedge`() {
+    val fixture = goalFixture(subtaskCount = 2)
+    val launcher = GoalFixtureAgentRunLauncher(fixture)
+    val paused =
+      CliRuntime.run(
+        fixture.goalCommand(extra = listOf("--stop-after-subtask", "1")),
+        fixture.context(launcher = launcher),
+      )
+    assertEquals(2, paused.exitCode, paused.stdout)
+    val childWorkflowId = resolveCompletedChildWorkflowId(fixture)
+    seedIssue342StaleParentControlState(fixture)
+    seedExpiredWorkerLease(fixture, childWorkflowId)
+    val live = StringBuilder()
+
+    val resumed =
+      CliRuntime.run(
+        fixture.goalCommand(),
+        fixture.context(launcher = launcher, liveStdout = { live.append(it) }),
+      )
+
+    val output = live.toString()
+    assertContains(output, "goal SKILL-901: cleared stale_execution_lease on the parent goal")
+    assertContains(output, "goal SKILL-901: cleared stale_runner_interrupted_pause on the parent goal")
+    assertContains(output, "goal SKILL-901: cleared stale_child_worker_lease on subtask 1")
+    assertEquals(0, workerLeaseRowCount(fixture, childWorkflowId))
+    assertFalse(resumed.stdout.contains("runner_interrupted"), resumed.stdout)
+  }
+
   private fun resolveCompletedChildWorkflowId(fixture: GoalCliFixture): String =
     ensureTestDatabase(fixture.dbPath).use { connection ->
       connection.createStatement().use { statement ->
