@@ -162,6 +162,9 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertNotNull(scope.snapshot?.pendingClarificationQuestion)
         audit(f, recorder, 3, false, "The caller still needs production work.")
         assertNull(scope.snapshot?.pendingClarificationQuestion)
+        assertEquals("The caller still needs production work.", scope.snapshot?.outcomes?.last()?.evidenceRef)
+        assertTrue(requireNotNull(scope.currentCriterionContext).contains("The caller still needs production work."))
+        assertFalse(requireNotNull(scope.currentCriterionContext).contains("Only part of the caller is connected."))
         assertEquals(1, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
         assertEquals(
           FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE,

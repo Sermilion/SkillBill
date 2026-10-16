@@ -301,7 +301,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
             live.criterionRef,
             digest,
             AcceptanceCriterionRepairOutcomeKind.INCOMPLETE,
-            pendingClarificationQuestion,
+            prose,
           ),
         )
       }
