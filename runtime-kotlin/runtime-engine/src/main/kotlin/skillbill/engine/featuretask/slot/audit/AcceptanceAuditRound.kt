@@ -137,7 +137,8 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     if (prose != null) {
       val produced =
         JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
-      produced[SharedPayloadKeys.VALUE] = prose
+      produced[SharedPayloadKeys.VALUE] =
+        listOfNotNull(auditProseValue(normalizedOutput.envelopeWireMap()), prose).joinToString("\n\n")
       envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
     }
     return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))

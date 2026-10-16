@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 
 internal object AuditImplementFixPromptSections {
   const val DIRECTIVE: String =
@@ -37,6 +38,7 @@ internal object AuditImplementFixPromptSections {
       "When the remaining gaps are wrong because the code already satisfies them, pass the claim object as the " +
       "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of a repair report. " +
       "Either change files or return a no-change claim, never both. " +
+      ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE + " " +
       "The runtime returns to a fresh audit after this step. " +
       "When every in-scope production finding is addressed, report that in ordinary prose. " +
       "Never report completion while any production gap remains; " +

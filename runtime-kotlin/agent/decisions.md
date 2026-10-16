@@ -2995,3 +2995,23 @@ layer. A6 reuses the existing artifact family and codec. A7 retains refusal and
 typed corruption handling. A8 adds no production ambient effects. A9-A12 retain
 package direction, test placement, narrow visibility and typed interfaces.
 G1-G7 require no guard, fixture, baseline or exemption change.
+
+## [2026-10-16] Preserve source findings after malformed no-change claims
+
+Context: an audit independently found that goal monitoring lost confirmed repair
+accounting on resume. The preceding repair had submitted a malformed no-change
+claim. AcceptanceAuditRound rejected the claim but replaced the auditor's value
+with formatting errors, so the next repair plan lost the production finding.
+Audit repair also offered the no-change argument without its existing shape.
+
+Decision: keep the auditor's value and append the claim rejection reasons. Keep
+the rejected verdict and all existing claim validation. Audit repair uses the
+same claim guidance as implementation. No contract field, admission exception,
+comparison change or budget bypass is added.
+
+Review: A1, A2 and A5 retain audit settlement and transition ownership. A6 reuses
+the existing prose field and claim vocabulary. A7 preserves both refusal reasons
+and inspected evidence. A3-A4 and A8-A12 add no state, ports, ambient effects or
+module crossings. G1-G7 remain unchanged. A regression exercises a resumed
+malformed repair claim and verifies that the next plan receives both the source
+finding and the rejection reasons.
