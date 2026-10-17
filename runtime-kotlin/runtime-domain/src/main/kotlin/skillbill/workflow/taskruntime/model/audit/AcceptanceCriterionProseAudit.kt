@@ -40,14 +40,15 @@ private fun AcceptanceCriterionRepairState.applyInitialAudit(
   audit: AcceptanceCriterionProseAudit,
 ): AcceptanceCriterionRepairState {
   if (!audit.satisfied) {
-    return copy(
-      mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
-      stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
-      pendingAuditRefs = unresolvedQueue,
-      currentCriterionRef = unresolvedQueue.firstOrNull(),
-      proseAudits = proseAudits + audit,
-      revision = audit.revision,
-    )
+    return openCriteriaNamedIn(audit.prose)?.let { named -> applyDiscoveredGaps(audit, named) }
+      ?: copy(
+        mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+        stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
+        pendingAuditRefs = unresolvedQueue,
+        currentCriterionRef = unresolvedQueue.firstOrNull(),
+        proseAudits = proseAudits + audit,
+        revision = audit.revision,
+      )
   }
   val closed =
     criteria.map { criterion ->
@@ -68,6 +69,48 @@ private fun AcceptanceCriterionRepairState.applyInitialAudit(
     revision = audit.revision,
   )
 }
+
+private fun AcceptanceCriterionRepairState.applyDiscoveredGaps(
+  audit: AcceptanceCriterionProseAudit,
+  named: Set<String>,
+): AcceptanceCriterionRepairState? {
+  val open = unresolvedQueue.filter { it in named }.toSet()
+  if (open.isEmpty()) return null
+  val settled =
+    criteria.map { criterion ->
+      when {
+        criterion.canonicalRef in open -> criterion.copy(evidenceRef = audit.prose)
+        criterion.sourceDisposition == AcceptanceCriterionSourceDisposition.NOT_APPLICABLE -> criterion
+        else ->
+          criterion.copy(
+            sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED,
+            evidenceRef = audit.prose,
+            closureEvidenceRef = audit.prose,
+            closureTreeDigest = audit.treeDigest,
+            closureCheckpointId = audit.checkpointId,
+          )
+      }
+    }
+  val queue = AcceptanceCriterionRepairState.stableQueue(settled, dependencies, settled.associateBy { it.canonicalRef })
+  if (queue.isNullOrEmpty()) return null
+  return copy(
+    criteria = settled,
+    unresolvedQueue = queue,
+    currentCriterionRef = queue.first(),
+    pendingAuditRefs = emptyList(),
+    mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
+    stage = AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
+    proseAudits = proseAudits + audit,
+    revision = audit.revision,
+  )
+}
+
+private val OPEN_CRITERIA_LINE = Regex("""^\W*open criteria\W*:(.*)$""", RegexOption.IGNORE_CASE)
+private val CRITERION_ID = Regex("""\bAC-[0-9]{3}\b""", RegexOption.IGNORE_CASE)
+
+internal fun openCriteriaNamedIn(prose: String): Set<String>? =
+  prose.lineSequence().mapNotNull { OPEN_CRITERIA_LINE.find(it.trim())?.groupValues?.get(1) }.lastOrNull()
+    ?.let { listed -> CRITERION_ID.findAll(listed).map { it.value.uppercase() }.toSet() }
 
 private fun AcceptanceCriterionRepairState.canAdmitProseAudit(audit: AcceptanceCriterionProseAudit): Boolean {
   val current = reservation == null && audit.revision == revision + 1

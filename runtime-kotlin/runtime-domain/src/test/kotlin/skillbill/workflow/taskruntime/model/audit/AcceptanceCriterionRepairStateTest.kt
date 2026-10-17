@@ -57,6 +57,67 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
+  fun `discovery accepts unnamed criteria and each named gap is repaired and verified once before moving on`() {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second", "third"),
+            listOf(
+              criterion("AC-001", 1, "first"),
+              criterion("AC-002", 2, "second"),
+              criterion("AC-003", 3, "third"),
+            ),
+            emptyList(),
+          ),
+        ),
+      )
+    val discovery =
+      AcceptanceCriterionProseAudit(
+        "full:1",
+        initial.revision + 1,
+        null,
+        false,
+        "b".repeat(64),
+        "AC-001 and AC-003 are met. AC-002 lets a second caller bypass the reservation.\nOpen criteria: AC-002",
+        "c".repeat(64),
+        "source:1",
+      )
+
+    val queued = assertNotNull(initial.recordProseAudit(discovery))
+
+    assertEquals(listOf("AC-002"), queued.unresolvedQueue)
+    assertEquals("AC-002", queued.currentCriterionRef)
+    assertEquals(emptyList(), queued.pendingAuditRefs, "no focused audit precedes the repair")
+    assertEquals(AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED, queued.stage)
+    assertEquals(
+      listOf(AcceptanceCriterionSourceDisposition.SOURCE_CLOSED, AcceptanceCriterionSourceDisposition.SOURCE_CLOSED),
+      queued.criteria.filter { it.canonicalRef != "AC-002" }.map { it.sourceDisposition },
+    )
+    assertEquals(queued, AcceptanceCriterionRepairState.restore(queued))
+
+    val repaired =
+      assertNotNull(
+        assertNotNull(queued.reserve("reservation-1"))
+          .completeRepairAwaitingTargetedVerification("reservation-1", "repair:1", "d".repeat(64), "checkpoint:1"),
+      )
+    val accepted = assertNotNull(repaired.record(outcome("outcome-1", "reservation-1", "AC-002", successful = true)))
+
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, accepted.stage, "verification is the only post-repair audit")
+    assertEquals(accepted, AcceptanceCriterionRepairState.restore(accepted))
+  }
+
+  @Test
+  fun `a discovery without a readable open criteria line falls back to auditing every criterion`() {
+    assertNull(openCriteriaNamedIn("AC-002 remains open."))
+    assertEquals(emptySet(), openCriteriaNamedIn("Open criteria: none"))
+    assertEquals(setOf("AC-002", "AC-005"), openCriteriaNamedIn("Gaps below.\n**Open criteria:** ac-002, AC-005"))
+  }
+
+  @Test
   fun `an initial discovery that finds every criterion met is accepted at once`() {
     val initial =
       assertNotNull(

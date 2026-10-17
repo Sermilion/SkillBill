@@ -13,8 +13,11 @@ internal object AcceptanceAuditPromptSections {
 
   const val DIRECTIVE: String =
     "On the initial full audit, verify the production behavior required by every acceptance criterion " +
-      "against the current implementation. On a focused audit, inspect only the authored criterion selected by " +
-      "the runtime. " +
+      "against the current implementation, and end your prose with exactly one line " +
+      "`Open criteria: AC-002, AC-005` that names every criterion with a production source gap, or " +
+      "`Open criteria: none`. The runtime accepts every criterion that line does not name and repairs the " +
+      "named ones one at a time; a test-only criterion is never open. On a focused audit, inspect only the " +
+      "authored criterion selected by the runtime. " +
       "Exclude all test requirements from audit, even when the plan or a criterion " +
       "explicitly requires tests. Missing tests, coverage, assertions, test quality, fixtures, and test results " +
       "never keep an acceptance criterion open. For a mixed criterion, evaluate only its production behavior. " +
@@ -56,7 +59,8 @@ internal object AcceptanceAuditPromptSections {
         "Report source gaps and conclusions in ordinary prose. Say when the current source meets the " +
           "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
           "state those later test or build obligations separately when relevant. Refer to criteria using their " +
-          "briefing labels when useful, without requiring a fixed list or format. " +
+          "briefing labels when useful; apart from the initial full audit's Open criteria line there is no " +
+          "fixed format. " +
           "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
           "before downstream review. Focused audits inspect the runtime-selected criterion. " +
           "For capability " +
