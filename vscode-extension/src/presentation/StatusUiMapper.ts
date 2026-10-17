@@ -73,7 +73,12 @@ export const StatusUiMapper = {
             outcome.fromCache ? "Cached status is stale" : "Status is stale",
             outcome.diagnostic,
           ),
-          planning: relevantPlanning(outcome.planning, outcome.currentSubtaskId, outcome.progressCompleted),
+          planning: relevantPlanning(
+            outcome.planning,
+            outcome.currentSubtaskId,
+            outcome.progressCompleted,
+            outcome.currentStepId,
+          ),
           currentModel: outcome.currentModel,
           currentPhaseExecution: outcome.currentPhaseExecution,
           lastAgentActivityAt: outcome.lastAgentActivityAt,
@@ -218,7 +223,12 @@ function mapRunState(
     startedAt: outcome.startedAt,
     subtaskStartedAt: outcome.subtaskStartedAt,
     lastUpdated: outcome.updatedAt,
-    planning: relevantPlanning(outcome.planning, outcome.currentSubtaskId, outcome.progressCompleted),
+    planning: relevantPlanning(
+      outcome.planning,
+      outcome.currentSubtaskId,
+      outcome.progressCompleted,
+      outcome.currentStepId,
+    ),
     workflowFamily: outcome.workflowFamily,
     pauseRequested: outcome.pauseRequested,
     currentModel: outcome.currentModel,
@@ -304,15 +314,21 @@ function pollFailureNote(diagnostic: StatusDiagnostic | undefined): string | und
   return StatusUiMapper.POLL_FAILED_NOTE;
 }
 
+const LIVE_PLANNING_STEP_IDS = new Set(["plan", "preplan", "planning"]);
+
 function relevantPlanning(
   planning: GoalPlanningInfo | undefined,
   currentSubtaskId: string | undefined,
   progressCompleted: number | undefined,
+  currentStepId: string | undefined,
 ): GoalPlanningInfo | undefined {
   if (!planning || planning.state === "prepared") {
     return undefined;
   }
   if (currentSubtaskId || (progressCompleted ?? 0) > 0) {
+    return undefined;
+  }
+  if (currentStepId && !LIVE_PLANNING_STEP_IDS.has(currentStepId)) {
     return undefined;
   }
   return planning;

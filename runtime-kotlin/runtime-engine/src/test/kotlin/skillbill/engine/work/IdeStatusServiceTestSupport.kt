@@ -224,6 +224,7 @@ internal fun goalManifestState(
   fixture: Path,
   identity: String,
   childWorkflowId: String,
+  lastResumableStep: String = "implement",
 ): GoalRunnerManifestState =
   GoalRunnerManifestState(
     parentWorkflowId = "goal-1",
@@ -251,7 +252,7 @@ internal fun goalManifestState(
               specPath = "spec_2.md",
               status = "in_progress",
               workflowId = childWorkflowId,
-              lastResumableStep = "implement",
+              lastResumableStep = lastResumableStep,
             ),
           ),
       ),
