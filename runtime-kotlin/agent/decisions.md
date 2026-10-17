@@ -188,10 +188,15 @@ Decision: A participating step whose resolved profile is opus-5-5 selects that s
 Reason: A manual strategy flag would diverge from the launched model. Specializing every step in the selected slot would change non-Opus repairs in the same plan.
 Alternatives considered: An operator toggle stays rejected, as in the 2026-09-26 slot-skeleton decision. Substring and agent-name matching were rejected because they are not the launched model.
 
+## [2026-10-17] Resume with a different agent uses that agent's launch assignment
+Context: Selecting Cursor on tray resume still launched Codex's recorded `gpt-6.1-sol[effort=high]`. SKILL-403 kept recorded models so a config edit could not change an admitted profile. The selected `--agent` already changed the CLI.
+Decision: Same-agent resume still launches the recorded step assignment and warns on matrix drift. When the resolved agent for a remaining step is not the recorded assignment's agent, drop that assignment and resolve the model from the selected agent's current matrix. The durable execution plan is unchanged. Diagnostics `execution_plan_resume` now reports `value_used` as the assignment that will launch.
+Reason: A recorded Codex model is not a Cursor model id. Operator agent selection is explicit intent to launch that agent, not a silent config reinterpretation of the same agent.
+
 ## [2026-10-05] Resume launches the recorded assignment
 Context: Current configuration can resolve a different model than the one admitted with the execution plan.
 Decision: Resume launches the recorded step assignment. Drift emits a diagnostics warning at seam execution_plan_resume, with expected and used set to the recorded assignment and current set to the fresh resolution. Refusal is limited to an unregistered strategy id or revision, or a record that fails validation, and it happens before workflow, parent, child, or lease mutation.
-Reason: Relaunching under today's config would change an admitted profile. Recording the drift keeps the plan immutable without treating every config edit as a hard failure.
+Reason: Relaunching under today's config would change an admitted profile. Recording the drift keeps the plan immutable without treating every config edit as a hard failure. Same-agent matrix drift still follows this rule; a later decision covers an operator-selected different agent.
 
 ## [2026-10-05] Recognize only two exact Opus 5.5 identities
 Context: Provider names, aliases, and older Opus models must stay on the canonical strategies.

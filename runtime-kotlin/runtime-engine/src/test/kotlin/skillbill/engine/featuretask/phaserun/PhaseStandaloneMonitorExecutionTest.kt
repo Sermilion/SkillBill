@@ -124,8 +124,9 @@ class PhaseStandaloneMonitorExecutionTest {
 
     val result = run()
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(COMMIT_PUSH, result.completedStepIds.first(), "the publication step runs first as a no-op")
+    val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertOwnedWorktreeRemoved(completed.targetReport)
+    assertEquals(COMMIT_PUSH, completed.completedStepIds.first(), "the publication step runs first as a no-op")
     val repair = forkHead()
     assertEquals(headSha, git(fork, "rev-parse", "$repair^"), "exactly one normal repair commit on the fork head")
     assertEquals("class Fix1", git(fork, "show", "$repair:Fix.kt"))
@@ -180,8 +181,8 @@ class PhaseStandaloneMonitorExecutionTest {
   fun `the initial publication visit leaves the fork untouched when CI already passes`() {
     val result = run()
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertTrue(result.targetReport.any { it.startsWith("Cleanup: released") }, result.targetReport.toString())
+    val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertOwnedWorktreeRemoved(completed.targetReport)
     assertEquals(headSha, forkHead())
     assertEquals(emptyList(), repairCwds)
     assertEquals(listOf("refs/heads/$FEATURE_BRANCH", "refs/heads/main"), refs(fork))
@@ -222,7 +223,8 @@ class PhaseStandaloneMonitorExecutionTest {
 
     val result = run()
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertOwnedWorktreeRemoved(completed.targetReport)
     val merge = forkHead()
     assertEquals(listOf(headSha, pinnedBase), git(fork, "rev-list", "--parents", "-n", "1", merge).split(" ").drop(1))
     assertEquals("class Base", git(fork, "show", "$merge:Base.kt"))
@@ -235,6 +237,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val result = run(checks = { failing() })
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertOwnedWorktreeRemoved(blocked.targetReport)
     assertEquals(MAX_REPAIRS, repairCwds.size, "no fourth repair may launch")
     assertTrue("after 3 CI-confirmed" in blocked.reason, blocked.reason)
     var commit = forkHead()
@@ -281,6 +284,14 @@ class PhaseStandaloneMonitorExecutionTest {
 
     assertEquals(0, operations.calls, "no refused operation may observe or publish")
     assertEquals(headSha, forkHead())
+  }
+
+  private fun assertOwnedWorktreeRemoved(report: List<String>) {
+    val cleanup = report.single { it.startsWith("Cleanup: ") }
+    assertTrue(cleanup.startsWith("Cleanup: released"), cleanup)
+    val path = Path.of(report.single { it.startsWith("Worktree: ") }.removePrefix("Worktree: "))
+    assertFalse(Files.exists(path), "standalone monitor left $path")
+    assertFalse(path.toString() in git(caller, "worktree", "list", "--porcelain"), "git still lists $path")
   }
 
   private fun run(

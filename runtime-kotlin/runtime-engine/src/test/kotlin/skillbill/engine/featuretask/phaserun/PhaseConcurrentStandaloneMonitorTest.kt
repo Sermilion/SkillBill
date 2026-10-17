@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -107,7 +108,12 @@ class PhaseConcurrentStandaloneMonitorTest {
         pool.shutdownNow()
       }
 
-    results.forEach { assertIs<PhaseRunResult.Completed>(it, it.toString()) }
+    results.forEach { result ->
+      val completed = assertIs<PhaseRunResult.Completed>(result, result.toString())
+      val path = Path.of(completed.targetReport.single { it.startsWith("Worktree: ") }.removePrefix("Worktree: "))
+      assertTrue(completed.targetReport.any { it.startsWith("Cleanup: released") }, completed.targetReport.toString())
+      assertFalse(Files.exists(path), "standalone monitor left $path")
+    }
     assertEquals(PULL_REQUESTS.size, repairCwds.toSet().size, "each pull request repairs in its own worktree")
     repairCwds.forEach { cwd ->
       assertTrue(cwd.startsWith(caller.resolve(".git/skill-bill/standalone-monitor")), "owned worktree, not $cwd")

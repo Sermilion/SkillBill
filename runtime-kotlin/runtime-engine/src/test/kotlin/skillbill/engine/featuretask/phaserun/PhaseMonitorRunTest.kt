@@ -64,9 +64,15 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push")
     val headBefore = git(repoRoot, "rev-parse", "HEAD")
 
+    val linked = root.resolve("untouched-worktree")
+    git(repoRoot, "worktree", "add", linked.toString(), "-b", "kept-worktree", "main")
+    val worktrees = worktreePaths()
+
     val result = phaseEntry.runMonitor("SKILL-904")
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(worktrees, worktreePaths())
+    assertTrue(Files.isDirectory(linked))
     assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
     assertTrue(
       result.value.orEmpty().contains("CI passed for published commit '$headBefore' on branch '$FEATURE_BRANCH'"),
@@ -234,6 +240,9 @@ class PhaseMonitorRunTest {
           ),
         )
       }
+    val linked = root.resolve("untouched-worktree")
+    git(repoRoot, "worktree", "add", linked.toString(), "-b", "kept-worktree", "main")
+    val worktrees = worktreePaths()
     val outcomes = RecordingOutcomeStore()
     val monitor = DefaultGoalRunnerCiMonitor(entry(checks = checks, agentLauncher = repairLauncher), outcomes, clock)
     val result =
@@ -247,6 +256,8 @@ class PhaseMonitorRunTest {
       )
 
     assertIs<PhaseRunResult.Completed>(result)
+    assertEquals(worktrees, worktreePaths())
+    assertTrue(Files.isDirectory(linked))
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds(repairLauncher))
     assertEquals(2, observations)
     assertTrue(outcomes.progressEvents.isNotEmpty())
@@ -335,6 +346,13 @@ class PhaseMonitorRunTest {
     git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
     git(repoRoot, "push", "-u", "origin", FEATURE_BRANCH)
   }
+
+  private fun worktreePaths(): Set<String> =
+    git(repoRoot, "worktree", "list", "--porcelain")
+      .lineSequence()
+      .filter { it.startsWith("worktree ") }
+      .map { it.removePrefix("worktree ") }
+      .toSet()
 
   private fun git(
     workDir: Path,

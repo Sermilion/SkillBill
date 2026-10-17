@@ -1,3 +1,11 @@
+## [2026-10-17] Resume a different selected agent with that agent's models
+Areas: runtime-engine featuretask lifecycle and runloop planning
+- Same-agent resume still launches the recorded step assignment. A remaining step whose recorded agent is not the resolved resume agent drops that assignment and resolves the model from the selected agent's execution matrix.
+- Durable execution-plan identities stay recorded. `execution_plan_resume` warnings report `value_used` as the assignment that will launch.
+- Test: FeatureTaskRuntimeResumeLaunchAssignmentTest catches a Cursor resume of a Codex-recorded `audit_plan_fix` still sending `gpt-6.1-sol`.
+Feature flag: N/A
+Acceptance criteria: N/A (targeted resume launch fix)
+
 ## [2026-10-14] SKILL-425 subtask 4 — retire the standalone feature-task skeleton
 Areas: runtime-domain workflow/taskruntime skeleton; runtime-contracts error/shellcontent; runtime-engine featuretask lifecycle, runner, continuation; runtime-cli featuretask; runtime-infra/launcher agentrun; runtime-engine test slotbaseline; README.md; docs/; skills/skill-bill/content.md
 - SkeletonDefinition.admittedForRun(goalContinuation) is {GOAL_CHILD} for a goal child and {PLAN} otherwise; forRun is gone. STANDALONE stays declared and decode-only, so old rows still read, show in lookup and status, and can be abandoned. No migration.
