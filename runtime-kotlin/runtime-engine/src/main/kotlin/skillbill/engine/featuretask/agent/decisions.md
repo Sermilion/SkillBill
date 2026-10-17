@@ -1,3 +1,10 @@
+## [2026-10-17] Goal children stamp validate, not last-child-only build
+Context: `GoalRunnerQualityGateSelectionResolver` stamped BUILD for every non-final child and VALIDATE only for the last non-skipped subtask. BUILD is compile-only, so completed earlier subtasks had no boolean validation result and the last child inherited accumulated check/detekt debt.
+Decision: The resolver returns VALIDATE for every subtask id present in the manifest. Goal children run `review -> validate -> write_history`. BUILD remains an explicit CLI/env selection and PackBuildStrategy is unchanged. SKILL-415's unrouted BUILD-to-agent-validate fallback stays for explicit BUILD requests.
+Reason: Each subtask must close its own full project gate. Deferring validate to the last child hid formatting and static-analysis failures until the end of the goal.
+Supersedes: Goal continuation stamps build for every non-skipped child before the last non-skipped entry (SKILL-204).
+Revisit when: An operator needs a compile-only intermediate child again.
+
 ## [2026-10-16] Recover failed repairs from recorded execution semantics
 Context: Resume must retain failed repairs after current phase records are replaced. Legacy monitor verdicts conflated CI failure and merge conflict, and report prose cannot establish which occurred.
 Decision: Admit historical CI_FAILED meaning only through the immutable stored monitor selection, dispatch owners and corrected traversal. Join matched START/COMPLETE and generation-zero producer identities, accepted repair completion, pushed baseline/publication outputs and Git ancestry/content evidence. Derive failed SHAs from publication records and restore the distinct failed-commit set.

@@ -9,14 +9,14 @@ import kotlin.test.assertEquals
 
 class GoalRunnerQualityGateSelectionResolverTest {
   @Test
-  fun `three-child goal resolves build build validate`() {
+  fun `three-child goal resolves validate for every subtask`() {
     val manifest = manifest(subtaskCount = 3)
     assertEquals(
-      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      FeatureTaskRuntimeQualityGateSelection.VALIDATE,
       GoalRunnerQualityGateSelectionResolver.resolve(manifest, 1),
     )
     assertEquals(
-      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      FeatureTaskRuntimeQualityGateSelection.VALIDATE,
       GoalRunnerQualityGateSelectionResolver.resolve(manifest, 2),
     )
     assertEquals(
@@ -35,7 +35,7 @@ class GoalRunnerQualityGateSelectionResolverTest {
   }
 
   @Test
-  fun `ordinal-last skipped promotes validate to previous last non-skipped`() {
+  fun `skipped last child still resolves validate for remaining subtasks`() {
     val manifest =
       manifest(subtaskCount = 3).copy(
         subtasks =
@@ -44,7 +44,7 @@ class GoalRunnerQualityGateSelectionResolverTest {
           },
       )
     assertEquals(
-      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      FeatureTaskRuntimeQualityGateSelection.VALIDATE,
       GoalRunnerQualityGateSelectionResolver.resolve(manifest, 1),
     )
     assertEquals(

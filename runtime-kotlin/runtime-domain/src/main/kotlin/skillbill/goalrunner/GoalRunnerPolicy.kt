@@ -25,15 +25,10 @@ object GoalRunnerQualityGateSelectionResolver {
     manifest: DecompositionManifest,
     subtaskId: Int,
   ): FeatureTaskRuntimeQualityGateSelection {
-    val lastNonSkippedId =
-      manifest.subtasks.lastOrNull {
-        it.status.decompositionStatus() != DecompositionStatus.SKIPPED
-      }?.id
-    return if (lastNonSkippedId == subtaskId) {
-      FeatureTaskRuntimeQualityGateSelection.VALIDATE
-    } else {
-      FeatureTaskRuntimeQualityGateSelection.BUILD
+    require(manifest.subtasks.any { it.id == subtaskId }) {
+      "Quality-gate selection requires subtask $subtaskId in the decomposition manifest."
     }
+    return FeatureTaskRuntimeQualityGateSelection.VALIDATE
   }
 }
 
