@@ -17,6 +17,7 @@ import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -166,7 +167,8 @@ private class WorkListDatabase(
       override val workflowStates = workflows
       override val workList: WorkListRepository =
         object : WorkListRepository by EmptyWorkListRepository {
-          override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+          override fun list(limit: Int?): WorkListListRead =
+            WorkListListRead(limit?.let(work::take) ?: work)
 
           override fun findByWorkflowId(workflowId: String): List<WorkItem> =
             work.filter { it.workflowId == workflowId }

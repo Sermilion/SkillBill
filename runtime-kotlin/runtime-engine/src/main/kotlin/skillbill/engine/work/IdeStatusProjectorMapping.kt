@@ -100,31 +100,25 @@ internal fun goalPlanningSummary(
 
 internal fun GoalRunnerStatusProjection.hasUnfinishedSubtasks(): Boolean = pendingCount > 0 || blockedCount > 0
 
-internal fun goalStaysOnOpenCiMonitor(
-  projection: GoalRunnerStatusProjection?,
-  completionRecorded: Boolean,
-): Boolean {
-  if (completionRecorded || projection == null || projection.paused) return false
+internal fun goalStaysOnOpenCiMonitor(projection: GoalRunnerStatusProjection?): Boolean {
+  if (projection == null || projection.paused) return false
+  if (projection.admittedParentComplete()) return false
   if (projection.pendingCount > 0 || projection.blockedCount > 0) return false
   return projection.completeCount > 0
 }
 
 internal fun goalShowsOpenCiMonitor(
   projection: GoalRunnerStatusProjection?,
-  completionRecorded: Boolean,
   lifecycle: IdeStatusLifecycleState,
 ): Boolean =
-  goalStaysOnOpenCiMonitor(projection, completionRecorded) &&
+  goalStaysOnOpenCiMonitor(projection) &&
     projection?.executionLiveness == ExecutionLiveness.LIVE &&
     projection.currentStep in setOf(OPEN_CI_MONITOR_STEP, "monitor_fix") &&
     lifecycle == IdeStatusLifecycleState.ACTIVE
 
-internal fun goalProjectsLiveFinalizationStep(
-  projection: GoalRunnerStatusProjection?,
-  goalCompletionRecorded: Boolean,
-): Boolean {
+internal fun goalProjectsLiveFinalizationStep(projection: GoalRunnerStatusProjection?): Boolean {
   if (projection == null || projection.executionLiveness != ExecutionLiveness.LIVE) return false
-  if (!goalStaysOnOpenCiMonitor(projection, goalCompletionRecorded)) return false
+  if (!goalStaysOnOpenCiMonitor(projection)) return false
   val step = projection.currentStep?.takeIf(String::isNotBlank) ?: return false
   return step in LIVE_GOAL_FINALIZATION_STEP_IDS
 }

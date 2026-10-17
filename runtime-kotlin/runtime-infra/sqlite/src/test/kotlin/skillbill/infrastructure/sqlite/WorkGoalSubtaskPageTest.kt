@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.decomposition.encodeDecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
@@ -29,7 +30,7 @@ class WorkGoalSubtaskPageTest {
         statement.setString(1, artifacts)
         statement.executeUpdate()
       }
-      val repository = SQLiteWorkListRepository(connection)
+      val repository = SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics)
       val first = assertNotNull(repository.goalSubtaskPage("parent", 0, 10))
       assertEquals((1..10).toList(), first.manifest.subtasks.map { it.id })
       assertEquals(1000, first.totalCount)

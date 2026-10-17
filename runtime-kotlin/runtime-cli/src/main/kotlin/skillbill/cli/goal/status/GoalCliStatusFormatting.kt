@@ -61,6 +61,7 @@ internal fun CliRunInputs.goalStatusRequest(
     selectedDiffMaxHunks = options.diff.selectedDiffMaxHunks,
     selectedDiffMaxLines = options.diff.selectedDiffMaxLines,
     selectedDiffMaxBytes = options.diff.selectedDiffMaxBytes,
+    pruneCheckpointRefs = false,
   )
 
 internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): Map<String, Any?> =
@@ -208,9 +209,9 @@ internal fun GoalRunnerStatusProjection.monitorResumableState(): String =
     when {
       paused -> "paused"
       pauseRequested -> "pause_requested"
-      currentSubtaskId == null && pendingCount == 0 && blockedCount == 0 -> "complete"
-      step.isNullOrBlank() -> "resumable"
-      else -> "resumable_at:${singleLineBounded(step)}"
+      admittedParentComplete() -> "complete"
+      !step.isNullOrBlank() -> "resumable_at:${singleLineBounded(step)}"
+      else -> "resumable"
     }
   }
 

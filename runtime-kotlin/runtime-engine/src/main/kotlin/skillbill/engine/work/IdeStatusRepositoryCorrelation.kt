@@ -60,7 +60,7 @@ class IdeStatusRepositoryCorrelation(
     val normalized = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
     var sawSameRepo = false
     var sawOtherRepo = false
-    for (other in unitOfWork.workList.list(limit = null)) {
+    for (other in unitOfWork.workList.list(limit = null).items) {
       if (other.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) != normalized) continue
       when (correlateSameIssueWork(other, normalized)) {
         VerifyRepoCorrelation.SAME_REPO -> sawSameRepo = true

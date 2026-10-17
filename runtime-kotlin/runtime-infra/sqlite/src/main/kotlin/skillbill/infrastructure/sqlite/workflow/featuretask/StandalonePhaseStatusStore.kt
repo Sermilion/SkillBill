@@ -2,6 +2,8 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -118,9 +120,7 @@ internal class StandalonePhaseStatusStore(
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation))
-      statement.executeQuery().use { rows ->
-        buildList { while (rows.next()) add(rows.toRecord()) }
-      }
+      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
     }
   }
 
@@ -143,9 +143,7 @@ internal class StandalonePhaseStatusStore(
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(listOf(finishedFrom.toString(), finishedThrough.toString()))
-      statement.executeQuery().use { rows ->
-        buildList { while (rows.next()) add(rows.toRecord()) }
-      }
+      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
     }
 
   override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> {
@@ -167,7 +165,7 @@ internal class StandalonePhaseStatusStore(
           query.offset,
         ),
       )
-      statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toRecord()) } }
+      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
     }
   }
 
@@ -543,6 +541,44 @@ internal class StandalonePhaseStatusStore(
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
+  private fun readAggregateRecords(rows: ResultSet): List<StandalonePhaseStatusRecord> {
+    val skipDiagnostics = AggregateRowSkipDiagnostics()
+    return buildList {
+      while (rows.next()) {
+        rows.tryToRecordForAggregate(skipDiagnostics)?.let(::add)
+      }
+    }
+  }
+
+  private class AggregateRowSkipDiagnostics {
+    var emitted: Int = 0
+    var truncated: Boolean = false
+  }
+
+  private fun ResultSet.tryToRecordForAggregate(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+  ): StandalonePhaseStatusRecord? =
+    try {
+      toRecord()
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      val invocationId = getString("invocation_id") ?: "<unknown>"
+      if (skipDiagnostics.emitted < MAX_AGGREGATE_ROW_DIAGNOSTICS) {
+        diagnostics.warning(
+          "seam=standalone_phase_status value_expected=readable_standalone_row value_used=skipped " +
+            "invocation_id=$invocationId error=${error.message.orEmpty()}",
+        )
+        skipDiagnostics.emitted++
+      } else if (!skipDiagnostics.truncated) {
+        diagnostics.warning(
+          "seam=standalone_phase_status value_expected=readable_standalone_row value_used=truncated " +
+            "skipped_diagnostics_cap=$MAX_AGGREGATE_ROW_DIAGNOSTICS",
+        )
+        skipDiagnostics.truncated = true
+      }
+      null
+    }
+
   private fun ResultSet.toRecord(): StandalonePhaseStatusRecord =
     StandalonePhaseStatusRecord(
       repositoryIdentity = getString("repository_identity"),
@@ -558,20 +594,40 @@ internal class StandalonePhaseStatusStore(
       lifecycleState = getString("lifecycle_state"),
       currentStep = getString("current_step"),
       currentActivity = getString("current_activity"),
-      startedAt = Instant.parse(getString("started_at")),
-      updatedAt = Instant.parse(getString("updated_at")),
-      finishedAt = getString("finished_at")?.let(Instant::parse),
+      startedAt = standaloneInstant("started_at"),
+      updatedAt = standaloneInstant("updated_at"),
+      finishedAt = standaloneInstantOrNull("finished_at"),
       activeDurationMs = getLong("active_duration_ms").takeIf { !wasNull() },
-      activeDurationAsOf = getString("active_duration_as_of")?.let(Instant::parse),
+      activeDurationAsOf = standaloneInstantOrNull("active_duration_as_of"),
       leaseOwner = getString("lease_owner"),
       leaseGeneration = getLong("lease_generation"),
-      leaseExpiresAt = Instant.parse(getString("lease_expires_at")),
+      leaseExpiresAt = standaloneInstant("lease_expires_at"),
       terminalResult = getString("terminal_result"),
       acceptedResult = getString("accepted_result"),
       processOwner = readProcessOwner(),
       launchAgentId = getString("launch_agent_id"),
       launchArguments = readLaunchArguments(),
     )
+
+  private fun ResultSet.standaloneInstant(column: String): Instant {
+    val raw = getString(column)
+    return parsePersistedInstantOrNull(raw.orEmpty())
+      ?: throw invalidIdeStatusSchemaError(
+        sourceLabel = "standalone status '${getString("invocation_id")}'",
+        fieldPath = column,
+        reason = "Invalid persisted timestamp.",
+      )
+  }
+
+  private fun ResultSet.standaloneInstantOrNull(column: String): Instant? {
+    val raw = getString(column) ?: return null
+    return parsePersistedInstantOrNull(raw)
+      ?: throw invalidIdeStatusSchemaError(
+        sourceLabel = "standalone status '${getString("invocation_id")}'",
+        fieldPath = column,
+        reason = "Invalid persisted timestamp.",
+      )
+  }
 
   private fun ResultSet.readLaunchArguments(): List<String>? {
     val raw = getString("launch_arguments_json") ?: return null
@@ -623,6 +679,7 @@ internal class StandalonePhaseStatusStore(
   }
 
   private companion object {
+    const val MAX_AGGREGATE_ROW_DIAGNOSTICS = 32
     const val MAX_LAUNCH_ARGUMENTS = 128
     const val MAX_LAUNCH_ARGUMENT_LENGTH = 16384
     const val MONITOR_PHASE_ID = "monitor"

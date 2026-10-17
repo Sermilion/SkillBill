@@ -67,6 +67,7 @@ import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
@@ -551,7 +552,8 @@ internal class TrackingDatabase(
               .filter { row -> query.afterKey?.let { row.key < it } != false }.take(query.limit)
           }
 
-          override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+          override fun list(limit: Int?): WorkListListRead =
+            WorkListListRead(limit?.let(work::take) ?: work)
 
           override fun findByWorkflowId(workflowId: String): List<WorkItem> =
             work.filter { it.workflowId == workflowId }

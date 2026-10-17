@@ -771,7 +771,7 @@ class TransitionTracker {
       val event = when {
         item.lifecycle == Lifecycle.BLOCKED && prior.lifecycle != Lifecycle.BLOCKED -> "blocked"
         item.lifecycle == Lifecycle.FAILED && prior.lifecycle != Lifecycle.FAILED -> "failed"
-        item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.TERMINAL && prior.lifecycle != Lifecycle.TERMINAL -> "goal_completed"
+        item.successfulGoalCompletion() && prior.lifecycle != Lifecycle.TERMINAL -> "goal_completed"
         item.lifecycle == Lifecycle.PAUSED && prior.lifecycle != Lifecycle.PAUSED -> "pause_took_effect"
         item.scope == ExecutionScope.STANDALONE_PHASE && item.lifecycle == Lifecycle.TERMINAL && prior.lifecycle != Lifecycle.TERMINAL -> "standalone_phase_finished"
         else -> null
@@ -821,7 +821,12 @@ fun project(board: Board, now: java.time.Instant): BoardProjection {
   val live = phaseItems.filter { it.liveSection != null }
   return BoardProjection(board.items.count { it.liveSection in setOf(WorkSection.GOALS, WorkSection.PHASES) }, board.items.count {
     it.needsAttention()
-  }, board.items.count { it.lifecycle == Lifecycle.TERMINAL && it.finishedAt?.let { done -> !done.isBefore(board.observedAt.minus(Duration.ofHours(24))) && !done.isAfter(board.observedAt) } == true }, goals, live + finished, live, finished)
+  }, board.items.count {
+    it.successfulGoalCompletion() &&
+      it.finishedAt?.let { done ->
+        !done.isBefore(board.observedAt.minus(Duration.ofHours(24))) && !done.isAfter(board.observedAt)
+      } == true
+  }, goals, live + finished, live, finished)
 }
 
 fun displayedDuration(baseMs: Long?, asOf: java.time.Instant?, now: java.time.Instant, freshness: Freshness, live: Boolean): Long? {

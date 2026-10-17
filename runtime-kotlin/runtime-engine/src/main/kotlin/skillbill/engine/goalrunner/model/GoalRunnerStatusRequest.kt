@@ -11,7 +11,7 @@ data class GoalRunnerStatusRequest(
   val configuredAgentOverrideId: String? = null,
   val repoRoot: Path? = null,
   val includeDiffStat: Boolean = false,
-  val pruneCheckpointRefs: Boolean = true,
+  val pruneCheckpointRefs: Boolean = false,
   val includeCompletedSubtaskValidation: Boolean = true,
   val completedSubtaskValidationIds: Set<Int>? = null,
   val selectedDiffHunkPaths: List<String> = emptyList(),

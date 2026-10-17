@@ -33,7 +33,7 @@ internal fun goalWatchStopReason(
   when {
     projection == null -> CliPayloadStatus.NOT_FOUND
     projection.paused -> "goal_paused"
-    projection.pendingCount == 0 -> "goal_terminal"
+    projection.admittedParentComplete() -> "goal_terminal"
     idleStop -> "goal_idle"
     maxRefreshes > 0 && refreshCount >= maxRefreshes -> "max_refreshes"
     else -> null

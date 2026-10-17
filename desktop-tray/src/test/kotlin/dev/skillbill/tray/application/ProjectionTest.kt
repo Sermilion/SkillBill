@@ -15,7 +15,12 @@ class ProjectionTest {
     val failed = item("failed", Lifecycle.FAILED, WorkFamily.FEATURE_GOAL)
     val phase = item("c", Lifecycle.TERMINAL, WorkFamily.FEATURE_VERIFY).copy(scope = ExecutionScope.STANDALONE_PHASE, finishedAt = observed.minusSeconds(120), displayGroup = WorkSection.PHASES)
     val oldFinished = item("d", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL).copy(finishedAt = observed.minusSeconds(90_000))
-    val board = Board(observed, Retention.WEEK, listOf(running, blocked, failed, phase, oldFinished))
+    val recentSuccess =
+      item("e", Lifecycle.TERMINAL, WorkFamily.FEATURE_GOAL).copy(
+        finishedAt = observed.minusSeconds(120),
+        finishedAtSource = "goal_completion",
+      )
+    val board = Board(observed, Retention.WEEK, listOf(running, blocked, failed, phase, oldFinished, recentSuccess))
     val projection = project(board, observed.plusSeconds(10))
     assertEquals(listOf("a", "failed", "b"), projection.goals.map { it.identity.id })
     assertEquals(2, projection.needsYou)

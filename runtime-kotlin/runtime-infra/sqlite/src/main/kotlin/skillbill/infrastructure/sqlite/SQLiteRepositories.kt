@@ -97,7 +97,7 @@ internal class SQLiteUnitOfWork(
   override val telemetryOutbox: TelemetryOutboxRepository = TelemetryOutboxStore(connection, runtimeVersion)
   override val workflowStates: WorkflowStateRepository =
     WorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive)
-  override val workList: WorkListRepository = SQLiteWorkListRepository(connection)
+  override val workList: WorkListRepository = SQLiteWorkListRepository(connection, diagnostics)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
     GoalPlanningPreparationStore(connection, diagnostics, transactionActive)
   override val goalRunnerControls: GoalRunnerControlRepository =

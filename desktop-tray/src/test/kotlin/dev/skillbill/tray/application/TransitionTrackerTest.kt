@@ -24,7 +24,7 @@ class TransitionTrackerTest {
     val changes = listOf(
       initial[0].copy(lifecycle = Lifecycle.BLOCKED, updatedAt = initial[0].updatedAt.plusSeconds(1)),
       initial[1].copy(lifecycle = Lifecycle.FAILED, updatedAt = initial[1].updatedAt.plusSeconds(1)),
-      initial[2].copy(lifecycle = Lifecycle.TERMINAL, updatedAt = initial[2].updatedAt.plusSeconds(1)),
+      initial[2].copy(lifecycle = Lifecycle.TERMINAL, finishedAtSource = "goal_completion", updatedAt = initial[2].updatedAt.plusSeconds(1)),
       initial[3].copy(lifecycle = Lifecycle.PAUSED, updatedAt = initial[3].updatedAt.plusSeconds(1)),
       initial[4].copy(lifecycle = Lifecycle.TERMINAL, updatedAt = initial[4].updatedAt.plusSeconds(1)),
     )
@@ -38,7 +38,7 @@ class TransitionTrackerTest {
   fun `delayed live section cannot replay a completion from a newer recent section`() {
     val tracker = TransitionTracker()
     val active = item("goal", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL).copy(databaseStoreId = "store", databaseRevision = 10)
-    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, databaseRevision = 12)
+    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, finishedAtSource = "goal_completion", databaseRevision = 12)
     tracker.observe(board(listOf(active)))
     assertEquals(listOf("goal_completed"), tracker.observe(board(listOf(completed))).map { it.second })
     assertEquals(emptyList(), tracker.observe(board(listOf(active.copy(databaseRevision = 11)))))
@@ -49,15 +49,26 @@ class TransitionTrackerTest {
   fun `reconnect baseline absorbs completions while disconnected`() {
     val tracker = TransitionTracker()
     val active = item("goal", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL)
-    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, updatedAt = active.updatedAt.plusSeconds(1))
+    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, finishedAtSource = "goal_completion", updatedAt = active.updatedAt.plusSeconds(1))
     tracker.baseline(board(listOf(active)))
     tracker.baseline(board(listOf(completed)))
     assertEquals(emptyList(), tracker.observe(board(listOf(completed))))
 
     val newActive = item("new-goal", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL)
     tracker.baseline(board(listOf(completed, newActive)))
-    val newCompletion = newActive.copy(lifecycle = Lifecycle.TERMINAL, updatedAt = newActive.updatedAt.plusSeconds(1))
+    val newCompletion =
+      newActive.copy(lifecycle = Lifecycle.TERMINAL, finishedAtSource = "goal_completion", updatedAt = newActive.updatedAt.plusSeconds(1))
     assertEquals(listOf("goal_completed"), tracker.observe(board(listOf(completed, newCompletion))).map { it.second })
+  }
+
+  @Test
+  fun `terminal goal without completion provenance does not notify goal completed`() {
+    val tracker = TransitionTracker()
+    val active = item("goal", Lifecycle.ACTIVE, WorkFamily.FEATURE_GOAL)
+    val terminalWithoutProvenance =
+      active.copy(lifecycle = Lifecycle.TERMINAL, finishedAtSource = "goal_state_entry", updatedAt = active.updatedAt.plusSeconds(1))
+    tracker.observe(board(listOf(active)))
+    assertEquals(emptyList(), tracker.observe(board(listOf(terminalWithoutProvenance))).map { it.second })
   }
 
   private fun board(items: List<WorkItem>) = Board(Instant.parse("2026-10-11T10:00:00Z"), Retention.DAY, items)

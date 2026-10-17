@@ -843,7 +843,7 @@ class IdeStatusService(
     observedAt: Instant,
     resolved: ResolvedWorkCandidates? = null,
   ): List<IdeStatusCandidate> {
-    val work = resolved?.work?.map { it.item } ?: unitOfWork.workList.list(limit = null)
+    val work = resolved?.work?.map { it.item } ?: unitOfWork.workList.list(limit = null).items
     val issueKeysWithGoals =
       work
         .filter { it.workflowKind == WorkItemKind.FEATURE_GOAL }

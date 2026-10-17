@@ -123,7 +123,12 @@ data class GoalRunnerStatusProjection(
   val latestWorktreeEdit: WorktreeEditSummary? = null,
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
-)
+  val goalCompletedAt: String? = null,
+) {
+  fun admittedParentComplete(): Boolean =
+    !goalCompletedAt.isNullOrBlank() ||
+      noChangeStatus?.state == GoalNoChangeState.COMPLETED_NO_CHANGE
+}
 
 data class GoalRunnerSubtaskValidationEvidence(
   val subtaskId: Int,
@@ -190,6 +195,7 @@ data class GoalRunnerStatusProjectionRuntimeInputs(
   val latestWorktreeEdit: WorktreeEditSummary? = null,
   val auditAcRetryCount: Int? = null,
   val noChangeStatus: GoalRunnerNoChangeStatus? = null,
+  val goalCompletedAt: String? = null,
 )
 
 object GoalRunnerStatusProjector {

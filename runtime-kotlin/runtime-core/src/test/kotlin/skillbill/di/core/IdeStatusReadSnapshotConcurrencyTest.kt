@@ -23,6 +23,7 @@ import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -280,7 +281,7 @@ private class CountingWorkList(
   private val delegate: WorkListRepository,
   private val trigger: () -> Unit,
 ) : WorkListRepository by delegate {
-  override fun list(limit: Int?): List<WorkItem> = delegate.list(limit).also { trigger() }
+  override fun list(limit: Int?): WorkListListRead = delegate.list(limit).also { trigger() }
 
   override fun findByWorkflowId(workflowId: String): List<WorkItem> =
     delegate.findByWorkflowId(workflowId).also {
