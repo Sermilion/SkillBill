@@ -184,6 +184,13 @@ class DatabaseMigrationsTest {
   }
 
   @Test
+  fun `each desktop schema version increase has a migration`() {
+    val versions = DatabaseMigrations.migrations.map { migration -> migration.version }
+    assertEquals(DesktopReadSchema.VERSION, versions.last())
+    assertEquals((1..DesktopReadSchema.VERSION).filter { version -> version != 23 }, versions)
+  }
+
+  @Test
   fun `opening legacy audit storage preserves its rows without requiring or updating them`() {
     val root = Files.createTempDirectory("runtime-kotlin-stateless-audit-storage")
     val dbPath = root.resolve("legacy.db")
