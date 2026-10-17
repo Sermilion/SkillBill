@@ -64,7 +64,7 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push")
     val headBefore = git(repoRoot, "rev-parse", "HEAD")
 
-    val result = phaseEntry.run(monitorRequest("SKILL-904"))
+    val result = phaseEntry.runMonitor("SKILL-904")
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
@@ -72,19 +72,6 @@ class PhaseMonitorRunTest {
     assertEquals(emptyList(), launcher.requests)
     assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"))
     database.assertNoDurableWorkflowState()
-  }
-
-  @Test
-  fun `monitor finishes and reports when the branch has no open pull request`() {
-    initFeatureBranch()
-
-    val result =
-      entry(identity = { _, _ -> PullRequestIdentity.Absent }).run(monitorRequest(PULL_REQUEST_URL))
-
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
-    assertTrue(result.value.orEmpty().contains("No open pull request was found"), result.value)
-    assertEquals(emptyList(), launcher.requests)
   }
 
   @Test
@@ -100,7 +87,7 @@ class PhaseMonitorRunTest {
         )
       }
 
-    val result = entry(checks = failing).run(monitorRequest("SKILL-904"))
+    val result = entry(checks = failing).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
@@ -117,7 +104,7 @@ class PhaseMonitorRunTest {
     val result =
       entry(checks = { _, _ ->
         PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
-      }).run(monitorRequest("SKILL-904"))
+      }).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result)
     assertTrue("did not publish a source or merge change" in blocked.reason, blocked.reason)
@@ -142,7 +129,7 @@ class PhaseMonitorRunTest {
           )
         },
         checks = { _, _ -> PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.PASS, ""))) },
-      ).run(monitorRequest("SKILL-904"))
+      ).runMonitor("SKILL-904")
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
@@ -174,7 +161,7 @@ class PhaseMonitorRunTest {
       )
     }
 
-    val result = entry(identity = identity, checks = checks).run(monitorRequest("SKILL-904"))
+    val result = entry(identity = identity, checks = checks).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
@@ -194,7 +181,7 @@ class PhaseMonitorRunTest {
         )
       }
 
-    entry(checks = failing).run(monitorRequest("SKILL-904"))
+    entry(checks = failing).runMonitor("SKILL-904")
 
     val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
     assertTrue("Run the full project validation" in prompt, prompt)
@@ -290,7 +277,7 @@ class PhaseMonitorRunTest {
         PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
       }
 
-    val result = entry(checks = checks, agentLauncher = repairLauncher).run(monitorRequest("SKILL-904"))
+    val result = entry(checks = checks, agentLauncher = repairLauncher).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("Could not push branch"), blocked.reason)
@@ -367,6 +354,9 @@ class PhaseMonitorRunTest {
       invokedAgentId = "claude",
       intake = intake,
     )
+
+  private fun PhaseRunEntry.runMonitor(intake: String): PhaseRunResult =
+    runForGoal(monitorRequest(intake), "goal-parent", FEATURE_BRANCH)
 
   private fun repairLauncher(repair: () -> Unit): RuntimeRecordingLauncher =
     RuntimeRecordingLauncher { request ->

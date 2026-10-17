@@ -122,6 +122,22 @@ properties:
       path:
         type: string
         minLength: 1
+  outcome:
+    type: object
+    additionalProperties: false
+    required: [kind, detail]
+    properties:
+      kind:
+        enum:
+          - completed
+          - blocked
+          - setup_failed
+          - run_failed
+          - cancelled
+          - abandoned
+      detail:
+        type: string
+        minLength: 1
 x-coherence-checks:
   - updated_at must not be earlier than acquired_at
   - owner_token and generation fence every metadata mutation, cleanup, and release
@@ -130,3 +146,5 @@ x-coherence-checks:
   - state prepared requires execution_path, execution_branch, pinned_head_sha, pinned_base_sha, and last_published_sha
   - state retained requires retention and forbids released tombstone fields
   - state released forbids execution_path, execution_branch, owned_refs, and retention
+  - outcome is only recorded on settled (retained or released) records
+  - acquiring and prepared records carry no outcome

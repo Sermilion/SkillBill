@@ -34,10 +34,14 @@ data class PhaseRunRequest(
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   val activityOutput: ((String, String) -> Unit)? = null,
   val launchArguments: List<String>? = null,
+  val recoverStaleOwner: String? = null,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
     require(invokedAgentId.isNotBlank()) { "PhaseRunRequest.invokedAgentId is required." }
+    require(recoverStaleOwner == null || recoverStaleOwner.isNotBlank()) {
+      "PhaseRunRequest.recoverStaleOwner must not be blank."
+    }
   }
 }
 
@@ -45,6 +49,7 @@ sealed interface PhaseRunResult {
   val invocationId: String
   val completedStepIds: List<String>
   val reviewResult: ParallelCodeReviewResult?
+  val targetReport: List<String>
 
   data class Completed(
     override val invocationId: String,
@@ -54,6 +59,7 @@ sealed interface PhaseRunResult {
     val specBundle: PhaseRunSpecBundle? = null,
     val completedOutputs: List<String> = emptyList(),
     val acceptedOutput: String? = null,
+    override val targetReport: List<String> = emptyList(),
   ) : PhaseRunResult
 
   data class Blocked(
@@ -63,6 +69,7 @@ sealed interface PhaseRunResult {
     val stepId: String,
     val reason: String,
     val completedOutputs: List<String> = emptyList(),
+    override val targetReport: List<String> = emptyList(),
   ) : PhaseRunResult
 }
 

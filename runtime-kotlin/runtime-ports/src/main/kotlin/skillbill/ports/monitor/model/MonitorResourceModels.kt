@@ -95,6 +95,31 @@ enum class MonitorRetentionReason(val wireValue: String) {
   }
 }
 
+enum class MonitorOutcomeKind(val wireValue: String) {
+  COMPLETED("completed"),
+  BLOCKED("blocked"),
+  SETUP_FAILED("setup_failed"),
+  RUN_FAILED("run_failed"),
+  CANCELLED("cancelled"),
+  ABANDONED("abandoned"),
+  ;
+
+  companion object {
+    fun fromWire(value: String?): MonitorOutcomeKind? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
+data class MonitorPrimaryOutcome(
+  val kind: MonitorOutcomeKind,
+  val detail: String,
+)
+
+data class MonitorSettleRequest(
+  val fence: MonitorFence,
+  val outcome: MonitorPrimaryOutcome,
+  val removalAllowed: Boolean = true,
+)
+
 sealed interface MonitorSettlement {
   data object Released : MonitorSettlement
 

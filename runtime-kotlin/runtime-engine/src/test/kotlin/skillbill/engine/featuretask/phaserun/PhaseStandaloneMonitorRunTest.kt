@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
 import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.monitor.MonitorPullRequestSource
 import skillbill.ports.monitor.model.MonitorCallerRepository
@@ -57,6 +58,7 @@ class PhaseStandaloneMonitorRunTest {
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertEquals(SkeletonDefinition.MONITOR.id, blocked.stepId)
     assertTrue(blocked.reason.startsWith("Monitor target refused"), blocked.reason)
+    assertEquals(listOf("Selector: https://github.com/example/repo/pull/7"), blocked.targetReport)
     assertEquals(emptyList(), launcher.requests)
     assertEquals(emptyList(), git.checkoutCalls)
     database.assertNoDurableWorkflowState()
@@ -88,6 +90,7 @@ class PhaseStandaloneMonitorRunTest {
           object : ShutdownHookPort {
             override fun register(action: () -> Unit): ShutdownHookRegistration = error("goal runs register no hook")
           },
+          AgentRunChildDrain { true },
         ),
       ).entry()
 

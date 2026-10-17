@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.phaserun.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -11,6 +13,8 @@ import skillbill.ports.monitor.model.MonitorContextResolution
 import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchRejection
 import skillbill.ports.monitor.model.MonitorFetchResult
+import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorRepositoryContext
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorStaleRecovery
@@ -24,6 +28,7 @@ class StandaloneMonitorExecutionPreparer(
   private val resources: StandaloneMonitorResources,
   private val diagnostics: RuntimeDiagnostics,
   private val shutdownHooks: ShutdownHookPort,
+  private val childDrain: AgentRunChildDrain,
 ) {
   fun prepare(request: MonitorPreparationRequest): MonitorPreparation =
     when (val parsed = parseMonitorIntake(request.intake, request.currentBranch)) {
@@ -92,14 +97,27 @@ class StandaloneMonitorExecutionPreparer(
     context: MonitorRepositoryContext,
     target: MonitorResolvedTarget,
   ): MonitorPreparation {
-    val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics, shutdownHooks)
+    val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics, shutdownHooks, childDrain)
     var handedOff = false
     try {
       val prepared = createWorkspace(fence, context, target, cleanup)
       handedOff = prepared is MonitorPreparation.Prepared
       return prepared
+    } catch (interrupted: InterruptedException) {
+      cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "Monitor preparation was interrupted."))
+      Thread.currentThread().interrupt()
+      throw interrupted
+    } catch (failure: RuntimeException) {
+      val detail = monitorOutcomeDetail(failure.message, failure::class.java.simpleName)
+      val settlement = cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, detail))
+      if (failure !is SkillBillRuntimeException) throw failure
+      return MonitorPreparation.Failed(detail, target.pullRequest, settlement)
     } finally {
-      if (!handedOff) cleanup.settle()
+      if (!handedOff) {
+        cleanup.settle(
+          MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "Monitor preparation ended before handing off."),
+        )
+      }
     }
   }
 
@@ -110,15 +128,29 @@ class StandaloneMonitorExecutionPreparer(
     cleanup: MonitorCleanupOwnership,
   ): MonitorPreparation =
     when (val fetched = resources.fetchPinned(fence, target)) {
-      is MonitorFetchResult.Rejected ->
-        MonitorPreparation.Blocked(fetchBlockKind(fetched.reason), fetched.detail, target.pullRequest)
+      is MonitorFetchResult.Rejected -> {
+        val kind = fetchBlockKind(fetched.reason)
+        val settlement =
+          cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "$kind: ${fetched.detail}"))
+        MonitorPreparation.Blocked(kind, fetched.detail, target.pullRequest, settlement = settlement)
+      }
       is MonitorFetchResult.Fetched -> {
         val worktree =
           cleanup.exclusive {
-            resources.createWorktree(fence, target, fetched.refs).also { resources.markPrepared(fence, target, it) }
+            resources.createWorktree(fence, target, fetched.refs).also {
+              cleanup.recordWorktree(it.path)
+              resources.markPrepared(fence, target, it)
+            }
           }
         MonitorPreparation.Prepared(
-          MonitorExecutionContext(target, context.callerRoot, worktree, fence.ownerToken, fence.generation),
+          MonitorExecutionContext(
+            target,
+            context.callerRoot,
+            context.primaryRoot,
+            worktree,
+            fence.ownerToken,
+            fence.generation,
+          ),
           cleanup,
         )
       }

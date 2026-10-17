@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.monitor
 
 import skillbill.ports.monitor.model.MonitorOwnershipState
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.monitor.model.MonitorSettlement
@@ -29,14 +30,25 @@ internal class MonitorOwnedCleanup(
     directory: Path,
     record: MonitorOwnershipRecord,
     target: MonitorResolvedTarget?,
+    outcome: MonitorPrimaryOutcome?,
+    removalAllowed: Boolean = true,
   ): MonitorSettlement {
-    val retention = retentionFor(directory, record, target)
+    val retention =
+      retentionFor(directory, record, target)
+        ?: if (removalAllowed) null else childMayBeRunningRetention(record)
     return if (retention != null) {
-      retain(directory, record, retention)
+      retain(directory, record, retention, outcome)
     } else {
-      removeOwned(directory, record)
+      removeOwned(directory, record, outcome)
     }
   }
+
+  private fun childMayBeRunningRetention(record: MonitorOwnershipRecord): MonitorSettlement.Retained =
+    MonitorSettlement.Retained(
+      MonitorRetentionReason.PUBLICATION_UNKNOWN,
+      record.executionPath?.let(Path::of),
+      "an owned repair child may still be running; publication cannot be verified",
+    )
 
   private fun retentionFor(
     directory: Path,
@@ -159,6 +171,7 @@ internal class MonitorOwnedCleanup(
   private fun removeOwned(
     directory: Path,
     record: MonitorOwnershipRecord,
+    outcome: MonitorPrimaryOutcome?,
   ): MonitorSettlement {
     val primaryRoot = Path.of(record.primaryRoot)
     val failure =
@@ -172,6 +185,7 @@ internal class MonitorOwnedCleanup(
           executionBranch = null,
           ownedRefs = emptyList(),
           retention = null,
+          outcome = outcome,
           updatedAt = monitorNow(clock, record),
         ),
       )
@@ -185,6 +199,7 @@ internal class MonitorOwnedCleanup(
           record.executionPath?.let(Path::of),
           failure,
         ),
+        outcome,
       )
     }
   }
@@ -223,12 +238,14 @@ internal class MonitorOwnedCleanup(
     directory: Path,
     record: MonitorOwnershipRecord,
     retention: MonitorSettlement.Retained,
+    outcome: MonitorPrimaryOutcome?,
   ): MonitorSettlement {
     MonitorAdmissionFiles.write(
       directory,
       record.copy(
         state = MonitorOwnershipState.RETAINED,
         retention = MonitorRetentionRecord(retention.reason, retention.detail, retention.path?.toString()),
+        outcome = outcome,
         updatedAt = monitorNow(clock, record),
       ),
     )

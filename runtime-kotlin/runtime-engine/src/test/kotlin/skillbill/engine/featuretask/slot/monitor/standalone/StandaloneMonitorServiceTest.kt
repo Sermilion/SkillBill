@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phaserun.monitor.head
 import skillbill.engine.featuretask.phaserun.monitor.pullRequest
 import skillbill.engine.featuretask.runloop.finalization.standalone.StandaloneRepairCommit
 import skillbill.engine.featuretask.slot.state.StandalonePublication
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
@@ -94,7 +95,7 @@ class StandaloneMonitorServiceTest {
     )
   private val ledger =
     StandaloneMonitorLedger(
-      MonitorExecutionContext(target, Path.of("/caller"), WORKTREE, "owner-token", 1L),
+      MonitorExecutionContext(target, Path.of("/caller"), Path.of("/caller"), WORKTREE, "owner-token", 1L),
       MonitorCleanupOwnership(
         MonitorFence(Path.of("/fence"), "owner-token", 1L),
         UnreachableMonitorResources(),
@@ -102,6 +103,7 @@ class StandaloneMonitorServiceTest {
         object : ShutdownHookPort {
           override fun register(action: () -> Unit): ShutdownHookRegistration = ShutdownHookRegistration { true }
         },
+        AgentRunChildDrain { true },
       ),
     )
 

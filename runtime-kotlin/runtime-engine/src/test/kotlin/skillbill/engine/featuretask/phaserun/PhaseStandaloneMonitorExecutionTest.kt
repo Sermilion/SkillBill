@@ -25,6 +25,7 @@ import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.infrastructure.workflow.monitor.GitMonitorRepairPublisher
 import skillbill.infrastructure.workflow.monitor.GitMonitorResources
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
@@ -168,6 +169,10 @@ class PhaseStandaloneMonitorExecutionTest {
     val worktree = repairCwds.single()
     assertEquals(headSha, git(worktree, "rev-parse", "HEAD"), "an unresolved repair must not be committed")
     assertEquals("class Fix1", Files.readString(worktree.resolve("Fix.kt")).trim(), "the attempted edit is retained")
+    assertTrue("Pull request: $PULL_REQUEST_URL" in blocked.targetReport, blocked.targetReport.toString())
+    assertTrue("Worktree: $worktree" in blocked.targetReport, blocked.targetReport.toString())
+    val cleanup = blocked.targetReport.single { it.startsWith("Cleanup:") }
+    assertTrue(cleanup.startsWith("Cleanup: retained (untracked_files)") && worktree.toString() in cleanup, cleanup)
   }
 
   @Test
@@ -175,6 +180,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val result = run()
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertTrue("Cleanup: released" in result.targetReport, result.targetReport.toString())
     assertEquals(headSha, forkHead())
     assertEquals(emptyList(), repairCwds)
     assertEquals(listOf("refs/heads/$FEATURE_BRANCH", "refs/heads/main"), refs(fork))
@@ -296,6 +302,7 @@ class PhaseStandaloneMonitorExecutionTest {
         GitMonitorResources(LiveProcessInspector, clock),
         NoopRuntimeDiagnostics,
         IgnoredShutdownHooks,
+        AgentRunChildDrain { true },
       )
     val entry =
       PhaseRunEntryFixture(

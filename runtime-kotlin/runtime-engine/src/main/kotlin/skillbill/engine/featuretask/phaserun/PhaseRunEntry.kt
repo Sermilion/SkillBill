@@ -19,6 +19,9 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
+import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -42,6 +45,7 @@ class PhaseRunEntry(
   private val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
+    if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
     val invocationId = newInvocationId()
     return withStatus(request, invocationId, request.definitionId) { statusRequest ->
       runInternal(statusRequest, invocationId)
@@ -54,9 +58,24 @@ class PhaseRunEntry(
       requireNotNull(SkeletonDefinition.preparedExecutionFor(request.definitionId)) {
         "Phase ${request.definitionId} has no prepared standalone execution."
       }
+    val branch = currentBranch(request)?.branch
+    val selector = request.intake?.trim()?.takeIf(String::isNotEmpty) ?: branch?.let { "branch $it" } ?: "no target"
+    if (request.recoverStaleOwner != null && request.intake.isNullOrBlank()) {
+      return monitorBlocked(
+        request,
+        invocationId,
+        "Stale owner recovery needs an explicit pull request target.",
+        listOf("Selector: $selector"),
+      )
+    }
     val preparation =
       standaloneMonitorPreparer.prepare(
-        MonitorPreparationRequest(request.repoRoot, request.intake, currentBranch(request)?.branch),
+        MonitorPreparationRequest(
+          request.repoRoot,
+          request.intake,
+          branch,
+          request.recoverStaleOwner?.let(::MonitorExpectedOwnerToken),
+        ),
       )
     return when (preparation) {
       is MonitorPreparation.Prepared -> runPrepared(request, definition, invocationId, preparation)
@@ -67,13 +86,15 @@ class PhaseRunEntry(
           null,
           preparation.pullRequest
             ?.let { "${it.targetKey} is already merged; there is nothing to monitor." }
-            ?: "No open pull request matched the monitor target; there is nothing to monitor.",
+            ?: "No open pull request matched $selector; there is nothing to monitor.",
+          targetReport = earlyReport(selector, preparation.pullRequest),
         )
       is MonitorPreparation.Blocked ->
         monitorBlocked(
           request,
           invocationId,
           listOfNotNull(preparation.detail, preparation.path?.let { "Path: $it." }).joinToString(" "),
+          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
         )
       is MonitorPreparation.Refused ->
         monitorBlocked(
@@ -81,8 +102,15 @@ class PhaseRunEntry(
           invocationId,
           (listOf("Monitor target refused (${preparation.reason}): ${preparation.detail}") + preparation.candidateUrls)
             .joinToString(" "),
+          earlyReport(selector, null),
         )
-      is MonitorPreparation.Failed -> monitorBlocked(request, invocationId, preparation.reason)
+      is MonitorPreparation.Failed ->
+        monitorBlocked(
+          request,
+          invocationId,
+          preparation.reason,
+          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+        )
     }
   }
 
@@ -104,11 +132,13 @@ class PhaseRunEntry(
         repoRoot = prepared.context.worktree.path,
       )
     try {
-      return withStatus(ownedRequest, invocationId, request.definitionId) { statusRequest ->
+      return withStatus(ownedRequest, invocationId, request.definitionId, prepared) { statusRequest ->
         runInternal(statusRequest, invocationId, standalone = prepared)
       }
     } finally {
-      prepared.cleanup.settle()
+      prepared.cleanup.settle(
+        MonitorPrimaryOutcome(MonitorOutcomeKind.RUN_FAILED, "The monitor run ended before its outcome was recorded."),
+      )
     }
   }
 
@@ -116,10 +146,19 @@ class PhaseRunEntry(
     request: PhaseRunRequest,
     invocationId: String,
     publicPhaseId: String,
+    monitor: MonitorPreparation.Prepared? = null,
     body: (PhaseRunRequest) -> PhaseRunResult,
   ): PhaseRunResult {
     val publisher =
-      statusPublisherFactory.forPhase(
+      monitor?.let {
+        statusPublisherFactory.forMonitor(
+          it.context,
+          publicPhaseId,
+          invocationId,
+          request.invokedAgentId,
+          request.launchArguments,
+        )
+      } ?: statusPublisherFactory.forPhase(
         request.repoRoot,
         publicPhaseId,
         invocationId,
@@ -134,17 +173,37 @@ class PhaseRunEntry(
           request.activityOutput?.invoke(stepName, activity)
         },
       )
-    return runCatching { body(statusRequest) }
+    monitor?.cleanup?.onSettled { settlement ->
+      runCatching { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }
+    }
+    val outcome = runCatching { body(statusRequest) }
+    val settlement = monitor?.cleanup?.settle(primaryOutcomeOf(outcome))
+    return outcome
+      .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement) }
       .onSuccess(publisher::settle)
       .onFailure(publisher::settleFailure)
-      .getOrThrow()
+      .getOrElse { failure ->
+        if (monitor == null || settlement == null || failure !is Exception || failure is InterruptedException) {
+          throw failure
+        }
+        throw monitorRunFailure(failure, monitor.context, settlement)
+      }
   }
 
   private fun monitorBlocked(
     request: PhaseRunRequest,
     invocationId: String,
     reason: String,
-  ): PhaseRunResult.Blocked = PhaseRunResult.Blocked(invocationId, emptyList(), null, request.definitionId, reason)
+    targetReport: List<String>,
+  ): PhaseRunResult.Blocked =
+    PhaseRunResult.Blocked(
+      invocationId,
+      emptyList(),
+      null,
+      request.definitionId,
+      reason,
+      targetReport = targetReport,
+    )
 
   private fun runInternal(
     request: PhaseRunRequest,

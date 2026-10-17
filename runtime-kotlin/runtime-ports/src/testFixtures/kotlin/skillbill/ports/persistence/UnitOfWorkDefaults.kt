@@ -43,9 +43,10 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
 
       override fun readEligible(
         repositoryIdentity: String,
-        branchCorrelation: String,
+        branchCorrelation: String?,
         now: Instant,
         page: StandaloneEligiblePage,
+        monitorRepositoryIdentity: String,
       ): List<StandalonePhaseStatusRecord> = emptyList()
 
       override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> =

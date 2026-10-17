@@ -20,6 +20,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -228,6 +229,68 @@ class IdeStatusServiceBranchScopingTest {
     assertEquals("goal-1", result.snapshot.workflowId)
   }
 
+  @Test
+  fun `pull request monitor is reported from an unrelated checkout with its exact target`() {
+    val fixture = gitRepoFixture("ide-status-monitor-target", branch = "feat/OTHER-9-unrelated")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val record =
+      StandalonePhaseStatusRecord(
+        repositoryIdentity = identity,
+        branchCorrelation = "feat/SKILL-427-shared",
+        issueKey = null,
+        workflowId = null,
+        invocationId = "monitor-invocation",
+        phaseId = "monitor",
+        executionId = "monitor-execution",
+        statusStoreId = "store",
+        runSequence = "1",
+        statusRevision = "1",
+        lifecycleState = "active",
+        currentStep = "monitor",
+        currentActivity = null,
+        startedAt = ideStatusObservedAt.minusSeconds(60),
+        updatedAt = ideStatusObservedAt,
+        finishedAt = null,
+        activeDurationMs = null,
+        activeDurationAsOf = null,
+        leaseOwner = "owner",
+        leaseGeneration = 1L,
+        leaseExpiresAt = ideStatusObservedAt.plusSeconds(3600),
+        terminalResult = null,
+        monitorTarget =
+          StandaloneMonitorTarget(
+            pullRequestKey = "github.com/acme/repo#7",
+            pullRequestUrl = "https://github.com/acme/repo/pull/7",
+            headRepository = "github.com/fork-a/repo",
+            headRef = "feat/SKILL-427-shared",
+            callerRoot = fixture.toString(),
+            worktreePath = "/wt/7",
+          ),
+      )
+    val base = TrackingDatabase(work = emptyList(), workflows = IdeStatusWorkflowStates())
+    val statuses =
+      object : StandalonePhaseStatusRepository by base.unitOfWork().standalonePhaseStatuses {
+        override fun readEligible(
+          repositoryIdentity: String,
+          branchCorrelation: String?,
+          now: Instant,
+          page: StandaloneEligiblePage,
+          monitorRepositoryIdentity: String,
+        ): List<StandalonePhaseStatusRecord> = listOf(record).eligiblePage(page)
+      }
+
+    val result =
+      ideStatusService(TrackingDatabase(emptyList(), base.workflows, statusRepository = statuses)).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertNull(result.snapshot.problem)
+    assertEquals("monitor-execution", result.snapshot.execution?.executionId)
+    val summary = requireNotNull(result.snapshot.summary)
+    assertEquals(true, "Pull request https://github.com/acme/repo/pull/7;" in summary, summary)
+    assertEquals(true, "worktree /wt/7" in summary, summary)
+  }
+
   private fun registeredGoalDatabase(
     identity: String,
     registeredBranch: String,
@@ -256,9 +319,10 @@ class IdeStatusServiceBranchScopingTest {
 
         override fun readEligible(
           repositoryIdentity: String,
-          branchCorrelation: String,
+          branchCorrelation: String?,
           now: Instant,
           page: StandaloneEligiblePage,
+          monitorRepositoryIdentity: String,
         ): List<StandalonePhaseStatusRecord> = eligibleStandalones.eligiblePage(page)
       }
     return TrackingDatabase(

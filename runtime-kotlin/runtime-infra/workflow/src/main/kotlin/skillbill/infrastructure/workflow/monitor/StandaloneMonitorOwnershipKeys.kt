@@ -42,6 +42,9 @@ object StandaloneMonitorOwnershipKeys {
   const val RETENTION_REASON = "reason"
   const val RETENTION_DETAIL = "detail"
   const val RETENTION_PATH = "path"
+  const val OUTCOME = "outcome"
+  const val OUTCOME_KIND = "kind"
+  const val OUTCOME_DETAIL = "detail"
 
   val TOP_LEVEL: Set<String> =
     setOf(
@@ -64,8 +67,10 @@ object StandaloneMonitorOwnershipKeys {
       ACQUIRED_AT,
       UPDATED_AT,
       RETENTION,
+      OUTCOME,
     )
   val TARGET_FIELDS: Set<String> = setOf(TARGET_HOST, TARGET_REPOSITORY, TARGET_NUMBER, TARGET_URL)
   val PROCESS_FIELDS: Set<String> = setOf(HOST_IDENTITY, BOOT_IDENTITY, PID, PROCESS_BIRTH_TOKEN)
   val RETENTION_FIELDS: Set<String> = setOf(RETENTION_REASON, RETENTION_DETAIL, RETENTION_PATH)
+  val OUTCOME_FIELDS: Set<String> = setOf(OUTCOME_KIND, OUTCOME_DETAIL)
 }

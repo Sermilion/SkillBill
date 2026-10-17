@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phaserun.monitor
 
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.monitor.StandaloneMonitorResources
 import skillbill.ports.monitor.model.MonitorAcquireRequest
@@ -11,12 +12,15 @@ import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchRejection
 import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorFetchedRefs
+import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
 import skillbill.ports.monitor.model.MonitorRecoveryRefusal
 import skillbill.ports.monitor.model.MonitorRepositoryContext
 import skillbill.ports.monitor.model.MonitorResolvedTarget
 import skillbill.ports.monitor.model.MonitorRetentionReason
+import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
@@ -51,6 +55,9 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
     error: Throwable?,
   ) = Unit
 }
+
+private fun MonitorCleanupOwnership.settleCompleted(): MonitorSettlement =
+  settle(MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed"))
 
 private class RecordingResources : StandaloneMonitorResources {
   val calls = mutableListOf<String>()
@@ -95,7 +102,7 @@ private class RecordingResources : StandaloneMonitorResources {
     worktree: MonitorWorktree,
   ) = step("markPrepared") { Unit }
 
-  override fun settle(fence: MonitorFence): MonitorSettlement =
+  override fun settle(request: MonitorSettleRequest): MonitorSettlement =
     step("settle") {
       settleFailure?.let { throw it }
       settlement
@@ -129,7 +136,13 @@ class StandaloneMonitorExecutionPreparerTest {
   private val diagnostics = RecordingDiagnostics()
   private val shutdownHooks = RecordingShutdownHooks()
   private val preparer =
-    StandaloneMonitorExecutionPreparer(MonitorTargetResolver(source), resources, diagnostics, shutdownHooks)
+    StandaloneMonitorExecutionPreparer(
+      MonitorTargetResolver(source),
+      resources,
+      diagnostics,
+      shutdownHooks,
+      AgentRunChildDrain { true },
+    )
 
   private fun prepare(
     intake: String? = PR_URL,
@@ -150,7 +163,7 @@ class StandaloneMonitorExecutionPreparerTest {
     assertEquals(Path.of("/wt"), prepared.context.worktree.path)
     assertEquals(CALLER_ROOT, prepared.context.callerRoot)
 
-    assertEquals(MonitorSettlement.Released, prepared.cleanup.settle())
+    assertEquals(MonitorSettlement.Released, prepared.cleanup.settleCompleted())
   }
 
   @Test
@@ -162,7 +175,7 @@ class StandaloneMonitorExecutionPreparerTest {
 
     assertEquals(1, resources.calls.count { it == "settle" })
     assertTrue(shutdownHooks.registered.isEmpty())
-    assertEquals(MonitorSettlement.Released, prepared.cleanup.settle())
+    assertEquals(MonitorSettlement.Released, prepared.cleanup.settleCompleted())
     assertEquals(1, resources.calls.count { it == "settle" })
   }
 
@@ -171,8 +184,8 @@ class StandaloneMonitorExecutionPreparerTest {
     resources.settlement = MonitorSettlement.Retained(MonitorRetentionReason.DIRTY_WORKTREE, Path.of("/wt"), "edits")
     val prepared = assertIs<MonitorPreparation.Prepared>(prepare())
 
-    val first = prepared.cleanup.settle()
-    val second = prepared.cleanup.settle()
+    val first = prepared.cleanup.settleCompleted()
+    val second = prepared.cleanup.settleCompleted()
 
     assertSame(first, second)
     assertEquals(1, resources.calls.count { it == "settle" })
@@ -184,7 +197,7 @@ class StandaloneMonitorExecutionPreparerTest {
     resources.settleFailure = IllegalStateException("disk gone")
     val prepared = assertIs<MonitorPreparation.Prepared>(prepare())
 
-    val settled = assertIs<MonitorSettlement.Retained>(prepared.cleanup.settle())
+    val settled = assertIs<MonitorSettlement.Retained>(prepared.cleanup.settleCompleted())
 
     assertEquals(MonitorRetentionReason.CLEANUP_FAILED, settled.reason)
     assertEquals("disk gone", settled.detail)
@@ -249,7 +262,7 @@ class StandaloneMonitorExecutionPreparerTest {
 
     resources.calls.clear()
     resources.recovery = MonitorStaleRecovery.Recovered("old-token")
-    assertIs<MonitorPreparation.Prepared>(prepare(expectedStaleOwner = expected)).cleanup.settle()
+    assertIs<MonitorPreparation.Prepared>(prepare(expectedStaleOwner = expected)).cleanup.settleCompleted()
     assertEquals("recoverStale", resources.calls[1])
     assertEquals("acquire", resources.calls[2])
   }

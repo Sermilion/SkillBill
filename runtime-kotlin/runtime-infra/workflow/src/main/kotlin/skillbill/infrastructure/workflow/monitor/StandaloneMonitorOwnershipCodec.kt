@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.workflow.identity.task.STANDALONE_MONITOR_OWNERSHIP_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorOwnershipState
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.monitor.model.MonitorRetentionReason
@@ -43,6 +45,7 @@ internal data class MonitorOwnershipRecord(
   val acquiredAt: Instant,
   val updatedAt: Instant,
   val retention: MonitorRetentionRecord?,
+  val outcome: MonitorPrimaryOutcome? = null,
 )
 
 internal object StandaloneMonitorOwnershipCodec {
@@ -72,6 +75,7 @@ internal object StandaloneMonitorOwnershipCodec {
     root.put(Keys.ACQUIRED_AT, record.acquiredAt.toString())
     root.put(Keys.UPDATED_AT, record.updatedAt.toString())
     record.retention?.let { root.set<ObjectNode>(Keys.RETENTION, retentionNode(it)) }
+    record.outcome?.let { root.set<ObjectNode>(Keys.OUTCOME, outcomeNode(it)) }
     return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root)
   }
 
@@ -120,6 +124,7 @@ internal object StandaloneMonitorOwnershipCodec {
       acquiredAt = reader.instant(root, Keys.ACQUIRED_AT),
       updatedAt = reader.instant(root, Keys.UPDATED_AT),
       retention = retentionOf(root.path(Keys.RETENTION), reader, label),
+      outcome = outcomeOf(root.path(Keys.OUTCOME), reader, label),
     )
   }
 
@@ -174,6 +179,20 @@ internal object StandaloneMonitorOwnershipCodec {
     )
   }
 
+  private fun outcomeOf(
+    node: JsonNode,
+    reader: FieldReader,
+    label: String,
+  ): MonitorPrimaryOutcome? {
+    if (node.isMissingNode) return null
+    requireObject(node, Keys.OUTCOME, label)
+    requireKnownKeys(node, Keys.OUTCOME_FIELDS, label, Keys.OUTCOME)
+    val kind =
+      MonitorOutcomeKind.fromWire(reader.text(node, Keys.OUTCOME_KIND))
+        ?: throw invalid(label, "unknown outcome kind")
+    return MonitorPrimaryOutcome(kind, reader.text(node, Keys.OUTCOME_DETAIL))
+  }
+
   private fun checkCoherence(
     record: MonitorOwnershipRecord,
     label: String,
@@ -191,6 +210,9 @@ internal object StandaloneMonitorOwnershipCodec {
         record.updatedAt.isBefore(record.acquiredAt) -> "updated_at is earlier than acquired_at"
         record.state == MonitorOwnershipState.PREPARED && prepared.any { it == null } ->
           "a prepared record needs the execution path, branch, and every pinned and published SHA"
+        record.outcome != null &&
+          record.state in setOf(MonitorOwnershipState.ACQUIRING, MonitorOwnershipState.PREPARED) ->
+          "an acquiring or prepared record must not carry an outcome"
         record.state == MonitorOwnershipState.RETAINED && record.retention == null ->
           "a retained record needs a retention reason"
         record.state != MonitorOwnershipState.RETAINED && record.retention != null ->
@@ -261,6 +283,12 @@ internal object StandaloneMonitorOwnershipCodec {
       put(Keys.RETENTION_REASON, retention.reason.wireValue)
       put(Keys.RETENTION_DETAIL, retention.detail)
       retention.path?.let { put(Keys.RETENTION_PATH, it) }
+    }
+
+  private fun outcomeNode(outcome: MonitorPrimaryOutcome): ObjectNode =
+    mapper.createObjectNode().apply {
+      put(Keys.OUTCOME_KIND, outcome.kind.wireValue)
+      put(Keys.OUTCOME_DETAIL, outcome.detail)
     }
 
   private class FieldReader(private val label: String) {

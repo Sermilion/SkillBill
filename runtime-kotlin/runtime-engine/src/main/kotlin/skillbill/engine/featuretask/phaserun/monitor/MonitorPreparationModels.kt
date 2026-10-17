@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun.monitor
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorSettlement
 import java.nio.file.Path
 
 data class MonitorPreparationRequest(
@@ -38,6 +39,7 @@ sealed interface MonitorPreparation {
     val detail: String,
     val pullRequest: MonitorPullRequestIdentity?,
     val path: Path? = null,
+    val settlement: MonitorSettlement? = null,
   ) : MonitorPreparation
 
   data class Refused(
@@ -46,5 +48,9 @@ sealed interface MonitorPreparation {
     val candidateUrls: List<String> = emptyList(),
   ) : MonitorPreparation
 
-  data class Failed(val reason: String) : MonitorPreparation
+  data class Failed(
+    val reason: String,
+    val pullRequest: MonitorPullRequestIdentity? = null,
+    val settlement: MonitorSettlement? = null,
+  ) : MonitorPreparation
 }

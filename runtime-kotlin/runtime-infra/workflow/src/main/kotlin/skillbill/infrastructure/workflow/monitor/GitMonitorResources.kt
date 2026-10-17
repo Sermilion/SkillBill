@@ -13,10 +13,14 @@ import skillbill.ports.monitor.model.MonitorFetchRejection
 import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorFetchedRefs
 import skillbill.ports.monitor.model.MonitorOwnerSummary
+import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorOwnershipState
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorRecoveryRefusal
 import skillbill.ports.monitor.model.MonitorRepositoryContext
 import skillbill.ports.monitor.model.MonitorResolvedTarget
+import skillbill.ports.monitor.model.MonitorRetentionReason
+import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
@@ -28,6 +32,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
+
+private val URL_USERINFO = Regex("(?i)(https?://)([^\\s/@]+)@")
+private const val MAX_FAILURE_DETAIL = 1000
 
 private class HeldOwnership(
   val admission: HeldAdmission,
@@ -98,7 +105,8 @@ class GitMonitorResources(
     val block = existing?.let(::admissionBlock)
     if (block != null) {
       admission.close()
-      return MonitorAcquisition.Blocked(block, directory, blockDetail(existing, block), summaryOf(existing))
+      val path = if (block == MonitorAdmissionBlock.RETAINED_WORK) retainedPath(existing, directory) else directory
+      return MonitorAcquisition.Blocked(block, path, blockDetail(existing, block), summaryOf(existing))
     }
     val generation = (existing?.generation ?: 0) + 1
     var admitted = false
@@ -198,7 +206,8 @@ class GitMonitorResources(
     )
   }
 
-  override fun settle(fence: MonitorFence): MonitorSettlement {
+  override fun settle(request: MonitorSettleRequest): MonitorSettlement {
+    val fence = request.fence
     val ownership = held[fence.directory]?.takeIf { it.matches(fence) }
     val record = ownership?.let { runCatching { MonitorAdmissionFiles.read(fence.directory) }.getOrNull() }
     if (ownership == null || record == null || !record.isOwnedBy(fence)) {
@@ -206,11 +215,46 @@ class GitMonitorResources(
       return MonitorSettlement.FenceLost("The ownership of ${fence.directory} is no longer held by this invocation.")
     }
     return try {
-      cleanup.settle(fence.directory, record, ownership.target)
+      cleanup.settle(fence.directory, record, ownership.target, request.outcome, request.removalAllowed)
+    } catch (failure: RuntimeException) {
+      cleanupFailure(fence, record, request.outcome, failure)
     } finally {
       release(fence, ownership)
     }
   }
+
+  private fun cleanupFailure(
+    fence: MonitorFence,
+    record: MonitorOwnershipRecord,
+    outcome: MonitorPrimaryOutcome,
+    failure: RuntimeException,
+  ): MonitorSettlement.Retained {
+    val path = record.executionPath?.let(Path::of) ?: fence.directory
+    val detail = redactedFailureDetail(failure)
+    val retained = MonitorSettlement.Retained(MonitorRetentionReason.CLEANUP_FAILED, path, detail)
+    try {
+      val current = MonitorAdmissionFiles.read(fence.directory)
+      if (current != null && current.isOwnedBy(fence)) {
+        MonitorAdmissionFiles.write(
+          fence.directory,
+          current.copy(
+            state = MonitorOwnershipState.RETAINED,
+            retention = MonitorRetentionRecord(retained.reason, detail, path.toString()),
+            outcome = outcome,
+            updatedAt = monitorNow(clock, current),
+          ),
+        )
+      }
+    } catch (writeFailure: RuntimeException) {
+      failure.addSuppressed(writeFailure)
+    }
+    return retained
+  }
+
+  private fun redactedFailureDetail(failure: Throwable): String =
+    (failure.message?.takeIf(String::isNotBlank) ?: failure::class.java.simpleName)
+      .replace(URL_USERINFO, "$1<redacted>@")
+      .take(MAX_FAILURE_DETAIL)
 
   private fun release(
     fence: MonitorFence,
@@ -244,41 +288,73 @@ class GitMonitorResources(
       } catch (failure: SkillBillRuntimeException) {
         return refusal(MonitorRecoveryRefusal.CORRUPT_OWNERSHIP, directory, failure.message.orEmpty())
       }
-    val refused = record?.let { recoveryRefusal(it, request) }
+    val refused = record?.let { recoveryRefusal(it, request, directory) }
     return when {
       record == null -> refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
-      refused != null -> refusal(refused.first, directory, refused.second)
+      refused != null -> refused
       else ->
-        when (val settled = cleanup.settle(directory, record, null)) {
+        when (val settled = cleanup.settle(directory, record, null, abandonedOutcome(record))) {
           MonitorSettlement.Released -> MonitorStaleRecovery.Recovered(record.ownerToken)
           is MonitorSettlement.Retained ->
-            refusal(MonitorRecoveryRefusal.RETAINED_UNFINISHED, settled.path ?: directory, settled.detail)
+            refusal(
+              MonitorRecoveryRefusal.RETAINED_UNFINISHED,
+              settled.path ?: directory,
+              "(${settled.reason.wireValue}) ${settled.detail}",
+            )
           is MonitorSettlement.FenceLost ->
             refusal(MonitorRecoveryRefusal.RETAINED_UNFINISHED, directory, settled.detail)
         }
     }
   }
 
+  private fun abandonedOutcome(record: MonitorOwnershipRecord): MonitorPrimaryOutcome =
+    MonitorPrimaryOutcome(
+      MonitorOutcomeKind.ABANDONED,
+      "owner ${record.ownerToken} (pid ${record.process.pid}) ended while ${record.state.wireValue} " +
+        "without settling",
+    )
+
   private fun recoveryRefusal(
     record: MonitorOwnershipRecord,
     request: MonitorStaleRecoveryRequest,
-  ): Pair<MonitorRecoveryRefusal, String>? {
+    directory: Path,
+  ): MonitorStaleRecovery.Refused? {
     val local = runCatching { inspector.currentProcess() }.getOrNull()
     val sameHost = local != null && local.hostIdentity == record.process.hostIdentity
     val inspection = if (sameHost) inspector.inspect(record.process) else null
     return when {
       record.state == MonitorOwnershipState.RELEASED ->
-        MonitorRecoveryRefusal.NO_OWNERSHIP to "The ownership was already released."
+        MonitorStaleRecovery.Refused(
+          MonitorRecoveryRefusal.NO_OWNERSHIP,
+          directory,
+          "The ownership was already released.",
+        )
       record.ownerToken != request.expectedOwner.value ->
-        MonitorRecoveryRefusal.TOKEN_MISMATCH to "The recorded owner token differs from the expected one."
+        MonitorStaleRecovery.Refused(
+          MonitorRecoveryRefusal.TOKEN_MISMATCH,
+          directory,
+          "The recorded owner token differs from the expected one.",
+        )
       record.state == MonitorOwnershipState.RETAINED ->
-        MonitorRecoveryRefusal.RETAINED_UNFINISHED to (record.retention?.detail ?: "Work is retained.")
+        MonitorStaleRecovery.Refused(
+          MonitorRecoveryRefusal.RETAINED_UNFINISHED,
+          retainedPath(record, directory),
+          retainedDetail(record),
+        )
       inspection == null ->
-        MonitorRecoveryRefusal.UNKNOWN_OWNER to "The owner process belongs to another host or is unreadable."
+        MonitorStaleRecovery.Refused(
+          MonitorRecoveryRefusal.UNKNOWN_OWNER,
+          directory,
+          "The owner process belongs to another host or is unreadable.",
+        )
       inspection == FeatureTaskRuntimeProcessInspection.ExactLive ->
-        MonitorRecoveryRefusal.LIVE_OWNER to "The owner process is still alive."
+        MonitorStaleRecovery.Refused(MonitorRecoveryRefusal.LIVE_OWNER, directory, "The owner process is still alive.")
       !inspection.isConfirmedDead() ->
-        MonitorRecoveryRefusal.UNKNOWN_OWNER to "The owner process has no positive death evidence."
+        MonitorStaleRecovery.Refused(
+          MonitorRecoveryRefusal.UNKNOWN_OWNER,
+          directory,
+          "The owner process has no positive death evidence.",
+        )
       else -> null
     }
   }
@@ -347,12 +423,24 @@ class GitMonitorResources(
     block: MonitorAdmissionBlock,
   ): String =
     when (block) {
-      MonitorAdmissionBlock.RETAINED_WORK ->
-        "Work from a previous invocation is retained: ${record.retention?.detail ?: "no detail recorded"}."
+      MonitorAdmissionBlock.RETAINED_WORK -> retainedDetail(record)
       else ->
         "A previous invocation (owner ${record.ownerToken}) ended without releasing its ownership; " +
           "recover it explicitly with that owner token."
     }
+
+  private fun retainedPath(
+    record: MonitorOwnershipRecord,
+    directory: Path,
+  ): Path = record.retention?.path?.let(Path::of) ?: directory
+
+  private fun retainedDetail(record: MonitorOwnershipRecord): String =
+    "Work from a previous invocation (owner ${record.ownerToken}) is retained " +
+      "(${record.retention?.reason?.wireValue ?: "no retention reason recorded"})" +
+      (record.executionBranch?.let { " on owned branch $it" } ?: "") +
+      ": ${record.retention?.detail ?: "no detail recorded"}" +
+      (record.outcome?.let { "; previous outcome ${it.kind.wireValue}: ${it.detail}" } ?: "") +
+      "; resolve or publish it manually before monitoring this pull request again."
 
   private fun summaryOf(record: MonitorOwnershipRecord): MonitorOwnerSummary =
     MonitorOwnerSummary(

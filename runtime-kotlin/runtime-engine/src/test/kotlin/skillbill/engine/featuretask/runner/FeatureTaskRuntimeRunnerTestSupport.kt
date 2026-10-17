@@ -2552,6 +2552,8 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
     override fun optionalRealPath(path: Path): Path? = null
 
     override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+
+    override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
   }
 
 internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): FeatureTaskRuntimeRunLoopContext =

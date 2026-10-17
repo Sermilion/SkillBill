@@ -35,6 +35,7 @@ import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenc
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
+import skillbill.infrastructure.sqlite.core.schema.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
@@ -817,5 +818,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 58,
       name = "record-standalone-phase-launch-scope",
       operation = ::recordStandalonePhaseLaunchScope,
+    ),
+    DatabaseMigration(
+      version = 59,
+      name = "record-standalone-monitor-target",
+      operation = ::recordStandaloneMonitorTarget,
     ),
   )

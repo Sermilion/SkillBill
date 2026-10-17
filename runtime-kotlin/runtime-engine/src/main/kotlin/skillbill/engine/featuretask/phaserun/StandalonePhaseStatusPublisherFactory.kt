@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phaserun
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.idestatus.model.IdeStatusLaunchScope
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -32,6 +33,19 @@ class StandalonePhaseStatusPublisherFactory(
   ): StandalonePhaseStatusEventSink {
     val registration =
       registrations.phaseRegistration(repoRoot, phaseId, invocationId, issueKey = null)
+        .copy(launchAgentId = agentId, launchArguments = launchArguments)
+    return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics)
+  }
+
+  fun forMonitor(
+    context: MonitorExecutionContext,
+    phaseId: String,
+    invocationId: String,
+    agentId: String? = null,
+    launchArguments: List<String>? = null,
+  ): StandalonePhaseStatusEventSink {
+    val registration =
+      registrations.monitorRegistration(context, phaseId, invocationId)
         .copy(launchAgentId = agentId, launchArguments = launchArguments)
     return StandalonePhaseStatusEventSink(database, { registration }, clock, diagnostics)
   }

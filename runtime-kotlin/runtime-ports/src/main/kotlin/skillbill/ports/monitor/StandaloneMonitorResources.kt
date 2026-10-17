@@ -7,6 +7,7 @@ import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorFetchedRefs
 import skillbill.ports.monitor.model.MonitorResolvedTarget
+import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
@@ -52,10 +53,11 @@ interface StandaloneMonitorResources {
 
   /**
    * Removes only verified owned clean work whose commits are all published, otherwise retains the worktree and
-   * refs with an exact reason, then releases the fence. Never forces removal and never throws for a retained
+   * refs with an exact reason, then releases the fence. The primary outcome is persisted next to the retention or
+   * release, and `removalAllowed = false` forces retention. Never forces removal and never throws for a retained
    * outcome; a failure to settle is returned as a retained cleanup failure.
    */
-  fun settle(fence: MonitorFence): MonitorSettlement
+  fun settle(request: MonitorSettleRequest): MonitorSettlement
 
   fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery
 }

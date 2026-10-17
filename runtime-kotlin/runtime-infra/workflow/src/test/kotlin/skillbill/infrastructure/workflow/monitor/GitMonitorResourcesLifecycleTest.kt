@@ -13,6 +13,9 @@ import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorRecoveryRefusal
 import skillbill.ports.monitor.model.MonitorRetentionReason
+import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
+import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
@@ -31,6 +34,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 private const val STALE_TOKEN = "stale-owner-token-0123456789"
+
+private fun GitMonitorResources.settle(fence: MonitorFence): MonitorSettlement =
+  settle(MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.COMPLETED, "completed")))
 
 private data class RetentionCase(
   val name: String,

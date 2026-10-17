@@ -48,7 +48,8 @@ internal fun readStatusWorkItems(
 internal fun readStatusStandaloneRecords(
   unitOfWork: UnitOfWork,
   repositoryIdentity: String,
-  branch: String,
+  monitorRepositoryIdentity: String,
+  branch: String?,
   observedAt: Instant,
   queryWork: IdeStatusQueryWork?,
 ): List<StandalonePhaseStatusRecord> {
@@ -64,6 +65,7 @@ internal fun readStatusStandaloneRecords(
           branch,
           observedAt,
           StandaloneEligiblePage(limit, after, slice),
+          monitorRepositoryIdentity,
         )
       queryWork?.page(page.size)
       records += page

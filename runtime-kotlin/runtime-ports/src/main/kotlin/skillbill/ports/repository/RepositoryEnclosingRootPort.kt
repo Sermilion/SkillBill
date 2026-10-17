@@ -11,6 +11,8 @@ interface RepositoryEnclosingRootPort {
   fun optionalRealPath(path: Path): Path?
 
   fun repositoryIdentity(repoRoot: Path): String
+
+  fun primaryRepositoryRoot(repoRoot: Path): Path
 }
 
 fun Path.toFileLocation(): FileLocation = FileLocation(toString())

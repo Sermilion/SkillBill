@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor commits, pushes, watches CI, and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -355,12 +355,28 @@ workflow row, branch, or checkpoint commit.
 
 ## Phase Monitor
 
-`phase:monitor` watches CI on the open PR of the checked-out branch. An issue key
-or PR URL intake names the work; it does not switch branches. The phase composes
-`commit_push` followed by `monitor`, so it commits and pushes any pending changes
-first, like `phase:pr`. When every check passes, is skipped, or is cancelled, the
-phase completes. It also completes when the PR is merged, regardless of failing
-or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
+`phase:monitor` watches CI on one exact open PR. Its intake is a single
+`https://<host>/<owner>/<repo>/pull/<number>` URL, a single issue key, or nothing. A
+URL names that PR. An issue key selects the one PR that mentions it in its title,
+body, or head branch, preferring open PRs. With no intake, the PR whose head is the
+checked-out branch is selected. Several matching PRs, a malformed or multi-token
+intake, an unwritable head, or incomplete PR data refuse the run and name the
+candidates or the defect. Resolution only reads PR data. It never checks out the
+target in the caller checkout, and the caller's branch, index, and uncommitted work
+stay untouched, so monitors for different PRs that share a head branch name run
+concurrently without colliding. The runtime fetches the PR head and base at pinned
+commits and creates an owned temporary worktree and branch under the caller's
+`.git/skill-bill/standalone-monitor` directory. All repair work runs in that
+worktree. The phase starts by watching CI and publishes nothing unless a repair
+is needed. It does not commit or push pending caller changes. A repair that settles
+completed is committed and pushed to the PR's head repository and branch only if
+the remote head is still the pinned commit, never to the base repository. A
+teammate push, a moved head, or a lost ownership fence blocks publication and
+keeps the repair. A merged PR completes without work. A closed, unmerged PR
+blocks. A selector with no open PR completes with a report that names the selector
+and that there is nothing to monitor. These early outcomes create no worktree. When every check passes, is skipped, or is
+cancelled, the phase completes. It also completes when the PR is merged, regardless
+of failing or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
 while other checks are pending. This initial failure starts repair and does not
 count against the failed repair budget. A merge conflict starts merge repair on
 that poll, even when no checks are reported: the fix merges the base branch and
@@ -379,8 +395,28 @@ once after CI reports a failure. Pending, stale, unassociated, or absent checks
 do not count. The runtime observes the third repair commit's CI result and blocks
 only if that result fails. Merge-only work does not spend a CI repair attempt.
 The cap report names failed repair commits and their check links from recorded
-evidence. When the branch has no open PR,
-the phase completes and reports that there is nothing to monitor.
+evidence.
+
+Admission allows one monitor per PR. A second monitor for a PR with a live owner
+blocks and names that owner. A stale owner blocks and reports its owner token. After
+confirming the process is gone, rerun with the exact PR URL and
+`--recover-stale-owner <owner-token>`. The option applies only to `phase monitor`,
+needs an explicit target, and is refused when the token is malformed or does not
+match the recorded owner. Recovery never takes over a live owner or a worktree with
+unfinished work.
+
+Status, events, and the printed report name the exact PR URL, repository, head
+branch and head repository, invocation, owned worktree, and the cleanup outcome. A clean
+run releases the worktree and branch. A worktree with uncommitted or untracked
+changes, unpublished commits, unknown publication state, unowned resources, or a
+failed cleanup is retained, and the report names its path and reason. Retained work
+blocks a fresh monitor of the same PR until it is resolved. A hard kill leaves no
+cleanup record and is handled as stale recovery, not as guaranteed cleanup.
+Canceling or rerunning a monitor from the desktop targets its exact invocation and
+PR URL. A rerun launches `phase monitor <that URL>` without checking the head
+branch out in the caller checkout. Cancel stops the owning process and keeps
+retained work. Goal finalization and `phase:pr` keep their branch-based monitoring
+unchanged.
 
 While CI is pending, progress reports identify the current PR and include available
 check links. Describe queued checks as waiting, and name running work only when the

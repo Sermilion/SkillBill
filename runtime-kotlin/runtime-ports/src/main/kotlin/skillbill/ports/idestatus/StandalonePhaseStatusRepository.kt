@@ -20,9 +20,10 @@ interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepositor
 
   fun readEligible(
     repositoryIdentity: String,
-    branchCorrelation: String,
+    branchCorrelation: String?,
     now: Instant,
     page: StandaloneEligiblePage = StandaloneEligiblePage(),
+    monitorRepositoryIdentity: String = repositoryIdentity,
   ): List<StandalonePhaseStatusRecord>
 
   fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord>

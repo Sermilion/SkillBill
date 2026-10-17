@@ -174,6 +174,7 @@ class DatabaseMigrationsTest {
         56 to "abandon-stale-verify-workflows",
         57 to "record-launch-agent-environment",
         58 to "record-standalone-phase-launch-scope",
+        59 to "record-standalone-monitor-target",
       ),
       migrationDefinitions,
     )
@@ -335,6 +336,57 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v59 adds nullable monitor target columns and keeps existing standalone rows legacy`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v59-monitor-target").resolve("legacy.db")
+    val targetColumns =
+      listOf(
+        "monitor_pr_key", "monitor_pr_url", "monitor_head_repository", "monitor_head_ref",
+        "monitor_caller_root", "monitor_worktree_path", "monitor_cleanup_disposition",
+        "monitor_cleanup_reason", "monitor_cleanup_detail",
+      )
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-monitor-target'")
+        targetColumns.forEach { column ->
+          statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN $column")
+        }
+        statement.executeUpdate(
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-monitor', 'monitor', 'store', '4', '3', 'active', " +
+            "'monitor', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 2, '2026-10-17T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 58")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      targetColumns.forEach { column ->
+        assertTrue(column in columnNames(connection, "standalone_phase_status"), column)
+      }
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT run_sequence, status_revision, lease_generation, monitor_pr_key, monitor_cleanup_disposition " +
+            "FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals(listOf("4", "3", "2"), listOf(it.getString(1), it.getString(2), it.getString(3)))
+          assertEquals(null, it.getString(4))
+          assertEquals(null, it.getString(5))
+        }
+        assertFailsWith<SQLException> {
+          statement.executeUpdate("UPDATE standalone_phase_status SET monitor_cleanup_disposition = 'other'")
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
     }
   }
 

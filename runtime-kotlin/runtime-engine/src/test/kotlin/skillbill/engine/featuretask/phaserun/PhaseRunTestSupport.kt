@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -32,6 +33,7 @@ import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorFetchedRefs
 import skillbill.ports.monitor.model.MonitorResolvedTarget
+import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
@@ -124,6 +126,7 @@ internal fun refusingMonitorPreparer(
     object : ShutdownHookPort {
       override fun register(action: () -> Unit): ShutdownHookRegistration = ShutdownHookRegistration { true }
     },
+    AgentRunChildDrain { true },
   )
 
 internal open class UnreachableMonitorResources : StandaloneMonitorResources {
@@ -149,7 +152,7 @@ internal open class UnreachableMonitorResources : StandaloneMonitorResources {
     worktree: MonitorWorktree,
   ) = unreachable("markPrepared")
 
-  override fun settle(fence: MonitorFence): MonitorSettlement = unreachable("settle")
+  override fun settle(request: MonitorSettleRequest): MonitorSettlement = unreachable("settle")
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery = unreachable("recoverStale")
 

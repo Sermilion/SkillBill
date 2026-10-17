@@ -303,4 +303,8 @@ internal fun workRunOwnershipKey(
   item: WorkDetailItem,
   phase: StandalonePhaseStatusRecord?,
 ): String =
-  item.snapshot.workflowId ?: "${item.snapshot.repositoryIdentity}:${item.snapshot.branchCorrelation}:${phase?.phaseId}"
+  item.snapshot.workflowId ?: listOf(
+    item.snapshot.repositoryIdentity,
+    phase?.monitorTarget?.pullRequestKey ?: item.snapshot.branchCorrelation,
+    phase?.phaseId,
+  ).joinToString(":")

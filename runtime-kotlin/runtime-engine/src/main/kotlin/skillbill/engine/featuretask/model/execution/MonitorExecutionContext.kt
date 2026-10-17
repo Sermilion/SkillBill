@@ -7,6 +7,7 @@ import java.nio.file.Path
 data class MonitorExecutionContext(
   val target: MonitorResolvedTarget,
   val callerRoot: Path,
+  val primaryRoot: Path,
   val worktree: MonitorWorktree,
   val ownerToken: String,
   val generation: Long,

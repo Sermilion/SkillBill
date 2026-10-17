@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -25,6 +26,11 @@ class StandalonePhaseStatusEventSink(
   private var currentStep: String = "run"
   private var currentActivity: String? = null
   private var lastCiObservedPendingSampleNames: Set<String>? = null
+  private var monitorCleanup: StandaloneMonitorCleanup? = null
+
+  fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
+    monitorCleanup = cleanup
+  }
 
   override fun emit(event: FeatureTaskRuntimeRunEvent) {
     runCatching {
@@ -151,6 +157,7 @@ class StandalonePhaseStatusEventSink(
             finishedAt = finishedAt,
             terminalResult = terminalResult?.takeIf(String::isNotBlank),
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
+            monitorCleanup = monitorCleanup,
           ),
         )
       }

@@ -6,10 +6,13 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
 import skillbill.ports.idestatus.model.StandaloneEligiblePage
 import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Clock
@@ -240,6 +243,109 @@ class StandalonePhaseStatusStoreTest {
       assertEquals(recorded, it.standalonePhaseStatuses.latestWorkflowExecution("goal-parent")?.agentEnvironment)
     }
   }
+
+  @Test
+  fun `monitors of different pull requests sharing a branch stay active and are found from any branch`() {
+    val directory = Files.createTempDirectory("standalone-monitor-targets")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    val lease = started.plusSeconds(3600)
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, lease))
+      it.standalonePhaseStatuses.register(targetRegistration("eight", 8, started.plusSeconds(1), lease))
+      it.standalonePhaseStatuses.register(monitorRegistration("legacy", started.plusSeconds(2), lease))
+    }
+    val rows = database.read { it.standalonePhaseStatuses.readEligible("repo", "unrelated-branch", started) }
+    assertEquals(
+      setOf("execution-seven", "execution-eight"),
+      rows.map { it.executionId }.toSet(),
+    )
+    assertEquals(listOf("active", "active"), rows.map { it.lifecycleState })
+    assertEquals(
+      setOf("github.com/acme/repo#7", "github.com/acme/repo#8"),
+      rows.map { it.monitorTarget?.pullRequestKey }.toSet(),
+    )
+    val legacy = database.read { it.standalonePhaseStatuses.readEligible("repo", "feat/crashlytics", started) }
+    assertEquals("active", legacy.first { it.executionId == "execution-legacy" }.lifecycleState)
+  }
+
+  @Test
+  fun `monitor cleanup round trips on a target row and is refused on a row without a target`() {
+    val directory = Files.createTempDirectory("standalone-monitor-cleanup")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, started.plusSeconds(3600)))
+      it.standalonePhaseStatuses.register(monitorRegistration("legacy", started, started.plusSeconds(3600)))
+    }
+    val retained = StandaloneMonitorCleanup.Retained(MonitorRetentionReason.DIRTY_WORKTREE, "Dirty. Path: /wt/7")
+    val result =
+      database.transaction {
+        it.standalonePhaseStatuses.update(cleanupUpdate("execution-seven", started, retained))
+      }
+    assertEquals(StandalonePhaseStatusUpdateResult.ACCEPTED, result)
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-seven") }
+    assertEquals(retained, record?.monitorCleanup)
+    assertEquals(targetOf(7), record?.monitorTarget)
+    assertFailsWith<IllegalArgumentException> {
+      database.transaction {
+        it.standalonePhaseStatuses.update(
+          cleanupUpdate("execution-legacy", started, StandaloneMonitorCleanup.Released),
+        )
+      }
+    }
+  }
+
+  @Test
+  fun `a partially recorded monitor target fails loudly instead of reading as a legacy row`() {
+    val directory = Files.createTempDirectory("standalone-monitor-corrupt-target")
+    val dbPath = directory.resolve("status.db")
+    val database =
+      sqliteDatabaseSessionFactory(
+        userHome = directory,
+        dbPathOverride = dbPath.toString(),
+        environment = mapOf("TEST" to "1"),
+      )
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, started.plusSeconds(3600)))
+    }
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      connection.createStatement().use {
+        it.executeUpdate("UPDATE standalone_phase_status SET monitor_head_ref = NULL")
+      }
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      database.read { it.standalonePhaseStatuses.readByInvocation("run-seven") }
+    }
+  }
+
+  private fun targetOf(number: Int) =
+    StandaloneMonitorTarget(
+      pullRequestKey = "github.com/acme/repo#$number",
+      pullRequestUrl = "https://github.com/acme/repo/pull/$number",
+      headRepository = "github.com/fork-$number/repo",
+      headRef = "feat/crashlytics",
+      callerRoot = "/caller",
+      worktreePath = "/wt/$number",
+    )
+
+  private fun targetRegistration(
+    suffix: String,
+    number: Int,
+    startedAt: Instant,
+    leaseExpiresAt: Instant,
+  ) = monitorRegistration(suffix, startedAt, leaseExpiresAt).copy(monitorTarget = targetOf(number))
+
+  private fun cleanupUpdate(
+    executionId: String,
+    at: Instant,
+    cleanup: StandaloneMonitorCleanup,
+  ) = StandalonePhaseStatusUpdate(
+    executionId = executionId, expectedRevision = "1", leaseOwner = "owner", leaseGeneration = 1,
+    lifecycleState = "terminal", currentStep = "monitor", currentActivity = null, updatedAt = at,
+    finishedAt = at, terminalResult = "done", monitorCleanup = cleanup,
+  )
 
   private fun monitorRegistration(
     suffix: String,
