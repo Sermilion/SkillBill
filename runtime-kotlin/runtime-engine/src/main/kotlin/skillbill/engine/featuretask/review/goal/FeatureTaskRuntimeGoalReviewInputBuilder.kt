@@ -2,15 +2,15 @@ package skillbill.engine.featuretask.review.goal
 
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationArtifactPatcher
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
-import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
-import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewBaseField
 import skillbill.engine.featuretask.lifecycle.continuation.canRecoverReviewBase
 import skillbill.engine.featuretask.lifecycle.continuation.continuationFromArtifacts
 import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifacts
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputBlocked
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputReady
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -53,8 +53,18 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
     repoRoot: Path,
     scope: FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-  ): GoalSubtaskReviewInputPreparation {
-    val durable = loadGoalReviewDurable(workflowId) ?: return GoalSubtaskReviewInputPreparation.MissingState
+  ): GoalSubtaskReviewInputPreparation =
+    preparedGoalReviewInput(workflowId, gitOperations, repoRoot, scope, admitted)
+      ?: GoalSubtaskReviewInputPreparation.MissingState
+
+  private fun preparedGoalReviewInput(
+    workflowId: String,
+    gitOperations: WorkflowGitOperations,
+    repoRoot: Path,
+    scope: FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
+  ): GoalSubtaskReviewInputPreparation? {
+    val durable = loadGoalReviewDurable(workflowId) ?: return null
     val (state, continuation) = durable
     val (selectedBaseline, failedField) = selectedGoalReviewBaseline(state, scope)
     val result =
@@ -82,16 +92,13 @@ class FeatureTaskRuntimeGoalReviewInputBuilder(
           ),
         )
       }
-    if (recovery is GoalReviewInputRecovery.OwnershipRejected) {
-      return GoalSubtaskReviewInputPreparation.MissingState
+    val input = goalReviewInputFromBuildResult(result, recovery)
+    val persisted = input?.let { persistGoalReviewInput(workflowId, it, admitted) }
+    return when {
+      recovery is GoalReviewInputRecovery.OwnershipRejected || (input != null && persisted == null) -> null
+      input == null -> goalReviewBlockedPreparation(result, recovery)
+      else -> GoalSubtaskReviewInputReady(requireNotNull(persisted), input)
     }
-    val input =
-      goalReviewInputFromBuildResult(result, recovery)
-        ?: return goalReviewBlockedPreparation(result, recovery)
-    val persisted =
-      persistGoalReviewInput(workflowId, input, admitted)
-        ?: return GoalSubtaskReviewInputPreparation.MissingState
-    return GoalSubtaskReviewInputReady(persisted, input)
   }
 
   internal fun recoverGoalReviewInput(request: GoalReviewInputRecoveryRequest): GoalReviewInputRecovery {

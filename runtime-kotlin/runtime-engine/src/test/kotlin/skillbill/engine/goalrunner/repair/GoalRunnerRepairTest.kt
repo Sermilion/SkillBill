@@ -1596,8 +1596,7 @@ internal class GoalRunnerRepairLeaseClearanceTest : GoalRunnerRepairFixtures() {
     override fun currentProcess(): FeatureTaskRuntimeProcessIdentity =
       FeatureTaskRuntimeProcessIdentity("host", "boot", 1, "birth")
 
-    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) =
-      FeatureTaskRuntimeProcessInspection.ForeignHost
+    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ForeignHost
 
     override fun awaitExit(
       ownership: FeatureTaskRuntimeWorkerOwnership,

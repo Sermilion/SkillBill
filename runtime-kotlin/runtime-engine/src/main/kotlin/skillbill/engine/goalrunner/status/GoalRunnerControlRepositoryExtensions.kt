@@ -37,11 +37,7 @@ internal fun GoalRunnerControlRepository.heartbeatExecutionLease(
   val current = state.executionLease ?: return false
   if (current.ownerToken != lease.ownerToken || current.generation != lease.generation) return false
   val proposedHeartbeat = lease.heartbeatAtInstant
-  if (!current.expiresAtInstant.isAfter(proposedHeartbeat) ||
-    !lease.expiresAtInstant.isAfter(proposedHeartbeat) ||
-    lease.expiresAtInstant <= current.expiresAtInstant ||
-    lease.heartbeatAtInstant < current.heartbeatAtInstant
-  ) {
+  if (lease.heartbeatIsStale(current, proposedHeartbeat)) {
     return false
   }
   persistControlState(parentWorkflowId, state.advancedBy(lease.heartbeatAt).copy(executionLease = lease))
@@ -76,6 +72,15 @@ internal fun GoalRunnerControlRepository.releaseExecutionLeaseIfExpired(
   if (current.expiresAtInstant.isAfter(now)) return false
   return releaseExecutionLease(parentWorkflowId, ownerToken, generation)
 }
+
+private fun GoalRunnerExecutionLease.heartbeatIsStale(
+  current: GoalRunnerExecutionLease,
+  proposedHeartbeat: Instant,
+): Boolean =
+  !current.expiresAtInstant.isAfter(proposedHeartbeat) ||
+    !expiresAtInstant.isAfter(proposedHeartbeat) ||
+    expiresAtInstant <= current.expiresAtInstant ||
+    heartbeatAtInstant < current.heartbeatAtInstant
 
 private fun GoalRunnerControlState.advancedBy(heartbeatAt: Instant): GoalRunnerControlState {
   val goal = advanceAccumulator(activeDurationMs, activeDurationAsOf, heartbeatAt)

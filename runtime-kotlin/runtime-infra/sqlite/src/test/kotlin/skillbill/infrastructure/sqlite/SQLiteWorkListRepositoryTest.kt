@@ -59,7 +59,8 @@ class SQLiteWorkListRepositoryTest {
         }
       }
 
-      val states = SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics).list().items.map { it.currentState }.toSet()
+      val states =
+        SQLiteWorkListRepository(connection, NoopRuntimeDiagnostics).list().items.map { it.currentState }.toSet()
 
       assertEquals(declaredStatuses, states)
     }
@@ -95,7 +96,7 @@ class SQLiteWorkListRepositoryTest {
 
   private fun featureTaskWorkflowRow(row: FeatureTaskWorkflowRow): String =
     "INSERT INTO feature_task_workflows VALUES " +
-      "('SKILL-117', '${row.mode}', ${row.workflowId}, '${row.startedAt}', " +
+      "('SKILL-117', '${row.mode}', ${row.workflowId}, '1.0.0', '${row.startedAt}', " +
       "'${row.workflowStatus}', '${row.stateEnteredAt}', ${row.estimated})"
 
   private fun goalIssueProgressRow(
@@ -135,12 +136,12 @@ class SQLiteWorkListRepositoryTest {
     connection.createStatement().use { statement ->
       statement.executeUpdate(
         "CREATE TABLE feature_task_workflows (" +
-          "issue_key TEXT, mode TEXT, workflow_id TEXT, started_at TEXT, workflow_status TEXT, " +
-          "state_entered_at TEXT, state_entered_at_estimated INTEGER)",
+          "issue_key TEXT, mode TEXT, workflow_id TEXT, contract_version TEXT, started_at TEXT, " +
+          "workflow_status TEXT, state_entered_at TEXT, state_entered_at_estimated INTEGER)",
       )
       statement.executeUpdate(
         "CREATE TABLE feature_verify_workflows (" +
-          "issue_key TEXT, workflow_id TEXT, started_at TEXT, workflow_status TEXT, " +
+          "issue_key TEXT, workflow_id TEXT, contract_version TEXT, started_at TEXT, workflow_status TEXT, " +
           "state_entered_at TEXT, state_entered_at_estimated INTEGER)",
       )
       statement.executeUpdate(

@@ -813,7 +813,7 @@ class WorkflowStateStoreLifecycleTest {
     val executor = Executors.newFixedThreadPool(2)
     try {
       val transitions =
-        listOf("blocked", "failed").map { status ->
+        listOf("blocked", "paused").map { status ->
           executor.submit {
             ready.countDown()
             check(start.await(5, TimeUnit.SECONDS)) { "Concurrent transition start timed out." }

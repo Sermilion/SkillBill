@@ -13,6 +13,7 @@ dependencies {
   implementation(libs.sqlite.jdbc)
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.kotlin.test)
+  testImplementation(testFixtures(project(":runtime-ports")))
   testFixturesImplementation(project(":runtime-ports"))
   testFixturesImplementation(project(":runtime-contracts"))
   testFixturesImplementation(project(":runtime-domain"))

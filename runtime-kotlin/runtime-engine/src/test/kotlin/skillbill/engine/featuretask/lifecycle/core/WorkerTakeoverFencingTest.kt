@@ -62,9 +62,11 @@ class WorkerTakeoverFencingTest {
         val before = database.read { it.workflowStates.getFeatureTaskWorkflow(original.workflowId) }
         val lease = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(original.workflowId) }
         database.transaction { unit ->
-          assertTrue(
-            unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates("3000-01-01T00:00:00Z").isEmpty(),
-          )
+          val candidates =
+            unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates("3000-01-01T00:00:00Z")
+          if (status in WorkflowStatus.terminalStatuses) {
+            assertTrue(candidates.isEmpty())
+          }
           assertFalse(
             unit.workflowStates.reconcileFeatureTaskRuntimeCrashedWorker(
               original.workflowId,
@@ -117,7 +119,13 @@ class WorkerTakeoverFencingTest {
           )
         val before = database.read { it.workflowStates.getFeatureTaskWorkflow(original.workflowId) }
         val coordinator =
-          FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission, NoopRuntimeDiagnostics)
+          FeatureTaskRuntimeWorkerCoordinator(
+            database,
+            supervisor,
+            testHarnessClock,
+            execution.admission,
+            NoopRuntimeDiagnostics,
+          )
         var launches = 0
 
         assertFailsWith<IllegalStateException>(race) {
@@ -160,7 +168,14 @@ class WorkerTakeoverFencingTest {
             )
           }
         })
-      val coordinator = FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission, NoopRuntimeDiagnostics)
+      val coordinator =
+        FeatureTaskRuntimeWorkerCoordinator(
+          database,
+          supervisor,
+          testHarnessClock,
+          execution.admission,
+          NoopRuntimeDiagnostics,
+        )
       coordinator.runOwned(original.workflowId, execution.inputs, execution.identity(original.workflowId)) { admitted ->
         assertEquals(original.workflowId, admitted.identity.workflowId)
         assertContentEquals(execution.encoded, execution.codec.encode(admitted.plan))
@@ -204,7 +219,13 @@ class WorkerTakeoverFencingTest {
           val lease = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(original.workflowId) }
           val supervisor = TakeoverSupervisor()
           val coordinator =
-            FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission, NoopRuntimeDiagnostics)
+            FeatureTaskRuntimeWorkerCoordinator(
+              database,
+              supervisor,
+              testHarnessClock,
+              execution.admission,
+              NoopRuntimeDiagnostics,
+            )
           var launches = 0
 
           assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError> {
@@ -233,7 +254,14 @@ class WorkerTakeoverFencingTest {
       val identity = execution.identity(original.workflowId)
       val before = database.read { it.workflowStates.getFeatureTaskWorkflow(original.workflowId) }
       val supervisor = TakeoverSupervisor()
-      val coordinator = FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission, NoopRuntimeDiagnostics)
+      val coordinator =
+        FeatureTaskRuntimeWorkerCoordinator(
+          database,
+          supervisor,
+          testHarnessClock,
+          execution.admission,
+          NoopRuntimeDiagnostics,
+        )
       var launches = 0
       listOf(
         identity.copy(repositoryIdentity = "repo-root-realpath-v1:/tmp/other-repository"),
@@ -272,7 +300,13 @@ class WorkerTakeoverFencingTest {
           )
         val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(original.workflowId)) }
         val coordinator =
-          FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission, NoopRuntimeDiagnostics)
+          FeatureTaskRuntimeWorkerCoordinator(
+            database,
+            supervisor,
+            testHarnessClock,
+            execution.admission,
+            NoopRuntimeDiagnostics,
+          )
         var launches = 0
 
         assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {

@@ -29,19 +29,19 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.workflowStatus
-import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
 import java.time.Clock
 
@@ -256,6 +256,23 @@ internal class WorkflowGoalRunnerTerminalBridge(
         }
       }
     if (resolvedInTransaction != null) return resolvedInTransaction
+    val expiredLease =
+      database.transaction { unitOfWork ->
+        terminalPersistence.crashReconcileToResumable(
+          unitOfWork.workflowStates,
+          workflowId,
+          issueKey,
+          subtaskId,
+        )
+      }
+    return expiredLease ?: persistReconciledTerminalOutcome(workflowId, issueKey, subtaskId)
+  }
+
+  private fun persistReconciledTerminalOutcome(
+    workflowId: String,
+    issueKey: String,
+    subtaskId: Int,
+  ): GoalRunnerStoredOutcome? {
     val reconciled = crashReconciler.reconcile(workflowId)
     if (reconciled.reconciledCount <= 0) return null
     val reconcilableOutcome =

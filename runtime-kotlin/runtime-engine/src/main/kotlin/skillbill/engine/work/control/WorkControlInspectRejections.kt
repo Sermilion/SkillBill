@@ -24,9 +24,7 @@ internal fun processInspectionWorkControlRejection(
     is FeatureTaskRuntimeProcessInspection.Unsupported -> WorkControlRejection.UNINSPECTABLE
   }
 
-internal fun processInspectionCancelRejection(
-  inspection: FeatureTaskRuntimeProcessInspection,
-): WorkControlRejection? =
+internal fun processInspectionCancelRejection(inspection: FeatureTaskRuntimeProcessInspection): WorkControlRejection? =
   when (inspection) {
     FeatureTaskRuntimeProcessInspection.NotRunning -> null
     FeatureTaskRuntimeProcessInspection.ExactLive -> null

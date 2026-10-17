@@ -319,3 +319,57 @@ Test class names are validate anchors only; they are not substitutes for product
 ## Subtask 2 handoff
 
 Subtask 3 owns SQLite maintenance closure and overall coverage reconciliation per `spec_subtask_3_sqlite-maintenance-and-audit-closure.md`. F4 recovery ledger and F5 recorder gap remain as subtask 1 carry-over.
+
+## F13 — Pre-install preserve wipe vs durable SQLite bytes
+
+| Field | Value |
+| --- | --- |
+| ID | F13 |
+| Classification | verified no-finding area (source + regression definitions) |
+| Severity | n/a |
+| Trigger | Pre-install `remove_state_dir_preserving_source` with open WAL writer and committed workflow/settlement/progress rows |
+| Identities — workflow | `wftr-maint-422` |
+| Identities — issue | `SKILL-422` |
+| Production owner | `uninstall.sh` `remove_state_dir_preserving_source`; `install.sh` `run_pre_install_uninstall` |
+| Isolated reproduction — inputs | Disposable home with `review-metrics.db` seeded via `seedMaintenanceWorkflowHistory`; held JDBC writer; `SKILL_BILL_PRESERVE_SOURCE_ON_WIPE=1` |
+| Isolated reproduction — expected outcome | `runtime/` cleared; DB + WAL/SHM retained; `PRAGMA integrity_check` ok; identity/settlement/`goal_issue_progress` rows unchanged after reopen |
+| Test pointer (validate-owned) | T3-01 `InstallerShellMaintenanceRecoveryTest` |
+| Execution evidence | pending validate |
+
+## F14 — Shell preservation vs application destructive uninstall
+
+| Field | Value |
+| --- | --- |
+| ID | F14 |
+| Classification | verified no-finding area (contract separation) |
+| Severity | n/a |
+| Trigger | Operator expects explicit uninstall to remove state root while reinstall preserve wipe retains DB files |
+| Production owner | `uninstall.sh` full wipe vs `SkillBillUninstallService.apply` `removeRecursively(plan.stateRoot)` |
+| Isolated reproduction — inputs | Same disposable home: preserve wipe then explicit shell wipe; separate application `apply` with real `removeTree` |
+| Isolated reproduction — expected outcome | Preserve path keeps `review-metrics.db`; explicit shell and application paths remove state root; failed `removeTree` sets `failed` without deleting tree |
+| Test pointer (validate-owned) | T3-04 `InstallerShellMaintenanceRecoveryTest`, `SkillBillUninstallDestructiveSemanticsTest` |
+| Execution evidence | pending validate |
+
+## F15 — Unreadable backup must not destroy primary store
+
+| Field | Value |
+| --- | --- |
+| ID | F15 |
+| Classification | verified no-finding area (typed refusal boundary) |
+| Severity | n/a |
+| Trigger | Operator or test opens corrupted backup copy while primary DB remains coherent |
+| Production owner | `SQLiteDatabaseSessionFactory.read` typed translation (`SQLiteDatabaseSessionFactoryTypedFailureTest` family) |
+| Isolated reproduction — inputs | Checkpointed primary DB; corrupted `backups/baseline/review-metrics.db` bytes |
+| Isolated reproduction — expected outcome | `DatabaseFailureCode.ACCESS` on backup read; primary bytes and rows unchanged |
+| Test pointer (validate-owned) | T3-03 `SqliteMaintenanceRecoveryRegressionTest` |
+| Execution evidence | pending validate |
+
+## External limitation — historical WAL incident evidence
+
+| Field | Value |
+| --- | --- |
+| ID | EL-422-WAL |
+| Classification | external limitation |
+| Scope | Operator reset / historical segment loss referenced in parent spec |
+| Evidence | No recoverable parent workflow history in repository or disposable reproduction; originals not reconstructed |
+| Next action | Read-only operator evidence if surfaced later; does not block T3 regressions |

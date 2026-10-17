@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
-import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -50,31 +49,31 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean {
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return false
-      val updated =
-        engine.updateRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          record,
-          WorkflowUpdateInput(
-            terminalInstant = clock.instant(),
-            workflowStatus = WorkflowStatus.COMPLETED,
-            currentStepId = planStepId,
-            stepUpdates = null,
-            artifactsPatch =
-              WorkflowArtifactPatch.from(
-                mapOf(
-                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(
-                    terminal.asWorkflowArtifactEntry(),
-                  ),
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return false
+    val updated =
+      engine.updateRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        record,
+        WorkflowUpdateInput(
+          terminalInstant = clock.instant(),
+          workflowStatus = WorkflowStatus.COMPLETED,
+          currentStepId = planStepId,
+          stepUpdates = null,
+          artifactsPatch =
+            WorkflowArtifactPatch.from(
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(
+                  terminal.asWorkflowArtifactEntry(),
                 ),
               ),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
-      return true
+            ),
+          sessionId = record.sessionId.orEmpty(),
+        ),
+      )
+    unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+    return true
   }
 
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =

@@ -2,12 +2,32 @@ package skillbill.workflow.engine
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.model.isTerminalStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
+
+internal fun requireTerminalFinishedAt(
+  existing: WorkflowStateSnapshot,
+  input: WorkflowUpdateInput,
+) = existing.finishedAt ?: input.terminalInstant
+  ?: throw invalidWorkflowStateSchemaError("A terminal workflow update requires a terminal instant.")
+
+internal fun refuseChangedOrdinaryTerminalReplay(
+  existing: WorkflowStateSnapshot,
+  updated: WorkflowStateSnapshot,
+) {
+  val sameIdentity = updated.copy(artifacts = existing.artifacts) == existing
+  val sameArtifacts = updated.artifacts.toMap() == existing.artifacts.toMap()
+  if (!sameIdentity || !sameArtifacts) {
+    throw invalidWorkflowStateSchemaError(
+      "An ordinary terminal replay cannot change the accepted workflow snapshot '${existing.workflowId}'.",
+    )
+  }
+}
 
 internal fun validateWorkflowOpen(
   definition: WorkflowDefinition,

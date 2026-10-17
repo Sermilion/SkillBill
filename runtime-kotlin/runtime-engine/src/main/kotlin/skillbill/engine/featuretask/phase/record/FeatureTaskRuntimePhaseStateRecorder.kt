@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.phase.record
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.lifecycle.execution.requireCurrent
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -26,8 +25,8 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
-import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -53,8 +52,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
   val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
   val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
   val clock: Clock,
-) {
-  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
+) : FeatureTaskRuntimePhaseStatePort, FeatureTaskRuntimePhaseStateQueries {
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
     if (recordPhaseState(request, null, phaseStart = true)) {
       RequiredPhaseWrite.Acknowledged
     } else {
@@ -66,14 +65,14 @@ class FeatureTaskRuntimePhaseStateRecorder(
       )
     }
 
-  fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request, null)
+  override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request, null)
 
-  fun recordOwnedPhaseState(
+  override fun recordOwnedPhaseState(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean = recordPhaseState(request, admitted)
 
-  fun recordOwnedRequiredPhaseStart(
+  override fun recordOwnedRequiredPhaseStart(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): RequiredPhaseWrite =
@@ -145,12 +144,12 @@ class FeatureTaskRuntimePhaseStateRecorder(
       true
     }
 
-  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
+  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     require(request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED && request.finished)
     return recordCompletedPhaseWrite(request, null)
   }
 
-  fun recordOwnedCompletedPhase(
+  override fun recordOwnedCompletedPhase(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean {
@@ -158,10 +157,10 @@ class FeatureTaskRuntimePhaseStateRecorder(
     return recordCompletedPhaseWrite(request, admitted)
   }
 
-  fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
+  override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recordIncompleteImplementationAttempt(request, null)
 
-  fun recordOwnedIncompleteImplementationAttempt(
+  override fun recordOwnedIncompleteImplementationAttempt(
     request: FeatureTaskRuntimePhaseStateRequest,
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): Boolean = recordIncompleteImplementationAttempt(request, admitted)
@@ -195,7 +194,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       true
     }
 
-  fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>? =
+  override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt>? =
     database.read { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
@@ -203,7 +202,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       implementationAttemptsFrom(record.artifacts)
     }
 
-  fun clearBackwardEdgeContext(
+  override fun clearBackwardEdgeContext(
     workflowId: String,
     phaseIds: Collection<String>,
   ): Boolean =
@@ -235,7 +234,7 @@ class FeatureTaskRuntimePhaseStateRecorder(
       true
     }
 
-  fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry? =
+  override fun loadOperatorBlockRetry(workflowId: String): FeatureTaskRuntimeOperatorBlockRetry? =
     database.read { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)

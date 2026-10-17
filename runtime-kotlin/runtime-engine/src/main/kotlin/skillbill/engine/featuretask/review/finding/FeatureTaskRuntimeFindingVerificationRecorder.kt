@@ -2,8 +2,8 @@ package skillbill.engine.featuretask.review.finding
 
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
-import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -66,19 +66,19 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
     workflowId: String,
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
   ): Boolean {
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
-      val artifacts = record.artifacts
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION.entry(
-            selections.mapValues { (_, headings) -> headings.map { it.asWorkflowArtifactEntry() } },
-          ),
+    val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
+    val artifacts = record.artifacts
+    workflowPersistence.persistArtifactsPatch(
+      unitOfWork.workflowStates,
+      record,
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION.entry(
+          selections.mapValues { (_, headings) -> headings.map { it.asWorkflowArtifactEntry() } },
         ),
-        WorkflowRowAdvance.keepFrom(record),
-      )
-      return true
+      ),
+      WorkflowRowAdvance.keepFrom(record),
+    )
+    return true
   }
 
   fun loadFindingVerificationDispositions(
@@ -121,18 +121,18 @@ class FeatureTaskRuntimeFindingVerificationRecorder(
     workflowId: String,
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean {
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
-      val serialized = dispositions.map { it.asWorkflowArtifactEntry() }
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.entry(serialized),
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS.entry(serialized),
-        ),
-        WorkflowRowAdvance.keepFrom(record),
-      )
-      return true
+    val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return false
+    val serialized = dispositions.map { it.asWorkflowArtifactEntry() }
+    workflowPersistence.persistArtifactsPatch(
+      unitOfWork.workflowStates,
+      record,
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.entry(serialized),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS.entry(serialized),
+      ),
+      WorkflowRowAdvance.keepFrom(record),
+    )
+    return true
   }
 
   fun clearFindingVerificationCheckpoint(workflowId: String): Boolean =

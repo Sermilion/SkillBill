@@ -64,22 +64,22 @@ class WorkCancellation(
         item.snapshot.workflowId,
         target.databaseFileObservation,
       ) { matchingRun(status, target) != null }
-    goalRunnerStopWorkControlRejection(stopped.status)?.let {
-      return Interruption.Refused(it)
-    }
-    if (stopped.status == GoalRunnerStopStatus.CHANGED_TARGET) {
-      return Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
-    }
-    if (stopped.status == GoalRunnerStopStatus.TERMINATION_INCOMPLETE) {
-      return Interruption.Refused(WorkControlRejection.TERMINATION_INCOMPLETE)
-    }
-    if (stopped.status == GoalRunnerStopStatus.NOT_FOUND &&
-      item.snapshot.lifecycleState == IdeStatusLifecycleState.ACTIVE
-    ) {
-      return Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
-    }
-    return Interruption.Unowned
+    val refused = stopGoalRefusal(stopped.status, item.snapshot.lifecycleState)
+    return if (refused != null) Interruption.Refused(refused) else Interruption.Unowned
   }
+
+  private fun stopGoalRefusal(
+    status: GoalRunnerStopStatus,
+    lifecycle: IdeStatusLifecycleState,
+  ): WorkControlRejection? =
+    goalRunnerStopWorkControlRejection(status)
+      ?: when {
+        status == GoalRunnerStopStatus.CHANGED_TARGET -> WorkControlRejection.CHANGED_TARGET
+        status == GoalRunnerStopStatus.TERMINATION_INCOMPLETE -> WorkControlRejection.TERMINATION_INCOMPLETE
+        status == GoalRunnerStopStatus.NOT_FOUND && lifecycle == IdeStatusLifecycleState.ACTIVE ->
+          WorkControlRejection.OWNERSHIP_MISMATCH
+        else -> null
+      }
 
   private fun finish(
     target: WorkRunTarget,
@@ -171,28 +171,7 @@ class WorkCancellation(
         return@transactionFenced Interruption.Refused(WorkControlRejection.OWNERSHIP_MISMATCH)
       }
       val inspection = worker?.let(supervisor::inspect) ?: FeatureTaskRuntimeProcessInspection.NotRunning
-      val inspectionRejection = processInspectionCancelRejection(inspection)
-      val interruption =
-        when {
-          inspectionRejection != null -> Interruption.Refused(inspectionRejection)
-          inspection == FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
-          inspection == FeatureTaskRuntimeProcessInspection.ExactLive -> {
-            requireNotNull(worker)
-            val reserved =
-              if (phase != null) {
-                unit.standalonePhaseStatuses.requestCancellation(phase, clock.instant()) ==
-                  StandalonePhaseStatusUpdateResult.ACCEPTED
-              } else {
-                unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
-                  worker.workflowId,
-                  worker.ownerToken,
-                  worker.generation,
-                )
-              }
-            if (reserved) Interruption.Reserved(worker) else Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
-          }
-          else -> Interruption.Unowned
-        }
+      val interruption = reservedInterruption(phase, worker, inspection, unit)
       if (interruption is Interruption.Refused) return@transactionFenced interruption
       if (supersededPhase(phase, unit, clock.instant())) return@transactionFenced interruption
       val stopped = launcher.stop(WorkRunStopRequest(unit.dbPath, workRunOwnershipKey(item, phase)))
@@ -202,6 +181,35 @@ class WorkCancellation(
         interruption
       }
     }
+
+  private fun reservedInterruption(
+    phase: StandalonePhaseStatusRecord?,
+    worker: FeatureTaskRuntimeWorkerOwnership?,
+    inspection: FeatureTaskRuntimeProcessInspection,
+    unit: UnitOfWork,
+  ): Interruption {
+    val inspectionRejection = processInspectionCancelRejection(inspection)
+    return when {
+      inspectionRejection != null -> Interruption.Refused(inspectionRejection)
+      inspection == FeatureTaskRuntimeProcessInspection.NotRunning -> Interruption.Unowned
+      inspection == FeatureTaskRuntimeProcessInspection.ExactLive -> {
+        requireNotNull(worker)
+        val reserved =
+          if (phase != null) {
+            unit.standalonePhaseStatuses.requestCancellation(phase, clock.instant()) ==
+              StandalonePhaseStatusUpdateResult.ACCEPTED
+          } else {
+            unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+              worker.workflowId,
+              worker.ownerToken,
+              worker.generation,
+            )
+          }
+        if (reserved) Interruption.Reserved(worker) else Interruption.Refused(WorkControlRejection.CHANGED_TARGET)
+      }
+      else -> Interruption.Unowned
+    }
+  }
 
   private companion object {
     val TERMINATION_GRACE: Duration = Duration.ofSeconds(5)

@@ -1,4 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
+
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
@@ -9,6 +10,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.featuretask.model.parseFeatureTaskRuntimeWorkerLeaseInstant
 import skillbill.ports.workflow.FeatureTaskRuntimeWorkerRepository
 import java.sql.Connection
+import java.time.Instant
 
 internal class FeatureTaskRuntimeWorkerStore(
   private val connection: Connection,
@@ -143,11 +145,7 @@ internal class FeatureTaskRuntimeWorkerStore(
   override fun heartbeatFeatureTaskRuntimeWorker(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
     connection.featureTaskRuntimeWorkerOwnership(ownership.workflowId, diagnostics)?.let { current ->
       val proposedHeartbeat = ownership.heartbeatAtInstant
-      if (current.ownerToken != ownership.ownerToken || current.generation != ownership.generation ||
-        current.leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE ||
-        current.expiresAtInstant <= proposedHeartbeat || ownership.expiresAtInstant <= proposedHeartbeat ||
-        ownership.heartbeatAtInstant < current.heartbeatAtInstant || ownership.expiresAtInstant <= current.expiresAtInstant
-      ) {
+      if (ownership.heartbeatIsStale(current, proposedHeartbeat)) {
         return false
       }
       connection.prepareStatement(
@@ -319,20 +317,47 @@ internal class FeatureTaskRuntimeWorkerStore(
       }
     if (!leaseReleased) return false
 
-    val workflowUpdated = connection.prepareStatement(
-      """
-      UPDATE feature_task_workflows
-      SET workflow_status = CASE WHEN workflow_status = 'running' THEN 'pending' ELSE workflow_status END,
-        interruption_reason = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE workflow_id = ? AND mode = 'runtime' AND workflow_status IN ('running', 'blocked')
-      """.trimIndent(),
-    ).use { statement ->
-      statement.bindAll(interruptionReason, workflowId)
-      statement.executeUpdate() == 1
-    }
+    val workflowUpdated =
+      connection.prepareStatement(
+        """
+        UPDATE feature_task_workflows
+        SET workflow_status = CASE WHEN workflow_status = 'running' THEN 'pending' ELSE workflow_status END,
+          interruption_reason = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE workflow_id = ? AND mode = 'runtime' AND workflow_status IN ('running', 'blocked')
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(interruptionReason, workflowId)
+        statement.executeUpdate() == 1
+      }
     if (!workflowUpdated) {
-      throw IllegalStateException("Crashed worker workflow '$workflowId' changed during lease reconciliation.")
+      error("Crashed worker workflow '$workflowId' changed during lease reconciliation.")
     }
     return true
   }
 }
+
+private fun FeatureTaskRuntimeWorkerOwnership.heartbeatIsStale(
+  current: FeatureTaskRuntimeWorkerOwnership,
+  proposedHeartbeat: Instant,
+): Boolean {
+  val identityMismatch = heartbeatIdentityMismatch(current)
+  val expiryStale = heartbeatExpiryStale(current, proposedHeartbeat)
+  val orderingStale = heartbeatOrderingStale(current)
+  return identityMismatch || expiryStale || orderingStale
+}
+
+private fun FeatureTaskRuntimeWorkerOwnership.heartbeatIdentityMismatch(
+  current: FeatureTaskRuntimeWorkerOwnership,
+): Boolean =
+  current.ownerToken != ownerToken ||
+    current.generation != generation ||
+    current.leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE
+
+private fun FeatureTaskRuntimeWorkerOwnership.heartbeatExpiryStale(
+  current: FeatureTaskRuntimeWorkerOwnership,
+  proposedHeartbeat: Instant,
+): Boolean = current.expiresAtInstant <= proposedHeartbeat || expiresAtInstant <= proposedHeartbeat
+
+private fun FeatureTaskRuntimeWorkerOwnership.heartbeatOrderingStale(
+  current: FeatureTaskRuntimeWorkerOwnership,
+): Boolean = heartbeatAtInstant < current.heartbeatAtInstant || expiresAtInstant <= current.expiresAtInstant

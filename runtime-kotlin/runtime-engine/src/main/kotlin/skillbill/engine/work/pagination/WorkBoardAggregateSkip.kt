@@ -35,30 +35,29 @@ internal fun skipIncompatibleBoardItem(
       workflowId = id,
       invocationId = id.takeIf { error.code == InstallFailureCode.INVALID_IDE_STATUS_SCHEMA },
     )
-  emitAggregateSkip(skipDiagnostics, runtimeDiagnostics, IDE_STATUS_BOARD_SEAM, id, null, error)
+  skipDiagnostics.emit(runtimeDiagnostics, IDE_STATUS_BOARD_SEAM, id, null, error)
   return null
 }
 
-internal fun emitAggregateSkip(
-  skipDiagnostics: AggregateSkipDiagnostics,
+internal fun AggregateSkipDiagnostics.emit(
   runtimeDiagnostics: RuntimeDiagnostics,
   seam: String,
   workflowId: String,
   invocationId: String?,
   error: SkillBillRuntimeException,
 ) {
-  if (skipDiagnostics.emitted < MAX_AGGREGATE_SKIP_DIAGNOSTICS) {
+  if (emitted < MAX_AGGREGATE_SKIP_DIAGNOSTICS) {
     runtimeDiagnostics.warning(
       "seam=$seam value_expected=readable_row value_used=skipped workflow_id=$workflowId " +
         "invocation_id=${invocationId ?: "<none>"} error=${error.message.orEmpty()}",
     )
-    skipDiagnostics.emitted++
-  } else if (!skipDiagnostics.truncated) {
+    emitted++
+  } else if (!truncated) {
     runtimeDiagnostics.warning(
       "seam=$seam value_expected=readable_row value_used=truncated " +
         "skipped_diagnostics_cap=$MAX_AGGREGATE_SKIP_DIAGNOSTICS",
     )
-    skipDiagnostics.truncated = true
+    truncated = true
   }
 }
 

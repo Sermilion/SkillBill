@@ -164,48 +164,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
           "outcome=live_expired_lease owner_token=${existing.ownerToken}",
       )
     }
-    var admissionReceipt: RuntimeMigrationReceipt? = null
-    val admitted =
-      runCatching {
-        database.transaction {
-          val execution =
-            executionAdmission.admit(
-              it,
-              existing.workflowId,
-              inputs,
-              identity,
-              reviewSelection,
-            )
-          admissionReceipt = execution.migrationReceipt
-          val reserved =
-            it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
-              existing.workflowId,
-              existing.ownerToken,
-              existing.generation,
-            )
-          if (!reserved) {
-            val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
-            val leftoverReservation =
-              current != null &&
-                current.workflowId == existing.workflowId &&
-                current.ownerToken == existing.ownerToken &&
-                current.generation == existing.generation &&
-                current.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
-            if (!leftoverReservation) {
-              error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
-            }
-            diagnostics.info(
-              "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
-                "outcome=leftover_takeover_reserved owner_token=${existing.ownerToken}",
-            )
-          }
-          execution
-        }
-      }.onFailure {
-        admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
-      }.getOrThrow().also {
-        admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
-      }
+    val admitted = admitWithTakeoverReservation(existing, inputs, identity, reviewSelection)
     if (inspection == FeatureTaskRuntimeProcessInspection.ExactLive) stopExactWorker(existing)
     val replacement =
       newOwnership(
@@ -214,35 +173,93 @@ class FeatureTaskRuntimeWorkerCoordinator(
         existing.phaseId,
         existing.phaseAttempt + 1,
       )
-    var transferReceipt: RuntimeMigrationReceipt? = null
-    val transferred =
-      runCatching {
-        database.transaction {
-          val execution =
-            executionAdmission.admit(
-              it,
-              existing.workflowId,
-              inputs,
-              admitted.identity,
-              reviewSelection,
-            )
-          transferReceipt = execution.migrationReceipt
-          if (!it.workflowStates.transferFeatureTaskRuntimeWorker(
-              replacement,
-              existing.ownerToken,
-              existing.generation,
-            )
-          ) {
-            error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
-          }
-          execution
-        }
-      }.onFailure {
-        transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
-      }.getOrThrow().also {
-        transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
-      }
+    val transferred = admitWithOwnershipTransfer(existing, inputs, admitted.identity, reviewSelection, replacement)
     return AcquiredWorker(replacement, transferred)
+  }
+
+  private fun admitWithTakeoverReservation(
+    existing: FeatureTaskRuntimeWorkerOwnership,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+    reviewSelection: RuntimeReviewSelection?,
+  ): AdmittedFeatureTaskRuntimeExecution {
+    var admissionReceipt: RuntimeMigrationReceipt? = null
+    return runCatching {
+      database.transaction {
+        val execution =
+          executionAdmission.admit(
+            it,
+            existing.workflowId,
+            inputs,
+            identity,
+            reviewSelection,
+          )
+        admissionReceipt = execution.migrationReceipt
+        val reserved =
+          it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+            existing.workflowId,
+            existing.ownerToken,
+            existing.generation,
+          )
+        if (!reserved) {
+          val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
+          val leftoverReservation =
+            current != null &&
+              current.workflowId == existing.workflowId &&
+              current.ownerToken == existing.ownerToken &&
+              current.generation == existing.generation &&
+              current.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
+          if (!leftoverReservation) {
+            error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+          }
+          diagnostics.info(
+            "seam=feature-task-runtime.worker-recovery workflow_id=${existing.workflowId} " +
+              "outcome=leftover_takeover_reserved owner_token=${existing.ownerToken}",
+          )
+        }
+        execution
+      }
+    }.onFailure {
+      admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
+    }.getOrThrow().also {
+      admissionReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
+    }
+  }
+
+  private fun admitWithOwnershipTransfer(
+    existing: FeatureTaskRuntimeWorkerOwnership,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+    reviewSelection: RuntimeReviewSelection?,
+    replacement: FeatureTaskRuntimeWorkerOwnership,
+  ): AdmittedFeatureTaskRuntimeExecution {
+    var transferReceipt: RuntimeMigrationReceipt? = null
+    return runCatching {
+      database.transaction {
+        val execution =
+          executionAdmission.admit(
+            it,
+            existing.workflowId,
+            inputs,
+            identity,
+            reviewSelection,
+          )
+        transferReceipt = execution.migrationReceipt
+        if (!it.workflowStates.transferFeatureTaskRuntimeWorker(
+            replacement,
+            existing.ownerToken,
+            existing.generation,
+          )
+        ) {
+          error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
+        }
+        execution
+      }
+    }.onFailure {
+      transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = false) }
+    }.getOrThrow().also {
+      transferReceipt?.let { executionAdmission.recordTransactionOutcome(it, committed = true) }
+    }
   }
 
   private fun inspectForRecovery(existing: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection {
@@ -251,14 +268,23 @@ class FeatureTaskRuntimeWorkerCoordinator(
       FeatureTaskRuntimeProcessInspection.ExactLive -> Unit
       FeatureTaskRuntimeProcessInspection.NotRunning -> Unit
       FeatureTaskRuntimeProcessInspection.ForeignHost ->
-        error("Worker ownership for workflow '${existing.workflowId}' belongs to a different host.")
+        if (leaseIsActive(existing)) {
+          error("Worker ownership for workflow '${existing.workflowId}' belongs to a different host.")
+        }
       FeatureTaskRuntimeProcessInspection.PidReused ->
-        error("Worker ownership for workflow '${existing.workflowId}' pid was reused.")
+        if (leaseIsActive(existing)) {
+          error("Worker ownership for workflow '${existing.workflowId}' PID was reused.")
+        }
       is FeatureTaskRuntimeProcessInspection.Unsupported ->
-        error("Worker process inspection for workflow '${existing.workflowId}' is unsupported: ${inspection.reason}")
+        if (leaseIsActive(existing)) {
+          error("Worker process inspection for workflow '${existing.workflowId}' is unsupported: ${inspection.reason}")
+        }
     }
     return inspection
   }
+
+  private fun leaseIsActive(existing: FeatureTaskRuntimeWorkerOwnership): Boolean =
+    existing.expiresAtInstant.isAfter(clock.instant())
 
   private fun stopExactWorker(existing: FeatureTaskRuntimeWorkerOwnership) {
     supervisor.terminateGracefully(existing)

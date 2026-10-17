@@ -19,6 +19,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.isTerminal
 import skillbill.workflow.taskruntime.phaseartifacts.featureTaskRuntimePhaseRecordAttemptCount
 import java.sql.Connection
+import java.sql.ResultSet
 import java.time.Clock
 import java.time.Instant
 
@@ -232,30 +233,30 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
       statement.bindAll(settlement.workflowId)
       statement.executeQuery().use { rows ->
         if (!rows.next()) return null
-        val leaseState =
-          decodeWorkerLeaseState(settlement.workflowId, rows.getString("lease_state"))
-        when (leaseState) {
-          FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED -> return FeatureTaskPhaseSettlementRefusalReason.OWNER_MISMATCH
-          FeatureTaskRuntimeWorkerLeaseState.ACTIVE -> {
-            val expiresAt = rows.getString("expires_at")
-            parseWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt, diagnostics)
-            val expiresInstant = parseFeatureTaskRuntimeWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt)
-            if (!expiresInstant.isAfter(clock.instant())) {
-              return FeatureTaskPhaseSettlementRefusalReason.LEASE_EXPIRED
-            }
-            val leasePhaseId = rows.getString("phase_id")
-            if (settlement.phaseId != leasePhaseId) {
-              return FeatureTaskPhaseSettlementRefusalReason.WRONG_PHASE
-            }
-            val leaseAttempt = rows.getInt("phase_attempt")
-            if (settlement.attempt != leaseAttempt) {
-              return FeatureTaskPhaseSettlementRefusalReason.STALE_ATTEMPT
-            }
-          }
-        }
+        return activeSettlementLeaseRefusal(settlement, rows)
       }
     }
     return null
+  }
+
+  private fun activeSettlementLeaseRefusal(
+    settlement: FeatureTaskPhaseSettlement,
+    rows: ResultSet,
+  ): FeatureTaskPhaseSettlementRefusalReason? {
+    val leaseState = decodeWorkerLeaseState(settlement.workflowId, rows.getString("lease_state"))
+    if (leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED) {
+      return FeatureTaskPhaseSettlementRefusalReason.OWNER_MISMATCH
+    }
+    if (leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE) return null
+    val expiresAt = rows.getString("expires_at")
+    parseWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt, diagnostics)
+    val expiresInstant = parseFeatureTaskRuntimeWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt)
+    return when {
+      !expiresInstant.isAfter(clock.instant()) -> FeatureTaskPhaseSettlementRefusalReason.LEASE_EXPIRED
+      settlement.phaseId != rows.getString("phase_id") -> FeatureTaskPhaseSettlementRefusalReason.WRONG_PHASE
+      settlement.attempt != rows.getInt("phase_attempt") -> FeatureTaskPhaseSettlementRefusalReason.STALE_ATTEMPT
+      else -> null
+    }
   }
 
   override fun delete(

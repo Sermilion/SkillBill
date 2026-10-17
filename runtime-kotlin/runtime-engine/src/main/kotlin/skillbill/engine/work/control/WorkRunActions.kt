@@ -4,14 +4,13 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.goalrunner.status.executionLivenessBlocksIdleSafeRefresh
 import skillbill.engine.work.IdeStatusService
 import skillbill.engine.work.control.model.WorkControlRejection
 import skillbill.engine.work.control.model.WorkControlResult
 import skillbill.engine.work.control.model.WorkRunOptions
 import skillbill.engine.work.control.model.WorkRunTarget
 import skillbill.engine.work.observation.workerOwnership
-import skillbill.engine.goalrunner.status.executionLivenessBlocksIdleSafeRefresh
-import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.install.model.SupportedAgent

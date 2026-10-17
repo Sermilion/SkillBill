@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -11,8 +12,11 @@ import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvid
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
+import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,9 +59,28 @@ class SqliteValidationGateEvidenceRoundTripTest {
     val tempDir = Files.createTempDirectory("validation-gate-evidence")
     val dbPath = tempDir.resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).close()
+    seedSettleableRuntimeWorkflow(dbPath, "wftr-gate-evidence")
     return SqliteFeatureTaskPhaseSettlementRepository(
       sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
     )
+  }
+
+  private fun seedSettleableRuntimeWorkflow(
+    dbPath: Path,
+    workflowId: String,
+  ) {
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator).saveFeatureTaskWorkflow(
+        workflowRow(
+          workflowId = workflowId,
+          sessionId = "ftr-$workflowId",
+          workflowName = "bill-feature-task",
+          currentStepId = "validate",
+          mode = RUNTIME,
+        ),
+        RUNTIME,
+      )
+    }
   }
 
   private fun gateEvidence(): FeatureTaskRuntimeValidationGateExecutionEvidence =

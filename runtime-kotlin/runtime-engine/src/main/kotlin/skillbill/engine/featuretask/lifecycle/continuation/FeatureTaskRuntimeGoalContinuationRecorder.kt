@@ -2,8 +2,8 @@ package skillbill.engine.featuretask.lifecycle.continuation
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeRemediationBaseReconciler
-import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.lifecycle.remediation.RemediationDegradationSignal
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherenceResult
@@ -66,9 +66,9 @@ class FeatureTaskRuntimeGoalContinuationRecorder(
 
   fun updateReviewState(
     workflowId: String,
-    transform: (GoalSubtaskReviewState) -> GoalSubtaskReviewState,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-  ): GoalSubtaskReviewState? = reviewPassRecorder.updateReviewState(workflowId, transform, admitted)
+    transform: (GoalSubtaskReviewState) -> GoalSubtaskReviewState,
+  ): GoalSubtaskReviewState? = reviewPassRecorder.updateReviewState(workflowId, admitted, transform)
 
   internal fun completeGoalReviewPass(
     request: GoalReviewPassCompletionRequest,

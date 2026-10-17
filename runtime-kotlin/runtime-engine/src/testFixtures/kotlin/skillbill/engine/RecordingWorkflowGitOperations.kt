@@ -58,6 +58,7 @@ class RecordingWorkflowGitOperations(
   var amendHeadCommitResult: WorkflowGitOperationResult? = null
   val checkpointRefs = mutableMapOf<String, String>()
   val updateCheckpointRefCalls = mutableListOf<Pair<String, String>>()
+  val deleteCheckpointRefCalls = mutableListOf<String>()
   var updateCheckpointRefResult: WorkflowGitOperationResult? = null
   var resolveCheckpointRefResult: WorkflowGitOperationResult? = null
   var onResolveCheckpointRef: ((String) -> WorkflowGitOperationResult?)? = null
@@ -208,6 +209,7 @@ class RecordingWorkflowGitOperations(
     namespacePrefix: String,
     refName: String,
   ): WorkflowGitOperationResult {
+    deleteCheckpointRefCalls.add(refName)
     checkpointRefs.remove(refName)
     return WorkflowGitOperationResult.Ok(value = refName)
   }

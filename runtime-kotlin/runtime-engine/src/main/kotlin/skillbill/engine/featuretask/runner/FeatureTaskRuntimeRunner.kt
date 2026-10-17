@@ -20,7 +20,12 @@ class FeatureTaskRuntimeRunner(
   fun run(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport {
     execute.foreignModeWorkflowBlock(request)?.let { return it }
     execute.terminalWorkflowBlock(request)?.let { return it }
-    val admittedRequest = request.copy(admittedExecution = startup.admit(request))
+    val admitted = startup.admit(request)
+    val carriedOwnership = request.admittedExecution?.workerOwnership
+    val admittedRequest =
+      request.copy(
+        admittedExecution = carriedOwnership?.let { admitted.withWorkerOwnership(it) } ?: admitted,
+      )
     validateAdmittedRequest(admittedRequest)
     val reconciliation = startup.reconcile()
     return when (val prepared = this.preparation.prepare(admittedRequest)) {

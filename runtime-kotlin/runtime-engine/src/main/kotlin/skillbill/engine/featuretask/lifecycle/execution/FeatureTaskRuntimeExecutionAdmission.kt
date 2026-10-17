@@ -128,7 +128,10 @@ class FeatureTaskRuntimeExecutionAdmission(
         checkedInputs,
         requireNotNull(descriptor),
         receipt,
-      )
+      ).let { accepted ->
+        states.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { accepted.withWorkerOwnership(it) }
+          ?: accepted
+      }
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
       throw error

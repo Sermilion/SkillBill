@@ -22,7 +22,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
@@ -90,7 +89,26 @@ internal class WorkflowGoalRunnerOutcomeTerminalPersistence(
     workflowId: String,
     issueKey: String,
     subtaskId: Int,
-  ): GoalRunnerStoredOutcome? = null
+  ): GoalRunnerStoredOutcome? {
+    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return null
+    val row =
+      workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) ?: return null
+    val continuation =
+      DurableWorkflowArtifacts.fromMap(row.toSnapshot().artifacts).goalContinuation()
+        ?.takeIf { it.issueKey == issueKey && it.subtaskId == subtaskId }
+        ?: return null
+    return crashReconcileExpiredWorkerToResumable(
+      CrashReconcileExpiredWorkerRequest(
+        workflowStates = workflowStates,
+        workerSupervisor = workerSupervisor,
+        workflowId = workflowId,
+        continuation = continuation,
+        ownership = ownership,
+        row = row,
+      ),
+      clock,
+    )
+  }
 
   fun persistMeasuredCompletion(
     workflowStates: WorkflowStateRepository,

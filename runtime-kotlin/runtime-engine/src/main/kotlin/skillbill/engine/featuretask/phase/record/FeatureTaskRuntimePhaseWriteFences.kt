@@ -23,10 +23,11 @@ internal fun requireCurrentWorker(
   clock: Clock,
 ): Boolean {
   admitted.requireCurrent(states, workflowId)
-  val expected = admitted.workerOwnership ?: return false
-  val workflow = states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) ?: return false
+  val expected = admitted.workerOwnership
+  val workflow = states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+  val current = states.getFeatureTaskRuntimeWorkerOwnership(workflowId)
+  if (expected == null || workflow == null || current == null) return false
   if (workflow.workflowStatus.workflowStatus() in WORKER_TERMINAL_STATUSES) return false
-  val current = states.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return false
   return current.ownerToken == expected.ownerToken &&
     current.generation == expected.generation &&
     current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
@@ -38,7 +39,7 @@ internal fun phaseEventAdmissible(
   previous: FeatureTaskRuntimePhaseRecord?,
   phaseStart: Boolean,
 ): Boolean {
-  if (previous == null) return phaseStart && request.status.workflowStepStatus() == WorkflowStepStatus.RUNNING
+  if (previous == null) return request.status.workflowStepStatus() == WorkflowStepStatus.RUNNING
   if (request.attemptCount < previous.attemptCount) return false
   if (request.attemptCount > previous.attemptCount) {
     return phaseStart && request.status.workflowStepStatus() == WorkflowStepStatus.RUNNING
@@ -58,7 +59,13 @@ internal fun completedPhaseRequestMatches(
     request.rejectedOutput == previous.rejectedOutput &&
     request.blockedReason == previous.blockedReason &&
     request.failureDisposition == previous.failureDisposition &&
-    request.fileManifestBefore == previous.fileManifestBefore &&
+    completedPhaseManifestMatches(request, previous)
+
+private fun completedPhaseManifestMatches(
+  request: FeatureTaskRuntimePhaseStateRequest,
+  previous: FeatureTaskRuntimePhaseRecord,
+): Boolean =
+  request.fileManifestBefore == previous.fileManifestBefore &&
     request.fileManifestAfter == previous.fileManifestAfter &&
     request.fileManifestIntroduced == previous.fileManifestIntroduced &&
     request.loopId == previous.loopId &&
@@ -67,7 +74,6 @@ internal fun completedPhaseRequestMatches(
     request.repairEvidence == previous.repairEvidence
 
 internal fun phaseCoupledEvidenceWriteAdmissible(
-  phaseId: String,
   attemptCount: Int,
   previous: FeatureTaskRuntimePhaseRecord?,
 ): Boolean {

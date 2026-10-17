@@ -48,7 +48,6 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import java.time.Clock
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -59,6 +58,7 @@ import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
+import java.time.Clock
 
 @Inject
 class GoalRunnerStatusProjectionAssembler(
@@ -221,17 +221,14 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
     val liveParent =
-      liveGoalFinalizationProgress(parentWorkflowId, durableRead)
+      liveGoalFinalizationProgress(parentWorkflowId)
     if (childProgress != null && liveParent == null) {
       return childProgress
     }
     return liveParent
   }
 
-  private fun liveGoalFinalizationProgress(
-    parentWorkflowId: String,
-    durableRead: GoalRunnerStatusDurableReadTracker,
-  ): GoalRunnerWorkflowProgress? =
+  private fun liveGoalFinalizationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
     outcomeStore.progress(parentWorkflowId)
       ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
       ?.let { parent ->

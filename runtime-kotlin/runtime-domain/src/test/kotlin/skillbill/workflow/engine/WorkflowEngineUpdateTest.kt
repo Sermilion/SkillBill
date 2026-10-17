@@ -12,7 +12,6 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 
 class WorkflowEngineUpdateTest {
   private val engine = WorkflowEngine()
@@ -48,7 +47,7 @@ class WorkflowEngineUpdateTest {
   }
 
   @Test
-  fun `terminal updates require an instant retain it on repeat and clear it when reopened`() {
+  fun `terminal updates require an instant retain it on repeat and refuse ordinary reopen`() {
     val terminal = input.copy(workflowStatus = WorkflowStatus.COMPLETED)
     assertFailsWith<SkillBillRuntimeException> {
       engine.updateRecord(definition, initial, terminal)
@@ -60,7 +59,11 @@ class WorkflowEngineUpdateTest {
     val repeated = engine.updateRecord(definition, completed, terminal.copy(terminalInstant = time.plusSeconds(10)))
     assertEquals(time, completed.finishedAt)
     assertEquals(time, repeated.finishedAt)
-    assertNull(engine.updateRecord(definition, repeated, input).finishedAt)
+    assertFailsWith<SkillBillRuntimeException> {
+      engine.updateRecord(definition, repeated, input)
+    }.also {
+      assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+    }
   }
 
   @Test

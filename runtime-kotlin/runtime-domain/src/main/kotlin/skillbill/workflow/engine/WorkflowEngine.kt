@@ -61,27 +61,23 @@ class WorkflowEngine {
       }
     input.artifactsPatch?.let { patch -> mergedArtifacts.putAll(patch) }
     val terminal = definition.isTerminalStatus(input.workflowStatus)
+    val artifactsUnchanged = !input.replaceArtifacts && input.artifactsPatch == null
     val updated =
       existing.copy(
         sessionId = input.sessionId.trim().ifBlank { existing.sessionId.orEmpty() },
         workflowStatus = input.workflowStatus,
         currentStepId = input.currentStepId.trim().ifBlank { existing.currentStepId.orEmpty() },
         steps = mergeStepUpdates(definition, existing.steps, input.stepUpdates?.asEntries()),
-        artifacts = DurableWorkflowArtifacts.fromMap(mergedArtifacts),
-        finishedAt =
-          if (terminal) {
-            existing.finishedAt ?: input.terminalInstant
-              ?: throw invalidWorkflowStateSchemaError("A terminal workflow update requires a terminal instant.")
+        artifacts =
+          if (artifactsUnchanged) {
+            existing.artifacts
           } else {
-            null
+            DurableWorkflowArtifacts.fromMap(mergedArtifacts)
           },
+        finishedAt = if (terminal) requireTerminalFinishedAt(existing, input) else null,
       )
     if (definition.isTerminalStatus(existing.workflowStatus)) {
-      if (updated != existing) {
-        throw invalidWorkflowStateSchemaError(
-          "An ordinary terminal replay cannot change the accepted workflow snapshot '${existing.workflowId}'.",
-        )
-      }
+      refuseChangedOrdinaryTerminalReplay(existing, updated)
       return existing
     }
     return updated

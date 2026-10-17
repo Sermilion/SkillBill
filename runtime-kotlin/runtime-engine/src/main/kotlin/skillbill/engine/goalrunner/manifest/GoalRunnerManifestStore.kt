@@ -71,7 +71,7 @@ interface GoalRunnerManifestQueries {
   fun sharedPreplanPayloadSha256(parentWorkflowId: String): String?
 }
 
-interface GoalRunnerManifestExecutionCommands {
+interface GoalRunnerManifestPauseCommands {
   fun requestPause(parentWorkflowId: String): GoalRunnerControlState?
 
   fun pauseNow(
@@ -89,7 +89,9 @@ interface GoalRunnerManifestExecutionCommands {
   fun resume(parentWorkflowId: String): GoalRunnerManifestState?
 
   fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState
+}
 
+interface GoalRunnerManifestLeaseCommands {
   fun acquireExecutionLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
@@ -134,6 +136,10 @@ interface GoalRunnerManifestExecutionCommands {
     nowInstant: String,
   ): Boolean
 }
+
+interface GoalRunnerManifestExecutionCommands :
+  GoalRunnerManifestPauseCommands,
+  GoalRunnerManifestLeaseCommands
 
 interface GoalRunnerManifestControlWrites {
   fun bindRepositoryIdentity(

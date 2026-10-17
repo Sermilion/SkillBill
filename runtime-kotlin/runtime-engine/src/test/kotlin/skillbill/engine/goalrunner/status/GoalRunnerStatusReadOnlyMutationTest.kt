@@ -7,6 +7,7 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertTrue

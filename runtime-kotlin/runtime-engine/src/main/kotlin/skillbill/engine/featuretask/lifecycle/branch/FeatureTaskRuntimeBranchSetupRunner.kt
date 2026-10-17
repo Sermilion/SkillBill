@@ -218,10 +218,13 @@ class FeatureTaskRuntimeBranchSetupRunner(
             .distinct()
             .sorted(),
       )
+    val admitted = request.admittedExecution
     val recorded =
-      request.admittedExecution?.let { admitted ->
+      if (admitted?.workerOwnership != null) {
         recorder.recordOwnedResolvedBranch(request.workflowId, resolvedBranch, admitted)
-      } ?: recorder.recordResolvedBranch(request.workflowId, resolvedBranch)
+      } else {
+        recorder.recordResolvedBranch(request.workflowId, resolvedBranch)
+      }
     if (!recorded) {
       return FeatureTaskRuntimeBranchSetupOutcome.blocked(branchSetupNotPersistedBlockedReason(branch))
     }

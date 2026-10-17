@@ -207,7 +207,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
       )
 
     assertTrue(
-      supervisor.inspect(ownership) is FeatureTaskRuntimeProcessInspection.ForeignHost,
+      supervisor.inspect(ownership) is FeatureTaskRuntimeProcessInspection.PidReused,
       "a different process occupying the pid must not read as the original worker",
     )
   }

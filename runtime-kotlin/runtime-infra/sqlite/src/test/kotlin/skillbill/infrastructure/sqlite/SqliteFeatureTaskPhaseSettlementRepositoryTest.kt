@@ -14,6 +14,7 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.Connection
 import java.time.Clock
 import java.time.Instant
@@ -37,6 +38,7 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
         },
       )
     }
+    seedSettleableRuntimeWorkflow(dbPath, "wftr-1")
     val repo =
       SqliteFeatureTaskPhaseSettlementRepository(
         sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
@@ -62,6 +64,7 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
     val tempDir = Files.createTempDirectory("phase-settlement-evidence")
     val dbPath = tempDir.resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).close()
+    seedSettleableRuntimeWorkflow(dbPath, "wftr-evidence")
     val repo =
       SqliteFeatureTaskPhaseSettlementRepository(
         sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
@@ -119,6 +122,7 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
     val tempDir = Files.createTempDirectory("phase-settlement-unknown")
     val dbPath = tempDir.resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).close()
+    seedSettleableRuntimeWorkflow(dbPath, "wftr-unknown")
     val repo =
       SqliteFeatureTaskPhaseSettlementRepository(
         sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
@@ -190,6 +194,7 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
     val tempDir = Files.createTempDirectory("phase-settlement-conflict")
     val dbPath = tempDir.resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).close()
+    seedSettleableRuntimeWorkflow(dbPath, "wftr-conflict")
     val repo =
       SqliteFeatureTaskPhaseSettlementRepository(
         sqliteDatabaseSessionFactory(userHome = tempDir, dbPathOverride = dbPath.toString(), environment = emptyMap()),
@@ -216,6 +221,24 @@ class SqliteFeatureTaskPhaseSettlementRepositoryTest {
 
     assertEquals(FeatureTaskPhaseSettlementWriteResult.Conflicting, conflict)
     assertEquals(accepted, repo.find("wftr-conflict", "implement", 2))
+  }
+
+  private fun seedSettleableRuntimeWorkflow(
+    dbPath: Path,
+    workflowId: String,
+  ) {
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator).saveFeatureTaskWorkflow(
+        workflowRow(
+          workflowId = workflowId,
+          sessionId = "ftr-$workflowId",
+          workflowName = "bill-feature-task",
+          currentStepId = "implement",
+          mode = RUNTIME,
+        ),
+        RUNTIME,
+      )
+    }
   }
 
   private fun tableExists(

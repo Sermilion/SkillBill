@@ -554,8 +554,7 @@ internal class TrackingDatabase(
               .filter { row -> query.afterKey?.let { row.key < it } != false }.take(query.limit)
           }
 
-          override fun list(limit: Int?): WorkListListRead =
-            WorkListListRead(limit?.let(work::take) ?: work)
+          override fun list(limit: Int?): WorkListListRead = WorkListListRead(limit?.let(work::take) ?: work)
 
           override fun findByWorkflowId(workflowId: String): List<WorkItem> =
             work.filter { it.workflowId == workflowId }

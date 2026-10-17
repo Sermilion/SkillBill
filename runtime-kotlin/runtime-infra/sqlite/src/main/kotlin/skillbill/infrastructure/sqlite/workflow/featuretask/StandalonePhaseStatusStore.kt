@@ -7,7 +7,6 @@ import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
-import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
@@ -164,27 +163,28 @@ internal class StandalonePhaseStatusStore(
         ),
       )
       statement.executeQuery().use { rows ->
-        readPhaseExecutionsForAggregate(rows, query.offset, query.limit)
+        rows.readAggregatePage(query.offset, query.limit) { tryToRecordForAggregate(it) }
       }
     }
   }
 
-  private fun readPhaseExecutionsForAggregate(
-    rows: ResultSet,
+  private fun <T> ResultSet.readAggregatePage(
     offset: Int,
     limit: Int,
-  ): List<StandalonePhaseStatusRecord> {
+    parse: ResultSet.(AggregateRowSkipDiagnostics) -> T?,
+  ): List<T> {
     val skipDiagnostics = AggregateRowSkipDiagnostics()
-    val items = mutableListOf<StandalonePhaseStatusRecord>()
+    val items = mutableListOf<T>()
     var healthySkipped = 0
-    while (rows.next()) {
-      val parsed = rows.tryToRecordForAggregate(skipDiagnostics) ?: continue
-      if (healthySkipped < offset) {
-        healthySkipped++
-        continue
+    while (next() && items.size < limit) {
+      val parsed = parse(skipDiagnostics)
+      if (parsed != null) {
+        if (healthySkipped < offset) {
+          healthySkipped++
+        } else {
+          items += parsed
+        }
       }
-      items += parsed
-      if (items.size >= limit) break
     }
     return items
   }
@@ -202,58 +202,11 @@ internal class StandalonePhaseStatusStore(
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
       statement.bindAll(listOf(startedThrough.toString(), workflowId))
-      statement.executeQuery().use { rows -> readWorkflowExecutionsForAggregate(rows, offset, limit) }
-    }
-  }
-
-  private fun readWorkflowExecutionsForAggregate(
-    rows: ResultSet,
-    offset: Int,
-    limit: Int,
-  ): List<IdeStatusWorkflowExecution> {
-    val skipDiagnostics = AggregateRowSkipDiagnostics()
-    val items = mutableListOf<IdeStatusWorkflowExecution>()
-    var healthySkipped = 0
-    while (rows.next()) {
-      val parsed = rows.tryToWorkflowExecutionForAggregate(skipDiagnostics) ?: continue
-      if (healthySkipped < offset) {
-        healthySkipped++
-        continue
+      statement.executeQuery().use { rows ->
+        rows.readAggregatePage(offset, limit) { tryToWorkflowExecutionForAggregate(it) }
       }
-      items += parsed
-      if (items.size >= limit) break
     }
-    return items
   }
-
-  private fun instantAtOrBeforeSql(columnName: String): String =
-    "(unixepoch($columnName) < unixepoch((SELECT value FROM cutoff)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT value FROM cutoff)) AND " +
-      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT value FROM cutoff)")}))"
-
-  private fun instantAtOrAfterBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} >= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
-
-  private fun instantAfterBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
-
-  private fun instantAtOrBeforeBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) < unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
 
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
@@ -717,13 +670,14 @@ internal class StandalonePhaseStatusStore(
           failure,
         )
       }
-    if (values == null || values.size > MAX_LAUNCH_ARGUMENTS || values.any { !validLaunchArgument(it) }) {
+    if (values == null ||
+      values.size > MAX_LAUNCH_ARGUMENTS ||
+      values.any { !validLaunchArgument(it, MAX_LAUNCH_ARGUMENT_LENGTH) }
+    ) {
       throw invalidIdeStatusSchemaError("standalone-status", "launch_arguments_json", "Invalid launch arguments.")
     }
     return values.filterIsInstance<String>()
   }
-
-  private fun validLaunchArgument(value: Any?): Boolean = value is String && value.length <= MAX_LAUNCH_ARGUMENT_LENGTH
 
   private fun ResultSet.readProcessOwner(): FeatureTaskRuntimeProcessIdentity? {
     val host = getString("owner_host_identity")
@@ -736,21 +690,6 @@ internal class StandalonePhaseStatusStore(
       throw invalidIdeStatusSchemaError("standalone-status", "process_owner", "owner identity is incomplete")
     }
     return FeatureTaskRuntimeProcessIdentity(requireNotNull(host), requireNotNull(boot), pid, requireNotNull(birth))
-  }
-
-  private fun incrementDecimal(value: String): String {
-    val digits = value.toCharArray()
-    var carry = 1
-    for (index in digits.lastIndex downTo 0) {
-      if (carry == 0) break
-      if (digits[index] == '9') {
-        digits[index] = '0'
-      } else {
-        digits[index] = (digits[index].code + 1).toChar()
-        carry = 0
-      }
-    }
-    return if (carry == 1) "1${digits.concatToString()}" else String(digits)
   }
 
   private companion object {

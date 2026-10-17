@@ -22,7 +22,7 @@ import skillbill.engine.work.observation.workerOwnership
 import skillbill.engine.work.pagination.AggregateSkipDiagnostics
 import skillbill.engine.work.pagination.IDE_STATUS_STATUS_SEAM
 import skillbill.engine.work.pagination.WorkDetailPagePosition
-import skillbill.engine.work.pagination.emitAggregateSkip
+import skillbill.engine.work.pagination.emit
 import skillbill.engine.work.pagination.includesDetailList
 import skillbill.engine.work.pagination.invalidWorkPaginationRequest
 import skillbill.engine.work.pagination.skipIncompatibleBoardItem
@@ -123,7 +123,7 @@ class IdeStatusService(
       database.read { unitOfWork ->
         val candidates =
           scopeToBranch(
-            collectCandidates(unitOfWork, identityResult, currentBranch, observedAt),
+            unitOfWork.collectCandidates(identityResult, currentBranch, observedAt),
             currentBranch,
             repoRoot,
           )
@@ -203,9 +203,8 @@ class IdeStatusService(
           consumed++
           examined++
           afterKey = row.key
-          projectBoardCandidate(
+          unitOfWork.projectBoardCandidate(
             row.id,
-            unitOfWork,
             observedAt,
             finishedFrom,
             diagnostics,
@@ -232,16 +231,15 @@ class IdeStatusService(
     }
   }
 
-  private fun projectBoardCandidate(
+  private fun UnitOfWork.projectBoardCandidate(
     id: String,
-    unit: UnitOfWork,
     observedAt: Instant,
     finishedFrom: Instant,
     diagnostics: MutableList<WorkBoardDiagnostic>,
     skipDiagnostics: AggregateSkipDiagnostics,
   ): WorkBoardItem? =
     try {
-      val found = detailMatch(id, unit) as? WorkDetailMatch.Found ?: return null
+      val found = detailMatch(id, this) as? WorkDetailMatch.Found ?: return null
       val identity = found.standalone?.repositoryIdentity ?: found.work?.repositoryIdentity
       val root = identity?.let(::decodeRepositoryRoot)
       if (identity == null || root == null) {
@@ -251,7 +249,6 @@ class IdeStatusService(
       val work = listOfNotNull(found.work)
       val candidates =
         collectCandidates(
-          unit,
           IdeStatusRepositoryResolution.Ok(identity, root),
           null,
           observedAt,
@@ -261,14 +258,14 @@ class IdeStatusService(
       candidates.singleOrNull()?.let { candidate ->
         projectRetainedBoardItem(
           candidate,
-          IdeStatusProjectionContext(unit, identity, null, observedAt, root),
+          IdeStatusProjectionContext(this, identity, null, observedAt, root),
           work,
           finishedFrom,
           diagnostics,
         )
       }
     } catch (error: SkillBillRuntimeException) {
-      skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this.diagnostics, id)
+      skipIncompatibleBoardItem(error, diagnostics, skipDiagnostics, this@IdeStatusService.diagnostics, id)
     }
 
   fun projectBoardSelection(
@@ -293,8 +290,7 @@ class IdeStatusService(
           }
           val candidates =
             try {
-              collectCandidates(
-                unitOfWork,
+              unitOfWork.collectCandidates(
                 IdeStatusRepositoryResolution.Ok(identity, root),
                 null,
                 observedAt,
@@ -437,8 +433,7 @@ class IdeStatusService(
           )
         }
         val candidates =
-          collectCandidates(
-            unitOfWork,
+          unitOfWork.collectCandidates(
             IdeStatusRepositoryResolution.Ok(identity, root),
             null,
             observedAt,
@@ -872,15 +867,14 @@ class IdeStatusService(
     return planning.state != GoalPlanningStatusState.PREPARED
   }
 
-  private fun collectCandidates(
-    unitOfWork: UnitOfWork,
+  private fun UnitOfWork.collectCandidates(
     repository: IdeStatusRepositoryResolution.Ok,
     branch: String?,
     observedAt: Instant,
     resolved: ResolvedWorkCandidates? = null,
     skipDiagnostics: AggregateSkipDiagnostics = AggregateSkipDiagnostics(),
   ): List<IdeStatusCandidate> {
-    val work = resolved?.work?.map { it.item } ?: unitOfWork.workList.list(limit = null).items
+    val work = resolved?.work?.map { it.item } ?: workList.list(limit = null).items
     val issueKeysWithGoals =
       work
         .filter { it.workflowKind == WorkItemKind.FEATURE_GOAL }
@@ -888,21 +882,20 @@ class IdeStatusService(
         .toSet()
     val workflowCandidates =
       work.mapNotNull { item ->
-        if (isExcludedGoalChild(routeScopeFor(item, unitOfWork), item.issueKey, issueKeysWithGoals)) {
+        if (isExcludedGoalChild(routeScopeFor(item, this), item.issueKey, issueKeysWithGoals)) {
           null
         } else {
           try {
             toCandidate(
               item,
-              unitOfWork,
+              this,
               repository,
               branch,
               resolved?.work?.firstOrNull { it.item.workflowId == item.workflowId },
             )
           } catch (error: SkillBillRuntimeException) {
             if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
-            emitAggregateSkip(
-              skipDiagnostics,
+            skipDiagnostics.emit(
               diagnostics,
               IDE_STATUS_STATUS_SEAM,
               item.workflowId,
@@ -915,7 +908,7 @@ class IdeStatusService(
       }
     val standaloneRecords =
       resolved?.standalone ?: branch?.let { branchName ->
-        unitOfWork.standalonePhaseStatuses.readEligible(repository.identity, branchName, observedAt)
+        standalonePhaseStatuses.readEligible(repository.identity, branchName, observedAt)
       }.orEmpty()
     val standaloneCandidates =
       latestPhaseExecutions(standaloneRecords).map { stored ->

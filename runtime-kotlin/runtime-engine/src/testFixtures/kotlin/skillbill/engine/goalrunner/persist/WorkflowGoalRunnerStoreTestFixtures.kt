@@ -1,18 +1,17 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.application.TestRepositoryEnclosingRoot
-import skillbill.application.testHarnessClock
-import skillbill.engine.featuretask.validation.ValidationGateResolver
-import skillbill.ports.config.NoopRepoLocalConfigPort
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.testHarnessClock
+import skillbill.config.model.RepoLocalConfig
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
@@ -24,6 +23,9 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionCon
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.model.RepositoryRoot
+import skillbill.ports.config.RepoLocalConfigPort
+import skillbill.ports.config.model.ReadRepoLocalConfigRequest
+import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -34,6 +36,7 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -132,9 +135,12 @@ private fun testFeatureTaskRuntimeCrashReconciler(
       statusProjectionPhaseStrategies(),
       FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator()),
       FeatureTaskRuntimeExecutionPlanSchemaValidator(),
-      ValidationGateResolver(NoopRuntimeDiagnostics),
+      ValidationGateResolver { emptyList() },
       NoopWorkflowGitOperations,
-      NoopRepoLocalConfigPort,
+      object : RepoLocalConfigPort {
+        override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
+          ReadRepoLocalConfigResult(RepoLocalConfig.defaults())
+      },
       database,
       testExecutionPlanCompatibility(),
       NoopRuntimeDiagnostics,
