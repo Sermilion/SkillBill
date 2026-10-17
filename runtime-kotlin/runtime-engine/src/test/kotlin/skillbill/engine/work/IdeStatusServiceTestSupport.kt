@@ -100,6 +100,7 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
@@ -850,6 +851,8 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   ): Boolean = false
 
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = null
+
+  override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? = null
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> = emptyList()
 
