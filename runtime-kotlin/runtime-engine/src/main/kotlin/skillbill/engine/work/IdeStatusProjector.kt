@@ -17,7 +17,6 @@ import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
-import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusExecutionScope
 import skillbill.idestatus.model.IdeStatusLifecycleState
@@ -219,7 +218,7 @@ class IdeStatusProjector(
     val completionRecorded = projection?.admittedParentComplete() == true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
-    val planningStep = goalPlanningStep(planning, preliminaryLifecycle)
+    val planningStep = livePlanningOverlay(planning, projection?.currentStep, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, lifecycle)
@@ -281,14 +280,6 @@ class IdeStatusProjector(
       )
     return IdeStatusProjection(snapshot, pauseReason.exactText)
   }
-
-  private fun goalPlanningStep(
-    planning: IdeStatusPlanning?,
-    preliminaryLifecycle: IdeStatusLifecycleState,
-  ): IdeStatusPlanning? =
-    planning?.takeIf {
-      it.state != GoalPlanningStatusState.PREPARED && !preliminaryLifecycle.isSettled()
-    }
 
   private fun goalPauseRequested(projection: GoalRunnerStatusProjection?): Boolean =
     projection?.pauseRequested == true && projection.paused != true

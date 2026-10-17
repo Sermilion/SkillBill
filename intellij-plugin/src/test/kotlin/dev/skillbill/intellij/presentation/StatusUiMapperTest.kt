@@ -412,7 +412,13 @@ class StatusUiMapperTest {
             totalSubtaskCount = 4,
         )
         val relevant = StatusUiMapper.map(
-            active(planning = planning, currentSubtaskId = null, progressCompleted = 0),
+            active(
+                planning = planning,
+                currentSubtaskId = null,
+                progressCompleted = 0,
+                currentStepId = "plan",
+                currentStepLabel = "Plan",
+            ),
             now,
         ) as SkillBillStatusUiState.Active
         assertEquals(planning, relevant.planning)
@@ -738,6 +744,8 @@ class StatusUiMapperTest {
         planning: GoalPlanningInfo? = null,
         currentSubtaskId: String? = "2",
         progressCompleted: Int? = 3,
+        currentStepId: String = "implement",
+        currentStepLabel: String = "Implement",
     ) = SkillBillStatusOutcome.Active(
         observedAt = now,
         summary = "active",
@@ -745,8 +753,8 @@ class StatusUiMapperTest {
         issueKey = "SKILL-148",
         workflowId = "wfl-1",
         workflowFamily = "feature-task-runtime",
-        currentStepId = "implement",
-        currentStepLabel = "Implement",
+        currentStepId = currentStepId,
+        currentStepLabel = currentStepLabel,
         progressCompleted = progressCompleted,
         progressTotal = 9,
         startedAt = startedAt,

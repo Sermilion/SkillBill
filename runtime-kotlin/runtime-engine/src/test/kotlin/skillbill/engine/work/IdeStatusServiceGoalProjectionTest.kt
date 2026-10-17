@@ -123,7 +123,7 @@ class IdeStatusServiceGoalProjectionTest {
     assertFalse(wire.containsKey("paused_at"))
     assertEquals(heartbeatAt.toString(), wire["updated_at"])
     assertFalse(result.snapshot.summary.contains("paused", ignoreCase = true))
-    assertEquals("planning", result.snapshot.currentStep.id)
+    assertEquals("implement", result.snapshot.currentStep.id)
   }
 
   private fun expiredLease(heartbeatAt: Instant): GoalRunnerExecutionLease = lease(heartbeatAt)
@@ -176,7 +176,7 @@ class IdeStatusServiceGoalProjectionTest {
         goalOnlyDatabase(),
         manifestStore =
           StubGoalManifestStore(
-            goalManifestState(fixture, identity, childWorkflowId = ""),
+            goalManifestState(fixture, identity, childWorkflowId = "", lastResumableStep = "plan"),
             planning = planningSnapshot(GoalPlanningStatusState.PARTIALLY_PLANNED, wave = listOf(2, 3, 4, 5, 6)),
             lease = liveLease(),
           ),
@@ -668,6 +668,44 @@ class IdeStatusServiceGoalProjectionTest {
     assertEquals(operatorReason, pauseReason["label"])
     assertTrue((wire["summary"] as String).contains(operatorReason))
     assertFalse((wire["summary"] as String).contains("active on validate", ignoreCase = true))
+  }
+
+  @Test
+  fun `incomplete planning inventory cannot override a live monitor step`() {
+    val fixture = gitRepoFixture("ide-status-stale-planning-monitor", branch = "feat/SKILL-148-status-fix")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val original = zeroAc46Database(identity, includeFeatureGoalWorkItem = true)
+    val database =
+      TrackingDatabase(
+        work = original.work.filter { it.workflowId == "goal-1" },
+        workflows = original.workflows,
+        controls =
+          object : GoalRunnerControlRepository by EmptyGoalRunnerControlRepository {
+            override fun controlState(parentWorkflowId: String) = GoalRunnerControlState(repositoryIdentity = identity)
+          },
+      )
+    val status =
+      ideStatusService(
+        database,
+        manifestStore =
+          StubGoalManifestStore(
+            zeroAc46ManifestState(fixture, identity),
+            planning = planningSnapshot(GoalPlanningStatusState.PARTIALLY_PLANNED),
+            lease = liveLease(),
+          ),
+        outcomeStore =
+          object : GoalRunnerWorkflowOutcomeStore by EmptyOutcomeStore {
+            override fun progress(workflowId: String): GoalRunnerWorkflowProgress? =
+              parkedParentProgressOnMonitor().takeIf { workflowId == "goal-1" }
+          },
+      ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+    assertEquals(IdeStatusLifecycleState.ACTIVE, status.snapshot.lifecycleState)
+    assertEquals("monitor", status.snapshot.currentStep.id)
+    assertEquals("Goal SKILL-148 is active on monitor.", status.snapshot.summary)
+    assertEquals(GoalPlanningStatusState.PARTIALLY_PLANNED, status.snapshot.planning?.state)
+    assertEquals(2, status.snapshot.progress?.completed)
+    assertEquals(2, status.snapshot.progress?.total)
   }
 
   @Test

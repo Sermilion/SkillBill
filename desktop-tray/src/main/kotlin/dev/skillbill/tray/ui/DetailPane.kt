@@ -39,7 +39,7 @@ internal fun DetailPane(detail: Detail?, problem: Problem?, model: DashboardMode
   val scroll = rememberScrollState()
   val item = detail.item
   val pipeline = phasePipeline(detail)
-  val planning = item.planningState?.let { it != "prepared" } == true
+  val planning = item.planningIsLive()
   val subtaskKeys = detail.subtasks.map { "${item.identity.repositoryIdentity}:${item.identity.id}:subtask:${it.id}" } +
     listOfNotNull("${item.identity.repositoryIdentity}:${item.identity.id}:goal-finish".takeIf { detail.goalFinishPipeline.isNotEmpty() })
   val dependencyKeys = detail.dependencies.map { "${item.identity.repositoryIdentity}:${item.identity.id}:dependency:${it.subtaskId}:${it.dependency.subtaskId}" } +

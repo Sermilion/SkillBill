@@ -179,11 +179,31 @@ internal class StandalonePhaseStatusStore(
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM ide_status_workflow_execution " +
         "WHERE workflow_id = ? AND ${instantAtOrBeforeSql("started_at")} " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
-      statement.bindAll(listOf(startedThrough.toString(), workflowId, limit, offset))
-      statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toWorkflowExecution()) } }
+      statement.bindAll(listOf(startedThrough.toString(), workflowId))
+      statement.executeQuery().use { rows -> readWorkflowExecutionsForAggregate(rows, offset, limit) }
     }
+  }
+
+  private fun readWorkflowExecutionsForAggregate(
+    rows: ResultSet,
+    offset: Int,
+    limit: Int,
+  ): List<IdeStatusWorkflowExecution> {
+    val skipDiagnostics = AggregateRowSkipDiagnostics()
+    val items = mutableListOf<IdeStatusWorkflowExecution>()
+    var healthySkipped = 0
+    while (rows.next()) {
+      val parsed = rows.tryToWorkflowExecutionForAggregate(skipDiagnostics) ?: continue
+      if (healthySkipped < offset) {
+        healthySkipped++
+        continue
+      }
+      items += parsed
+      if (items.size >= limit) break
+    }
+    return items
   }
 
   private fun instantAtOrBeforeSql(columnName: String): String =
@@ -562,22 +582,57 @@ internal class StandalonePhaseStatusStore(
       toRecord()
     } catch (error: SkillBillRuntimeException) {
       if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
-      val invocationId = getString("invocation_id") ?: "<unknown>"
-      if (skipDiagnostics.emitted < MAX_AGGREGATE_ROW_DIAGNOSTICS) {
-        diagnostics.warning(
-          "seam=standalone_phase_status value_expected=readable_standalone_row value_used=skipped " +
-            "invocation_id=$invocationId error=${error.message.orEmpty()}",
-        )
-        skipDiagnostics.emitted++
-      } else if (!skipDiagnostics.truncated) {
-        diagnostics.warning(
-          "seam=standalone_phase_status value_expected=readable_standalone_row value_used=truncated " +
-            "skipped_diagnostics_cap=$MAX_AGGREGATE_ROW_DIAGNOSTICS",
-        )
-        skipDiagnostics.truncated = true
-      }
+      emitAggregateRowSkip(
+        skipDiagnostics,
+        seam = "standalone_phase_status",
+        rowKind = "readable_standalone_row",
+        identity =
+          "invocation_id=${getString("invocation_id") ?: "<unknown>"}",
+        error = error,
+      )
       null
     }
+
+  private fun ResultSet.tryToWorkflowExecutionForAggregate(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+  ): IdeStatusWorkflowExecution? =
+    try {
+      toWorkflowExecution()
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      val workflowId = getString("workflow_id") ?: "<unknown>"
+      val invocationId = getString("invocation_id") ?: "<unknown>"
+      val executionId = getString("execution_id") ?: "<unknown>"
+      emitAggregateRowSkip(
+        skipDiagnostics,
+        seam = "ide_status_workflow_execution",
+        rowKind = "readable_workflow_execution_row",
+        identity = "workflow_id=$workflowId invocation_id=$invocationId execution_id=$executionId",
+        error = error,
+      )
+      null
+    }
+
+  private fun emitAggregateRowSkip(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+    seam: String,
+    rowKind: String,
+    identity: String,
+    error: SkillBillRuntimeException,
+  ) {
+    if (skipDiagnostics.emitted < MAX_AGGREGATE_ROW_DIAGNOSTICS) {
+      diagnostics.warning(
+        "seam=$seam value_expected=$rowKind value_used=skipped $identity error=${error.message.orEmpty()}",
+      )
+      skipDiagnostics.emitted++
+    } else if (!skipDiagnostics.truncated) {
+      diagnostics.warning(
+        "seam=$seam value_expected=$rowKind value_used=truncated " +
+          "skipped_diagnostics_cap=$MAX_AGGREGATE_ROW_DIAGNOSTICS",
+      )
+      skipDiagnostics.truncated = true
+    }
+  }
 
   private fun ResultSet.toRecord(): StandalonePhaseStatusRecord =
     StandalonePhaseStatusRecord(

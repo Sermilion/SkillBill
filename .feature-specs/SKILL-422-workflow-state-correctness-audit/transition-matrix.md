@@ -81,6 +81,18 @@ Categories: **lifecycle**, **phase/step**, **liveness**, **freshness**, **contro
 | Display group assignment | `IdeStatusPolicy.displayGroup` / `work` → `IdeStatusDisplayGroup` (`GOALS`, `PHASES`) | same | row facts → group | goal vs phase ownership | none | recomputed on read | — | — | grouped tray layout; `goalPauseRequested` when `pauseRequested && !paused` |
 | Freshness classification for display | `IdeStatusFreshnessClassifier` | projected tray row | stale vs fresh presentation | timestamps + lease facts | none | read-side only | — | — | stale badges without mutating workflow rows |
 
+## Subtask 2: planning, finalization, projection (SKILL-422)
+
+| Transition | Actor | Identity | Prior → target | Evidence required | Write set | Recovery / replay | Terminal | Resumable | Consumer effect |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Standalone plan checkpoint capture | `StandalonePlanPreparation`, `StandalonePlanRun` | parent `workflow_id`, planning contract | planning in flight → bundle persisted | authored plan + checkpoint payload | planning store / import tables + artifact bundle | failed DB write must not report completed plan | no | resume from bundle | goal planning status |
+| Standalone plan import | `StandalonePlanCheckpointImport` | same + `preplan_payload_sha256` | external bundle → admitted plan | matching contract + bundle | manifest + checkpoint refs | changed intake must refuse silent replace | no | replan retains completed/skipped | decomposition manifest |
+| Parent finalization (PR/monitor) | `GoalRunnerFinalization`, `GoalRunnerCiMonitor` | `parent_workflow_id`, run session | children done → parent finalization steps | admitted completion or accepted no-change; not children alone | control `goalCompletedAt`, progress `operationKind=goal_finalization`, CI monitor state | duplicate finish guarded by telemetry + control markers | parent terminal when admitted | resume preserves children | tray/CLI finalization pipeline |
+| Child outcome commit | `WorkflowGoalRunnerOutcomeStore`, `GoalTerminalOutcomeDerivation` | child `workflow_id` | non-terminal → terminal child outcome | commit evidence for COMPLETE; no-change distinct | outcome store + child workflow row | crash reconcile in transaction | yes (child) | child no | parent manifest reconciliation |
+| Status projection (read-only) | `GoalRunnerStatusService.status`, CLI/MCP status | `issue_key`, `parent_workflow_id` | durable rows → projection | none for mutation | **none** (no checkpoint prune, no lease renew) | idempotent read | — | — | operator visibility |
+| Work list aggregate read | `SQLiteWorkListRepository.list`, `WorkListService` | `workflow_id` per row | SQL row → `WorkItem` or skip | parse + snapshot validation | none | malformed row skipped; targeted `findByWorkflowId` still rejects | — | — | CLI work list |
+| Board/tray completion signal | `IdeStatusService` → tray `TransitionTracker` | goal identity + `finishedAtSource` | non-terminal → successful terminal presentation | `finishedAtSource=goal_completion` for success counts/notifications | none | abandoned → `CANCELED` lifecycle, not success | — | — | notifications, Done 24h |
+
 ## Explicitly unsupported as workflow statuses
 
 `cancelled`, `interrupted`, `superseded`, `idle` — not `WorkflowStatus` enum members. Use **`abandoned`**, **`failed`**, **`paused`**, **`blocked`** on admitted workflow rows where production assigns them. **Canceled** presentation uses `IdeStatusLifecycleState.CANCELED` for `ABANDONED` workflow rows only. **Idle** liveness uses `GoalRunnerLivenessState`, not a workflow status. **Superseded** standalone monitors use `StandalonePhaseStatusStore.supersedeActiveMonitors`, not a workflow row transition.

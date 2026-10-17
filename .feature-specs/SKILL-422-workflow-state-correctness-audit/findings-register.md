@@ -236,6 +236,86 @@ Test class names are validate anchors only; they are not substitutes for product
 | Planning DB failure stop | `FeatureTaskRuntimePlanningStopper.resolveAuthoredBundle` (`PlanDecompositionStop.kt`: `rethrowIfDatabaseFailure` vs bundle-not-ready `Blocked`); `FeatureTaskRuntimeRunTransitionOwner.persistDecomposeTerminal` | Stop-on-database-failure honesty; not goal-stop F7 | Distinct from operator stop pause retention |
 | Schema registry vs settlements | migration v35 `feature_task_phase_settlements` vs `schema_migrations` PK `name` only (`DatabaseSchemaStatements.kt`) | Settlements table exists outside `DatabaseSchema.tableNames` registry list | Registry omission does not deny settlements durability (inventory AC-001) |
 
+## F8 — Status read pruned checkpoint refs
+
+| Field | Value |
+| --- | --- |
+| ID | F8 |
+| Classification | source-confirmed defect (repaired) |
+| Severity | high |
+| Trigger | `skill-bill goal status` / watch with default `GoalRunnerStatusRequest.pruneCheckpointRefs=true` |
+| Identities — workflow | parent `workflow_id` via manifest |
+| Identities — issue | `issue_key` on goal manifest |
+| Identities — repository | `repoRoot` on status request |
+| Before state | Eligible checkpoint refs present under `refs/skill-bill/checkpoints/<issue>/` |
+| After / intended | Refs unchanged after repeated status reads |
+| Root cause | `GoalRunnerStatusProjectionAssembler.reconcileStatusManifest` called `pruneEligibleCheckpointRefsForManifest` when `pruneCheckpointRefs` true |
+| Production owner | `GoalRunnerStatusProjectionAssembler.kt`; authorized prune: `GoalRunnerFinalization.pruneCompletedCheckpointRefs` |
+| Repair (implementation) | Removed prune from status reconciliation; default `pruneCheckpointRefs=false`; CLI sets false |
+| Test pointer (validate-owned) | T2-06 `GoalRunnerStatusReadOnlyMutationTest` |
+| Execution evidence | pending validate |
+
+## F9 — Work list aggregate abort on malformed row
+
+| Field | Value |
+| --- | --- |
+| ID | F9 |
+| Classification | source-confirmed defect (repaired) |
+| Severity | medium |
+| Trigger | `SQLiteWorkListRepository.list` hits `INVALID_WORK_LIST_ROW` on any row |
+| Identities — workflow | `workflow_id` on offending row |
+| Before state | Mixed healthy and malformed rows in union query |
+| After / intended | Healthy rows returned; malformed skipped; `findByWorkflowId` still throws for corrupt target |
+| Root cause | `toWorkItem()` throw aborted entire list build |
+| Production owner | `SQLiteWorkListRepository.kt` |
+| Repair (implementation) | `tryWorkItem()` skips `INVALID_WORK_LIST_ROW` in `list()` only |
+| Test pointer (validate-owned) | T2-07 `SQLiteWorkListRepositoryTest` |
+| Execution evidence | pending validate |
+
+## F10 — Tray success signal on non-success terminal goals
+
+| Field | Value |
+| --- | --- |
+| ID | F10 |
+| Classification | source-confirmed defect (repaired) |
+| Severity | medium |
+| Trigger | Goal row transitions to `Lifecycle.TERMINAL` without `finishedAtSource=goal_completion` |
+| Identities — issue | tray `issueKey` |
+| Identities — parent | goal `workflowId` |
+| Before state | Prior lifecycle non-terminal |
+| After / intended | No `goal_completed` notification; excluded from Done 24h count |
+| Root cause | `TransitionTracker` and `project()` treated any goal TERMINAL as success |
+| Production owner | `DashboardController.kt` (`TransitionTracker`, `project`) |
+| Repair (implementation) | `WorkItem.successfulGoalCompletion()` requires `goal_completion` source |
+| Test pointer (validate-owned) | T2-09 `TransitionTrackerTest`, `ProjectionTest` |
+| Execution evidence | pending validate |
+
+## F11 — Parent completion vs completed children only
+
+| Field | Value |
+| --- | --- |
+| ID | F11 |
+| Classification | source-supported candidate |
+| Severity | high |
+| Trigger | All children terminal while PR/monitor finalization unfinished |
+| Identities — parent | `parent_workflow_id` |
+| Identities — subtask | completed child ids |
+| Production owner | `GoalRunnerFinalization.kt`, `GoalRunnerCiMonitor.kt` |
+| Status | traced; validate reproduction T2-01 |
+| Execution evidence | pending validate |
+
+## F12 — Board candidate scan under limit
+
+| Field | Value |
+| --- | --- |
+| ID | F12 |
+| Classification | source-supported candidate |
+| Severity | medium |
+| Trigger | First rejected board row consumes limit budget |
+| Production owner | `IdeStatusService` board assembly |
+| Status | deferred pending validate proof T2-07 |
+| Execution evidence | pending validate |
+
 ## Subtask 2 handoff
 
-Parent aggregate finalization, public projection repair, and F4 closure policy — finding IDs F4, F5 gap, and parent/child closure rows in `transition-matrix.md`.
+Subtask 3 owns SQLite maintenance closure and overall coverage reconciliation per `spec_subtask_3_sqlite-maintenance-and-audit-closure.md`. F4 recovery ledger and F5 recorder gap remain as subtask 1 carry-over.

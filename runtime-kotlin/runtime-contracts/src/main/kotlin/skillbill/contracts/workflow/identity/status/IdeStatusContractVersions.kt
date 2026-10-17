@@ -7,7 +7,7 @@ import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKe
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 const val IDE_STATUS_CONTRACT_VERSION: String = "0.4"
-const val WORK_BOARD_CONTRACT_VERSION: String = "1.1"
+const val WORK_BOARD_CONTRACT_VERSION: String = "1.2"
 const val WORK_DETAIL_CONTRACT_VERSION: String = "1.1"
 
 object IdeStatusPayloadKeys {

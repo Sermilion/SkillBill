@@ -344,7 +344,7 @@ class IdeStatusServiceBranchScopingTest {
         goalOnlyDatabase(),
         manifestStore =
           StubGoalManifestStore(
-            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            goalManifestState(fixture, identity, childWorkflowId = "w-child", lastResumableStep = "plan"),
             planning = planningSnapshot(GoalPlanningStatusState.PARTIALLY_PLANNED),
           ),
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
@@ -975,7 +975,7 @@ class IdeStatusServiceBranchScopingTest {
         goalOnlyDatabase(),
         manifestStore =
           StubGoalManifestStore(
-            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            goalManifestState(fixture, identity, childWorkflowId = "w-child", lastResumableStep = "plan"),
             planning = planningSnapshot(GoalPlanningStatusState.PARTIALLY_PLANNED),
           ),
       )

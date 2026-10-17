@@ -12,6 +12,7 @@ object StatusUiMapper {
     const val POLL_TIMEOUT_NOTE: String = "Status poll timed out. Showing the last live snapshot."
     const val POLL_CANCELLED_NOTE: String = "Status poll was cancelled. Showing the last live snapshot."
     const val POLL_FAILED_NOTE: String = "Status poll failed. Showing the last live snapshot."
+    private val LIVE_PLANNING_STEP_IDS = setOf("plan", "preplan", "planning")
 
     fun map(outcome: SkillBillStatusOutcome, now: Instant): SkillBillStatusUiState =
         when (outcome) {
@@ -75,6 +76,7 @@ object StatusUiMapper {
                         outcome.planning,
                         outcome.currentSubtaskId,
                         outcome.progressCompleted,
+                        outcome.currentStepId,
                     ),
                     workflowFamily = outcome.workflowFamily,
                     pauseRequested = outcome.pauseRequested,
@@ -123,6 +125,7 @@ object StatusUiMapper {
                         outcome.planning,
                         outcome.currentSubtaskId,
                         outcome.progressCompleted,
+                        outcome.currentStepId,
                     ),
                     workflowFamily = outcome.workflowFamily,
                     pauseRequested = outcome.pauseRequested,
@@ -172,6 +175,7 @@ object StatusUiMapper {
                         outcome.planning,
                         outcome.currentSubtaskId,
                         outcome.progressCompleted,
+                        outcome.currentStepId,
                     ),
 
 
@@ -361,9 +365,11 @@ object StatusUiMapper {
         planning: GoalPlanningInfo?,
         currentSubtaskId: String?,
         progressCompleted: Int?,
+        currentStepId: String?,
     ): GoalPlanningInfo? {
         if (planning == null || planning.state == "prepared") return null
         if (!currentSubtaskId.isNullOrBlank() || (progressCompleted ?: 0) > 0) return null
+        if (!currentStepId.isNullOrBlank() && currentStepId !in LIVE_PLANNING_STEP_IDS) return null
         return planning
     }
 

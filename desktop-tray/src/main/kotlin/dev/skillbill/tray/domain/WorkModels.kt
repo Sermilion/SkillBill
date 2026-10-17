@@ -72,7 +72,11 @@ data class WorkItem(
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
-)
+) {
+  fun planningIsLive(): Boolean = currentStepId in LIVE_PLANNING_STEP_IDS
+}
+
+internal val LIVE_PLANNING_STEP_IDS: Set<String> = setOf("plan", "preplan", "planning")
 
 data class PhaseExecution(val phaseId: String, val kind: PhaseExecutionKind, val count: Int, val total: Int?)
 enum class PhaseExecutionKind { PASS, SEMANTIC_LOOP, GATE_RUN, BOUNDED_EDGE, ATTEMPT }

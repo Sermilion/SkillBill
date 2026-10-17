@@ -214,6 +214,7 @@ private class SnapshotFixture(
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      diagnostics = NoopRuntimeDiagnostics,
     )
   }
 }

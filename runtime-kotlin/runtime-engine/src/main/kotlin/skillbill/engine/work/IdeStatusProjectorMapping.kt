@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runner.operatorDecisionPause
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
@@ -40,6 +41,20 @@ internal fun goalCurrentSubtask(
       activeDurationAsOf = projection.liveSubtaskActiveDurationAnchor(),
     )
   }
+
+internal fun livePlanningOverlay(
+  planning: IdeStatusPlanning?,
+  projectedStep: String?,
+  lifecycle: IdeStatusLifecycleState,
+): IdeStatusPlanning? =
+  planning?.takeIf {
+    it.state != GoalPlanningStatusState.PREPARED &&
+      !lifecycle.isSettled() &&
+      projectedStep.isLivePlanningStep()
+  }
+
+internal fun String?.isLivePlanningStep(): Boolean =
+  isNullOrBlank() || this in LIVE_PLANNING_STEP_IDS
 
 internal fun goalStep(
   planningStep: IdeStatusPlanning?,
@@ -156,6 +171,8 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 }
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
+
+internal val LIVE_PLANNING_STEP_IDS: Set<String> = setOf("plan", "preplan", "planning")
 
 private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 

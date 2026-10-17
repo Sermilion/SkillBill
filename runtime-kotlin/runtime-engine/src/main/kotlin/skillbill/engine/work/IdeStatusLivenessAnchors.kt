@@ -62,7 +62,7 @@ class IdeStatusLivenessAnchors(
     return unitOfWork.workflowStates
       .getAll(WorkflowFamily.TASK_RUNTIME, childIds.toSet())
       .values
-      .mapNotNull { parseInstantOrNull(it.updatedAt) }
+      .mapNotNull { it.updatedAt }
       .maxOrNull()
   }
 }

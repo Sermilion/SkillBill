@@ -22,6 +22,7 @@ enum class WorkBoardDiagnosticReason(val wireValue: String) {
   MISSING_REPOSITORY_IDENTITY("missing_repository_identity"),
   INVALID_REPOSITORY_IDENTITY("invalid_repository_identity"),
   MISSING_COMPLETION_TIME("missing_completion_time"),
+  INCOMPATIBLE_RECORD("incompatible_record"),
 }
 
 enum class WorkBoardCompletionSource(val wireValue: String) {

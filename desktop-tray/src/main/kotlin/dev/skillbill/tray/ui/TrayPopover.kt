@@ -118,7 +118,7 @@ internal fun PopoverWorkRow(item: WorkItem, selected: Boolean, now: Instant, sta
         Text(FileName(item.repositoryRoot), Modifier.weight(1f), color = ink, fontFamily = display, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(item.issueKey ?: item.phaseId ?: item.currentStepId, Modifier.border(1.dp, color.copy(alpha = .45f), RoundedCornerShape(50)).padding(horizontal = 7.dp, vertical = 3.dp), color = color, fontFamily = mono, fontSize = 10.5.sp)
       }
-      val planning = item.planningState?.let { it != "prepared" } == true
+      val planning = item.planningIsLive()
       val phase = if (item.lifecycle == Lifecycle.ACTIVE) item.currentStepLabel else item.lifecycle.name.lowercase()
       val duration = if (item.scope == ExecutionScope.STANDALONE_PHASE) phaseElapsedText(item, now, stale) else durationText(item.activeDurationMs, item.activeDurationAsOf, item, now, stale)
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
