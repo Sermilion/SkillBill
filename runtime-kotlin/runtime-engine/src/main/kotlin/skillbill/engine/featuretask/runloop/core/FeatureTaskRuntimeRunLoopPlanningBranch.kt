@@ -16,10 +16,10 @@ import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
-import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunLoopPlanningBranch {
@@ -155,8 +155,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
     resolvedAgentId: String,
-  ): StepLaunchAssignment? =
-    context.runState.stepLaunchAssignment(phaseId)?.takeIf { it.agentId == resolvedAgentId }
+  ): StepLaunchAssignment? = context.runState.stepLaunchAssignment(phaseId)?.takeIf { it.agentId == resolvedAgentId }
 
   private fun recordedModelDirective(
     context: FeatureTaskRuntimeRunLoopContext,

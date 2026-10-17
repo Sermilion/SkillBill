@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
+import skillbill.infrastructure.sqlite.core.migration.area.acceptedrepair.rewriteAcceptedAcceptanceCriterionRepairStates
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
@@ -28,7 +29,6 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
-import skillbill.infrastructure.sqlite.core.migration.area.rewriteAcceptedAcceptanceCriterionRepairStates
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
 import skillbill.infrastructure.sqlite.core.migration.ensureSchemaColumnsAndHeals
 import skillbill.infrastructure.sqlite.core.migration.persistGoalPlanningRepairEvidence

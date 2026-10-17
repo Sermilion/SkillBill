@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.workflow.featuretask.AcceptanceCriterionRepairStateSchemaValidator
-import skillbill.infrastructure.sqlite.core.migration.area.rewriteAcceptedAcceptanceCriterionRepairStates
+import skillbill.infrastructure.sqlite.core.migration.area.acceptedrepair.rewriteAcceptedAcceptanceCriterionRepairStates
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap

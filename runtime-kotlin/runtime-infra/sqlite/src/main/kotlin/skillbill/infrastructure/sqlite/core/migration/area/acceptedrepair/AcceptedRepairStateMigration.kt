@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.migration.area
+package skillbill.infrastructure.sqlite.core.migration.area.acceptedrepair
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema

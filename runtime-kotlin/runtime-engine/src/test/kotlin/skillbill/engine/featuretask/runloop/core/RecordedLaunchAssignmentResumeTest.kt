@@ -125,8 +125,7 @@ private fun FeatureTaskRuntimeRunLoopContext.resumedAs(
   val delegate = resumed.runState
   val wrapped =
     object : PhaseRunState by delegate {
-      override fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? =
-        recorded.takeIf { it.stepId == stepId }
+      override fun stepLaunchAssignment(stepId: String): StepLaunchAssignment? = recorded.takeIf { it.stepId == stepId }
     }
   return resumed.withRunState(wrapped)
 }

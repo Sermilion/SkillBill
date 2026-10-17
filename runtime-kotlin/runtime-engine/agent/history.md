@@ -1,3 +1,16 @@
+## [2026-10-17] SKILL-427 subtask 3: status, control, recovery and public monitor cutover
+Areas: runtime-engine featuretask/phaserun and work; runtime-ports idestatus; runtime-infra sqlite status store and workflow monitor; runtime-cli phase; skills/skill-bill content; docs/runtime-command-guidance.md
+- Public phase monitor resolves its target read-only, prepares an owned worktree, then runs the internal standalone monitor. Goal monitoring and phase pr stay on the existing checkout path, and the legacy monitor strategies are unchanged.
+- Status stores an optional target tuple (pull-request key and URL, head repository and ref, caller root, worktree) plus cleanup disposition. Migration 59 adds those nullable columns. All-null remains legacy; a partial or incoherent tuple fails the read. Desktop read schema is 60 because migration 60 rewrites accepted repair rows.
+- Target rows skip branch supersession and remain visible from any caller branch under the original repository identity. History, cancellation and the work board group by pull-request key first. Target-less rows keep branch scoping.
+- Replay launches the recorded pull-request URL and does not check that head out in the caller. Retained unfinished work blocks a fresh run at ownership admission, and the report names the path and reason. The monitor-only recover-stale-owner option is not stored as a launch argument.
+- Early refusals name the selector and invent no worktree. Cleanup is recorded on the terminal update when the process finishes. An abrupt kill leaves ownership evidence for stale recovery and does not claim the worktree was removed.
+- Authored Phase Monitor guidance describes exact intake, owned worktrees, watch-first repair publication, one monitor per pull request, retention, and unchanged goal and phase-pr behavior.
+- Pattern: engine policy, SQLite tuple storage, and ownership files as the admission authority.
+- Limits: unknown owners stay alive, and retained repairs are not adopted automatically. No feature flag and no new IDE wire fields.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented
+
 ## [2026-10-17] SKILL-427 subtask 2: standalone slot execution and guarded repair publication
 Areas: runtime-engine featuretask (slot/monitor/standalone, phaserun, runloop/finalization/standalone, slot/skeleton, slot/state); runtime-domain SkeletonDefinition; runtime-ports ports/monitor; runtime-infra workflow/monitor and github; runtime-core di/featuretask
 - SkeletonDefinition.STANDALONE_MONITOR (id standalone-monitor, COMMIT_PUSH + MONITOR, not standalone-invocable) traverses monitor_fix, commit_push, monitor. The public MONITOR/PR definitions and both legacy monitor strategies are untouched; runForGoal bypasses the new path.
