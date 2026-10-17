@@ -8,6 +8,8 @@ import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
@@ -319,9 +321,18 @@ class FeatureTaskRuntimeRunEntry(
       )
     val expected = boundedAssignmentIdentity(admittedExecution.plan.stepLaunchAssignments)
     val current = boundedAssignmentIdentity(resolved)
+    val used =
+      boundedAssignmentIdentity(
+        FeatureTaskRuntimeResumeLaunchAssignment.usedAssignments(
+          admittedExecution.plan.stepLaunchAssignments,
+          resolved,
+        ) { stepId ->
+          FeatureTaskRuntimeAgentResolver.resolve(stepId, input.agentAssignment, input.invokedAgentId).resolvedAgentId
+        },
+      )
     if (expected != current) {
       diagnostics.warning(
-        "seam=execution_plan_resume value_expected=$expected value_used=$expected current=$current",
+        "seam=execution_plan_resume value_expected=$expected value_used=$used current=$current",
       )
     }
   }
