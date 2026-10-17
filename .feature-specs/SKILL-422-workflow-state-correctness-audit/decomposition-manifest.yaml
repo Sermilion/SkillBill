@@ -9,8 +9,8 @@ base_branch: "main"
 feature_branch: "feat/SKILL-422-workflow-state-correctness-audit"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 2
-  action: "resume"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Durable state and ownership"
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Goal finalization and public state"
   spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_2_goal-finalization-and-public-state.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261017-124122-3ucv"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

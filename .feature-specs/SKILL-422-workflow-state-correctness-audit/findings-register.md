@@ -268,7 +268,7 @@ Test class names are validate anchors only; they are not substitutes for product
 | After / intended | Healthy rows returned; malformed skipped; `findByWorkflowId` still throws for corrupt target |
 | Root cause | `toWorkItem()` throw aborted entire list build |
 | Production owner | `SQLiteWorkListRepository.kt` |
-| Repair (implementation) | `tryWorkItem()` skips `INVALID_WORK_LIST_ROW` in `list()` only |
+| Repair (implementation) | `tryWorkItemOrReject()` skips `INVALID_WORK_LIST_ROW` in `list()` only |
 | Test pointer (validate-owned) | T2-07 `SQLiteWorkListRepositoryTest` |
 | Execution evidence | pending validate |
 

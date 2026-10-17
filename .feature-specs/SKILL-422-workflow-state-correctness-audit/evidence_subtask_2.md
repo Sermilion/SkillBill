@@ -10,9 +10,9 @@ Source review and repair for goal finalization, durable planning, public project
 | Status request default | `GoalRunnerStatusRequest.pruneCheckpointRefs` | repaired | Default `false`; CLI status sets `false` explicitly |
 | Work list aggregate parse | `SQLiteWorkListRepository.list` | repaired | Malformed rows skipped; `findByWorkflowId` still typed-rejects |
 | Tray goal completion signal | `TransitionTracker`, `project` in `DashboardController.kt` | repaired | `goal_completed` and 24h Done count require `finishedAtSource == goal_completion` |
-| Issue finish guard | `GoalTelemetrySave.saveGoalIssueFinished` | verified no change | `finished_event_emitted_at IS NULL` overwrite guard retained; validate owns duplicate-finish scenarios (T2-02) |
+| Issue finish guard | `GoalTelemetrySave.saveGoalIssueFinished` | repaired | Overwrite guard is `finished_at IS NULL` plus terminal status exclusion; `goalIssueFinished` still emits after save so a recorded finish can retry unavailable emission |
 | Run session finish guard | `GoalTelemetrySave.updateGoalFinished` | verified no change | Requires `status IS NULL AND finished_at IS NULL` |
-| Ide status read paths | `IdeStatusService`, `IdeStatusProjector` | verified | Already pass `pruneCheckpointRefs = false` |
+| Ide status read paths | `IdeStatusService`, `IdeStatusProjector` | repaired | Status/projector pass `pruneCheckpointRefs = false`; board aggregate skips incompatible rows with `incompatible_record` |
 | Planning bundle before completed | `StandalonePlanPreparation`, checkpoint import | candidate | Source walk deferred to validate T2-04 |
 | Purge / stop / abandon separation | `GoalRunnerPurgeCoordinator`, `GoalRunnerStatusControlVerbs` | verified partial | Subtask 1 stop honesty; purge ownership traced, validate T2-05 |
 
@@ -33,11 +33,11 @@ Subtask 1 findings F1–F7 retained in `findings-register.md` with full trigger/
 | AC | Implement evidence | Validate closure |
 | --- | --- | --- |
 | AC-001 | Extended `transition-matrix.md` subtask 2 section; this file; findings F8–F12 | Matrix spot-check + doc audit |
-| AC-002 | F11 traced; no production change without validate proof | T2-01–T2-03 |
+| AC-002 | `admittedParentComplete()` on status/CLI watch; monitor step overlay when children settled | T2-01–T2-03 |
 | AC-003 | Planning paths listed in checklist; no bundle refusal change in this diff | T2-04 |
 | AC-004 | Administrative paths documented in matrix; no new purge behavior | T2-05 |
 | AC-005 | F8 repair; `projectWorkflow` still `require(!pruneCheckpointRefs)` | T2-06 |
-| AC-006 | F9 repair for list aggregate | T2-07 |
+| AC-006 | F9 repair for list aggregate; board diagnostic `incompatible_record` on work-board 1.2 | T2-07 |
 | AC-007 | F10 repair; retention windows unchanged | T2-09 |
 | AC-008 | Tests named above added/updated | Full suite in validate |
 | AC-009 | This evidence file + findings register | Audit phase |
@@ -54,12 +54,12 @@ Subtask 1 findings F1–F7 retained in `findings-register.md` with full trigger/
 ## Explicitly verified areas
 
 - Post-push checkpoint prune still invoked from `GoalRunnerIterationOutcome` / finalization path (not removed).
-- `WorkListService.retainReadableWork` skip semantics unchanged for invalid workflow snapshots.
-- Work board schema diagnostic enum unchanged (no new `incompatible_record` token in this pass).
+- `WorkListService.retainReadableWork` skips missing workflow snapshots with a diagnostic instead of aborting the list.
+- Work board schema 1.2 adds diagnostic reason `incompatible_record`; Kotlin `WORK_BOARD_CONTRACT_VERSION` and `WorkBoardDiagnosticReason.INCOMPATIBLE_RECORD` match.
 
 ## Deviations / deferred
 
 - No `implementation_plan_subtask_2.md` file in tree (plan hydrated from goal-planning import only); implement followed `spec_subtask_2` implementation sequence.
 - IntelliJ `StatusRefreshCoordinator` ordering: no code change; SKILL-417 exception preserved pending validate T2-10.
-- Malformed row diagnostics on work list CLI: skip is silent at repository boundary; board diagnostics path unchanged.
+- Malformed work-list rows emit bounded repository diagnostics and remain in `WorkListListRead.rejectedRows`; board projection records `incompatible_record`.
 - Format/lint: no module-scoped formatter invocation established safe for this mixed diff; validate owns compile and check.

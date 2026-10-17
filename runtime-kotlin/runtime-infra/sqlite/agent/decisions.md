@@ -1,5 +1,15 @@
 # SQLite boundary decisions
 
+## [2026-10-17] Isolate malformed work-list rows in aggregate list
+Context: SQLiteWorkListRepository.list threw INVALID_WORK_LIST_ROW on the first bad toWorkItem parse and aborted the whole board and list.
+Decision: list skips that code through tryWorkItemOrReject, keeps healthy items, and records rejectedRows. findByWorkflowId still typed-rejects a corrupt target.
+Reason: Aggregate reads must retain healthy records beside malformed ones. Explicit identity access must still fail loudly so absence is not silent.
+
+## [2026-10-17] Guard issue-finish overwrite on finished_at and terminal status
+Context: Issue finish used finished_event_emitted_at as the overwrite guard, so a duplicate finish before or after unavailable emission could rewrite the admitted historical outcome.
+Decision: UPDATE only when finished_at IS NULL and status is not already completed, completed_no_change, failed, or abandoned. Emission still follows save so a recorded finish can retry unavailable emission.
+Reason: Telemetry emission is not a second completion authority. The first admitted finish must stay; a later duplicate is a no-op.
+
 ## [2026-10-17] Refuse phase settlement before INSERT when the workflow cannot settle
 Context: MCP and other upsert callers can reach feature_task_phase_settlements without the phase-loop fences, including against a missing or already terminal runtime row.
 Decision: Read the runtime workflow row and worker lease before INSERT. Missing rows return WORKFLOW_NOT_SETTLEABLE; terminal status returns TERMINAL_WORKFLOW; lower attempts, takeover-reserved, expired, or wrong-phase leases refuse with the matching reason.

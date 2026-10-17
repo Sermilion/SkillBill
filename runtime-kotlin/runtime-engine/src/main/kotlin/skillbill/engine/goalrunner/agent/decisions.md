@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-17] Keep checkpoint prune off the status read path
+Context: Goal status and watch defaulted pruneCheckpointRefs to true, and reconcileStatusManifest deleted eligible checkpoint refs during ordinary projection.
+Decision: Status projection requires pruneCheckpointRefs false and no longer calls prune. Default the request flag to false; CLI status and ide-status pass false. Authorized prune stays on finalization, reset, and purge.
+Reason: A CLI-only flag left every other status reader able to mutate recovery refs. Read-only status cannot own deletion; repeated reads must preserve refs, rows, and revisions.
+Alternatives considered: Patching only the CLI flag, rejected because other readers still reached the assembler prune.
+
 ## [2026-10-17] Stop reports incomplete termination unless process exit is confirmed
 Context: Goal stop paused first, then mapped inspect or terminate failure to STOPPED, so operators saw success while the owned process was still live or unverified.
 Decision: After reserveStop writes the operator pause, only confirmed process exit yields STOPPED. Inspect or terminate failure, or a still-live owner, returns TERMINATION_INCOMPLETE with termination_failed or owner_still_live. The pause JSON stays.

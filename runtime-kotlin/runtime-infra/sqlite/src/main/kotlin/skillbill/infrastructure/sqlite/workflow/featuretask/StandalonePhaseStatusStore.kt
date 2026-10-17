@@ -153,7 +153,7 @@ internal class StandalonePhaseStatusStore(
         "WHERE repository_identity = ? AND phase_id = ? " +
         "AND COALESCE(upper(issue_key), workflow_id, branch_correlation) = ? " +
         "AND ${instantAtOrBeforeSql("started_at")} " +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
       statement.bindAll(
         listOf(
@@ -161,12 +161,32 @@ internal class StandalonePhaseStatusStore(
           query.repositoryIdentity,
           query.phaseId,
           query.phaseGroup,
-          query.limit,
-          query.offset,
         ),
       )
-      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
+      statement.executeQuery().use { rows ->
+        readPhaseExecutionsForAggregate(rows, query.offset, query.limit)
+      }
     }
+  }
+
+  private fun readPhaseExecutionsForAggregate(
+    rows: ResultSet,
+    offset: Int,
+    limit: Int,
+  ): List<StandalonePhaseStatusRecord> {
+    val skipDiagnostics = AggregateRowSkipDiagnostics()
+    val items = mutableListOf<StandalonePhaseStatusRecord>()
+    var healthySkipped = 0
+    while (rows.next()) {
+      val parsed = rows.tryToRecordForAggregate(skipDiagnostics) ?: continue
+      if (healthySkipped < offset) {
+        healthySkipped++
+        continue
+      }
+      items += parsed
+      if (items.size >= limit) break
+    }
+    return items
   }
 
   override fun readWorkflowExecutions(

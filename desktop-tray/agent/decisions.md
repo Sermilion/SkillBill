@@ -1,3 +1,8 @@
+## [2026-10-17] Count and notify only successful goal completion
+Context: Tray treated any FEATURE_GOAL TERMINAL transition as success, so abandoned, cancelled, and superseded rows incremented Done 24h and emitted goal_completed.
+Decision: successfulGoalCompletion requires family FEATURE_GOAL, lifecycle TERMINAL, and finishedAtSource goal_completion. TransitionTracker and 24h Done counts use that helper.
+Reason: Generic terminality includes non-success closures. Existing completion provenance already distinguishes success; a new public discriminator was not required.
+
 ## [2026-10-12] Read work through the runtime store
 Context: SKILL-423 replaces CLI work-data requests with an in-process view of the runtime-owned database.
 Decision: Room opens an existing compatible store read-only. Shared runtime services project lifecycle and identity facts, admit exact-target controls, and own migrations. DataStore stores app preferences.

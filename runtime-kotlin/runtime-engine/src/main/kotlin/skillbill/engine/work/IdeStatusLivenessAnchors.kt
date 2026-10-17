@@ -9,7 +9,6 @@ import java.time.Instant
 
 class IdeStatusLivenessAnchors(
   private val unitOfWork: UnitOfWork,
-  private val repositoryIdentity: String,
 ) {
   fun authoritativeUpdatedAt(
     item: WorkItem,
@@ -40,20 +39,12 @@ class IdeStatusLivenessAnchors(
         IdeStatusWorkflowFamily.FEATURE_GOAL -> null
       }?.updatedAt
 
-    return listOfNotNull(fromWorkflow, item.stateEnteredAt, goalLeaseHeartbeatAt(item, family)).maxOrNull()
+    return listOfNotNull(fromWorkflow, item.stateEnteredAt).maxOrNull()
   }
 
   private fun goalLeaseHeartbeatAt(item: WorkItem): Instant? {
     val lease = unitOfWork.goalRunnerControls.controlState(item.workflowId).executionLease ?: return null
     return lease.heartbeatAt
-  }
-
-  private fun goalLeaseHeartbeatAt(
-    item: WorkItem,
-    family: IdeStatusWorkflowFamily,
-  ): Instant? {
-    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL) return null
-    return goalLeaseHeartbeatAt(item)
   }
 
   private fun latestParentGoalChildUpdatedAt(item: WorkItem): Instant? {

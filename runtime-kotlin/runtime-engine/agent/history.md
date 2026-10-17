@@ -1,3 +1,15 @@
+## [2026-10-17] SKILL-422 subtask 2: goal finalization and public state
+Areas: runtime-engine goalrunner status and work projection; runtime-infra/sqlite worklist and goal telemetry; runtime-ports work/idestatus; runtime-cli goal status; runtime-application work; desktop-tray; orchestration/contracts work-board; IntelliJ and VS Code status mappers
+- Status projection no longer prunes checkpoint refs; authorized prune stays on finalization, reset, and purge. pruneCheckpointRefs defaults to false on requests, CLI, and ide-status.
+- Work-list list skips INVALID_WORK_LIST_ROW and records rejectedRows; findByWorkflowId still typed-rejects a corrupt target. Work-board 1.2 adds incompatible_record for skipped board rows.
+- Tray goal_completed notifications and 24h Done counts require finishedAtSource=goal_completion, not generic TERMINAL.
+- Issue-finish overwrite guard is finished_at IS NULL plus terminal status exclusion; emission still follows save so unavailable emission can retry.
+- Pattern: read-only status cannot own mutation; aggregate reads isolate malformed rows; successful completion uses existing provenance. reusable
+- reusable: WorkListListRead.rejectedRows, WorkItem.successfulGoalCompletion, skipIncompatibleBoardItem.
+- Breaking: work-board contract 1.2 adds incompatible_record. Limits: F11 parent-vs-children completion, F12 board-limit scan, planning-bundle refusal, IntelliJ T2-10, and test execution wait for validate.
+Feature flag: N/A
+Acceptance criteria: 5/9 implemented (source-based; tests unexecuted)
+
 ## [2026-10-17] SKILL-422 subtask 1: durable state and ownership
 Areas: runtime-engine featuretask phase record/settlement, worker, crash reconcile; goalrunner stop and persist; runtime-infra/sqlite workflow and phase settlements; runtime-domain WorkflowEngine; runtime-ports, runtime-contracts, runtime-mcp, runtime-application workflow
 - Inventory, transition matrix, and findings F1–F7 classify every discovered store and artifact family, then rank terminal reopen, settlement overwrite, stale-owner writes, and false STOPPED.
