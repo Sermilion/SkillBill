@@ -372,7 +372,7 @@ internal data class GoalCliFixture(
       workflowGitOperations = workflowGitOperations,
       agentRunLauncher = launcher,
       goalPullRequestPort = pullRequests,
-      pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+      pullRequestIdentityLookup = OpenPullRequestIdentityLookup(GoalTestWorkflowGitOperations),
       pullRequestChecksLookup = PassingPullRequestChecksLookup,
       liveStdout = liveStdout,
       liveStderr = liveStderr,

@@ -106,9 +106,19 @@ internal class DurablePhaseRunRecords(
       null -> recorder.recordRequiredPhaseStart(request)
     }
 
-  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
+  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
     acceptance?.complete(request)
-      ?: recorder.recordCompletedPhase(request)
+      ?: if (recorder.recordCompletedPhase(request)) {
+        RequiredPhaseWrite.Acknowledged
+      } else {
+        RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.COMPLETION,
+          request.workflowId,
+          request.phaseId,
+          request.attemptCount,
+          detail = "The authoritative workflow record is missing. The producer output is retained.",
+        )
+      }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordIncompleteImplementationAttempt(request)

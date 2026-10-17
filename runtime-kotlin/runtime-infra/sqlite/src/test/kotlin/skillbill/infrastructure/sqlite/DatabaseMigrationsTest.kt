@@ -174,7 +174,7 @@ class DatabaseMigrationsTest {
         56 to "abandon-stale-verify-workflows",
         57 to "record-launch-agent-environment",
         58 to "record-standalone-phase-launch-scope",
-        59 to "record-standalone-monitor-target", 60 to "rewrite-accepted-acceptance-criterion-repair-state",
+        59 to "record-standalone-monitor-target",
       ),
       migrationDefinitions,
     )

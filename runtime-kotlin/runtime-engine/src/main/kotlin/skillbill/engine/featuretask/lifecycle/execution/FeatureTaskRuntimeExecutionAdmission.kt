@@ -99,12 +99,13 @@ class FeatureTaskRuntimeExecutionAdmission(
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.contains(initialSnapshot.artifacts)
       val artifacts = initialSnapshot.artifacts
       val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts)
-      val plan =
-        compatibility.requireSupportedExecution(
+      val supportedExecution =
+        compatibility.requireSupportedExecutionWithRecordedSemantics(
           descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
           checkedInputs,
           onMapping = { recordMapping(workflowId) },
         )
+      val plan = supportedExecution.plan
       requireMatchingPlan(plan, identity, requestedReviewSelection)
       requireCompletedGateOutputEvidence(artifacts, plan)
       val phaseOutputs = migratePhaseOutputs(request, initialSnapshot, ownsGoalPlanningImport)
@@ -120,6 +121,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         plan,
         checkedInputs,
         requireNotNull(descriptor),
+        supportedExecution.recordedMonitorSemantics,
         phaseOutputs.receipt ?: currentReceipt(),
       )
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {

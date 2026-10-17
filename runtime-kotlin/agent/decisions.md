@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-16] Missing monitor accounting evidence stays unknown
+Context: The monitor repair cap was reconstructed from retained producer, completion, publication, and Git evidence. Missing association or an older CI_FAILED report without a published-head statement was converted into a monitor block, even when fewer than three failed repair commits were proven.
+Decision: Count only distinct repair SHAs qualified by the existing completed repair, pushed publication, change, producer, and observed-head evidence. Missing or contradictory accounting evidence emits diagnostics and remains unknown. It neither fabricates a failed attempt nor blocks cap-sensitive resume. Live failures without a qualified repair association keep the existing repair transition as progress. Green completion requires stable PR number and head identity matching the latest completed pushed publication before monitor start; a stale or headless green observation returns to the same watch loop. Merged PR handling and actual lookup failures keep their existing outcomes.
+Reason: Accounting uncertainty cannot prove either a consumed attempt or successful CI. It must not replace the monitor's existing repair, timeout, or recovery owners with a new accounting refusal.
+Preserves: Producer association, accepted completion, publication ownership, change qualification, distinct failed-commit accounting, and the existing monitor transition owner.
+
 ## [2026-10-14] SKILL-425: retire the standalone feature-task skeleton
 Context: With the full run planning through the plan skeleton, a single feature is a one-subtask bundle, so the `standalone` skeleton (all nine feature-run slots, no goal continuation) had no entry left but its own run command and a prose-only plan mode.
 Decision: `SkeletonDefinition.admittedForRun(goalContinuation)` is `{GOAL_CHILD}` for a goal child and `{PLAN}` otherwise, and `forRun` is removed. `STANDALONE` stays declared, in `entries`, and bound in `SkeletonStrategyBindings` as a decode-only binding, so a stored `standalone` plan still decodes, shows in lookup and status, and can be abandoned. No migration rewrites the row. Execution admission and continuation claim refuse a recorded `standalone` plan with `retiredStandaloneWorkflowError` (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`, a coded `SkillBillRuntimeException`, no new exception class); the message says to abandon the workflow and run `skill-bill <KEY>`. The `standalone` route scope stays because plan workflows carry it. `FeatureTaskContinuationLookupQuery.admittedDefinition` has no default, so each caller names the definition it reads. The prose-only plan mode was already gone from `AgentPlanStrategy`. `feature-task run`, its explicit `run` subcommand and the `feature-task-runtime` run alias are removed; `feature-task` and the hidden `feature-task-runtime` alias are command groups only (status, resume, abandon, retry-blocked, repair-identity, lookup). Goal children launch through `feature-task resume <child id>` for every launch, because the goal runner opens the child row under its assigned id before launch; `RUN_SUBCOMMAND` and the `--workflow-id` run option are gone. The slot baseline drops its `standalone` bundle, and the runner test harness defaults to a goal-child continuation.
@@ -2951,6 +2957,53 @@ cancellation, and diagnostics. A8 adds no ambient production effects. A9-A12 kee
 package direction, test placement, visibility, and typed accounting. G1-G7 require
 no guard, baseline, or exemption changes.
 
+## [2026-10-16] Govern installed compatibility prerequisites separately from S3-7
+
+Context: SKILL-428 subtask 3 stopped at audit_plan_fix because S3-7 forbids new
+durable formats while the feature checkout carries compatibility changes already
+installed from main. The operator explicitly approved the prerequisite treatment
+in the current session and then authorized resuming the existing goal.
+
+Decision: Govern the compatibility changes from 8c8cdb308, f37339c2d, a3d0f98c0,
+and c9b3376a8 as installed prerequisites outside the S3-7 feature comparison.
+Retain the acceptance-repair budget offset and resume behavior, the removed prose
+length bound, schema version 58, launch-scope persistence, and completed planning
+presentation and controls. Preserve their contracts, supported persisted-state
+admission, and historical outcomes. This boundary covers only those compatibility
+changes. Keep the audit baseline and acceptance text unchanged. It authorizes no
+guard exemption, downgrade, data rewrite, or erasure of evidence.
+
+Monitor accounting and prose-dependent recovery remain within S3-7. The previous
+entry's use of a failed-publication report as historical evidence must be repaired.
+Resume through the existing goal runtime, complete audit_plan_fix, then let the
+runtime own implementation, validation, installation refresh where required, and
+acceptance auditing. Preserve completed work and the existing workflow records.
+
+Repair planning must separate accepted historical failure decisions from live
+publication/change qualification. Investigate the immutable stored execution plan
+and existing admission checks as non-prose evidence of corrected verdict semantics:
+the current traversal has separate PROGRESS and CI_FAILED monitor repair edges,
+while the old traversal conflates failure and conflict. A newly synthesized plan
+or current strategy identity alone cannot establish historical producer semantics.
+Join matched START/COMPLETE and generation-zero producer identities, accepted
+completion, pushed publication results, and Git ancestry/content evidence. Get
+counted SHAs from publication records. Identify evidence for each historical case,
+including replaced repair manifests, before prescribing recovery. Do not count
+ambiguous legacy CI_FAILED records through verdict-only inference.
+
+Delete confirmsPublishedFailure and all prose-dependent attribution fallbacks.
+Keep failingChecksProse as reporting only. Preserve live failed-CI/head/publication
+qualification, distinct-SHA accounting, FeatureTaskRuntimeRunTransitionOwner,
+existing diagnostics and recovery behavior, check links, and optional
+monitoringSummary. Add no field, receipt, protocol, migration, or block category.
+Keep required local validation, runtime publication ownership, private-path
+exclusion, branch restrictions, and existing terminal PR behavior. Apply A1, A2,
+A5, A6, A7 and G1-G7 without weakening enforcement.
+
+This entry records operator authority and planning guidance. It does not claim
+that the production repair or its verification is complete. Other acceptance
+criteria retain their own audit obligations.
+
 ## [2026-10-16] Keep monitor publication evidence inside the active phase
 
 Context: Main publishes repairs inside the monitor phase. Joining the SKILL-428
@@ -2969,3 +3022,105 @@ repair, a rejected push, and goal monitoring without reopening completed phases.
 MonitorRepairResumeAccountingTest covers historical identity and failure counts.
 A1-A12 and G1-G7 remain clean. This integration adds no schema, port, guard
 exception, or separate state owner.
+
+## [2026-10-16] Retain explicit operator mandates across blocked-phase recovery
+
+Context: a blocked-phase retry delivered the operator's prerequisite decision to
+audit_plan_fix, then consumed its phase-scoped reason. The following audit still
+received empty mandates and repeated the scope block. Recording the decision in
+this source log did not amend the workflow's governed briefing.
+
+Decision: `feature-task retry-blocked` accepts an optional `--mandate` supplied
+by the operator. The existing retry transaction appends that directive to the
+workflow's admitted run invariants. Existing mandates, acceptance criteria,
+spec identity and other invariant fields remain intact. Duplicate mandates
+are not appended. Later phases and resumes use the existing mandate briefing
+path. A plain retry reason keeps its existing single-phase lifetime.
+
+Missing run invariants refuse the mandate and retry together. Malformed
+invariants retain their typed admission failure. No new persisted field,
+contract version, migration, phase bypass or acceptance rewrite is involved.
+The decision applies only to the selected child workflow.
+
+Review: A1 and A2 keep the mutation in the application retry transaction and
+briefing delivery in the engine. A3-A5 add no collaborator bag, port or forwarding
+layer. A6 reuses the existing artifact family and codec. A7 retains refusal and
+typed corruption handling. A8 adds no production ambient effects. A9-A12 retain
+package direction, test placement, narrow visibility and typed interfaces.
+G1-G7 require no guard, fixture, baseline or exemption change.
+
+## [2026-10-16] Preserve source findings after malformed no-change claims
+
+Context: an audit independently found that goal monitoring lost confirmed repair
+accounting on resume. The preceding repair had submitted a malformed no-change
+claim. AcceptanceAuditRound rejected the claim but replaced the auditor's value
+with formatting errors, so the next repair plan lost the production finding.
+Audit repair also offered the no-change argument without its existing shape.
+
+Decision: keep the auditor's value and append the claim rejection reasons. Keep
+the rejected verdict and all existing claim validation. Audit repair uses the
+same claim guidance as implementation. No contract field, admission exception,
+comparison change or budget bypass is added.
+
+Review: A1, A2 and A5 retain audit settlement and transition ownership. A6 reuses
+the existing prose field and claim vocabulary. A7 preserves both refusal reasons
+and inspected evidence. A3-A4 and A8-A12 add no state, ports, ambient effects or
+module crossings. G1-G7 remain unchanged. A regression exercises a resumed
+malformed repair claim and verifies that the next plan receives both the source
+finding and the rejection reasons.
+
+
+## [2026-10-16] Continue confirmed no-change audits without operator approval
+
+Context: A completed no-change source audit paused a goal until the operator
+accepted it. The operator has removed that approval requirement. Treating the
+old accept command as automatic completion would also skip the child's remaining
+review and quality gate.
+
+Decision: delete the audit pause producer and use normal authoritative completion
+and routing. Keep the no_change_confirmed output and derive satisfied for the
+existing review entry gate after claim validation. Malformed and rejected claims
+still enter repair. Historical undecided pauses resume the child through audit
+without an operator decision. Retain the old artifact decoder and already
+recorded operator choices for compatible recovery. Legacy pause status reports
+resumable, and later pauses cannot inherit an earlier no-change approval state.
+No workflow record rewrite,
+schema change, migration or new marker is needed.
+
+Review checklist: A1 clean, policy remains in engine. A2 clean, no new shared
+owners. A3 clean, no collaborator changes. A4 clean, no new ports. A5 clean,
+active pause code is deleted. A6 clean, existing verdict and artifact vocabulary
+remain. A7 clean, claim rejection and durable completion failures still refuse.
+A8 clean, no ambient effects. A9 and A10 clean, tests stay with their owners.
+A11 and A12 clean, the audit hook loses its pause argument. G1-G7 clean, no guard,
+baseline, exemption or acceptance fixture is weakened. Regressions cover normal
+review and validation after confirmation, serial final source admission, and
+resuming an undecided historical pause without closing its child early.
+
+
+## [2026-10-16] Admit retained planning evidence after ledger compaction
+
+Context: A resumed child had 200 consecutive phase ledger entries numbered 17
+through 216. Normal bounded-history retention had removed its initial planning
+imports. GoalChildPlanningImportMatcher still required sequence zero at the
+start and reported a stale plan, although the import provenance and settled
+planning records remained intact. Scoped replan would delete that child's audit
+progress and is unnecessary for this case.
+
+Decision: decode ledger entries through the existing durable reader. Validate the
+complete surviving import prefix by sequence number. A prefix that has rolled out
+is admissible only in a full retained window at the existing ledger limit, with
+consecutive sequence numbers throughout. Keep parent planning, provenance, payload
+and settled phase admission unchanged. Do not reconstruct old entries, rewrite
+workflow records or change retention. Incomplete windows, gaps and altered
+surviving imports still fail admission.
+
+Review checklist: A1 and A2 clean, the matcher consumes existing engine decoding
+and domain retention vocabulary. A3 and A4 clean, no new collaborators or ports.
+A5 clean, the permanent sequence-zero assumption is removed at its consumer.
+A6 clean, typed ledger reads replace raw key access. A7 clean, malformed durable
+entries retain typed failures. A8 clean, no ambient reads. A9-A12 clean, no new
+packages, API or raw map boundary. G1-G7 clean, no guard, baseline or exemption
+changes. The regression failed under the old reader and now admits partially and
+fully pruned import prefixes without changing stored child bytes. Rejection cases
+cover incomplete windows, sequence gaps and changed surviving imports.

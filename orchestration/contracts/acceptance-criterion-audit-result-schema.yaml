@@ -6,7 +6,7 @@ additionalProperties: false
 required: [contract_version, mode, catalog_id, spec_digest, execution_id, tree_digest, checkpoint_id, producing_output_id, producing_output_digest, criteria, dependencies, regressed_refs, edge_changes]
 properties:
   contract_version: { const: '0.1' }
-  mode: { enum: [initial_discovery, current_criterion_targeted, final_full] }
+  mode: { enum: [initial_discovery, current_criterion_targeted] }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
   spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
   execution_id: { type: string, minLength: 1, maxLength: 256 }
@@ -67,8 +67,6 @@ x-coherence-checks:
     description: Initial discovery contains exactly one source and validation disposition for every authored criterion.
   - id: targeted-binding
     description: Targeted output contains only the current criterion and matches its live reservation and expected revision.
-  - id: final-full-coverage
-    description: Final-full evaluates every production criterion and binds regression and edge changes to admitted output evidence.
   - id: dependency-availability
     description: Every declared edge references admitted criteria and has available validation ownership for pending prerequisites.
   - id: utf8-capacity

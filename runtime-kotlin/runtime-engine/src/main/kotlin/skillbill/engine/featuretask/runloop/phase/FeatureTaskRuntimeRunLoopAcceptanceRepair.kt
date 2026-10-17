@@ -34,7 +34,7 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
     val state = scope.snapshot ?: return null
     val steps = scope.steps
-    if (steps == null || state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED ||
+    if (steps == null || state.stage == AcceptanceCriterionRepairStage.ACCEPTED ||
       context.hasLeftSlot(PhaseSlot.AUDIT)
     ) {
       return null
@@ -71,14 +71,15 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
     requireNotNull(state)
     requireNotNull(scope)
     requireNotNull(steps)
-    if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) return Routing.Continue
+    if (state.stage == AcceptanceCriterionRepairStage.ACCEPTED) return Routing.Continue
     if (state.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
         context.request,
         context.state,
         context.runState.coupledSession(),
         phaseId,
-        "Acceptance criterion repair exhausted its three unsuccessful outcomes. ${scope.currentCriterionContext}",
+        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+          "Other criteria have separate budgets. ${scope.currentCriterionContext}",
       )
       return Routing.Stop
     }
@@ -129,9 +130,9 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
   ): String? {
     if (context.runState.selectedOwnerOf(phaseId)?.slot != PhaseSlot.CODE_REVIEW) return null
     val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair ?: return null
-    val state = scope.snapshot ?: return "The authored acceptance catalog has not completed its final source audit."
-    return if (state.stage != AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
-      "The current source has no committed final acceptance audit. Resume at the full audit before review."
+    val state = scope.snapshot ?: return "The authored acceptance catalog has not been audited yet."
+    return if (state.stage != AcceptanceCriterionRepairStage.ACCEPTED) {
+      "Not every acceptance criterion is accepted yet. Resume the criterion audit before review."
     } else {
       null
     }

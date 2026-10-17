@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 5 - Navigation and host lifetimes
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -46,7 +46,7 @@ The delivery subtask removes remaining legacy paths and records evidence.
 
 ## Implementation Details
 
-The tasks below use the preplan digest as their only repository knowledge. Paths are relative to `desktop-tray/`. The package prefix is `dev.skillbill.tray`. Lines marked **Assumption** record a fact the digest did not establish. Implement confirms each one against the tree before acting on it and records any difference in its summary.
+The tasks below use the preplan digest as their only repository knowledge. Paths are relative to `../../../desktop-tray`. The package prefix is `dev.skillbill.tray`. Lines marked **Assumption** record a fact the digest did not establish. Implement confirms each one against the tree before acting on it and records any difference in its summary.
 
 ### Task 1 - Census the tree and record reference drift (serves all ACs)
 

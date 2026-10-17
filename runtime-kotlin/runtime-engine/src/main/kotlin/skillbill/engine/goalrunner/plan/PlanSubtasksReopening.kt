@@ -13,6 +13,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -61,7 +62,12 @@ class PlanSubtasksReopening(
               clock = clock,
             ),
           )
-        val updated = engine.updateRecord(WorkflowFamily.TASK_RUNTIME.definition, snapshot, update)
+        val updated =
+          engine.updateRecord(
+            WorkflowFamily.TASK_RUNTIME.definition,
+            snapshot,
+            update.copy(workflowStatus = WorkflowStatus.PENDING),
+          )
         unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
         true
       }

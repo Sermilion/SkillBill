@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 1 - Build graph and core foundations
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -13,7 +13,7 @@ Modules owned by later subtasks (`core:data`, `core:datastore`, `core:ui`, `feat
 
 ## Acceptance Criteria
 
-1. `desktop-tray/settings.gradle.kts` includes `build-logic` through `pluginManagement`, and the convention build imports `desktop-tray/gradle/libs.versions.toml`. Project-owned convention plugins with one Skill Bill prefix cover KMP library, Compose KMP, Kotlin-Inject/Anvil, tests/quality, and desktop application packaging. Convention tests exercise them (parent AC-02).
+1. `../../../desktop-tray/settings.gradle.kts` includes `build-logic` through `pluginManagement`, and the convention build imports `desktop-tray/gradle/libs.versions.toml`. Project-owned convention plugins with one Skill Bill prefix cover KMP library, Compose KMP, Kotlin-Inject/Anvil, tests/quality, and desktop application packaging. Convention tests exercise them (parent AC-02).
 2. Every registered module compiles one `jvm` target only. A clean configuration and build succeed without Android SDK variables or Apple toolchains, and no Android/iOS plugin, target, or KSP configuration is registered. Gradle target-inventory evidence proves it (parent AC-03).
 3. `composeApp` owns the desktop executable, native tray sources/resources, and packaging tasks, with verified native loading, package identifiers, icons, and distributions preserved. The root build holds no production classes. Root task aliases keep documented developer commands working (parent AC-01, AC-24 packaging part).
 4. `core:common`, `core:domain`, `core:designsystem`, and `core:testing` are populated from the old tree in `commonMain`/`commonTest`, with real production consumers. `core:domain` has no Compose, lifecycle, Room, DataStore, navigation, host, or runtime dependency (parent AC-05).
@@ -92,7 +92,7 @@ All facts below come from the preplan digest. Items marked **Assumption** were n
 
 ### Ordered tasks
 
-**T1. Catalog (AC 1, AC 2).** Edit `desktop-tray/gradle/libs.versions.toml`.
+**T1. Catalog (AC 1, AC 2).** Edit `../../../desktop-tray/gradle/libs.versions.toml`.
 
 - **Plugin artifacts as libraries**, for the build-logic classpath:
   - `kotlin-gradle-plugin`
@@ -110,7 +110,7 @@ All facts below come from the preplan digest. Items marked **Assumption** were n
 
 **T2. `build-logic` included build (AC 1, AC 2, AC 5).**
 
-- **`desktop-tray/build-logic/settings.gradle.kts`:**
+- **`../../../desktop-tray/build-logic/settings.gradle.kts`:**
   - `rootProject.name = "build-logic"`.
   - Repositories: `gradlePluginPortal()`, `google()`, `mavenCentral()`.
   - `versionCatalogs { create("libs") { from(files("../gradle/libs.versions.toml")) } }`.
@@ -154,19 +154,19 @@ All facts below come from the preplan digest. Items marked **Assumption** were n
       - `compileMacTrayNative`, building `libskillbilltray.dylib` staged under `macos/`.
     - Native sources are read from the applying project's `src/jvmMain/native/{linux,macos}`.
     - Native outputs reach the jar through `kotlin.sourceSets.jvmMain.resources.srcDir(<task output provider>)`, not through `processResources.dependsOn`.
-    - `stageAppImage` is a Sync task fed by `createDistributable` output under the project build directory. Its icon is `design/App/docs/assets/skill-bill-app-icon.svg`, resolved from the repository root through `rootProject.layout.projectDirectory`, not relative to the module.
+    - `stageAppImage` is a Sync task fed by `createDistributable` output under the project build directory. Its icon is `../../../design/App/docs/assets/skill-bill-app-icon.svg`, resolved from the repository root through `rootProject.layout.projectDirectory`, not relative to the module.
     - `packageAppImage` keeps the pinned `appimagetool` 1.9.1 at the root `desktop-tray/build/tools/...` location that `APPIMAGE.md` already documents (`rootProject.layout.buildDirectory`). Configuration must never download or execute it.
     - The OS `onlyIf` guards stay as they are today. The macOS `clang`/AppKit compile is host packaging, not an Apple mobile toolchain.
 
 **T3. Root settings and build (AC 1 to AC 3, AC 6).**
 
-- **`desktop-tray/settings.gradle.kts`:**
+- **`../../../desktop-tray/settings.gradle.kts`:**
   - `pluginManagement { includeBuild("build-logic"); repositories { gradlePluginPortal(); google(); mavenCentral() } }`.
   - Keep the foojay 1.0.0 plugin, `FAIL_ON_PROJECT_REPOS`, the repositories, and `includeBuild("../runtime-kotlin")` with all five `dev.skillbill:*` substitutions.
   - Add `enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")`.
   - `include(":composeApp", ":core:common", ":core:domain", ":core:designsystem", ":core:testing")`.
   - Register no `core:data`, `core:datastore`, `core:ui` or `feature:*` here.
-- **`desktop-tray/build.gradle.kts`:**
+- **`../../../desktop-tray/build.gradle.kts`:**
   - Drop the application plugins, the dependencies, the compose block and the native tasks.
   - Apply only `base`.
   - Plugins already on the build-logic classpath are applied by ID with no version (`id("com.google.devtools.ksp")`, `id("org.jetbrains.kotlin.plugin.serialization")`). This avoids the "already on the classpath with unknown version" failure.
@@ -178,7 +178,7 @@ All facts below come from the preplan digest. Items marked **Assumption** were n
   - **Root task aliases.** Implement collects every `./gradlew <task>` invocation in:
     - `ARCHITECTURE.md`, `APPIMAGE.md` and `docs/data-layer-validation.md`;
     - `scripts/packaged-data-smoke.py`;
-    - `.github/workflows/desktop-tray-ci.yml` and `desktop-tray-snapshot-cleanup.yml`.
+    - `../../../.github/workflows/desktop-tray-ci.yml` and `desktop-tray-snapshot-cleanup.yml`.
 
     For each task name that now lives under `:composeApp`, it registers a root alias that depends on `:composeApp:<task>`. Expected names include `run`, `createDistributable`, `packageDistributionForCurrentOS`, `packageDmg`/`Msi`/`Deb`/`Rpm`, `stageAppImage`, `packageAppImage`, and a `test` alias over every child `jvmTest`.
   - **Callers that pass `--tests` or other Test-type options cannot go through an alias.** Edit those callers to `:composeApp:jvmTest` in this subtask, in CI and scripts, because of the execution rule. The broader prose rewrite of those documents stays with subtask 6.

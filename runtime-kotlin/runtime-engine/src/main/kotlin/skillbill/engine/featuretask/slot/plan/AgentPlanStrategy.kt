@@ -142,7 +142,8 @@ class AgentPlanStrategy : PhaseStrategy() {
       ## Phase feasibility
       Check every planned requirement, constraint, non-goal, and task against the authority of the
       phase that must perform it. Implement produces repository end states; audit inspects them.
-      Validation owns commands and their evidence. Review, commit, PR, history, and install work
+      Acceptance criteria are production end states only; tests are never acceptance criteria and
+      belong under Test Obligations. Validation owns commands and their evidence. Review, commit, PR, history, and install work
       stays with its owning phase or parent runtime. Never invent a scope restriction that prevents
       required review or validation repairs to production wiring, test setup, formatting, or lint.
       Preserve behavior, assertions, and architecture rules instead. Preserve explicit operator

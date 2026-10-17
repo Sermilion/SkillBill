@@ -151,7 +151,7 @@ internal class StandalonePullRequestWatcher(
     return when {
       failing.isNotEmpty() -> PullRequestCiOutcome.Failed(failing, headSha)
       reportedChecks.isEmpty() || reportedChecks.any { it.bucket == CheckBucket.PENDING } -> null
-      else -> PullRequestCiOutcome.Passed
+      else -> PullRequestCiOutcome.Passed(headSha)
     }
   }
 

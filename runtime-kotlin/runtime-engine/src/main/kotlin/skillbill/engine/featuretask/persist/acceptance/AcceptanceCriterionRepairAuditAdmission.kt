@@ -16,7 +16,6 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 @Inject
 class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTaskRuntimeWireArtifactValidator) {
   internal fun matches(
-    previous: AcceptanceCriterionRepairState?,
     next: AcceptanceCriterionRepairState,
     mutation: AcceptanceCriterionRepairMutation,
     evidence: AcceptanceCriterionRepairAuditEvidence?,
@@ -35,14 +34,12 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
     return when (mutation) {
       is AcceptanceCriterionRepairMutation.Discover -> discoveryMatches(wire, next)
       is AcceptanceCriterionRepairMutation.Outcome -> targetedMatches(wire, next, mutation)
-      is AcceptanceCriterionRepairMutation.FinalAudit -> finalMatches(wire, previous, next, mutation)
       else -> false
     }
   }
 
   private fun needsAudit(mutation: AcceptanceCriterionRepairMutation): Boolean =
     mutation is AcceptanceCriterionRepairMutation.Discover ||
-      mutation is AcceptanceCriterionRepairMutation.FinalAudit ||
       mutation is AcceptanceCriterionRepairMutation.Outcome && mutation.outcome.kind in
       setOf(
         AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
@@ -97,34 +94,6 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
       )
   }
 
-  private fun finalMatches(
-    wire: FeatureTaskRuntimeWorkflowArtifactMap,
-    previous: AcceptanceCriterionRepairState?,
-    next: AcceptanceCriterionRepairState,
-    mutation: AcceptanceCriterionRepairMutation.FinalAudit,
-  ): Boolean {
-    val facts = facts(wire)
-    val coverage =
-      facts.map { it[Keys.CANONICAL_REF] }.toSet() == mutation.auditedRefs &&
-        (wire[Keys.REGRESSED_REFS] as List<*>).toSet() == mutation.regressedRefs
-    val source =
-      wire[Keys.PRODUCING_OUTPUT_DIGEST] == mutation.digest &&
-        wire[Keys.TREE_DIGEST] == mutation.treeDigest && wire[Keys.CHECKPOINT_ID] == mutation.checkpointId
-    val criteria =
-      facts.all {
-          fact ->
-        next.criteria.singleOrNull { it.canonicalRef == fact[Keys.CANONICAL_REF] }?.let {
-          criterionMatches(
-            fact,
-            it,
-          )
-        } == true
-      }
-    val edges = previous == next || (wire[Keys.EDGE_CHANGES] as List<*>).toSet() == dependencyChanges(previous, next)
-    val bound = coverage && source && criteria && edges
-    return wire[Keys.MODE] == AcceptanceCriterionRepairMode.FINAL_FULL.wireValue && bound
-  }
-
   private fun noGraphChanges(wire: FeatureTaskRuntimeWorkflowArtifactMap): Boolean =
     (wire[Keys.EDGE_CHANGES] as List<*>).isEmpty() && (wire[Keys.REGRESSED_REFS] as List<*>).isEmpty()
 
@@ -138,13 +107,4 @@ class AcceptanceCriterionRepairAuditAdmission(private val validator: FeatureTask
 
   private fun facts(wire: FeatureTaskRuntimeWorkflowArtifactMap): List<FeatureTaskRuntimeWorkflowArtifactMap> =
     (wire[Keys.CRITERIA] as List<*>).map { FeatureTaskRuntimeWorkflowArtifactMap.from(it) }
-
-  private fun dependencyChanges(
-    previous: AcceptanceCriterionRepairState?,
-    next: AcceptanceCriterionRepairState,
-  ): Set<Any?> {
-    val before = (previous?.asRepairWireMap()?.get(Keys.DEPENDENCIES) as? List<*>).orEmpty().toSet()
-    val after = (next.asRepairWireMap()[Keys.DEPENDENCIES] as List<*>).toSet()
-    return (before - after) + (after - before)
-  }
 }

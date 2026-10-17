@@ -90,6 +90,7 @@ private fun settleRecord(
         prompt = producedOutputsOf(record)["prompt"] as? String,
         summary = record["summary"] as? String,
         verdict = verdict,
+        noChange = JsonCodec.anyToStringAnyMap(producedOutputsOf(record)["no_change"]),
       ),
     )
   }

@@ -60,7 +60,9 @@ import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -82,7 +84,7 @@ fun testPhaseStrategies(
   reviewRunner: PhaseRunner? = null,
   pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   delegatedReviewRunner: ParallelCodeReviewRunner? = null,
-  monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup(gitOperations),
   pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
   planFanOutCap: Int = 1,
@@ -165,11 +167,21 @@ object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
   ): PullRequestIdentity = PullRequestIdentity.Unavailable("test runs do not reach GitHub")
 }
 
-object OpenPullRequestIdentityLookup : PullRequestIdentityLookup {
+class OpenPullRequestIdentityLookup(private val git: WorkflowGitCommitHistoryOperations) : PullRequestIdentityLookup {
   override fun lookup(
     repoRoot: Path,
     branch: String,
-  ): PullRequestIdentity = PullRequestIdentity.Found(url = "https://github.com/example/repo/pull/1", number = 1)
+  ): PullRequestIdentity {
+    val head = git.headCommitSha(repoRoot)
+    check(head is WorkflowGitOperationResult.Ok && head.value.isNotBlank()) {
+      "The open pull request fixture needs a published HEAD."
+    }
+    return PullRequestIdentity.Found(
+      url = "https://github.com/example/repo/pull/1",
+      number = 1,
+      headSha = head.value.trim(),
+    )
+  }
 }
 
 object PassingPullRequestChecksLookup : PullRequestChecksLookup {

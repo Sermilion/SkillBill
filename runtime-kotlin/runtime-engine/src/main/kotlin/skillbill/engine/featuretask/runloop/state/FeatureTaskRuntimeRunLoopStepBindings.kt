@@ -616,10 +616,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
       )
     }.fold(
       onSuccess = { persisted ->
-        if (persisted) {
-          null
+        if (persisted is RequiredPhaseWrite.Rejected) {
+          persisted.message
         } else {
-          prefix
+          null
         }
       },
       onFailure = { error -> "$prefix ${error.message.orEmpty()}" },

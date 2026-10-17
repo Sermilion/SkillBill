@@ -13,9 +13,9 @@
         "contract_version": "0.7",
         "phase_id": "monitor",
         "produced_outputs": {
-            "value": "CI passed on branch 'feat/existing-runtime-branch': every check on the pull request passed, was skipped, or was cancelled."
+            "value": "CI passed for published commit '__NORMALIZED_SHA40__' on branch 'feat/existing-runtime-branch': every check passed, was skipped, or was cancelled."
         },
         "status": "completed",
-        "summary": "CI passed for the pull request."
+        "summary": "CI passed for published commit '__NORMALIZED_SHA40__'."
     }
 }

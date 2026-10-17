@@ -136,7 +136,13 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
           recorder::producerOutput,
           phaseSettlementService::findEnvelope,
           diagnostics,
-        ).restore(runRequest, records, ledger)
+        ).restore(
+          runRequest,
+          records,
+          ledger,
+          runRequest.admittedExecution?.recordedMonitorSemantics,
+          executionPlan,
+        )
       } ?: MonitorRepairAccounting.RestoredHistory(emptyList(), emptyMap(), false)
     return FeatureTaskRuntimeRunState(
       initialRecords = records,

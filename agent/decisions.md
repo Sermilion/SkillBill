@@ -1,3 +1,24 @@
+## [2026-10-17] Discovery names the open criteria in prose and each gap is verified once
+Context: After discovery found any gap, every criterion still got a focused audit, including ones discovery had found met, and each repaired criterion got a second read-only audit after its targeted verification. A subtask with eight criteria spent about fourteen audits where four were needed.
+Decision: The initial full audit ends its prose with one line, `Open criteria: AC-002, AC-005` or `Open criteria: none`. The runtime reads that line leniently: criteria it does not name are accepted at once, named criteria queue in spec order and go straight to plan fix, implement fix and one targeted verification audit, with up to three unsuccessful cycles each. When the queue empties the run moves on. If the line is missing or names no queued criterion, the runtime falls back to auditing every criterion; it never blocks on the line.
+Reason: Discovery already established which criteria have gaps; auditing met criteria again and re-auditing a verified repair duplicates work. A prose line keeps the workflow prose-based and adds no structured settlement field or new block reason.
+Alternatives considered: A structured `open_criteria` settlement argument was rejected because it adds block reasons to a prose workflow. Parsing free prose without a marker line was rejected as too fragile.
+Revisit when: Discovery agents routinely omit or misreport the Open criteria line.
+
+## [2026-10-17] Acceptance repair trusts per-criterion results and has no final full audit
+Context: SKILL-426 added a final full source audit after the per-criterion repair queue emptied. That audit re-checked every criterion at once and, on any gap, re-queued criteria that focused audits had already accepted, so a run could keep cycling through whole-spec audits after every criterion was settled.
+Decision: The loop keeps one initial full discovery audit, then settles one criterion at a time with up to three unsuccessful repair cycles each. When the queue empties the state becomes `ACCEPTED` and the run moves to review. There is no final full audit and no re-check of accepted criteria. The final-audit stage, fields, payload keys and schema entries are removed outright with no legacy read path. This supersedes SKILL-426 AC-005.
+Reason: A focused audit that accepted a criterion is the authority for it; re-auditing everything at the end duplicates work and lets one regression report reopen the whole queue.
+Alternatives considered: Keeping the final audit but scoping its reopen to named criteria was rejected because it still checks every criterion at once. Keeping the removed stage readable for old rows was rejected; there is no backwards compatibility requirement.
+Revisit when: A later repair is shown to break an earlier accepted criterion in a way review and validation do not catch.
+
+## [2026-10-16] Acceptance criteria never include tests
+Context: Plan-authored specs turned test expectations into acceptance criteria (for example "T3/T6 tests exist"). Audit already excludes test-only criteria, so such criteria could never be accepted by audit, stayed open until validate, and kept implementation and audit loops chasing work that belongs to later phases.
+Decision: Acceptance criteria describe production end states only. The plan spec contract (`feature-spec-directive.md`), the plan feasibility constraint and the preplan intake forbid test-only criteria and criteria that name a test, test class, fixture, coverage, regression case or a guard's synthetic-violation case. Required tests go under a `## Test Obligations` section, and validate runs them.
+Reason: Every criterion must be checkable by audit against production source; tests are evidence produced and run by later phases, not end states of the change.
+Alternatives considered: Keeping test criteria and teaching audit to defer them was rejected because it already does, and the criteria still blocked acceptance and confused repair loops.
+Revisit when: A change's deliverable is itself test infrastructure, such as a new architecture guard, and needs criteria of its own.
+
 ## [2026-07-15] Full local installs are the default for maintainer work
 Context: Non-interactive `./install.sh --from-source` falls back to detected agents, base-only platform packs, and anonymous telemetry, which can leave follow-up validation without routed platform-pack coverage or full diagnostic telemetry.
 Decision: Maintainer install refreshes in this repo should use the full install shape: detected agents, every platform pack (`platform-mode=all`), MCP registration, and full telemetry unless the user explicitly asks for a narrower install.

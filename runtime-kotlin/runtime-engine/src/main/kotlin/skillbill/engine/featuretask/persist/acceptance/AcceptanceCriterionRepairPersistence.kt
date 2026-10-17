@@ -39,11 +39,9 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairFinalAuditInput
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
-import skillbill.workflow.taskruntime.model.audit.requireFinalProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
 import skillbill.workflow.taskruntime.model.audit.retainProseProgress
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -318,14 +316,16 @@ class AcceptanceCriterionRepairPersistence(
       return refuse(worker, null, AcceptanceCriterionRepairRefusal.OWNER_CHANGED)
     }
     val identity = phaseIdentityMatches(worker, binding, request.phase)
-    if (!identity ||
-      !adoption.sourceMatches(
+    if (!identity) {
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED)
+    }
+    if (!adoption.sourceMatches(
         worker,
         repositoryRoot,
         binding,
       )
     ) {
-      return refuse(worker, null, AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED)
+      return refuse(worker, null, AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED)
     }
     val record =
       states.get(WorkflowFamily.TASK_RUNTIME, worker.workflowId)
@@ -524,14 +524,7 @@ class AcceptanceCriterionRepairPersistence(
     artifacts: Map<String, Any?>,
     request: AcceptanceCriterionRepairCommit,
   ): Map<String, Any?>? {
-    val patch =
-      if (request.mutation == AcceptanceCriterionRepairMutation.RequireFinalAudit &&
-        request.phase.status == WorkflowStepStatus.COMPLETED.wireValue
-      ) {
-        emptyMap()
-      } else {
-        phases.serialPhasePatch(artifacts, request.phase, request.attemptStatus)
-      }
+    val patch = phases.serialPhasePatch(artifacts, request.phase, request.attemptStatus)
     val additionalPhaseId = request.additionalPhaseId ?: return patch
     val additional = restoreCompletedPhase(workflowId, additionalPhaseId, artifacts + patch) ?: return null
     return patch + phases.serialPhasePatch(artifacts + patch, additional, request.additionalAttemptStatus)
@@ -689,7 +682,6 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
       -> proseTransition(state, mutation)
       else -> repairTransition(state, mutation, auditDigest)
     }
@@ -703,7 +695,6 @@ class AcceptanceCriterionRepairPersistence(
         state?.recordProseAudit(mutation.audit)?.clearPendingClarification()
       AcceptanceCriterionRepairMutation.KeepProgress -> state?.retainProseProgress()
       is AcceptanceCriterionRepairMutation.Clarification -> state?.retainClarification(mutation.question)
-      AcceptanceCriterionRepairMutation.RequireFinalAudit -> state?.requireFinalProseAudit()
       else -> null
     }
 
@@ -744,22 +735,9 @@ class AcceptanceCriterionRepairPersistence(
             auditBindingDigest = auditDigest,
           ),
         )?.clearPendingClarification()
-      is AcceptanceCriterionRepairMutation.FinalAudit ->
-        state?.recordFinalFullAudit(
-          AcceptanceCriterionRepairFinalAuditInput(
-            mutation.auditedRefs,
-            mutation.regressedRefs,
-            mutation.digest,
-            mutation.treeDigest,
-            mutation.checkpointId,
-            dependencies = mutation.dependencies ?: state.dependencies,
-            auditBindingDigest = auditDigest,
-          ),
-        )?.clearPendingClarification()
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
       -> null
     }
 
@@ -783,7 +761,6 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
       -> proseReplayExpected(state, expected, mutation)
       else -> repairReplayExpected(state, expected, mutation)
     }
@@ -801,7 +778,6 @@ class AcceptanceCriterionRepairPersistence(
           state?.proseAudits?.any { it == mutation.audit } == true
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
       -> expected.revision == state?.revision?.minus(1)
       else -> false
     }
@@ -824,13 +800,9 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.Discover ->
         expected == ExpectedAcceptanceCriterionRepairState(null, null, null)
       is AcceptanceCriterionRepairMutation.Outcome -> outcomeExpectedMatches(state, expected, mutation)
-      is AcceptanceCriterionRepairMutation.FinalAudit ->
-        expected.currentCriterionRef == null && expected.reservationId == null &&
-          expected.revision == state?.finalAudits?.singleOrNull { it.digest == mutation.digest }?.revision?.minus(1)
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
-      AcceptanceCriterionRepairMutation.RequireFinalAudit,
       -> false
     }
 

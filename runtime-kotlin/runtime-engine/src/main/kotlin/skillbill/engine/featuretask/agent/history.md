@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-16] SKILL-428 subtask 3 - Count CI-confirmed failed repairs
+Areas: runtime-engine featuretask and goalrunner monitoring, runtime-domain taskruntime, runtime-ports Git and PR identity, runtime-infra workflow, runtime-cli reporting, authored monitor guidance
+- Count each distinct completed, changed and pushed repair commit once after CI fails on its matching PR head. Initial failures and merge conflicts start uncharged repair; repeated polls, jobs and changed failure causes do not reset or multiply the count.
+- Observe the third published repair until CI settles before the cap stops another CI repair. Pending or stale observations, setup retries, incomplete repairs and failed pushes consume no failed-repair attempt.
+- MonitorRepairAccounting and its producer-evidence helpers are reusable. Live qualification joins accepted completion, attributed source paths or new merge ancestry, pushed publication and matching failed CI; FeatureTaskRuntimeRunTransitionOwner retains coupled mutations.
+- Resume uses immutable recorded execution semantics, matched ledger and producer identities, accepted completion, publication records and Git evidence. Replaced current repair manifests do not erase earlier qualified failures; narration never authorizes accounting.
+- Standalone monitor, goal monitor and phase-pr share the accounting. Reports distinguish launched work, publication, pending checks and confirmed failures, with retained failed commits and available check links at the cap.
+- Unchanged publication uses the existing blocked settlement without spending an attempt. Missing or contradictory evidence remains unknown with diagnostics and existing recovery behavior; branch, publication and local-check ownership stay intact.
+- No monitor schema, receipt, mandatory field, migration or block category was added. Operator-approved installed compatibility prerequisites, including schema version 58, remain outside this subtask's feature comparison.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented for S3-1 through S3-7; parent-feature completion remains outside this subtask.
+
 ## [2026-10-16] SKILL-428 subtask 2 - Reuse a working validation environment
 Areas: runtime-engine featuretask slot/qualitygate, docs/runtime-command-guidance.md
 - Shared validation and monitor-repair guidance reads repository instructions and CI/setup scripts before choosing a host or container, then checks tools, writable home/cache/temp paths and required display support before expensive checks.

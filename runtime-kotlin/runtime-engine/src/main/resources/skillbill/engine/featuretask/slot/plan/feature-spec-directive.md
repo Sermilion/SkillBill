@@ -85,8 +85,9 @@ Run when the resolved spec-source mode is `local` (no config, `spec_type: local`
 
 Before writing a parent or subtask spec, check every requirement, constraint,
 non-goal, and implementation step against the authority of the phase that must
-perform it. State acceptance criteria as repository end states that implement
-can produce and audit can inspect. Put command execution and its evidence in
+perform it. State acceptance criteria as production repository end states that
+implement can produce and audit can inspect. Tests are never acceptance criteria:
+put required tests in Test Obligations and command execution and its evidence in
 Validation Strategy. Keep review, commit, PR, history, and install actions with
 the phases or parent runtime that own them.
 
@@ -131,9 +132,14 @@ contract or the runtime fails the run with "must list at least one criterion":
   - "fixtures match their baseline" when that needs a capture or generator run
   - "goal planning runs end to end", or any other runtime behavior observed by
     running it
-  Instead, state the repository fact that makes the result true: the code
-  exists, a named test exists and asserts the behavior, or the guard rule has
-  a synthetic-violation test. Put the command in Validation Strategy.
+  Instead, state the production repository fact that makes the result true:
+  the code exists and implements the behavior, or the wiring is in place. Put
+  the command in Validation Strategy.
+- A criterion MUST NOT require tests. Acceptance criteria describe production
+  end states only. Never write a test-only criterion, and never make a
+  criterion name a test, test class, fixture, test coverage, regression case,
+  or a guard's synthetic-violation case. List every required test under a
+  `## Test Obligations` section; validate runs them.
 - A criterion MUST NOT require content in an artifact the runtime writes: the
   commit message, the commit sha, the PR title or body, or history entries.
   Ask for a file under the spec folder instead (for example
@@ -152,7 +158,7 @@ Prefer the canonical numbered form the runtime writer emits:
 
 The manifest is validated against the decomposition manifest schema contract before persistence and again when the runtime reads it.
 
-Each subtask spec must contain scope, acceptance criteria, non-goals, dependency notes, validation strategy, and next path. The acceptance-criteria section must follow the **Spec Format Contract** above so the runtime can extract it.
+Each subtask spec must contain scope, acceptance criteria, non-goals, dependency notes, validation strategy, and next path, plus `## Test Obligations` when the change needs tests. The acceptance-criteria section must follow the **Spec Format Contract** above so the runtime can extract it.
 
 For decomposed goals, the runtime creates or amends the active subtask commit before review. Review and approval bind to the exact committed target and tree; later code repairs invalidate that approval. Finalization may add only the declared boundary-history outputs under `agent/history.md` and `agent/decisions.md` after the reviewed tree is verified.
 

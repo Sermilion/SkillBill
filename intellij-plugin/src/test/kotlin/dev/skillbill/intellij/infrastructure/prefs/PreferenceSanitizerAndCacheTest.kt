@@ -67,7 +67,7 @@ class PreferenceSanitizerAndCacheTest {
         val gap = "source still misses the required behavior ".repeat(12)
         val summary = "Acceptance criteria: Criterion ac-0001 (S3-004); 3 failures used; " +
             "0 failures remaining; queue position 1 of 1; Criterion exhausted; source repair cannot advance; " +
-            "Final full source audit remains required after focused work; " +
+            "Focused repair cycle reserved; " +
             "Source acceptance is separate from later tests, build, and project-quality checks. Latest gap: $gap"
         val cache = LastKnownDisplayCache(
             display = CachedDisplaySnapshot(summary = boundedDisplaySummary(summary)),
@@ -83,7 +83,7 @@ class PreferenceSanitizerAndCacheTest {
         assertTrue(restored.fromCache)
         assertTrue(restored.summary.contains("3 failures used"))
         assertTrue(restored.summary.contains("0 failures remaining"))
-        assertTrue(restored.summary.contains("Final full source audit"))
+        assertTrue(restored.summary.contains("Focused repair cycle reserved"))
         assertTrue(restored.summary.contains("Summary abbreviated"))
         assertTrue(restored.summary.length <= CachedDisplaySnapshot.MAX_SUMMARY_CHARS)
         val presentation = SkillBillStatusBarPresentation.map(StatusUiMapper.map(restored, cache.observedAt))

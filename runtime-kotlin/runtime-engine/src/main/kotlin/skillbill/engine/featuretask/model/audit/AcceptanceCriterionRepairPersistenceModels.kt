@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.model.audit
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdmission
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
@@ -54,8 +53,6 @@ sealed interface AcceptanceCriterionRepairMutation {
 
   data class Clarification(val question: String) : AcceptanceCriterionRepairMutation
 
-  data object RequireFinalAudit : AcceptanceCriterionRepairMutation
-
   data class Reserve(val reservationId: String) : AcceptanceCriterionRepairMutation
 
   data class RepairCompleted(
@@ -66,21 +63,13 @@ sealed interface AcceptanceCriterionRepairMutation {
   ) : AcceptanceCriterionRepairMutation
 
   data class Outcome(val outcome: AcceptanceCriterionRepairOutcome) : AcceptanceCriterionRepairMutation
-
-  data class FinalAudit(
-    val auditedRefs: Set<String>,
-    val regressedRefs: Set<String>,
-    val digest: String,
-    val treeDigest: String,
-    val checkpointId: String,
-    val dependencies: List<AcceptanceCriterionRepairDependency>? = null,
-  ) : AcceptanceCriterionRepairMutation
 }
 
 enum class AcceptanceCriterionRepairRefusal(val wireValue: String) {
   OWNER_CHANGED("owner_changed"),
   EXPECTED_STATE_CHANGED("expected_state_changed"),
   IDENTITY_CHANGED("identity_changed"),
+  SPEC_SOURCE_CHANGED("spec_source_changed"),
   INVALID_TRANSITION("invalid_transition"),
   AUDIT_BINDING_CHANGED("audit_binding_changed"),
   UNSAFE_LEGACY_ADOPTION("unsafe_legacy_adoption"),
@@ -149,10 +138,9 @@ class AcceptanceCriterionRepairRunState internal constructor(
       }
       if (current == null) {
         val outcome =
-          if (state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
-            "Final full source audit accepted. Tests, build, and project-quality work remain in their later phases."
-          } else if (state.finalAuditRequired) {
-            "Focused queue is empty; the final full source audit is required before source acceptance."
+          if (state.stage == AcceptanceCriterionRepairStage.ACCEPTED) {
+            "Every acceptance criterion is accepted. Tests, build, and project-quality work remain in their later " +
+              "phases."
           } else {
             "Audit the full authored acceptance set against current source."
           }
@@ -172,7 +160,7 @@ class AcceptanceCriterionRepairRunState internal constructor(
       return "mode=${state.mode.wireValue}; stage=${state.stage.wireValue}; criterion $identity; " +
         "retained failures: $failures of ${AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES}; " +
         "remaining failures: $remaining; queue position: ${queuePosition ?: "unavailable"} of ${authoredQueue.size}; " +
-        "live cycle: ${reserved ?: "none"}; final audit required: ${state.finalAuditRequired}; " +
+        "live cycle: ${reserved ?: "none"}; " +
         "authored criterion: ${criterion.originalText}; latest gap: $gap" +
         state.pendingClarificationQuestion?.let { "; read-only clarification: $it" }.orEmpty()
     }

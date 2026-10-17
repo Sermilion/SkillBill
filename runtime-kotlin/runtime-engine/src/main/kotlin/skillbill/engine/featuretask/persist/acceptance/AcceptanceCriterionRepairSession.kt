@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunStat
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import java.nio.file.Path
 
@@ -25,7 +26,7 @@ internal class AcceptanceCriterionRepairSession(
 
   fun start(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? = recorder.start(this, phase)
 
-  fun complete(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? = recorder.complete(this, phase)
+  fun complete(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.complete(this, phase)
 
   override fun settleUnsuccessfulRepair(
     phase: FeatureTaskRuntimePhaseStateRequest,

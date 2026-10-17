@@ -27,7 +27,6 @@ import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -140,7 +139,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
 
   private class AuditOutputView(
     private val remediation: PhaseCheckpointRemediationContext,
-    private val settlement: PhaseOutputSettlementContext,
+    settlement: PhaseOutputSettlementContext,
     private val acceptedRun: PhaseRun,
   ) : OutputView(settlement),
     PhaseAuditOutputContext {
@@ -190,17 +189,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       attested: NormalizedFeatureTaskRuntimePhaseOutput,
       outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       progressRejection: String?,
-      noChangePause: FeatureTaskRuntimeNoChangePause?,
     ): AttemptResult? {
       val checked = capture.also { check(it.run === acceptedRun) }
-      if (noChangePause != null) {
-        return FeatureTaskRuntimeRunLoopAuditSettlement.settleNoChangeRound(
-          settlement,
-          checked,
-          attested,
-          noChangePause,
-        )
-      }
       return FeatureTaskRuntimeRunLoopAuditSettlement.settleCompletedRound(
         remediation,
         checked,

@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.hydration
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
+import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
@@ -34,6 +35,7 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePlanBundleFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImportSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
@@ -554,21 +556,23 @@ private class GoalChildPlanningImportMatcher(
     artifacts: Map<String, Any?>,
     phaseIds: List<String>,
   ): Boolean {
-    val ledger =
-      (DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.value(artifacts) as? List<*>)
-        ?.mapNotNull { it as? Map<*, *> }
-        ?: return false
-    if (ledger.size < phaseIds.size) return false
-    return ledger.take(phaseIds.size).withIndex().all { (index, entry) ->
-      listOf(
-        (entry["action"] as? String)?.let(FeatureTaskRuntimePhaseLedgerAction::fromWire) ==
-          FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
-        (entry["sequence_number"] as? Number)?.toInt() == index,
-        entry[SharedPayloadKeys.PHASE_ID] == phaseIds[index],
-        (entry["attempt_count"] as? Number)?.toInt() == 1,
-        entry["resolved_agent_id"] == null,
-      ).all { it }
-    }
+    val ledger = decodePhaseLedger(artifacts)
+    val firstSequence = ledger.firstOrNull()?.sequenceNumber ?: return false
+    val admissibleWindow =
+      ledger.size <= FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT &&
+        (firstSequence == 0 || ledger.size == FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+    val consecutive =
+      ledger.withIndex().all { (index, entry) ->
+        entry.sequenceNumber.toLong() == firstSequence.toLong() + index
+      }
+    if (!admissibleWindow || !consecutive) return false
+    val retainedImport = ledger.takeWhile { it.sequenceNumber < phaseIds.size }
+    return (firstSequence > 0 || retainedImport.size == phaseIds.size) &&
+      retainedImport.all { entry ->
+        entry.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+          entry.phaseId == phaseIds[entry.sequenceNumber] &&
+          entry.attemptCount == 1 && entry.resolvedAgentId == null
+      }
   }
 
   private fun stepsSettled(

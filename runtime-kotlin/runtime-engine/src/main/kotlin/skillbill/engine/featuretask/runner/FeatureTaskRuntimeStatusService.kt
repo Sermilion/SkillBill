@@ -204,11 +204,6 @@ class FeatureTaskRuntimeStatusService(
       listOfNotNull(
         current?.let { criterionBudgetExplanation(state, it.canonicalRef, it.originalAlias) },
         criterionRepairStageExplanation(state),
-        when {
-          state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED -> "Source acceptance recorded"
-          state.finalAuditRequired -> "Final full source audit required"
-          else -> "Final full source audit remains required after focused work"
-        },
         "Source acceptance is separate from later tests, build, and project-quality checks",
       ).joinToString("; ")
     val gap = current?.evidenceRef?.takeUnless { it == state.specDigest }
@@ -253,8 +248,7 @@ class FeatureTaskRuntimeStatusService(
         AcceptanceCriterionRepairStage.REPAIR_RESERVED -> "Focused repair cycle reserved"
         AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
           "Repair completed; targeted verification required"
-        AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED -> "Final full source audit required now"
-        AcceptanceCriterionRepairStage.FINAL_ACCEPTED -> "Final full source audit accepted"
+        AcceptanceCriterionRepairStage.ACCEPTED -> "Every acceptance criterion accepted; source acceptance recorded"
         AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> "Criterion exhausted; source repair cannot advance"
       }
     }

@@ -8,8 +8,6 @@ import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairMutatio
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRefusal
 import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairWriteResult
 import skillbill.engine.featuretask.model.audit.ExpectedAcceptanceCriterionRepairState
-import skillbill.engine.featuretask.phase.core.decodePhaseLedger
-import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
@@ -19,7 +17,6 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -38,7 +35,7 @@ import skillbill.contracts.workflow.featuretask.AcceptanceCriterionRepairPayload
 
 class AcceptanceCriterionRepairPersistenceTest {
   @Test
-  fun `restart replays targeted failure once and final regression retains the same criterion budget`() {
+  fun `restart replays targeted failure once and the third unsuccessful cycle blocks the criterion`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
         val initial = f.discover(worker)
@@ -58,10 +55,10 @@ class AcceptanceCriterionRepairPersistenceTest {
             f.write(worker, verifying, AcceptanceCriterionRepairMutation.Outcome(outcome), evidence),
           ).state
         f.assertReplayAfterRestart(worker, verifying, failed, outcome, evidence)
-        var state = closeAndReopen(f, worker, failed, outcome)
+        var state = failed
         assertEquals(1, state.unsuccessfulTotals["AC-001"])
         assertEquals("AC-001", state.currentCriterionRef)
-        for (index in 3..4) {
+        for (index in 2..3) {
           state =
             assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
               f.write(worker, state, AcceptanceCriterionRepairMutation.Reserve("reservation-$index")),
@@ -88,10 +85,9 @@ class AcceptanceCriterionRepairPersistenceTest {
           f.write(
             worker,
             state,
-            AcceptanceCriterionRepairMutation.Reserve("reservation-5"),
+            AcceptanceCriterionRepairMutation.Reserve("reservation-4"),
           ),
         )
-        assertEquals(2, state.sourceTransitions.size)
         assertTrue(f.warnings.any { "record_kind=replay" in it && "owner_generation=" in it })
       }
     }
@@ -138,58 +134,6 @@ class AcceptanceCriterionRepairPersistenceTest {
       ),
     )
     assertEquals(beforeReplay, f.snapshot().toRecord())
-  }
-
-  private fun closeAndReopen(
-    f: SerialRepairSqliteFixture,
-    worker: AcquiredFeatureTaskRuntimeWorker,
-    failed: AcceptanceCriterionRepairState,
-    outcome: AcceptanceCriterionRepairOutcome,
-  ): AcceptanceCriterionRepairState {
-    val verifying = f.prepareRepair(worker, failed, "reservation-2")
-    val success =
-      outcome.copy(
-        outcomeId = "success-2",
-        reservationId = "reservation-2",
-        digest =
-          "e".repeat(
-            64,
-          ),
-        kind = AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,
-        evidenceRef = "targeted:2",
-      )
-    val closed =
-      assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
-        f.write(
-          worker,
-          verifying,
-          AcceptanceCriterionRepairMutation.Outcome(success),
-          f.audit(),
-        ),
-      ).state
-    assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, closed.stage)
-    assertTrue(decodePhaseRecords(f.snapshot().artifacts).containsKey("audit_implement_fix"))
-    assertTrue(decodePhaseLedger(f.snapshot().artifacts).any { it.phaseId == "audit_implement_fix" })
-    assertEquals(
-      2,
-      decodeImplementationAttemptsFromArtifact(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.value(f.snapshot().artifacts),
-      ).size,
-    )
-    return assertIs<AcceptanceCriterionRepairWriteResult.Committed>(
-      f.write(
-        worker,
-        closed,
-        AcceptanceCriterionRepairMutation.FinalAudit(
-          setOf("AC-001", "AC-002"),
-          setOf("AC-001"),
-          "f".repeat(64),
-          "d".repeat(64),
-          "checkpoint:1",
-        ),
-        f.audit(),
-      ),
-    ).state
   }
 
   @Test
@@ -302,7 +246,7 @@ class AcceptanceCriterionRepairPersistenceTest {
                       staged.artifacts,
                     ),
                   ).toAcceptanceCriterionRepairState("staged")
-                assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, state.stage)
+                assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, state.stage)
                 throw IOException("closure commit rejected")
               }
           }
@@ -349,7 +293,7 @@ class AcceptanceCriterionRepairPersistenceTest {
         )
         f.sourceDigest = "e".repeat(64)
         assertEquals(
-          AcceptanceCriterionRepairRefusal.IDENTITY_CHANGED,
+          AcceptanceCriterionRepairRefusal.SPEC_SOURCE_CHANGED,
           assertIs<AcceptanceCriterionRepairWriteResult.Refused>(f.write(worker, state, mutation)).reason,
         )
         assertEquals(before, f.snapshot().toRecord())

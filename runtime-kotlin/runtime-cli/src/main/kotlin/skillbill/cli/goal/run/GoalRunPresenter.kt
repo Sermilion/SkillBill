@@ -14,6 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.GoalRunnerStopReport
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 class GoalRunPresenter(
@@ -204,6 +205,10 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
           append(singleLineBounded(url))
         }
         appendLine()
+        report.monitoringSummary?.takeIf(String::isNotBlank)?.let { summary ->
+          appendLine("Monitoring:")
+          appendLine(normalizeTerminalEvidence(summary))
+        }
       }
     is GoalRunnerRunReport.CompletedNoChange ->
       buildString {
@@ -259,10 +264,36 @@ private fun stoppedText(report: GoalRunnerRunReport.Stopped): String =
       }
     append("goal ${report.issueKey}: $verb")
     append(" at subtask ${report.stop.subtaskId}")
-    append(" — ")
-    append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
-    appendLine()
+    if (isGoalMonitorStop(report.stop)) {
+      appendLine()
+      appendLine("Monitoring details:")
+      appendLine(normalizeTerminalEvidence(report.stop.blockedReason.ifBlank { reason }))
+    } else {
+      append(" — ")
+      append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
+      appendLine()
+    }
   }
+
+private fun isGoalMonitorStop(stop: GoalRunnerStopReport): Boolean =
+  stop.subtaskId == 0 &&
+    stop.lastResumableStep in
+    setOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+    )
+
+private fun normalizeTerminalEvidence(value: String): String =
+  buildString(value.length) {
+    value.forEach { character ->
+      when {
+        character == '\n' -> append(character)
+        character == '\r' -> append('\n')
+        character.isISOControl() -> append(' ')
+        else -> append(character)
+      }
+    }
+  }.trim()
 
 internal fun singleLineBounded(
   value: String,

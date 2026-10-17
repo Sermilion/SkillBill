@@ -23,7 +23,8 @@ internal class AcceptanceAuditVerdictRule(
       return FeatureTaskRuntimeVerdict.ADVANCE
     }
     return when (wireVerdict) {
-      FeatureTaskRuntimeVerdict.SATISFIED, FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED -> wireVerdict
+      FeatureTaskRuntimeVerdict.SATISFIED, FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED ->
+        FeatureTaskRuntimeVerdict.SATISFIED
       FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED -> FeatureTaskRuntimeVerdict.ADVANCE
       else -> fallbackVerdict(wireVerdict)
     }

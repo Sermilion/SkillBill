@@ -65,9 +65,10 @@ internal class InMemoryCommitPush(
     paths: List<String>,
     issueKey: String,
   ): String? {
-    if (paths.isEmpty()) return null
-    val stage = git.stagePaths(repoRoot, paths)
-    if (stage !is WorkflowGitOperationResult.Ok) return "Could not stage pending changes: ${stage.error}"
+    if (paths.isNotEmpty()) {
+      val stage = git.stagePaths(repoRoot, paths)
+      if (stage !is WorkflowGitOperationResult.Ok) return "Could not stage pending changes: ${stage.error}"
+    }
     return when (val commit = git.createCommit(repoRoot, "$issueKey: Prepare changes for pull request")) {
       is WorkflowGitCommitResult.Failed -> "Could not commit pending changes: ${commit.error}"
       is WorkflowGitCommitResult.Committed, WorkflowGitCommitResult.NothingToCommit -> null

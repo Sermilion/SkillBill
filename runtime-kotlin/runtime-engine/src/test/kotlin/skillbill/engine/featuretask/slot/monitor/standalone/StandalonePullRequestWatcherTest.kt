@@ -102,7 +102,7 @@ class StandalonePullRequestWatcherTest {
 
     val outcome = watch(expected = REPAIRED, superseded = setOf(PUBLISHED))
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(REPAIRED), outcome)
     assertEquals(2, sleeps.size)
   }
 
@@ -172,7 +172,7 @@ class StandalonePullRequestWatcherTest {
     reportedSequence += reports(check("build", CheckBucket.PENDING))
     reportedSequence += reports(check("build", CheckBucket.PASS))
 
-    assertEquals(PullRequestCiOutcome.Passed, watch())
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch())
     assertEquals(1, sleeps.size)
     assertEquals(listOf(listOf("build")), running)
   }
@@ -193,7 +193,7 @@ class StandalonePullRequestWatcherTest {
     reportedSequence += reports(check("docs", CheckBucket.SKIPPING), check("e2e", CheckBucket.PENDING))
     reportedSequence += reports(check("docs", CheckBucket.SKIPPING), check("e2e", CheckBucket.CANCEL))
 
-    assertEquals(PullRequestCiOutcome.Passed, watch())
+    assertEquals(PullRequestCiOutcome.Passed(PUBLISHED), watch())
     assertEquals(1, sleeps.size, "a skipped check must not pass while another is pending")
   }
 

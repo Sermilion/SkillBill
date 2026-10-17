@@ -223,7 +223,7 @@ internal class RuntimeOwnedGateSettlement(
       recorder = context.recorder,
       phaseState = phaseState,
       inMemoryOutput = inMemoryOutput,
-    )
+    ) == RequiredPhaseWrite.Acknowledged
   }
 }
 

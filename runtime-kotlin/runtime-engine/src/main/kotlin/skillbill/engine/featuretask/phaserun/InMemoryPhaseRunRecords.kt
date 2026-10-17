@@ -113,11 +113,11 @@ internal class InMemoryPhaseRunRecords private constructor(
     return RequiredPhaseWrite.Acknowledged
   }
 
-  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
+  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
     request.normalizedOutput?.output?.value?.let { acceptedOutputs[request.phaseId] = it }
-    val recorded = recordPhaseState(request)
-    if (recorded) phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
-    return recorded
+    recordPhaseState(request)
+    phaseLedger += phaseLedgerEntry(FeatureTaskRuntimePhaseLedgerAction.COMPLETE, request)
+    return RequiredPhaseWrite.Acknowledged
   }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean = true
@@ -129,7 +129,7 @@ internal class InMemoryPhaseRunRecords private constructor(
     phaseRecords.mapValues { (_, record) -> record.detached() }.toMap()
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
-    recordCompletedPhase(completion.phaseState)
+    recordCompletedPhase(completion.phaseState) == RequiredPhaseWrite.Acknowledged
 
   override fun persistReviewGenerationInvalidation(
     workflowId: String,

@@ -54,6 +54,30 @@ Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name
 forms run `skill-bill operation <name>`, relaying one operator confirmation.
 `skill-bill goal status` stays CLI-only; no skill wraps it.
 
+## Blocked-phase operator decisions
+
+To resolve a blocked child phase, use
+`skill-bill feature-task retry-blocked <workflow-id> --phase <phase> --reason <reason>`.
+The reason applies only to that reopened phase. When the operator also supplies a
+decision that later phases must retain, pass `--mandate <decision>`. The runtime
+appends it to the child workflow's existing `mandates_and_overrides` in the same
+transaction that reopens the phase. Later phases and resumes receive the mandate
+through their governed briefings. This does not change the spec, acceptance
+criteria, comparison baseline, or other workflows. A retry without `--mandate`
+does not promote its reason to a run mandate.
+
+## Confirmed no-change claims
+
+A validated implementation no-change claim still requires the independent source
+audit. Once that audit confirms the claim, the child continues through review and
+its selected quality gate without operator approval. The audit keeps its
+`no_change_confirmed` output while routing it as satisfied for the existing review
+entry gate. Malformed or rejected claims retain the audit repair path.
+
+An undecided pause recorded by an older runtime resumes its child through audit
+and the remaining phases. Its retained claim, audit evidence and pause artifact
+stay readable. Previously recorded operator decisions retain their behavior.
+
 ## Model selection at launch
 
 Resume uses the recorded per-step assignment. A later alias, remap, or default
@@ -141,9 +165,7 @@ Monitoring counts distinct published repair commits only after CI fails on those
 commits. Resume reconstructs qualified failures from retained runtime producer,
 completion, publication, and Git evidence. Repeated observations of a commit keep
 one failure. A later repair replacing the latest phase record does not erase a
-previously qualified failure. Missing or contradictory history keeps the existing
-recovery block and never becomes a zero count. Initial CI failure, pending checks,
-and merge conflicts do not consume this budget.
+previously qualified failure. Missing or contradictory history stays unknown, does not add a failure, and does not exhaust the cap. Missing monitor output blocks cap-sensitive resume. Initial CI failure, pending checks, unassociated observations, and merge conflicts do not consume this budget. Green checks complete monitoring only when the observed PR head matches the latest completed pushed publication.
 
 Before choosing a host or container for CI repair, read the applicable `AGENTS.md`
 files, `CONTRIBUTING.md`, the failing workflow, and any setup scripts it calls.
@@ -217,6 +239,11 @@ An empty check report keeps goal monitoring active until checks arrive and pass
 or the monitor reaches its timeout. It never counts as CI success. A timeout or
 exhausted repair loop reports a blocked goal rather than completion.
 
+A long-running child's phase ledger retains its latest bounded window. Resume
+checks planning-import entries that remain in that window alongside the durable
+planning provenance and completed phase records. Normal removal of older ledger
+entries does not require replan or discard the child's execution progress.
+
 ## Edited subtask specs on resume
 
 A full goal launch checks unfinished subtask specs against their saved planning hashes
@@ -244,13 +271,12 @@ outcome blocks that criterion. Explicit operator resume of the blocked goal rese
 the active failure counts to zero and grants three new outcomes per criterion,
 while retaining prior outcome identities and source evidence. An ordinary state
 reload does not reset the budget. A successful outcome closes source work for it
-without erasing earlier failures. The final full source audit checks the whole
-authored set. If that audit finds a regression, the criterion reopens with its
-retained failure budget. An ambiguous regression gets the existing read-only
-prose follow-up before reopening; it does not require a phrase or agent-authored
-identifier protocol.
+without erasing earlier failures.
 
-An empty focused queue still requires the final full source audit. Source
+Only the initial discovery audits the whole authored set. After it, the runtime
+settles one criterion at a time and trusts each settled result: an accepted
+criterion is never re-checked, and no full audit runs again. When the focused
+queue is empty, every criterion is accepted and the run moves on to review. Source
 acceptance does not say that tests, build, or other project-quality work ran.
 Those obligations stay in their existing review, build, and validation phases.
 Status and detail readers report committed facts only. Older aggregate attempts
@@ -258,6 +284,11 @@ without criterion attribution remain unavailable, not zero. Starting prospective
 per-criterion accounting for such a workflow requires a separate explicit
 operator decision. Audit, repair planning, and source repair do not run builds or
 tests.
+
+When a completed phase cannot be admitted, the block report retains the rejected
+completion's reason and attempt. A changed or unreadable bound spec names its
+path and preserves the producer output for recovery. It does not accept the
+audit against a different spec or erase earlier criterion outcomes.
 
 ## Durable planning migration
 

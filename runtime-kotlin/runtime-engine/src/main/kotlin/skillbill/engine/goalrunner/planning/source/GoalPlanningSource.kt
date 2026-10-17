@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.planning.source
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.workflow.decomposition.findCompletedPlanWorkflowId
 import skillbill.config.model.CompactionSettings
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
@@ -271,10 +270,7 @@ class PlanWorkflowGoalPlanningSource(
 
   private fun linkedPlan(scope: PlanningScope): LinkedPlan? =
     database.read { unitOfWork ->
-      unitOfWork.workflowStates.findCompletedPlanWorkflowId(
-        scope.state.manifest.issueKey,
-        scope.identity.repositoryIdentity,
-      )?.let { workflowId ->
+      unitOfWork.workflowStates.findLinkedSubtaskPlanWorkflowId(scope.identity, scope.pending)?.let { workflowId ->
         linkedPlanOf(workflowId, unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId))
       }
     }

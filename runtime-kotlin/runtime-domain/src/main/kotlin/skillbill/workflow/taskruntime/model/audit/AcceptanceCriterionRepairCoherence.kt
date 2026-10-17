@@ -103,8 +103,7 @@ internal object AcceptanceCriterionRepairCoherence {
     if (!awaiting && hasEvidence) return false
     if (reserved != (state.reservation != null)) return false
     if (readonly && (state.reservation != null || state.pendingAuditRefs.isEmpty())) return false
-    val finalFlag = state.finalAuditRequired == (state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED)
-    return finalFlag && stageIsCoherent(state) && reservationIsCoherent(state)
+    return stageIsCoherent(state) && reservationIsCoherent(state)
   }
 
   private fun stageIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
@@ -113,8 +112,7 @@ internal object AcceptanceCriterionRepairCoherence {
       AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> readOnlyAuditIsRequired(state)
       AcceptanceCriterionRepairStage.REPAIR_RESERVED -> reservedIsCoherent(state)
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION -> awaitingStageIsCoherent(state)
-      AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED -> finalAuditIsRequired(state)
-      AcceptanceCriterionRepairStage.FINAL_ACCEPTED -> finalAuditIsAccepted(state)
+      AcceptanceCriterionRepairStage.ACCEPTED -> acceptedIsCoherent(state)
       AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> budgetIsBlocked(state)
     }
 
@@ -124,12 +122,9 @@ internal object AcceptanceCriterionRepairCoherence {
   private fun awaitingStageIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
     awaitingIsCoherent(state) && !hasExhaustedBudget(state)
 
-  private fun finalAuditIsRequired(state: AcceptanceCriterionRepairState): Boolean =
-    state.mode == AcceptanceCriterionRepairMode.FINAL_FULL && state.unresolvedQueue.isEmpty()
-
-  private fun finalAuditIsAccepted(state: AcceptanceCriterionRepairState): Boolean =
-    state.mode == AcceptanceCriterionRepairMode.FINAL_FULL && state.unresolvedQueue.isEmpty() &&
-      state.finalAudits.lastOrNull()?.digest == state.finalAuditDigest && state.finalAuditDigest != null
+  private fun acceptedIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
+    state.mode == AcceptanceCriterionRepairMode.ACCEPTED && state.unresolvedQueue.isEmpty() &&
+      state.pendingAuditRefs.isEmpty()
 
   private fun budgetIsBlocked(state: AcceptanceCriterionRepairState): Boolean =
     state.mode == AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED && state.currentCriterionRef != null &&
@@ -152,7 +147,7 @@ internal object AcceptanceCriterionRepairCoherence {
 
   private fun hasNoRepairHistory(state: AcceptanceCriterionRepairState): Boolean =
     state.outcomes.isEmpty() && state.proseAudits.isEmpty() && state.sourceTransitions.isEmpty() &&
-      state.finalAudits.isEmpty() && state.pendingAuditRefs.isEmpty()
+      state.pendingAuditRefs.isEmpty()
 
   private fun awaitingIsCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val evidence = !state.completedRepairEvidenceRef.isNullOrBlank() && !state.admittedCheckpointId.isNullOrBlank()
@@ -214,7 +209,7 @@ internal object AcceptanceCriterionRepairCoherence {
   }
 
   private fun historyIsCoherent(state: AcceptanceCriterionRepairState): Boolean =
-    transitionsAreCoherent(state) && auditsAreCoherent(state) && currentSourcesAreCoherent(state)
+    transitionsAreCoherent(state) && currentSourcesAreCoherent(state)
 
   private fun transitionsAreCoherent(state: AcceptanceCriterionRepairState): Boolean {
     val history = state.sourceTransitions
@@ -285,18 +280,8 @@ internal object AcceptanceCriterionRepairCoherence {
     state: AcceptanceCriterionRepairState,
   ): Boolean {
     val closed = t.fromDisposition == AcceptanceCriterionSourceDisposition.SOURCE_CLOSED
-    return closed && (finalAuditReopeningIsCoherent(t, state) || proseAuditReopeningIsCoherent(t, state))
+    return closed && proseAuditReopeningIsCoherent(t, state)
   }
-
-  private fun finalAuditReopeningIsCoherent(
-    transition: AcceptanceCriterionRepairSourceTransition,
-    state: AcceptanceCriterionRepairState,
-  ): Boolean =
-    state.finalAudits.singleOrNull { it.digest == transition.producingId }?.let {
-      transition.criterionRef in it.regressedRefs && transition.producingDigest == it.digest &&
-        transition.revision == it.revision && transition.treeDigest == it.treeDigest &&
-        transition.checkpointId == it.checkpointId && transition.evidenceRef == it.digest
-    } == true
 
   private fun proseAuditReopeningIsCoherent(
     transition: AcceptanceCriterionRepairSourceTransition,
@@ -307,46 +292,6 @@ internal object AcceptanceCriterionRepairCoherence {
         transition.revision == it.revision && transition.treeDigest == it.treeDigest &&
         transition.checkpointId == it.checkpointId && transition.evidenceRef == it.prose
     } == true
-
-  private fun auditsAreCoherent(state: AcceptanceCriterionRepairState): Boolean {
-    val history = state.finalAudits
-    val bounded = history.size <= AcceptanceCriterionRepairState.MAX_REPAIR_FINAL_AUDITS
-    val unique =
-      history.map {
-        it.digest
-      }.distinct().size == history.size && history.map { it.revision }.distinct().size == history.size
-    val ordered = history.map { it.revision } == history.map { it.revision }.sorted()
-    return bounded && unique && ordered && history.all { auditIsCoherent(it, state) }
-  }
-
-  private fun auditIsCoherent(
-    audit: AcceptanceCriterionRepairFinalAudit,
-    state: AcceptanceCriterionRepairState,
-  ): Boolean {
-    val identity =
-      audit.catalogId == state.catalogId && audit.executionId == state.executionId &&
-        audit.specDigest == state.specDigest
-    val refs =
-      state.criteria.filter {
-        it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE
-      }.map { it.canonicalRef }.sorted()
-    val coverage =
-      audit.auditedRefs == refs && audit.regressedRefs.distinct().size == audit.regressedRefs.size &&
-        refs.containsAll(
-          audit.regressedRefs,
-        )
-    val evidence =
-      audit.revision in 1..state.revision && audit.digest.isDigest() &&
-        audit.treeDigest.isDigest() && audit.checkpointId.isNotBlank()
-    val reopened =
-      audit.regressedRefs.all {
-          ref ->
-        state.sourceTransitions.any {
-          it.criterionRef == ref && it.revision == audit.revision && it.producingId == audit.digest
-        }
-      }
-    return identity && coverage && evidence && reopened
-  }
 
   private fun currentSourcesAreCoherent(state: AcceptanceCriterionRepairState): Boolean =
     state.criteria.all { criterion ->

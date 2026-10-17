@@ -262,6 +262,9 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
 
     assertContains(prompt, "## Subtask Sizing")
     assertContains(prompt, "## Spec Format Contract")
+    assertContains(prompt, "A criterion MUST NOT require tests.")
+    assertContains(prompt, "tests are never acceptance criteria and")
+    assertFalse(prompt.contains("a named test exists"), "a test must never be offered as an acceptance criterion")
     assertContains(prompt, "Spec bundle planning requirement")
     assertContains(prompt, "Write nothing outside that")
     assertContains(prompt, "Do not write an Implementation")
@@ -382,12 +385,12 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Use the existing satisfied verdict",
+      "pass verdict \"satisfied\" when the inspected production scope is met",
       "the source acceptance verdict",
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Final source acceptance is required before downstream review",
+      "Every criterion must be accepted before downstream review",
       "the audit-specific advance rule",
     )
     assertFalse(auditPrompt.contains("exactly `[]`"), "audit must not demand a literal empty list")

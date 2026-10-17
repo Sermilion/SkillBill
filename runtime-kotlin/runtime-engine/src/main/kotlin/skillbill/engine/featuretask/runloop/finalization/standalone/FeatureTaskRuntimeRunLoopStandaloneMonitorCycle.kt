@@ -51,14 +51,14 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
             "${target.targetKey} was merged, so monitoring is complete.",
           ),
         )
-      PullRequestCiOutcome.Passed ->
+      is PullRequestCiOutcome.Passed ->
         complete(
           run,
           iteration,
           monitorOutput(
             run,
             "CI passed for the pull request.",
-            "CI passed on ${target.targetKey} at ${ledger.acknowledgedHeadSha}: every check passed, was skipped, " +
+            "CI passed on ${target.targetKey} at ${outcome.headSha}: every check passed, was skipped, " +
               "or was cancelled.",
           ),
         )

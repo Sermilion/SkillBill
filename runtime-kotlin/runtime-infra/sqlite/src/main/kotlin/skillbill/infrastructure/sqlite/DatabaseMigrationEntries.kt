@@ -18,7 +18,6 @@ import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMig
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
-import skillbill.infrastructure.sqlite.core.migration.area.acceptedrepair.rewriteAcceptedAcceptanceCriterionRepairStates
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
@@ -824,10 +823,5 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 59,
       name = "record-standalone-monitor-target",
       operation = ::recordStandaloneMonitorTarget,
-    ),
-    DatabaseMigration(
-      version = 60,
-      name = "rewrite-accepted-acceptance-criterion-repair-state",
-      operation = ::rewriteAcceptedAcceptanceCriterionRepairStates,
     ),
   )

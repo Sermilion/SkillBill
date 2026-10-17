@@ -229,8 +229,8 @@ class IdeStatusProjector(
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
-    val planningStep = goalPlanningStep(planning, preliminaryLifecycle).takeIf { childContext.currentPhaseId == null }
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
+    val planningStep = goalPlanningStep(planning, lifecycle, childContext.currentPhaseId)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, completionRecorded, lifecycle)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection, completionRecorded)
     val pauseReason =
@@ -311,10 +311,11 @@ class IdeStatusProjector(
 
   private fun goalPlanningStep(
     planning: IdeStatusPlanning?,
-    preliminaryLifecycle: IdeStatusLifecycleState,
+    lifecycle: IdeStatusLifecycleState,
+    childPhaseId: String?,
   ): IdeStatusPlanning? =
     planning?.takeIf {
-      it.state != GoalPlanningStatusState.PREPARED && !preliminaryLifecycle.isSettled()
+      it.state != GoalPlanningStatusState.PREPARED && !lifecycle.isSettled() && childPhaseId == null
     }
 
   private fun goalPauseRequested(projection: GoalRunnerStatusProjection?): Boolean =

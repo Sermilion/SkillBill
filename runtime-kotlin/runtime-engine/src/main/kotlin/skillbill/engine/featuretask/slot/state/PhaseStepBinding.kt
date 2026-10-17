@@ -126,6 +126,8 @@ internal interface PhaseCiObservation {
     repoRoot: Path,
     branch: String,
     onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
+    expectedHeadSha: String? = null,
+    onInconclusive: (String) -> Unit = {},
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
@@ -231,7 +233,7 @@ internal sealed interface StandalonePublication {
 }
 
 internal sealed interface PullRequestCiOutcome {
-  data object Passed : PullRequestCiOutcome
+  data class Passed(val headSha: String) : PullRequestCiOutcome
 
   data object Merged : PullRequestCiOutcome
 

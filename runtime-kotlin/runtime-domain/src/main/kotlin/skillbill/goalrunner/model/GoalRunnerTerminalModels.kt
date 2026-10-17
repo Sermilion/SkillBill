@@ -136,6 +136,7 @@ sealed interface GoalRunnerRunReport {
     val unaddressedSeverityBreakdown: Map<String, Int> = emptyMap(),
     val featureName: String? = null,
     override val parentWorkflowId: String? = null,
+    val monitoringSummary: String? = null,
   ) : GoalRunnerRunReport
 
   /** The goal finished with no subtask commit: every subtask was accepted as no-change, so there is no PR. */

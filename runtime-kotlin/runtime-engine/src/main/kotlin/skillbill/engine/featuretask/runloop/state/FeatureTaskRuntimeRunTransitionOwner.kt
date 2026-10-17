@@ -199,9 +199,9 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     phaseState: FeatureTaskRuntimePhaseStateRequest,
     inMemoryOutput: FeatureTaskRuntimePhaseOutput,
     qualifiedFailedRepairSha: String? = null,
-  ): Boolean {
+  ): RequiredPhaseWrite {
     val persisted = recorder.recordCompletedPhase(phaseState)
-    if (persisted) {
+    if (persisted == RequiredPhaseWrite.Acknowledged) {
       progress.reserveReviewPass(phaseState.reviewPassNumber)
       progress.recordCompleted(inMemoryOutput, qualifiedFailedRepairSha)
     }
@@ -252,10 +252,10 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     clearPendingReentry: Boolean,
   ): Boolean {
     val persisted = recorder.recordCompletedPhase(phaseState)
-    if (persisted) {
+    if (persisted == RequiredPhaseWrite.Acknowledged) {
       applyCarriedForwardInMemoryCompletion(inMemoryOutput, clearPendingReentry)
     }
-    return persisted
+    return persisted == RequiredPhaseWrite.Acknowledged
   }
 
   fun recordSyntheticUpstreamCompletion(output: FeatureTaskRuntimePhaseOutput) {

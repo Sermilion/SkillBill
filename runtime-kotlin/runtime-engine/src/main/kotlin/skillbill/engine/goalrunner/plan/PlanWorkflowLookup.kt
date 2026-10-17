@@ -13,15 +13,16 @@ class PlanWorkflowLookup(
   fun lookup(
     issueKey: String,
     repositoryIdentity: String,
-  ): FeatureTaskContinuationLookupResult = lookupService.lookupPlan(issueKey, repositoryIdentity)
+    workflowId: String?,
+  ): FeatureTaskContinuationLookupResult = lookupService.lookupPlan(issueKey, repositoryIdentity, workflowId)
 
   fun lookupAfterCrashRecovery(
     issueKey: String,
     repositoryIdentity: String,
   ): FeatureTaskContinuationLookupResult {
-    val found = lookup(issueKey, repositoryIdentity)
+    val found = lookup(issueKey, repositoryIdentity, null)
     if (found !is FeatureTaskContinuationLookupResult.AlreadyRunning) return found
     crashReconciler.reconcile(found.candidate.workflowId)
-    return lookup(issueKey, repositoryIdentity)
+    return lookup(issueKey, repositoryIdentity, null)
   }
 }

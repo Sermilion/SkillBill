@@ -17,7 +17,6 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangeClaimValidation
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
@@ -60,20 +59,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
       attested,
       outputMap,
       null,
-      noChangePauseFor(auditContext, outputMap),
     )
-  }
-
-  private fun noChangePauseFor(
-    context: PhaseStepOutputContext,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): FeatureTaskRuntimeNoChangePause? {
-    if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
-      return null
-    }
-    if (outputMap[SharedPayloadKeys.VERDICT] != FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED.wireValue) return null
-    val valid = claimValidation(context) as? FeatureTaskRuntimeNoChangeClaimValidation.Valid ?: return null
-    return FeatureTaskRuntimeNoChangePause.fromClaim(valid.claim, auditSummary = auditProseValue(outputMap).orEmpty())
   }
 
   private fun noChangeRoundRejection(
@@ -137,7 +123,8 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     if (prose != null) {
       val produced =
         JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
-      produced[SharedPayloadKeys.VALUE] = prose
+      produced[SharedPayloadKeys.VALUE] =
+        listOfNotNull(auditProseValue(normalizedOutput.envelopeWireMap()), prose).joinToString("\n\n")
       envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
     }
     return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))

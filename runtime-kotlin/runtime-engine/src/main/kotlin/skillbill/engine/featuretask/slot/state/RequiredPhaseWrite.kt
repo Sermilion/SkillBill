@@ -5,6 +5,7 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionCon
 enum class RequiredPhaseWriteKind(val wireValue: String) {
   START("start"),
   BRIEFING("briefing"),
+  COMPLETION("completion"),
 }
 
 sealed interface RequiredPhaseWrite {
@@ -16,8 +17,10 @@ sealed interface RequiredPhaseWrite {
     val phaseId: String,
     val attempt: Int,
     val handoffRejection: InvalidFeatureTaskRuntimeHandoffProjectionContext? = null,
+    val detail: String? = null,
   ) : RequiredPhaseWrite {
     val message: String =
-      "Required ${writeKind.wireValue} write rejected for phase '$phaseId', attempt $attempt."
+      "Required ${writeKind.wireValue} write rejected for phase '$phaseId', attempt $attempt." +
+        detail?.let { " $it" }.orEmpty()
   }
 }

@@ -241,7 +241,8 @@ internal object AcceptanceCriterionRepairAttemptSettlement {
     context.loopTransitions.applyPersistedPhaseCompletion(output, phase.reviewPassNumber)
     if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
       return PhaseOutcome.blocked(
-        "Acceptance criterion repair exhausted its three unsuccessful outcomes. " + scope.currentCriterionContext,
+        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+          "Other criteria have separate budgets. " + scope.currentCriterionContext,
       )
     }
     return PhaseOutcome.completed(output)

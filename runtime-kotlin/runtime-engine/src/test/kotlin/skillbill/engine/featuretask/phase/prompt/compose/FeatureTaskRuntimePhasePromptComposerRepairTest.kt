@@ -9,9 +9,10 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerRepairTest {
   @Test
-  fun `final audit rechecks previously accepted production criteria`() {
+  fun `audits never re-check criteria an earlier audit accepted`() {
     val auditPrompt = composePromptForPhase("audit")
-    assertContains(auditPrompt, "including criteria previously accepted")
+    assertContains(auditPrompt, "Criteria accepted by an earlier audit stay accepted and are not re-checked.")
+    assertFalse(auditPrompt.contains("including criteria previously accepted"))
     assertTrue(!auditPrompt.contains("prior_gap_memory"))
     assertTrue(!auditPrompt.contains("Prior-gap memory"))
   }
