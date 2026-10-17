@@ -1,6 +1,7 @@
 package skillbill.engine.work.pagination
 
 import skillbill.engine.work.model.IdeStatusQueryWork
+import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.idestatus.model.IdeStatusDurableWorkflowState
 import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusPolicy
@@ -47,8 +48,8 @@ internal fun readStatusWorkItems(
 
 internal fun readStatusStandaloneRecords(
   unitOfWork: UnitOfWork,
-  repositoryIdentity: String,
-  branch: String,
+  repository: IdeStatusRepositoryResolution.Ok,
+  branch: String?,
   observedAt: Instant,
   queryWork: IdeStatusQueryWork?,
 ): List<StandalonePhaseStatusRecord> {
@@ -60,10 +61,11 @@ internal fun readStatusStandaloneRecords(
       val limit = minOf(STATUS_CANDIDATE_PAGE_SIZE, STATUS_CANDIDATE_BUDGET - records.size)
       val page =
         unitOfWork.standalonePhaseStatuses.readEligible(
-          repositoryIdentity,
+          repository.identity,
           branch,
           observedAt,
           StandaloneEligiblePage(limit, after, slice),
+          repository.monitorIdentity,
         )
       queryWork?.page(page.size)
       records += page

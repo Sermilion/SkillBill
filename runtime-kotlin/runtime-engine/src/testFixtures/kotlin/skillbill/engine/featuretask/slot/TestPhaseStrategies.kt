@@ -13,6 +13,10 @@ import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStr
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
@@ -43,6 +47,18 @@ import skillbill.ports.goalrunner.runner.model.CheckBucket
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
+import skillbill.ports.monitor.MonitorCheckSource
+import skillbill.ports.monitor.MonitorPullRequestSource
+import skillbill.ports.monitor.MonitorRepairPublisher
+import skillbill.ports.monitor.model.MonitorCallerRepository
+import skillbill.ports.monitor.model.MonitorFailureLog
+import skillbill.ports.monitor.model.MonitorPublicationRefusal
+import skillbill.ports.monitor.model.MonitorPublicationRequest
+import skillbill.ports.monitor.model.MonitorPublicationResult
+import skillbill.ports.monitor.model.MonitorPullRequestIdentity
+import skillbill.ports.monitor.model.MonitorPullRequestListing
+import skillbill.ports.monitor.model.MonitorPullRequestLookup
+import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -53,6 +69,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 
 fun statusProjectionPhaseStrategies(): PhaseStrategyLookup =
   testPhaseStrategies(
@@ -71,8 +88,10 @@ fun testPhaseStrategies(
   pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
   planFanOutCap: Int = 1,
+  standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
+  val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
   val planFanOut = PlanFanOutStrategy(planFanOutPort, planFanOutCap)
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
   val prCanonical =
@@ -131,6 +150,9 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(prOpus, runner()),
         PhaseStrategyRegistration(monitorCanonical, runner()),
         PhaseStrategyRegistration(monitorOpus, runner()),
+        PhaseStrategyRegistration(standaloneMonitor, runner()),
+        PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(standaloneMonitor), runner()),
+        PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
       ),
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
@@ -168,6 +190,49 @@ object PassingPullRequestChecksLookup : PullRequestChecksLookup {
     prNumber: Int,
   ): PullRequestChecks =
     PullRequestChecks.Reported(listOf(PullRequestCheck("build", CheckBucket.PASS, "https://ci.example/build")))
+}
+
+object UnavailableStandaloneMonitorService {
+  val source: MonitorPullRequestSource =
+    object : MonitorPullRequestSource {
+      override fun callerRepository(callerRoot: Path): MonitorCallerRepository =
+        MonitorCallerRepository.Unavailable("test runs do not reach GitHub")
+
+      override fun pullRequest(
+        repository: MonitorRepositoryIdentity,
+        number: Int,
+      ): MonitorPullRequestLookup = MonitorPullRequestLookup.Failed("test runs do not reach GitHub")
+
+      override fun pullRequests(repository: MonitorRepositoryIdentity): MonitorPullRequestListing =
+        MonitorPullRequestListing.Failed("test runs do not reach GitHub")
+
+      override fun pullRequestsForBranch(
+        repository: MonitorRepositoryIdentity,
+        headRepository: MonitorRepositoryIdentity,
+        branch: String,
+      ): MonitorPullRequestListing = MonitorPullRequestListing.Failed("test runs do not reach GitHub")
+    }
+
+  val service: StandaloneMonitorService =
+    StandaloneMonitorService(
+      source = source,
+      checks =
+        object : MonitorCheckSource {
+          override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
+            PullRequestChecks.Unavailable("test runs do not reach GitHub")
+
+          override fun failureLog(
+            pullRequest: MonitorPullRequestIdentity,
+            check: PullRequestCheck,
+          ): MonitorFailureLog = MonitorFailureLog.Unavailable("test runs do not reach GitHub")
+        },
+      publisher =
+        object : MonitorRepairPublisher {
+          override fun publish(request: MonitorPublicationRequest): MonitorPublicationResult =
+            MonitorPublicationResult.Rejected(MonitorPublicationRefusal.GUARD_REFUSED, "test runs do not publish")
+        },
+      clock = Clock.systemUTC(),
+    )
 }
 
 object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
@@ -257,6 +322,8 @@ fun testPhaseStrategyBindings(
     SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
     SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
+    SkeletonDefinition.STANDALONE_MONITOR to
+      SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.STANDALONE_MONITOR),
   )
 }
 

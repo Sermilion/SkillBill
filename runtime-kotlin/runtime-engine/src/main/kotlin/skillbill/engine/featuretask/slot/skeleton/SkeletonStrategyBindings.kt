@@ -11,6 +11,9 @@ import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStr
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
@@ -101,6 +104,12 @@ object SkeletonStrategyBindings {
         mapOf(
           PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
           PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
+        ),
+      SkeletonDefinition.STANDALONE_MONITOR to
+        mapOf(
+          PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(StandaloneMonitorPublicationStrategy.ID),
+          PhaseSlot.MONITOR to
+            PhaseStrategyBinding.Fixed(StandaloneMonitorStrategy.ID).withOpus(StandaloneMonitorOpus55Strategy.ID),
         ),
     )
 

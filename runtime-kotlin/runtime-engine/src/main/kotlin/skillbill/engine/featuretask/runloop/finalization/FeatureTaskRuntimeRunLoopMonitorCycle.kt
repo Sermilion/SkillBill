@@ -310,7 +310,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     ) + "Failing checks: " +
       checks.joinToString("; ") { check -> "${check.name} (${check.link})" } + "."
 
-  private fun monitorOutput(
+  internal fun monitorOutput(
     phaseId: String,
     summary: String,
     value: String,
@@ -351,7 +351,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
       )
     }
 
-  private fun PhaseRuntimeFinalizationContext.complete(
+  internal fun PhaseRuntimeFinalizationContext.complete(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
@@ -392,7 +392,7 @@ internal object FeatureTaskRuntimeRunLoopMonitorCycle {
     )
   }
 
-  private fun PhaseRuntimeFinalizationContext.block(
+  internal fun PhaseRuntimeFinalizationContext.block(
     run: PhaseRun,
     iteration: Int,
     reason: String,

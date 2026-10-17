@@ -14,6 +14,7 @@ import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
 import skillbill.model.EnvironmentContext
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
@@ -615,6 +616,81 @@ class WorkRunControlsTest {
           )
         }
       }
+    }
+  }
+
+  @Test
+  fun `pull request monitors replay their exact url from any checkout and cancel only their own invocation`() {
+    establishTemporarySchemaReadiness("monitor-target-controls").use { fixture ->
+      Files.createDirectory(fixture.tempDir.resolve(".git"))
+      Files.writeString(fixture.tempDir.resolve(".git/HEAD"), "ref: refs/heads/feat/OTHER-1-unrelated\n")
+      val launched = mutableListOf<WorkRunLaunchRequest>()
+      val stopped = mutableListOf<WorkRunStopRequest>()
+      val launcher =
+        object : WorkRunLauncher {
+          override fun stop(request: WorkRunStopRequest): WorkRunStopResult {
+            stopped += request
+            return WorkRunStopResult.Stopped
+          }
+
+          override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
+            launched += request
+            return WorkRunLaunchResult.Started(fixture.tempDir.resolve("monitor.log"))
+          }
+        }
+      val component = component(fixture.tempDir, fixture.dbPath, launcher)
+      val repository = "repo-root-realpath-v1:${fixture.tempDir.toRealPath()}"
+      component.databaseSession.transaction { unit ->
+        listOf(7, 8).forEach { number ->
+          unit.standalonePhaseStatuses.register(
+            registration(fixture.tempDir).copy(
+              branchCorrelation = "feat/SKILL-427-shared",
+              invocationId = "monitor-$number",
+              executionId = "execution-$number",
+              launchAgentId = "claude",
+              launchArguments = listOf("phase", "monitor", "https://example.test/stale", "--agent", "claude"),
+              monitorTarget =
+                StandaloneMonitorTarget(
+                  pullRequestKey = "github.com/acme/repo#$number",
+                  pullRequestUrl = "https://github.com/acme/repo/pull/$number",
+                  headRepository = "github.com/fork-$number/repo",
+                  headRef = "feat/SKILL-427-shared",
+                  callerRoot = fixture.tempDir.toString(),
+                  worktreePath = "/wt/$number",
+                ),
+            ),
+          )
+        }
+      }
+
+      fun targetFor(invocation: String): WorkRunTarget {
+        val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest(invocation)).item)
+        return WorkRunTarget(
+          invocation,
+          item.snapshot.repositoryIdentity,
+          Path.of(item.repositoryRoot),
+          item.snapshot.execution?.executionId,
+          item.snapshot.execution?.statusRevision,
+          item.snapshot.updatedAt,
+          assertNotNull(item.databaseFileObservation),
+        )
+      }
+
+      assertEquals(WorkControlResult.Accepted, component.launchRun(targetFor("monitor-7"), "codex"))
+      val prompt = assertIs<WorkRunLaunchKind.AgentHarness>(launched.single().kind).prompt
+      assertContains(prompt, "https://github.com/acme/repo/pull/7")
+      assertFalse("https://example.test/stale" in prompt)
+
+      assertEquals(WorkControlResult.Accepted, component.cancelRun(targetFor("monitor-8")))
+      assertEquals("$repository:github.com/acme/repo#8:monitor", stopped.single().ownershipKey)
+      assertEquals(
+        IdeStatusLifecycleState.CANCELED,
+        component.ideStatusService.detail(WorkDetailRequest("monitor-8")).item?.snapshot?.lifecycleState,
+      )
+      assertEquals(
+        IdeStatusLifecycleState.PAUSED,
+        component.ideStatusService.detail(WorkDetailRequest("monitor-7")).item?.snapshot?.lifecycleState,
+      )
     }
   }
 

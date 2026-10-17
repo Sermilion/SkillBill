@@ -64,9 +64,15 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push")
     val headBefore = git(repoRoot, "rev-parse", "HEAD")
 
-    val result = phaseEntry.run(monitorRequest("SKILL-904"))
+    val linked = root.resolve("untouched-worktree")
+    git(repoRoot, "worktree", "add", linked.toString(), "-b", "kept-worktree", "main")
+    val worktrees = worktreePaths()
+
+    val result = phaseEntry.runMonitor("SKILL-904")
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(worktrees, worktreePaths())
+    assertTrue(Files.isDirectory(linked))
     assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
     assertTrue(
       result.value.orEmpty().contains("CI passed for published commit '$headBefore' on branch '$FEATURE_BRANCH'"),
@@ -75,19 +81,6 @@ class PhaseMonitorRunTest {
     assertEquals(emptyList(), launcher.requests)
     assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"))
     database.assertNoDurableWorkflowState()
-  }
-
-  @Test
-  fun `monitor finishes and reports when the branch has no open pull request`() {
-    initFeatureBranch()
-
-    val result =
-      entry(identity = { _, _ -> PullRequestIdentity.Absent }).run(monitorRequest(PULL_REQUEST_URL))
-
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf(COMMIT_PUSH, MONITOR), result.completedStepIds)
-    assertTrue(result.value.orEmpty().contains("No open pull request was found"), result.value)
-    assertEquals(emptyList(), launcher.requests)
   }
 
   @Test
@@ -103,7 +96,7 @@ class PhaseMonitorRunTest {
         )
       }
 
-    val result = entry(checks = failing).run(monitorRequest("SKILL-904"))
+    val result = entry(checks = failing).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
@@ -120,7 +113,7 @@ class PhaseMonitorRunTest {
     val result =
       entry(checks = { _, _ ->
         PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
-      }).run(monitorRequest("SKILL-904"))
+      }).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result)
     assertTrue("did not publish a source or merge change" in blocked.reason, blocked.reason)
@@ -145,7 +138,7 @@ class PhaseMonitorRunTest {
           )
         },
         checks = { _, _ -> PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.PASS, ""))) },
-      ).run(monitorRequest("SKILL-904"))
+      ).runMonitor("SKILL-904")
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds())
@@ -177,7 +170,7 @@ class PhaseMonitorRunTest {
       )
     }
 
-    val result = entry(identity = identity, checks = checks).run(monitorRequest("SKILL-904"))
+    val result = entry(identity = identity, checks = checks).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("after 3 CI-confirmed failed repair commit(s)"), blocked.reason)
@@ -197,7 +190,7 @@ class PhaseMonitorRunTest {
         )
       }
 
-    entry(checks = failing).run(monitorRequest("SKILL-904"))
+    entry(checks = failing).runMonitor("SKILL-904")
 
     val prompt = launcher.requests.first().skillRunRequest.promptOverride.orEmpty()
     assertTrue("Run the full project validation" in prompt, prompt)
@@ -247,6 +240,9 @@ class PhaseMonitorRunTest {
           ),
         )
       }
+    val linked = root.resolve("untouched-worktree")
+    git(repoRoot, "worktree", "add", linked.toString(), "-b", "kept-worktree", "main")
+    val worktrees = worktreePaths()
     val outcomes = RecordingOutcomeStore()
     val monitor = DefaultGoalRunnerCiMonitor(entry(checks = checks, agentLauncher = repairLauncher), outcomes, clock)
     val result =
@@ -260,6 +256,8 @@ class PhaseMonitorRunTest {
       )
 
     assertIs<PhaseRunResult.Completed>(result)
+    assertEquals(worktrees, worktreePaths())
+    assertTrue(Files.isDirectory(linked))
     assertEquals(listOf(MONITOR_FIX), launchedPhaseIds(repairLauncher))
     assertEquals(2, observations)
     assertTrue(outcomes.progressEvents.isNotEmpty())
@@ -293,7 +291,7 @@ class PhaseMonitorRunTest {
         PullRequestChecks.Reported(listOf(PullRequestCheck("validate", CheckBucket.FAIL, "https://ci.example/run")))
       }
 
-    val result = entry(checks = checks, agentLauncher = repairLauncher).run(monitorRequest("SKILL-904"))
+    val result = entry(checks = checks, agentLauncher = repairLauncher).runMonitor("SKILL-904")
 
     val blocked = assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertTrue(blocked.reason.contains("Could not push branch"), blocked.reason)
@@ -349,6 +347,13 @@ class PhaseMonitorRunTest {
     git(repoRoot, "push", "-u", "origin", FEATURE_BRANCH)
   }
 
+  private fun worktreePaths(): Set<String> =
+    git(repoRoot, "worktree", "list", "--porcelain")
+      .lineSequence()
+      .filter { it.startsWith("worktree ") }
+      .map { it.removePrefix("worktree ") }
+      .toSet()
+
   private fun git(
     workDir: Path,
     vararg args: String,
@@ -370,6 +375,9 @@ class PhaseMonitorRunTest {
       invokedAgentId = "claude",
       intake = intake,
     )
+
+  private fun PhaseRunEntry.runMonitor(intake: String): PhaseRunResult =
+    runForGoal(monitorRequest(intake), "goal-parent", FEATURE_BRANCH)
 
   private fun repairLauncher(repair: () -> Unit): RuntimeRecordingLauncher =
     RuntimeRecordingLauncher { request ->

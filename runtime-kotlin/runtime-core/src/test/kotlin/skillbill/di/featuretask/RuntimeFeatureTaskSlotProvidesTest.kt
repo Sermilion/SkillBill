@@ -15,6 +15,8 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
@@ -82,6 +84,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.PLAN,
           SkeletonDefinition.PR,
           SkeletonDefinition.MONITOR,
+          SkeletonDefinition.STANDALONE_MONITOR,
         ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
           strategies.selectedStepIds(facts).forEach { step ->
@@ -99,6 +102,8 @@ class RuntimeFeatureTaskSlotProvidesTest {
         SkeletonDefinition.PLAN to setOf(RuntimeIntakeStrategy.ID, AgentPreplanStrategy.ID, PlanFanOutStrategy.ID),
         SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID, MonitorStrategy.ID),
         SkeletonDefinition.MONITOR to setOf(RuntimeCommitStrategy.ID, MonitorStrategy.ID),
+        SkeletonDefinition.STANDALONE_MONITOR to
+          setOf(StandaloneMonitorPublicationStrategy.ID, StandaloneMonitorStrategy.ID),
       )
     expected.forEach { (definition, strategyIds) ->
       val facts = PhaseStrategySelectionFacts(definition, emptySet())

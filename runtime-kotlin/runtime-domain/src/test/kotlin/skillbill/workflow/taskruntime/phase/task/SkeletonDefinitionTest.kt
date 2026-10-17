@@ -142,6 +142,20 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `the internal standalone monitor mirrors the monitor traversal but is never publicly invocable`() {
+    val standalone = SkeletonDefinition.STANDALONE_MONITOR
+
+    assertEquals("standalone-monitor", standalone.id)
+    assertEquals(SkeletonDefinition.MONITOR.stepIds, standalone.stepIds)
+    assertEquals(SkeletonDefinition.MONITOR.declaration(), standalone.declaration())
+    assertEquals(SkeletonRunStateKind.IN_MEMORY, standalone.runStateKind)
+    assertFalse(standalone.standaloneInvocable)
+    assertEquals(standalone, SkeletonDefinition.byId("standalone-monitor"))
+    assertEquals(standalone, SkeletonDefinition.preparedExecutionFor(SkeletonDefinition.MONITOR.id))
+    assertEquals(null, SkeletonDefinition.preparedExecutionFor(SkeletonDefinition.PR.id))
+  }
+
+  @Test
   fun `a definition that reorders slots raises a typed error`() {
     val error =
       assertFailsWith<InvalidSkeletonDefinitionError> {

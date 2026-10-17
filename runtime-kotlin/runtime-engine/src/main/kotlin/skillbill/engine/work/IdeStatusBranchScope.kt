@@ -10,6 +10,7 @@ object IdeStatusBranchScope {
   ): Boolean =
     when {
       candidate.workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL -> true
+      candidate.standaloneStatus?.monitorTarget != null -> true
       candidate.standaloneStatus != null ->
         candidate.branchCorrelation == null ||
           candidate.branchCorrelation == "HEAD" ||

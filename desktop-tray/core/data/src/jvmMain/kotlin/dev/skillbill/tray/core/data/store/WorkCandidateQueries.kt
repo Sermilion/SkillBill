@@ -54,7 +54,7 @@ internal fun candidateQuery(section: WorkSection, cutoff: String, through: Strin
 EXISTS (
         SELECT 1 FROM standalone_phase_status newer
         WHERE newer.repository_identity = s.repository_identity AND newer.phase_id = s.phase_id
-          AND COALESCE(upper(newer.issue_key), newer.workflow_id, newer.branch_correlation) = COALESCE(upper(s.issue_key), s.workflow_id, s.branch_correlation)
+          AND COALESCE(newer.monitor_pr_key, upper(newer.issue_key), newer.workflow_id, newer.branch_correlation) = COALESCE(s.monitor_pr_key, upper(s.issue_key), s.workflow_id, s.branch_correlation)
           AND (length(newer.run_sequence) > length(s.run_sequence)
             OR (length(newer.run_sequence) = length(s.run_sequence) AND newer.run_sequence > s.run_sequence)
             OR (newer.run_sequence = s.run_sequence AND newer.invocation_id > s.invocation_id))

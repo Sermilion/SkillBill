@@ -3,6 +3,13 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_CLEANUP_ASSIGNMENTS
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_KEY_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_COLUMN_LIST
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_PLACEHOLDERS
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValues
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorCleanup
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorTarget
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
@@ -53,7 +60,7 @@ internal class StandalonePhaseStatusStore(
 
   private fun registerInTransaction(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord {
     readByInvocation(request.invocationId)?.let { return it }
-    if (request.phaseId == MONITOR_PHASE_ID) {
+    if (request.phaseId == MONITOR_PHASE_ID && request.monitorTarget == null) {
       supersedeActiveMonitors(
         repositoryIdentity = request.repositoryIdentity,
         branchCorrelation = request.branchCorrelation,
@@ -69,8 +76,12 @@ internal class StandalonePhaseStatusStore(
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
-        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN,
+        $MONITOR_TARGET_COLUMN_LIST
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        $MONITOR_TARGET_PLACEHOLDERS
+      )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -99,7 +110,7 @@ internal class StandalonePhaseStatusStore(
           request.launchArguments?.let(JsonCodec::valueToJsonString),
           agentEnvironmentJson(request.agentEnvironment),
           request.launchScope.wireValue,
-        ),
+        ) + request.monitorTarget.columnValues(),
       )
       statement.executeUpdate()
     }
@@ -108,9 +119,10 @@ internal class StandalonePhaseStatusStore(
 
   override fun readEligible(
     repositoryIdentity: String,
-    branchCorrelation: String,
+    branchCorrelation: String?,
     now: Instant,
     page: StandaloneEligiblePage,
+    monitorRepositoryIdentity: String,
   ): List<StandalonePhaseStatusRecord> {
     val (limit, after, slice) = page
     require(limit > 0) { "Eligible status page limit must be positive." }
@@ -130,15 +142,22 @@ internal class StandalonePhaseStatusStore(
       """
       WITH bounds(live_from, settled_from) AS (VALUES (?, ?))
       SELECT * FROM standalone_phase_status
-      WHERE repository_identity = ? AND branch_correlation = ?
+      WHERE ((repository_identity = ? AND ? IS NOT NULL AND branch_correlation = ?)
+          OR (repository_identity = ? AND $MONITOR_PR_KEY_COLUMN IS NOT NULL))
         AND $eligible
         ${if (after == null) "" else "AND $AFTER_ANCHOR_SQL"}
       ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ?
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
-        listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation) +
-          after.anchorBindings() + limit,
+        listOf(
+          liveFrom.toString(),
+          settledFrom.toString(),
+          repositoryIdentity,
+          branchCorrelation,
+          branchCorrelation,
+          monitorRepositoryIdentity,
+        ) + after.anchorBindings() + limit,
       )
       statement.executeQuery().use { rows ->
         buildList { while (rows.next()) add(rows.toRecord()) }
@@ -152,7 +171,7 @@ internal class StandalonePhaseStatusStore(
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM standalone_phase_status " +
         "WHERE repository_identity = ? AND phase_id = ? " +
-        "AND COALESCE(upper(issue_key), workflow_id, branch_correlation) = ? " +
+        "AND COALESCE($MONITOR_PR_KEY_COLUMN, upper(issue_key), workflow_id, branch_correlation) = ? " +
         "AND ${instantAtOrBeforeSql("started_at")} " +
         (if (query.after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
@@ -268,6 +287,9 @@ internal class StandalonePhaseStatusStore(
     operatorCancellation: Boolean = false,
   ): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(request.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
+    require(request.monitorCleanup == null || current.monitorTarget != null) {
+      "Monitor cleanup can only be recorded on a target-bearing monitor execution."
+    }
     val rejected = updateRejection(current, request, operatorCancellation)
     if (rejected != null) return rejected
     val nextRevision = incrementDecimal(current.statusRevision)
@@ -278,7 +300,8 @@ internal class StandalonePhaseStatusStore(
           status_revision = ?, lifecycle_state = ?, current_step = ?, current_activity = ?,
           updated_at = ?, finished_at = ?, active_duration_ms = COALESCE(?, active_duration_ms),
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
-          terminal_result = ?, accepted_result = ?
+          terminal_result = ?, accepted_result = ?,
+          $MONITOR_CLEANUP_ASSIGNMENTS
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -295,11 +318,13 @@ internal class StandalonePhaseStatusStore(
             request.activeDurationAsOf?.toString(),
             request.terminalResult,
             request.acceptedResult,
-            request.executionId,
-            request.expectedRevision,
-            request.leaseOwner,
-            request.leaseGeneration,
-          ),
+          ) + request.monitorCleanup.columnValues() +
+            listOf(
+              request.executionId,
+              request.expectedRevision,
+              request.leaseOwner,
+              request.leaseGeneration,
+            ),
         )
         statement.executeUpdate()
       }
@@ -320,7 +345,7 @@ internal class StandalonePhaseStatusStore(
         """
         SELECT execution_id, status_revision FROM standalone_phase_status
         WHERE repository_identity = ? AND branch_correlation = ? AND phase_id = ?
-          AND lifecycle_state IN ('active', 'paused')
+          AND lifecycle_state IN ('active', 'paused') AND $MONITOR_PR_KEY_COLUMN IS NULL
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(listOf(repositoryIdentity, branchCorrelation, MONITOR_PHASE_ID))
@@ -545,8 +570,9 @@ internal class StandalonePhaseStatusStore(
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
-  private fun ResultSet.toRecord(): StandalonePhaseStatusRecord =
-    StandalonePhaseStatusRecord(
+  private fun ResultSet.toRecord(): StandalonePhaseStatusRecord {
+    val monitorTarget = readMonitorTarget("standalone-status")
+    return StandalonePhaseStatusRecord(
       repositoryIdentity = getString("repository_identity"),
       branchCorrelation = getString("branch_correlation"),
       issueKey = getString("issue_key"),
@@ -575,7 +601,10 @@ internal class StandalonePhaseStatusStore(
       launchArguments = readLaunchArguments(),
       agentEnvironment = readAgentEnvironment("standalone-status"),
       launchScope = readLaunchScope("standalone-status"),
+      monitorTarget = monitorTarget,
+      monitorCleanup = readMonitorCleanup("standalone-status", monitorTarget != null),
     )
+  }
 
   private fun ResultSet.readLaunchArguments(): List<String>? {
     val raw = getString("launch_arguments_json") ?: return null

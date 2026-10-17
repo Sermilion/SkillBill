@@ -3,9 +3,11 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -70,6 +72,26 @@ class StandalonePhaseRegistrationFactory(
       leaseExpiresAt = now.plus(LEASE_DURATION),
       processOwner = processOwner(),
       agentEnvironment = agentEnvironment(),
+    )
+  }
+
+  fun monitorRegistration(
+    context: MonitorExecutionContext,
+    phaseId: String,
+    invocationId: String,
+  ): StandalonePhaseStatusRegistration {
+    val head = context.target.head.tip
+    return phaseRegistration(context.primaryRoot, phaseId, invocationId, issueKey = null).copy(
+      branchCorrelation = head.ref,
+      monitorTarget =
+        StandaloneMonitorTarget(
+          pullRequestKey = context.target.pullRequest.targetKey,
+          pullRequestUrl = context.target.pullRequest.url,
+          headRepository = "${head.repository.host}/${head.repository.slug}",
+          headRef = head.ref,
+          callerRoot = repositories.canonicalPath(context.callerRoot).toString(),
+          worktreePath = context.worktree.path.toString(),
+        ),
     )
   }
 

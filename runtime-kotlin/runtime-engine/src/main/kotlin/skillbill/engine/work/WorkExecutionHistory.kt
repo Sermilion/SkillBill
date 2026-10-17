@@ -8,6 +8,7 @@ import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkExecutionInstance
@@ -20,8 +21,29 @@ internal fun phaseGroupIdentity(record: StandalonePhaseStatusRecord): Triple<Str
   Triple(
     record.repositoryIdentity,
     record.phaseId,
-    record.issueKey?.uppercase() ?: record.workflowId ?: record.branchCorrelation,
+    record.monitorTarget?.pullRequestKey
+      ?: record.issueKey?.uppercase()
+      ?: record.workflowId
+      ?: record.branchCorrelation,
   )
+
+internal fun StandalonePhaseStatusRecord.monitorTargetDetail(): String? =
+  monitorTarget?.let { target ->
+    listOfNotNull(
+      "Pull request ${target.pullRequestUrl}",
+      "repository ${target.pullRequestKey.substringBefore('#')}",
+      "branch ${target.headRef} (${target.headRepository})",
+      "invocation $invocationId",
+      "worktree ${target.worktreePath}",
+      monitorCleanup?.let { cleanup -> "cleanup ${cleanup.describe()}" },
+    ).joinToString("; ", prefix = "[", postfix = "]")
+  }
+
+private fun StandaloneMonitorCleanup.describe(): String =
+  when (this) {
+    StandaloneMonitorCleanup.Released -> "released"
+    is StandaloneMonitorCleanup.Retained -> "retained (${reason.wireValue}): $detail"
+  }
 
 internal fun latestPhaseExecutions(records: List<StandalonePhaseStatusRecord>): List<StandalonePhaseStatusRecord> =
   records.groupBy(::phaseGroupIdentity).values.map { instances ->
@@ -110,6 +132,15 @@ internal data class ResolvedExecutionReason(
 )
 
 internal fun resolveExecutionReason(
+  record: StandalonePhaseStatusRecord,
+  unitOfWork: UnitOfWork,
+): ResolvedExecutionReason {
+  val resolved = resolveStoredReason(record, unitOfWork)
+  val detail = record.monitorTargetDetail() ?: return resolved
+  return resolved.copy(text = resolved.text?.let { "$it $detail" })
+}
+
+private fun resolveStoredReason(
   record: StandalonePhaseStatusRecord,
   unitOfWork: UnitOfWork,
 ): ResolvedExecutionReason {

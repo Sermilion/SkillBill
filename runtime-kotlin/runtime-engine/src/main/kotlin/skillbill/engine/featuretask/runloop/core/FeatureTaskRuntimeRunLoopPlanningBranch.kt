@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeResumeLaunchAssignment
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -67,16 +66,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   private fun capExhaustionPhaseRun(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
-  ): PhaseRun {
-    val request = context.request
-    val resolvedAgent =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      )
-    return phaseRun(context, phaseId, request, context.specSource, resolvedAgent)
-  }
+  ): PhaseRun = buildPhaseRun(context, phaseId, context.request, context.specSource, null)
 
   internal fun runPhase(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -125,17 +115,6 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         assignment = request.agentAssignment,
         invokedAgentId = request.invokedAgentId,
       )
-    return phaseRun(context, phaseId, request, specSource, resolvedAgent, reentry)
-  }
-
-  private fun phaseRun(
-    context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-    request: FeatureTaskRuntimeRunFacts,
-    specSource: SpecSource,
-    resolvedAgent: FeatureTaskRuntimeResolvedPhaseAgent,
-    reentry: PendingReentry? = null,
-  ): PhaseRun {
     val recorded = context.runState.stepLaunchAssignment(phaseId)
     val resolvedAgentId = resolvedAgent.resolvedAgentId
     return PhaseRun(

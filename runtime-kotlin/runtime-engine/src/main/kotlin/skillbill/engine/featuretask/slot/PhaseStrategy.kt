@@ -116,6 +116,8 @@ internal enum class PhaseExecutionBindingKind {
   FINDING_VERIFICATION,
   REPAIR_RECEIPT,
   CI_MONITOR,
+  STANDALONE_MONITOR,
+  STANDALONE_PUBLICATION,
 }
 
 internal data class PhaseExecutionPlanMapping(

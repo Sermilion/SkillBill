@@ -12,6 +12,8 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -44,14 +46,16 @@ internal class InMemoryPhaseRunRecords private constructor(
   private val clock: Clock,
   private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
   private val phaseRecords: LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>,
+  override val standaloneMonitorLedger: StandaloneMonitorLedger?,
 ) : PhaseRunRecords,
+  StandaloneMonitorRunRecords,
   PhasePlanRecords by InMemoryPhasePlanRecords(phaseRecords),
   FeatureTaskRuntimeNoChangePausePort by InMemoryNoChangePauses() {
-  constructor(clock: Clock, resolvedBranch: FeatureTaskRuntimeResolvedBranch?) : this(
-    clock,
-    resolvedBranch,
-    LinkedHashMap(),
-  )
+  constructor(
+    clock: Clock,
+    resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
+    standaloneMonitorLedger: StandaloneMonitorLedger? = null,
+  ) : this(clock, resolvedBranch, LinkedHashMap(), standaloneMonitorLedger)
 
   val acceptedOutputs = mutableMapOf<String, String>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()

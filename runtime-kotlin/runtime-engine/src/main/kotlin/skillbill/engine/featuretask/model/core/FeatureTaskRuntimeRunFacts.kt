@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.model.core
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -82,6 +83,9 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** Whether this pass ends once the `intake` step settles, before run invariants can be read from the spec. */
   val stopAfterIntake: Boolean get() = false
+
+  /** The pinned pull request target and owned worktree of a prepared standalone monitor; null for every other run. */
+  val monitorExecution: MonitorExecutionContext? get() = null
 }
 
 data class PhaseInstructions(

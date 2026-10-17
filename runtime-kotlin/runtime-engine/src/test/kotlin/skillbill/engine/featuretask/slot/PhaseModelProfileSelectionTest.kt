@@ -5,6 +5,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_K
 import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -14,10 +16,12 @@ import skillbill.workflow.taskruntime.model.skeleton.LaunchModelProvenance
 import skillbill.workflow.taskruntime.model.skeleton.LaunchProviderNamespace
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfile
 import skillbill.workflow.taskruntime.model.skeleton.PhaseModelProfileClassifier
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -120,6 +124,27 @@ class PhaseModelProfileSelectionTest {
     assertTrue(
       strategy.promptSections(PHASE_AUDIT_IMPLEMENT_FIX, repairInputs).taskDirective.contains("Opus"),
     )
+  }
+
+  @Test
+  fun `an opus monitor repair selects the standalone opus variant only for the internal standalone monitor`() {
+    val lookup = testPhaseStrategies({ error("unused") }, NoopWorkflowGitOperations)
+
+    fun monitorStrategy(definition: SkeletonDefinition): String =
+      lookup
+        .executionPlan(
+          PhaseStrategySelectionFacts(
+            definition,
+            emptySet(),
+            mapOf(PHASE_MONITOR_FIX to opusAssignment(PHASE_MONITOR_FIX)),
+          ),
+        ).selectedStrategies
+        .single { it.slot == PhaseSlot.MONITOR }
+        .strategyId
+
+    assertEquals(StandaloneMonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.STANDALONE_MONITOR))
+    assertEquals(MonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.MONITOR))
+    assertEquals(MonitorOpus55Strategy.ID, monitorStrategy(SkeletonDefinition.PR))
   }
 
   @Test

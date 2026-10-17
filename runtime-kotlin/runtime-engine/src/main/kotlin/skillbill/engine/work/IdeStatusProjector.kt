@@ -158,7 +158,10 @@ class IdeStatusProjector(
       freshness = IdeStatusFreshnessClassifier.classify(record.updatedAt, context.observedAt),
       summary =
         resolveExecutionReason(record, context.unitOfWork).text
-          ?: "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+          ?: listOfNotNull(
+            "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+            record.monitorTargetDetail(),
+          ).joinToString(" "),
     )
   }
 

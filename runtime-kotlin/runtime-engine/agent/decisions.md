@@ -1,3 +1,48 @@
+## [2026-10-17] Public phase monitor uses the prepared standalone path
+Context: The shared monitor definition is also used by goal monitoring. Rebinding it would change goal and phase-pr behavior. The prepared standalone path stayed internal until target rows could be told apart from caller-branch rows.
+Decision: Public phase monitor resolves its target read-only, prepares an owned worktree, then runs the internal standalone monitor. Goal monitoring, phase pr, and the legacy monitor strategies stay on their existing definitions and bindings. The recorded public phase and launch arguments remain monitor.
+Reason: Status can now keep two pull requests independent, so the public route can leave the caller checkout. Goal monitoring still enforces its workflow branch, and phase pr still publishes in that checkout.
+Alternatives considered: Rebinding the shared monitor definition was rejected because goal and phase pr share it.
+
+## [2026-10-17] Target-bearing monitors group by pull request, not caller branch
+Context: Two monitors can repair different pull requests that share an issue key or head-branch spelling, including from one dirty checkout and later from an unrelated branch.
+Decision: A target-bearing registration skips branch supersession, and legacy supersession ignores those rows. Reads include them through the original repository identity on any caller branch. History, cancellation and board grouping prefer the canonical pull-request key. Target-less rows keep issue, workflow and branch grouping, and branch-scoped reads.
+Reason: Branch and issue identity collapse distinct pull requests once execution is in an owned worktree. Admission still refuses a second live monitor of the same pull request; a status row is not that fence.
+
+## [2026-10-17] Retained monitor work blocks replay at ownership admission
+Context: Unfinished repair must not be replaced by a fresh monitor, and a status row can outlive the process that wrote it.
+Decision: Replay launches the exact recorded pull-request URL and does not check that head out in the caller. A retained dirty, unpublished or uncertain worktree blocks the new run at the ownership fence, and the monitor reports that path and reason. A stale status row alone does not keep the pull request blocked. The monitor-only recover-stale-owner token is passed to admission and is not stored as a launch argument.
+Reason: Ownership files are the admission authority and carry the path. Status is best-effort reporting. Blocking from a status row would refuse the pull request after the worktree had already been recovered.
+
+## [2026-10-17] Monitor target detail stays in existing status fields
+Context: Operators need the pull-request URL, real head, invocation, worktree and cleanup outcome. IDE consumers already read summary and detail.
+Decision: Store the target tuple and cleanup disposition as nullable status columns in migration 59. Project them through the existing summary and detail fields. Leave the IDE status schema unchanged. All-null metadata remains a legacy row; a partial or incoherent tuple fails the read.
+Reason: The columns are storage for runtime control, not a new public wire. A schema bump would force every IDE consumer to change for fields they can already show.
+
+## [2026-10-17] Abrupt monitor death is stale recovery, not recorded cleanup
+Context: Cleanup may remove only a verified owned clean worktree, and a killed process cannot run its terminal update.
+Decision: The cleanup owner starts at acquisition and records released or retained only on the terminal status update, with an idempotent final backstop. An abrupt kill leaves no cleanup record. Recovery uses the ownership file, the expected owner token and positive death evidence of that owner.
+Reason: A missing cleanup row must not be read as a removed worktree. The ownership file remains the evidence for stale recovery and for the retained path.
+
+## [2026-10-16] SKILL-427 standalone monitor publishes through one idempotent service and pins the base commit
+Context: SKILL-427 subtask 2 adds the internal `standalone-monitor` skeleton, which repairs a pull request's CI failures in an owned worktree and pushes the repair to the pull request's own head endpoint. The public `monitor` definition, its strategies and its bindings stay untouched until subtask 3 owns public normalization.
+Decision: (1) Publication is one idempotent `StandaloneMonitorService.publish`, reachable from the `monitor_fix` settle hook (right after the repair completes) and from later `commit_push` visits; the first `commit_push` visit has nothing pending and touches no git state. Because in-memory phase runs settle through final prose and cannot record a blocked status, the repair prose must end with the exact line `Repair outcome: fixed`; any other ending, including none, leaves the repair uncompleted, unpublished and preserved in the worktree. (2) The pre-publication guard compares the re-read pull request with the pinned target: state OPEN, head repository/ref/push URL unchanged, head SHA equal to the last head this invocation published, write evidence still holding, base repository/ref/SHA equal to the pinned base. The same check runs before repair launch, before staging/commit and immediately before push, and conflict repair merges the pinned base commit rather than a newer fetched tip. (3) The per-invocation ledger of pending repair, receipts and acknowledged heads lives in `InMemoryPhaseRunRecords` behind `StandaloneMonitorRunRecords`, never in the run facts, so no ports or callbacks leak into shared facts. (4) `StandaloneMonitorService` is a public class so `runtime-core` can construct it; the run loop reaches it only through the internal `PhaseStandaloneMonitorOperations` contract in `slot/state`, the same way the legacy monitor exposes `PhaseCiObservation`, and the ledger lives in `phaserun/monitor`, so shared code imports no strategy package. (5) `PhaseRunEntry.run` stays on the legacy path; the prepared path is the internal `runStandaloneMonitor` that subtask 3 wires to the public command. It finds its internal definition through `SkeletonDefinition.preparedExecutionFor(publicId)`, which `STANDALONE_MONITOR` declares with `preparedExecutionOf = monitor`, so phaserun names no definition constant.
+Reason: One publication path keeps the no-op first visit, the three guard re-reads, the non-force push, and the receipt bookkeeping identical whichever phase reaches them. A repair is investigated and validated against one base; publishing it after the base moved would claim a fix the agent never checked against that base.
+Alternatives considered: Tolerating base SHA advances was rejected because the accepted plan requires any external head/base advance to block; it would avoid blocking repairs on a busy base branch. Publishing only from `commit_push` was rejected because the existing traversal returns to `monitor` after `monitor_fix`, so a repair would be observed before it was published. Reusing the legacy `InMemoryCommitPush` was rejected because it stages and commits unconditionally and has no remote guard. Putting the ledger in `InMemoryPhaseRunFacts` was rejected by the no-ports-in-facts rule.
+Revisit when: Subtask 3 routes the public `monitor` command through the prepared path, or blocking on base advances proves too disruptive on busy base branches.
+
+## [2026-10-16] Standalone monitor worktrees live under the common git dir and are removed only when provably safe
+Context: Concurrent standalone monitors of different PRs must not collide, and a monitor must never destroy work it did not publish.
+Decision: Admission is keyed by the canonical common git dir and target PR, so linked worktrees contend on one lock. The worktree, branch and refs are invocation-specific under skill-bill/standalone-monitor in the common dir, and cleanup removes only an owned, clean, fully published worktree, never with force.
+Reason: A common-dir key makes linked worktrees see the same owner, and invocation tokens stop two runs sharing refs. Retaining with an exact reason and path is safer than guessing.
+Alternatives considered: Worktrees beside the caller checkout, rejected because they pollute it and are not keyed to the shared repository.
+
+## [2026-10-16] Stale monitor recovery requires positive death evidence of the exact owner
+Context: A crashed monitor leaves ownership state that blocks the same PR forever, but stealing it from a live or unknown owner would run two monitors on one worktree.
+Decision: Recovery needs the expected owner token, an acquirable lock and positive exact-process death evidence. Live or unknown owners and retained unfinished work are refused, and the fence is checked in memory and on disk.
+Reason: Unknown must read as alive, since a false takeover costs more than a manual reset.
+Revisit when: A cross-process contention test or a heartbeat lease gives a safer liveness signal.
+
 ## [2026-10-14] SKILL-425: the engine drops the goal planning sweep
 Context: The goal runner ran a planning sweep over `GoalPlanningPhaseRunState` and wrote `goal_*` checkpoints.
 Decision: The goal runner asks `GoalPlanningSource` for planning (plan workflow, then read-only legacy tables, then `StandalonePlanRun`). Status reads planning progress from the latest plan workflow bundle and falls back to the legacy tables, and `GoalChildPlanningHydrator` reads either source. The full decision is in runtime-kotlin/agent/decisions.md.

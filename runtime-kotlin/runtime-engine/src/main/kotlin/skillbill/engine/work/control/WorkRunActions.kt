@@ -92,7 +92,7 @@ class WorkRunActions(
     target: WorkRunTarget,
   ): WorkControlRejection? {
     val branch = phase.branchCorrelation
-    if (branch.isBlank() || branch == "HEAD") return null
+    if (phase.monitorTarget != null || branch.isBlank() || branch == "HEAD") return null
     val current = branches.checkedOutBranch(target.repositoryRoot) ?: return WorkControlRejection.BRANCH_UNAVAILABLE
     return WorkControlRejection.BRANCH_CHANGED.takeIf { current != branch }
   }
@@ -183,6 +183,9 @@ class WorkRunActions(
     phase: StandalonePhaseStatusRecord,
     agent: String,
   ): List<String>? {
+    phase.monitorTarget?.let { target ->
+      return listOf("phase", phase.phaseId, target.pullRequestUrl, "--agent", agent)
+    }
     phase.launchArguments?.let { saved -> return savedArguments(phase, saved, agent) }
     return when {
       phase.launchScope == IdeStatusLaunchScope.GOAL -> phase.issueKey?.let { listOf("goal", it, "--agent", agent) }
@@ -259,7 +262,13 @@ class WorkRunActions(
       appendLine("Selected agent: $agent")
       appendLine("Work identity: ${item.snapshot.execution?.invocationId ?: item.snapshot.workflowId}")
       appendLine("Repository: ${item.repositoryRoot}")
-      appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
+      val monitored = phase.monitorTarget
+      if (monitored == null) {
+        appendLine("Keep the recorded branch ${phase.branchCorrelation} and existing PR.")
+      } else {
+        appendLine("Monitor exactly ${monitored.pullRequestUrl}; the runtime prepares its own worktree for it.")
+        appendLine("Do not check out the pull request branch ${monitored.headRef} in this repository.")
+      }
       append("Read durable state before continuing. Do not create another branch or PR for this work.")
     }
 

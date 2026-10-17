@@ -108,6 +108,11 @@ governedResources {
     "SKILL-120: canonical feature-task runtime worker-ownership schema",
   )
   copy(
+    "copyStandaloneMonitorOwnershipSchema",
+    "standalone-monitor-ownership-schema.yaml",
+    "SKILL-427: canonical standalone monitor ownership schema",
+  )
+  copy(
     "copyFeatureTaskExecutionIdentitySchema",
     "feature-task-execution-identity-schema.yaml",
     "SKILL-120: canonical feature-task execution-identity schema",

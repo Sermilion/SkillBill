@@ -1,6 +1,7 @@
 package skillbill.ports.idestatus.model
 
 import skillbill.idestatus.model.IdeStatusLaunchScope
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import java.time.Instant
 
@@ -32,6 +33,48 @@ data class IdeStatusWorkflowExecution(
   val agentEnvironment: Map<String, String> = emptyMap(),
 )
 
+data class StandaloneMonitorTarget(
+  val pullRequestKey: String,
+  val pullRequestUrl: String,
+  val headRepository: String,
+  val headRef: String,
+  val callerRoot: String,
+  val worktreePath: String,
+) {
+  init {
+    val match =
+      requireNotNull(PULL_REQUEST_KEY.matchEntire(pullRequestKey)) {
+        "Monitor pull request key '$pullRequestKey' is not host/owner/name#number."
+      }
+    val (location, number) = match.destructured
+    require(pullRequestUrl == "https://$location/pull/$number") {
+      "Monitor pull request URL '$pullRequestUrl' does not match key '$pullRequestKey'."
+    }
+    require(
+      headRepository.isNotBlank() && headRef.isNotBlank() && callerRoot.isNotBlank() && worktreePath.isNotBlank(),
+    ) {
+      "A monitor target needs a head repository, head ref, caller root and worktree path."
+    }
+  }
+
+  private companion object {
+    val PULL_REQUEST_KEY = Regex("([^/#\\s]+/[^/#\\s]+/[^/#\\s]+)#([1-9][0-9]*)")
+  }
+}
+
+sealed interface StandaloneMonitorCleanup {
+  data object Released : StandaloneMonitorCleanup
+
+  data class Retained(
+    val reason: MonitorRetentionReason,
+    val detail: String,
+  ) : StandaloneMonitorCleanup {
+    init {
+      require(detail.isNotBlank()) { "A retained monitor worktree needs a detail." }
+    }
+  }
+}
+
 data class StandalonePhaseStatusRegistration(
   val repositoryIdentity: String,
   val branchCorrelation: String,
@@ -51,6 +94,7 @@ data class StandalonePhaseStatusRegistration(
   val launchArguments: List<String>? = null,
   val agentEnvironment: Map<String, String> = emptyMap(),
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val monitorTarget: StandaloneMonitorTarget? = null,
 )
 
 data class StandalonePhaseStatusUpdate(
@@ -67,6 +111,7 @@ data class StandalonePhaseStatusUpdate(
   val activeDurationAsOf: Instant? = null,
   val terminalResult: String? = null,
   val acceptedResult: String? = null,
+  val monitorCleanup: StandaloneMonitorCleanup? = null,
 )
 
 enum class StandalonePhaseStatusUpdateResult {
@@ -107,6 +152,8 @@ data class StandalonePhaseStatusRecord(
   val launchArguments: List<String>? = null,
   val agentEnvironment: Map<String, String> = emptyMap(),
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val monitorTarget: StandaloneMonitorTarget? = null,
+  val monitorCleanup: StandaloneMonitorCleanup? = null,
 )
 
 const val STANDALONE_ELIGIBLE_PAGE_LIMIT: Int = 500

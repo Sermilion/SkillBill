@@ -31,6 +31,9 @@ import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSect
 import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
@@ -109,10 +112,14 @@ class PhaseStrategyCompositionTest {
         environment = emptyMap(),
       )
     val fanOut = PlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1)
+    val standaloneMonitor = StandaloneMonitorStrategy(UnavailableStandaloneMonitorService.service)
     return PhaseStrategyRegistry(
       (
         strategies +
           listOf(
+            standaloneMonitor,
+            StandaloneMonitorOpus55Strategy(standaloneMonitor),
+            StandaloneMonitorPublicationStrategy(UnavailableStandaloneMonitorService.service),
             DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
             DelegatedReviewOpus55Strategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
             DelegatedStandaloneReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
@@ -323,6 +330,32 @@ class PhaseStrategyCompositionTest {
         }
       }
     }
+  }
+
+  @Test
+  fun `the internal standalone monitor binds its own strategies and leaves the legacy monitor bindings alone`() {
+    val registry = productionRegistry()
+    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, SkeletonStrategyBindings.bindings))
+    val standalone =
+      lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE_MONITOR, emptySet()))
+    val legacy = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.MONITOR, emptySet()))
+
+    assertEquals(StandaloneMonitorStrategy.ID, lookup.strategyFor(PHASE_MONITOR, standalone).strategyId)
+    assertEquals(StandaloneMonitorStrategy.ID, lookup.strategyFor(PHASE_MONITOR_FIX, standalone).strategyId)
+    assertEquals(StandaloneMonitorPublicationStrategy.ID, lookup.strategyFor(PHASE_COMMIT_PUSH, standalone).strategyId)
+    assertEquals(MonitorStrategy.ID, lookup.strategyFor(PHASE_MONITOR, legacy).strategyId)
+    assertEquals(RuntimeCommitStrategy.ID, lookup.strategyFor(PHASE_COMMIT_PUSH, legacy).strategyId)
+    assertEquals(
+      setOf(StandaloneMonitorStrategy.ID, StandaloneMonitorOpus55Strategy.ID),
+      SkeletonStrategyBindings.bindings
+        .getValue(SkeletonDefinition.STANDALONE_MONITOR)
+        .getValue(PhaseSlot.MONITOR)
+        .strategyIds,
+    )
+    assertEquals(
+      setOf(MonitorStrategy.ID, MonitorOpus55Strategy.ID),
+      SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR).getValue(PhaseSlot.MONITOR).strategyIds,
+    )
   }
 
   @Test

@@ -11,6 +11,8 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservatio
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
@@ -27,6 +29,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.standalone.FeatureTaskRuntimeRunLoopStandaloneMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.standalone.StandaloneRepairCommit
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
@@ -64,6 +68,9 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewFindingObservations
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -358,6 +365,69 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
     return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
       environment.runDeclaredMonitorCycle(run, observation, requireNotNull(acceptedOwner.monitorRepairSteps))
     }
+  }
+}
+
+private class FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseStandaloneMonitorStepBinding {
+  private val ledger: StandaloneMonitorLedger?
+    get() = (environment.recorder as? StandaloneMonitorRunRecords)?.standaloneMonitorLedger
+
+  override fun runStandaloneMonitor(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopStandaloneMonitorCycle) { environment.runStandaloneMonitor(run, operations) }
+  }
+
+  override fun standaloneRepairBrief(): String {
+    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+    return ledger?.pendingRepair?.evidence.orEmpty()
+  }
+
+  override fun guardStandaloneRepairLaunch(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    val owned = ledger ?: return "Standalone repair requires its prepared execution ledger."
+    val worktree = StandaloneRepairCommit(environment.gitOperations, owned.execution.worktree.path)
+    return operations.guardRepairLaunch(owned, worktree)
+  }
+
+  override fun publishStandaloneRepair(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+    reportedFixed: Boolean,
+  ): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopStandaloneMonitorCycle) {
+      environment.publishStandaloneRepair(operations, reportedFixed)
+    }
+  }
+}
+
+private class FeatureTaskRuntimeRunLoopStandalonePublicationStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseStandalonePublicationStepBinding {
+  override fun runStandalonePublication(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(
+      FeatureTaskRuntimeRunLoopStandaloneMonitorCycle,
+    ) { environment.runStandalonePublication(run, operations) }
   }
 }
 
@@ -937,6 +1007,20 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
         FeatureTaskRuntimeRunLoopQualityGateStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.slot == PhaseSlot.PULL_REQUEST ->
         FeatureTaskRuntimeRunLoopPullRequestStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.STANDALONE_MONITOR ->
+        FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.STANDALONE_PUBLICATION ->
+        FeatureTaskRuntimeRunLoopStandalonePublicationStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
       owner?.slot == PhaseSlot.COMMIT_PUSH ->
         FeatureTaskRuntimeRunLoopFinalizationStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.CI_MONITOR ->

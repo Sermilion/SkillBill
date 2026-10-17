@@ -203,7 +203,10 @@ class IdeStatusService(
           IdeStatusProblemSnapshots.noMatchingWork(repository.identity, observedAt, currentBranch),
           queryWork,
         )
-    return emit(projector.project(candidate = selected, context = context).snapshot, queryWork)
+    val monitorRecord = selected.standaloneStatus?.takeIf { it.monitorTarget != null }
+    val selectedContext =
+      monitorRecord?.let { context.copy(repositoryIdentity = it.repositoryIdentity) } ?: context
+    return emit(projector.project(candidate = selected, context = selectedContext).snapshot, queryWork)
   }
 
   fun board(request: WorkBoardRequest): WorkBoardResult {
@@ -894,9 +897,8 @@ class IdeStatusService(
         }
       }
     val standaloneRecords =
-      resolved?.standalone ?: branch?.let { branchName ->
-        readStatusStandaloneRecords(unitOfWork, repository.identity, branchName, observedAt, queryWork)
-      }.orEmpty()
+      resolved?.standalone
+        ?: readStatusStandaloneRecords(unitOfWork, repository, branch, observedAt, queryWork)
     val standaloneCandidates =
       latestPhaseExecutions(standaloneRecords).map { stored ->
         val record = projectStandaloneLease(stored, observedAt)
@@ -1098,7 +1100,12 @@ internal fun resolveRepositoryIdentity(
       "Could not form canonical repository identity for: $repoRootArg",
     )
   } else {
-    IdeStatusRepositoryResolution.Ok(identity = identity, repoRoot = canonicalGitRoot)
+    val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(canonicalGitRoot)
+    IdeStatusRepositoryResolution.Ok(
+      identity = identity,
+      repoRoot = canonicalGitRoot,
+      monitorIdentity = goalRepositoryIdentity(primaryRoot, repositoryEnclosingRootPort),
+    )
   }
 }
 
