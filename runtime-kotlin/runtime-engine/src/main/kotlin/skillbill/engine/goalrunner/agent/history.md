@@ -1,5 +1,14 @@
 # goalrunner boundary history
 
+## [2026-10-17] Every goal child stamps validate
+Areas: runtime-domain/goalrunner, runtime-engine/goalrunner
+- `GoalRunnerQualityGateSelectionResolver` returns VALIDATE for every subtask in the manifest, including first and middle children. The last-non-skipped BUILD/VALIDATE split is gone.
+- A three-child goal launches validate, validate, validate. A skipped last child still stamps VALIDATE on the remaining children. Explicit `--quality-gate-selection build` and PackBuildStrategy are unchanged.
+- Pattern: one quality-gate selection for every launched goal child, so each subtask records a full validation result instead of deferring check/detekt debt to the last child. reusable
+- Limitation: in-flight children already recorded as BUILD finish that recorded plan; this selection applies to new launches.
+Feature flag: N/A
+Acceptance criteria: n/a
+
 ## [2026-10-14] SKILL-425 subtask 2: full run plans first
 Areas: runtime-engine goalrunner (intake, plan, GoalRunner), runtime-cli goal/core and kernel/plan, goalrunner and CLI tests
 - A full run on a key with no stored durable goal and no bundle on disk now runs the plan skeleton first, then imports the bundle and runs the goal in the same invocation. GoalRunner.requiresPlanning answers the question; GoalCliCommands.planFirstWhenNoGoal acts on it after admission.

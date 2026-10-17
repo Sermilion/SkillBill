@@ -1021,7 +1021,7 @@ class GoalRunnerValidationDepthTest {
 
 class GoalRunnerQualityGateSelectionTest {
   @Test
-  fun `three-child goal stamps build build validate`() {
+  fun `three-child goal stamps validate for every child`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 3))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -1037,8 +1037,8 @@ class GoalRunnerQualityGateSelectionTest {
 
     assertEquals(
       listOf(
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
+        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
         FeatureTaskRuntimeQualityGateSelection.VALIDATE,
       ),
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
@@ -1067,7 +1067,7 @@ class GoalRunnerQualityGateSelectionTest {
   }
 
   @Test
-  fun `ordinal-last skipped promotes validate to previous last non-skipped`() {
+  fun `skipped last child still stamps validate on remaining children`() {
     val initial =
       manifest(subtaskCount = 3).copy(
         subtasks =
@@ -1090,7 +1090,7 @@ class GoalRunnerQualityGateSelectionTest {
 
     assertEquals(listOf(1, 2), launcher.requests.map { it.skillRunRequest.subtaskId })
     assertEquals(
-      listOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+      listOf(FeatureTaskRuntimeQualityGateSelection.VALIDATE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
     )
   }
