@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 2 - Data, preferences, and generated DI
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -36,7 +36,7 @@ Run the desktop `./gradlew clean check --no-build-cache`, KSP generation from em
 
 ## Implementation Details
 
-All facts below come from the preplan digest. Statements marked **Assumption** were not in the digest. Implement must confirm each one against the tree and record any correction in its phase output. Paths are relative to `desktop-tray/`, and the package prefix is `dev.skillbill.tray`.
+All facts below come from the preplan digest. Statements marked **Assumption** were not in the digest. Implement must confirm each one against the tree and record any correction in its phase output. Paths are relative to `../../../desktop-tray`, and the package prefix is `dev.skillbill.tray`.
 
 ### Settled decisions
 

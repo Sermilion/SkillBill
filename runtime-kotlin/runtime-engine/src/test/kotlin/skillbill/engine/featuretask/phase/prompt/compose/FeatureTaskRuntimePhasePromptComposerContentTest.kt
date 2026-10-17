@@ -390,7 +390,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Final source acceptance is required before downstream review",
+      "Every criterion must be accepted before downstream review",
       "the audit-specific advance rule",
     )
     assertFalse(auditPrompt.contains("exactly `[]`"), "audit must not demand a literal empty list")

@@ -16,7 +16,7 @@ This spec was authored separately from its implementation. The goal run that con
 
 ## Problem and evidence
 
-On 2026-10-11, the inspected implementation checkout used `desktop-tray/settings.gradle.kts` with no included application subprojects and `desktop-tray/build.gradle.kts` with the Kotlin JVM plugin. Domain, application, presentation, UI, composition, preferences, and CLI infrastructure lived under the same `desktop-tray/src/main/kotlin` tree. The Gradle/source inventory showed no desktop `build-logic`, `composeApp`, `core:*`, `feature:*`, or common source sets.
+On 2026-10-11, the inspected implementation checkout used `../../../desktop-tray/settings.gradle.kts` with no included application subprojects and `desktop-tray/build.gradle.kts` with the Kotlin JVM plugin. Domain, application, presentation, UI, composition, preferences, and CLI infrastructure lived under the same `desktop-tray/src/main/kotlin` tree. The Gradle/source inventory showed no desktop `build-logic`, `composeApp`, `core:*`, `feature:*`, or common source sets.
 
 SKILL-423's parent and saved subtask plan already describe a Readian-style KMP migration. Its manifest remained `in_progress` at inspection. These observations establish an unimplemented structural requirement at that point, not a completed workflow verdict. Reinspect the eventual implementation checkout before changing code.
 
@@ -30,7 +30,7 @@ Reconcile overlapping changes against the current tree. Keep existing working re
 
 Preserve SKILL-414, SKILL-417, SKILL-418, and landed SKILL-422 lifecycle/status behavior. Runtime architecture rules remain authoritative. This spec does not authorize weakened guards, changed workflow semantics, schema duplication, or an unrelated UI redesign.
 
-Follow the active-fix-branch rule in the implementation checkout's `AGENTS.md`. The current instruction names `base/SKILL-380-phase-slot-strategies` until it merges. Recheck that condition before a later execution and use its worktree when another feature branch has work in progress. All spec references and later planning paths are repository-relative.
+Follow the active-fix-branch rule in the implementation checkout's `../../../AGENTS.md`. The current instruction names `base/SKILL-380-phase-slot-strategies` until it merges. Recheck that condition before a later execution and use its worktree when another feature branch has work in progress. All spec references and later planning paths are repository-relative.
 
 ## Reference evidence and precedence
 
@@ -69,7 +69,7 @@ This is architecture parity, not a source copy. Do not import Readian's authenti
 
 ## Required final project structure
 
-Keep `desktop-tray/` as the Gradle root and preserve its wrapper entry point. The shipped executable and app branding remain Skill Bill.
+Keep `../../../desktop-tray` as the Gradle root and preserve its wrapper entry point. The shipped executable and app branding remain Skill Bill.
 
 ```text
 desktop-tray/
@@ -138,7 +138,7 @@ Only JVM source sets may consume supported runtime libraries. Use the build's su
 
 ## Build conventions
 
-`pluginManagement` includes the desktop's own `build-logic`. The convention build imports `desktop-tray/gradle/libs.versions.toml`. Runtime build logic and Readian build logic are references, not dependencies on developer-specific absolute paths.
+`pluginManagement` includes the desktop's own `build-logic`. The convention build imports `../../../desktop-tray/gradle/libs.versions.toml`. Runtime build logic and Readian build logic are references, not dependencies on developer-specific absolute paths.
 
 Provide project-owned convention IDs for KMP library, Compose KMP, Kotlin-Inject/Anvil, Room 3, feature modules, tests/quality, and desktop application packaging where responsibilities justify distinct plugins. Use one consistent Skill Bill prefix. Implement common behavior once. A plugin may compose smaller conventions; it must not silently register mobile targets.
 
@@ -229,7 +229,7 @@ The source IDs below use SKILL-423's normalized audit numbering. Preserve that p
 | SKILL-423 AC-011, control admission and feedback | AC-33 | Shared admission validates the exact selected database/store/file identity through the owning write connection, alongside repository, execution, revision, and lease fences. Same-path replacement cannot write to the prior file after a desktop path check. Durable intent, accepted request, attempted termination, confirmed exit, and incomplete termination remain distinct typed outcomes through desktop feedback. Host waits remain outside the transaction and acceptance cannot fabricate lifecycle completion. |
 | SKILL-423 AC-017, deadline ownership | AC-34 | Owner death, lease expiry, shared freshness, recent-completion expiry, and history cutoffs reproject subscribed data without writes or periodic store polling. Board and independently subscribed detail deadlines belong to the selected store/generation/query/identity and retained ranges. Append, eviction, refreshed ranges, selection changes, and replacement recompute and wake the earliest deadline; obsolete callbacks cannot invalidate a new owner. Preserve implemented owner-exit, freshness, lease, and retained-page scheduling repairs. |
 
-Current source owners include `desktop-tray/src/main/kotlin/dev/skillbill/tray/application/Ports.kt`, `DashboardController.kt`, `domain/WorkModels.kt`, `infrastructure/data/RoomBoardSource.kt`, `RuntimeWorkMapper.kt`, `infrastructure/storage/WorkCandidateQueries.kt`, and `ui/DetailPane.kt`. Runtime owners include `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/`, its `control/` and `pagination/` families, goal/runtime status services, runtime ports, and SQLite persistence implementations. The existing desktop guard is `desktop-tray/src/test/kotlin/dev/skillbill/tray/architecture/DesktopArchitectureTest.kt`. These paths identify handoff entry points; final module placement follows this feature's ownership rules.
+Current source owners include `desktop-tray/src/main/kotlin/dev/skillbill/tray/application/Ports.kt`, `DashboardController.kt`, `domain/WorkModels.kt`, `infrastructure/data/RoomBoardSource.kt`, `RuntimeWorkMapper.kt`, `infrastructure/storage/WorkCandidateQueries.kt`, and `ui/DetailPane.kt`. Runtime owners include `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work`, its `control/` and `pagination/` families, goal/runtime status services, runtime ports, and SQLite persistence implementations. The existing desktop guard is `desktop-tray/src/test/kotlin/dev/skillbill/tray/architecture/DesktopArchitectureTest.kt`. These paths identify handoff entry points; final module placement follows this feature's ownership rules.
 
 AC-005, AC-012, and AC-015 were reported satisfied in the latest SKILL-423 repair result. Preserve refresh/initial-empty behavior, notification deduplication, and independent detail observation. They are not additional open handoff items. This transfer does not weaken runtime architecture rules, mutate a manifest, reset retry history, or authorize fabricated audit/validation evidence.
 

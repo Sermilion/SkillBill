@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 
 class AcceptanceCriterionRepairStateTest {
   @Test
-  fun `a named prose regression focuses verification but repeated unchanged rejection rechecks every criterion`() {
+  fun `after discovery each criterion settles alone and an empty queue is accepted without a full re-audit`() {
     val initial =
       assertNotNull(
         AcceptanceCriterionRepairState.admit(
@@ -16,52 +16,79 @@ class AcceptanceCriterionRepairStateTest {
             "execution",
             "a".repeat(64),
             listOf("first", "second"),
-            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")).map {
-              it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
-            },
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")),
             emptyList(),
           ),
         ),
       )
-    val rejection =
+    val discovery =
       AcceptanceCriterionProseAudit(
         "full:1",
         initial.revision + 1,
         null,
         false,
         "b".repeat(64),
-        "AC-001 is satisfied. AC-002 remains open. The second caller can bypass the reservation.",
+        "AC-002 remains open: the second caller can bypass the reservation.",
         "c".repeat(64),
         "source:1",
       )
-    val focused = assertNotNull(initial.recordProseAudit(rejection))
-    assertEquals(listOf("AC-002"), focused.pendingAuditRefs)
-    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, focused.stage)
-    val rechecked =
+    val queued = assertNotNull(initial.recordProseAudit(discovery))
+    assertEquals(listOf("AC-001", "AC-002"), queued.pendingAuditRefs)
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, queued.stage)
+
+    fun AcceptanceCriterionRepairState.focusedAccept(ref: String) =
       assertNotNull(
-        focused.recordProseAudit(
-          rejection.copy(
-            id = "focused:1",
-            revision = focused.revision + 1,
-            criterionRef = "AC-002",
-            satisfied = true,
-            prose = "The second caller already enforces the reservation.",
+        recordProseAudit(
+          discovery.copy(id = "focused:$ref", revision = revision + 1, criterionRef = ref, satisfied = true),
+        ),
+      )
+
+    val first = queued.focusedAccept("AC-001")
+    assertEquals(listOf("AC-002"), first.pendingAuditRefs)
+    assertEquals(AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED, first.stage)
+    val accepted = first.focusedAccept("AC-002")
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, accepted.stage)
+    assertEquals(AcceptanceCriterionRepairMode.ACCEPTED, accepted.mode)
+    assertEquals(accepted, AcceptanceCriterionRepairState.restore(accepted))
+    assertNull(
+      accepted.recordProseAudit(discovery.copy(id = "full:2", revision = accepted.revision + 1)),
+      "an accepted queue trusts its settled criteria and admits no later full re-check",
+    )
+  }
+
+  @Test
+  fun `an initial discovery that finds every criterion met is accepted at once`() {
+    val initial =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first"),
+            listOf(criterion("AC-001", 1, "first")),
+            emptyList(),
           ),
         ),
       )
-    assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, rechecked.stage)
-    val repeated =
+    val accepted =
       assertNotNull(
-        rechecked.recordProseAudit(
-          rejection.copy(
-            id = "full:2",
-            revision = rechecked.revision + 1,
+        initial.recordProseAudit(
+          AcceptanceCriterionProseAudit(
+            "full:1",
+            initial.revision + 1,
+            null,
+            true,
+            "b".repeat(64),
+            "Every production criterion is met.",
+            "c".repeat(64),
+            "source:1",
           ),
         ),
       )
-    assertEquals(listOf("AC-001", "AC-002"), repeated.pendingAuditRefs)
-    val unknown = assertNotNull(initial.recordProseAudit(rejection.copy(prose = "AC-099 remains open.")))
-    assertEquals(listOf("AC-001", "AC-002"), unknown.pendingAuditRefs)
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, accepted.stage)
+    assertEquals(emptyList(), accepted.pendingAuditRefs)
+    assertEquals(accepted, AcceptanceCriterionRepairState.restore(accepted))
   }
 
   @Test
@@ -174,39 +201,25 @@ class AcceptanceCriterionRepairStateTest {
   }
 
   @Test
-  fun `empty discovery requires final proof and refuses conflicting final digest reuse after reopening`() {
-    val admission =
-      AcceptanceCriterionRepairAdmission(
-        "catalog",
-        "execution",
-        "a".repeat(64),
-        listOf("first", "second"),
-        listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")).map {
-          it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
-        },
-        emptyList(),
+  fun `a discovery with nothing unresolved is accepted and restorable`() {
+    val discovered =
+      assertNotNull(
+        AcceptanceCriterionRepairState.admit(
+          AcceptanceCriterionRepairAdmission(
+            "catalog",
+            "execution",
+            "a".repeat(64),
+            listOf("first", "second"),
+            listOf(criterion("AC-001", 1, "first"), criterion("AC-002", 2, "second")).map {
+              it.copy(sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_CLOSED)
+            },
+            emptyList(),
+          ),
+        ),
       )
-    val discovered = assertNotNull(AcceptanceCriterionRepairState.admit(admission))
-    assertEquals(AcceptanceCriterionRepairMode.FINAL_FULL, discovered.mode)
+    assertEquals(AcceptanceCriterionRepairMode.ACCEPTED, discovered.mode)
+    assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, discovered.stage)
     assertEquals(discovered, AcceptanceCriterionRepairState.restore(discovered))
-    val input =
-      AcceptanceCriterionRepairFinalAuditInput(
-        setOf("AC-001", "AC-002"),
-        setOf("AC-001", "AC-002"),
-        "b".repeat(64),
-        "c".repeat(64),
-        "checkpoint:final",
-        dependencies = listOf(dependency("AC-001", "AC-002")),
-      )
-    val reopened = assertNotNull(discovered.recordFinalFullAudit(input))
-    assertEquals(listOf("AC-002", "AC-001"), reopened.unresolvedQueue)
-    assertEquals(reopened, AcceptanceCriterionRepairState.restore(reopened))
-    assertEquals(reopened, reopened.recordFinalFullAudit(input))
-    assertNull(reopened.recordFinalFullAudit(input.copy(checkpointId = "other-checkpoint")))
-    assertNull(reopened.recordFinalFullAudit(input.copy(regressedRefs = emptySet())))
-    assertNull(reopened.recordFinalFullAudit(input.copy(dependencies = emptyList())))
-    assertNull(reopened.recordFinalFullAudit(input.copy(auditBindingDigest = "d".repeat(64))))
-    assertNull(discovered.recordFinalFullAudit(input.copy(evaluatedRefs = setOf("AC-001"))))
   }
 
   @Test

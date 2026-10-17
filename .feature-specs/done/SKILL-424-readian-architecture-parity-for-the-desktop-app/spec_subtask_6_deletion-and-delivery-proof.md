@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 6 - Deletion and delivery proof
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -45,7 +45,7 @@ Run the desktop `./gradlew clean check --no-build-cache` and confirm root `check
 
 ## Implementation Details
 
-Paths are relative to `desktop-tray/` unless they start with `runtime-kotlin/` or `.github/`. `ARCH/` stands for `composeApp/src/jvmTest/kotlin/dev/skillbill/tray/architecture/`. Implement compiles nothing and runs no checks. The validate phase runs every command named below.
+Paths are relative to `../../../desktop-tray` unless they start with `runtime-kotlin/` or `.github/`. `ARCH/` stands for `composeApp/src/jvmTest/kotlin/dev/skillbill/tray/architecture/`. Implement compiles nothing and runs no checks. The validate phase runs every command named below.
 
 ### Starting state
 
@@ -105,7 +105,7 @@ Everything was planned in this one session, without delegated units, because the
    - Apply A4 to the `core/data` hits.
    - Leave the empty untracked root directories `src/main/resources/fonts` and `src/test` in place. Git ignores them, and `DeletionRulesTest.rootSourceFiles()` counts only regular files. Removing them is optional, and this plan does not remove them.
    - Leave `DeletionRules` rules (a)–(e) and `approvedProcessFiles` unchanged. The approved files are `NativeServicesImpl`, `NativeTrayHost`, `TrayPopoverPlacement`, and `macos/MacStatusItemBridge` under `composeApp/src/jvmMain/kotlin/dev/skillbill/tray/infrastructure/`. The list must not grow. Rule (c) keeps the ban on process use in desktop sources, which the operator decision preserves.
-   - Read `.github/workflows/desktop-tray-snapshot-cleanup.yml`. Change it only if it names a path that moved to `composeApp/build/...`.
+   - Read `../../../.github/workflows/desktop-tray-snapshot-cleanup.yml`. Change it only if it names a path that moved to `composeApp/build/...`.
    - Keep the CI workflow as it is: the three OS runners, `clean check createDistributable --no-build-cache`, `:composeApp:packagedDataSmoke`, the artifact upload path, and the broader path filter.
    - Apply A5 to the runtime reader inventory.
    - Tests: none.
@@ -126,7 +126,7 @@ Everything was planned in this one session, without delegated units, because the
      - Add one sentence that runtime services reached through the in-process graph may run `git`, per the 2026-10-15 operator decision.
      - Keep the approved native file list.
    - Leave `docs/skill-423-handoff.md` and `docs/data-layer-validation.md` unchanged; they contain none of this wording.
-   - Leave `agent/history.md` and `agent/decisions.md` to write_history.
+   - Leave `../../../agent/history.md` and `agent/decisions.md` to write_history.
    - Tests: none. These are docs.
 
 ### Validation (validate phase only)

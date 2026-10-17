@@ -686,7 +686,7 @@ class SkillBillStatusBarPresentationTest {
         val retained = StatusUiMapper.map(
             activeOutcome(planning = null, currentSubtaskId = "subtask-1", completed = 1)
                 .copy(
-                    summary = "Final full source audit required. Tests and build remain pending.",
+                    summary = "Focused source assessment selected. Tests and build remain pending.",
                     currentStepId = "audit",
                     currentStepLabel = "Audit",
                     diagnostic = StatusDiagnostic(timedOut = true, reasonCode = POLL_FAILED_REASON_CODE),
@@ -700,7 +700,7 @@ class SkillBillStatusBarPresentationTest {
         assertNull(mapped.details.staleNote)
         assertFalse(mapped.tooltipText.contains(SkillBillStatusBarPresentation.STALE_NOTE))
         assertTrue(mapped.details.problemSummary!!.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))
-        assertTrue(mapped.details.problemSummary!!.contains("Final full source audit required"))
+        assertTrue(mapped.details.problemSummary!!.contains("Focused source assessment selected"))
         assertTrue(mapped.accessibleDescription.contains("pending"))
         assertTrue(mapped.accessibleDescription.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))
         assertTrue(mapped.tooltipText.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))

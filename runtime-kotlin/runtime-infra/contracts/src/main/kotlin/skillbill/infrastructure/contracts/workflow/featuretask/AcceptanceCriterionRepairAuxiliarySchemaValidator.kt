@@ -26,7 +26,6 @@ import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairAdopt
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionSourceDisposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -144,13 +143,6 @@ object AcceptanceCriterionRepairAuxiliarySchemaValidator {
         } else {
           null
         }
-      }
-      AcceptanceCriterionRepairMode.FINAL_FULL.wireValue -> {
-        val production =
-          criteria.filter {
-            it[Keys.SOURCE_DISPOSITION] != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE.wireValue
-          }
-        if (production.size != refs.size) "final-full audit contains a non-production criterion." else null
       }
       else -> "audit result mode is unsupported."
     }

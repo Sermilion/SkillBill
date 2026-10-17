@@ -84,7 +84,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         )
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       assertContains(harness.launchOrder(), "review")
       assertContains(harness.launchOrder(), "validate")
       assertEquals(null, harness.recorder.loadNoChangePause(WORKFLOW_ID))
@@ -92,7 +92,7 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
-  fun `a failed repair returns to focused planning once before the next authored criterion and final audit`() {
+  fun `a failed repair returns to focused planning once and an accepted queue moves to review without another audit`() {
     val repairs = AtomicInteger()
     val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
     val launcher = serialLauncher(repairs) { currentState.get() }
@@ -112,7 +112,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           worker,
         )
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-      assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       assertEquals(1, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
       assertEquals(2, repairs.get())
       assertEquals(
@@ -127,10 +127,11 @@ class FeatureTaskRuntimeSerialRepairTest {
           "audit",
           "audit",
           "audit",
-          "audit",
         ),
         harness.launchedPromptPhaseOrder().filter { it.startsWith("audit") },
       )
+      val order = harness.launchOrder()
+      assertEquals("review", order[order.indexOfLast { it == "audit" } + 1], "$order")
     }
   }
 
@@ -160,14 +161,12 @@ class FeatureTaskRuntimeSerialRepairTest {
       val report = harness.runner.run(request, worker)
       assertEquals("validate", assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, "$report").lastIncompletePhase)
       assertEquals(listOf("validate"), changedPhases)
-      assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+      assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       val finishedPhases = harness.launchedPromptPhaseOrder().toList()
-      val acceptedAudits = scope.snapshot?.finalAudits
       val resumed = harness.runner.run(request, worker)
       assertIs<FeatureTaskRuntimeRunReport.Completed>(resumed, "$resumed")
       assertEquals(finishedPhases + listOf("validate", "write_history"), harness.launchedPromptPhaseOrder())
       assertEquals(listOf("validate", "validate", "write_history"), changedPhases)
-      assertEquals(acceptedAudits, scope.snapshot?.finalAudits)
     }
   }
 
@@ -199,7 +198,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
       if (secondCriterionSucceeds) {
         assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
-        assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
         assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
         assertContains(harness.launchOrder(), "review")
       } else {
@@ -228,8 +227,7 @@ class FeatureTaskRuntimeSerialRepairTest {
             when {
               state == null -> serialDiscoveryOutput()
               prompt.contains("Read-only repair-report admission") -> settledAuditSatisfiedRecord()
-              state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ||
-                state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED ->
+              state.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
                 serialStructuredAuditOutput(audit, state, "The selected production requirement is satisfied.")
               else -> {
                 val refs = state.pendingAuditRefs.ifEmpty { state.unresolvedQueue }.joinToString()
@@ -346,9 +344,7 @@ class FeatureTaskRuntimeSerialRepairTest {
           val state = currentState()
           if (audit == 1) {
             facts(serialDiscoveryOutput())
-          } else if (state?.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ||
-            state?.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
-          ) {
+          } else if (state?.stage == AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION) {
             facts(serialStructuredAuditOutput(audit, state, "Current production behavior meets this requirement."))
           } else {
             facts(
@@ -463,7 +459,7 @@ class FeatureTaskRuntimeSerialRepairTest {
       if (targeted) {
         AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
       } else {
-        AcceptanceCriterionRepairMode.FINAL_FULL
+        AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
       }
     val auditResult =
       mapOf(

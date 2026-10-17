@@ -15,8 +15,6 @@ required:
   - reservation
   - outcomes
   - unsuccessful_totals
-  - final_audit_required
-  - final_audit_digest
   - revision
   - mode
   - stage
@@ -24,7 +22,6 @@ required:
   - admitted_tree_digest
   - admitted_checkpoint_id
   - source_transitions
-  - final_audits
 properties:
   contract_version: { const: '0.1' }
   catalog_id: { type: string, minLength: 1, maxLength: 256 }
@@ -105,11 +102,9 @@ properties:
     additionalProperties: false
     patternProperties:
       '^AC-[0-9]{3}$': { type: integer, minimum: 0, maximum: 3 }
-  final_audit_required: { type: boolean }
-  final_audit_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
   revision: { type: integer, minimum: 0 }
-  mode: { enum: [initial_discovery, current_criterion_targeted, final_full] }
-  stage: { enum: [discovery_admitted, read_only_audit_required, repair_reserved, repair_completed_awaiting_targeted_verification, final_audit_required, final_accepted, budget_blocked] }
+  mode: { enum: [initial_discovery, current_criterion_targeted, accepted] }
+  stage: { enum: [discovery_admitted, read_only_audit_required, repair_reserved, repair_completed_awaiting_targeted_verification, accepted, budget_blocked] }
   completed_repair_evidence_ref: { type: [string, 'null'], minLength: 1 }
   admitted_tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
   admitted_checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
@@ -130,25 +125,6 @@ properties:
         evidence_ref: { type: string, minLength: 1 }
         tree_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
         checkpoint_id: { type: [string, 'null'], minLength: 1, maxLength: 256 }
-  final_audits:
-    type: array
-    maxItems: 4096
-    items:
-      type: object
-      additionalProperties: false
-      required: [revision, digest, catalog_id, execution_id, spec_digest, tree_digest, checkpoint_id, audited_refs, regressed_refs, dependencies]
-      properties:
-        revision: { type: integer, minimum: 1 }
-        digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
-        catalog_id: { type: string, minLength: 1, maxLength: 256 }
-        execution_id: { type: string, minLength: 1, maxLength: 256 }
-        spec_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
-        tree_digest: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
-        checkpoint_id: { type: string, minLength: 1, maxLength: 256 }
-        audited_refs: { type: array, maxItems: 256, uniqueItems: true, items: { type: string, pattern: '^AC-[0-9]{3}$' } }
-        regressed_refs: { type: array, maxItems: 256, uniqueItems: true, items: { type: string, pattern: '^AC-[0-9]{3}$' } }
-        dependencies: { $ref: '#/properties/dependencies' }
-        audit_binding_digest: { type: [string, 'null'], pattern: '^[a-fA-F0-9]{64}$' }
   pending_audit_refs: { type: array, maxItems: 256, uniqueItems: true, items: { type: string, pattern: '^AC-[0-9]{3}$' } }
   prose_audits:
     type: array
@@ -176,9 +152,9 @@ x-coherence-checks:
     description: Current criterion is the first unresolved queue entry; a reservation names that current criterion and at most one reservation is live.
   - id: monotonic-budget
     description: Unsuccessful totals equal accepted unsuccessful outcomes at or after budget_start_outcome_index, which defaults to zero and cannot exceed the retained outcome count. Each criterion admits at most three failures per budget. Explicit operator resume of a budget-blocked child advances the index to the retained outcome count and clears the active totals without deleting history. Budget-blocked state has an exhausted criterion anywhere in the unresolved queue; discovery, reserved, and awaiting-verification stages have no exhausted unresolved criterion.
-  - id: final-audit
-    description: An empty queue requires final audit; only final-full evidence may reopen regressions.
+  - id: accepted-queue
+    description: An empty focused queue with no pending audit is accepted; settled criteria are trusted and no later full audit re-checks them.
   - id: immutable-transition-history
-    description: Accepted source closures and final-audit reopenings retain their producing identity and evidence through the authoritative state lifetime.
+    description: Accepted source closures and focused-audit reopenings retain their producing identity and evidence through the authoritative state lifetime.
   - id: utf8-capacity
     description: The runtime refuses serialized artifacts above 12582912 UTF-8 bytes before persistence.

@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.model.audit
 enum class AcceptanceCriterionRepairMode(val wireValue: String) {
   INITIAL_DISCOVERY("initial_discovery"),
   CURRENT_CRITERION_TARGETED("current_criterion_targeted"),
-  FINAL_FULL("final_full"),
+  ACCEPTED("accepted"),
 }
 
 enum class AcceptanceCriterionRepairStage(val wireValue: String) {
@@ -11,8 +11,7 @@ enum class AcceptanceCriterionRepairStage(val wireValue: String) {
   READ_ONLY_AUDIT_REQUIRED("read_only_audit_required"),
   REPAIR_RESERVED("repair_reserved"),
   REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION("repair_completed_awaiting_targeted_verification"),
-  FINAL_AUDIT_REQUIRED("final_audit_required"),
-  FINAL_ACCEPTED("final_accepted"),
+  ACCEPTED("accepted"),
   BUDGET_BLOCKED("budget_blocked"),
 }
 
@@ -114,31 +113,6 @@ data class AcceptanceCriterionRepairSourceTransition(
   val checkpointId: String?,
 )
 
-data class AcceptanceCriterionRepairFinalAuditInput(
-  val evaluatedRefs: Set<String>,
-  val regressedRefs: Set<String>,
-  val evidenceDigest: String,
-  val treeDigest: String,
-  val checkpointId: String,
-  val mode: AcceptanceCriterionRepairMode = AcceptanceCriterionRepairMode.FINAL_FULL,
-  val dependencies: List<AcceptanceCriterionRepairDependency>? = null,
-  val auditBindingDigest: String? = null,
-)
-
-data class AcceptanceCriterionRepairFinalAudit(
-  val revision: Long,
-  val digest: String,
-  val catalogId: String,
-  val executionId: String,
-  val specDigest: String,
-  val treeDigest: String,
-  val checkpointId: String,
-  val auditedRefs: List<String>,
-  val regressedRefs: List<String>,
-  val dependencies: List<AcceptanceCriterionRepairDependency>,
-  val auditBindingDigest: String? = null,
-)
-
 data class AcceptanceCriterionRepairState internal constructor(
   val catalogId: String,
   val executionId: String,
@@ -150,8 +124,6 @@ data class AcceptanceCriterionRepairState internal constructor(
   val reservation: AcceptanceCriterionRepairReservation?,
   val outcomes: List<AcceptanceCriterionRepairOutcome>,
   val unsuccessfulTotals: Map<String, Int>,
-  val finalAuditRequired: Boolean,
-  val finalAuditDigest: String?,
   val revision: Long,
   val mode: AcceptanceCriterionRepairMode,
   val stage: AcceptanceCriterionRepairStage,
@@ -159,7 +131,6 @@ data class AcceptanceCriterionRepairState internal constructor(
   val admittedTreeDigest: String?,
   val admittedCheckpointId: String?,
   val sourceTransitions: List<AcceptanceCriterionRepairSourceTransition>,
-  val finalAudits: List<AcceptanceCriterionRepairFinalAudit>,
   val pendingAuditRefs: List<String> = emptyList(),
   val proseAudits: List<AcceptanceCriterionProseAudit> = emptyList(),
   val pendingClarificationQuestion: String? = null,
@@ -190,12 +161,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     val available = reservation == null && !hasExhaustedUnresolvedCriterion(unresolvedQueue, unsuccessfulTotals)
     val validId = reservationId.isNotBlank() && outcomes.none { it.reservationId == reservationId }
     val capacity = outcomes.size < MAX_REPAIR_OUTCOMES && sourceTransitions.size < MAX_REPAIR_SOURCE_TRANSITIONS
-    val allowedStage =
-      stage in
-        setOf(
-          AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED,
-          AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED,
-        )
+    val allowedStage = stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
     if (mode != AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED || !available || !validId) return null
     if (!capacity || !allowedStage) return null
     return copy(
@@ -262,8 +228,6 @@ data class AcceptanceCriterionRepairState internal constructor(
       reservation = null,
       outcomes = outcomes + acceptedOutcome,
       unsuccessfulTotals = totals,
-      finalAuditRequired = queue.isEmpty() && pending.isEmpty(),
-      finalAuditDigest = if (queue.isEmpty()) null else finalAuditDigest,
       mode = modeAfterOutcome(pending, queue),
       stage = stageAfterOutcome(blocked, outcome.successful, pending, queue),
       completedRepairEvidenceRef = null,
@@ -279,7 +243,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     queue: List<String>,
   ): AcceptanceCriterionRepairMode =
     if (queue.isEmpty() && pending.isEmpty()) {
-      AcceptanceCriterionRepairMode.FINAL_FULL
+      AcceptanceCriterionRepairMode.ACCEPTED
     } else {
       AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
     }
@@ -293,7 +257,7 @@ data class AcceptanceCriterionRepairState internal constructor(
     when {
       blocked -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
       successful && pending.isNotEmpty() -> AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
-      queue.isEmpty() && pending.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
+      queue.isEmpty() && pending.isEmpty() -> AcceptanceCriterionRepairStage.ACCEPTED
       else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
     }
 
@@ -345,122 +309,6 @@ data class AcceptanceCriterionRepairState internal constructor(
     }
   }
 
-  fun recordFinalFullAudit(input: AcceptanceCriterionRepairFinalAuditInput): AcceptanceCriterionRepairState? {
-    val regressedRefs = input.regressedRefs
-    val evidenceDigest = input.evidenceDigest
-    val dependencies = input.dependencies ?: dependencies
-    val acceptedAudit = finalAudits.firstOrNull { it.digest == evidenceDigest }
-    if (acceptedAudit != null || finalAuditDigest == evidenceDigest) {
-      return if (acceptedAudit?.matches(input, this) == true) this else null
-    }
-    if (!canRecordFinal(input)) return null
-    val reopened =
-      criteria.map { criterion ->
-        if (criterion.canonicalRef in regressedRefs) {
-          criterion.copy(
-            sourceDisposition = AcceptanceCriterionSourceDisposition.SOURCE_UNRESOLVED,
-            closureEvidenceRef = null,
-            closureTreeDigest = null,
-            closureCheckpointId = null,
-            evidenceRef = evidenceDigest,
-          )
-        } else {
-          criterion
-        }
-      }
-    val admitted =
-      admit(
-        AcceptanceCriterionRepairAdmission(
-          catalogId,
-          executionId,
-          specDigest,
-          criteria.sortedBy { it.ordinal }.map { it.originalText },
-          reopened,
-          dependencies,
-        ),
-      ) ?: return null
-    val ordered = admitted.unresolvedQueue
-    val exhausted = hasExhaustedUnresolvedCriterion(ordered, unsuccessfulTotals)
-    val transitions = reopeningTransitions(reopened, input)
-    return copy(
-      criteria = reopened,
-      dependencies = dependencies,
-      unresolvedQueue = ordered,
-      currentCriterionRef = ordered.firstOrNull(),
-      finalAuditRequired = false,
-      finalAuditDigest = evidenceDigest,
-      mode =
-        if (ordered.isEmpty()) {
-          AcceptanceCriterionRepairMode.FINAL_FULL
-        } else {
-          AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
-        },
-      stage =
-        when {
-          exhausted -> AcceptanceCriterionRepairStage.BUDGET_BLOCKED
-          ordered.isEmpty() -> AcceptanceCriterionRepairStage.FINAL_ACCEPTED
-          else -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
-        },
-      sourceTransitions = sourceTransitions + transitions,
-      finalAudits =
-        finalAudits +
-          acceptedAudit(input),
-      revision = revision + 1,
-    )
-  }
-
-  private fun acceptedAudit(input: AcceptanceCriterionRepairFinalAuditInput): AcceptanceCriterionRepairFinalAudit =
-    AcceptanceCriterionRepairFinalAudit(
-      revision = revision + 1,
-      digest = input.evidenceDigest,
-      catalogId = catalogId,
-      executionId = executionId,
-      specDigest = specDigest,
-      treeDigest = input.treeDigest,
-      checkpointId = input.checkpointId,
-      auditedRefs = input.evaluatedRefs.sorted(),
-      regressedRefs = input.regressedRefs.sorted(),
-      dependencies = input.dependencies ?: dependencies,
-      auditBindingDigest = input.auditBindingDigest,
-    )
-
-  private fun canRecordFinal(input: AcceptanceCriterionRepairFinalAuditInput): Boolean {
-    val validMode = input.mode == AcceptanceCriterionRepairMode.FINAL_FULL && finalAuditRequired && reservation == null
-    val validStage = stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
-    val validEvidence =
-      input.evidenceDigest.isDigest() && input.treeDigest.isDigest() &&
-        input.checkpointId.isNotBlank()
-    val refs =
-      criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
-        .mapTo(mutableSetOf()) { it.canonicalRef }
-    val completeCoverage = input.evaluatedRefs == refs && refs.containsAll(input.regressedRefs)
-    val capacity =
-      finalAudits.size < MAX_REPAIR_FINAL_AUDITS &&
-        sourceTransitions.size + input.regressedRefs.size <= MAX_REPAIR_SOURCE_TRANSITIONS
-    return validMode && validStage && validEvidence && completeCoverage && capacity
-  }
-
-  private fun reopeningTransitions(
-    reopened: List<AcceptanceCriterionRepairCriterion>,
-    input: AcceptanceCriterionRepairFinalAuditInput,
-  ): List<AcceptanceCriterionRepairSourceTransition> {
-    return criteria.mapNotNull { previous ->
-      val next = reopened.first { it.canonicalRef == previous.canonicalRef }
-      if (previous.sourceDisposition == next.sourceDisposition) return@mapNotNull null
-      AcceptanceCriterionRepairSourceTransition(
-        criterionRef = previous.canonicalRef,
-        revision = revision + 1,
-        fromDisposition = previous.sourceDisposition,
-        toDisposition = next.sourceDisposition,
-        producingId = input.evidenceDigest,
-        producingDigest = input.evidenceDigest,
-        evidenceRef = input.evidenceDigest,
-        treeDigest = input.treeDigest,
-        checkpointId = input.checkpointId,
-      )
-    }
-  }
-
   companion object {
     const val MAX_UNSUCCESSFUL_REPAIR_OUTCOMES: Int = 3
     const val MAX_DURABLE_UTF8_BYTES: Int = 12_582_912
@@ -496,18 +344,16 @@ data class AcceptanceCriterionRepairState internal constructor(
         reservation = null,
         outcomes = emptyList(),
         unsuccessfulTotals = emptyMap(),
-        finalAuditRequired = queue.isEmpty(),
-        finalAuditDigest = null,
         revision = 0,
         mode =
           if (queue.isEmpty()) {
-            AcceptanceCriterionRepairMode.FINAL_FULL
+            AcceptanceCriterionRepairMode.ACCEPTED
           } else {
             AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
           },
         stage =
           if (queue.isEmpty()) {
-            AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
+            AcceptanceCriterionRepairStage.ACCEPTED
           } else {
             AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
           },
@@ -515,7 +361,6 @@ data class AcceptanceCriterionRepairState internal constructor(
         admittedTreeDigest = null,
         admittedCheckpointId = null,
         sourceTransitions = emptyList(),
-        finalAudits = emptyList(),
       )
     }
 
@@ -550,7 +395,6 @@ data class AcceptanceCriterionRepairState internal constructor(
     internal const val MAX_REPAIR_DEPENDENCIES: Int = 4096
     internal const val MAX_REPAIR_OUTCOMES: Int = 4096
     internal const val MAX_REPAIR_SOURCE_TRANSITIONS: Int = 16384
-    internal const val MAX_REPAIR_FINAL_AUDITS: Int = 4096
   }
 }
 
@@ -592,16 +436,3 @@ private fun AcceptanceCriterionRepairOutcome.matchesVerification(state: Acceptan
         checkpointId == state.admittedCheckpointId
     )
   )
-
-private fun AcceptanceCriterionRepairFinalAudit.matches(
-  input: AcceptanceCriterionRepairFinalAuditInput,
-  state: AcceptanceCriterionRepairState,
-): Boolean {
-  val identity = catalogId == state.catalogId && executionId == state.executionId && specDigest == state.specDigest
-  val source = treeDigest == input.treeDigest && checkpointId == input.checkpointId
-  val coverage = auditedRefs == input.evaluatedRefs.sorted() && regressedRefs == input.regressedRefs.sorted()
-  val graph =
-    dependencies == (input.dependencies ?: state.dependencies) &&
-      auditBindingDigest == input.auditBindingDigest
-  return input.mode == AcceptanceCriterionRepairMode.FINAL_FULL && identity && source && coverage && graph
-}

@@ -12,7 +12,7 @@ internal object AcceptanceAuditPromptSections {
       "gaps for audit_plan_fix."
 
   const val DIRECTIVE: String =
-    "On an initial or final full audit, verify the production behavior required by every acceptance criterion " +
+    "On the initial full audit, verify the production behavior required by every acceptance criterion " +
       "against the current implementation. On a focused audit, inspect only the authored criterion selected by " +
       "the runtime. " +
       "Exclude all test requirements from audit, even when the plan or a criterion " +
@@ -34,9 +34,8 @@ internal object AcceptanceAuditPromptSections {
       "When the runtime supplies a current criterion, inspect that authored criterion and report its source gaps " +
       "in prose. A focused audit checks every independent production requirement in that criterion; treat earlier " +
       "audit findings as context, not as a complete list of its gaps. If the source conclusion is ambiguous, keep " +
-      "the criterion open and request read-only clarification. A final full audit inspects " +
-      "every authored production requirement in the current source, including " +
-      "criteria previously accepted. Apply the same test exclusion. " +
+      "the criterion open and request read-only clarification. Criteria accepted by an earlier audit stay " +
+      "accepted and are not re-checked. " +
       "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
       "verdict \"satisfied\" when the inspected production scope is met and verdict \"advance\" when it has " +
       "source gaps. A completion without a verdict is read as a clarification request and repeats this audit. " +
@@ -58,8 +57,8 @@ internal object AcceptanceAuditPromptSections {
           "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
           "state those later test or build obligations separately when relevant. Refer to criteria using their " +
           "briefing labels when useful, without requiring a fixed list or format. " +
-          "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Final source acceptance is " +
-          "required before downstream review. Focused audits inspect the runtime-selected criterion. " +
+          "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
+          "before downstream review. Focused audits inspect the runtime-selected criterion. " +
           "For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
@@ -79,7 +78,6 @@ internal object AcceptanceAuditPromptSections {
 
   private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
     val current = inputs.currentAcceptanceCriterion ?: return ""
-    return " Runtime-selected audit context: $current. Use this context for a focused audit; final full audits " +
-      "must inspect the full authored production scope."
+    return " Runtime-selected audit context: $current. Use this context for a focused audit."
   }
 }

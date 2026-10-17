@@ -19,17 +19,6 @@ fun AcceptanceCriterionRepairState.retainClarification(question: String): Accept
   return copy(revision = revision + 1, pendingClarificationQuestion = readable)
 }
 
-fun AcceptanceCriterionRepairState.requireFinalProseAudit(): AcceptanceCriterionRepairState? =
-  if (stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED) {
-    copy(
-      stage = AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED,
-      finalAuditRequired = true,
-      revision = revision + 1,
-    )
-  } else {
-    null
-  }
-
 fun AcceptanceCriterionRepairState.recordProseAudit(
   audit: AcceptanceCriterionProseAudit,
 ): AcceptanceCriterionRepairState? {
@@ -40,7 +29,7 @@ fun AcceptanceCriterionRepairState.recordProseAudit(
     mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY &&
       stage == AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED && audit.criterionRef == null ->
       applyInitialAudit(audit)
-    audit.criterionRef == null -> beginFinalRecheck(audit)
+    audit.criterionRef == null -> null
     stage != AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> null
     audit.criterionRef != pendingAuditRefs.firstOrNull() -> null
     else -> applyFocusedAudit(audit)
@@ -73,9 +62,8 @@ private fun AcceptanceCriterionRepairState.applyInitialAudit(
     unresolvedQueue = emptyList(),
     currentCriterionRef = null,
     pendingAuditRefs = emptyList(),
-    mode = AcceptanceCriterionRepairMode.FINAL_FULL,
-    stage = AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED,
-    finalAuditRequired = true,
+    mode = AcceptanceCriterionRepairMode.ACCEPTED,
+    stage = AcceptanceCriterionRepairStage.ACCEPTED,
     proseAudits = proseAudits + audit,
     revision = audit.revision,
   )
@@ -131,12 +119,11 @@ private fun AcceptanceCriterionRepairState.applyFocusedAudit(
     sourceTransitions = sourceTransitions + transition,
     mode =
       if (pending.isEmpty() && queue.isEmpty()) {
-        AcceptanceCriterionRepairMode.FINAL_FULL
+        AcceptanceCriterionRepairMode.ACCEPTED
       } else {
         AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED
       },
     stage = proseAuditStage(audit.satisfied, blocked, pending, queue),
-    finalAuditRequired = pending.isEmpty() && queue.isEmpty(),
     revision = audit.revision,
   )
 }
@@ -168,41 +155,5 @@ private fun proseAuditStage(
     !satisfied -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
     pending.isNotEmpty() -> AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED
     queue.isNotEmpty() -> AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED
-    else -> AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED
+    else -> AcceptanceCriterionRepairStage.ACCEPTED
   }
-
-private fun AcceptanceCriterionRepairState.beginFinalRecheck(
-  audit: AcceptanceCriterionProseAudit,
-): AcceptanceCriterionRepairState? {
-  if (stage != AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED || audit.satisfied) return null
-  val pending =
-    criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
-      .sortedBy { it.ordinal }.map { it.canonicalRef }
-  val lastSettlement =
-    maxOf(
-      sourceTransitions.maxOfOrNull { it.revision } ?: 0,
-      finalAudits.maxOfOrNull { it.revision } ?: 0,
-    )
-  val repeatedSource =
-    proseAudits.any {
-      it.revision > lastSettlement && it.criterionRef == null && !it.satisfied && it.treeDigest == audit.treeDigest &&
-        it.checkpointId == audit.checkpointId
-    }
-  val named =
-    Regex(
-      "\\b(AC-[0-9]{3})\\b\\s+(?:(?:is|remains|still)\\s+)?" +
-        "(?:open|unresolved|unsatisfied|not\\s+(?:satisfied|met|implemented)|requires\\s+repair)\\b",
-      RegexOption.IGNORE_CASE,
-    ).findAll(audit.prose).map { it.groupValues[1].uppercase() }.toSet()
-  val focused = pending.filter { it in named }.takeUnless { repeatedSource || it.isEmpty() } ?: pending
-  return copy(
-    criteria = criteria.map { if (it.canonicalRef in focused) it.copy(evidenceRef = audit.prose) else it },
-    pendingAuditRefs = focused,
-    currentCriterionRef = focused.firstOrNull(),
-    finalAuditRequired = false,
-    mode = AcceptanceCriterionRepairMode.CURRENT_CRITERION_TARGETED,
-    stage = AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED,
-    proseAudits = proseAudits + audit,
-    revision = audit.revision,
-  )
-}

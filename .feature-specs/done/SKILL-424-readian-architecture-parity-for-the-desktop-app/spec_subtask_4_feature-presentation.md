@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 4 - Feature presentation
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -33,7 +33,7 @@ The parent spec is authoritative for module ownership, allowed dependencies, lif
 
 ## Implementation Details
 
-These tasks come from the preplan digest. That digest described a single-project `desktop-tray/` tree in which all production code sits under `src/main/kotlin/dev/skillbill/tray/`. Each "Assumption" line below marks a fact the digest did not establish. Implement confirms it against the current source before relying on it and records any change in its phase output. Paths are relative to `desktop-tray/`. Implement does not run builds, tests, or `check`. Those belong to the build and validate phases. The tests listed here are the ones to author.
+These tasks come from the preplan digest. That digest described a single-project `../../../desktop-tray` tree in which all production code sits under `src/main/kotlin/dev/skillbill/tray/`. Each "Assumption" line below marks a fact the digest did not establish. Implement confirms it against the current source before relying on it and records any change in its phase output. Paths are relative to `desktop-tray/`. Implement does not run builds, tests, or `check`. Those belong to the build and validate phases. The tests listed here are the ones to author.
 
 ### Task 1: Reconcile the tree before changing it (serves all ACs)
 

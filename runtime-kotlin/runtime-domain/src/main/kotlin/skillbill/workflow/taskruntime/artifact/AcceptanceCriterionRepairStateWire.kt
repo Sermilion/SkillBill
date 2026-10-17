@@ -6,7 +6,6 @@ import skillbill.error.shellcontent.invalidAcceptanceCriterionRepairStateSchema
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionProseAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairCriterion
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairDependency
-import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairFinalAudit
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcome
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
@@ -35,8 +34,6 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
       Keys.OUTCOMES to outcomes.map(::outcomeWire),
       Keys.UNSUCCESSFUL_TOTALS to unsuccessfulTotals,
       Keys.BUDGET_START_OUTCOME_INDEX to budgetStartOutcomeIndex,
-      Keys.FINAL_AUDIT_REQUIRED to finalAuditRequired,
-      Keys.FINAL_AUDIT_DIGEST to finalAuditDigest,
       Keys.REVISION to revision,
       Keys.MODE to mode.wireValue,
       Keys.STAGE to stage.wireValue,
@@ -55,22 +52,6 @@ fun AcceptanceCriterionRepairState.asRepairWireMap(): FeatureTaskRuntimeWorkflow
             Keys.EVIDENCE_REF to transition.evidenceRef,
             Keys.TREE_DIGEST to transition.treeDigest,
             Keys.CHECKPOINT_ID to transition.checkpointId,
-          )
-        },
-      Keys.FINAL_AUDITS to
-        finalAudits.map { audit ->
-          mapOf(
-            Keys.REVISION to audit.revision,
-            Keys.DIGEST to audit.digest,
-            Keys.CATALOG_ID to audit.catalogId,
-            Keys.EXECUTION_ID to audit.executionId,
-            Keys.SPEC_DIGEST to audit.specDigest,
-            Keys.TREE_DIGEST to audit.treeDigest,
-            Keys.CHECKPOINT_ID to audit.checkpointId,
-            Keys.AUDITED_REFS to audit.auditedRefs,
-            Keys.REGRESSED_REFS to audit.regressedRefs,
-            Keys.DEPENDENCIES to audit.dependencies.map(::dependencyWire),
-            Keys.AUDIT_BINDING_DIGEST to audit.auditBindingDigest,
           )
         },
       Keys.PENDING_AUDIT_REFS to pendingAuditRefs,
@@ -105,8 +86,6 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       outcomes = repairOutcomes(),
       unsuccessfulTotals = repairTotals(),
       budgetStartOutcomeIndex = repairBudgetStartOutcomeIndex(),
-      finalAuditRequired = requiredBoolean(Keys.FINAL_AUDIT_REQUIRED),
-      finalAuditDigest = optionalString(Keys.FINAL_AUDIT_DIGEST),
       revision = requiredLong(Keys.REVISION),
       mode = requiredEnum(Keys.MODE, AcceptanceCriterionRepairMode.entries) { it.wireValue },
       stage = requiredEnum(Keys.STAGE, AcceptanceCriterionRepairStage.entries) { it.wireValue },
@@ -114,7 +93,6 @@ fun FeatureTaskRuntimeWorkflowArtifactMap.toAcceptanceCriterionRepairState(
       admittedTreeDigest = optionalString(Keys.ADMITTED_TREE_DIGEST),
       admittedCheckpointId = optionalString(Keys.ADMITTED_CHECKPOINT_ID),
       sourceTransitions = repairTransitions(),
-      finalAudits = repairFinalAudits(),
       pendingAuditRefs = optionalStringList(Keys.PENDING_AUDIT_REFS),
       proseAudits = repairProseAudits(),
       pendingClarificationQuestion = optionalString(Keys.PENDING_CLARIFICATION_QUESTION),
@@ -393,34 +371,6 @@ private fun FeatureTaskRuntimeWorkflowArtifactMap.repairTransitions(): List<Acce
       evidenceRef = transition.requiredString(Keys.EVIDENCE_REF),
       treeDigest = transition.optionalString(Keys.TREE_DIGEST),
       checkpointId = transition.optionalString(Keys.CHECKPOINT_ID),
-    )
-  }
-
-private fun FeatureTaskRuntimeWorkflowArtifactMap.repairFinalAudits(): List<AcceptanceCriterionRepairFinalAudit> =
-  objectList(Keys.FINAL_AUDITS).map { audit ->
-    AcceptanceCriterionRepairFinalAudit(
-      revision = audit.requiredLong(Keys.REVISION),
-      digest = audit.requiredString(Keys.DIGEST),
-      catalogId = audit.requiredString(Keys.CATALOG_ID),
-      executionId = audit.requiredString(Keys.EXECUTION_ID),
-      specDigest = audit.requiredString(Keys.SPEC_DIGEST),
-      treeDigest = audit.requiredString(Keys.TREE_DIGEST),
-      checkpointId = audit.requiredString(Keys.CHECKPOINT_ID),
-      auditedRefs = audit.stringList(Keys.AUDITED_REFS),
-      regressedRefs = audit.stringList(Keys.REGRESSED_REFS),
-      auditBindingDigest = audit.optionalString(Keys.AUDIT_BINDING_DIGEST),
-      dependencies =
-        (audit[Keys.DEPENDENCIES] as List<*>).map { raw ->
-          val edge = repairObject(raw)
-          AcceptanceCriterionRepairDependency(
-            edge.requiredString(Keys.DEPENDENT_REF),
-            edge.requiredString(Keys.PREREQUISITE_REF),
-            edge.requiredString(Keys.REASON),
-            edge.requiredString(Keys.DECLARING_OUTPUT_REF),
-            edge
-              .requiredString(Keys.SOURCE_EVIDENCE_REF),
-          )
-        },
     )
   }
 

@@ -1,6 +1,6 @@
 # SKILL-424 Subtask 3 - SKILL-423 data repair handoff
 
-Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-424-readian-architecture-parity-for-the-desktop-app/spec.md](spec.md)
 Issue key: SKILL-424
 
 ## Scope
@@ -64,10 +64,10 @@ This plan comes from the preplan digest only. Nothing here was checked against t
   - `application/DashboardControllerTest.kt`
   - `ui/ReasonTooltipTest.kt`
 - **Runtime**:
-  - `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work/`, covering `IdeStatusService` (`board`, `projectBoardSelection`, `detail`), `control/WorkControlService.request` and the `pagination/` family.
+  - `../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/work`, covering `IdeStatusService` (`board`, `projectBoardSelection`, `detail`), `control/WorkControlService.request` and the `pagination/` family.
   - The runtime ports and SQLite persistence implementations.
   - `RuntimeComponent` exports `databaseSession`, `workControlService`, `FeatureTaskRuntimeRunEntry` and `workObservationService`. The inbound API inventory pins these names.
-- **Gap statement**: `desktop-tray/ARCHITECTURE.md` lists these remaining data gaps:
+- **Gap statement**: `../../../desktop-tray/ARCHITECTURE.md` lists these remaining data gaps:
   - The desktop still owns grouping and control-eligibility checks.
   - The Room projection runs beside a separate runtime JDBC snapshot through `IdeStatusService`.
   - `IdeStatusService.board` loads the full work list and standalone candidates.
@@ -84,7 +84,7 @@ This plan comes from the preplan digest only. Nothing here was checked against t
   - `gap`: state the remaining defect in one sentence.
   - `partial`: list the satisfied parts and the gap separately.
 - The report descriptions predate repairs to bounded shared reads, store/revision cursors, exact accepted execution output, owner observation and detail deadlines. Treat each report claim as a hypothesis and check it in source.
-- Create the handoff record at `desktop-tray/docs/skill-423-handoff.md`. It has one row per obligation with these columns:
+- Create the handoff record at `../../../desktop-tray/docs/skill-423-handoff.md`. It has one row per obligation with these columns:
   - SKILL-423 source ID
   - SKILL-424 AC
   - current production trace
@@ -92,7 +92,7 @@ This plan comes from the preplan digest only. Nothing here was checked against t
   - final owner (module or source set, and symbol)
   - regression evidence (test class and method, plus the command that runs it)
   - executed result
-- **Assumption**: the record lives under `desktop-tray/docs/` beside `data-layer-validation.md`, and subtask 6's inventories link to it rather than copying it.
+- **Assumption**: the record lives under `../../../desktop-tray/docs` beside `data-layer-validation.md`, and subtask 6's inventories link to it rather than copying it.
 - Phase feasibility for the executed-result column:
   - Implement fills every column except "executed result" and marks that column `pending validate`.
   - The validate phase writes the observed result from the commands it runs.
@@ -243,8 +243,8 @@ This plan comes from the preplan digest only. Nothing here was checked against t
 
 **T9. Close out the handoff.**
 
-- Update the "remaining data gaps" paragraph in `desktop-tray/ARCHITECTURE.md` to match the verdicts. Remove fixed gaps and keep honest residuals.
-- Complete every row of `desktop-tray/docs/skill-423-handoff.md` except the executed results.
+- Update the "remaining data gaps" paragraph in `../../../desktop-tray/ARCHITECTURE.md` to match the verdicts. Remove fixed gaps and keep honest residuals.
+- Complete every row of `../../../desktop-tray/docs/skill-423-handoff.md` except the executed results.
 - Produce the A1-A12 and G1-G7 report for the touched runtime code in the implement summary.
 
 ### Constraints

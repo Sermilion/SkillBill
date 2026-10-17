@@ -60,7 +60,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): Boolean? {
     val scope = session.accounting
     if (!session.worker.ownsAuditStep(phase.phaseId)) return null
-    val state = scope.snapshot ?: return true
+    val state = scope.snapshot?.takeUnless { it.stage == AcceptanceCriterionRepairStage.ACCEPTED } ?: return true
     val mutation = startMutation(state, session.steps, phase) ?: return false
     val committed =
       if (mutation == AcceptanceCriterionRepairMutation.KeepProgress &&
@@ -89,8 +89,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
           AcceptanceCriterionRepairStage.REPAIR_RESERVED -> AcceptanceCriterionRepairMutation.KeepProgress
           else -> null
         }
-      state.stage == AcceptanceCriterionRepairStage.FINAL_ACCEPTED ->
-        AcceptanceCriterionRepairMutation.RequireFinalAudit
       else -> AcceptanceCriterionRepairMutation.KeepProgress
     }
 
@@ -104,6 +102,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     val envelope = phase.normalizedOutput?.envelopeWireMap()
     if (envelope == null) return rejected(phase, "The normalized phase output is unavailable.")
     val state = invocationState(scope, phase) ?: scope.snapshot
+    if (state?.stage == AcceptanceCriterionRepairStage.ACCEPTED) return null
     return if (state == null) {
       completeDiscovery(
         session,
@@ -230,15 +229,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
             ),
           )
         }
-        state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED && satisfied ->
-          AcceptanceCriterionRepairMutation.FinalAudit(
-            state.criteria.filter { it.sourceDisposition != AcceptanceCriterionSourceDisposition.NOT_APPLICABLE }
-              .mapTo(linkedSetOf()) { it.canonicalRef },
-            emptySet(),
-            digest,
-            tree,
-            checkpoint,
-          )
         else ->
           AcceptanceCriterionRepairMutation.ProseAudit(
             AcceptanceCriterionProseAudit(
@@ -256,10 +246,7 @@ class AcceptanceCriterionRepairPhaseRecorder(
     }
 
   private fun auditedCriterion(state: AcceptanceCriterionRepairState): String? =
-    state.currentCriterionRef.takeUnless {
-      state.stage == AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED ||
-        state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY
-    }
+    state.currentCriterionRef.takeUnless { state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY }
 
   private fun repairCompletionMutation(
     state: AcceptanceCriterionRepairState,
@@ -399,8 +386,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
         },
       AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION to
         steps.audit,
-      AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED to
-        steps.audit,
     )
 
   private fun commit(
@@ -473,7 +458,6 @@ class AcceptanceCriterionRepairPhaseRecorder(
   ): AcceptanceCriterionRepairAuditEvidence? {
     val requiresEvidence =
       mutation is AcceptanceCriterionRepairMutation.Discover ||
-        mutation is AcceptanceCriterionRepairMutation.FinalAudit ||
         mutation is AcceptanceCriterionRepairMutation.Outcome && mutation.outcome.kind in
         setOf(
           AcceptanceCriterionRepairOutcomeKind.TARGETED_SUCCESS,

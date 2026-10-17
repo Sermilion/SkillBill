@@ -69,13 +69,13 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
           RequiredPhaseWrite.Acknowledged,
           recorder.complete(output(next, "satisfied", "The first requirement is implemented.")),
         )
-        assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, scope.snapshot?.stage)
+        assertEquals(AcceptanceCriterionRepairStage.ACCEPTED, scope.snapshot?.stage)
       }
     }
   }
 
   @Test
-  fun `named final regression skips unrelated audits and retains each criterion failure count`() {
+  fun `each criterion keeps its own failure count and its third unsuccessful cycle blocks`() {
     SerialRepairSqliteFixture().use { f ->
       f.owned { worker ->
         val scope =
@@ -107,19 +107,9 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         repair(f, recorder, 2)
         audit(f, recorder, 3, false, "The caller still permits a second semantic repair in one cycle.")
         assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
-        repair(f, recorder, 3)
-        audit(f, recorder, 4, true, "The runtime now reserves and settles one repair cycle.")
-        assertEquals(AcceptanceCriterionRepairStage.FINAL_AUDIT_REQUIRED, scope.snapshot?.stage)
-        audit(f, recorder, 5, true, "All production requirements pass. This audit did not run tests.")
-        assertEquals(AcceptanceCriterionRepairStage.FINAL_ACCEPTED, scope.snapshot?.stage)
-        audit(f, recorder, 6, false, "AC-001 is satisfied. AC-002 remains open. Its caller has no reservation.")
+        assertEquals(null, scope.snapshot?.unsuccessfulTotals?.get("AC-001"))
         assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
-        assertEquals(listOf("AC-002"), scope.snapshot?.pendingAuditRefs)
-        assertTrue(requireNotNull(scope.currentCriterionContext).contains("Its caller has no reservation."))
-        audit(f, recorder, 8, false, "The second caller again has no reservation enforcement.")
-        assertEquals("AC-002", scope.snapshot?.currentCriterionRef)
-        assertEquals(2, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
-        val last = phase(f, "audit_implement_fix", 4)
+        val last = phase(f, "audit_implement_fix", 3)
         assertTrue(recorder.start(last) == true)
         assertTrue(
           recorder.settleUnsuccessfulRepair(
@@ -130,7 +120,7 @@ class AcceptanceCriterionRepairPhaseRecorderTest {
         assertEquals(AcceptanceCriterionRepairStage.BUDGET_BLOCKED, scope.snapshot?.stage)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
         assertEquals(WorkflowStatus.BLOCKED, f.snapshot().workflowStatus)
-        assertFalse(recorder.start(phase(f, "audit_implement_fix", 5)) == true)
+        assertFalse(recorder.start(phase(f, "audit_implement_fix", 4)) == true)
         assertEquals(3, scope.snapshot?.unsuccessfulTotals?.get("AC-002"))
       }
     }

@@ -271,21 +271,12 @@ outcome blocks that criterion. Explicit operator resume of the blocked goal rese
 the active failure counts to zero and grants three new outcomes per criterion,
 while retaining prior outcome identities and source evidence. An ordinary state
 reload does not reset the budget. A successful outcome closes source work for it
-without erasing earlier failures. The final full source audit checks the whole
-authored set. If that audit finds a regression, the criterion reopens with its
-retained failure budget. An ambiguous regression gets the existing read-only
-prose follow-up before reopening; it does not require a phrase or agent-authored
-identifier protocol.
+without erasing earlier failures.
 
-When a full report clearly names an open canonical criterion in prose, its next
-read-only audit checks that criterion first. The mention guides verification;
-it does not reopen or accept source work by itself. The focused context carries
-the full rejection report as its latest evidence, rather than an older acceptance.
-Reports without a recognized reference keep the full recheck. If another full audit rejects the same unchanged
-source after the focused check, the runtime rechecks every criterion to avoid
-repeating a mistaken prose interpretation.
-
-An empty focused queue still requires the final full source audit. Source
+Only the initial discovery audits the whole authored set. After it, the runtime
+settles one criterion at a time and trusts each settled result: an accepted
+criterion is never re-checked, and no full audit runs again. When the focused
+queue is empty, every criterion is accepted and the run moves on to review. Source
 acceptance does not say that tests, build, or other project-quality work ran.
 Those obligations stay in their existing review, build, and validation phases.
 Status and detail readers report committed facts only. Older aggregate attempts
