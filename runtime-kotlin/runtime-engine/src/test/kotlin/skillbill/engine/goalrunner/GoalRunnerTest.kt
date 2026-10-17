@@ -1021,7 +1021,7 @@ class GoalRunnerValidationDepthTest {
 
 class GoalRunnerQualityGateSelectionTest {
   @Test
-  fun `three-child goal stamps build build validate`() {
+  fun `three-child goal stamps validate on every child`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 3))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -1036,11 +1036,7 @@ class GoalRunnerQualityGateSelectionTest {
     assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
 
     assertEquals(
-      listOf(
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-      ),
+      List(3) { FeatureTaskRuntimeQualityGateSelection.VALIDATE },
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
     )
   }
@@ -1067,7 +1063,7 @@ class GoalRunnerQualityGateSelectionTest {
   }
 
   @Test
-  fun `ordinal-last skipped promotes validate to previous last non-skipped`() {
+  fun `children before a skipped last child still stamp validate`() {
     val initial =
       manifest(subtaskCount = 3).copy(
         subtasks =
@@ -1077,6 +1073,33 @@ class GoalRunnerQualityGateSelectionTest {
       )
     val store = InMemoryGoalManifestStore(manifest = initial)
     val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+        store.mutate { current -> current.withWorkflowId(subtaskId, "wfl-$subtaskId") }
+        outcomes["wfl-$subtaskId"] = completeOutcome(subtaskId)
+        launchFacts()
+      }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))
+
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
+
+    assertEquals(listOf(1, 2), launcher.requests.map { it.skillRunRequest.subtaskId })
+    assertEquals(
+      List(2) { FeatureTaskRuntimeQualityGateSelection.VALIDATE },
+      launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
+    )
+  }
+
+  @Test
+  fun `resumed child keeps its recorded build selection while new children stamp validate`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 2).withBlockedSubtask(1, workflowId = "wfl-1", reason = "build blocked"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    outcomes.seedReviewState("wfl-1")
+    outcomes.qualityGateSelections["wfl-1"] = FeatureTaskRuntimeQualityGateSelection.BUILD
     val launcher =
       RecordingSubtaskLauncher { request ->
         val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
@@ -4918,6 +4941,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
 internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
+  val qualityGateSelections: MutableMap<String, FeatureTaskRuntimeQualityGateSelection> = mutableMapOf()
   val unemittedReviewPasses: MutableMap<String, List<GoalSubtaskReviewPassResult>> = mutableMapOf()
   val acknowledgedReviewPasses: MutableList<Pair<String, Int>> = mutableListOf()
   val progresses: MutableMap<String, GoalRunnerWorkflowProgress> = mutableMapOf()
@@ -4958,6 +4982,9 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   }
 
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = reviewStates[workflowId]
+
+  override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
+    qualityGateSelections[workflowId]
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     unemittedReviewPasses[workflowId].orEmpty()

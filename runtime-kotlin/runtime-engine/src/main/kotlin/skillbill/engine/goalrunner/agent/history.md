@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-17] SKILL-425 subtask 1: validate every goal child
+Areas: runtime-domain goalrunner (GoalRunnerPolicy), runtime-engine goalrunner (launch, execution/core, persist, reset), docs/runtime-command-guidance.md, goalrunner and lifecycle tests
+- GoalRunnerQualityGateSelectionResolver.resolve() takes no parameters and always returns VALIDATE. The last-non-skipped BUILD promotion is gone, so every non-skipped child runs review, validate, write_history.
+- Resume fence: GoalRunnerSubtaskLaunchPrepare, GoalRunnerRunPreparation.existingChildExecutionPlanAdmission and GoalRunnerLaunchReconciler.goalContinuationContext use the child's recorded selection when one exists and resolve() otherwise. A live BUILD child keeps BUILD instead of failing execution-plan admission.
+- Reusable: GoalRunnerReviewOutcomeStore.recordedQualityGateSelection(workflowId) reads the child's goal_continuation artifact selection. WorkflowGoalRunnerReviewBridge implements it; GoalRunnerRunPreparation now takes the outcome store as a constructor dependency.
+- New children still persist the resolver result only on first open; no code patches or migrates existing child rows.
+- Untouched: SkeletonStrategyBindings, PackBuildStrategy, CLI/env BUILD parsing and the SKILL-415 fallback. BUILD stays compile-only and runs only when explicitly selected or already recorded on a resumed child.
+- Tests: GoalRunnerQualityGateSelectionResolverTest was deleted because it would only assert a constant. GoalRunnerTest covers validate on every child, skipped-last, and a recorded-BUILD resume. GoalRunnerTestFactory seeds each existing child's plan from the recorded selection.
+- Limit: the featuretask decision "Quality gate is a slot with two strategies" still says only the final goal child runs validate.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented (validate passed clean check)
+
 ## [2026-10-14] SKILL-425 subtask 2: full run plans first
 Areas: runtime-engine goalrunner (intake, plan, GoalRunner), runtime-cli goal/core and kernel/plan, goalrunner and CLI tests
 - A full run on a key with no stored durable goal and no bundle on disk now runs the plan skeleton first, then imports the bundle and runs the goal in the same invocation. GoalRunner.requiresPlanning answers the question; GoalCliCommands.planFirstWhenNoGoal acts on it after admission.

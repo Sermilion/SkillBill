@@ -55,8 +55,7 @@ internal fun livePlanningOverlay(
       projectedStep.isLivePlanningStep()
   }
 
-internal fun String?.isLivePlanningStep(): Boolean =
-  isNullOrBlank() || this in LIVE_PLANNING_STEP_IDS
+internal fun String?.isLivePlanningStep(): Boolean = isNullOrBlank() || this in LIVE_PLANNING_STEP_IDS
 
 internal fun goalStep(
   planningStep: IdeStatusPlanning?,

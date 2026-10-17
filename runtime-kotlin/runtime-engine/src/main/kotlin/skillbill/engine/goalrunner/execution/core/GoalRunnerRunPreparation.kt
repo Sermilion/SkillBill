@@ -16,6 +16,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
@@ -37,6 +38,7 @@ import java.nio.file.Path
 @Inject
 class GoalRunnerRunPreparation(
   private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
@@ -193,7 +195,9 @@ class GoalRunnerRunPreparation(
           repoRoot = request.repoRoot,
           definition = SkeletonDefinition.GOAL_CHILD,
           reviewMode = reviewMode,
-          qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+          qualityGate =
+            outcomeStore.recordedQualityGateSelection(workflowId)
+              ?: GoalRunnerQualityGateSelectionResolver.resolve(),
           validationDepth = ValidationDepth.FULL,
           timeout = request.timeout,
           workflowId = workflowId,
