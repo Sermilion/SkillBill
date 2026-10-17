@@ -2,9 +2,9 @@ package skillbill.infrastructure.workflow.monitor
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.infrastructure.workflow.github.GhCommandRunner
-import skillbill.infrastructure.workflow.github.GhPullRequestChecksLookup
 import skillbill.infrastructure.workflow.github.ProcessGhCommandRunner
 import skillbill.infrastructure.workflow.github.describeFailure
+import skillbill.infrastructure.workflow.github.parsePullRequestChecks
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.goalrunner.runner.model.PullRequestChecks
 import skillbill.ports.monitor.MonitorCheckSource
@@ -26,10 +26,8 @@ class GhMonitorCheckSource internal constructor(
     ProcessGhCommandRunner(maxOutputBytes = LOG_OUTPUT_BYTES, deadlineSeconds = LOG_DEADLINE_SECONDS),
   )
 
-  private val checksParser = GhPullRequestChecksLookup(gh)
-
   override fun checks(pullRequest: MonitorPullRequestIdentity): PullRequestChecks =
-    checksParser.parseChecks(
+    parsePullRequestChecks(
       gh.run(
         Path.of("."),
         listOf(

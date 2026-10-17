@@ -118,8 +118,8 @@ internal class StandalonePullRequestWatcher(
       pullRequest.state == MonitorPullRequestState.MERGED -> Observation.Settled(PullRequestCiOutcome.Merged)
       pullRequest.state == MonitorPullRequestState.CLOSED ->
         Observation.Settled(PullRequestCiOutcome.Blocked("The pull request was closed without merging."))
-      pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
       headSha == null -> Observation.Settled(PullRequestCiOutcome.Unavailable("The pull request head is unavailable."))
+      headSha == heads.expected && pullRequest.conflicting -> Observation.Settled(PullRequestCiOutcome.Conflicted)
       headSha == heads.expected -> Observation.Open(pullRequest, headSha)
       headSha in heads.superseded -> Observation.NotYetVisible
       else ->

@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.phaserun.monitor.StandalonePendingRepair
 import skillbill.engine.featuretask.phaserun.monitor.head
 import skillbill.engine.featuretask.phaserun.monitor.pullRequest
+import skillbill.engine.featuretask.runloop.finalization.standalone.StandaloneRepairCommit
 import skillbill.engine.featuretask.slot.state.StandalonePublication
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.CheckBucket
@@ -48,6 +49,7 @@ private val WORKTREE = MonitorWorktree(Path.of("/owned/worktree"), "skill-bill/m
 
 class StandaloneMonitorServiceTest {
   private val git = RecordingWorkflowGitOperations().apply { headCommitShaValue = PUBLISHED }
+  private val repairWorktree = StandaloneRepairCommit(git, WORKTREE.path)
   private val publisherRequests = mutableListOf<MonitorPublicationRequest>()
   private var publisherResult: MonitorPublicationResult? = null
   private var remoteHead = PUBLISHED
@@ -122,7 +124,7 @@ class StandaloneMonitorServiceTest {
   fun `the first commit_push visit with no repair pending touches no git state and publishes nothing`() {
     git.ownedPathsValue = listOf("src/Unrelated.kt")
 
-    assertEquals(StandalonePublication.NothingPending, service.operations.publish(ledger, git))
+    assertEquals(StandalonePublication.NothingPending, service.operations.publish(ledger, repairWorktree))
 
     assertNothingTouched()
     assertEquals(0, git.headCommitShaCalls, "the initial visit must not read or fabricate a commit")
@@ -133,7 +135,7 @@ class StandaloneMonitorServiceTest {
   fun `a completed repair is committed from owned paths and pushed against the last published head`() {
     completedRepair(dirtyPath = "src/Fix.kt")
 
-    val published = assertIs<StandalonePublication.Published>(service.operations.publish(ledger, git))
+    val published = assertIs<StandalonePublication.Published>(service.operations.publish(ledger, repairWorktree))
 
     assertEquals(listOf("src/Fix.kt"), git.stagePathsCalls)
     val request = publisherRequests.single()
@@ -150,7 +152,7 @@ class StandaloneMonitorServiceTest {
     completedRepair(dirtyPath = "src/Fix.kt")
     remoteHead = TEAMMATE
 
-    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, git))
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
 
     assertTrue(TEAMMATE in blocked.reason, blocked.reason)
     assertTrue(WORKTREE.path.toString() in blocked.reason, "the preserved work path must be named: ${blocked.reason}")
@@ -162,7 +164,7 @@ class StandaloneMonitorServiceTest {
     completedRepair(dirtyPath = "src/Fix.kt")
     remoteBase = MonitorBranchTip(ACME, "main", ADVANCED_BASE)
 
-    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, git))
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
 
     assertTrue(ADVANCED_BASE in blocked.reason && SHA in blocked.reason, blocked.reason)
     assertNothingTouched()
@@ -173,20 +175,20 @@ class StandaloneMonitorServiceTest {
   fun `a repair launches when the target is unchanged and the worktree is still at the repair baseline`() {
     ledger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
 
-    assertNull(service.operations.guardRepairLaunch(ledger, git))
+    assertNull(service.operations.guardRepairLaunch(ledger, repairWorktree))
   }
 
   @Test
   fun `a repair launch is refused when the base advanced, the head moved, or no repair is pending`() {
-    assertTrue("No repair is pending" in service.operations.guardRepairLaunch(ledger, git).orEmpty())
+    assertTrue("No repair is pending" in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
 
     ledger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
     remoteBase = MonitorBranchTip(ACME, "main", ADVANCED_BASE)
-    assertTrue(ADVANCED_BASE in service.operations.guardRepairLaunch(ledger, git).orEmpty())
+    assertTrue(ADVANCED_BASE in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
 
     remoteBase = MonitorBranchTip(ACME, "main", SHA)
     remoteHead = TEAMMATE
-    assertTrue(TEAMMATE in service.operations.guardRepairLaunch(ledger, git).orEmpty())
+    assertTrue(TEAMMATE in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
   }
 
   @Test
@@ -203,7 +205,7 @@ class StandaloneMonitorServiceTest {
     completedRepair(dirtyPath = "src/Fix.kt")
     remoteState = MonitorPullRequestState.CLOSED
 
-    assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, git))
+    assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
 
     assertNothingTouched()
   }
@@ -212,7 +214,7 @@ class StandaloneMonitorServiceTest {
   fun `a repair that changed nothing is blocked instead of republishing the old head`() {
     completedRepair()
 
-    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, git))
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
 
     assertTrue("made no change" in blocked.reason, blocked.reason)
     assertEquals(emptyList(), publisherRequests)
@@ -223,7 +225,7 @@ class StandaloneMonitorServiceTest {
     completedRepair(dirtyPath = "src/Fix.kt")
     publisherResult = MonitorPublicationResult.Rejected(MonitorPublicationRefusal.GUARD_REFUSED, "remote head moved")
 
-    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, git))
+    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
 
     assertTrue("guard_refused" in blocked.reason, blocked.reason)
     assertEquals(true, ledger.pendingRepair?.completed)

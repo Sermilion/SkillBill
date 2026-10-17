@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phaserun.monitor.StandalonePendingRepair
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
 import skillbill.engine.featuretask.slot.state.PullRequestCiOutcome
 import skillbill.engine.featuretask.slot.state.StandalonePublication
+import skillbill.engine.featuretask.slot.state.StandaloneRepairWorktree
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.monitor.MonitorCheckSource
 import skillbill.ports.monitor.MonitorPullRequestSource
@@ -16,7 +17,6 @@ import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestState
 import skillbill.ports.monitor.model.MonitorWritability
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.time.Clock
 import java.time.Duration
 
@@ -83,10 +83,10 @@ class StandaloneMonitorService(
 
     override fun guardRepairLaunch(
       ledger: StandaloneMonitorLedger,
-      git: WorkflowGitOperations,
+      worktree: StandaloneRepairWorktree,
     ): String? {
       val pending = ledger.pendingRepair ?: return "No repair is pending for this monitor step."
-      val head = StandaloneRepairCommit(git, ledger.execution.worktree.path).headSha()
+      val head = worktree.headSha()
       return verifyTarget(ledger)
         ?: if (head == pending.baselineSha) {
           null
@@ -98,30 +98,28 @@ class StandaloneMonitorService(
 
     override fun publish(
       ledger: StandaloneMonitorLedger,
-      git: WorkflowGitOperations,
+      worktree: StandaloneRepairWorktree,
     ): StandalonePublication =
       ledger.exclusive {
         val pending = ledger.pendingRepair
         if (pending == null || !pending.completed) {
           StandalonePublication.NothingPending
         } else {
-          publishPending(ledger, git, pending)
+          publishPending(ledger, worktree, pending)
         }
       }
   }
 
   private fun publishPending(
     ledger: StandaloneMonitorLedger,
-    git: WorkflowGitOperations,
+    worktree: StandaloneRepairWorktree,
     pending: StandalonePendingRepair,
   ): StandalonePublication {
-    val execution = ledger.execution
-    val commit = StandaloneRepairCommit(git, execution.worktree.path)
     val refusal =
       verifyTarget(ledger)
-        ?: commit.commitPending("Repair ${execution.target.pullRequest.targetKey}")
-        ?: repairCommitRefusal(commit, pending)
-    val repairSha = commit.headSha()
+        ?: worktree.commitPending("Repair ${ledger.execution.target.pullRequest.targetKey}")
+        ?: repairCommitRefusal(worktree, pending)
+    val repairSha = worktree.headSha()
     return when {
       refusal != null -> blocked(ledger, refusal)
       repairSha == null -> blocked(ledger, "The repair commit could not be read.")
@@ -130,14 +128,14 @@ class StandaloneMonitorService(
   }
 
   private fun repairCommitRefusal(
-    commit: StandaloneRepairCommit,
+    worktree: StandaloneRepairWorktree,
     pending: StandalonePendingRepair,
   ): String? {
-    val head = commit.headSha()
+    val head = worktree.headSha()
     return when {
       head == null -> "The repair commit could not be read."
       head == pending.baselineSha -> "The repair made no change to the pull request head ${pending.baselineSha}."
-      !commit.descendsFrom(pending.baselineSha, head) ->
+      !worktree.descendsFrom(pending.baselineSha, head) ->
         "The repair commit $head does not descend from the published head ${pending.baselineSha}."
       else -> null
     }

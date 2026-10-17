@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
 import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
+import skillbill.engine.featuretask.slot.state.StandaloneRepairWorktree
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.infrastructure.workflow.monitor.GitMonitorRepairPublisher
@@ -46,7 +47,6 @@ import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -395,12 +395,12 @@ class PhaseStandaloneMonitorExecutionTest {
 
     override fun guardRepairLaunch(
       ledger: StandaloneMonitorLedger,
-      git: WorkflowGitOperations,
+      worktree: StandaloneRepairWorktree,
     ) = refused()
 
     override fun publish(
       ledger: StandaloneMonitorLedger,
-      git: WorkflowGitOperations,
+      worktree: StandaloneRepairWorktree,
     ) = refused()
 
     private fun refused(): Nothing {

@@ -28,7 +28,7 @@ private val GUARD_SCRIPT =
   |done < "${'$'}input"
   |[ "${'$'}count" -eq 1 ] || refuse "expected exactly one ref update, saw ${'$'}count"
   |if [ -n "${'$'}$GUARD_ORIGINAL_HOOK" ]; then
-  |  "${'$'}$GUARD_ORIGINAL_HOOK" "${'$'}@" < "${'$'}input" || exit 1
+  |  "${'$'}$GUARD_ORIGINAL_HOOK" "${'$'}@" < "${'$'}input" || refuse "the repository pre-push hook refused"
   |fi
   |exit 0
   |

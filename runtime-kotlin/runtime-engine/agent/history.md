@@ -1,3 +1,15 @@
+## [2026-10-17] SKILL-427 subtask 2: standalone slot execution and guarded repair publication
+Areas: runtime-engine featuretask (slot/monitor/standalone, phaserun, runloop/finalization/standalone, slot/skeleton, slot/state); runtime-domain SkeletonDefinition; runtime-ports ports/monitor; runtime-infra workflow/monitor and github; runtime-core di/featuretask
+- SkeletonDefinition.STANDALONE_MONITOR (id standalone-monitor, COMMIT_PUSH + MONITOR, not standalone-invocable) traverses monitor_fix, commit_push, monitor. The public MONITOR/PR definitions and both legacy monitor strategies are untouched; runForGoal bypasses the new path.
+- PhaseRunEntry.runStandaloneMonitor runs subtask 1's preparer before the status publisher, branch capture, facts or records, runs against the owned worktree and settles ownership in finally. Public `monitor` is not rerouted; subtask 3 owns that.
+- One idempotent StandaloneMonitorService.publish serves the monitor_fix settle hook and later commit_push visits; the first commit_push visit is a no-op with no git reads. A repair counts only when its prose ends with `Repair outcome: fixed`.
+- The guard re-reads the pull request before repair launch, before commit and before push, and blocks on any head or base drift or a closed PR. The per-invocation ledger lives in InMemoryPhaseRunRecords; facts carry only an immutable optional MonitorExecutionContext.
+- Infra: GitMonitorRepairPublisher pushes non-force to the explicit head push URL through a command-scoped pre-push guard hook (one ref update, expected old SHA, chains the original hook, fails closed) and re-reads the remote head to classify Acknowledged, Rejected or Uncertain. reusable: MonitorRepairPublisher and MonitorCheckSource ports.
+- GhMonitorCheckSource fetches check logs only for own-repo workflow-run links; evidence is size-capped and fence-neutralized.
+- Limits: written without a compile, format or test run, so build fixes are expected. The 3-attempt cap relies on existing trigger declarations with no dedicated test, there is no end-to-end prepared-run test, and guard-script lines may exceed the line-length limit.
+Feature flag: N/A
+Acceptance criteria: 7 criteria implemented in source; counts deferred to audit and validate
+
 ## [2026-10-16] SKILL-427 subtask 1: standalone monitor target resolution and owned worktree preparation
 Areas: runtime-engine featuretask/phaserun/monitor; runtime-ports ports/monitor; runtime-infra workflow/monitor, host, contracts; runtime-contracts; runtime-core di; orchestration/contracts
 - MonitorTargetResolver and MonitorTargetPolicy resolve a PR from intake: strict https PR URL, token-exact issue key, branch match. A URL mismatch is refused before any lookup; merged, closed, missing and ambiguous targets never reach admission.

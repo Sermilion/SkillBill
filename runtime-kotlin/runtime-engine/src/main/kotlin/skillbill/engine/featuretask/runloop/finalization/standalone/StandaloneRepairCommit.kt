@@ -1,6 +1,7 @@
-package skillbill.engine.featuretask.slot.monitor.standalone
+package skillbill.engine.featuretask.runloop.finalization.standalone
 
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
+import skillbill.engine.featuretask.slot.state.StandaloneRepairWorktree
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -10,20 +11,26 @@ import java.nio.file.Path
 internal class StandaloneRepairCommit(
   private val git: WorkflowGitOperations,
   private val worktree: Path,
-) {
-  fun commitPending(subject: String): String? {
-    val dirty = git.repositoryOwnedPaths(worktree)
-    val staged = git.stagedPaths(worktree)
-    if (dirty !is WorkflowGitNameListResult.Listed) return "Could not discover repair changes: ${failure(dirty)}"
-    if (staged !is WorkflowGitNameListResult.Listed) return "Could not inspect the index: ${failure(staged)}"
+) : StandaloneRepairWorktree {
+  override fun commitPending(subject: String): String? {
+    val dirty =
+      when (val result = git.repositoryOwnedPaths(worktree)) {
+        is WorkflowGitNameListResult.Listed -> result
+        is WorkflowGitNameListResult.Failed -> return "Could not discover repair changes: ${result.error}"
+      }
+    val staged =
+      when (val result = git.stagedPaths(worktree)) {
+        is WorkflowGitNameListResult.Listed -> result
+        is WorkflowGitNameListResult.Failed -> return "Could not inspect the index: ${result.error}"
+      }
     val paths = (dirty.names + staged.names).filterNot(::isRuntimePrivatePath).distinct().sorted()
     return if (paths.isEmpty()) null else stageAndCommit(paths, subject)
   }
 
-  fun headSha(): String? =
+  override fun headSha(): String? =
     (git.headCommitSha(worktree) as? WorkflowGitOperationResult.Ok)?.value?.trim()?.takeIf(String::isNotBlank)
 
-  fun descendsFrom(
+  override fun descendsFrom(
     ancestorSha: String,
     descendantSha: String,
   ): Boolean =
@@ -51,8 +58,6 @@ internal class StandaloneRepairCommit(
         remaining.names.filterNot(::isRuntimePrivatePath).takeIf { it.isNotEmpty() }
           ?.let { "Uncommitted changes remain after the repair commit: ${it.take(MAX_LISTED_PATHS).joinToString()}." }
     }
-
-  private fun failure(result: WorkflowGitNameListResult): String = (result as WorkflowGitNameListResult.Failed).error
 
   private companion object {
     const val MAX_LISTED_PATHS = 5

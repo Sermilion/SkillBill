@@ -40,7 +40,13 @@ class GitMonitorRepairPublisher : MonitorRepairPublisher {
     original: String,
   ): MonitorPublicationResult {
     val worktree = request.worktree.path
-    val hookDirectory = writeMonitorPrePushGuard()
+    val hookDirectory =
+      runCatching(::writeMonitorPrePushGuard).getOrElse { failure ->
+        return MonitorPublicationResult.Rejected(
+          MonitorPublicationRefusal.GUARD_REFUSED,
+          "The pre-push guard could not be installed, so the push fails closed: ${failure.message}",
+        )
+      }
     try {
       val environment =
         NO_PROMPT_ENVIRONMENT +

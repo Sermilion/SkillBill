@@ -30,6 +30,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.finalization.standalone.FeatureTaskRuntimeRunLoopStandaloneMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.standalone.StandaloneRepairCommit
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
@@ -390,10 +391,14 @@ private class FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
     return ledger?.pendingRepair?.evidence.orEmpty()
   }
 
-  override fun guardStandaloneRepairLaunch(operations: PhaseStandaloneMonitorOperations): String? {
-    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+  override fun guardStandaloneRepairLaunch(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
     val owned = ledger ?: return "Standalone repair requires its prepared execution ledger."
-    return operations.guardRepairLaunch(owned, environment.gitOperations)
+    val worktree = StandaloneRepairCommit(environment.gitOperations, owned.execution.worktree.path)
+    return operations.guardRepairLaunch(owned, worktree)
   }
 
   override fun publishStandaloneRepair(

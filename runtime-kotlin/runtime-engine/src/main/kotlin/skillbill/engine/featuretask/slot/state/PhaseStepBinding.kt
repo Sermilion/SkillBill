@@ -12,7 +12,6 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.PullRequestCheck
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -153,7 +152,10 @@ internal interface PhaseStandaloneMonitorStepBinding : PhaseAcceptedStepExecutio
   fun standaloneRepairBrief(): String
 
   /** The reason the repair cannot launch against the current pull request and worktree, or null when it can. */
-  fun guardStandaloneRepairLaunch(operations: PhaseStandaloneMonitorOperations): String?
+  fun guardStandaloneRepairLaunch(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): String?
 
   /**
    * The reason the settled repair cannot be published, or null when it was published or nothing was pending. A repair
@@ -194,14 +196,30 @@ internal interface PhaseStandaloneMonitorOperations {
   /** The reason the pending repair cannot launch, or null when the target and worktree are unchanged. */
   fun guardRepairLaunch(
     ledger: StandaloneMonitorLedger,
-    git: WorkflowGitOperations,
+    worktree: StandaloneRepairWorktree,
   ): String?
 
   /** Publishes the completed pending repair, or reports that nothing is pending or why publication blocked. */
   fun publish(
     ledger: StandaloneMonitorLedger,
-    git: WorkflowGitOperations,
+    worktree: StandaloneRepairWorktree,
   ): StandalonePublication
+}
+
+/**
+ * The owned worktree of this invocation's repair, bound to that path. It can only read HEAD, test ancestry and commit
+ * the repair's own changes; it cannot push, fetch, reset, check out, tag or address another checkout.
+ */
+internal interface StandaloneRepairWorktree {
+  fun headSha(): String?
+
+  fun descendsFrom(
+    ancestorSha: String,
+    descendantSha: String,
+  ): Boolean
+
+  /** The reason the repair's changes could not be committed, or null when committed or nothing was pending. */
+  fun commitPending(subject: String): String?
 }
 
 internal sealed interface StandalonePublication {

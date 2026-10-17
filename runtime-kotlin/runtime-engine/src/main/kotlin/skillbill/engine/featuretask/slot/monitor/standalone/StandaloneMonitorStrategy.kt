@@ -81,7 +81,7 @@ class StandaloneMonitorStrategy(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,
         state: PhaseStepBinding,
-      ): String? = (state as PhaseStandaloneMonitorStepBinding).guardStandaloneRepairLaunch(service.operations)
+      ): String? = (state as PhaseStandaloneMonitorStepBinding).guardStandaloneRepairLaunch(run, service.operations)
 
       override fun settleCompletedOutput(
         run: PhaseRun,

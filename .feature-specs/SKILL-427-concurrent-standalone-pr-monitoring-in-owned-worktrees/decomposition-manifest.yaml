@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Standalone slot execution and guarded repair publication"
   spec_path: ".feature-specs/SKILL-427-concurrent-standalone-pr-monitoring-in-owned-worktrees/spec_subtask_2_standalone_slot_execution_and_guarded_publication.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261016-170410-oj0l"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

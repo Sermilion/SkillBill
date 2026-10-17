@@ -108,7 +108,7 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
     )
     val ledger = standaloneLedger() ?: return block(run, iteration, MISSING_LEDGER)
     val (summary, value) =
-      when (val publication = operations.publish(ledger, gitOperations)) {
+      when (val publication = operations.publish(ledger, repairWorktree(ledger))) {
         StandalonePublication.NothingPending ->
           "No repair is pending; nothing was staged, committed, fetched, or pushed." to
             "No repair was published for ${ledger.execution.target.pullRequest.targetKey}."
@@ -131,8 +131,12 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
         "preserved in ${worktree.path} on branch ${worktree.branch}."
     }
     ledger.completePendingRepair()
-    return (operations.publish(ledger, gitOperations) as? StandalonePublication.Blocked)?.reason
+    val publication = operations.publish(ledger, repairWorktree(ledger))
+    return (publication as? StandalonePublication.Blocked)?.reason
   }
+
+  private fun PhaseRuntimeFinalizationContext.repairWorktree(ledger: StandaloneMonitorLedger) =
+    StandaloneRepairCommit(gitOperations, ledger.execution.worktree.path)
 
   private fun PhaseRuntimeFinalizationContext.failed(
     run: PhaseRun,

@@ -155,6 +155,18 @@ class StandalonePullRequestWatcherTest {
   }
 
   @Test
+  fun `a stale conflict flag on the superseded head waits for the repair instead of starting another`() {
+    heads += listOf(PUBLISHED, REPAIRED)
+    conflicting = true
+    reported = reports(check("build", CheckBucket.PASS))
+
+    val outcome = watch(expected = REPAIRED, superseded = setOf(PUBLISHED))
+
+    assertEquals(PullRequestCiOutcome.Conflicted, outcome)
+    assertEquals(1, sleeps.size, "the superseded head must be waited out before any conflict is judged")
+  }
+
+  @Test
   fun `pending checks are reported as running and waited on until they pass`() {
     heads += PUBLISHED
     reportedSequence += reports(check("build", CheckBucket.PENDING))
