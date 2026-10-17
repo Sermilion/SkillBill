@@ -662,6 +662,7 @@ class WorkRunControlsTest {
           )
         }
       }
+
       fun targetFor(invocation: String): WorkRunTarget {
         val item = assertNotNull(component.ideStatusService.detail(WorkDetailRequest(invocation)).item)
         return WorkRunTarget(

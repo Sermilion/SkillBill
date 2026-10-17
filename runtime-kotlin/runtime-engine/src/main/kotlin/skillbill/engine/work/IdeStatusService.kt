@@ -898,14 +898,7 @@ class IdeStatusService(
       }
     val standaloneRecords =
       resolved?.standalone
-        ?: readStatusStandaloneRecords(
-          unitOfWork,
-          repository.identity,
-          repository.monitorIdentity,
-          branch,
-          observedAt,
-          queryWork,
-        )
+        ?: readStatusStandaloneRecords(unitOfWork, repository, branch, observedAt, queryWork)
     val standaloneCandidates =
       latestPhaseExecutions(standaloneRecords).map { stored ->
         val record = projectStandaloneLease(stored, observedAt)

@@ -20,8 +20,7 @@ internal fun earlySetupReport(
   selector: String,
   pullRequest: MonitorPullRequestIdentity?,
   settlement: MonitorSettlement?,
-): List<String> =
-  earlyReport(selector, pullRequest) + listOfNotNull(settlement?.let { "Cleanup: ${cleanupLine(it)}" })
+): List<String> = earlyReport(selector, pullRequest) + listOfNotNull(settlement?.let { "Cleanup: ${cleanupLine(it)}" })
 
 internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOutcome =
   outcome.fold(
@@ -42,15 +41,19 @@ internal fun primaryOutcomeOf(outcome: Result<PhaseRunResult>): MonitorPrimaryOu
 internal fun monitorRunFailure(
   failure: Throwable,
   context: MonitorExecutionContext,
-  settlement: MonitorSettlement,
-): SkillBillRuntimeException =
-  SkillBillRuntimeException(
+  settlement: MonitorSettlement?,
+): Throwable {
+  if (settlement == null || failure !is Exception || failure is InterruptedException) return failure
+  return SkillBillRuntimeException(
     code = (failure as? SkillBillRuntimeException)?.code ?: StandaloneMonitorRunFailureCode.RUN_FAILED,
     message =
-      (listOf(failure.message?.takeIf(String::isNotBlank) ?: failure::class.java.simpleName) +
-        monitorTargetReport(context, settlement)).joinToString("\n"),
+      (
+        listOf(failure.message?.takeIf(String::isNotBlank) ?: failure::class.java.simpleName) +
+          monitorTargetReport(context, settlement)
+      ).joinToString("\n"),
     cause = failure,
   )
+}
 
 internal fun MonitorSettlement.toStatusCleanup(): StandaloneMonitorCleanup =
   when (this) {

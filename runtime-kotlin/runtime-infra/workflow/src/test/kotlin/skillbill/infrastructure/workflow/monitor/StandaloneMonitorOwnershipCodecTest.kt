@@ -119,7 +119,7 @@ class StandaloneMonitorOwnershipCodecTest {
     }
     assertRejected(StandaloneMonitorFailureCode.INCOHERENT_OWNERSHIP, MonitorOwnershipState.PREPARED) {
       val retention = mapper.createObjectNode().put(Keys.RETENTION_REASON, "dirty_worktree")
-      it.set<ObjectNode>(Keys.RETENTION, retention.put(Keys.RETENTION_DETAIL, "x"))
+      it.set<ObjectNode>(Keys.RETENTION, retention.put(Keys.DETAIL, "x"))
     }
     assertRejected(StandaloneMonitorFailureCode.INCOHERENT_OWNERSHIP, MonitorOwnershipState.RELEASED) {
       it.put(Keys.EXECUTION_PATH, "/work/repo/.git/skill-bill/worktree")

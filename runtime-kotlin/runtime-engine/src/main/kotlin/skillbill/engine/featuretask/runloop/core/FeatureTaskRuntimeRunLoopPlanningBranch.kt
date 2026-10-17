@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.StepLaunchAssignment
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
@@ -85,7 +86,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       request = request,
       specSource = context.specSource,
       policy = context.acceptedStepPolicy(phaseId),
-      launchAssignment = context.runState.stepLaunchAssignment(phaseId),
+      launchAssignment = applicableRecordedAssignment(context, phaseId, resolvedAgent.resolvedAgentId),
     )
   }
 
@@ -145,20 +146,28 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       request = request,
       specSource = specSource,
       policy = context.acceptedStepPolicy(phaseId),
-      launchAssignment = context.runState.stepLaunchAssignment(phaseId),
+      launchAssignment = applicableRecordedAssignment(context, phaseId, resolvedAgent.resolvedAgentId),
       reentry = reentry,
     )
   }
+
+  private fun applicableRecordedAssignment(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    resolvedAgentId: String,
+  ): StepLaunchAssignment? =
+    context.runState.stepLaunchAssignment(phaseId)?.takeIf { it.agentId == resolvedAgentId }
 
   private fun recordedModelDirective(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
     resolvedAgentId: String,
   ): PhaseModelDirective? {
-    val assignment = context.runState.stepLaunchAssignment(phaseId)
-    val recordedModel = assignment?.launch?.effectiveModel
-    if (recordedModel != null) return PhaseModelDirective(recordedModel, assignment.launch.requestedEffort)
-    if (assignment != null) return null
+    val assignment = applicableRecordedAssignment(context, phaseId, resolvedAgentId)
+    if (assignment != null) {
+      val recordedModel = assignment.launch.effectiveModel ?: return null
+      return PhaseModelDirective(recordedModel, assignment.launch.requestedEffort)
+    }
     return FeatureTaskRuntimeModelResolver.resolve(phaseId, resolvedAgentId, context.request.modelAssignment)
   }
 

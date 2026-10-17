@@ -10,11 +10,11 @@ import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
 import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchRejection
 import skillbill.ports.monitor.model.MonitorFetchResult
+import skillbill.ports.monitor.model.MonitorOutcomeKind
 import skillbill.ports.monitor.model.MonitorOwnershipState
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorRecoveryRefusal
 import skillbill.ports.monitor.model.MonitorRetentionReason
-import skillbill.ports.monitor.model.MonitorOutcomeKind
-import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery

@@ -54,6 +54,7 @@ class PhaseConcurrentStandaloneMonitorTest {
   private val root: Path = Files.createTempDirectory("skillbill-concurrent-monitor").toRealPath()
   private val origin: Path = root.resolve("origin.git")
   private val caller: Path = root.resolve("caller")
+  private val harnessRoot: Path = root.resolve("harness")
   private val home: Path = Files.createTempDirectory("skillbill-concurrent-monitor-home")
   private val clock: Clock = Clock.systemUTC()
   private val database = phaseRunDatabase(home, clock)
@@ -143,6 +144,7 @@ class PhaseConcurrentStandaloneMonitorTest {
           Files.writeString(cwd.resolve("Fix$number.kt"), "class Fix$number\n")
           bothRepairing.countDown()
           check(bothRepairing.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) { "the other monitor never started repairing" }
+          return@RuntimeRecordingLauncher facts(FIXED_REPAIR_OUTPUT)
         }
         facts(validJsonOutput(phaseId))
       }
@@ -151,7 +153,7 @@ class PhaseConcurrentStandaloneMonitorTest {
     val config =
       RuntimeHarnessConfig(
         seedDurableWorkflow = false,
-        repoRoot = caller,
+        repoRoot = harnessRoot,
         launcher = launcher,
         gitOperationsOverride = GitWorkflowGitOperations(),
         standaloneMonitorService = service,
@@ -288,6 +290,16 @@ class PhaseConcurrentStandaloneMonitorTest {
     const val CHECK_URL = "https://github.com/acme/repo/actions/runs/1/job/2"
     const val MONITOR_FIX = "monitor_fix"
     const val TIMEOUT_SECONDS = 120L
+    val FIXED_REPAIR_OUTPUT =
+      """
+      {
+        "contract_version": "0.7",
+        "phase_id": "monitor_fix",
+        "status": "completed",
+        "summary": "Monitor repair settled.",
+        "produced_outputs": {"value": "The build failure was repaired in the owned worktree.\nRepair outcome: fixed"}
+      }
+      """.trimIndent()
     val PULL_REQUESTS: Map<Int, String> = linkedMapOf(7 to "fork-a", 8 to "fork-b")
     val ACME: MonitorRepositoryIdentity = MonitorRepositoryIdentity.canonical("github.com", "acme", "repo")
   }

@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.StandaloneRepairWorktree
 import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.infrastructure.workflow.monitor.GitMonitorRepairPublisher
 import skillbill.infrastructure.workflow.monitor.GitMonitorResources
@@ -180,7 +181,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val result = run()
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertTrue("Cleanup: released" in result.targetReport, result.targetReport.toString())
+    assertTrue(result.targetReport.any { it.startsWith("Cleanup: released") }, result.targetReport.toString())
     assertEquals(headSha, forkHead())
     assertEquals(emptyList(), repairCwds)
     assertEquals(listOf("refs/heads/$FEATURE_BRANCH", "refs/heads/main"), refs(fork))
@@ -274,7 +275,9 @@ class PhaseStandaloneMonitorExecutionTest {
         }
       }
 
-    assertFailsWith<InspectionFinished> { run(runLoopEntry = inspection) }
+    val failure = assertFailsWith<SkillBillRuntimeException> { run(runLoopEntry = inspection) }
+    assertIs<InspectionFinished>(failure.cause)
+    assertTrue("Cleanup: released" in failure.message.orEmpty(), failure.message)
 
     assertEquals(0, operations.calls, "no refused operation may observe or publish")
     assertEquals(headSha, forkHead())

@@ -12,8 +12,8 @@ import skillbill.ports.monitor.model.MonitorFence
 import skillbill.ports.monitor.model.MonitorFetchRejection
 import skillbill.ports.monitor.model.MonitorFetchResult
 import skillbill.ports.monitor.model.MonitorFetchedRefs
-import skillbill.ports.monitor.model.MonitorOwnerSummary
 import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorOwnerSummary
 import skillbill.ports.monitor.model.MonitorOwnershipState
 import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorRecoveryRefusal
@@ -25,6 +25,7 @@ import skillbill.ports.monitor.model.MonitorSettlement
 import skillbill.ports.monitor.model.MonitorStaleRecovery
 import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
 import skillbill.ports.monitor.model.MonitorWorktree
+import skillbill.ports.monitor.model.redactedMonitorDetail
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.isConfirmedDead
 import java.io.IOException
@@ -32,9 +33,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
-
-private val URL_USERINFO = Regex("(?i)(https?://)([^\\s/@]+)@")
-private const val MAX_FAILURE_DETAIL = 1000
 
 private class HeldOwnership(
   val admission: HeldAdmission,
@@ -216,7 +214,7 @@ class GitMonitorResources(
     }
     return try {
       cleanup.settle(fence.directory, record, ownership.target, request.outcome, request.removalAllowed)
-    } catch (failure: RuntimeException) {
+    } catch (failure: SkillBillRuntimeException) {
       cleanupFailure(fence, record, request.outcome, failure)
     } finally {
       release(fence, ownership)
@@ -227,7 +225,7 @@ class GitMonitorResources(
     fence: MonitorFence,
     record: MonitorOwnershipRecord,
     outcome: MonitorPrimaryOutcome,
-    failure: RuntimeException,
+    failure: SkillBillRuntimeException,
   ): MonitorSettlement.Retained {
     val path = record.executionPath?.let(Path::of) ?: fence.directory
     val detail = redactedFailureDetail(failure)
@@ -245,16 +243,14 @@ class GitMonitorResources(
           ),
         )
       }
-    } catch (writeFailure: RuntimeException) {
+    } catch (writeFailure: SkillBillRuntimeException) {
       failure.addSuppressed(writeFailure)
     }
     return retained
   }
 
   private fun redactedFailureDetail(failure: Throwable): String =
-    (failure.message?.takeIf(String::isNotBlank) ?: failure::class.java.simpleName)
-      .replace(URL_USERINFO, "$1<redacted>@")
-      .take(MAX_FAILURE_DETAIL)
+    redactedMonitorDetail(failure.message?.takeIf(String::isNotBlank) ?: failure::class.java.simpleName)
 
   private fun release(
     fence: MonitorFence,

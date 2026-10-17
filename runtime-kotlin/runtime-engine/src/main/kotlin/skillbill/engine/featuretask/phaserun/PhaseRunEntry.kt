@@ -182,12 +182,7 @@ class PhaseRunEntry(
       .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement) }
       .onSuccess(publisher::settle)
       .onFailure(publisher::settleFailure)
-      .getOrElse { failure ->
-        if (monitor == null || settlement == null || failure !is Exception || failure is InterruptedException) {
-          throw failure
-        }
-        throw monitorRunFailure(failure, monitor.context, settlement)
-      }
+      .getOrElse { failure -> throw monitor?.let { monitorRunFailure(failure, it.context, settlement) } ?: failure }
   }
 
   private fun monitorBlocked(

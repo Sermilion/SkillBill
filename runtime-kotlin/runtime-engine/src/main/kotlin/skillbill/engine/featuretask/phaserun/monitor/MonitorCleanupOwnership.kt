@@ -10,6 +10,7 @@ import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.monitor.model.MonitorRetentionReason
 import skillbill.ports.monitor.model.MonitorSettleRequest
 import skillbill.ports.monitor.model.MonitorSettlement
+import skillbill.ports.monitor.model.redactedMonitorDetail
 import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import java.nio.file.Path
@@ -17,16 +18,11 @@ import java.time.Duration
 
 private val SHUTDOWN_CHILD_DRAIN: Duration = Duration.ofSeconds(2)
 private const val SHUTDOWN_OUTCOME_DETAIL = "The monitor process received a termination request"
-private val URL_USERINFO = Regex("(?i)(https?://)([^\\s/@]+)@")
-private const val MAX_OUTCOME_DETAIL = 1000
 
 internal fun monitorOutcomeDetail(
   text: String?,
   fallback: String,
-): String =
-  (text?.trim()?.takeIf(String::isNotEmpty) ?: fallback)
-    .replace(URL_USERINFO, "$1<redacted>@")
-    .take(MAX_OUTCOME_DETAIL)
+): String = redactedMonitorDetail(text?.trim()?.takeIf(String::isNotEmpty) ?: fallback)
 
 class MonitorCleanupOwnership internal constructor(
   private val fence: MonitorFence,

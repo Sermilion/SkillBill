@@ -19,6 +19,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBack
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -27,6 +28,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
+import skillbill.infrastructure.sqlite.core.migration.area.rewriteAcceptedAcceptanceCriterionRepairStates
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
 import skillbill.infrastructure.sqlite.core.migration.ensureSchemaColumnsAndHeals
 import skillbill.infrastructure.sqlite.core.migration.persistGoalPlanningRepairEvidence
@@ -35,7 +37,6 @@ import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenc
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
 import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
-import skillbill.infrastructure.sqlite.core.schema.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
@@ -823,5 +824,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 59,
       name = "record-standalone-monitor-target",
       operation = ::recordStandaloneMonitorTarget,
+    ),
+    DatabaseMigration(
+      version = 60,
+      name = "rewrite-accepted-acceptance-criterion-repair-state",
+      operation = ::rewriteAcceptedAcceptanceCriterionRepairStates,
     ),
   )

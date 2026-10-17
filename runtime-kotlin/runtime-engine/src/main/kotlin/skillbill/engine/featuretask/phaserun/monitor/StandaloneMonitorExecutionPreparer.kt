@@ -98,27 +98,35 @@ class StandaloneMonitorExecutionPreparer(
     target: MonitorResolvedTarget,
   ): MonitorPreparation {
     val cleanup = MonitorCleanupOwnership(fence, resources, diagnostics, shutdownHooks, childDrain)
-    var handedOff = false
-    try {
-      val prepared = createWorkspace(fence, context, target, cleanup)
-      handedOff = prepared is MonitorPreparation.Prepared
-      return prepared
-    } catch (interrupted: InterruptedException) {
-      cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "Monitor preparation was interrupted."))
-      Thread.currentThread().interrupt()
-      throw interrupted
-    } catch (failure: RuntimeException) {
-      val detail = monitorOutcomeDetail(failure.message, failure::class.java.simpleName)
-      val settlement = cleanup.settle(MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, detail))
-      if (failure !is SkillBillRuntimeException) throw failure
-      return MonitorPreparation.Failed(detail, target.pullRequest, settlement)
-    } finally {
-      if (!handedOff) {
-        cleanup.settle(
-          MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "Monitor preparation ended before handing off."),
+    val prepared =
+      runCatching { createWorkspace(fence, context, target, cleanup) }
+        .getOrElse { failure -> setupFailure(failure, cleanup, target) }
+    if (prepared !is MonitorPreparation.Prepared) {
+      cleanup.settle(
+        MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "Monitor preparation ended before handing off."),
+      )
+    }
+    return prepared
+  }
+
+  private fun setupFailure(
+    failure: Throwable,
+    cleanup: MonitorCleanupOwnership,
+    target: MonitorResolvedTarget,
+  ): MonitorPreparation.Failed {
+    val primary =
+      if (failure is InterruptedException) {
+        MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "Monitor preparation was interrupted.")
+      } else {
+        MonitorPrimaryOutcome(
+          MonitorOutcomeKind.SETUP_FAILED,
+          monitorOutcomeDetail(failure.message, failure::class.java.simpleName),
         )
       }
-    }
+    val settlement = cleanup.settle(primary)
+    if (failure is InterruptedException) Thread.currentThread().interrupt()
+    if (failure !is SkillBillRuntimeException) throw failure
+    return MonitorPreparation.Failed(primary.detail, target.pullRequest, settlement)
   }
 
   private fun createWorkspace(

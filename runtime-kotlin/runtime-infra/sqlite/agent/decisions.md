@@ -1,5 +1,11 @@
 # SQLite boundary decisions
 
+## [2026-10-17] Rewrite finished repair rows that predate final-audit records
+Context: Repair state contract 0.1 requires `final_audit_required`, `final_audit_digest`, and `final_audits`. Its mode and stage enums no longer include `accepted`. Rows written by the previous runtime stored that token once the queue was empty, and detail reads now fail schema validation.
+Decision: Migration 60 rewrites only that finished shape to mode `final_full` and stage `final_accepted`. It records one final audit at the existing revision, with no regressions, using the closure tree and checkpoint already stored on the row. The digest is a hash of that row's catalog, execution, spec, revision, audited refs, and closure anchor. A row that says `accepted` but is not an empty queue, or that has no closure anchor, fails the migration. Coherence is checked before the rewrite is saved.
+Reason: `accepted` meant source repair had finished. `final_accepted` is that state in the current contract. The audit record uses evidence the row already stored and does not invent a later revision.
+Alternatives considered: Reading `accepted` as `final_audit_required` would satisfy the schema but would tell the operator a final audit is still required. Deleting the artifact would drop the repair history the detail view needs.
+
 ## [2026-10-09] Use an append-only migration for phase-strategy telemetry columns
 Context: Version 39 was already recorded on existing databases, while later telemetry writes required two columns it had once added.
 Decision: Register a uniquely named v49 migration and reuse the idempotent nullable-column helper for both columns.

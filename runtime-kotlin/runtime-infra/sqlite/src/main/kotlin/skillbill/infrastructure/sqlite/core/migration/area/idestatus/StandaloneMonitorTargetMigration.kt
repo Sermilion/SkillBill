@@ -1,4 +1,4 @@
-package skillbill.infrastructure.sqlite.core.schema
+package skillbill.infrastructure.sqlite.core.migration.area.idestatus
 
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
@@ -95,8 +95,15 @@ internal fun ResultSet.readMonitorTarget(sourceLabel: String): StandaloneMonitor
     )
   }
   return try {
-    val present = values.map { requireNotNull(it) }
-    StandaloneMonitorTarget(present[0], present[1], present[2], present[3], present[4], present[5])
+    fun column(name: String): String = requireNotNull(getString(name))
+    StandaloneMonitorTarget(
+      pullRequestKey = column(MONITOR_PR_KEY_COLUMN),
+      pullRequestUrl = column(MONITOR_PR_URL_COLUMN),
+      headRepository = column(MONITOR_HEAD_REPOSITORY_COLUMN),
+      headRef = column(MONITOR_HEAD_REF_COLUMN),
+      callerRoot = column(MONITOR_CALLER_ROOT_COLUMN),
+      worktreePath = column(MONITOR_WORKTREE_PATH_COLUMN),
+    )
   } catch (failure: IllegalArgumentException) {
     throw invalidIdeStatusSchemaError(
       sourceLabel,
@@ -115,6 +122,7 @@ internal fun ResultSet.readMonitorCleanup(
   val reason = getString(MONITOR_CLEANUP_REASON_COLUMN)
   val detail = getString(MONITOR_CLEANUP_DETAIL_COLUMN)
   if (disposition == null && reason == null && detail == null) return null
+
   fun invalid(message: String): Nothing =
     throw invalidIdeStatusSchemaError(sourceLabel, MONITOR_CLEANUP_DISPOSITION_COLUMN, message)
   if (!hasTarget) invalid("Monitor cleanup is recorded without a monitor target.")

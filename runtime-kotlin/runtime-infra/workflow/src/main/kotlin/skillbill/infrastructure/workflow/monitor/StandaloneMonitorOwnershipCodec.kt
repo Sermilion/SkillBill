@@ -174,7 +174,7 @@ internal object StandaloneMonitorOwnershipCodec {
         ?: throw invalid(label, "unknown retention reason")
     return MonitorRetentionRecord(
       reason,
-      reader.text(node, Keys.RETENTION_DETAIL),
+      reader.text(node, Keys.DETAIL),
       reader.optionalText(node, Keys.RETENTION_PATH),
     )
   }
@@ -190,37 +190,18 @@ internal object StandaloneMonitorOwnershipCodec {
     val kind =
       MonitorOutcomeKind.fromWire(reader.text(node, Keys.OUTCOME_KIND))
         ?: throw invalid(label, "unknown outcome kind")
-    return MonitorPrimaryOutcome(kind, reader.text(node, Keys.OUTCOME_DETAIL))
+    return MonitorPrimaryOutcome(kind, reader.text(node, Keys.DETAIL))
   }
 
   private fun checkCoherence(
     record: MonitorOwnershipRecord,
     label: String,
   ) {
-    val prepared =
-      listOf(
-        record.executionPath,
-        record.executionBranch,
-        record.pinnedHeadSha,
-        record.pinnedBaseSha,
-        record.lastPublishedSha,
-      )
     val problem =
-      when {
-        record.updatedAt.isBefore(record.acquiredAt) -> "updated_at is earlier than acquired_at"
-        record.state == MonitorOwnershipState.PREPARED && prepared.any { it == null } ->
-          "a prepared record needs the execution path, branch, and every pinned and published SHA"
-        record.outcome != null &&
-          record.state in setOf(MonitorOwnershipState.ACQUIRING, MonitorOwnershipState.PREPARED) ->
-          "an acquiring or prepared record must not carry an outcome"
-        record.state == MonitorOwnershipState.RETAINED && record.retention == null ->
-          "a retained record needs a retention reason"
-        record.state != MonitorOwnershipState.RETAINED && record.retention != null ->
-          "only a retained record may carry a retention reason"
-        record.state == MonitorOwnershipState.RELEASED &&
-          (record.executionPath != null || record.executionBranch != null || record.ownedRefs.isNotEmpty()) ->
-          "a released tombstone must not name execution resources"
-        else -> null
+      if (record.updatedAt.isBefore(record.acquiredAt)) {
+        "updated_at is earlier than acquired_at"
+      } else {
+        preparationProblem(record) ?: settlementProblem(record)
       }
     if (problem != null) {
       throw SkillBillRuntimeException(
@@ -229,6 +210,37 @@ internal object StandaloneMonitorOwnershipCodec {
       )
     }
   }
+
+  private fun preparationProblem(record: MonitorOwnershipRecord): String? {
+    val prepared =
+      listOf(
+        record.executionPath,
+        record.executionBranch,
+        record.pinnedHeadSha,
+        record.pinnedBaseSha,
+        record.lastPublishedSha,
+      )
+    return when {
+      record.state == MonitorOwnershipState.PREPARED && prepared.any { it == null } ->
+        "a prepared record needs the execution path, branch, and every pinned and published SHA"
+      record.outcome != null &&
+        record.state in setOf(MonitorOwnershipState.ACQUIRING, MonitorOwnershipState.PREPARED) ->
+        "an acquiring or prepared record must not carry an outcome"
+      else -> null
+    }
+  }
+
+  private fun settlementProblem(record: MonitorOwnershipRecord): String? =
+    when {
+      record.state == MonitorOwnershipState.RETAINED && record.retention == null ->
+        "a retained record needs a retention reason"
+      record.state != MonitorOwnershipState.RETAINED && record.retention != null ->
+        "only a retained record may carry a retention reason"
+      record.state == MonitorOwnershipState.RELEASED &&
+        (record.executionPath != null || record.executionBranch != null || record.ownedRefs.isNotEmpty()) ->
+        "a released tombstone must not name execution resources"
+      else -> null
+    }
 
   private fun requireVersion(
     root: JsonNode,
@@ -281,14 +293,14 @@ internal object StandaloneMonitorOwnershipCodec {
   private fun retentionNode(retention: MonitorRetentionRecord): ObjectNode =
     mapper.createObjectNode().apply {
       put(Keys.RETENTION_REASON, retention.reason.wireValue)
-      put(Keys.RETENTION_DETAIL, retention.detail)
+      put(Keys.DETAIL, retention.detail)
       retention.path?.let { put(Keys.RETENTION_PATH, it) }
     }
 
   private fun outcomeNode(outcome: MonitorPrimaryOutcome): ObjectNode =
     mapper.createObjectNode().apply {
       put(Keys.OUTCOME_KIND, outcome.kind.wireValue)
-      put(Keys.OUTCOME_DETAIL, outcome.detail)
+      put(Keys.DETAIL, outcome.detail)
     }
 
   private class FieldReader(private val label: String) {

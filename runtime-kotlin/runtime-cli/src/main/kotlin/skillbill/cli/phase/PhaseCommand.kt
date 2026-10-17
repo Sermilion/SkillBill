@@ -235,15 +235,16 @@ object PhaseInvocationParser {
     token: String?,
   ) {
     if (token == null) return
-    if (invocation.definitionId != SkeletonDefinition.MONITOR.id) {
-      throw UsageError("--$RECOVER_STALE_OWNER_OPTION applies only to `phase ${SkeletonDefinition.MONITOR.id}`.")
-    }
-    if (invocation.intake == null) {
-      throw UsageError("--$RECOVER_STALE_OWNER_OPTION needs an explicit pull request target.")
-    }
-    if (token.length < MIN_OWNER_TOKEN_LENGTH || token.any { it.isWhitespace() || it.isISOControl() }) {
-      throw UsageError("--$RECOVER_STALE_OWNER_OPTION needs the owner token a blocked monitor reported.")
-    }
+    val refusal =
+      when {
+        invocation.definitionId != SkeletonDefinition.MONITOR.id ->
+          "--$RECOVER_STALE_OWNER_OPTION applies only to `phase ${SkeletonDefinition.MONITOR.id}`."
+        invocation.intake == null -> "--$RECOVER_STALE_OWNER_OPTION needs an explicit pull request target."
+        token.length < MIN_OWNER_TOKEN_LENGTH || token.any { it.isWhitespace() || it.isISOControl() } ->
+          "--$RECOVER_STALE_OWNER_OPTION needs the owner token a blocked monitor reported."
+        else -> null
+      }
+    refusal?.let { throw UsageError(it) }
   }
 
   private fun definitionId(name: String): String {
