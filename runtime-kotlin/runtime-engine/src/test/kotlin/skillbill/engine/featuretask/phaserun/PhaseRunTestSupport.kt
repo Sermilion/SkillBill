@@ -7,6 +7,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
+import skillbill.engine.featuretask.phaserun.qa.qaStandalonePhaseRun
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.EnabledRuntimeTelemetrySettingsProvider
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
@@ -42,6 +43,7 @@ import skillbill.ports.process.ShutdownHookPort
 import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -84,6 +86,7 @@ internal data class PhaseRunEntryFixture(
   val clock: Clock,
   val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
+  val qaManifests: List<PlatformManifest> = emptyList(),
 )
 
 internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
@@ -113,7 +116,11 @@ internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
         override fun launch(request: AgentRunLaunchRequest) =
           error("A phase run fixture must not resolve launches through the test support launcher.")
       },
-    standaloneMonitorPreparer = standaloneMonitorPreparer,
+    standaloneRunners =
+      StandalonePhaseRunners(
+        standaloneMonitorPreparer,
+        qaStandalonePhaseRun(gitOperations, qaManifests),
+      ),
   )
 
 internal fun refusingMonitorPreparer(

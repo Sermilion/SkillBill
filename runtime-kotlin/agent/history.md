@@ -1,3 +1,15 @@
+## [2026-10-18] SKILL-419 subtask 1: QA contracts and standalone phase
+Areas: runtime-kotlin contracts, domain, ports, engine, infra, core and CLI; orchestration/contracts; platform-packs/kmp and platform-packs/ios; skills/skill-bill; docs; README.md
+- MEDIUM feature. Added report-only `phase qa`, the in-memory QA skeleton and agent strategy. Valid receipts complete with exit 0, including findings; missing or invalid output and changed HEAD or tracked-file status block.
+- Receipt and device-lease schemas start at 0.1. The shared `featuretask/qa` validator binds receipts to the expected revision and invocation evidence, rejects unsupported success claims, and distinguishes simulator coverage. reusable
+- Manifest-owned `qa_capability` uses dominant-pack routing. Absent capability produces an `unsupported_target` skip; incompatible declarations fail. Android and iOS guidance owns device discovery and interaction.
+- Invocation-owned scripts and evidence stay under `.git/skill-bill/qa/`. The lease CLI hashes serials; the adapter preserves live foreign leases, reclaims confirmed-dead owners, and reports retained cleanup resources.
+- Extracted `WorktreeBaseline` for QA and verify, and `RecordedProcessLiveness` for QA leases and monitor ownership. reusable
+- Standalone status carries attempted, passed, findings, skipped and incomplete outcomes through SQLite migration v60 and IDE status contract 0.5. Fallback and cleanup paths emit records.
+- Limits: feature-task composition, `qa_fix`, QA policy flags and verify integration belong to subtasks 2 and 3. Live iOS device smoke remains unavailable on this Linux host.
+Feature flag: N/A
+Acceptance criteria: 9/9 implemented
+
 ## [2026-10-17] Resume a different selected agent with that agent's models
 Areas: runtime-engine featuretask lifecycle and runloop planning
 - Same-agent resume still launches the recorded step assignment. A remaining step whose recorded agent is not the resolved resume agent drops that assignment and resolves the model from the selected agent's execution matrix.

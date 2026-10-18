@@ -51,7 +51,7 @@ class PhaseCommand(
 ) : DocumentedCliCommand(
     "phase",
     "Run one standalone phase (${PhaseInvocationParser.phaseNames().joinToString(", ")}) over the working tree. " +
-      "Review, validation, pr and monitor keep no workflow state; plan is a durable, resumable workflow that " +
+      "Review, validation, qa, pr and monitor keep no workflow state; plan is a durable, resumable workflow that " +
       "stops after the spec bundle.",
   ) {
   private val name by argument(

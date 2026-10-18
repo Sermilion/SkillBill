@@ -113,6 +113,16 @@ governedResources {
     "SKILL-427: canonical standalone monitor ownership schema",
   )
   copy(
+    "copyQaReceiptSchema",
+    "qa-receipt-schema.yaml",
+    "SKILL-419: canonical QA receipt schema",
+  )
+  copy(
+    "copyQaDeviceLeaseSchema",
+    "qa-device-lease-schema.yaml",
+    "SKILL-419: canonical QA device lease schema",
+  )
+  copy(
     "copyFeatureTaskExecutionIdentitySchema",
     "feature-task-execution-identity-schema.yaml",
     "SKILL-120: canonical feature-task execution-identity schema",

@@ -1,0 +1,86 @@
+# QA device lease schema (canonical source of truth).
+#
+# One record per device lives at <git common dir>/skill-bill/qa/leases/<device_fingerprint>.json and names the QA
+# invocation that owns the device. The invocation owner record, <git common dir>/skill-bill/qa/<invocation>/owner.json,
+# uses the invocation_owner shape below and names the long-lived runtime process whose liveness keeps the lease.
+#
+# Versioning rule:
+#
+# - contract_version is pinned by QA_DEVICE_LEASE_CONTRACT_VERSION in
+#   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaReceiptContract.kt.
+# - Records carry a sha256 device fingerprint only, never a raw device serial.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/qa-device-lease-schema.yaml"
+title: "QA device lease"
+description: >-
+  Ownership of one QA device by one QA invocation, kept while the owning runtime process is alive.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - device_fingerprint
+  - invocation_id
+  - owner_token
+  - process
+  - acquired_at
+properties:
+  contract_version:
+    type: string
+    const: "0.1"
+  device_fingerprint:
+    type: string
+    pattern: "^[0-9a-f]{64}$"
+  invocation_id:
+    $ref: "#/$defs/invocation_id"
+  owner_token:
+    type: string
+    minLength: 16
+  process:
+    $ref: "#/$defs/process"
+  acquired_at:
+    type: string
+    format: date-time
+$defs:
+  invocation_id:
+    type: string
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+  process:
+    type: object
+    additionalProperties: false
+    required: [host_identity, boot_identity, pid, process_birth_token]
+    properties:
+      host_identity:
+        type: string
+        minLength: 1
+      boot_identity:
+        type: string
+        minLength: 1
+      pid:
+        type: integer
+        minimum: 1
+      process_birth_token:
+        type: string
+        minLength: 1
+  invocation_owner:
+    type: object
+    additionalProperties: false
+    required:
+      - contract_version
+      - invocation_id
+      - owner_token
+      - process
+      - acquired_at
+    properties:
+      contract_version:
+        type: string
+        const: "0.1"
+      invocation_id:
+        $ref: "#/$defs/invocation_id"
+      owner_token:
+        type: string
+        minLength: 16
+      process:
+        $ref: "#/$defs/process"
+      acquired_at:
+        type: string
+        format: date-time

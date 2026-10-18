@@ -188,3 +188,21 @@ object FeatureTaskExecutionIdentitySchemaPaths {
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-execution-identity-schema.yaml"
 }
+
+object QaReceiptSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/qa-receipt-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/qa-receipt-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/qa-receipt-schema.yaml"
+}
+
+object QaDeviceLeaseSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/qa-device-lease-schema.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/qa-device-lease-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/qa-device-lease-schema.yaml"
+}

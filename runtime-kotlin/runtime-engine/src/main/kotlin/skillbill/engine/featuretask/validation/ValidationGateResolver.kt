@@ -64,19 +64,19 @@ class ValidationGateResolver(
       )
     }
   }
+}
 
-  private fun dominantPacks(
-    manifests: List<PlatformManifest>,
-    paths: List<String>,
-  ): List<PlatformManifest> {
-    val routing = ReviewStackRouting.route(manifests, paths.map { ReviewRoutingChangedFile(it, "") })
-    val bySlug = manifests.associateBy { it.slug }
-    val routed = routing.routedSlugs.mapNotNull(bySlug::get)
-    val fallback = ReviewFallbackResolver.resolveOptional(manifests)
-    val concrete = routed.filterNot { it.slug == fallback?.slug }.ifEmpty { routed }
-    val largestScope = concrete.maxOfOrNull { routing.ownedPathsBySlug[it.slug]?.size ?: 0 } ?: return emptyList()
-    val leaders = concrete.filter { routing.ownedPathsBySlug[it.slug]?.size == largestScope }
-    val composedBaselines = leaders.flatMap { it.codeReviewComposition?.baselineLayers.orEmpty() }.map { it.platform }
-    return leaders.filterNot { it.slug in composedBaselines }
-  }
+internal fun dominantPacks(
+  manifests: List<PlatformManifest>,
+  paths: List<String>,
+): List<PlatformManifest> {
+  val routing = ReviewStackRouting.route(manifests, paths.map { ReviewRoutingChangedFile(it, "") })
+  val bySlug = manifests.associateBy { it.slug }
+  val routed = routing.routedSlugs.mapNotNull(bySlug::get)
+  val fallback = ReviewFallbackResolver.resolveOptional(manifests)
+  val concrete = routed.filterNot { it.slug == fallback?.slug }.ifEmpty { routed }
+  val largestScope = concrete.maxOfOrNull { routing.ownedPathsBySlug[it.slug]?.size ?: 0 } ?: return emptyList()
+  val leaders = concrete.filter { routing.ownedPathsBySlug[it.slug]?.size == largestScope }
+  val composedBaselines = leaders.flatMap { it.codeReviewComposition?.baselineLayers.orEmpty() }.map { it.platform }
+  return leaders.filterNot { it.slug in composedBaselines }
 }

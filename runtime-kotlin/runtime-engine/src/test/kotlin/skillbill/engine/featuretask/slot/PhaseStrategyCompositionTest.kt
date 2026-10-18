@@ -42,6 +42,7 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qa.QaStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -129,6 +130,7 @@ class PhaseStrategyCompositionTest {
             ),
             fanOut,
             PlanFanOutOpus55Strategy(fanOut),
+            QaStrategy(unavailableQaReceiptSettlement()),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
     )

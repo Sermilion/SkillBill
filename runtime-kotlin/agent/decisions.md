@@ -1,5 +1,20 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-18] SKILL-419: keep device automation in pack-guided agent runs
+Context: Mobile QA must reuse available Android and iOS tooling, and later feature-task and verify entry points need the same QA foundation.
+Decision: Packs declare QA capability and guidance. The agent discovers and drives devices; the runtime resolves capability, owns leases and revision identity, and validates receipts through one shared engine validator.
+Reason: The spec calls for existing project automation, ADB and XCUITest tooling rather than a bespoke device server. Keeping platform interaction in pack guidance preserves manifest-driven routing and lets each entry point reuse the same runtime contracts.
+
+## [2026-10-18] SKILL-419: complete valid standalone QA reports with findings
+Context: Standalone QA evaluates the checked-out tree without repairing application code. A reproduced product failure is useful output from that evaluator.
+Decision: Any valid QA receipt completes with exit 0, including findings, skipped and incomplete verdicts. Missing or malformed receipts, revision mismatches and tracked-file or HEAD changes block with exit 1. The standalone skeleton selects only `qa`.
+Reason: QA verdict and evaluator completion answer different questions. Findings must remain visible without triggering repair, while process success or app launch alone cannot establish valid coverage. Feature-task repair belongs to subtask 2.
+
+## [2026-10-18] SKILL-419: reclaim device leases only after confirmed owner death
+Context: Concurrent QA invocations can install over or manipulate the same device, and a crashed invocation can leave a lease behind.
+Decision: Store per-device leases under the repository's QA directory using hashed device identities and invocation process ownership. Reuse monitor liveness checks; preserve a foreign lease unless its owner is confirmed dead. Release invocation leases on exit and report retained resources when cleanup fails.
+Reason: Exclusive invocation ownership prevents one run from changing another run's device state. The monitor's existing live and stale checks provide the recovery rule without a second liveness policy. Hashes keep raw device serials out of durable records and output.
+
 ## [2026-10-16] Missing monitor accounting evidence stays unknown
 Context: The monitor repair cap was reconstructed from retained producer, completion, publication, and Git evidence. Missing association or an older CI_FAILED report without a published-head statement was converted into a monitor block, even when fewer than three failed repair commits were proven.
 Decision: Count only distinct repair SHAs qualified by the existing completed repair, pushed publication, change, producer, and observed-head evidence. Missing or contradictory accounting evidence emits diagnostics and remains unknown. It neither fabricates a failed attempt nor blocks cap-sensitive resume. Live failures without a qualified repair association keep the existing repair transition as progress. Green completion requires stable PR number and head identity matching the latest completed pushed publication before monitor start; a stale or headless green observation returns to the same watch loop. Merged PR handling and actual lookup failures keep their existing outcomes.

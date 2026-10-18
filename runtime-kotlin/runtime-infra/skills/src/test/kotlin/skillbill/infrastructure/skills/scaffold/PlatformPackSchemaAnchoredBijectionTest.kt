@@ -18,6 +18,7 @@ class PlatformPackSchemaAnchoredBijectionTest {
       "area_metadata",
       "declared_quality_check_file",
       "validation_gate",
+      "qa_capability",
       "code_review_composition",
       "fallback_capabilities",
       "pointers",

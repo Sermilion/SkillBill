@@ -38,7 +38,9 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
   ): FeatureTaskRuntimePhaseDeclaration {
-    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS) {
+    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS ||
+      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_QA
+    ) {
       return FeatureTaskRuntimePhaseDeclaration(
         phaseId = phaseId,
         projectionDeclarations = emptyList(),

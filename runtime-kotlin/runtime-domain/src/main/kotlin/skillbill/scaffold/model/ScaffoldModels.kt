@@ -184,6 +184,27 @@ enum class ValidationGateCompilerDiagnosticsFormat(val wireValue: String) {
   }
 }
 
+enum class QaPlatform(val wireValue: String) {
+  ANDROID("android"),
+  IOS("ios"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): QaPlatform? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
+data class QaCapabilityDeclaration(
+  val platforms: Set<QaPlatform>,
+  val guidanceFile: String,
+  val discoveryHints: List<String> = emptyList(),
+) {
+  init {
+    require(platforms.isNotEmpty()) { "qa_capability.platforms must name at least one platform." }
+    require(guidanceFile.isNotBlank()) { "qa_capability.guidance_file must be a non-blank pack-relative path." }
+  }
+}
+
 data class ValidationGateExecutedWorkSignal(
   val format: ValidationGateExecutedWorkFormat,
 )
@@ -218,6 +239,7 @@ data class PlatformManifest(
   val notes: String? = null,
   val declaredQualityCheckFile: FileLocation? = null,
   val validationGate: ValidationGateDeclaration? = null,
+  val qaCapability: QaCapabilityDeclaration? = null,
   val codeReviewComposition: CodeReviewComposition? = null,
   val fallbackCapabilities: Set<String> = emptySet(),
   val pointers: List<PointerSpec> = emptyList(),

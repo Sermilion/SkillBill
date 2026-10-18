@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:qa reports mobile QA findings from a device or simulator; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -66,6 +66,7 @@ operator's current request selects a standalone phase or operation.
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<instructions>] phase:qa` | `skill-bill phase qa [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<issue-key\|pr-url>] phase:monitor` | `skill-bill phase monitor [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
@@ -331,6 +332,20 @@ available findings, explain the block, and exit 1. The operator review never
 launches repair. Full feature runs retain their separate review, verification,
 and repair steps. A `# Review phase blocked` line means the phase stopped before
 it finished; report it and exit non-zero.
+
+## Phase QA
+
+`phase:qa` runs the report-only `qa` slot. The runtime resolves the platform from
+the installed packs, not the dispatcher: the routed pack's `qa_capability` names
+its guidance, and a repository with no declaring pack completes as a skipped
+`unsupported_target` run without launching an agent. The QA agent drives one
+device or simulator and writes its receipt and evidence under
+`.git/skill-bill/qa/<invocation>/`, never in the working tree. It never edits
+tracked files, commits, pushes, or opens a PR, and a run that changes the
+repository fails. A valid receipt exits 0 for every verdict, findings included.
+A missing or malformed receipt, a receipt for another revision, or a changed
+worktree exits 1. Relay the printed verdict, flows, findings, and cleanup as a
+phase form.
 
 ## Phase PR
 

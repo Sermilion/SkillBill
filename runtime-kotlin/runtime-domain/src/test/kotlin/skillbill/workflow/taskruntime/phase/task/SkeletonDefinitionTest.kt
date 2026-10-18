@@ -188,7 +188,7 @@ class SkeletonDefinitionTest {
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
     assertEquals(listOf("intake", "preplan", "plan", "plan_subtasks"), SkeletonDefinition.PLAN.stepIds)
     assertEquals(
-      listOf("review", "validation", "plan", "pr", "monitor"),
+      listOf("review", "validation", "qa", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
     )
     assertEquals(setOf(SkeletonDefinition.PLAN), SkeletonDefinition.admittedForRun(goalContinuation = false))

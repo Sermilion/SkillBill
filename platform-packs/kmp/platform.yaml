@@ -58,6 +58,9 @@ declared_files:
     ux-accessibility: code-review/bill-kmp-code-review-ux-accessibility/content.md
     code-quality: code-review/bill-kmp-code-review-code-quality/content.md
 
+qa_capability:
+  platforms: [android]
+  guidance_file: qa/android-qa.md
 validation_gate:
   full_gate_command:
     - ./gradlew

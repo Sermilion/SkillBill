@@ -14,6 +14,8 @@ internal object FeatureTaskRuntimePhaseIds {
   const val AUDIT_PLAN_FIX: String = "audit_plan_fix"
   const val AUDIT_IMPLEMENT_FIX: String = "audit_implement_fix"
   const val AUDIT: String = "audit"
+  const val QA: String = "qa"
+  const val QA_FIX: String = "qa_fix"
   const val VALIDATE: String = "validate"
   const val WRITE_HISTORY: String = "write_history"
   const val COMMIT_PUSH: String = "commit_push"
@@ -43,6 +45,8 @@ internal object FeatureTaskRuntimePhaseIds {
       AUDIT_PLAN_FIX,
       AUDIT_IMPLEMENT_FIX,
       AUDIT,
+      QA,
+      QA_FIX,
       REVIEW,
       VERIFY_FINDINGS,
       IMPLEMENT_FIX,

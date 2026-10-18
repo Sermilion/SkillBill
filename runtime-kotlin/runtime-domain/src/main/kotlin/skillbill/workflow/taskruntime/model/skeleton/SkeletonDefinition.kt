@@ -3,10 +3,16 @@ package skillbill.workflow.taskruntime.model.skeleton
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
 import skillbill.error.featuretask.UnknownSkeletonDefinitionError
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 enum class SkeletonRunStateKind(val wireValue: String) {
   DURABLE("durable"),
   IN_MEMORY("in_memory"),
+}
+
+enum class PhaseRunHarness {
+  NONE,
+  DEVICE_QA,
 }
 
 enum class PhaseIntakeRequirement(val wireValue: String) {
@@ -23,6 +29,7 @@ data class SkeletonDefinition(
   val stepIds: List<String> = slots.flatMap(PhaseSlot::steps),
   val standaloneInvocable: Boolean = false,
   val preparedExecutionOf: String? = null,
+  val runHarness: PhaseRunHarness = PhaseRunHarness.NONE,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -72,6 +79,15 @@ data class SkeletonDefinition(
         SkeletonRunStateKind.IN_MEMORY,
         standaloneInvocable = true,
       )
+    val QA: SkeletonDefinition =
+      SkeletonDefinition(
+        "qa",
+        listOf(PhaseSlot.QA),
+        SkeletonRunStateKind.IN_MEMORY,
+        standaloneInvocable = true,
+        stepIds = listOf(FeatureTaskRuntimePhaseIds.QA),
+        runHarness = PhaseRunHarness.DEVICE_QA,
+      )
     val PLAN: SkeletonDefinition =
       SkeletonDefinition(
         "plan",
@@ -104,13 +120,16 @@ data class SkeletonDefinition(
         preparedExecutionOf = MONITOR.id,
       )
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, MONITOR, STANDALONE_MONITOR)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, QA, PLAN, PR, MONITOR, STANDALONE_MONITOR)
 
     fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
       if (goalContinuation) setOf(GOAL_CHILD) else setOf(PLAN)
 
     fun preparedExecutionFor(publicId: String): SkeletonDefinition? =
       entries.singleOrNull { it.preparedExecutionOf == publicId }
+
+    fun runHarnessOf(publicId: String): PhaseRunHarness =
+      entries.firstOrNull { it.id == publicId }?.runHarness ?: PhaseRunHarness.NONE
 
     fun byId(id: String): SkeletonDefinition =
       entries.firstOrNull { it.id == id }

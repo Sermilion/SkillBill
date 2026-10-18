@@ -1,0 +1,384 @@
+# QA receipt schema (canonical source of truth).
+#
+# The settled output of one QA run: the agent drives a device or simulator from pack guidance and writes this
+# receipt under the invocation directory; the runtime validates it before any consumer reads it.
+#
+# Versioning rule:
+#
+# - contract_version is pinned by QA_RECEIPT_CONTRACT_VERSION in
+#   runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/qa/QaReceiptContract.kt.
+# - Evidence is referenced by path and digest only. No object carries a body, content, or data field, so an inline
+#   body fails additionalProperties.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/qa-receipt-schema.yaml"
+title: "QA receipt"
+description: >-
+  Bounded result of one mobile QA run, bound to the repository revision and uncommitted tree it tested.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - verdict
+  - identity
+  - artifact
+  - policy
+  - target
+  - flows
+  - assertions
+  - findings
+  - cleanup
+properties:
+  contract_version:
+    type: string
+    const: "0.1"
+  verdict:
+    type: string
+    enum:
+      - passed
+      - findings_open
+      - skipped
+      - incomplete
+  identity:
+    type: object
+    additionalProperties: false
+    required:
+      - head_revision
+      - tree_identity
+    properties:
+      head_revision:
+        type: string
+        pattern: "^[0-9a-f]{40}$"
+      tree_identity:
+        type: string
+        pattern: "^[0-9a-f]{64}$"
+  artifact:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required:
+          - kind
+          - path_ref
+          - sha256
+        properties:
+          kind:
+            type: string
+            minLength: 1
+            maxLength: 32
+          path_ref:
+            type: string
+            minLength: 1
+            maxLength: 512
+          sha256:
+            type: string
+            pattern: "^[0-9a-f]{64}$"
+  policy:
+    type: string
+    enum:
+      - standalone
+      - auto
+      - "on"
+      - "off"
+  target:
+    oneOf:
+      - type: "null"
+      - type: object
+        additionalProperties: false
+        required:
+          - platform
+          - device_fingerprint
+          - kind
+          - selection
+        properties:
+          platform:
+            type: string
+            enum:
+              - android
+              - ios
+          device_fingerprint:
+            type: string
+            pattern: "^[0-9a-f]{64}$"
+          kind:
+            type: string
+            enum:
+              - physical
+              - simulator
+          selection:
+            type: string
+            enum:
+              - explicit
+              - single
+              - substituted
+  tool_versions:
+    type: object
+    maxProperties: 16
+    propertyNames:
+      maxLength: 64
+    additionalProperties:
+      type: string
+      maxLength: 64
+  flows:
+    type: array
+    maxItems: 64
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - status
+        - hardware_only
+      properties:
+        id:
+          $ref: "#/$defs/identifier"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+          enum:
+            - exercised
+            - untested
+        hardware_only:
+          type: boolean
+        untested_reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+      allOf:
+        - if:
+            properties:
+              status:
+                const: untested
+          then:
+            required:
+              - untested_reason
+          else:
+            not:
+              required:
+                - untested_reason
+  assertions:
+    type: array
+    maxItems: 128
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - flow_id
+        - description
+        - outcome
+        - criteria
+      properties:
+        flow_id:
+          $ref: "#/$defs/identifier"
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        outcome:
+          type: string
+          enum:
+            - pass
+            - fail
+        criteria:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+  findings:
+    type: array
+    maxItems: 64
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - affected_criteria
+        - steps
+        - expected
+        - observed
+        - evidence_refs
+      properties:
+        id:
+          $ref: "#/$defs/identifier"
+        affected_criteria:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+        expected:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        observed:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        evidence_refs:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/$defs/evidence_ref"
+  skip_reason:
+    type: string
+    enum:
+      - capability_absent
+      - unsupported_target
+      - disabled_policy
+      - isolation_unavailable
+      - ambiguous_target
+      - unauthorized_target
+      - offline_target
+      - device_contended
+      - empty_scope
+  incomplete_reason:
+    type: string
+    enum:
+      - interrupted
+      - automation_broken
+      - budget_exhausted
+      - device_lost
+      - other
+  reason_detail:
+    type: string
+    minLength: 1
+    maxLength: 500
+  fallbacks:
+    type: array
+    maxItems: 16
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - reason
+      properties:
+        kind:
+          type: string
+          enum:
+            - simulator_substitution
+            - target_substitution
+            - retry
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+  cleanup:
+    type: object
+    additionalProperties: false
+    required:
+      - outcome
+      - retained_resources
+    properties:
+      outcome:
+        type: string
+        enum:
+          - released
+          - retained
+      retained_resources:
+        type: array
+        maxItems: 16
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - kind
+            - identity
+          properties:
+            kind:
+              type: string
+              minLength: 1
+              maxLength: 64
+            identity:
+              type: string
+              minLength: 1
+              maxLength: 200
+      guidance:
+        type: string
+        minLength: 1
+        maxLength: 500
+    allOf:
+      - if:
+          properties:
+            outcome:
+              const: retained
+        then:
+          required:
+            - guidance
+          properties:
+            retained_resources:
+              minItems: 1
+allOf:
+  - if:
+      properties:
+        verdict:
+          const: skipped
+    then:
+      required:
+        - skip_reason
+    else:
+      not:
+        required:
+          - skip_reason
+  - if:
+      properties:
+        verdict:
+          const: incomplete
+    then:
+      required:
+        - incomplete_reason
+    else:
+      not:
+        required:
+          - incomplete_reason
+  - if:
+      not:
+        properties:
+          verdict:
+            const: skipped
+    then:
+      properties:
+        artifact:
+          type: object
+        target:
+          type: object
+$defs:
+  identifier:
+    type: string
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+  evidence_ref:
+    type: object
+    additionalProperties: false
+    required:
+      - kind
+      - path
+      - sha256
+    properties:
+      kind:
+        type: string
+        enum:
+          - screenshot
+          - ui_hierarchy
+          - log_excerpt
+          - recording
+          - script
+      path:
+        type: string
+        maxLength: 512
+        pattern: "^\\.git/skill-bill/qa/[A-Za-z0-9._/-]+$"
+      sha256:
+        type: string
+        pattern: "^[0-9a-f]{64}$"

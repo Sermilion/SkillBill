@@ -32,6 +32,8 @@ internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
     FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.AUDIT to ExecutionTier.REASONING,
+    FeatureTaskRuntimePhaseIds.QA to ExecutionTier.IMPLEMENTATION,
+    FeatureTaskRuntimePhaseIds.QA_FIX to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.VALIDATE to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.WRITE_HISTORY to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.COMMIT_PUSH to ExecutionTier.IMPLEMENTATION,

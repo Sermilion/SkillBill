@@ -17,6 +17,7 @@ import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.SelfConfirmingOperation
+import skillbill.engine.operation.core.WorktreeBaseline
 import skillbill.engine.operation.core.anchorUnreadable
 import skillbill.engine.operation.core.closedVerifyWorkflow
 import skillbill.engine.operation.core.gitValueOr
@@ -25,6 +26,7 @@ import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.pullRequestNotFound
 import skillbill.engine.operation.core.unknownVerifyWorkflow
 import skillbill.engine.operation.core.unresolvableVerifyTarget
+import skillbill.engine.operation.core.worktreeBaseline
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
@@ -512,14 +514,8 @@ class VerifyOperation(
   private inline fun worktreeBaseline(
     context: OperationContext,
     refuse: (OperationOutcome.Blocked) -> Nothing,
-  ): Pair<String, String> {
-    val status =
-      when (val result = gitOperations.worktreeStatus(context.repoRoot)) {
-        is WorkflowGitOperationResult.Ok -> result.value.orEmpty()
-        else -> refuse(anchorUnreadable(WORKTREE_ANCHOR, result.error))
-      }
-    return status to gitOperations.runtimePhaseHeadCommit(context.repoRoot).gitValueOr(HEAD_ANCHOR, refuse)
-  }
+  ): WorktreeBaseline =
+    gitOperations.worktreeBaseline(context.repoRoot) { anchor, error -> refuse(anchorUnreadable(anchor, error)) }
 
   private fun repoRootOf(context: OperationContext): String = context.repoRoot.toAbsolutePath().normalize().toString()
 
@@ -531,7 +527,6 @@ class VerifyOperation(
     const val DEFAULT_BASE_REF = "origin/HEAD"
     const val SPEC_ANCHOR = "spec"
     const val HEAD_ANCHOR = "HEAD"
-    const val WORKTREE_ANCHOR = "worktree status"
     const val SUPERSEDE_SCAN_LIMIT = 100
     const val WORKTREE_CHANGED = "operation verify is read-only, but the worktree or HEAD changed during the run."
 

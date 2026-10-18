@@ -4,6 +4,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionContext
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -86,6 +87,9 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** The pinned pull request target and owned worktree of a prepared standalone monitor; null for every other run. */
   val monitorExecution: MonitorExecutionContext? get() = null
+
+  /** The workspace, expected identity, and pack guidance of a standalone QA run; null for every other run. */
+  val qaExecution: QaExecutionContext? get() = null
 }
 
 data class PhaseInstructions(

@@ -91,7 +91,7 @@ skill-bill update
 - **workflow.** Persisted runtime state for one goal, standalone phase, or operation.
 - **subtask.** One independently shipped unit of a decomposed goal.
 - **phase.** A standalone-invocable skeleton id: `review`, `validation`, `plan`, `pr`, `monitor`. Invoked as `skill-bill phase <name>`. `verify` is not a phase.
-- **slot.** One of the 11 `PhaseSlot` wire values: `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, `standalone_review`. `standalone_review` is the report-only operator review slot that `phase:review` runs.
+- **slot.** One of the 12 `PhaseSlot` wire values: `preplan`, `plan`, `implementation`, `audit`, `code_review`, `quality_gate`, `write_history`, `commit_push`, `pull_request`, `monitor`, `standalone_review`, `qa`. `standalone_review` is the report-only operator review slot that `phase:review` runs, and `qa` is the report-only mobile QA slot that `phase:qa` runs.
 - **step.** An internal workflow step id, distinct from phases and slots.
 - **operation.** A `skill-bill operation <name>` command. `verify` and `update-check` are operations.
 - **pack.** A platform pack under `platform-packs/<slug>/` that owns review routing and `validation_gate`.
@@ -102,7 +102,7 @@ skill-bill update
 
 `/skill-bill <intake>` launches the goal runtime. The runtime prepares a missing spec, plans the work, and runs it. If a spec or goal already exists, it resumes that instead. A small feature uses one subtask. Larger work can use dependency-ordered subtasks, each with a fresh execution context and durable handoff artifacts.
 
-The runtime defines 11 slots. A full run uses the first ten in this order; `standalone_review` runs only for `phase:review`:
+The runtime defines 12 slots. A full run uses the first ten in this order; `standalone_review` runs only for `phase:review` and `qa` only for `phase:qa`:
 
 | Slot | What happens |
 | --- | --- |
@@ -117,6 +117,7 @@ The runtime defines 11 slots. A full run uses the first ten in this order; `stan
 | `pull_request` | Create or update the PR once every subtask is complete. |
 | `monitor` | Watch CI on the open PR and repair failing checks. |
 | `standalone_review` | Report-only operator review. `phase:review` runs this slot. |
+| `qa` | Report-only mobile QA on an Android or iOS device or simulator, driven by the routed platform pack's QA guidance. `phase:qa` runs this slot. |
 
 Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs `standalone_review`, and `phase:plan` runs `intake`, `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
 

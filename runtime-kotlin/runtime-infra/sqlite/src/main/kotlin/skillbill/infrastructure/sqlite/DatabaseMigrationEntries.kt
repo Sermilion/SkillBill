@@ -20,6 +20,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDelive
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneQaOutcome
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -823,5 +824,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 59,
       name = "record-standalone-monitor-target",
       operation = ::recordStandaloneMonitorTarget,
+    ),
+    DatabaseMigration(
+      version = 60,
+      name = "record-standalone-qa-outcome",
+      operation = ::recordStandaloneQaOutcome,
     ),
   )

@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
+import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
@@ -25,6 +27,7 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.qa.QaStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildOpus55Strategy
@@ -59,6 +62,8 @@ import skillbill.ports.monitor.model.MonitorPullRequestIdentity
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
+import skillbill.ports.qa.QaWorkspacePort
+import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -89,6 +94,7 @@ fun testPhaseStrategies(
   planFanOutPort: BoundedWorkFanOutPort = SequentialBoundedWorkFanOutPort,
   planFanOutCap: Int = 1,
   standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
+  qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
@@ -153,12 +159,28 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(standaloneMonitor, runner()),
         PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(standaloneMonitor), runner()),
         PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
+        PhaseStrategyRegistration(QaStrategy(qaReceipts), runner()),
       ),
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
   val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
 }
+
+fun unavailableQaReceiptSettlement(): QaReceiptSettlement =
+  QaReceiptSettlement(
+    QaReceiptValidator { null },
+    object : QaWorkspacePort {
+      override fun open(
+        repoRoot: Path,
+        invocationId: String,
+      ): QaWorkspace = error("Test phase strategies do not open a QA workspace.")
+
+      override fun readReceipt(workspace: QaWorkspace): String? = null
+
+      override fun close(workspace: QaWorkspace) = Unit
+    },
+  )
 
 object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
   override fun lookup(
@@ -319,6 +341,7 @@ fun testPhaseStrategyBindings(
           reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
       ),
     SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
+    SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
     SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
     SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
     SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),

@@ -97,14 +97,14 @@ class PhaseInvocationParserTest {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("standalone", emptyList()) }
 
     assertEquals(
-      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, pr, or monitor.",
+      "Phase 'standalone' runs over durable workflow state; expected review, validation, qa, plan, pr, or monitor.",
       error.message,
     )
   }
 
   @Test
   fun `phase names are the standalone-invocable definitions, including the durable plan`() {
-    assertEquals(listOf("review", "validation", "plan", "pr", "monitor"), PhaseInvocationParser.phaseNames())
+    assertEquals(listOf("review", "validation", "qa", "plan", "pr", "monitor"), PhaseInvocationParser.phaseNames())
     assertEquals(
       PhaseInvocation("plan", "SKILL-9 add a tab", null, null),
       PhaseInvocationParser.parse("plan", listOf("SKILL-9", "add", "a", "tab")),
