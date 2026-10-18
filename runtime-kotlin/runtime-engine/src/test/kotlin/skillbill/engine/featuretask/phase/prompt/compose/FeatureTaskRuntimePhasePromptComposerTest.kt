@@ -174,8 +174,20 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "Report status completed when inspection finishes")
     assertContains(prompt, "The runtime owns repair retries and progress limits")
     assertContains(prompt, "A completed inspection with open criteria routes to audit_plan_fix")
+    assertContains(prompt, AcceptanceAuditPromptSections.DEFECT_CLASS_FANOUT_SENTENCE)
     assertFalse(prompt.contains("Another automatic repair requires fewer open criterion IDs"))
     assertFalse(prompt.contains("equal or larger counts block for operator intervention"))
+  }
+
+  @Test
+  fun `audit plan and repair cover remaining siblings of the selected defect class`() {
+    val planPrompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX)
+    val repairPrompt =
+      composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX)
+
+    assertContains(planPrompt, "remaining defect class")
+    assertContains(planPrompt, "plan every remaining sibling")
+    assertContains(repairPrompt, "sibling of a planned defect class")
   }
 
   @Test

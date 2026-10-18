@@ -1,3 +1,8 @@
+## [2026-10-17] Focused audit reports a defect class, not only the latest gap
+Context: Per-criterion audit still looped when a focused pass named one production path, repair fixed that path, and the next audit found a sibling of the same forbidden pattern (SQL LIMIT before parse isolation on a cousin store method).
+Decision: Keep one-criterion serial repair and the existing strategy revision. Instruct audit, `audit_plan_fix`, and `audit_implement_fix` that a named gap is an example of a remaining defect class. Audit reports every remaining sibling in that criterion's family. Plan and repair cover that set in one round. Do not open another criterion.
+Reason: The runtime already allowed several independent gaps under one criterion. Agents treated the latest-gap briefing as the work item. Prompt text is enough; a semantic revision bump would remap in-flight runs for a wording change.
+
 ## [2026-10-16] Recover failed repairs from recorded execution semantics
 Context: Resume must retain failed repairs after current phase records are replaced. Legacy monitor verdicts conflated CI failure and merge conflict, and report prose cannot establish which occurred.
 Decision: Admit historical CI_FAILED meaning only through the immutable stored monitor selection, dispatch owners and corrected traversal. Join matched START/COMPLETE and generation-zero producer identities, accepted repair completion, pushed baseline/publication outputs and Git ancestry/content evidence. Derive failed SHAs from publication records and restore the distinct failed-commit set.
