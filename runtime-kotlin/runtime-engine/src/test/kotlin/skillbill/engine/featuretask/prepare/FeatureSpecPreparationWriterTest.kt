@@ -98,6 +98,27 @@ class FeatureSpecPreparationWriterTest {
   }
 
   @Test
+  fun `specs exceeding the planning size limit remain writable and admissible`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-existing-criteria")
+    val criteria = (1..6).map { "Production outcome $it." }
+    val request =
+      authoredBundleRequest().copy(
+        decision = decomposedDecision().copy(acceptanceCriteria = criteria),
+        subtasks = listOf(singleSubtask().copy(acceptanceCriteria = criteria)),
+      )
+
+    val written = writer.write(repoRoot, request)
+    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+
+    assertEquals(written.parentSpecPath, verified.parentSpecPath)
+    assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
+    (listOf(written.parentSpecPath) + written.subtaskSpecPaths).forEach { path ->
+      val text = Files.readString(repoRoot.resolve(path))
+      criteria.forEach { criterion -> assertContains(text, criterion) }
+    }
+  }
+
+  @Test
   fun `decomposed writes parent and ordered subtask specs then writes manifest`() {
     val repoRoot = Files.createTempDirectory("skillbill-feature-spec-decomposed")
     val result =

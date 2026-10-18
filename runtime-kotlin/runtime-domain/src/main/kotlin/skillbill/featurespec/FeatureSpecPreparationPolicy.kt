@@ -6,6 +6,8 @@ import skillbill.featurespec.model.FeatureSpecPreparationIntake
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 
 object FeatureSpecPreparationPolicy {
+  private const val MAX_ACCEPTANCE_CRITERIA_PER_SPEC = 5
+
   private val decomposedHints =
     listOf(
       "decompose",
@@ -59,6 +61,9 @@ object FeatureSpecPreparationPolicy {
     acceptanceCriteria: List<String>,
     constraints: List<String>,
   ): FeatureSpecPreparationMode {
+    if (acceptanceCriteria.size > MAX_ACCEPTANCE_CRITERIA_PER_SPEC) {
+      return FeatureSpecPreparationMode.DECOMPOSED
+    }
     val explicit = FeatureSpecPreparationMode.fromWireValue(intendedOutcome.lowercase())
     if (explicit != null) {
       return explicit

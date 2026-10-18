@@ -90,6 +90,16 @@ runtime commit strategy and launches no agent. Details:
 
 ## Phase and operation concepts
 
+Planning authors specs with one to five acceptance criteria each. A subtask needing more than
+five criteria splits into the fewest dependency-ordered subtask specs needed to stay within that
+limit. Distribute criteria evenly, with counts differing by at most one. Six criteria become two
+specs with three each; eleven become three specs with four, four, and three.
+Every requirement remains covered, and each criterion describes one focused production outcome.
+The parent summarizes feature-level outcomes within the same limit. An existing operator-authored
+parent remains unchanged, even when it has more than five criteria; its executable subtasks still
+obey the limit. This is a planning instruction and sizing rule. It adds no runtime rejection or
+block reason for oversized specs.
+
 An existing `spec.md` without a manifest is preparation intake. The full run reads its requirements and writes the manifest and executable subtask specs in the same folder, preserving the parent file and design assets. File paths, folder paths, bundle keys, and issue keys resolve to that existing bundle. Preparation uses the current branch as its base. Unrelated manifest bundles do not participate in its nested-decomposition check.
 
 Standalone phases and operations are operator tools. Agents may invoke
