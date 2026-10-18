@@ -52,9 +52,13 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
+import kotlin.time.toKotlinInstant
 
 actual fun formatInstant(value: Instant, pattern: String): String =
   DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault()).format(value.toJavaInstant())
+
+actual fun startOfLocalDay(value: Instant): Instant =
+  value.toJavaInstant().atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant().toKotlinInstant()
 
 actual fun abbreviateHomeDirectory(path: String): String =
   System.getProperty("user.home")?.takeIf { it.isNotEmpty() }?.let { path.replace(it, "~") } ?: path
