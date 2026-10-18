@@ -54,10 +54,9 @@ fun SidebarWorkRow(item: WorkItem, selected: Boolean, onSelect: () -> Unit) {
           color = if (item.lifecycle == Lifecycle.CANCELED) lifecycleColor(item.lifecycle) else if (item.needsAttention()) orange else muted,
           fontFamily = mono, fontSize = 10.5.sp, lineHeight = 14.7.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        if (item.showsAsStandalonePhase()) {
-          val started = item.startedAt?.let { formatInstant(it, "d MMM HH:mm") }
-          val invocation = item.invocationId?.removePrefix("phr-")?.take(8)
-          Text(listOfNotNull(started, invocation).joinToString(" · "), color = dim, fontFamily = mono, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val branch = item.branch?.takeIf { item.showsAsStandalonePhase() }
+        if (branch != null) {
+          Text(branch, color = dim, fontFamily = mono, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
       }
       if (item.progressTotal != null) {

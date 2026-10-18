@@ -15,6 +15,9 @@ import kotlin.time.Instant
 /** Formats [value] in the user's time zone with a `java.time`-style [pattern] such as `d MMM HH:mm`. */
 expect fun formatInstant(value: Instant, pattern: String): String
 
+/** The instant the local calendar day holding [value] began, in the system time zone. */
+expect fun startOfLocalDay(value: Instant): Instant
+
 /** Replaces the user's home directory prefix with `~` so a path reads short. */
 expect fun abbreviateHomeDirectory(path: String): String
 

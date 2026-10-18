@@ -17,6 +17,8 @@ data class WorkUiState(
   val needsYou: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val goals: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val phases: PagedListState<WorkItem> = PagedListState.InitialLoading,
+  /** Work that finished within the last day, latest first; the sidebar lists what finished today. Never live. */
+  val finished: PagedListState<WorkItem> = PagedListState.InitialLoading,
   val store: StoreObservation? = null,
 ) {
   private val sections = TrackedSections(needsYou, goals, phases)

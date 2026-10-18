@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Composable
@@ -37,4 +39,19 @@ fun tickingNow(clock: Clock = Clock.System): State<Instant> {
     }
   }
   return now
+}
+
+/** When the local calendar day began, advanced at each local midnight. */
+@Composable
+fun startOfToday(clock: Clock = Clock.System): State<Instant> {
+  val today = remember(clock) { mutableStateOf(startOfLocalDay(clock.now())) }
+  LaunchedEffect(clock) {
+    while (true) {
+      // A local day lasts 23 to 25 hours, so 26 hours after its start always falls in the next one.
+      val next = startOfLocalDay(today.value + 26.hours)
+      delay((next - clock.now()).coerceAtLeast(1.seconds))
+      today.value = startOfLocalDay(clock.now())
+    }
+  }
+  return today
 }

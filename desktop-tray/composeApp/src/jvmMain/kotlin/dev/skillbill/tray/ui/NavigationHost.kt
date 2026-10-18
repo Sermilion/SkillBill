@@ -51,6 +51,7 @@ import dev.skillbill.tray.core.ui.navigation.DatabaseGenerationRef
 import dev.skillbill.tray.core.ui.navigation.EntryArgsOutcome
 import dev.skillbill.tray.core.ui.navigation.rememberEntryComponent
 import dev.skillbill.tray.core.ui.navigation.rememberEntryViewModel
+import dev.skillbill.tray.core.ui.startOfToday
 import dev.skillbill.tray.feature.detail.DetailArgs
 import dev.skillbill.tray.feature.detail.DetailEffect
 import dev.skillbill.tray.feature.detail.DetailRoute
@@ -186,6 +187,7 @@ private fun WorkEntry(window: WindowOwner) {
   val component = rememberEntryComponent { window.entries.create() }
   val work = rememberEntryViewModel("work") { component.viewModels.work() }
   val state by work.state.collectAsState()
+  val today by startOfToday()
   val scroll = rememberLazyListState(memory.scrollIndex, memory.scrollOffset)
   var opened by remember { mutableStateOf(false) }
 
@@ -210,7 +212,7 @@ private fun WorkEntry(window: WindowOwner) {
   }
 
   Sidebar(navigator, memory, scroll, actions.openSettings) {
-    workSections(state, memory.filter.isNotBlank(), navigator.selected, scroll, work::onAction)
+    workSections(state, today, memory.filter.isNotBlank(), navigator.selected, scroll, work::onAction)
   }
 }
 

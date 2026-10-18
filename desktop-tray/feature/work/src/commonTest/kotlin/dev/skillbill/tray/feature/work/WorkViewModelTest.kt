@@ -1,6 +1,7 @@
 package dev.skillbill.tray.feature.work
 
 import dev.skillbill.tray.core.domain.model.AppSettings
+import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.Board
 import dev.skillbill.tray.core.domain.model.Problem
 import dev.skillbill.tray.core.domain.model.ProblemCode
@@ -65,7 +66,7 @@ class WorkViewModelTest {
   fun `every live section starts reading and each one lands on its own`() = runTest(dispatcher) {
     val vm = viewModel()
     assertEquals(
-      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES),
+      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT),
       boards.observeCalls.map { it.section }.toSet(),
     )
     assertEquals(PagedListState.InitialLoading, vm.state.value.goals)
@@ -164,7 +165,7 @@ class WorkViewModelTest {
   }
 
   @Test
-  fun `a filter restarts the live sections with it`() = runTest(dispatcher) {
+  fun `a filter restarts the live and finished sections with it`() = runTest(dispatcher) {
     val vm = viewModel()
     val before = boards.observeCalls.size
 
@@ -172,12 +173,27 @@ class WorkViewModelTest {
     runCurrent()
 
     val restarted = boards.observeCalls.drop(before)
-    assertEquals(setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES), restarted.map { it.section }.toSet())
+    assertEquals(
+      setOf(WorkSection.NEEDS_YOU, WorkSection.GOALS, WorkSection.PHASES, WorkSection.RECENT),
+      restarted.map { it.section }.toSet(),
+    )
     assertTrue(restarted.all { it.filter == "skill" })
 
     vm.onAction(WorkAction.FilterChanged("skill"))
     runCurrent()
     assertEquals(before + restarted.size, boards.observeCalls.size, "The same text does not restart anything.")
+  }
+
+  @Test
+  fun `finished work lands in its own section and never counts as live`() = runTest(dispatcher) {
+    val vm = viewModel()
+    emit(WorkSection.RECENT, workItem("done", lifecycle = Lifecycle.TERMINAL))
+    runCurrent()
+
+    val state = vm.state.value
+    assertEquals(listOf("done"), ids(state.finished))
+    assertTrue(state.liveItems.isEmpty())
+    assertEquals(false, state.loaded)
   }
 
   @Test
@@ -194,7 +210,7 @@ class WorkViewModelTest {
     runCurrent()
 
     assertEquals(PagedListState.InitialLoading, vm.state.value.goals)
-    assertEquals(3, boards.observeCalls.size)
+    assertEquals(4, boards.observeCalls.size)
   }
 
   @Test

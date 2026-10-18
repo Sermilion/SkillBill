@@ -38,13 +38,16 @@ import dev.skillbill.tray.core.ui.LoadNextPageOnScroll
 import dev.skillbill.tray.core.ui.PageFooter
 import dev.skillbill.tray.core.ui.PagedListState
 import dev.skillbill.tray.core.ui.SidebarWorkRow
+import kotlin.time.Instant
 
 /**
- * The sidebar's live work as rows of the window's one sidebar list: the needs-you, standalone-phase and goal-run sections.
- * The window owns the list, its [scroll] state and the filter text, so work and history share one scroll region.
+ * The sidebar's work as rows of the window's one sidebar list: the needs-you, standalone-phase and goal-run sections, then
+ * what finished since [today], the start of the local day. The window owns the list, its [scroll] state and the filter text,
+ * so work and history share one scroll region.
  */
 fun LazyListScope.workSections(
   state: WorkUiState,
+  today: Instant,
   filtering: Boolean,
   selected: WorkIdentity?,
   scroll: LazyListState,
@@ -54,6 +57,10 @@ fun LazyListScope.workSections(
   workSection("Needs you", WorkSection.NEEDS_YOU, state.needsYou, shown, filtering, selected, scroll, onAction, first = true)
   workSection("Standalone phases", WorkSection.PHASES, state.phases, shown, filtering, selected, scroll, onAction)
   workSection("Goal runs", WorkSection.GOALS, state.goals, shown, filtering, selected, scroll, onAction)
+  // The recent section holds the last 24 hours, latest first; rows from before today's start drop out, and so do older pages.
+  workSection("Finished today", WorkSection.RECENT, state.finished, shown, filtering, selected, scroll, onAction, empty = "Nothing finished today") {
+    it.finishedAt?.let { finished -> finished >= today } == true
+  }
 }
 
 /** The sidebar's filter field. The window owns the text and hands it to both the work and the history ViewModel. */
@@ -87,23 +94,26 @@ private fun LazyListScope.workSection(
   scroll: LazyListState,
   onAction: (WorkAction) -> Unit,
   first: Boolean = false,
+  empty: String = "No ${title.lowercase()}",
+  shows: (WorkItem) -> Boolean = { true },
 ) {
-  val rows = (list as? PagedListState.Content)?.items.orEmpty().filter { shown.add(it.identity) }
+  val loaded = (list as? PagedListState.Content)?.items.orEmpty()
+  val rows = loaded.filter { shows(it) && shown.add(it.identity) }
   item(key = "$section:header") {
     DesignLabel("$title · ${rows.size}", Modifier.padding(start = 14.dp, top = if (first) 4.dp else 14.dp, bottom = 6.dp))
   }
   when (list) {
     PagedListState.InitialLoading -> item(key = "$section:loading") { SectionNote("Loading...") }
     is PagedListState.InitialError -> item(key = "$section:problem") { SectionProblem(list.problem.summary) { onAction(WorkAction.Retry(section)) } }
-    is PagedListState.LoadedEmpty -> {
-      item(key = "$section:empty") { SectionNote(if (filtering) "No matching work" else "No ${title.lowercase()}") }
-    }
+    is PagedListState.LoadedEmpty -> emptyNote(section, if (filtering) "No matching work" else empty)
     is PagedListState.Content -> {
       list.readError?.let { problem -> item(key = "$section:problem") { SectionProblem(problem.summary) { onAction(WorkAction.Retry(section)) } } }
+      if (rows.isEmpty()) emptyNote(section, if (filtering) "No matching work" else empty)
       items(rows, key = { "$section:${it.identity.repositoryIdentity}:${it.identity.id}" }) { item ->
         SidebarWorkRow(item, selected == item.identity) { onAction(WorkAction.Select(item.identity)) }
       }
-      if (list.append != AppendState.Exhausted) item(key = "$section:footer") {
+      // Pages run in section order, so once a loaded row is not shown, no later page holds one that is.
+      if (list.append != AppendState.Exhausted && loaded.all(shows)) item(key = "$section:footer") {
         LoadNextPageOnScroll(scroll, list.append !is AppendState.Failed, list.append == AppendState.Loading, "$section:footer") {
           onAction(WorkAction.LoadMore(section))
         }
@@ -111,6 +121,10 @@ private fun LazyListScope.workSection(
       }
     }
   }
+}
+
+private fun LazyListScope.emptyNote(section: WorkSection, text: String) {
+  item(key = "$section:empty") { SectionNote(text) }
 }
 
 @Composable
