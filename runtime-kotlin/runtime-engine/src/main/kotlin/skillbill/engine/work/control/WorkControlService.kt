@@ -114,7 +114,7 @@ class WorkControlService(
   ): WorkControlResult.Rejected? =
     database.read { unit ->
       val observation = unit.workList.observation()
-      if (!storeIsCurrent() || target.observation != null && target.observation != observation) {
+      if (!storeIsCurrent() || target.observation != null && target.observation.storeId != observation.storeId) {
         return@read WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       }
       if (unit.workList.findByWorkflowId(target.workflowId).isEmpty()) {
@@ -134,8 +134,15 @@ class WorkControlService(
           observation.takeIf { target.observation != null },
           item.databaseFileObservation,
         )
+      val expected =
+        target.copy(
+          repositoryRoot = target.repositoryRoot.normalize(),
+          statusRevision = actual.statusRevision,
+          updatedAt = actual.updatedAt,
+          observation = actual.observation,
+        )
       when {
-        actual != target.copy(repositoryRoot = target.repositoryRoot.normalize()) ->
+        actual != expected ->
           WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
         !(if (action == WorkControlAction.PAUSE) workPauseEligible(snapshot) else workControlEligible(snapshot)) ->
           WorkControlResult.Rejected(WorkControlRejection.INELIGIBLE_TARGET)

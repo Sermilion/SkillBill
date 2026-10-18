@@ -263,7 +263,7 @@ internal fun goalManifestState(
   )
 
 internal fun ideStatusService(
-  database: TrackingDatabase,
+  database: DatabaseSessionFactory,
   manifestStore: GoalRunnerManifestStore = EmptyManifestStore,
   outcomeStore: GoalRunnerWorkflowOutcomeStore = EmptyOutcomeStore,
   snapshotValidator: WorkflowSnapshotValidator = acceptingIdeStatusSnapshotValidator,

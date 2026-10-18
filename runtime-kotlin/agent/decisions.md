@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-18] Admit goal Stop and Pause across ordinary progress updates
+Context: Desktop Stop and Pause compared the whole displayed target with a fresh projection. A heartbeat, phase update, or unrelated goal write could invalidate the database revision or timestamps before the control reached admission.
+Decision: Preserve database file and store identity, repository, workflow, issue, execution id, status store id, run sequence, and runner lease owner and generation checks. Ignore progress revisions and timestamps when comparing the same target. Keep validation and durable control intent in the existing admission transaction, followed by process identity checks before termination.
+Reason: Normal progress does not change which goal or runner the operator selected. Requiring a current progress snapshot can prevent Stop from controlling an active runner.
+Evidence: `WorkControlServiceTest` exercises Stop and Pause after SQLite progress writes and rejects changed identities before recording intent or terminating a process.
+
 ## [2026-10-18] Recheck unknown monitor publication and persist admission failures
 Context: A canceled monitor retained a published repair as `publication_unknown` because stale recovery had no resolved remote. A later desktop retry exited before recording an attempt, so the tray waited for a registration that would never arrive.
 Decision: Recheck unknown publication from an abandoned owner under the admission lock only with same-host positive process-death evidence and the resolved PR head remote. Explicit token recovery also receives that target. Retention after an undrained repair child continues to block retry. Preserve dirty, untracked, unpublished and unverifiable resources. If a worktree directory vanished, remove only its matching owned Git registration before deleting the published branch. Register resolved admission and setup failures as blocked attempts with the exact PR and head branch. The existing nullable `monitor_worktree_path` column remains absent until a worktree exists; target identity columns remain required.
