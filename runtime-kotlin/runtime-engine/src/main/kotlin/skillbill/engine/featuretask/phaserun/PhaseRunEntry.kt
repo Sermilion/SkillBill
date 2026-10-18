@@ -6,6 +6,7 @@ import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phaserun.monitor.MonitorAttemptTarget
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
 import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
 import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
@@ -95,6 +96,7 @@ class PhaseRunEntry(
           invocationId,
           listOfNotNull(preparation.detail, preparation.path?.let { "Path: $it." }).joinToString(" "),
           earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+          preparation.attempt,
         )
       is MonitorPreparation.Refused ->
         monitorBlocked(
@@ -110,6 +112,7 @@ class PhaseRunEntry(
           invocationId,
           preparation.reason,
           earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+          preparation.attempt,
         )
     }
   }
@@ -152,7 +155,12 @@ class PhaseRunEntry(
     val publisher =
       monitor?.let {
         statusPublisherFactory.forMonitor(
-          it.context,
+          MonitorAttemptTarget(
+            it.context.target,
+            it.context.callerRoot,
+            it.context.primaryRoot,
+            it.context.worktree.path,
+          ),
           publicPhaseId,
           invocationId,
           request.invokedAgentId,
@@ -190,15 +198,28 @@ class PhaseRunEntry(
     invocationId: String,
     reason: String,
     targetReport: List<String>,
-  ): PhaseRunResult.Blocked =
-    PhaseRunResult.Blocked(
-      invocationId,
-      emptyList(),
-      null,
-      request.definitionId,
-      reason,
-      targetReport = targetReport,
-    )
+    attempt: MonitorAttemptTarget? = null,
+  ): PhaseRunResult.Blocked {
+    val result =
+      PhaseRunResult.Blocked(
+        invocationId,
+        emptyList(),
+        null,
+        request.definitionId,
+        reason,
+        targetReport = targetReport,
+      )
+    attempt?.let {
+      statusPublisherFactory.forMonitor(
+        it,
+        request.definitionId,
+        invocationId,
+        request.invokedAgentId,
+        request.launchArguments,
+      ).settle(result)
+    }
+    return result
+  }
 
   private fun runInternal(
     request: PhaseRunRequest,

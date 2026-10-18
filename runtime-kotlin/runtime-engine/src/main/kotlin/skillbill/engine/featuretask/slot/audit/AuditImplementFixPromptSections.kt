@@ -22,7 +22,8 @@ internal object AuditImplementFixPromptSections {
       "but leave its example and regression test cases to their owning phases. An earlier audit or repair " +
       "calling a criterion test-only does not exclude a guard implementation that the criterion requires. " +
       "A criterion may contain several independent production gaps: account for each before editing and address " +
-      "all of them in this repair run. Shared prerequisite edits are allowed, but other " +
+      "all of them in this repair run. A sibling of a planned defect class found while tracing callers is " +
+      "in-scope for this run; do not defer it to the next audit. Shared prerequisite edits are allowed, but other " +
       "criteria need their own audit. Use the plan and current repository to implement the missing behavior " +
       "in production. Trace each reported production path through its callers, transaction boundaries, " +
       "and failure handling. A check in an earlier transaction does not protect a later mutation. Reconcile " +
@@ -59,7 +60,7 @@ internal object AuditImplementFixPromptSections {
           (
             inputs.currentAcceptanceCriterion?.let {
               "\n\nRuntime-selected authored criterion and retained budget:\n$it\nRepair only this " +
-                "criterion's source gaps."
+                "criterion. Include every remaining sibling of its reported defect class."
             } ?: (
               "\n\nThe runtime did not provide a selected authored criterion. " +
                 "Do not edit; report the missing runtime context."
