@@ -22,6 +22,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
@@ -147,20 +148,8 @@ class FeatureTaskRuntimePhaseStateRecorder(
       if (admitted != null && !requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock)) {
         return@transaction false
       }
-      if (admitted != null && phaseStart) {
-        val ownership = admitted.workerOwnership
-        if (
-          ownership != null &&
-          !unitOfWork.workflowStates.bindFeatureTaskRuntimeWorkerPhaseCoordinates(
-            request.workflowId,
-            ownership.ownerToken,
-            ownership.generation,
-            request.phaseId,
-            request.attemptCount,
-          )
-        ) {
-          return@transaction false
-        }
+      if (admitted != null && phaseStart && !bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)) {
+        return@transaction false
       }
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId)
@@ -198,6 +187,30 @@ class FeatureTaskRuntimePhaseStateRecorder(
       )
       true
     }
+
+  override fun bindOwnedPhaseCoordinates(
+    request: FeatureTaskRuntimePhaseStateRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      requireCurrentWorker(admitted, unitOfWork.workflowStates, request.workflowId, clock) &&
+        bindPhaseCoordinates(unitOfWork.workflowStates, request, admitted)
+    }
+
+  private fun bindPhaseCoordinates(
+    states: WorkflowStateRepository,
+    request: FeatureTaskRuntimePhaseStateRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean {
+    val ownership = admitted.workerOwnership ?: return true
+    return states.bindFeatureTaskRuntimeWorkerPhaseCoordinates(
+      request.workflowId,
+      ownership.ownerToken,
+      ownership.generation,
+      request.phaseId,
+      request.attemptCount,
+    )
+  }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     require(request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED && request.finished)

@@ -121,7 +121,7 @@ internal class DurablePhaseRunRecords(
     admitted.ownedWrite({ recorder.recordOwnedPhaseState(request, it) }) { recorder.recordPhaseState(request) }
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
-    when (acceptance?.start(request)) {
+    when (acceptance?.start(request)?.let { it && recorder.bindOwnedPhaseCoordinates(request, admitted) }) {
       true -> RequiredPhaseWrite.Acknowledged
       false ->
         RequiredPhaseWrite.Rejected(

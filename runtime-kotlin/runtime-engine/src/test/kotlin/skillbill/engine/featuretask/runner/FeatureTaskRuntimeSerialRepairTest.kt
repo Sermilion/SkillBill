@@ -141,6 +141,35 @@ class FeatureTaskRuntimeSerialRepairTest {
   }
 
   @Test
+  fun `audit slot steps run under a worker lease bound to their own phase`() {
+    val repairs = AtomicInteger()
+    val currentState = AtomicReference<AcceptanceCriterionRepairState?>()
+    val launchedPhaseAndLeasePhase = mutableListOf<Pair<String, String?>>()
+    lateinit var harness: RunnerHarness
+    val launcher =
+      serialLauncher(repairs, onPhase = { phase ->
+        val lease = harness.io.database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID) }
+        launchedPhaseAndLeasePhase += phase to lease?.phaseId
+      }) { currentState.get() }
+    harness =
+      runnerHarness(RuntimeHarnessConfig(launcher = launcher, codeReviewMode = CodeReviewExecutionMode.INLINE))
+    harness.gitOperations.repositoryFingerprintValue = "unchanged-source"
+    runOwnedSerial(harness) { admitted, worker, scope ->
+      currentState.set(scope.snapshot)
+      val report =
+        harness.runner.run(
+          harness.request().copy(admittedExecution = admitted, acceptanceCriterionRepair = scope),
+          worker,
+        )
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$report")
+    }
+
+    val auditSlotLaunches = launchedPhaseAndLeasePhase.filter { (phase, _) -> phase.startsWith("audit") }
+    assertEquals(setOf("audit", "audit_plan_fix", "audit_implement_fix"), auditSlotLaunches.map { it.first }.toSet())
+    assertEquals(auditSlotLaunches.map { it.first }, auditSlotLaunches.map { it.second })
+  }
+
+  @Test
   fun `later phase edits leave accepted phases complete on execution and resume`() {
     val git = RecordingWorkflowGitOperations().apply { repositoryFingerprintValue = "unchanged-source" }
     val currentState = AtomicReference<AcceptanceCriterionRepairState?>()

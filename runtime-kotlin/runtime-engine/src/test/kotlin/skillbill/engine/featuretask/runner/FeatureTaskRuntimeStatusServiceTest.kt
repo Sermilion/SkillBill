@@ -865,6 +865,22 @@ class FeatureTaskRuntimeStatusAttributionTest {
   }
 
   @Test
+  fun `a pending audit fix step the workflow row names as current stays current instead of advancing to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.advanceWorkflowRowTo("audit_plan_fix")
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("audit_plan_fix", projection.currentPhaseId)
+  }
+
+  @Test
   fun `legacy blocked audit gap record projects pending not blocked`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
@@ -1396,6 +1412,11 @@ internal class StatusHarness(
     ),
   )
 
+  fun advanceWorkflowRowTo(stepId: String) {
+    val row = requireNotNull(repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+    repository.saveFeatureTaskWorkflow(row.copy(currentStepId = stepId), RUNTIME)
+  }
+
   fun seedDiagnosticSignals(vararg signals: FeatureTaskRuntimeDiagnosticSignal) {
     seedDiagnosticSignalsArtifact(signals.map { it.asWorkflowArtifactEntry() })
   }
@@ -1486,6 +1507,8 @@ internal class StatusInMemoryWorkflowRepository : WorkflowStateRepositoryDefault
     workflowId: String,
     mode: FeatureTaskWorkflowMode,
   ): WorkflowStateRecord? = taskRuntimeRows[workflowId]
+
+  override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? = taskRuntimeRows[workflowId]
 
   override fun listFeatureTaskWorkflows(
     mode: FeatureTaskWorkflowMode,

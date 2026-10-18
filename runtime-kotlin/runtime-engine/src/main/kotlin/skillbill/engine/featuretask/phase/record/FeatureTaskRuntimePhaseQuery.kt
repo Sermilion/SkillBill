@@ -25,6 +25,11 @@ class FeatureTaskRuntimePhaseQuery
         unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(workflowId)?.mode
       }
 
+    fun currentStepId(workflowId: String): String? =
+      database.read { unitOfWork ->
+        unitOfWork.workflowStates.readFeatureTaskWorkflowHeader(workflowId)?.currentStepId
+      }
+
     internal fun terminalWorkflow(workflowId: String): WorkflowStateRecord? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.getFeatureTaskWorkflow(workflowId)

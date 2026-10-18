@@ -21,6 +21,11 @@ internal interface FeatureTaskRuntimePhaseStatePort {
     admitted: AdmittedFeatureTaskRuntimeExecution,
   ): RequiredPhaseWrite
 
+  fun bindOwnedPhaseCoordinates(
+    request: FeatureTaskRuntimePhaseStateRequest,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean
+
   fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
   fun recordOwnedCompletedPhase(
