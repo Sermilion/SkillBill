@@ -116,7 +116,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, args.workflowId)
           ?: return@transaction false
       val previous = decodePhaseRecords(record.artifacts)[args.phaseId]
-      if (!phaseCoupledEvidenceWriteAdmissible(args.attemptCount, previous)) {
+      if (!checkpointIdentityWriteAdmissible(args.attemptCount, previous)) {
         return@transaction false
       }
       appendCheckpointIdentityInTransaction(unitOfWork, record, args)

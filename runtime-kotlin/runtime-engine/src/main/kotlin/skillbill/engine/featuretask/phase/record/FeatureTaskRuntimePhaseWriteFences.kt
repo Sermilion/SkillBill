@@ -85,6 +85,11 @@ private fun completedPhaseManifestMatches(
     request.reviewPassNumber == previous.reviewPassNumber &&
     request.repairEvidence == previous.repairEvidence
 
+internal fun checkpointIdentityWriteAdmissible(
+  attemptCount: Int,
+  preceding: FeatureTaskRuntimePhaseRecord?,
+): Boolean = preceding != null && attemptCount >= preceding.attemptCount
+
 internal fun phaseCoupledEvidenceWriteAdmissible(
   attemptCount: Int,
   previous: FeatureTaskRuntimePhaseRecord?,
