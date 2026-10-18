@@ -144,12 +144,21 @@ class GitMonitorResources(
         else -> null
       }
     if (rejection != null) return MonitorFetchResult.Rejected(rejection.first, rejection.second)
+    val pinnedBaseSha =
+      baseSha ?: return MonitorFetchResult.Rejected(
+        MonitorFetchRejection.BASE_UNAVAILABLE,
+        base.output,
+      )
     val pinned = MonitorAdmissionFiles.read(fence.directory) ?: throw fenceLost(fence)
     persist(
       fence,
-      pinned.copy(pinnedHeadSha = target.head.tip.sha, pinnedBaseSha = baseSha, updatedAt = monitorNow(clock, pinned)),
+      pinned.copy(
+        pinnedHeadSha = target.head.tip.sha,
+        pinnedBaseSha = pinnedBaseSha,
+        updatedAt = monitorNow(clock, pinned),
+      ),
     )
-    return MonitorFetchResult.Fetched(refs)
+    return MonitorFetchResult.Fetched(refs, pinnedBaseSha)
   }
 
   private fun tipOf(

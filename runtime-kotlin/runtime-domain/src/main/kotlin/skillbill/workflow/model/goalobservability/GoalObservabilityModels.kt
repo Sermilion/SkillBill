@@ -71,6 +71,7 @@ data class GoalProgressEvent(
   val expectedLong: Boolean = false,
   val outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
   val contractVersion: String = GOAL_PROGRESS_EVENT_CONTRACT_VERSION,
+  val agentId: String? = null,
 ) {
   constructor(
     eventKind: GoalProgressEventKind,
@@ -85,6 +86,7 @@ data class GoalProgressEvent(
     expectedLong: Boolean = false,
     outcome: GoalProgressOutcome = GoalProgressOutcome.NONE,
     contractVersion: String = GOAL_PROGRESS_EVENT_CONTRACT_VERSION,
+    agentId: String? = null,
   ) : this(
     eventKind = eventKind,
     workflowId = workflowId,
@@ -98,6 +100,7 @@ data class GoalProgressEvent(
     expectedLong = expectedLong,
     outcome = outcome,
     contractVersion = contractVersion,
+    agentId = agentId,
   )
 
   init {
@@ -121,6 +124,7 @@ data class GoalProgressEvent(
       stepId?.takeIf(String::isNotBlank)?.let { put(SharedPayloadKeys.STEP_ID, it) }
       operationName?.takeIf(String::isNotBlank)?.let { put("operation_name", it) }
       operationKind?.takeIf(String::isNotBlank)?.let { put("operation_kind", it) }
+      agentId?.takeIf(String::isNotBlank)?.let { put("agent_id", it) }
       if (eventKind.isOperationEvent) {
         put("expected_long", expectedLong)
       }

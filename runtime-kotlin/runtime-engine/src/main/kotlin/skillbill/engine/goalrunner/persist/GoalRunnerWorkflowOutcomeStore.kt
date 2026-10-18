@@ -16,6 +16,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 
 interface GoalRunnerTerminalOutcomeStore {
@@ -42,6 +43,8 @@ interface GoalRunnerTerminalOutcomeStore {
 
 interface GoalRunnerReviewOutcomeStore {
   fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState?
+
+  fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection?
 
   fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult>
 

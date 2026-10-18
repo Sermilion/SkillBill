@@ -132,6 +132,7 @@ class DefaultGoalRunnerCiMonitor(
               operationKind = GOAL_FINALIZATION_OPERATION_KIND,
               expectedLong = progress.expectedLong,
               outcome = progress.outcome,
+              agentId = request.configuredAgentOverrideId ?: request.invokedAgentId,
             ),
         ),
       )

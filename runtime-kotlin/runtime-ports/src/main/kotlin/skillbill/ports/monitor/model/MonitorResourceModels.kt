@@ -68,7 +68,10 @@ data class MonitorFetchedRefs(
 enum class MonitorFetchRejection { HEAD_UNAVAILABLE, HEAD_MOVED, BASE_UNAVAILABLE, BASE_MOVED }
 
 sealed interface MonitorFetchResult {
-  data class Fetched(val refs: MonitorFetchedRefs) : MonitorFetchResult
+  data class Fetched(
+    val refs: MonitorFetchedRefs,
+    val baseSha: String,
+  ) : MonitorFetchResult
 
   data class Rejected(
     val reason: MonitorFetchRejection,

@@ -127,8 +127,8 @@ internal object FeatureTaskRuntimeRunLoopStandaloneMonitorCycle {
     val ledger = standaloneLedger() ?: return MISSING_LEDGER
     if (!reportedFixed) {
       val worktree = ledger.execution.worktree
-      return "The repair agent did not report a fixed repair, so nothing was committed or published. Work is " +
-        "preserved in ${worktree.path} on branch ${worktree.branch}."
+      return "The repair agent did not report a fixed repair, so nothing was committed or published. The repair " +
+        "worktree is ${worktree.path} on branch ${worktree.branch}; the cleanup report says whether it was kept."
     }
     ledger.completePendingRepair()
     val publication = operations.publish(ledger, repairWorktree(ledger))

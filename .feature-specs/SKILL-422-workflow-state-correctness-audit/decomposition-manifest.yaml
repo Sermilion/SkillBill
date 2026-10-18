@@ -3,34 +3,40 @@ contract_version: "0.5"
 issue_key: "SKILL-422"
 feature_name: "workflow-state-correctness-audit"
 parent_spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec.md"
-status: "pending"
+status: "blocked"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "main"
 feature_branch: "feat/SKILL-422-workflow-state-correctness-audit"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
-  action: "start"
+  subtask_id: 3
+  action: "blocked"
 subtasks:
 - id: 1
   name: "Durable state and ownership"
   spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_1_durable-state-and-ownership.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261017-072336-briq"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "Goal finalization and public state"
   spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_2_goal-finalization-and-public-state.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261017-124122-3ucv"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 1
     optional: false
@@ -38,12 +44,17 @@ subtasks:
 - id: 3
   name: "SQLite maintenance and audit closure"
   spec_path: ".feature-specs/SKILL-422-workflow-state-correctness-audit/spec_subtask_3_sqlite-maintenance-and-audit-closure.md"
-  status: "pending"
+  status: "blocked"
   branch: null
   commit_sha: null
-  workflow_id: null
-  blocked_reason: null
-  last_resumable_step: null
+  workflow_id: "wftr-20261017-143757-uniu"
+  blocked_reason: "Feature-task-runtime phase 'validate' agent exited with non-zero\
+    \ status 1.\nConnection lost, reconnecting to https://agentn.global.api5.cursor.sh\
+    \ (attempt 1)...\nRetry attempt 1...\nRetriableError: Connection stalled repeatedly"
+  last_resumable_step: "validate"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
   dependencies:
   - subtask_id: 2
     optional: false

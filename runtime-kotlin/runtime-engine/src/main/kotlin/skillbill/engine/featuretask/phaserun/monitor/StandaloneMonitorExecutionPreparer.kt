@@ -158,6 +158,7 @@ class StandaloneMonitorExecutionPreparer(
             worktree,
             fence.ownerToken,
             fence.generation,
+            fetched.baseSha,
           ),
           cleanup,
         )

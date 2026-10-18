@@ -1,5 +1,11 @@
 # goalrunner boundary decisions
 
+## [2026-10-17] Validate every goal child and fence resumes on the recorded selection
+Context: Goal children before the last one ran compile-only build and recorded no validation result. On SKILL-422 the deferred check and detekt debt landed on the last child's validate session.
+Decision: The resolver returns VALIDATE for every child. Launch prepare, run preparation and the launch reconciler use a child's recorded quality_gate_selection when present and resolve() only when absent.
+Reason: The resolver change alone would make recorded BUILD children fail execution-plan admission, because BUILD and VALIDATE descriptors are incompatible. Honoring the recorded value lets in-flight children finish as they started.
+Alternatives considered: Migrating existing child rows to validate was rejected; the spec rules out rewriting rows or retroactive revalidation.
+
 ## [2026-10-14] Plan first only when no goal and no bundle exist
 Context: A full run must go through the plan skeleton, but stored goals and hand-written bundles must keep working.
 Decision: Plan first only when loadDurableByIssueKey finds no stored goal and intakePreparation.prepare finds no bundle. Otherwise go straight to goalRunner.run.

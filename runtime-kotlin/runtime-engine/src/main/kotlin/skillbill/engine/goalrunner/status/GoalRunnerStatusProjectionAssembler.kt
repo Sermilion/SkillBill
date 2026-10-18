@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
+import skillbill.engine.featuretask.lifecycle.continuation.runningPhaseAgentId
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.review.core.isAuditGapRound
@@ -82,7 +83,7 @@ class GoalRunnerStatusProjectionAssembler(
       }
     return GoalRunnerStatusProjector.project(
       manifest = manifest,
-      activeAgent = resolveActiveAgent(currentSubtask),
+      activeAgent = resolveActiveAgent(currentSubtask, loadedState.parentWorkflowId),
       extras =
         statusProjectionRuntimeInputs(
           loadedState = loadedState,
@@ -142,7 +143,7 @@ class GoalRunnerStatusProjectionAssembler(
         request.issueKey,
         subject.current,
         subject.counts,
-        resolveActiveAgent(subject.current),
+        resolveActiveAgent(subject.current, parentWorkflowId),
         inputs,
       )
     }
@@ -217,6 +218,12 @@ class GoalRunnerStatusProjectionAssembler(
     }
     return liveParent
   }
+
+  private fun goalFinalizationAgent(parentWorkflowId: String): String? =
+    liveGoalFinalizationProgress(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
+      ?.latestDeclaredProgressEvent
+      ?.agentId
+      ?.takeIf(String::isNotBlank)
 
   private fun liveGoalFinalizationProgress(
     parentWorkflowId: String,
@@ -600,14 +607,20 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
 
-  private fun resolveActiveAgent(currentSubtask: DecompositionSubtask?): String? {
-    if (currentSubtask == null) return null
+  private fun resolveActiveAgent(
+    currentSubtask: DecompositionSubtask?,
+    parentWorkflowId: String,
+  ): String? {
+    if (currentSubtask == null) return goalFinalizationAgent(parentWorkflowId)
     val workflowId = currentSubtask.workflowId?.takeIf(String::isNotBlank)
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME
     ) {
-      agentAttributionFromPhaseState(phaseQuery, workflowId, includeParticipatingAgents = false).finalizingAgentId
-        ?.takeIf(String::isNotBlank)
+      (
+        runningPhaseAgentId(phaseQuery, workflowId)
+          ?: agentAttributionFromPhaseState(phaseQuery, workflowId, includeParticipatingAgents = false)
+            .finalizingAgentId
+      )?.takeIf(String::isNotBlank)
         ?.let { return it }
     }
     return currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)

@@ -21,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Test
 import skillbill.infrastructure.sqlite.establishTemporarySchemaReadiness
@@ -74,6 +75,8 @@ class DesktopAppSmokeTest {
         exit = { exited.complete(Unit) },
         refresh = {},
       )
+      // Window state belongs to the UI dispatcher; reading it from the test thread races the router's updates.
+      suspend fun <T> onUi(block: () -> T): T = withContext(application.dispatchers.ui) { block() }
       try {
         withTimeout(10_000) { application.settings.settings.first { it !is SettingsState.Loading } }
         assertIs<Outcome.Value<*>>(application.settings.update { it.copy(databasePath = fixture.dbPath.toString()) })
@@ -89,15 +92,15 @@ class DesktopAppSmokeTest {
         }
 
         // Two main windows with navigators of their own.
-        val first = checkNotNull(owner.windows.target()) { "The application owner opens a main window." }
-        val second = owner.windows.openMain()
+        val first = checkNotNull(onUi { owner.windows.target() }) { "The application owner opens a main window." }
+        val second = onUi { owner.windows.openMain() }
         assertNotSame(first, second)
         assertNotSame(first.navigator, second.navigator)
-        assertEquals(2, owner.windows.windows.count { it.navigator.section != null })
+        assertEquals(2, onUi { owner.windows.windows.count { it.navigator.section != null } })
 
         // History and detail.
-        first.navigator.switchTo(Section.HISTORY)
-        assertEquals(Section.HISTORY, first.navigator.section)
+        onUi { first.navigator.switchTo(Section.HISTORY) }
+        assertEquals(Section.HISTORY, onUi { first.navigator.section })
         assertIs<Outcome.Value<Board>>(application.boards.board(WorkSection.HISTORY, Retention.DAY))
         assertEquals(identity, assertIs<Outcome.Value<Detail>>(application.details.detail(identity)).value.item.identity)
 
@@ -107,25 +110,27 @@ class DesktopAppSmokeTest {
 
         // Tray intents land in the window used last, and only there.
         owner.router.dispatch(HostIntent.OpenWork(identity))
-        eventually("the tray intent to reach the window") { second.takeIf { it.focusRequests > 0 } }
-        assertEquals(identity, second.navigator.selected)
-        assertNull(first.navigator.selected)
+        eventually("the tray intent to reach the window") { onUi { second.takeIf { it.focusRequests > 0 } } }
+        assertEquals(identity, onUi { second.navigator.selected })
+        assertNull(onUi { first.navigator.selected })
         owner.router.dispatch(HostIntent.OpenSettings)
-        eventually("the settings window") { owner.windows.windows.firstOrNull { it.navigator.section == null } }
-        assertEquals(2, owner.windows.windows.count { it.navigator.section != null })
+        eventually("the settings window") { onUi { owner.windows.windows.firstOrNull { it.navigator.section == null } } }
+        assertEquals(2, onUi { owner.windows.windows.count { it.navigator.section != null } })
 
         // Hiding a window keeps it; with every main window hidden, the tray brings the last one back.
-        first.hide()
-        second.hide()
-        assertFalse(second.visible)
-        assertFalse(second.disposed)
+        onUi {
+          first.hide()
+          second.hide()
+        }
+        assertFalse(onUi { second.visible })
+        assertFalse(onUi { second.disposed })
         owner.router.dispatch(HostIntent.ShowMain)
-        eventually("the hidden window to return") { second.takeIf { it.visible } }
-        assertFalse(first.visible)
-        second.hide()
+        eventually("the hidden window to return") { onUi { second.takeIf { it.visible } } }
+        assertFalse(onUi { first.visible })
+        onUi { second.hide() }
 
         // Exit ends every window, then the coordinators, then the stores, and only then asks the process to end.
-        val windowsAtExit = owner.windows.windows.toList()
+        val windowsAtExit = onUi { owner.windows.windows.toList() }
         owner.router.dispatch(HostIntent.Quit)
         withTimeout(15_000) { exited.await() }
         outliving.coroutineContext[Job]!!.children.toList().forEach { it.join() }

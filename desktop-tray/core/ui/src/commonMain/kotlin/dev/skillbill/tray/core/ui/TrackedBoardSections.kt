@@ -65,7 +65,8 @@ private fun isLive(item: WorkItem): Boolean = item.liveSection != null
 
 /**
  * The live board sections (needs you, goals, standalone phases) and, unless [includeRecent] is false, the recent section the
- * board is completed with. One owner builds one instance: it keeps its own pagers and its own board observations, so
+ * board is completed with. The filter narrows the recent section only when [filterRecent] is true, for an owner that lists
+ * it on screen. One owner builds one instance: it keeps its own pagers and its own board observations, so
  * owners never supersede each other's reads. It is fed the preferences through [apply]; everything runs on [scope]'s
  * dispatcher, which must be single-threaded.
  */
@@ -73,6 +74,7 @@ class TrackedBoardSections(
   private val scope: CoroutineScope,
   private val boards: WorkBoardRepository,
   includeRecent: Boolean = true,
+  private val filterRecent: Boolean = false,
 ) {
   private val needsYou = SectionPager(scope, boards, WorkSection.NEEDS_YOU, ::isLive)
   private val goals = SectionPager(scope, boards, WorkSection.GOALS, ::isLive)
@@ -119,11 +121,12 @@ class TrackedBoardSections(
     }
   }
 
-  /** Narrows the live sections by [text]; the recent section is never filtered. */
+  /** Narrows the live sections by [text], and the recent section too when [filterRecent] is true. */
   fun changeFilter(text: String) {
     if (filter == text) return
     filter = text
-    applied?.let { current -> live.forEach { it.start(SectionQuery(current.retention, text)) } }
+    val filtered = if (recentIncluded && filterRecent) live + recent else live
+    applied?.let { current -> filtered.forEach { it.start(SectionQuery(current.retention, text)) } }
   }
 
   fun retry(section: WorkSection) {
@@ -148,6 +151,6 @@ class TrackedBoardSections(
 
   private fun startAll(retention: Retention, clear: Boolean) {
     live.forEach { it.start(SectionQuery(retention, filter), clear) }
-    if (recentIncluded) recent.start(SectionQuery(retention), clear)
+    if (recentIncluded) recent.start(SectionQuery(retention, if (filterRecent) filter else ""), clear)
   }
 }

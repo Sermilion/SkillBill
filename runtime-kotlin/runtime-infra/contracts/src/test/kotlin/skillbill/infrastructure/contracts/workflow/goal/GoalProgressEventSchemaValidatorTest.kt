@@ -51,6 +51,26 @@ class GoalProgressEventSchemaValidatorTest {
   }
 
   @Test
+  fun `operation event carrying the owning agent passes`() {
+    val event =
+      GoalProgressEvent(
+        eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+        workflowId = "wfl-parent",
+        workflowPhase = "monitor_fix",
+        processAlive = true,
+        sequenceNumber = 3,
+        timestamp = "2026-06-02T10:02:00Z",
+        operationName = "monitor_fix",
+        operationKind = "goal_finalization",
+        agentId = "claude",
+      )
+    GoalProgressEventSchemaValidator.validate(
+      JsonCodec.anyToStringAnyMap(event.toPersistenceWire())!!,
+      "test-agent",
+    )
+  }
+
+  @Test
   fun `unknown event kind fails loudly with typed error`() {
     val malformed =
       linkedMapOf<String, Any?>(

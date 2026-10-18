@@ -11,4 +11,5 @@ data class MonitorExecutionContext(
   val worktree: MonitorWorktree,
   val ownerToken: String,
   val generation: Long,
+  val pinnedBaseSha: String,
 )

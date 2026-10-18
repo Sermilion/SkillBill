@@ -203,7 +203,9 @@ class GoalRunnerSubtaskLaunchPrepare(
         "Goal subtask '$subtaskId' is missing from the decomposition manifest."
       }
     val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
-    val qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId)
+    val qualityGate =
+      priorWorkflowId?.let(outcomeStore::recordedQualityGateSelection)
+        ?: GoalRunnerQualityGateSelectionResolver.resolve()
     val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
