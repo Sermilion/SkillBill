@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.identity.status.WorkPaginationLimits
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
+import skillbill.engine.featuretask.lifecycle.continuation.runningPhaseAgentId
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.review.core.isAuditGapRound
@@ -606,8 +607,11 @@ class GoalRunnerStatusProjectionAssembler(
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME
     ) {
-      agentAttributionFromPhaseState(phaseQuery, workflowId, includeParticipatingAgents = false).finalizingAgentId
-        ?.takeIf(String::isNotBlank)
+      (
+        runningPhaseAgentId(phaseQuery, workflowId)
+          ?: agentAttributionFromPhaseState(phaseQuery, workflowId, includeParticipatingAgents = false)
+            .finalizingAgentId
+      )?.takeIf(String::isNotBlank)
         ?.let { return it }
     }
     return currentSubtask.finalizingAgentId?.takeIf(String::isNotBlank)

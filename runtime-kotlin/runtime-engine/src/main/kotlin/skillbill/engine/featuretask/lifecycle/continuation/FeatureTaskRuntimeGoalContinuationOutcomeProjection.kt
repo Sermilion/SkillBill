@@ -85,6 +85,15 @@ internal data class SubtaskAgentAttribution(
   val participatingAgentIds: List<String>,
 )
 
+internal fun runningPhaseAgentId(
+  phaseQuery: FeatureTaskRuntimePhaseQuery,
+  workflowId: String,
+): String? =
+  phaseQuery.loadPhaseRecords(workflowId).orEmpty().values
+    .filter { it.status == WorkflowStepStatus.RUNNING && it.resolvedAgentId.isRuntimeAgentId() }
+    .maxByOrNull { it.startedAt }
+    ?.resolvedAgentId
+
 internal fun agentAttributionFromPhaseState(
   phaseQuery: FeatureTaskRuntimePhaseQuery,
   workflowId: String,

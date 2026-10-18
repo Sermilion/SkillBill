@@ -5717,6 +5717,30 @@ class GoalRunnerStatusAttributionTest {
     requireNotNull(status)
     assertEquals("cursor", status.activeAgent)
   }
+
+  @Test
+  fun `status projection reports the agent running the current attempt after another agent blocked the phase`() {
+    val harness = GoalStatusPhaseLedgerHarness()
+    val workflowId = "wfl-agent-switch"
+    harness.openRuntimeWorkflow(workflowId)
+    harness.recordCompletedPhase(workflowId, phaseId = "implement", resolvedAgentId = "cursor")
+    harness.recordPhase(workflowId, phaseId = "validate", resolvedAgentId = "cursor", status = "blocked", attempt = 1)
+    harness.recordPhase(workflowId, phaseId = "validate", resolvedAgentId = "claude", status = "running", attempt = 2)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 1).withBlockedSubtask(1, workflowId = workflowId, reason = "resumed"),
+      )
+    val service =
+      testGoalRunnerStatusService(
+        manifestStore = store,
+        outcomeStore = RecordingOutcomeStore(),
+        phaseRecorder = harness.recorder,
+      )
+
+    val status = requireNotNull(service.status(GoalRunnerStatusRequest(issueKey = "SKILL-56")))
+
+    assertEquals("claude", status.activeAgent)
+  }
 }
 
 internal const val FAKE_PAUSED_AT = "2026-08-02T10:00:00Z"
@@ -5771,6 +5795,25 @@ private class GoalStatusPhaseLedgerHarness {
         resolvedAgentId = resolvedAgentId,
         finished = true,
         outputArtifact = """{"contract_version":"0.1"}""",
+      ),
+    )
+  }
+
+  fun recordPhase(
+    workflowId: String,
+    phaseId: String,
+    resolvedAgentId: String,
+    status: String,
+    attempt: Int,
+  ) {
+    recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = workflowId,
+        phaseId = phaseId,
+        status = status,
+        attemptCount = attempt,
+        resolvedAgentId = resolvedAgentId,
+        finished = status != "running",
       ),
     )
   }
