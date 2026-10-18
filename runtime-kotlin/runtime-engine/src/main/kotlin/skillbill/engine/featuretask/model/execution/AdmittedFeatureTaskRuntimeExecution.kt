@@ -12,6 +12,7 @@ class AdmittedFeatureTaskRuntimeExecution internal constructor(
   val plan: ResolvedPhaseExecutionPlan,
   val effectiveInputs: EffectiveGatePolicyInputs,
   descriptor: Any,
+  internal val recordedMonitorSemantics: RecordedMonitorExecutionSemantics,
   internal val migrationReceipt: RuntimeMigrationReceipt,
   val workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
 ) {
@@ -28,6 +29,7 @@ class AdmittedFeatureTaskRuntimeExecution internal constructor(
       plan,
       effectiveInputs,
       descriptorValue,
+      recordedMonitorSemantics,
       migrationReceipt,
       ownership,
     )

@@ -51,4 +51,30 @@ class PhaseResultReportingTest {
     assertTrue(output.contains(result.reason), output)
     assertTrue(output.indexOf(prUrl) < output.indexOf(result.reason))
   }
+
+  @Test
+  fun `blocked monitor prints its exact target and retained worktree before the invocation id`() {
+    val state = CliRunState(stdinText = null)
+    val target =
+      listOf(
+        "Pull request: https://github.com/example/repo/pull/7",
+        "Worktree: /caller/.git/skill-bill/standalone-monitor/7",
+        "Cleanup: retained (dirty_worktree) at /caller/.git/skill-bill/standalone-monitor/7: Dirty.",
+      )
+    val result =
+      PhaseRunResult.Blocked(
+        invocationId = "phr-reporting",
+        completedStepIds = emptyList(),
+        reviewResult = null,
+        stepId = "monitor_fix",
+        reason = "Repair was not published",
+        targetReport = target,
+      )
+
+    writePhaseResult(state, "monitor", result)
+
+    val output = requireNotNull(state.result).stdout
+    target.forEach { line -> assertTrue(output.contains(line), output) }
+    assertTrue(output.indexOf(target.last()) < output.indexOf("phr-reporting"), output)
+  }
 }

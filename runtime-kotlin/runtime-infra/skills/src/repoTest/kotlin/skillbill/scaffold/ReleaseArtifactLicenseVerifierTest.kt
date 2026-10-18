@@ -1,5 +1,7 @@
 package skillbill.scaffold
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -27,6 +29,45 @@ class ReleaseArtifactLicenseVerifierTest {
     writeChecksum(tar)
 
     assertEquals(0, runVerifier(zip, tar).exitCode)
+  }
+
+  @Test
+  fun `desktop release archive verifies when checksum tool defaults to binary records`() {
+    val fixture = Files.createTempDirectory("skillbill-desktop-release")
+    val app = fixture.resolve("desktop-tray/composeApp/build/compose/binaries/main/app/Skill Bill")
+    Files.createDirectories(app)
+    Files.write(app.resolve("Skill Bill.exe"), byteArrayOf(0, 10, 13, -1))
+    Files.write(fixture.resolve("LICENSE"), rootLicenseBytes)
+    val bin = Files.createDirectory(fixture.resolve("bin"))
+    val checksumTool = bin.resolve("sha256sum")
+    Files.writeString(
+      checksumTool,
+      """
+      |#!/usr/bin/env bash
+      |set -euo pipefail
+      |if command -v shasum >/dev/null 2>&1; then
+      |  exec shasum -a 256 --binary "${'$'}@"
+      |else
+      |  exec /usr/bin/sha256sum --binary "${'$'}@"
+      |fi
+      """.trimMargin(),
+    )
+    assertTrue(checksumTool.toFile().setExecutable(true))
+    val workflow = YAMLMapper().readTree(Files.readString(repoRoot.resolve(".github/workflows/release.yml")))
+    val bundle =
+      workflow.path("jobs").path("build").path("steps")
+        .single { it.path("name").asText() == "Bundle desktop tray archive" }
+        .path("run").asText()
+    val builder = ProcessBuilder("bash", "-c", bundle).directory(fixture.toFile()).redirectErrorStream(true)
+    builder.environment()["PATH"] = bin.toString() + File.pathSeparator + builder.environment()["PATH"].orEmpty()
+    builder.environment()["RELEASE_VERSION"] = "0.7.0"
+    builder.environment()["HOST_TOKEN"] = "windows-x64"
+    val process = builder.start()
+    val output = process.inputStream.bufferedReader().readText()
+    assertEquals(0, process.waitFor(), output)
+
+    val result = runVerifier(fixture.resolve("skill-bill-desktop-0.7.0-windows-x64.tar.gz"))
+    assertEquals(0, result.exitCode, result.output)
   }
 
   @Test

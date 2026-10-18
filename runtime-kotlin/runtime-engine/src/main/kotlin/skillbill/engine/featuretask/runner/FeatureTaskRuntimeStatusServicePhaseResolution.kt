@@ -32,13 +32,15 @@ fun phaseStatuses(
   blockedPhaseIds: Set<String>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): List<FeatureTaskRuntimePhaseStatus> =
-  FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.map { phaseId ->
-    records[phaseId].toPhaseStatus(
-      phaseId = phaseId,
-      blocked = phaseId in blockedPhaseIds,
-      continuationKind = latestContinuationKind(ledger, phaseId),
-    )
-  }
+  FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+    .filter { phaseId -> PhaseSlot.slotForStep(phaseId) != PhaseSlot.INTAKE || phaseId in records }
+    .map { phaseId ->
+      records[phaseId].toPhaseStatus(
+        phaseId = phaseId,
+        blocked = phaseId in blockedPhaseIds,
+        continuationKind = latestContinuationKind(ledger, phaseId),
+      )
+    }
 
 fun resolveCurrentPhaseId(
   terminalDecomposeRecorded: Boolean,
@@ -48,11 +50,29 @@ fun resolveCurrentPhaseId(
   loopOnlyStepIds: Set<String>,
 ): String? {
   if (terminalDecomposeRecorded) return null
-  return currentReentryPhaseId(records, ledger) ?: phases.firstOrNull {
-    it.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED &&
-      !shouldSkipPendingLoopOnlyPhase(it.phaseId, it.status, loopOnlyStepIds)
-  }?.phaseId
+  return openExecutionPhaseId(phases, ledger)
+    ?: currentReentryPhaseId(records, ledger)
+    ?: phases.firstOrNull {
+      it.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED &&
+        !shouldSkipPendingLoopOnlyPhase(it.phaseId, it.status, loopOnlyStepIds)
+    }?.phaseId
 }
+
+fun openExecutionPhaseId(
+  phases: List<FeatureTaskRuntimePhaseStatus>,
+  ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+): String? =
+  ledger
+    .maxByOrNull { it.sequenceNumber }
+    ?.takeIf { it.action in OPEN_EXECUTION_ACTIONS }
+    ?.phaseId
+    ?.takeIf { phaseId -> phases.any { it.phaseId == phaseId } }
+
+private val OPEN_EXECUTION_ACTIONS =
+  setOf(
+    FeatureTaskRuntimePhaseLedgerAction.START,
+    FeatureTaskRuntimePhaseLedgerAction.RESUME,
+  )
 
 fun shouldSkipPendingLoopOnlyPhase(
   phaseId: String,

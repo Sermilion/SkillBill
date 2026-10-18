@@ -75,7 +75,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplanPrompt, "full preplan covering boundaries")
     assertContains(preplanPrompt, "Do not modify repository files during this phase.")
     assertContains(preplanPrompt, "as prose")
-    assertContains(planPrompt, "Do not modify repository files during this phase.")
+    assertContains(planPrompt, "modify no other repository file")
     assertContains(planPrompt, "upstream preplan digest")
     assertContains(implementPrompt, "Reconcile the repository to the intended state")
     assertContains(implementPrompt, "read the file named by spec_reference")
@@ -257,52 +257,39 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `goal-continuation plan does not treat future acceptance work as a prerequisite`() {
-    val prompt =
-      composePhasePrompt(
-        PROMPT_COMPOSER_ISSUE_KEY,
-        promptComposerBriefingFor("plan"),
-      ) { copy(suppressDecomposition = true) }
-
-    assertContains(prompt, "Goal-continuation planning constraint")
-    assertContains(prompt, "Never include installer, uninstall, or")
-    assertContains(prompt, "install-sync commands in the plan")
-    assertContains(prompt, "`./install.sh`")
-    assertContains(prompt, "it does not require that work to have already")
-    assertContains(prompt, "Never block planning merely because a later implementation or validation action")
-    assertContains(prompt, "genuinely missing input or an irreconcilable constraint")
-    assertTrue(!prompt.contains("return a blocked plan"))
-    assertFalse(prompt.contains("## Subtask Sizing"), "goal-child plan omits the spec directive")
-    assertFalse(prompt.contains("## Spec Format Contract"), "goal-child plan omits the spec directive")
-    assertContains(prompt, "plain prose")
-  }
-
-  @Test
-  fun `spec bundle plan carries the feature-spec directive and allows a single subtask`() {
-    val prompt =
-      composePhasePrompt(
-        PROMPT_COMPOSER_ISSUE_KEY,
-        promptComposerBriefingFor("plan"),
-      ) { copy(specBundleRequired = true) }
+  fun `plan prompt is always the bundle prompt with no goal-continuation text and no implementation details`() {
+    val prompt = composePromptForPhase("plan")
 
     assertContains(prompt, "## Subtask Sizing")
     assertContains(prompt, "## Spec Format Contract")
+    assertContains(prompt, "A criterion MUST NOT require tests.")
+    assertContains(prompt, "tests are never acceptance criteria and")
+    assertFalse(prompt.contains("a named test exists"), "a test must never be offered as an acceptance criterion")
     assertContains(prompt, "Spec bundle planning requirement")
     assertContains(prompt, "Write nothing outside that")
+    assertContains(prompt, "Do not write an Implementation")
+    assertContains(prompt, "Never include installer, uninstall, or")
+    assertFalse(prompt.contains("Goal-continuation planning constraint"))
     assertFalse(prompt.contains("decomposition_package"))
-    assertFalse(prompt.contains("stamps the contract version and phase id itself"))
     assertFalse(prompt.contains("\"mode\": \"direct\""))
-    assertFalse(prompt.contains("Do not forward the complete plan envelope"))
     assertFalse(prompt.contains("at least two"), "a spec bundle may hold one subtask")
   }
 
   @Test
-  fun `spec bundle plan carries a manifest template the schema accepts`() {
-    val prompt =
-      composePhasePrompt(
-        PROMPT_COMPOSER_ISSUE_KEY,
-        promptComposerBriefingFor("plan"),
-      ) { copy(specBundleRequired = true) }
+  fun `plan_subtasks prompt names only the assigned sub-spec and asks for its implementation details`() {
+    val prompt = composePromptForPhase("plan_subtasks")
+
+    assertContains(prompt, "Edit only the assigned")
+    assertContains(prompt, "## Implementation Details")
+    assertContains(prompt, "Never modify the parent spec, a sibling sub-spec")
+    assertContains(prompt, "Never include installer, uninstall, or")
+    assertFalse(prompt.contains("## Subtask Sizing"), "a subtask plan does not author the bundle")
+    assertFalse(prompt.contains("Spec bundle planning requirement"), "a subtask plan does not author the bundle")
+  }
+
+  @Test
+  fun `plan carries a manifest template the schema accepts`() {
+    val prompt = composePromptForPhase("plan")
     val template = prompt.substringAfter("```yaml\n").substringBefore("\n```")
     val manifest =
       template
@@ -317,12 +304,8 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
 
   @Test
   fun `plan works only from the preplan digest and preplan carries the evidence for it`() {
-    listOf(false, true).forEach { bundle ->
-      val plan =
-        composePhasePrompt(
-          PROMPT_COMPOSER_ISSUE_KEY,
-          promptComposerBriefingFor("plan"),
-        ) { copy(specBundleRequired = bundle) }
+    listOf("plan", "plan_subtasks").forEach { step ->
+      val plan = composePromptForPhase(step)
       assertContains(plan, "The preplan digest is this phase's only repository knowledge")
       assertContains(plan, "do not re-verify the digest")
     }
@@ -397,17 +380,17 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertFalse(auditPrompt.contains("VERIFYING phase"), "audit carries no envelope verifying-signal addendum")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Report the remaining acceptance criteria in prose",
+      "Report source gaps and conclusions in ordinary prose",
       "the audit prose signal",
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "the whole value is the single line",
-      "the remaining-criteria completion contract",
+      "pass verdict \"satisfied\" when the inspected production scope is met",
+      "the source acceptance verdict",
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Only a report that no criteria remain allows downstream review",
+      "Every criterion must be accepted before downstream review",
       "the audit-specific advance rule",
     )
     assertFalse(auditPrompt.contains("exactly `[]`"), "audit must not demand a literal empty list")
@@ -425,9 +408,9 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(repairPrompt, "even when a persisted audit finding or the plan explicitly requests tests")
     assertContains(repairPrompt, "record test-only findings as excluded from audit")
     assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
-    assertContains(prompt, "inspect only the unresolved criteria in the last accepted audit report")
+    assertContains(prompt, "inspect only the authored criterion selected by the runtime")
     assertContains(prompt, "Do not spawn subagents or invoke repair skills")
-    assertContains(prompt, "validate owns tests and failures")
+    assertContains(prompt, "state those later test or build obligations separately when relevant")
     assertTrue(!prompt.contains("TEST EXCLUSION"))
     assertTrue(!prompt.contains("free-form note prose"))
   }

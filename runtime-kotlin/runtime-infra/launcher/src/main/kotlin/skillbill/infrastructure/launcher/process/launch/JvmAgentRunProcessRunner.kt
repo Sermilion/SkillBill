@@ -129,6 +129,21 @@ class JvmAgentRunProcessRunner(
 
     private const val TEARDOWN_FAILURE_DETAIL_LIMIT = 240
 
+    internal fun drainLiveProcesses(timeoutMillis: Long): Boolean {
+      val snapshot = liveProcesses.toList()
+      snapshot.forEach { process -> runCatching { process.destroy() } }
+      val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+      snapshot.forEach { process ->
+        val remaining = (deadline - System.nanoTime()).coerceAtLeast(0L)
+        runCatching { process.waitFor(remaining, TimeUnit.NANOSECONDS) }
+        if (process.isAlive) runCatching { process.destroyForcibly() }
+      }
+      snapshot.forEach { process ->
+        runCatching { process.waitFor(DESTROY_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS) }
+      }
+      return snapshot.none(Process::isAlive)
+    }
+
     internal fun reapLiveProcesses(processes: List<Process>) {
       processes.forEach { process -> runCatching { process.destroy() } }
       processes.forEach { process ->

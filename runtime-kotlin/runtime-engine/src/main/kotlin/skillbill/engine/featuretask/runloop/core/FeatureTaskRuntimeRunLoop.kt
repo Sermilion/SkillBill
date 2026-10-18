@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledProgress
@@ -35,9 +36,11 @@ import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.nio.file.Path
 
 internal class FeatureTaskRuntimeRunLoopContext(
@@ -72,29 +75,55 @@ internal class FeatureTaskRuntimeRunLoopContext(
 
   override val coupledRunTransitions get() = runState.coupledRunTransitions
 
+  fun hasLeftSlot(slot: PhaseSlot): Boolean =
+    transitions.forwardPhaseIds.any { stepId ->
+      val owner = runState.selectedOwnerOf(stepId)
+      owner != null && owner.slot.ordinal > slot.ordinal &&
+        state.phase(stepId).record?.status?.let { it != WorkflowStepStatus.PENDING } == true
+    }
+
   fun acceptedStep(run: PhaseRun): PhaseAcceptedStepExecution {
+    requireAcceptedRun(run)
+    runState.stepBinding.beginStepBinding(run)
+    return FeatureTaskRuntimeRunLoopStepBindings.create(launchScope(run), run)
+  }
+
+  fun acceptedFanOutUnitStep(
+    run: PhaseRun,
+    unitId: Int,
+    bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+  ): PhaseAcceptedStepExecution {
+    requireAcceptedRun(run)
+    bindingCoordinator.beginStepBinding(run, unitId)
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
+      launchScope(run),
+      run,
+      unitId,
+      bindingCoordinator = bindingCoordinator,
+    )
+  }
+
+  private fun requireAcceptedRun(run: PhaseRun) {
     require(run.request === request)
     require(runState.selectedOwnerOf(run.phaseId) != null)
     require(runState.strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
-    runState.stepBinding.beginStepBinding(run)
-    return FeatureTaskRuntimeRunLoopStepBindings.create(
-      phaseAttemptLaunchCollaborationScope(
-        PhaseAttemptRunHost(
-          acceptedRun = run,
-          backingRunState = runState,
-          directGitOperations = gitOperations,
-          directDecompositionPlanner = decompositionPlanner,
-          directFindingVerificationBoundaryMemory = findingVerificationBoundaryMemory,
-          directSpecIntentProjectionResolver = specIntentProjectionResolver,
-          directLifecycleTelemetry = lifecycleTelemetry,
-          directSharedEvidenceResolver = sharedEvidenceResolver,
-          directDiffResolver = diffResolver,
-          directQualityGateCycles = qualityGateCycles,
-        ),
-      ),
-      run,
-    )
   }
+
+  private fun launchScope(run: PhaseRun) =
+    phaseAttemptLaunchCollaborationScope(
+      PhaseAttemptRunHost(
+        acceptedRun = run,
+        backingRunState = runState,
+        directGitOperations = gitOperations,
+        directDecompositionPlanner = decompositionPlanner,
+        directFindingVerificationBoundaryMemory = findingVerificationBoundaryMemory,
+        directSpecIntentProjectionResolver = specIntentProjectionResolver,
+        directLifecycleTelemetry = lifecycleTelemetry,
+        directSharedEvidenceResolver = sharedEvidenceResolver,
+        directDiffResolver = diffResolver,
+        directQualityGateCycles = qualityGateCycles,
+      ),
+    )
 
   override fun strategyFor(stepId: String): PhaseStrategy {
     if (runState.selectedOwnerOf(stepId) == null) {
@@ -253,6 +282,9 @@ class FeatureTaskRuntimeRunLoop internal constructor(
   }
 
   internal fun advance(phaseId: String): PhaseSettlement {
+    if (context.request.stopAfterIntake && PhaseSlot.slotForStep(phaseId) != PhaseSlot.INTAKE) {
+      return PhaseSettlement.stop()
+    }
     FeatureTaskRuntimeRunLoopDrive.phaseEntryBlockReason(context, phaseId)?.let { reason ->
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
         context.request,

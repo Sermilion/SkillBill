@@ -30,4 +30,6 @@ object TestRepositoryEnclosingRoot : RepositoryEnclosingRootPort {
     val gitRoot = canonicalPath(enclosingRepositoryRoot(repoRoot))
     return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
   }
+
+  override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
 }

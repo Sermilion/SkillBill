@@ -1,7 +1,78 @@
 ## [2026-10-17] Count and notify only successful goal completion
 Context: Tray treated any FEATURE_GOAL TERMINAL transition as success, so abandoned, cancelled, and superseded rows incremented Done 24h and emitted goal_completed.
-Decision: successfulGoalCompletion requires family FEATURE_GOAL, lifecycle TERMINAL, and finishedAtSource goal_completion. TransitionTracker and 24h Done counts use that helper.
+Decision: successfulGoalCompletion requires family FEATURE_GOAL, lifecycle TERMINAL, and finishedAtSource goal_completion. TransitionTracker uses that helper. After the SKILL-423 module split the 24h Done count is runtime-owned: IdeStatusPolicy.work counts doneWithinDay only when the board item's completion source is goal_completion.
 Reason: Generic terminality includes non-success closures. Existing completion provenance already distinguishes success; a new public discriminator was not required.
+
+## [2026-10-15] Repair Compose redraw state after native peer replacement
+Context: The frozen installed app had a live AWT event queue, active data reads, and a pending Compose recomposition. Its Skiko layer was active, but SurfaceSkiaLayerComponent retained isDisposed=true. Clearing that flag restored the running window. Compose 1.12.1 sets the flag when Skiko removes its peer and never clears it when addNotify recreates the layer.
+Decision: Transform the application and test runtime dependency to clear the wrapper flag after addNotify. Pin the patch to Compose 1.12.1 and reject a changed target class or method. Verify redraws and clicks across repeated real native peer replacement.
+Reason: The patch preserves the existing window, navigation, ViewModels, and GPU renderer. It needs no runtime reflection, redraw timer, or whole-window replacement.
+Revisit when: upgrading Compose. Remove the transform once the dependency handles native peer reattachment itself.
+
+## [2026-10-15] Let desktop reach runtime services that run git
+Context: The governed-edge walk banned any desktop path reaching a runtime process adapter, but the in-process runtime services behind work reads and controls run git.
+Decision: Operator-approved deviation: desktop may reach runtime services that run git or other processes through the in-process graph. The packaged app still never runs an installed CLI, discovers PATH or a login shell, or parses command output.
+Reason: The runtime owns that behavior, and banning it would block shared policy. The ban now sits at the CLI and PATH boundary the app must not cross.
+Alternatives considered: An allow-list entry or skipped root was rejected; the rule was deleted, not suppressed, and no baseline grew.
+Revisit when: the walk reports an unresolved governed edge into runtime code.
+
+## [2026-10-15] Key navigation entries by database generation
+Context: Windows can outlive a database selection or a same-path file replacement, and saved routes can name rows from the previous database.
+Decision: Every route entry key includes the database generation, and restore drops routes from an obsolete generation or with invalid arguments, falling back to a safe root.
+Reason: An entry, its component and its ViewModel can then never survive into the next database.
+
+## [2026-10-15] Allow serializable routes; keep JSON types banned in presentation
+Context: Navigation 3 routes must be @Serializable, but the presentation guard banned all of kotlinx.serialization.
+Decision: The forbidden token narrowed to kotlinx.serialization.json, and a typing scan rejects string-keyed Any maps and unchecked-cast suppressions in navigation sources.
+Reason: Routes stay typed while JSON payload handling stays out of presentation; no exemption or baseline grew.
+
+## [2026-10-15] Share one app-scoped WorkViewModel; relay from the shell
+Context: The work board allows one observer per WorkSection, but the window, sidebar and tray popover all need work state.
+Decision: One app-scoped WorkViewModel serves them all; the composeApp shell relays the history filter and board items to other features.
+Reason: Separate instances per surface would break the single-observer constraint; features stay independent because only the shell connects them.
+Alternatives considered: One ViewModel per surface was rejected for the observer limit; direct sibling-feature dependencies are banned by the source guards.
+
+## [2026-10-15] Must-not-miss feedback lives in UiState, not effects
+Context: One-shot effect channels can drop values when full, which is wrong for notices the user must see.
+Decision: Navigation (capacity 1) and transient (capacity 4) effects are bounded one-shots; anything that must not be missed goes in UiState pendingFeedback (max 8, monotonic ids, acknowledged by id).
+Reason: State survives recomposition and slow collectors; bounded effects cannot grow without limit.
+Revisit when: a feedback kind needs more than eight pending items.
+
+## [2026-10-15] Runtime owns work-control policy; desktop projects it
+Context: The desktop re-derived pause eligibility and collapsed control outcomes into a generic accept, hiding what the runtime had done.
+Decision: The runtime policy emits pauseEligible and typed control results (intent recorded, exit confirmed, accepted); the desktop only projects them.
+Reason: One policy owner keeps CLI, MCP and desktop consistent; typed outcomes let the UI distinguish a recorded pause intent from a confirmed exit.
+Revisit when: the desktop can drop its remaining freshness check beside the runtime facts.
+
+## [2026-10-15] Inject host and legacy preferences into the application component
+Context: The generated component must run in tests without touching the real user home, environment or java.util.prefs.
+Decision: ApplicationComponent takes the host environment and the legacy preferences source as constructor arguments; the factory defaults them to the real process.
+Reason: Providers that read the process directly made the smoke test mutate and clean real user state; constructor arguments let tests supply disposable ones.
+Alternatives considered: Test-only overrides inside providers were rejected as production test hooks.
+
+## [2026-10-15] Keep Room declarations in jvmMain behind a store-access port
+Context: Room 3 types and the runtime gateway are JVM-only, while repositories and paging belong in commonMain.
+Decision: Repositories in commonMain depend on ports (store access, commit signals, runtime gateway, failure classifier); Room and runtime code stay in jvmMain adapters.
+Reason: Keeps commonMain free of runtime, sql and Room imports (enforced by source rules) and lets tests wrap behavior at the port seams instead of adding production hooks.
+Revisit when: Room declarations can be shared in commonMain without JVM-only types.
+
+## [2026-10-15] Scope per-database session components behind app-scoped facades
+Context: Selecting another database must not leak connections or observers from the previous one.
+Decision: A per-database session component is created per selection and held behind app-scoped repository facades, with DatabaseSelection and generation counters app-scoped.
+Reason: Consumers keep stable injected repositories while session lifetimes close cleanly; detail owner registrations end with the detail collector, the rest at session close.
+Alternatives considered: Passing the database as a factory argument to each repository was rejected for churn in injected consumers.
+
+## [2026-10-15] Enforce module boundaries from generated manifests
+Context: SKILL-424 splits the desktop app into core modules, and source-only path checks cannot see Gradle edges, targets or plugins.
+Decision: A quality convention plugin writes each module's targets, plugins, KSP configurations and project dependencies to a manifest. Architecture tests read the manifests plus a PSI scan of imports and qualified names against an allowed-edge table.
+Reason: Manifests and parsed references catch aliased or star imports and wrong edges that text greps miss. Synthetic rejection fixtures prove each rule fails when broken.
+Alternatives considered: Grep-only path tests miss aliased imports; a third-party dependency-rule plugin adds a build dependency for a small ruleset.
+
+## [2026-10-15] Keep core domain free of platform time and file types
+Context: Domain models used java.time and java.nio, which blocks a pure multiplatform domain and the guard that bans platform imports.
+Decision: Domain uses kotlin.time for instants and durations and a DatabaseFileIdentity value (path, file key) for store identity. Conversion to java types happens only in runtime-facing edges such as the runtime mapper and Room board source.
+Reason: The domain stays portable and testable with a fake clock; platform types live where the platform is used.
+Revisit when: Adapters still calling Dispatchers.IO directly move behind the injected DispatcherProvider.
 
 ## [2026-10-12] Read work through the runtime store
 Context: SKILL-423 replaces CLI work-data requests with an in-process view of the runtime-owned database.
@@ -88,6 +159,7 @@ Reason: Database observation failure must not become periodic data refresh or a 
 Context: Resume and Run again now start work from an explicit desktop action. Reading work still uses Room and shared runtime projections.
 Decision: WorkRunActions validates the selected database, execution revision, process owner, recorded branch, and launch arguments before calling WorkRunLauncher. The desktop cannot use this port directly. Cancellation stays in the runtime and preserves history.
 Reason: Starting work needs a process boundary. The desktop architecture guard continues to forbid CLI read proxies and process adapters in desktop code. It checks the full graph up to the runtime launch port and limits that port to the admission owner, its infrastructure implementation, and DI.
+Superseded by: Let desktop reach runtime services that run git (2026-10-15)
 
 ## [2026-10-13] Start the installed agent harness from desktop controls
 Context: The operator wants Resume and Run again to start the installed headless agent, such as Claude Code or Codex, rather than start the Skill Bill CLI directly.
@@ -115,3 +187,24 @@ Reason: The sidebar represents work the operator can select. Its activity histor
 Context: Finalization failures kept only a blocked status after the runner exited, so Copy reason copied the generic goal summary.
 Decision: Save the runner's full stopped reason in goal control state and project it separately from the bounded status text. Show blocked goals in Goal activity with the existing three-line preview, delayed tooltip, and copy button. Keep the header summary short. Disable copying when an older attempt has no saved full reason and state that absence in Goal activity.
 Reason: Clipboard text must contain the recorded failure, and a missing reason must remain visible rather than become a generic status sentence.
+
+## [2026-10-14] Apply supported upgrades when selecting a database
+Context: An installed desktop app rejected an older runtime store with an incompatible-database message. Installation upgrades the runtime's default store, but the app can select a different store or open one restored after installation.
+Decision: Database selection calls the shared runtime schema port before opening Room or registering observation. The runtime checks the migration ledger, version, and installed Room identity before applying pending migrations. Missing databases stay absent, and newer or unrecognized stores remain unchanged. Ordinary reads and observation retain their read-only behavior.
+Reason: An older supported store should open with its saved work intact. Runtime migrations remain the only schema authority, and upgrading belongs to the connection boundary rather than each read.
+
+## [2026-10-14] Head rows with the run, show the branch as it is now
+Context: Sidebar rows were headed by the worktree folder name, so a WE-5108 goal running in a `we5116-…` worktree read as WE-5116. Goal detail showed the branch recorded when the execution registered and never followed the run.
+Decision: Head each sidebar row with its issue key and move the repository name to the second line. Keyless rows keep the repository name as their heading. Goal detail shows the worktree's checked-out branch at read time and falls back to the recorded branch. Standalone phases keep their recorded branch because it is part of their identity.
+Reason: A run is identified by its issue key, not by where it was started. The branch is display context and must be current.
+
+## [2026-10-15] Serialize detail subscriptions across cancelled selections
+Context: macOS CI caught overlapping detail reads during rapid reselection. Waiting for the previous selection job lost the original read when an intermediate job was cancelled before its body started.
+Decision: Hold a controller-owned mutex for each detail subscription's lifetime. Cancelled intermediate selections cannot release the active subscription's lock. Inject the controller dispatcher and use a test scheduler to hold the first read through cancellation while two reselections and refresh run.
+Reason: Cancellation requests do not prove a read has finished. The regression must prove the next subscription waits for the active read without depending on thread timing.
+
+## [2026-10-16] Resume an existing goal with the installed runtime, not an agent session
+Context: Resume for a paused goal started a headless `claude --print` session that ran `skill-bill goal <KEY>` as a foreground Bash tool call. The Bash tool stops foreground commands after 10 minutes, so the runner died during goal-finish. Company permission policy also turned `--dangerously-skip-permissions` into a no-op, so the session could not recover without prompts nobody could answer.
+Decision: `WorkRunLaunchRequest` carries a sealed `WorkRunLaunchKind`. An existing goal (no standalone phase record) resumes as `RuntimeCommand`: the launcher starts the installed `skill-bill` from `~/.local/bin` or PATH with `goal <KEY> --agent <agent> --repo-root <root> --no-live-output`, or `phase plan <KEY> --agent <agent>` for a durable plan workflow, with no stdin. Admission, ownership, logs, startup failure detection, systemd scoping, the database variable, and the recorded agent home stay the same. A missing `skill-bill` refuses the launch. Standalone phases and goals launched from a recorded raw intake keep the `AgentHarness` path, because the agent may need to rehydrate the tracker issue.
+Reason: The runtime already launches child agents itself. Starting it directly removes the Bash time limit and the outer permission surface, and a resume needs no tracker access.
+Supersedes in part: Start the installed agent harness from desktop controls (2026-10-13)

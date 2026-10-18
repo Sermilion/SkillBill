@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
@@ -99,11 +100,11 @@ class DatabaseMigrationsTest {
           }
           statement.executeQuery("PRAGMA user_version").use {
             assertTrue(it.next())
-            assertEquals(55, it.getInt(1))
+            assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
           }
           statement.executeQuery("SELECT max(version) FROM schema_migrations").use {
             assertTrue(it.next())
-            assertEquals(55, it.getInt(1))
+            assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
           }
         }
       }
@@ -170,12 +171,23 @@ class DatabaseMigrationsTest {
         53 to "bind-work-observations-and-accepted-results",
         54 to "separate-agent-activity-revisions",
         55 to "complete-desktop-launch-schema",
+        56 to "abandon-stale-verify-workflows",
+        57 to "record-launch-agent-environment",
+        58 to "record-standalone-phase-launch-scope",
+        59 to "record-standalone-monitor-target",
       ),
       migrationDefinitions,
     )
     assertEquals(migrationDefinitions.sortedBy { (version, _) -> version }, migrationDefinitions)
     assertEquals(migrationDefinitions.map { (version, _) -> version }.toSet().size, migrationDefinitions.size)
     assertEquals(migrationDefinitions.map { (_, name) -> name }.toSet().size, migrationDefinitions.size)
+  }
+
+  @Test
+  fun `each desktop schema version increase has a migration`() {
+    val versions = DatabaseMigrations.migrations.map { migration -> migration.version }
+    assertEquals(DesktopReadSchema.VERSION, versions.last())
+    assertEquals((1..DesktopReadSchema.VERSION).filter { version -> version != 23 }, versions)
   }
 
   @Test
@@ -331,6 +343,169 @@ class DatabaseMigrationsTest {
 
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       assertEquals(DatabaseMigrations.migrations.size, migrationRows(connection).size)
+    }
+  }
+
+  @Test
+  fun `migration v59 adds nullable monitor target columns and keeps existing standalone rows legacy`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v59-monitor-target").resolve("legacy.db")
+    val targetColumns =
+      listOf(
+        "monitor_pr_key", "monitor_pr_url", "monitor_head_repository", "monitor_head_ref",
+        "monitor_caller_root", "monitor_worktree_path", "monitor_cleanup_disposition",
+        "monitor_cleanup_reason", "monitor_cleanup_detail",
+      )
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-monitor-target'")
+        targetColumns.forEach { column ->
+          statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN $column")
+        }
+        statement.executeUpdate(
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-monitor', 'monitor', 'store', '4', '3', 'active', " +
+            "'monitor', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 2, '2026-10-17T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 58")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      targetColumns.forEach { column ->
+        assertTrue(column in columnNames(connection, "standalone_phase_status"), column)
+      }
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT run_sequence, status_revision, lease_generation, monitor_pr_key, monitor_cleanup_disposition " +
+            "FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals(listOf("4", "3", "2"), listOf(it.getString(1), it.getString(2), it.getString(3)))
+          assertEquals(null, it.getString(4))
+          assertEquals(null, it.getString(5))
+        }
+        assertFailsWith<SQLException> {
+          statement.executeUpdate("UPDATE standalone_phase_status SET monitor_cleanup_disposition = 'other'")
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
+    }
+  }
+
+  @Test
+  fun `migration v58 records existing standalone phases as launched on their own`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v58-launch-scope").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-standalone-phase-launch-scope'")
+        statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN launch_scope")
+        statement.executeUpdate(
+          "INSERT INTO standalone_phase_status (execution_id, repository_identity, branch_correlation, " +
+            "invocation_id, phase_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "current_step, started_at, updated_at, lease_owner, lease_generation, lease_expires_at) VALUES " +
+            "('legacy-execution', 'repo', 'main', 'legacy-plan', 'plan', 'store', '1', '1', 'active', 'plan', " +
+            "'2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'owner', 1, '2026-10-17T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 57")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeQuery(
+          "SELECT launch_scope FROM standalone_phase_status WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals("standalone", it.getString(1))
+        }
+        assertFailsWith<SQLException> {
+          statement.executeUpdate("UPDATE standalone_phase_status SET launch_scope = 'other'")
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
+    }
+  }
+
+  @Test
+  fun `migration v57 adds nullable agent environment columns to an existing status store`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v57-agent-environment").resolve("legacy.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'record-launch-agent-environment'")
+        statement.execute("ALTER TABLE standalone_phase_status DROP COLUMN agent_environment_json")
+        statement.execute("ALTER TABLE ide_status_workflow_execution DROP COLUMN agent_environment_json")
+        statement.executeUpdate(
+          "INSERT INTO ide_status_workflow_execution (execution_id, repository_identity, branch_correlation, " +
+            "workflow_id, invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state, " +
+            "started_at, updated_at) VALUES ('legacy-execution', 'repo', 'main', 'legacy-goal', " +
+            "'legacy-invocation', 'store', '1', '1', 'active', '2026-10-13T00:00:00Z', '2026-10-13T00:00:00Z')",
+        )
+        statement.execute("PRAGMA user_version = 56")
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        listOf("standalone_phase_status", "ide_status_workflow_execution").forEach { table ->
+          statement.executeQuery("SELECT agent_environment_json FROM $table LIMIT 0").use {
+            assertEquals(1, it.metaData.columnCount)
+          }
+        }
+        statement.executeQuery(
+          "SELECT agent_environment_json FROM ide_status_workflow_execution WHERE execution_id = 'legacy-execution'",
+        ).use {
+          assertTrue(it.next())
+          assertEquals(null, it.getString(1))
+        }
+        statement.executeQuery("PRAGMA user_version").use {
+          assertTrue(it.next())
+          assertEquals(DesktopReadSchema.VERSION, it.getInt(1))
+        }
+      }
+    }
+  }
+
+  @Test
+  fun `migration v56 abandons only verify workflows that stopped reporting while running`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-v56-verify").resolve("legacy.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      connection.createStatement().use { statement ->
+        statement.executeUpdate("DELETE FROM schema_migrations WHERE name = 'abandon-stale-verify-workflows'")
+        statement.executeUpdate(
+          "INSERT INTO feature_verify_workflows (workflow_id, workflow_status, updated_at, finished_at) VALUES " +
+            "('wfv-stale', 'running', datetime('now', '-3 days'), NULL), " +
+            "('wfv-fresh', 'running', datetime('now', '-1 hours'), NULL), " +
+            "('wfv-done', 'completed', datetime('now', '-3 days'), '2026-01-01T00:00:00.000Z')",
+        )
+      }
+    }
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val rows =
+        connection.createStatement().use { statement ->
+          statement.executeQuery(
+            "SELECT workflow_id, workflow_status, finished_at FROM feature_verify_workflows ORDER BY workflow_id",
+          ).use { result ->
+            buildMap {
+              while (result.next()) {
+                put(result.getString(1), result.getString(2) to result.getString(3))
+              }
+            }
+          }
+        }
+      assertEquals("abandoned", rows.getValue("wfv-stale").first)
+      assertNotNull(rows.getValue("wfv-stale").second)
+      assertEquals("running" to null, rows.getValue("wfv-fresh"))
+      assertEquals("completed" to "2026-01-01T00:00:00.000Z", rows.getValue("wfv-done"))
     }
   }
 

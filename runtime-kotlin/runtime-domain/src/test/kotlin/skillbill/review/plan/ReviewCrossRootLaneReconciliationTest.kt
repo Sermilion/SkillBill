@@ -19,6 +19,65 @@ import kotlin.test.assertTrue
 
 class ReviewCrossRootLaneReconciliationTest {
   @Test
+  fun `independent Python fixture review retains its scope beside composed Kotlin lanes`() {
+    val roots =
+      mapOf(
+        "kmp" to root(0, lane("kmp", "architecture", 0, ownedPaths = listOf("shared.kt"))),
+        "kotlin" to root(1, lane("kotlin", "architecture", 0, ownedPaths = listOf("backend.kt"))),
+        "python" to root(0, lane("python", "architecture", 0, ownedPaths = listOf("capture.py"))),
+      )
+    val manifests = listOf(pack("kmp", listOf("kotlin")), pack("kotlin"), pack("python"))
+
+    val lanes = ReviewCrossRootLaneReconciliation.reconcileRoutedRoots(roots, manifests)
+
+    assertEquals(listOf("kmp", "python"), lanes.map { it.lane.packSlug })
+    assertEquals(listOf("backend.kt", "shared.kt"), lanes.first().lane.ownedPaths)
+    assertEquals(listOf("capture.py"), lanes.last().lane.ownedPaths)
+    assertEquals(listOf("hunk-capture.py"), lanes.last().lane.changedHunkIds)
+    assertEquals(listOf(0, 1), lanes.map { it.lane.orderIndex })
+    assertEquals(
+      lanes,
+      ReviewCrossRootLaneReconciliation.reconcileRoutedRoots(roots.toList().reversed().toMap(), manifests.reversed()),
+    )
+  }
+
+  @Test
+  fun `conflicting ownership recovers to fallback without losing paths hunks or original owners`() {
+    val roots =
+      mapOf(
+        "kotlin" to root(0, lane("kotlin", "architecture", 0, ownedPaths = listOf("shared.txt", "main.kt"))),
+        "python" to root(0, lane("python", "architecture", 0, ownedPaths = listOf("shared.txt", "capture.py"))),
+      )
+    val fallback = pack("generic").copy(fallbackCapabilities = setOf("code-review"))
+    val resolution = ReviewLaneOwnershipResolution.reconcile(roots, listOf(pack("kotlin"), pack("python"), fallback))
+
+    val recovered = resolution.lanes.single()
+    assertEquals("generic", recovered.lane.packSlug)
+    assertEquals(listOf("capture.py", "main.kt", "shared.txt"), recovered.lane.ownedPaths)
+    assertEquals(listOf("hunk-capture.py", "hunk-main.kt", "hunk-shared.txt"), recovered.lane.changedHunkIds)
+    assertTrue(recovered.lane.required)
+    assertEquals(setOf("kotlin", "python"), recovered.inputs.map { it.packSlug }.toSet())
+    assertEquals(listOf("kotlin", "python"), resolution.conflicts.single().owners)
+    assertEquals("architecture", resolution.conflicts.single().area)
+    assertEquals("generic", resolution.conflicts.single().fallbackOwner)
+  }
+
+  @Test
+  fun `independent roots assigning the same path to different area owners still fail`() {
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        ReviewCrossRootLaneReconciliation.reconcileRoutedRoots(
+          mapOf(
+            "kotlin" to root(0, lane("kotlin", "architecture", 0)),
+            "python" to root(0, lane("python", "architecture", 0)),
+          ),
+          listOf(pack("kotlin"), pack("python")),
+        )
+      }
+    assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, error.code)
+  }
+
+  @Test
   fun `same universal fallback lane from two roots reconciles once at the end`() {
     val first =
       root(

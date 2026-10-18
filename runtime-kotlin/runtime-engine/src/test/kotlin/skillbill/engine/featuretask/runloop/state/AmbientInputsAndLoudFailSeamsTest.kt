@@ -35,7 +35,7 @@ private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVI
 
 class AmbientInputsAndLoudFailSeamsTest {
   @Test
-  fun `explicit resume of a finished audit continues from the furthest later phase`() {
+  fun `explicit resume preserves every finished phase and continues from the furthest later phase`() {
     val completed =
       mapOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to PREPLAN_OUTPUT,
@@ -66,10 +66,13 @@ class AmbientInputsAndLoudFailSeamsTest {
         resumeRulesFn = RESUME_RULES,
       )
 
-    val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
-    assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY, start.phaseId)
-    assertTrue(start.reopen)
-    state.reopenFromExplicitResume(start.phaseId)
+    completed.keys.forEach { phaseId ->
+      val start = state.explicitResumeStart(phaseId)
+      assertEquals(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY, start.phaseId, phaseId)
+      assertTrue(start.reopen, phaseId)
+      state.reopenFromExplicitResume(start.phaseId)
+      completed.keys.forEach { assertTrue(state.phase(it).completed, it) }
+    }
 
     assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
     assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)

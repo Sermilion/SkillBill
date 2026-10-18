@@ -166,7 +166,8 @@ class WorkflowGoalRunnerManifestStore
       database.read { unit ->
         planningStatusSnapshot(
           summary,
-          unit.goalPlanningPreparations.hasPreparedSharedPreplan(parentWorkflowId),
+          unit.goalPlanningPreparations.hasPreparedSharedPreplan(parentWorkflowId) ||
+            unit.planWorkflowPlanningProgress(parentWorkflowId)?.preplanRecorded == true,
           blockedSubtaskId,
           blockedReason,
         )
@@ -217,13 +218,24 @@ class WorkflowGoalRunnerManifestStore
       blockedSubtaskId: Int?,
       blockedReason: String?,
     ): GoalPlanningStatusSnapshot? =
-      database.read {
-        it.goalPlanningPreparations.boundedStatus(
-          parentWorkflowId,
-          orderedSubtaskIds,
-          blockedSubtaskId,
-          blockedReason,
-        )
+      database.read { unit ->
+        val legacy =
+          unit.goalPlanningPreparations.boundedStatus(
+            parentWorkflowId,
+            orderedSubtaskIds,
+            blockedSubtaskId,
+            blockedReason,
+          )
+        unit.planWorkflowPlanningProgress(parentWorkflowId)?.let { progress ->
+          planningStatusSnapshot(
+            orderedSubtaskIds,
+            (unit.goalPlanningPreparations.listPreparedPlanSubtaskIds(parentWorkflowId) + progress.plannedSubtaskIds)
+              .distinct(),
+            legacy.sharedPreplanPrepared || progress.preplanRecorded,
+            blockedSubtaskId,
+            blockedReason,
+          )
+        } ?: legacy
       }
 
     override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState {
@@ -315,10 +327,17 @@ class WorkflowGoalRunnerManifestStore
       return saved.first
     }
 
-    override fun sharedPreplanPayloadSha256(parentWorkflowId: String): String? =
-      database.read {
-        it.goalPlanningPreparations.sharedPreplanPayloadSha256(parentWorkflowId)
-      }
+    override fun clearReplannedChildWorkflows(
+      state: GoalRunnerManifestState,
+      subtaskIds: List<Int>,
+    ): GoalRunnerManifestState {
+      val saved =
+        database.transaction { unitOfWork ->
+          scopedReplanPersistence.clearReplannedChildren(unitOfWork, state, subtaskIds)
+        }
+      saved.second?.let { projectionPersistence.writeProjectionFile(state, it) }
+      return saved.first
+    }
 
     override fun saveNewChildWorkflow(
       state: GoalRunnerManifestState,

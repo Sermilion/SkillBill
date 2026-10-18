@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
@@ -132,7 +133,7 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
           acceptedOutput,
           null,
         ),
-    )
+    ) == RequiredPhaseWrite.Acknowledged
   }
 
   internal fun ReviewOutputPersistenceContext.persistGoalReviewCompletion(

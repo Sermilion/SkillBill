@@ -146,10 +146,14 @@ class FeatureTaskRuntimeRetryBlockedCommand(
   private val workflowId by argument(help = "Exact runtime workflow id whose blocked phase should be retried.")
   private val phaseId by option("--phase", help = "Blocked runtime phase to reopen.").required()
   private val reason by option("--reason", help = "Required operator reason recorded with the retry.").required()
+  private val mandate by option(
+    "--mandate",
+    help = "Explicit operator mandate retained in this workflow's run invariants for later phases and resumes.",
+  )
   private val format by formatOption()
 
   override fun run() {
-    val result = workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason)
+    val result = workflowService.retryBlockedFeatureTaskRuntimePhase(workflowId, phaseId, reason, mandate)
     state.complete(result.toPayload(), format, exitCode = if (result is WorkflowUpdateResult.Error) 1 else 0)
   }
 }

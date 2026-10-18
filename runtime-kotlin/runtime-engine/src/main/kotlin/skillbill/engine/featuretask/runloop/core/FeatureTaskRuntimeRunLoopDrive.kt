@@ -1,9 +1,11 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.observability.loopCapExhausted
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopAcceptanceRepair
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -11,6 +13,7 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.error.shellcontent.featureTaskRuntimePhaseOrderViolationMessage
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -46,13 +49,17 @@ object FeatureTaskRuntimeRunLoopDrive {
 
   internal fun reopenStaleSettledSteps(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
+      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
+        rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
+      }
     }
   }
 
   internal fun invalidateStaleEvidence(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
+      if (!context.hasLeftSlot(stepState.acceptedOwner.slot)) {
+        rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
+      }
     }
   }
 
@@ -83,7 +90,15 @@ object FeatureTaskRuntimeRunLoopDrive {
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): String? =
-    entryGateBlockReason(context.state, context.transitions, phaseId)
+    FeatureTaskRuntimeRunLoopAcceptanceRepair.reviewEntryBlockReason(context, phaseId)
+      ?: (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.let { scope ->
+        if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+          "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+            "Other criteria have separate budgets. ${scope.currentCriterionContext}"
+        } else {
+          null
+        }
+      } ?: entryGateBlockReason(context.state, context.transitions, phaseId)
       ?: with(FeatureTaskRuntimeRunLoopBackwardEdge) {
         FeatureTaskRuntimeRunLoopBackwardEdge.capExhaustedOnResume(
           context,
@@ -115,11 +130,28 @@ object FeatureTaskRuntimeRunLoopDrive {
     phaseId: String,
     verdict: FeatureTaskRuntimeVerdict,
   ): String? {
+    val scope = (context.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val serial = scope?.snapshot
+    if (serial != null && FeatureTaskRuntimeRunLoopAcceptanceRepair.ownsCompletedPhase(phaseId, scope.steps)) {
+      return when (val routing = FeatureTaskRuntimeRunLoopAcceptanceRepair.next(context, phaseId)) {
+        is FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Reenter -> routing.phaseId
+        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Stop -> null
+        FeatureTaskRuntimeRunLoopAcceptanceRepair.Routing.Continue -> nextTransitionAfter(context, phaseId, verdict)
+      }
+    }
+    return nextTransitionAfter(context, phaseId, verdict)
+  }
+
+  private fun nextTransitionAfter(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+    verdict: FeatureTaskRuntimeVerdict,
+  ): String? {
     val effectiveVerdict =
       FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
         rules.routedVerdict(phaseId, verdict, stepState)
       } ?: verdict
-    val edge = FeatureTaskRuntimeRunLoopCheckpoint.matchingBackwardEdge(context.transitions, phaseId, effectiveVerdict)
+    val edge = FeatureTaskRuntimeRunLoopCheckpoint.matchingBackwardEdge(traversal(context), phaseId, effectiveVerdict)
     edge?.let { FeatureTaskRuntimeRunLoopBackwardEdge.resumeInFlightReentry(context, it) }?.let { return it }
     val edgeIterationCount =
       edge?.let {
@@ -185,7 +217,8 @@ object FeatureTaskRuntimeRunLoopDrive {
       runState.coupledRunTransitions.enterExplicitResumeStart(explicitResume)
     }
     var phaseId: String? =
-      explicitResume?.phaseId
+      FeatureTaskRuntimeRunLoopAcceptanceRepair.resume(this)
+        ?: explicitResume?.phaseId
         ?: session.pendingReentry?.phaseId
         ?: traversal(this).forwardPhaseIds.first()
     phaseId =

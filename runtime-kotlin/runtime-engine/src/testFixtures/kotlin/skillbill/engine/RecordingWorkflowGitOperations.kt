@@ -52,6 +52,7 @@ class RecordingWorkflowGitOperations(
   var changedPathsBetweenCommitsResult: WorkflowGitNameListResult? = null
   val createCommitMessages = mutableListOf<String>()
   var createCommitResult: WorkflowGitCommitResult? = null
+  var onCreateCommit: (() -> Unit)? = null
   var localBranchHasUnpushedCommitsValue: Boolean = true
   var headCommitMessageValue: String = ""
   val amendCommitMessages = mutableListOf<String>()
@@ -129,6 +130,7 @@ class RecordingWorkflowGitOperations(
     message: String,
   ): WorkflowGitCommitResult {
     createCommitMessages += message
+    onCreateCommit?.invoke()
     if (invalidShaOnRemediationCommit && message.contains("remediation checkpoint")) {
       val bogus = "not-a-valid-commit-sha"
       headCommitShaValue = bogus

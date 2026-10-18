@@ -1,5 +1,6 @@
 package skillbill.ports.workflow.gitops
 
+import skillbill.ports.workflow.gitops.model.WorkflowGitCommitIdentityResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Path
@@ -17,6 +18,12 @@ internal object NoopWorkflowGitCommitHistoryOperations : WorkflowGitCommitHistor
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult {
     return WorkflowGitOperationResult.Ok(value = "")
   }
+
+  override fun commitIdentity(
+    repoRoot: Path,
+    commitSha: String,
+  ): WorkflowGitCommitIdentityResult =
+    WorkflowGitCommitIdentityResult.Failed("The no-op Git adapter has no commit identity for '$commitSha'.")
 
   override fun commitCountAhead(
     repoRoot: Path,

@@ -2,8 +2,11 @@ package dev.skillbill.intellij.infrastructure.prefs
 
 import dev.skillbill.intellij.domain.CachedDisplaySnapshot
 import dev.skillbill.intellij.domain.LastKnownDisplayCache
+import dev.skillbill.intellij.domain.boundedDisplaySummary
 import dev.skillbill.intellij.domain.toCacheSnapshotOrNull
 import dev.skillbill.intellij.domain.toStaleOutcome
+import dev.skillbill.intellij.presentation.SkillBillStatusBarPresentation
+import dev.skillbill.intellij.presentation.StatusUiMapper
 import dev.skillbill.intellij.fakes.FakePreferenceCache
 import java.time.Instant
 import org.junit.Assert.assertEquals
@@ -57,6 +60,35 @@ class PreferenceSanitizerAndCacheTest {
         assertEquals("SKILL-165", stale.issueKey)
         assertEquals(1, stale.progressCompleted)
         assertEquals(4, stale.progressTotal)
+    }
+
+    @Test
+    fun `bounded criterion context survives cache restoration as a stale observation`() {
+        val gap = "source still misses the required behavior ".repeat(12)
+        val summary = "Acceptance criteria: Criterion ac-0001 (S3-004); 3 failures used; " +
+            "0 failures remaining; queue position 1 of 1; Criterion exhausted; source repair cannot advance; " +
+            "Focused repair cycle reserved; " +
+            "Source acceptance is separate from later tests, build, and project-quality checks. Latest gap: $gap"
+        val cache = LastKnownDisplayCache(
+            display = CachedDisplaySnapshot(summary = boundedDisplaySummary(summary)),
+            observedAt = Instant.parse("2026-08-06T09:00:00Z"),
+        )
+
+        val persisted = SkillBillProjectDisplayCache()
+        persisted.write(cache)
+        val reloaded = SkillBillProjectDisplayCache()
+        reloaded.loadState(persisted.getState().copy())
+        val restored = reloaded.read()!!.toStaleOutcome()
+
+        assertTrue(restored.fromCache)
+        assertTrue(restored.summary.contains("3 failures used"))
+        assertTrue(restored.summary.contains("0 failures remaining"))
+        assertTrue(restored.summary.contains("Focused repair cycle reserved"))
+        assertTrue(restored.summary.contains("Summary abbreviated"))
+        assertTrue(restored.summary.length <= CachedDisplaySnapshot.MAX_SUMMARY_CHARS)
+        val presentation = SkillBillStatusBarPresentation.map(StatusUiMapper.map(restored, cache.observedAt))
+        assertTrue(presentation.isStaleMarked)
+        assertTrue(presentation.details.staleNote!!.contains("not live"))
     }
 
     @Test

@@ -10,6 +10,7 @@ import dev.skillbill.intellij.domain.CachedDisplaySnapshot
 import dev.skillbill.intellij.domain.DEFAULT_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.domain.LastKnownDisplayCache
 import dev.skillbill.intellij.domain.StatusExecutionMetadata
+import dev.skillbill.intellij.domain.boundedDisplaySummary
 import dev.skillbill.intellij.domain.MAX_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.domain.MIN_REFRESH_INTERVAL_SECONDS
 import dev.skillbill.intellij.infrastructure.AbsolutePathGuard
@@ -99,7 +100,7 @@ class SkillBillProjectDisplayCache : PersistentStateComponent<SkillBillProjectDi
         val observedAt = runCatching { Instant.parse(observedRaw) }.getOrNull() ?: return null
         return LastKnownDisplayCache(
             display = CachedDisplaySnapshot(
-                summary = summary.take(CachedDisplaySnapshot.MAX_SUMMARY_CHARS),
+                summary = boundedDisplaySummary(summary),
                 repositoryIdentity = state.repositoryIdentity,
                 issueKey = state.issueKey,
                 currentStepId = state.currentStepId,
@@ -229,7 +230,7 @@ object PreferenceSanitizer {
         }
         return cache.copy(
             display = cache.display.copy(
-                summary = summary.take(CachedDisplaySnapshot.MAX_SUMMARY_CHARS),
+                summary = boundedDisplaySummary(summary),
                 repositoryIdentity = sanitizeRepositoryIdentity(cache.display.repositoryIdentity),
                 issueKey = cache.display.issueKey?.take(64),
                 currentStepId = cache.display.currentStepId?.take(64),
@@ -247,7 +248,7 @@ object PreferenceSanitizer {
             return SkillBillProjectDisplayCache.State()
         }
         return state.copy(
-            summary = state.summary?.take(CachedDisplaySnapshot.MAX_SUMMARY_CHARS),
+            summary = state.summary?.let(::boundedDisplaySummary),
             repositoryIdentity = sanitizeRepositoryIdentity(state.repositoryIdentity),
             branchCorrelation = state.branchCorrelation?.trim()?.take(256),
         )

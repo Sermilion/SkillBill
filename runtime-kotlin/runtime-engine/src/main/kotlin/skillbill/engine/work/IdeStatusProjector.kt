@@ -65,6 +65,7 @@ private data class ChildOptionalContext(
   val currentModel: IdeStatusCurrentModel?,
   val currentPhaseExecution: IdeStatusCurrentPhaseExecution?,
   val operatorDecisionPause: FeatureTaskRuntimeOperatorDecisionPause? = null,
+  val criterionExplanation: String? = null,
 ) {
   companion object {
     val EMPTY = ChildOptionalContext(currentModel = null, currentPhaseExecution = null)
@@ -136,6 +137,7 @@ class IdeStatusProjector(
         statusRevision = record.statusRevision,
         invocationId = record.invocationId,
         phaseId = record.phaseId,
+        launchScope = record.launchScope,
       )
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
@@ -154,7 +156,10 @@ class IdeStatusProjector(
       freshness = IdeStatusFreshnessClassifier.classify(record.updatedAt, context.observedAt),
       summary =
         resolveExecutionReason(record, context.unitOfWork).text
-          ?: "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+          ?: listOfNotNull(
+            "Standalone phase ${record.phaseId} is ${record.lifecycleState}.",
+            record.monitorTargetDetail(),
+          ).joinToString(" "),
     )
   }
 
@@ -217,9 +222,10 @@ class IdeStatusProjector(
     val completionRecorded = projection?.admittedParentComplete() == true
     val preliminaryLifecycle = goalLifecycle(candidate, projection, completionRecorded)
     val planning = projection?.planning?.toIdeStatusPlanning()
-    val planningStep = livePlanningOverlay(planning, projection?.currentStep, preliminaryLifecycle)
     val childContext = childOptionalContext(projection?.currentChildWorkflowId, preliminaryLifecycle)
     val lifecycle = goalLifecycleForOperatorBlock(preliminaryLifecycle, childContext)
+    val planningStep =
+      livePlanningOverlay(planning, projection?.currentStep, lifecycle, childContext.currentPhaseId)
     val openCiMonitor = goalShowsOpenCiMonitor(projection, lifecycle)
     val liveFinalization = goalProjectsLiveFinalizationStep(projection)
     val pauseReason =
@@ -269,16 +275,34 @@ class IdeStatusProjector(
         summary =
           planningStep?.takeIf { lifecycle != IdeStatusLifecycleState.PAUSED }
             ?.let { goalPlanningSummary(issueKey, it) }
-            ?: goalSummary(
-              issueKey,
-              lifecycle,
-              step.label,
-              projection?.blockedCount ?: 0,
-              childContext.operatorDecisionPause,
-            ),
+            ?: goalSnapshotSummary(issueKey, lifecycle, step.label, projection, childContext),
       )
     return IdeStatusProjection(snapshot, pauseReason.exactText)
   }
+
+  private fun goalSnapshotSummary(
+    issueKey: String,
+    lifecycle: IdeStatusLifecycleState,
+    stepLabel: String,
+    projection: GoalRunnerStatusProjection?,
+    childContext: ChildOptionalContext,
+  ): String =
+    childContext.criterionExplanation?.let {
+      "Acceptance criteria: $it. " +
+        goalSummary(
+          issueKey,
+          lifecycle,
+          stepLabel,
+          projection?.blockedCount ?: 0,
+          childContext.operatorDecisionPause,
+        )
+    } ?: goalSummary(
+      issueKey,
+      lifecycle,
+      stepLabel,
+      projection?.blockedCount ?: 0,
+      childContext.operatorDecisionPause,
+    )
 
   private fun goalPauseRequested(projection: GoalRunnerStatusProjection?): Boolean =
     projection?.pauseRequested == true && projection.paused != true
@@ -400,6 +424,7 @@ class IdeStatusProjector(
         },
       currentPhaseExecution = status.currentPhaseExecution,
       operatorDecisionPause = status.operatorDecisionPause,
+      criterionExplanation = status.criterionExplanation,
     )
   }
 
@@ -451,7 +476,15 @@ class IdeStatusProjector(
         updatedAt = updatedAt,
         freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
         summary =
-          familySummary(
+          status.criterionExplanation?.let {
+            "Acceptance criteria: $it. " +
+              familySummary(
+                IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
+                candidate.issueKey,
+                candidate.lifecycleState,
+                stepLabel,
+              )
+          } ?: familySummary(
             IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME,
             candidate.issueKey,
             candidate.lifecycleState,
@@ -498,6 +531,19 @@ class IdeStatusProjector(
         WorkflowFamily.VERIFY -> IdeStatusWorkflowFamily.FEATURE_VERIFY
         WorkflowFamily.TASK_RUNTIME -> IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME
       }
+    val lifecycle =
+      if (family == WorkflowFamily.VERIFY) {
+        IdeStatusPolicy.verifyLifecycle(candidate.lifecycleState, updatedAt, context.observedAt)
+      } else {
+        candidate.lifecycleState
+      }
+    val summary =
+      if (lifecycle == IdeStatusLifecycleState.IDLE && candidate.lifecycleState == IdeStatusLifecycleState.ACTIVE) {
+        val subject = candidate.issueKey?.let { "${wireFamily.wireValue} $it" } ?: wireFamily.wireValue
+        "$subject stopped reporting progress at $stepLabel and is treated as abandoned."
+      } else {
+        familySummary(wireFamily, candidate.issueKey, lifecycle, stepLabel)
+      }
     return IdeStatusSnapshot(
       repositoryIdentity = context.repositoryIdentity,
       branchCorrelation = context.branchCorrelation,
@@ -505,7 +551,7 @@ class IdeStatusProjector(
       workflowId = candidate.workflowId,
       workflowFamily = wireFamily,
       execution = candidate.execution,
-      lifecycleState = candidate.lifecycleState,
+      lifecycleState = lifecycle,
       currentStep = IdeStatusStep(id = stepId, label = stepLabel),
       progress = progress,
       startedAt = startedAt,
@@ -513,7 +559,7 @@ class IdeStatusProjector(
       lastAgentActivityLabel = activityLabel,
       updatedAt = updatedAt,
       freshness = IdeStatusFreshnessClassifier.classify(updatedAt, context.observedAt),
-      summary = familySummary(wireFamily, candidate.issueKey, candidate.lifecycleState, stepLabel),
+      summary = summary,
     )
   }
 

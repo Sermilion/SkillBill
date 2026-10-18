@@ -1599,6 +1599,8 @@ internal class GoalRunnerRepairLeaseClearanceTest : GoalRunnerRepairFixtures() {
 
     override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ForeignHost
 
+    override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
     override fun awaitExit(
       ownership: FeatureTaskRuntimeWorkerOwnership,
       timeout: Duration,
@@ -1935,6 +1937,18 @@ internal abstract class GoalRunnerRepairFixtures {
       return controlStateValue
     }
 
+    override fun resume(parentWorkflowId: String): GoalRunnerManifestState {
+      controlStateValue =
+        controlStateValue.copy(
+          paused = false,
+          pauseRequested = false,
+          pauseConsumed = false,
+          pauseReason = null,
+          pausedAt = null,
+        )
+      return loadByIssueKey(ISSUE_KEY, null)
+    }
+
     override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState = state
 
     override fun acquireExecutionLease(
@@ -2026,6 +2040,8 @@ internal abstract class GoalRunnerRepairFixtures {
 
     override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
 
+    override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
     override fun awaitExit(
       ownership: FeatureTaskRuntimeWorkerOwnership,
       timeout: Duration,
@@ -2048,6 +2064,8 @@ internal abstract class GoalRunnerRepairFixtures {
       FeatureTaskRuntimeProcessIdentity("host", "boot", 1, "birth")
 
     override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.ExactLive
+
+    override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
     override fun awaitExit(
       ownership: FeatureTaskRuntimeWorkerOwnership,

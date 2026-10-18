@@ -2,11 +2,13 @@ package skillbill.engine.work
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.work.pagination.WorkDetailAnchor
 import skillbill.engine.work.pagination.WorkDetailPagePosition
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
 import skillbill.ports.idestatus.model.ExecutionReasonRestoration
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.WorkExecutionInstance
@@ -19,8 +21,29 @@ internal fun phaseGroupIdentity(record: StandalonePhaseStatusRecord): Triple<Str
   Triple(
     record.repositoryIdentity,
     record.phaseId,
-    record.issueKey?.uppercase() ?: record.workflowId ?: record.branchCorrelation,
+    record.monitorTarget?.pullRequestKey
+      ?: record.issueKey?.uppercase()
+      ?: record.workflowId
+      ?: record.branchCorrelation,
   )
+
+internal fun StandalonePhaseStatusRecord.monitorTargetDetail(): String? =
+  monitorTarget?.let { target ->
+    listOfNotNull(
+      "Pull request ${target.pullRequestUrl}",
+      "repository ${target.pullRequestKey.substringBefore('#')}",
+      "branch ${target.headRef} (${target.headRepository})",
+      "invocation $invocationId",
+      "worktree ${target.worktreePath}",
+      monitorCleanup?.let { cleanup -> "cleanup ${cleanup.describe()}" },
+    ).joinToString("; ", prefix = "[", postfix = "]")
+  }
+
+private fun StandaloneMonitorCleanup.describe(): String =
+  when (this) {
+    StandaloneMonitorCleanup.Released -> "released"
+    is StandaloneMonitorCleanup.Retained -> "retained (${reason.wireValue}): $detail"
+  }
 
 internal fun latestPhaseExecutions(records: List<StandalonePhaseStatusRecord>): List<StandalonePhaseStatusRecord> =
   records.groupBy(::phaseGroupIdentity).values.map { instances ->
@@ -56,16 +79,19 @@ internal fun workExecutionHistory(
   workflowId: String,
   page: WorkDetailPagePosition,
   limit: Int,
-): List<WorkExecutionInstance> =
-  if (standalone != null) {
+): List<WorkExecutionInstance> {
+  val anchor = (page.anchor as? WorkDetailAnchor.Execution)?.anchor
+  val offset = if (anchor == null) page.offset else 0
+  return if (standalone != null) {
     unitOfWork.standalonePhaseStatuses.readPhaseExecutions(
       StandalonePhaseExecutionQuery(
         standalone.repositoryIdentity,
         standalone.phaseId,
         phaseGroupIdentity(standalone).third,
         page.observedAt,
-        page.offset,
+        offset,
         limit,
+        anchor,
       ),
     )
       .map {
@@ -79,21 +105,26 @@ internal fun workExecutionHistory(
           it.finishedAt,
           reason.text,
           reason.restoration,
+          it.runSequence,
         )
       }
   } else {
-    unitOfWork.standalonePhaseStatuses.readWorkflowExecutions(workflowId, page.observedAt, page.offset, limit).map {
-      WorkExecutionInstance(
-        it.invocationId,
-        it.executionId,
-        it.lifecycleState,
-        it.startedAt,
-        it.updatedAt,
-        null,
-        null,
-      )
-    }
+    unitOfWork.standalonePhaseStatuses
+      .readWorkflowExecutions(workflowId, page.observedAt, offset, limit, anchor)
+      .map {
+        WorkExecutionInstance(
+          it.invocationId,
+          it.executionId,
+          it.lifecycleState,
+          it.startedAt,
+          it.updatedAt,
+          null,
+          null,
+          runSequence = it.runSequence,
+        )
+      }
   }
+}
 
 internal data class ResolvedExecutionReason(
   val text: String?,
@@ -101,6 +132,15 @@ internal data class ResolvedExecutionReason(
 )
 
 internal fun resolveExecutionReason(
+  record: StandalonePhaseStatusRecord,
+  unitOfWork: UnitOfWork,
+): ResolvedExecutionReason {
+  val resolved = resolveStoredReason(record, unitOfWork)
+  val detail = record.monitorTargetDetail() ?: return resolved
+  return resolved.copy(text = resolved.text?.let { "$it $detail" })
+}
+
+private fun resolveStoredReason(
   record: StandalonePhaseStatusRecord,
   unitOfWork: UnitOfWork,
 ): ResolvedExecutionReason {

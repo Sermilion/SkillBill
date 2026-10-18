@@ -27,6 +27,9 @@ fun acceptanceCriterionIdentity(
   return AcceptanceCriterionIdentity(canonical, label?.uppercase())
 }
 
+fun originalAcceptanceCriterionAlias(criterion: String): String? =
+  ORIGINAL_ACCEPTANCE_CRITERION_ALIAS.find(criterion.trim())?.value
+
 data class AcceptanceCriterionIdentity(val canonicalRef: String, val originalLabel: String?) {
   fun identifiedText(criterion: String): String =
     if (originalLabel != null && !originalLabel.startsWith("S")) {
@@ -38,3 +41,6 @@ data class AcceptanceCriterionIdentity(val canonicalRef: String, val originalLab
 
 private val ACCEPTANCE_CRITERION_LABEL =
   Regex("""^(?:S\d+-)?AC-?\d+(?=$|[.:\s/])""", RegexOption.IGNORE_CASE)
+
+private val ORIGINAL_ACCEPTANCE_CRITERION_ALIAS =
+  Regex("""^(?:S\d+-AC-?\d+|S\d+-\d+|AC-?\d+)(?=$|[.:\s/])""", RegexOption.IGNORE_CASE)

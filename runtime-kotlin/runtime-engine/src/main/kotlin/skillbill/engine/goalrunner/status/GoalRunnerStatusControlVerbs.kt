@@ -7,10 +7,12 @@ import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
+import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
 import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
+import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.db.DatabaseSessionFactory
@@ -38,6 +40,7 @@ class GoalRunnerStatusControlVerbs(
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val diagnostics: RuntimeDiagnostics,
+  private val repairCoordinator: GoalRunnerRepairCoordinator,
 ) {
   fun pause(
     issueKey: String,
@@ -251,20 +254,21 @@ class GoalRunnerStatusControlVerbs(
       goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort),
     )
     val before = manifestStore.controlState(loaded.parentWorkflowId)
-    if (!before.paused && !before.pauseRequested) {
-      return GoalRunnerResumeResult(
-        issueKey = issueKey,
-        parentWorkflowId = loaded.parentWorkflowId,
-        status = GoalRunnerResumeStatus.NOT_PAUSED,
-      )
-    }
-    manifestStore.resume(loaded.parentWorkflowId)
-      ?: return GoalRunnerResumeResult(issueKey = issueKey, status = GoalRunnerResumeStatus.NOT_FOUND)
+    val repair = repairCoordinator.repairBeforeResume(issueKey, repoRoot)
+    val status =
+      when {
+        repair?.status == GoalRunnerRepairStatus.OPERATOR_REQUIRED -> GoalRunnerResumeStatus.OPERATOR_REQUIRED
+        !before.paused && !before.pauseRequested -> GoalRunnerResumeStatus.NOT_PAUSED
+        manifestStore.resume(loaded.parentWorkflowId) == null -> GoalRunnerResumeStatus.NOT_FOUND
+        else -> GoalRunnerResumeStatus.RESUMED
+      }
     return GoalRunnerResumeResult(
       issueKey = issueKey,
-      parentWorkflowId = loaded.parentWorkflowId,
-      status = GoalRunnerResumeStatus.RESUMED,
-      clearedPauseReason = before.pauseReason,
+      parentWorkflowId = loaded.parentWorkflowId.takeUnless { status == GoalRunnerResumeStatus.NOT_FOUND },
+      status = status,
+      clearedPauseReason = before.pauseReason.takeIf { status == GoalRunnerResumeStatus.RESUMED },
+      appliedRepairs = repair?.appliedRepairs.orEmpty(),
+      refusalReason = repair?.refusalReason.takeIf { status == GoalRunnerResumeStatus.OPERATOR_REQUIRED },
     )
   }
 

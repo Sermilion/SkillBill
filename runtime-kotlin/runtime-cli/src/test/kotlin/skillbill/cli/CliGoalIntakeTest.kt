@@ -10,8 +10,6 @@ import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.passThroughResolvedLaunchModel
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.skeleton.EffectiveLaunchModel
 import java.nio.file.Files
 import java.nio.file.Path
@@ -122,28 +120,19 @@ class CliGoalIntakeTest {
           else -> "SKILL-901"
         }
       val launcher = StoppedPlanningLauncher(fixture.dbPath)
-      val git =
-        object : WorkflowGitOperations by GoalTestWorkflowGitOperations {
-          override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
-            WorkflowGitOperationResult.Ok(value = "feat/SKILL-900-foundation")
-        }
-      val context = fixture.context(launcher = launcher, workflowGitOperations = git).copy(repositoryRoot = root)
+      val context = fixture.context(launcher = launcher).copy(repositoryRoot = root)
       val command =
         listOf("--db", fixture.dbPath.toString(), reference, "--agent", "codex", "--repo-root", root.toString())
       try {
         repeat(2) {
           val result = CliRuntime.run(command, context)
-          assertEquals(3, result.exitCode, result.stderr + result.stdout)
+          assertEquals(1, result.exitCode, result.stderr + result.stdout)
           assertEquals(original, Files.readString(parent))
           assertEquals("<html>Existing design</html>", Files.readString(design))
           assertFalse(Files.exists(root.resolve(".feature-specs/SKILL-901-intake")))
-          val manifest = Files.readString(parent.resolveSibling("decomposition-manifest.yaml"))
-          assertContains(manifest, ".feature-specs/SKILL-901-goal/spec.md")
-          assertContains(manifest, "feat/SKILL-900-foundation")
-          val subtask = parent.resolveSibling("spec_subtask_1_implement-the-requested-change.md")
-          assertContains(Files.readString(subtask), "The decomposed goal completes every governed subtask.")
-          assertContains(Files.readString(subtask), "[layout](design/layout.html)")
-          assertEquals(1, parentCount(fixture.dbPath))
+          assertFalse(Files.exists(parent.resolveSibling("decomposition-manifest.yaml")))
+          assertTrue(bundleEntries(parent).none { it.startsWith("spec_subtask") }, bundleEntries(parent).toString())
+          assertEquals(0, parentCount(fixture.dbPath))
           assertEquals("contract_version: '0.4'\n", Files.readString(unrelated))
         }
         assertTrue(launcher.prompts.isNotEmpty())
@@ -182,6 +171,9 @@ class CliGoalIntakeTest {
     }
   }
 
+  private fun bundleEntries(parent: Path): List<String> =
+    Files.list(parent.parent).use { paths -> paths.map { it.fileName.toString() }.sorted().toList() }
+
   private fun startNewGoal(
     text: String,
     expectedKey: String,
@@ -194,7 +186,7 @@ class CliGoalIntakeTest {
     val command = listOf("--db", db.toString(), text, "--agent", "codex", "--repo-root", root.toString())
     try {
       val first = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
-      assertEquals(3, first.exitCode, first.stderr + first.stdout)
+      assertEquals(1, first.exitCode, first.stderr + first.stdout)
       val folder =
         Files.list(root.resolve(".feature-specs")).use { paths ->
           paths.findFirst().orElseThrow().fileName.toString()
@@ -202,19 +194,19 @@ class CliGoalIntakeTest {
       val (key, feature) = issueAndFeature(folder)
       assertEquals(expectedKey, key)
       assertEquals(expectedFeature, feature)
-      assertContains(first.stdout, "goal $key:")
-      assertFalse(first.stdout.contains("No decomposed parent workflow"))
+      assertContains(first.stdout + first.stderr, "Plan workflow ID")
       assertTrue(launcher.prompts.isNotEmpty())
       assertTrue(launcher.prompts.all { it.contains("Phase: preplan") })
+      assertEquals(0, parentCount(db))
       val spec = root.resolve(".feature-specs/$folder/spec.md")
       assertContains(Files.readString(spec), text)
       assertContains(Files.readString(spec), "Supplied requirements are authoritative and need no tracker lookup")
       assertContains(Files.readString(spec), "Locally allocated issue keys do not require a tracker connection")
       val before = Files.readString(spec)
       val second = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
-      assertEquals(3, second.exitCode, second.stderr + second.stdout)
+      assertEquals(1, second.exitCode, second.stderr + second.stdout)
       assertEquals(before, Files.readString(spec))
-      assertEquals(1, parentCount(db))
+      assertEquals(0, parentCount(db))
     } finally {
       root.toFile().deleteRecursively()
     }
@@ -250,7 +242,7 @@ class CliGoalIntakeTest {
       passThroughResolvedLaunchModel(request)
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
-      assertEquals(1, parentCount(db))
+      assertEquals(0, parentCount(db))
       prompts += request.skillRunRequest.promptOverride.orEmpty()
       return agentRunLaunchFacts(
         SupportedAgent.CODEX,

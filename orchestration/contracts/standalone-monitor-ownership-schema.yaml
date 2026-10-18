@@ -1,0 +1,150 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://skill-bill.dev/contracts/standalone-monitor-ownership-schema.yaml
+title: Standalone Monitor Ownership
+description: >-
+  Fenced ownership metadata for one standalone pull-request monitor invocation. One record lives beside the
+  admission lock file under the canonical Git common directory and is rewritten atomically while the lock is held.
+type: object
+additionalProperties: false
+required:
+  - contract_version
+  - target
+  - invocation_id
+  - owner_token
+  - generation
+  - process
+  - caller_root
+  - primary_root
+  - common_dir
+  - state
+  - acquired_at
+  - updated_at
+properties:
+  contract_version:
+    const: "1.0"
+  target:
+    type: object
+    additionalProperties: false
+    required: [host, repository, number, url]
+    properties:
+      host:
+        type: string
+        minLength: 1
+      repository:
+        type: string
+        pattern: "^[^/\\s]+/[^/\\s]+$"
+      number:
+        type: integer
+        minimum: 1
+      url:
+        type: string
+        minLength: 1
+  invocation_id:
+    type: string
+    minLength: 1
+  owner_token:
+    type: string
+    minLength: 16
+  generation:
+    type: integer
+    minimum: 1
+  process:
+    type: object
+    additionalProperties: false
+    required: [host_identity, boot_identity, pid, process_birth_token]
+    properties:
+      host_identity:
+        type: string
+        minLength: 1
+      boot_identity:
+        type: string
+        minLength: 1
+      pid:
+        type: integer
+        minimum: 1
+      process_birth_token:
+        type: string
+        minLength: 1
+  caller_root:
+    type: string
+    minLength: 1
+  primary_root:
+    type: string
+    minLength: 1
+  common_dir:
+    type: string
+    minLength: 1
+  state:
+    enum: [acquiring, prepared, retained, released]
+  execution_path:
+    type: string
+    minLength: 1
+  execution_branch:
+    type: string
+    minLength: 1
+  owned_refs:
+    type: array
+    uniqueItems: true
+    items:
+      type: string
+      minLength: 1
+  pinned_head_sha:
+    type: string
+    pattern: "^[0-9a-f]{40,64}$"
+  pinned_base_sha:
+    type: string
+    pattern: "^[0-9a-f]{40,64}$"
+  last_published_sha:
+    type: string
+    pattern: "^[0-9a-f]{40,64}$"
+  acquired_at:
+    type: string
+    format: date-time
+  updated_at:
+    type: string
+    format: date-time
+  retention:
+    type: object
+    additionalProperties: false
+    required: [reason, detail]
+    properties:
+      reason:
+        enum:
+          - dirty_worktree
+          - untracked_files
+          - unpublished_commits
+          - publication_unknown
+          - unowned_resource
+          - cleanup_failed
+      detail:
+        type: string
+        minLength: 1
+      path:
+        type: string
+        minLength: 1
+  outcome:
+    type: object
+    additionalProperties: false
+    required: [kind, detail]
+    properties:
+      kind:
+        enum:
+          - completed
+          - blocked
+          - setup_failed
+          - run_failed
+          - cancelled
+          - abandoned
+      detail:
+        type: string
+        minLength: 1
+x-coherence-checks:
+  - updated_at must not be earlier than acquired_at
+  - owner_token and generation fence every metadata mutation, cleanup, and release
+  - generation increases on every acquisition and released tombstones keep the last generation
+  - state acquiring may carry owned_refs and execution_path before every pinned SHA is known
+  - state prepared requires execution_path, execution_branch, pinned_head_sha, pinned_base_sha, and last_published_sha
+  - state retained requires retention and forbids released tombstone fields
+  - state released forbids execution_path, execution_branch, owned_refs, and retention
+  - outcome is only recorded on settled (retained or released) records
+  - acquiring and prepared records carry no outcome

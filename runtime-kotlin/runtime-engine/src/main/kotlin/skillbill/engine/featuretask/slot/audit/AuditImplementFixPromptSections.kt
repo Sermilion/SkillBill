@@ -3,26 +3,17 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 
 internal object AuditImplementFixPromptSections {
-  const val COMPLETION_MARKER: String = "audit_repair_complete: true"
-
-  fun endsWithCompletionMarker(value: String): Boolean =
-    value
-      .lineSequence()
-      .map(String::trim)
-      .filter(String::isNotEmpty)
-      .toList()
-      .dropLastWhile { it == "```" || it == "~~~" }
-      .lastOrNull() == COMPLETION_MARKER
-
   const val DIRECTIVE: String =
     "Execute the persisted audit_plan_fix repair plan in its declared order. The supplied upstream output " +
       "contains that plan and the latest audit findings. Reconcile each planned item against the current " +
       "tree before editing, preserve work already completed, and implement its proposed production changes. " +
       "Report closure evidence for every plan item and explain any source-backed adjustment. Do not " +
       "replace the repair plan with the original feature plan or silently omit a planned gap. " +
-      "Repair every finding about production behavior reported by the latest audit in the supplied upstream output. " +
+      "Repair every independent production gap for the runtime-selected authored criterion " +
+      "reported by the latest audit in the supplied upstream output. " +
       "Exclude test requirements, even when a persisted audit finding or the plan explicitly requests tests. " +
       "Do not add or repair tests to close an audit criterion. For mixed findings, repair only production " +
       "behavior; record test-only findings as excluded from audit and leave test work to its owning phases. " +
@@ -31,7 +22,8 @@ internal object AuditImplementFixPromptSections {
       "but leave its example and regression test cases to their owning phases. An earlier audit or repair " +
       "calling a criterion test-only does not exclude a guard implementation that the criterion requires. " +
       "A criterion may contain several independent production gaps: account for each before editing and address " +
-      "all of them in this repair run. Use the plan and current repository to implement the missing behavior " +
+      "all of them in this repair run. Shared prerequisite edits are allowed, but other " +
+      "criteria need their own audit. Use the plan and current repository to implement the missing behavior " +
       "in production. Trace each reported production path through its callers, transaction boundaries, " +
       "and failure handling. A check in an earlier transaction does not protect a later mutation. Reconcile " +
       "already-applied edits and preserve completed work and governed contracts. Before reporting completion, " +
@@ -44,16 +36,15 @@ internal object AuditImplementFixPromptSections {
       "own those; safe scoped authoring commands under the authoring discipline are allowed. Report evidence " +
       "for each finding and state any unresolved gap explicitly. " +
       "When the remaining gaps are wrong because the code already satisfies them, pass the claim object as the " +
-      "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of the completion " +
-      "marker. " +
+      "`no_change` argument of feature_task_phase_complete, with per-criterion evidence, instead of a repair report. " +
       "Either change files or return a no-change claim, never both. " +
+      ImplementationPromptSections.NO_CHANGE_CLAIM_DIRECTIVE + " " +
       "The runtime returns to a fresh audit after this step. " +
-      "When every in-scope production finding is addressed, end value with the exact marker " +
-      "`audit_repair_complete: true` alone on its final content line. " +
-      "Never emit it while any production gap remains; " +
-      "keep repairing in this repair run instead of returning a partial report. " +
-      "The runtime continues incomplete output and retryable failures within this repair step before " +
-      "returning to audit. It preserves applied edits and saved repair reports across continuation sessions. " +
+      "When every in-scope production finding is addressed, report that in ordinary prose. " +
+      "Never report completion while any production gap remains; " +
+      "finish the selected criterion's repair before returning to audit. Do not use generic semantic " +
+      "continuations to launch another repair mutation; report incomplete work for the serial owner to settle. " +
+      "The runtime preserves applied edits and saved repair reports across continuation sessions. " +
       "Known unfinished production work is not a needs_user_action blocker. Use that disposition only " +
       "when a concrete missing input or external action prevents further repair, and identify the required " +
       "action. Use non_retryable_policy_conflict only for an irreconcilable governing constraint. " +
@@ -63,7 +54,17 @@ internal object AuditImplementFixPromptSections {
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
     PhaseStepPromptSections(
-      taskDirective = DIRECTIVE,
+      taskDirective =
+        DIRECTIVE +
+          (
+            inputs.currentAcceptanceCriterion?.let {
+              "\n\nRuntime-selected authored criterion and retained budget:\n$it\nRepair only this " +
+                "criterion's source gaps."
+            } ?: (
+              "\n\nThe runtime did not provide a selected authored criterion. " +
+                "Do not edit; report the missing runtime context."
+            )
+          ),
       authoringDiscipline = projectAuthoringDisciplineDirective(),
       continuation = continuation(inputs),
       valueContent =
@@ -74,8 +75,7 @@ internal object AuditImplementFixPromptSections {
           "finding was already satisfied or does not apply. A changed filename alone is not " +
           "evidence. Do not claim a criterion is addressed while one of its reported production gaps remains. Audit " +
           "independently decides whether every production requirement is satisfied. Do not claim test execution. " +
-          "Record compact authoring command and deferral evidence in value before the completion marker, which " +
-          "stays the last content line.",
+          "Record compact authoring command and deferral evidence in value.",
     )
 
   private fun continuation(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
@@ -89,8 +89,11 @@ internal object AuditImplementFixPromptSections {
     return """
       ## Resume the saved audit repair
       Prior repair sessions changed the current checkout but left unfinished work. Reconcile their reports
-      with the latest audit and current source. Preserve completed edits and finish every remaining finding
-      in this repair run. Prior completion claims and test-only classifications remain claims to verify.
+      with the latest audit and current source. Preserve completed edits and continue the saved plan for
+      the runtime-selected criterion. Prior completion claims and test-only classifications remain claims
+      to verify. If this accepted repair output is incomplete, report the remaining production gaps so the
+      serial owner can settle the cycle and return to planning; do not start another mutation through a
+      generic continuation.
 
       $reports
 

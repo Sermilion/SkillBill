@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.audit
 
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -53,6 +54,14 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
         ),
     )
 
+  internal override val acceptanceRepairSteps =
+    AcceptanceCriterionRepairStepRoles(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+      FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID,
+    )
+
   override val slot: PhaseSlot = PhaseSlot.AUDIT
   override val strategyId: String = ID
   override val semanticRevision: Int = AuditPlanningExecutionPlanMapping.SEMANTIC_REVISION
@@ -82,7 +91,8 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
     policies.policyOf(stepId)
     return when (stepId) {
       entryStep -> AcceptanceAuditPromptSections.sections(inputs)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX -> AuditPlanFixPromptSections.sections()
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX ->
+        AuditPlanFixPromptSections.sections(inputs.currentAcceptanceCriterion)
       else -> AuditImplementFixPromptSections.sections(inputs)
     }
   }

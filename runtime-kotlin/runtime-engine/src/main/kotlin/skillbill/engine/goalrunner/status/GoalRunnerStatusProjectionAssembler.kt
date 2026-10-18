@@ -21,7 +21,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.monitoring.GOAL_FINALIZATION_OPERATION_KIND
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.planning.recovery.resolveChildExecutionLiveness
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -115,13 +114,12 @@ class GoalRunnerStatusProjectionAssembler(
       val childWorkflowId = subject.current?.workflowId?.takeIf(String::isNotBlank)
       val progress = resolveStatusWorkflowProgress(parentWorkflowId, childWorkflowId, durableRead)
       val noChange =
-        pausedNoChangeStatus(subject.state.manifest, subject.current)
-          ?: subject.completedNoChange?.let {
-            GoalRunnerNoChangeStatus(
-              GoalNoChangeState.COMPLETED_NO_CHANGE,
-              acceptedNoChangeReason(it.workflowId, durableRead) ?: "unknown",
-            )
-          }
+        subject.completedNoChange?.let {
+          GoalRunnerNoChangeStatus(
+            GoalNoChangeState.COMPLETED_NO_CHANGE,
+            acceptedNoChangeReason(it.workflowId, durableRead) ?: "unknown",
+          )
+        }
       val inputs =
         buildStatusProjectionRuntimeInputs(
           GoalStatusProjectionRuntimeAssembly(
@@ -266,7 +264,7 @@ class GoalRunnerStatusProjectionAssembler(
         childWorkflowId = childWorkflowId,
         latestWorktreeEdit = latestWorktreeEditSummary(childWorkflowId, durableRead),
         auditAcRetryCount = measuredAuditAcRetryCount(childWorkflowId, durableRead),
-        noChangeStatus = noChangeStatusFor(manifest, currentSubtask, durableRead),
+        noChangeStatus = completedNoChangeStatus(manifest, durableRead),
       ),
     )
   }
@@ -352,28 +350,6 @@ class GoalRunnerStatusProjectionAssembler(
       )
       null
     }
-
-  private fun noChangeStatusFor(
-    manifest: DecompositionManifest,
-    currentSubtask: DecompositionSubtask?,
-    durableRead: GoalRunnerStatusDurableReadTracker,
-  ): GoalRunnerNoChangeStatus? =
-    pausedNoChangeStatus(manifest, currentSubtask) ?: completedNoChangeStatus(manifest, durableRead)
-
-  private fun pausedNoChangeStatus(
-    manifest: DecompositionManifest,
-    currentSubtask: DecompositionSubtask?,
-  ): GoalRunnerNoChangeStatus? {
-    val subtask = currentSubtask ?: return null
-    val workflowId = subtask.workflowId?.takeIf(String::isNotBlank) ?: return null
-    val pause =
-      outcomeStore.terminalOutcome(workflowId, manifest.issueKey, subtask.id)?.noChangePause ?: return null
-    return GoalRunnerNoChangeStatus(
-      state = GoalNoChangeState.AWAITING_NO_CHANGE_DECISION,
-      reason = pause.reason.wireValue,
-      suggestedHandoff = pause.suggestedHandoff,
-    )
-  }
 
   private fun completedNoChangeStatus(
     manifest: DecompositionManifest,

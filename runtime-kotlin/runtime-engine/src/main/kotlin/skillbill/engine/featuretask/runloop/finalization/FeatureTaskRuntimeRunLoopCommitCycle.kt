@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinaliseRequest
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoff
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
@@ -40,11 +41,14 @@ import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
 import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import java.security.MessageDigest
 
 private data class FinaliseSubtaskArgs(
   val branch: String,
@@ -65,6 +69,54 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
       FeatureTaskRuntimePhaseStartReentry.FIRST_VISIT,
     )
     return settle(run, iteration)
+  }
+
+  internal fun PhaseRuntimeFinalizationContext.publishMonitorRepair(
+    run: PhaseRun,
+    publicationPhaseId: String,
+  ): String? {
+    val ledger =
+      recorder.loadPhaseLedger(request.workflowId)
+        ?: return "Could not read the publication ledger before publishing the monitor repair."
+    val publicationAttempt =
+      (ledger.filter { it.phaseId == publicationPhaseId }.maxOfOrNull { it.attemptCount } ?: 0) + 1
+    val publication =
+      FeatureTaskRuntimePhaseLedgerRequest(
+        workflowId = request.workflowId,
+        action = FeatureTaskRuntimePhaseLedgerAction.START,
+        phaseId = publicationPhaseId,
+        attemptCount = publicationAttempt,
+        resolvedAgentId = run.resolvedAgent.resolvedAgentId,
+      )
+    if (!recorder.appendLedgerEntry(publication)) return "Could not record the monitor repair publication start."
+    val resolved = recorder.loadResolvedBranch(request.workflowId)
+    val base = gitOperations.baseBranchOrDefault(request.repoRoot, resolved?.baseBranch)
+    val branch = requirePublishableBranch(resolved?.branch, base)
+    val result = InMemoryCommitPush(gitOperations, request.repoRoot).run(branch, request.issueKey)
+    if (result !is WorkflowGitOperationResult.Ok) return result.error
+    val output =
+      runtimeOwnedCommitPushOutput(
+        publicationPhaseId,
+        FeatureTaskRuntimeCommitPushReceipt(result.value, branch, base, pushed = true),
+      ).encodeToByteArray()
+    recorder.retainProducerOutput(
+      ProducerOutputEvidence(
+        workflowId = request.workflowId,
+        phaseId = publicationPhaseId,
+        attempt = publicationAttempt,
+        agentId = run.resolvedAgent.resolvedAgentId,
+        model = run.modelDirective?.model ?: "unspecified",
+        recordedAt = clock.instant(),
+        byteSize = output.size.toLong(),
+        sha256 = MessageDigest.getInstance("SHA-256").digest(output).joinToString("") { "%02x".format(it) },
+        payload = output,
+      ),
+    )
+    return if (recorder.appendLedgerEntry(publication.copy(action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE))) {
+      null
+    } else {
+      "Could not record the completed monitor repair publication."
+    }
   }
 
   internal fun runtimeOwnedCommitPushOutput(

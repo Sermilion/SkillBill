@@ -21,6 +21,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 import java.time.ZoneOffset
 
 private const val COMPLETED_UPSTREAM_MISSING_OUTPUT_BLOCK_REASON = "completed_upstream_missing_output"
@@ -116,7 +117,7 @@ fun completedUpstreamRepairRetryEntry(request: CompletedUpstreamRepairRequest): 
 fun settledPhaseOutputs(
   phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
 ): List<FeatureTaskRuntimePhaseOutput> =
-  phaseRecords.values.mapNotNull { record ->
+  phaseRecords.withoutPlanSubtaskUnitRecords().values.mapNotNull { record ->
     record.outputArtifact?.takeIf(String::isNotBlank)?.let { artifact ->
       FeatureTaskRuntimePhaseOutput(
         phaseId = record.phaseId,

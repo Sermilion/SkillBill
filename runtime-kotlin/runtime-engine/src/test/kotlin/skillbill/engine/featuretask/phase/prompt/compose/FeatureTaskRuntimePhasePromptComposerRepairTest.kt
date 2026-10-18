@@ -9,9 +9,10 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerRepairTest {
   @Test
-  fun `audit prompt carries satisfied criteria forward without rechecking them`() {
+  fun `audits never re-check criteria an earlier audit accepted`() {
     val auditPrompt = composePromptForPhase("audit")
-    assertContains(auditPrompt, "inspect only the unresolved criteria in the last accepted audit report")
+    assertContains(auditPrompt, "Criteria accepted by an earlier audit stay accepted and are not re-checked.")
+    assertFalse(auditPrompt.contains("including criteria previously accepted"))
     assertTrue(!auditPrompt.contains("prior_gap_memory"))
     assertTrue(!auditPrompt.contains("Prior-gap memory"))
   }
@@ -42,7 +43,7 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
     assertFalse(auditPrompt.contains("non_blocking_findings"))
     assertContains(
       auditPrompt,
-      "remaining acceptance criteria in prose",
+      "Report source gaps and conclusions in ordinary prose",
       false,
       "audit states its open criteria in prose",
     )

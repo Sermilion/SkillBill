@@ -1,6 +1,6 @@
 ---
 name: skill-bill
-description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor commits, pushes, watches CI, and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
+description: "Run governed feature work with /skill-bill <intake>, or explicitly requested standalone tasks. Phases: /skill-bill phase:plan <intake> prepares a spec bundle; /skill-bill phase:review reports code findings; /skill-bill phase:validation runs and repairs project checks, lint, and formatting; /skill-bill phase:pr commits, pushes, opens or updates a PR, and monitors CI; /skill-bill phase:monitor watches an exact open PR's CI from an owned temporary worktree and repairs failed checks or merge conflicts. Operations: /skill-bill operation:update-check checks for updates; /skill-bill operation:release bump:<patch|minor|major> proposes and publishes a release; /skill-bill operation:unit-test-value-check reviews test value; /skill-bill operation:feature-guard <intake> adds a feature flag; /skill-bill operation:feature-guard-cleanup <intake> removes a stabilized flag; /skill-bill operation:pr-review-fix proposes and applies selected PR feedback fixes; /skill-bill operation:verify <intake> audits confirmed acceptance criteria."
 ---
 
 # Skill Bill Dispatcher
@@ -54,6 +54,11 @@ Pick the route from the operator's explicit request. Without a standalone phase
 or operation request, use the full-run route. `phase:<name>` may come before or
 after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 
+An existing spec file or bundle directory is full-run intake. Planning-only
+instructions recorded in that spec describe the earlier planning invocation;
+they do not turn the current full-run request into `phase:plan`. Only the
+operator's current request selects a standalone phase or operation.
+
 | Invocation | Route | Intake |
 | --- | --- | --- |
 | `/skill-bill <intake>` | full run: Intake, Issue resolution, Launch, Relay | required |
@@ -74,8 +79,10 @@ after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 `phase:plan` is a durable, resumable plan: it seeds the parent spec, opens a
 plan workflow, stops after the verified spec bundle, and prints the bundle
 paths, the plan workflow id, and `skill-bill <KEY>`. Running the full run for
-that key later finishes an incomplete plan and then executes the goal. The
-dispatcher never invokes `phase plan` itself.
+that key later finishes an incomplete plan and then executes the goal. The full
+run plans new work through the same plan skeleton (intake, preplan, plan), so a
+single feature is a one-subtask bundle and there is no separate single-feature
+run. The dispatcher never invokes `phase plan` itself.
 
 If `phase:plan` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. `phase:verify` stops
@@ -155,6 +162,14 @@ workflow, or edit database rows. If the persisted workflow references a missing
 spec, launch with the issue reference so the runtime can report its recovery
 requirements. An explicit `phase:plan` reuses a readable local spec but does not
 resume a goal or inspect workflow state.
+
+A decomposition manifest already present is executable intake. Launch the full
+runtime directly, without checking it through `phase plan` or asking the operator
+to run `skill-bill <KEY>`. If this full-run request was mistakenly sent to
+`phase plan` and it refused because the manifest exists, correct the dispatch by
+launching the full runtime with the same intake and forwarded flags. That
+correction needs no new permission and does not apply to an explicit planning-only
+request or to other refusal reasons.
 
 Only when neither a local spec nor a matching persisted workflow exists and
 the operator supplied a tracker reference without requirements, fetch
@@ -258,21 +273,9 @@ output verbatim, adding nothing. Do not poll, sleep, tail logs, re-read status,
 launch an observer, or compose monitoring, completion, summary, or progress
 output. Run goal status only for the targeted intake lookup above or when the user explicitly asks.
 
-The exception is a goal run that exits with `awaiting_no_change_decision` (its
-last line reads `awaiting_no_change_decision: subtask:<N> reason:<reason>`). The
-subtask's implementer claimed that no code change is needed and an audit confirmed
-the claim, so the run is paused for the operator. Show the reported reason, the
-verdict and evidence for each criterion, the citations, the boundary trace, the
-owning system, and the suggested handoff, taken from the pause detail printed
-above that line. Ask the operator once whether to accept the no-change result
-(`accept_and_advance`), retry the fix with instructions (`retry_fix`), or abandon
-the subtask (`abandon_subtask`). On the answer, run
-`skill-bill goal operator-decision <ISSUE-KEY> --subtask <N> --decision <choice>`,
-adding `--instructions "<text>"` only for `retry_fix` and passing the operator's
-instructions verbatim. Then resume the goal with `skill-bill goal <ISSUE-KEY>` and
-relay its output verbatim. Never run `operator-decision` without the operator's
-answer, never choose a decision for the operator, and never ask again once the
-operator has answered.
+An audit-confirmed no-change claim continues through the remaining workflow phases
+without an operator approval. Existing undecided no-change pauses resume through
+the audit and the same remaining phases.
 
 ## Phase Forms
 
@@ -340,21 +343,79 @@ workflow row, branch, or checkpoint commit.
 
 ## Phase Monitor
 
-`phase:monitor` watches CI on the open PR of the checked-out branch. An issue key
-or PR URL intake names the work; it does not switch branches. The phase composes
-`commit_push` followed by `monitor`, so it commits and pushes any pending changes
-first, like `phase:pr`. When every check passes, is skipped, or is cancelled, the
-phase completes. It also completes when the PR is merged, regardless of failing
-or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
-while other checks are pending. A merge conflict starts the same repair on that
-poll, even when no checks are reported: the fix merges the base branch and
-resolves every conflict. The repair agent then discovers and runs the
-project's local checks, as validation does, and keeps repairing until they
-pass. A repair that blocks is not pushed. Once it completes, the runtime
-commits and pushes the repair, and monitor watches again, up to three
-fix attempts. The phase then blocks
-with the last failure and the last fix summary. When the branch has no open PR,
-the phase completes and reports that there is nothing to monitor.
+`phase:monitor` watches CI on one exact open PR. Its intake is a single
+`https://<host>/<owner>/<repo>/pull/<number>` URL, a single issue key, or nothing. A
+URL names that PR. An issue key selects the one PR that mentions it in its title,
+body, or head branch, preferring open PRs. With no intake, the PR whose head is the
+checked-out branch is selected. Several matching PRs, a malformed or multi-token
+intake, an unwritable head, or incomplete PR data refuse the run and name the
+candidates or the defect. Resolution only reads PR data. It never checks out the
+target in the caller checkout, and the caller's branch, index, and uncommitted work
+stay untouched, so monitors for different PRs that share a head branch name run
+concurrently without colliding. The runtime fetches the PR head and base at pinned
+commits and creates an owned temporary worktree and branch under the caller's
+`.git/skill-bill/standalone-monitor` directory. All repair work runs in that
+worktree. The phase starts by watching CI and publishes nothing unless a repair
+is needed. It does not commit or push pending caller changes. A repair that settles
+completed is committed and pushed to the PR's head repository and branch only if
+the remote head is still the pinned commit, never to the base repository. A
+teammate push, a moved head, or a lost ownership fence blocks publication and
+keeps the repair. A merged PR completes without work. A closed, unmerged PR
+blocks. A selector with no open PR completes with a report that names the selector
+and that there is nothing to monitor. These early outcomes create no worktree. When every check passes, is skipped, or is
+cancelled, the phase completes. It also completes when the PR is merged, regardless
+of failing or pending checks. When a check fails, `monitor_fix` starts repair on that poll even
+while other checks are pending. This initial failure starts repair and does not
+count against the failed repair budget. A merge conflict starts merge repair on
+that poll, even when no checks are reported: the fix merges the base branch and
+resolves every conflict without spending a CI repair attempt. For failing checks,
+the repair agent reads each failing job's CI logs, identifies the failed command or assertion, and traces the cause
+through the repository before editing. A passing local rerun does not resolve
+the CI failure. Intermittent failures require investigation of timing,
+concurrency, isolation, or environment differences as the evidence warrants.
+Completion requires a repository fix and passing local project checks.
+If investigation cannot establish a fix, the agent blocks with the failed check
+URL, inspected evidence, and unresolved cause or evidence gap. It cannot complete
+with an unchanged tree merely because local checks pass. A repair that blocks is
+not pushed. Once it completes, the runtime commits and pushes the repair, then
+matches CI results to that published commit. Each published repair commit counts
+once after CI reports a failure. Pending, stale, unassociated, or absent checks
+do not count. The runtime observes the third repair commit's CI result and blocks
+only if that result fails. Merge-only work does not spend a CI repair attempt.
+The cap report names failed repair commits and their check links from recorded
+evidence.
+
+Admission allows one monitor per PR. A second monitor for a PR with a live owner
+blocks and names that owner. A stale owner blocks and reports its owner token. After
+confirming the process is gone, rerun with the exact PR URL and
+`--recover-stale-owner <owner-token>`. The option applies only to `phase monitor`,
+needs an explicit target, and is refused when the token is malformed or does not
+match the recorded owner. Recovery never takes over a live owner or a worktree with
+unfinished work.
+
+Status, events, and the printed report name the exact PR URL, repository, head
+branch and head repository, invocation, owned worktree, and the cleanup outcome. A clean
+run releases the worktree and branch. A worktree with uncommitted or untracked
+changes, unpublished commits, unknown publication state, unowned resources, or a
+failed cleanup is retained, and the report names its path and reason. Retained work
+blocks a fresh monitor of the same PR until it is resolved. A hard kill leaves no
+cleanup record and is handled as stale recovery, not as guaranteed cleanup.
+Canceling or rerunning a monitor from the desktop targets its exact invocation and
+PR URL. A rerun launches `phase monitor <that URL>` without checking the head
+branch out in the caller checkout. Cancel stops the owning process and keeps
+retained work. Goal finalization and `phase:pr` keep their branch-based monitoring
+unchanged.
+
+While CI is pending, progress reports identify the current PR and include available
+check links. Describe queued checks as waiting, and name running work only when the
+CI observation reports it. Explain the next useful event, such as a check starting
+or settling. Report runner capacity only when an observation provides evidence;
+otherwise say it is unavailable. Do not infer missing commit or check details, or
+use administrative APIs to fill gaps. A live child means the process is active,
+not that source files changed. Local checks can establish a local result, but only
+remote CI observations establish the PR's CI result. Repeated waiting updates can
+refresh progress every 30 seconds; they do not change a verdict, deadline, or repair
+attempt count.
 
 ## Phase Validation
 

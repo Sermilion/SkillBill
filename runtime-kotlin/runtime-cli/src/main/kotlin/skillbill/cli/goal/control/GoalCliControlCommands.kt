@@ -71,7 +71,11 @@ class GoalResumeCommand(
   private val goalRunnerStatusService: GoalRunnerStatusService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
-) : DocumentedCliCommand("resume", "Clear a durable pause for a goal without starting child runs.") {
+) : DocumentedCliCommand(
+    "resume",
+    "Clear known stale resume wedges (as goal repair --apply does) and the durable pause for a goal " +
+      "without starting child runs.",
+  ) {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val repoRoot by option("--repo-root", help = "Repository root that owns the goal.")
 
@@ -170,8 +174,8 @@ class GoalReplanCommand(
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "replan",
-    "Discard one subtask plan while preserving sibling plans, shared preplan, and runtime state; " +
-      "pass --include-shared-preplan to also discard the shared preplan and cascade non-terminal sibling plans.",
+    "Discard one subtask plan from the plan workflow while preserving sibling plans and runtime state; " +
+      "the bundle's shared preplan cannot be discarded here, so re-run `phase plan` to re-plan the whole goal.",
   ) {
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val subtaskId by option(
@@ -180,9 +184,7 @@ class GoalReplanCommand(
   ).int().required()
   private val includeSharedPreplan by option(
     "--include-shared-preplan",
-    help =
-      "Also discard the goal-wide shared preplan and cascade sibling plans that are not " +
-        "complete with a commit_sha (planning rows only; runtime state and terminal plan rows stay).",
+    help = "Refused: a plan-workflow goal keeps one preplan for its whole bundle.",
   ).flag(default = false)
   private val repoRoot by option("--repo-root", help = "Repository root for the goal.")
 

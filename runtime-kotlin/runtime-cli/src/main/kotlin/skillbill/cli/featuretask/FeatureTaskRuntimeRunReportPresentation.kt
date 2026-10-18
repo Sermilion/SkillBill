@@ -104,6 +104,8 @@ internal fun runtimeRunText(report: FeatureTaskRuntimeRunReport): String =
         report.subtaskOutcome?.let { appendSubtaskOutcome(it) }
       }
       is FeatureTaskRuntimeRunReport.Paused -> {
+        appendLine("paused_phase: ${report.pausedPhase}")
+        appendLine("pause_reason: ${report.pauseReason}")
         report.subtaskOutcome?.let { appendSubtaskOutcome(it) }
       }
       is FeatureTaskRuntimeRunReport.Decomposed -> {

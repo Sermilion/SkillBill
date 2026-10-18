@@ -41,13 +41,16 @@ import kotlin.test.assertTrue
 
 class SkillBillUninstallDestructiveSemanticsTest {
   @Test
-  fun `T3-04 application uninstall removes state root and does not use shell preservation`() {
+  fun `T3-04 application uninstall removes install state but keeps databases and backups`() {
     val home = Files.createTempDirectory("skillbill-app-uninstall-home")
     val stateRoot = home.resolve(".skill-bill")
     val stateDb = stateRoot.resolve("review-metrics.db")
-    Files.createDirectories(stateRoot.resolve("runtime"))
+    val runtimeDir = stateRoot.resolve("runtime")
+    val backups = stateRoot.resolve("backups")
+    Files.createDirectories(runtimeDir)
+    Files.createDirectories(backups)
     Files.writeString(stateDb, "durable\n")
-    val fileSystem = LocalUninstallPathsPort(home)
+    val fileSystem = LocalUninstallPathsPort()
     val service =
       SkillBillUninstallService(
         installAgentService = InstallAgentService(DestructiveSemanticsInstallAgentTargetPort),
@@ -73,16 +76,17 @@ class SkillBillUninstallDestructiveSemanticsTest {
     val result = service.apply(plan)
 
     assertFalse(result.failed)
-    assertTrue(fileSystem.removedStateRoot)
-    assertFalse(Files.exists(stateRoot))
-    assertFalse(Files.exists(stateDb))
+    assertFalse(Files.exists(runtimeDir))
+    assertTrue(Files.exists(stateDb))
+    assertTrue(Files.exists(backups))
   }
 
   @Test
-  fun `T3-04 failed state root removal reports degradation instead of silent success`() {
+  fun `T3-04 failed install state removal reports degradation instead of silent success`() {
     val home = Files.createTempDirectory("skillbill-app-uninstall-partial")
     val stateRoot = home.resolve(".skill-bill")
-    Files.createDirectories(stateRoot)
+    val runtimeDir = stateRoot.resolve("runtime")
+    Files.createDirectories(runtimeDir)
     Files.writeString(stateRoot.resolve("review-metrics.db"), "durable\n")
     val fileSystem = FailingStateRootUninstallPathsPort(home)
     val service =
@@ -110,17 +114,14 @@ class SkillBillUninstallDestructiveSemanticsTest {
     val result = service.apply(plan)
 
     assertTrue(result.failed)
-    assertTrue(Files.exists(stateRoot))
-    assertTrue(result.warnings.any { it.contains(stateRoot.toString()) })
+    assertTrue(Files.exists(runtimeDir))
+    assertTrue(result.warnings.any { it.contains(runtimeDir.toString()) })
   }
 }
 
-private class LocalUninstallPathsPort(
-  private val home: Path,
-) : UninstallPathsPort {
-  var removedStateRoot = false
-
-  override fun listImmediateDirectoryNames(root: Path): List<String> = emptyList()
+private class LocalUninstallPathsPort : UninstallPathsPort {
+  override fun listImmediateDirectoryNames(root: Path): List<String> =
+    if (Files.isDirectory(root)) root.toFile().list().orEmpty().toList() else emptyList()
 
   override fun exists(path: Path): Boolean = Files.exists(path)
 
@@ -131,9 +132,6 @@ private class LocalUninstallPathsPort(
   override fun deleteIfExists(path: Path): Boolean = Files.deleteIfExists(path)
 
   override fun removeTree(path: Path): List<Path> {
-    if (path == home.resolve(".skill-bill")) {
-      removedStateRoot = true
-    }
     if (!Files.exists(path)) {
       return emptyList()
     }
@@ -151,7 +149,8 @@ private class LocalUninstallPathsPort(
 private class FailingStateRootUninstallPathsPort(
   private val home: Path,
 ) : UninstallPathsPort {
-  override fun listImmediateDirectoryNames(root: Path): List<String> = emptyList()
+  override fun listImmediateDirectoryNames(root: Path): List<String> =
+    if (root == home.resolve(".skill-bill")) listOf("runtime", "review-metrics.db") else emptyList()
 
   override fun exists(path: Path): Boolean = Files.exists(path)
 
@@ -162,8 +161,8 @@ private class FailingStateRootUninstallPathsPort(
   override fun deleteIfExists(path: Path): Boolean = true
 
   override fun removeTree(path: Path): List<Path> {
-    if (path == home.resolve(".skill-bill")) {
-      throw IOException("state root not removable")
+    if (path == home.resolve(".skill-bill").resolve("runtime")) {
+      throw IOException("install state not removable")
     }
     return emptyList()
   }

@@ -19,10 +19,12 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -150,10 +152,10 @@ class FeatureTaskRuntimeStatusServiceTest {
 
     assertEquals("LARGE", projection.featureSize)
     assertEquals(0, projection.completeCount)
-    assertEquals(17, projection.pendingCount)
+    assertEquals(18, projection.pendingCount)
     assertEquals(0, projection.blockedCount)
     assertEquals("preplan", projection.currentPhaseId)
-    assertEquals(List(17) { "pending" }, projection.phases.map { it.status })
+    assertEquals(List(18) { "pending" }, projection.phases.map { it.status })
   }
 
   @Test
@@ -344,6 +346,7 @@ class FeatureTaskRuntimeStatusServiceTest {
     harness.recordRunning("implement", attemptCount = 3)
     harness.recordCompleted("preplan", attemptCount = 1)
     harness.recordCompleted("plan", attemptCount = 1)
+    harness.recordCompleted("plan_subtasks", attemptCount = 1)
     harness.recordLedger(FeatureTaskRuntimePhaseLedgerAction.START, "implement", attemptCount = 1)
     harness.recordLedger(FeatureTaskRuntimePhaseLedgerAction.BLOCKED, "implement", attemptCount = 3)
 
@@ -352,7 +355,7 @@ class FeatureTaskRuntimeStatusServiceTest {
         harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
       )
 
-    assertEquals(2, projection.completeCount)
+    assertEquals(3, projection.completeCount)
     assertEquals(1, projection.blockedCount)
     assertEquals("implement", projection.currentPhaseId)
     assertEquals("completed", projection.phases.single { it.phaseId == "plan" }.status)
@@ -454,6 +457,7 @@ class FeatureTaskRuntimeStatusServiceTest {
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recordCompleted("preplan", attemptCount = 1)
     harness.recordCompleted("plan", attemptCount = 1)
+    harness.recordCompleted("plan_subtasks", attemptCount = 1)
     harness.recordBlocked("implement", attemptCount = 3, "fix loop exhausted")
     harness.recordLedger(FeatureTaskRuntimePhaseLedgerAction.START, "implement", attemptCount = 1)
 
@@ -471,7 +475,7 @@ class FeatureTaskRuntimeStatusServiceTest {
   fun `legacy audit gap loop edge does not reopen implement as current`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "review")
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit", "review")
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recordLoopEdge(
       phaseId = "implement",
@@ -492,7 +496,7 @@ class FeatureTaskRuntimeStatusServiceTest {
   fun `ledger-only review fix projects implement fix as current`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "review", "verify_findings")
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit", "review", "verify_findings")
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recordLoopEdge(
       phaseId = "implement_fix",
@@ -616,6 +620,7 @@ class FeatureTaskRuntimeStatusServiceTest {
     listOf(
       "preplan",
       "plan",
+      "plan_subtasks",
       "implement",
       "simplify",
       "audit",
@@ -634,7 +639,7 @@ class FeatureTaskRuntimeStatusServiceTest {
         harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
       )
 
-    assertEquals(12, projection.completeCount)
+    assertEquals(13, projection.completeCount)
     assertEquals("pending", projection.phases.single { it.phaseId == "implement_fix" }.status)
     assertEquals("pending", projection.phases.single { it.phaseId == "monitor_fix" }.status)
     assertNull(projection.currentPhaseId, "a completed forward run reports no current phase, not implement_fix")
@@ -774,7 +779,8 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `first audit pass is a pass not semantic loop 1 when no audit-gap edge has fired`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify").forEach { harness.recordCompleted(it, attemptCount = 1) }
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recordRunning("audit", attemptCount = 1)
 
     val projection =
@@ -794,7 +800,8 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `legacy audit gap loop edge does not override running audit as current`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify").forEach { harness.recordCompleted(it, attemptCount = 1) }
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recordRunning("audit", attemptCount = 2)
     harness.recordLoopEdge(
       phaseId = "implement",
@@ -816,10 +823,53 @@ class FeatureTaskRuntimeStatusAttributionTest {
   }
 
   @Test
+  fun `a resumed audit whose record still reads completed stays current instead of advancing to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.recordCompleted("audit", attemptCount = 2)
+    harness.recordLedger(START, "audit", attemptCount = 1)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 1)
+    harness.recordLedger(RESUME, "audit", attemptCount = 2)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 2)
+    harness.recordLedger(RESUME, "audit", attemptCount = 3)
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("audit", projection.currentPhaseId)
+    assertEquals("pending", projection.phases.single { it.phaseId == "review" }.status)
+  }
+
+  @Test
+  fun `a settled audit attempt lets the current phase advance to review`() {
+    val harness = statusHarness()
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
+    harness.recordCompleted("audit", attemptCount = 2)
+    harness.recordLedger(START, "audit", attemptCount = 1)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 1)
+    harness.recordLedger(RESUME, "audit", attemptCount = 2)
+    harness.recordLedger(COMPLETE, "audit", attemptCount = 2)
+
+    val projection =
+      requireNotNull(
+        harness.service.status(FeatureTaskRuntimeStatusRequest(workflowId = WORKFLOW_ID)),
+      )
+
+    assertEquals("review", projection.currentPhaseId)
+  }
+
+  @Test
   fun `legacy blocked audit gap record projects pending not blocked`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify").forEach { harness.recordCompleted(it, attemptCount = 1) }
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -850,7 +900,8 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `audit after legacy gap record reports pass execution not semantic loop`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify").forEach { harness.recordCompleted(it, attemptCount = 1) }
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify")
+      .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recordLoopEdge(
       phaseId = "implement",
       attemptCount = 1,
@@ -886,7 +937,7 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `review pass comes from durable review_pass_number not attempt_count`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit")
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit")
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
@@ -915,7 +966,7 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `stale completed review pass is omitted after review_fix implement_fix completes`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "review", "verify_findings")
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit", "review", "verify_findings")
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
@@ -965,7 +1016,7 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `completed review pass is omitted when a later phase is current`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "review", "verify_findings")
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit", "review", "verify_findings")
       .forEach { harness.recordCompleted(it, attemptCount = 1) }
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
@@ -996,7 +1047,7 @@ class FeatureTaskRuntimeStatusAttributionTest {
   fun `validation gate run count is gate_run after the gate begins and never invents a total`() {
     val harness = statusHarness()
     harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "review", "verify_findings").forEach {
+    listOf("preplan", "plan", "plan_subtasks", "implement", "simplify", "audit", "review", "verify_findings").forEach {
       harness.recordCompleted(it, attemptCount = 1)
     }
     harness.recordRunning("validate", attemptCount = 2)
@@ -1206,7 +1257,11 @@ internal fun statusHarness(): StatusHarness {
   val runInvariantsStore =
     FeatureTaskRuntimeRunInvariantsStore(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, StatusNoopSnapshotValidator),
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
       testHarnessClock,
     )
   return StatusHarness(
@@ -1215,6 +1270,11 @@ internal fun statusHarness(): StatusHarness {
     runInvariantsStore,
     FeatureTaskRuntimeStatusService(
       recorder,
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        StatusNoopSnapshotValidator,
+        featureTaskRuntimeWireArtifactValidatorForTest(),
+      ),
       runInvariantsStore,
       decomposeTerminalRecorder,
     ),
@@ -1384,6 +1444,9 @@ private class StatusFakeDatabaseSessionFactory(
   override fun <T> read(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unitOfWork())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 

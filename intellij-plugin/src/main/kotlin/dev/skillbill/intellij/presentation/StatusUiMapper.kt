@@ -177,10 +177,6 @@ object StatusUiMapper {
                         outcome.progressCompleted,
                         outcome.currentStepId,
                     ),
-
-
-
-
                     currentModel = outcome.currentModel,
                     currentPhaseExecution = outcome.currentPhaseExecution,
                     lastAgentActivityAt = outcome.lastAgentActivityAt,

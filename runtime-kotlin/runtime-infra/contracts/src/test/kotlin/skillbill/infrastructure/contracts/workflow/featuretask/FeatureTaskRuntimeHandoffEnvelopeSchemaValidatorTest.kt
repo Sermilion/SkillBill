@@ -13,12 +13,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
-  private val validator = FeatureTaskRuntimeWireArtifactValidator()
+  private val validator =
+    FeatureTaskRuntimeWireArtifactValidator(
+      FeatureTaskRuntimeExecutionPlanSchemaValidator(),
+      ContractFeatureTaskRuntimePhaseOutputMigration(),
+    )
 
   @Test
   fun `every closed wire artifact kind dispatches to its schema validator`() {
     val expectedErrors =
       mapOf(
+        FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE to
+          "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA",
+        FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT to
+          "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_AUDIT_RESULT_SCHEMA",
+        FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_HANDOFF to
+          "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_HANDOFF_SCHEMA",
+        FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_ADOPTION to
+          "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_ADOPTION_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD to
           "FeatureTaskRuntimeFailureCode.INVALID_QUARANTINE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT to

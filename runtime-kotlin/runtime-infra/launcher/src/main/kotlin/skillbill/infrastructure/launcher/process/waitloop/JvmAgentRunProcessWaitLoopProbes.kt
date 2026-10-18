@@ -5,6 +5,7 @@ import skillbill.infrastructure.launcher.process.launch.parseWorkflowIdAndStep
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import java.util.concurrent.CancellationException
 
 internal fun ProcessWaitLoop.pollWorkflowProgress(nowNanos: Long) {
   val read = request.probes.progressProbe.readProgressToken(degradation)
@@ -122,6 +123,7 @@ internal fun ProcessWaitLoop.writeActivityLabel() {
 
 internal fun AgentRunActivityStampSink.safeStamp(label: AgentActivityLabel) {
   runCatching { stamp(label) }
+    .onFailure { failure -> if (failure is CancellationException) throw failure }
 }
 
 internal fun AgentRunWorktreeEditObserver.safeObserve() {

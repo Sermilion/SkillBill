@@ -118,4 +118,25 @@ class PhaseInvocationParserTest {
     assertTrue(error.message.orEmpty().startsWith("Phase 'plan' requires an intake"), error.message)
     assertEquals(PhaseInvocation("pr", null, null, null), PhaseInvocationParser.parse("pr", emptyList()))
   }
+
+  @Test
+  fun `stale owner recovery is accepted only for a monitor with an explicit target and a real owner token`() {
+    val token = "owner-token-0123456789"
+    val url = "https://github.com/acme/repo/pull/7"
+    PhaseInvocationParser.requireRecoverableMonitor(PhaseInvocationParser.parse("monitor", listOf(url)), token)
+    PhaseInvocationParser.requireRecoverableMonitor(PhaseInvocationParser.parse("monitor", listOf(url)), null)
+
+    fun refusal(
+      phase: String,
+      rest: List<String>,
+      candidate: String,
+    ) = assertFailsWith<UsageError> {
+      PhaseInvocationParser.requireRecoverableMonitor(PhaseInvocationParser.parse(phase, rest), candidate)
+    }.message.orEmpty()
+
+    assertContains(refusal("review", listOf("tighten"), token), "applies only to `phase monitor`")
+    assertContains(refusal("monitor", emptyList(), token), "explicit pull request target")
+    assertContains(refusal("monitor", listOf(url), "short"), "owner token a blocked monitor reported")
+    assertContains(refusal("monitor", listOf(url), "owner token with spaces"), "owner token a blocked monitor reported")
+  }
 }

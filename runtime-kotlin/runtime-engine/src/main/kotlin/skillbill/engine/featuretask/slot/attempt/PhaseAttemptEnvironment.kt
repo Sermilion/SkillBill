@@ -221,6 +221,8 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
 
   val checkpoints: PhaseRunCheckpoints
 
+  val phaseSettlementService: PhaseRunSettlements
+
   val commitPushManifestCompletion: CommitPushManifestCompletion?
 }
 

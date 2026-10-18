@@ -70,8 +70,8 @@ import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
-import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
+import skillbill.engine.goalrunner.planning.source.PREPARE_ALL_GOAL_PLANNING_SOURCE
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.supervisionEvent
@@ -79,7 +79,6 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
-import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
@@ -105,7 +104,6 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.UnaddressedFinding
-import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
@@ -118,6 +116,7 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.ACTIVE
@@ -330,6 +329,37 @@ class GoalRunnerTest {
     assertEquals(listOf("sha-1", "sha-2"), store.manifest.subtasks.map { it.commitSha })
     assertEquals(listOf(1, 2), store.newChildWorkflowSetups.map { it.subtaskId })
     assertTrue(store.newChildWorkflowSetups.all { it.reviewBaseline.reviewBaseSha == "0".repeat(40) })
+  }
+
+  @Test
+  fun `an undecided historical no-change pause resumes its child instead of asking for approval`() {
+    val recorder = goalRunnerDefaultPhaseRecorder()
+    recorder.openTestWorkflow("wfl-1", "goal-child-no-change")
+    val pause = noChangePause()
+    recorder.persistNoChangePause("wfl-1", pause)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          manifest(subtaskCount = 1)
+            .withSubtaskStatus(1, DecompositionStatus.IN_PROGRESS.wireValue, "wfl-1"),
+      )
+    val outcomes = RecordingOutcomeStore().apply { seedReviewState("wfl-1") }
+    val launcher =
+      RecordingSubtaskLauncher {
+        outcomes["wfl-1"] = completeOutcome(1)
+        launchFacts()
+      }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(phaseRecorder = recorder),
+      )
+
+    val report = runner.run(runRequest())
+
+    assertIs<GoalRunnerRunReport.Completed>(report, "$report")
+    assertEquals(1, launcher.requests.size)
+    assertEquals("audit", launcher.requests.single().skillRunRequest.goalContinuation?.lastResumableStep)
+    assertEquals(pause, recorder.loadNoChangePause("wfl-1"))
   }
 
   @Test
@@ -991,7 +1021,7 @@ class GoalRunnerValidationDepthTest {
 
 class GoalRunnerQualityGateSelectionTest {
   @Test
-  fun `three-child goal stamps build build validate`() {
+  fun `three-child goal stamps validate on every child`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 3))
     val outcomes = RecordingOutcomeStore()
     val launcher =
@@ -1006,11 +1036,7 @@ class GoalRunnerQualityGateSelectionTest {
     assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
 
     assertEquals(
-      listOf(
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-      ),
+      List(3) { FeatureTaskRuntimeQualityGateSelection.VALIDATE },
       launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
     )
   }
@@ -1037,7 +1063,7 @@ class GoalRunnerQualityGateSelectionTest {
   }
 
   @Test
-  fun `ordinal-last skipped promotes validate to previous last non-skipped`() {
+  fun `children before a skipped last child still stamp validate`() {
     val initial =
       manifest(subtaskCount = 3).copy(
         subtasks =
@@ -1047,6 +1073,33 @@ class GoalRunnerQualityGateSelectionTest {
       )
     val store = InMemoryGoalManifestStore(manifest = initial)
     val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
+        store.mutate { current -> current.withWorkflowId(subtaskId, "wfl-$subtaskId") }
+        outcomes["wfl-$subtaskId"] = completeOutcome(subtaskId)
+        launchFacts()
+      }
+    val runner = testGoalRunner(goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()))
+
+    assertIs<GoalRunnerRunReport.Completed>(runner.run(runRequest()))
+
+    assertEquals(listOf(1, 2), launcher.requests.map { it.skillRunRequest.subtaskId })
+    assertEquals(
+      List(2) { FeatureTaskRuntimeQualityGateSelection.VALIDATE },
+      launcher.requests.map { requireNotNull(it.skillRunRequest.goalContinuation).qualityGateSelection },
+    )
+  }
+
+  @Test
+  fun `resumed child keeps its recorded build selection while new children stamp validate`() {
+    val store =
+      InMemoryGoalManifestStore(
+        manifest = manifest(subtaskCount = 2).withBlockedSubtask(1, workflowId = "wfl-1", reason = "build blocked"),
+      )
+    val outcomes = RecordingOutcomeStore()
+    outcomes.seedReviewState("wfl-1")
+    outcomes.qualityGateSelections["wfl-1"] = FeatureTaskRuntimeQualityGateSelection.BUILD
     val launcher =
       RecordingSubtaskLauncher { request ->
         val subtaskId = requireNotNull(request.skillRunRequest.subtaskId)
@@ -1207,10 +1260,10 @@ class GoalRunnerLinearScratchFinalizeTest {
           pullRequestPort = RecordingPullRequestPort(),
         ).copy(
           gitOperations = git,
-          goalPlanningSweep =
-            GoalPlanningSweep { state, request ->
+          goalPlanningSource =
+            GoalPlanningSource { state, request ->
               planningBranches += git.current
-              PREPARE_ALL_GOAL_PLANNING_SWEEP.prepare(state, request)
+              PREPARE_ALL_GOAL_PLANNING_SOURCE.prepare(state, request)
             },
         ),
       )
@@ -1682,8 +1735,8 @@ class GoalRunnerLinearScratchFinalizeTest {
           pullRequestPort = pullRequests,
         ).copy(
           gitOperations = git,
-          goalPlanningSweep =
-            GoalPlanningSweep { _, _ -> error("Archived completed specs must not be read for planning.") },
+          goalPlanningSource =
+            GoalPlanningSource { _, _ -> error("Archived completed specs must not be read for planning.") },
           pullRequestIdentityLookup =
             PullRequestIdentityLookup { _, _ ->
               if (merged) PullRequestIdentity.Merged(url, 463) else PullRequestIdentity.Found(url, 463)
@@ -3127,6 +3180,8 @@ private object ParentLiveChildDeadSupervisor : FeatureTaskRuntimeWorkerSuperviso
       FeatureTaskRuntimeProcessInspection.ExactLive
     }
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,
@@ -4243,9 +4298,6 @@ internal class InMemoryGoalManifestStore(
   var scopedReplanCount: Int = 0
     private set
   var clearedChildSubtaskIdsOnReplan: List<Int> = emptyList()
-  var lastIncludeSharedPreplan: Boolean? = null
-    private set
-  var forceSharedDigestMismatchOnReplan: Boolean = false
 
   override fun planningStatus(
     parentWorkflowId: String,
@@ -4284,54 +4336,14 @@ internal class InMemoryGoalManifestStore(
     )
   }
 
-  override fun sharedPreplanPayloadSha256(parentWorkflowId: String): String? =
-    sharedPreplanPayloadSha256ForTest.takeIf { sharedPreplanPrepared }
-
   override fun saveScopedReplan(
     state: GoalRunnerManifestState,
     subtaskId: Int,
     options: GoalRunnerScopedReplanOptions,
   ): GoalRunnerScopedReplanWriteResult {
     scopedReplanCount += 1
-    lastIncludeSharedPreplan = options.includeSharedPreplan
     val before = plannedSubtaskIds.sorted()
-    val sharedBefore = sharedPreplanPrepared
-    val cascadedIds: List<Int>
-    val deleted: Int
-    if (options.includeSharedPreplan) {
-      cascadedIds =
-        cascadeEligiblePlanSubtaskIds(
-          plannedIds = before.filter { it != subtaskId },
-          subtasks = state.manifest.subtasks,
-        )
-      val retained = before.filter { it != subtaskId && it !in cascadedIds }
-      if (options.expectedSharedPayloadSha256 != null) {
-        if (forceSharedDigestMismatchOnReplan ||
-          options.expectedSharedPayloadSha256 != sharedPreplanPayloadSha256ForTest
-        ) {
-          throw incompatibleGoalPlanningPreparationRecoveryError(
-            state.parentWorkflowId,
-            0,
-            "shared preplan changed after it was observed for discard",
-          )
-        }
-        sharedPreplanPrepared = false
-        if (retained.isEmpty()) {
-          plannedSubtaskIds.clear()
-          sharedPreplanPayloadSha256ForTest = null
-          deleted = if (subtaskId in before) 1 else 0
-        } else {
-          cascadedIds.forEach { plannedSubtaskIds.remove(it) }
-          deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-        }
-      } else {
-        cascadedIds.forEach { plannedSubtaskIds.remove(it) }
-        deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-      }
-    } else {
-      cascadedIds = emptyList()
-      deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
-    }
+    val deleted = if (plannedSubtaskIds.remove(subtaskId)) 1 else 0
     val saved = save(state)
     return GoalRunnerScopedReplanWriteResult(
       state = saved,
@@ -4339,9 +4351,6 @@ internal class InMemoryGoalManifestStore(
       plannedSubtaskIdsBefore = before,
       plannedSubtaskIdsAfter = plannedSubtaskIds.sorted(),
       sharedPreplanPrepared = sharedPreplanPrepared,
-      sharedPreplanPreparedBefore = sharedBefore,
-      discardedSharedPreplan = sharedBefore && !sharedPreplanPrepared,
-      cascadedPlanSubtaskIds = cascadedIds,
       clearedChildSubtaskIds = clearedChildSubtaskIdsOnReplan,
     )
   }
@@ -4932,6 +4941,7 @@ class GoalRunnerLaunchReconcilerWiringTest {
 internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   private val outcomes: MutableMap<String, GoalRunnerStoredOutcome> = mutableMapOf()
   private val reviewStates: MutableMap<String, GoalSubtaskReviewState> = mutableMapOf()
+  val qualityGateSelections: MutableMap<String, FeatureTaskRuntimeQualityGateSelection> = mutableMapOf()
   val unemittedReviewPasses: MutableMap<String, List<GoalSubtaskReviewPassResult>> = mutableMapOf()
   val acknowledgedReviewPasses: MutableList<Pair<String, Int>> = mutableListOf()
   val progresses: MutableMap<String, GoalRunnerWorkflowProgress> = mutableMapOf()
@@ -4972,6 +4982,9 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   }
 
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = reviewStates[workflowId]
+
+  override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
+    qualityGateSelections[workflowId]
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     unemittedReviewPasses[workflowId].orEmpty()
@@ -5766,6 +5779,9 @@ private class GoalStatusPhaseLedgerHarness {
 private class GoalStatusSeedableDatabase(
   private val repository: GoalStatusSeedableWorkflowStateRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   private val dbPath = Path.of("/fake/goal-status-phase-ledger.db")
 
   override fun resolveDbPath(): Path = dbPath
@@ -5901,6 +5917,9 @@ private object GoalTestEmptyDatabase : DatabaseSessionFactory {
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = this@GoalTestEmptyDatabase.dbPath
@@ -5943,6 +5962,9 @@ private class GoalTestPlanningDatabase : DatabaseSessionFactory {
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     return block(unitOfWork())
   }
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {

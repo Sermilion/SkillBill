@@ -728,7 +728,28 @@ echo ""
 echo "--- scenario 9: replay automatically installs the checksum-verified desktop app ---"
 FAKE_HOME="$(mktemp -d)"
 seed_selection_json "$FAKE_HOME"
+STATE_FIXTURE="$(mktemp -d)"
+WORK_TMPDIRS+=("$STATE_FIXTURE")
+STATE_FILES=(
+  "smoke-workflow.db"
+  "smoke-review.db"
+  ".custom.db"
+  "smoke-workflow.db-wal"
+  "smoke-workflow.db-shm"
+  "smoke-workflow.db-journal"
+  "backups/snapshot.db"
+  "backups/maintenance-report.json"
+)
+mkdir -p "$STATE_FIXTURE/backups" "$FAKE_HOME/.skill-bill"
+for state_file in "${STATE_FILES[@]}"; do
+  printf 'retained data for %s\n' "$state_file" > "$STATE_FIXTURE/$state_file"
+done
+cp -R "$STATE_FIXTURE/." "$FAKE_HOME/.skill-bill/"
 run_install "$FAKE_HOME"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "reinstall changed $state_file"
+done
+pass "reinstall preserves databases, SQLite journals, and backups"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 assert_file_exists "desktop app launcher installed" "$DESKTOP_EXECUTABLE"
@@ -743,16 +764,33 @@ if [[ "$TOKEN" == "linux-x64" ]]; then
 fi
 
 echo ""
-echo "--- scenario 10: explicit no preserves an existing desktop app during upgrade ---"
+echo "--- scenario 10: desktop skip is rejected before install mutation ---"
 DESKTOP_APP="$(desktop_app_target "$FAKE_HOME")"
 DESKTOP_EXECUTABLE="$(desktop_app_executable "$DESKTOP_APP")"
 mkdir -p "$(dirname "$DESKTOP_EXECUTABLE")"
 printf 'existing app\n' > "$DESKTOP_EXECUTABLE"
-run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app
+if run_install "$FAKE_HOME" SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=0 --no-desktop-app; then
+  fail "installer accepted a desktop skip option"
+fi
 [[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] && \
-  pass "explicitly skipping the app keeps the existing desktop install" || \
-  fail "explicitly skipping the app changed the existing desktop install"
+  pass "rejecting desktop skip preserves the existing install" || \
+  fail "rejecting desktop skip changed the existing desktop install"
 
+echo ""
+echo "--- scenario 10b: missing desktop archive fails the full install ---"
+DESKTOP_ARCHIVE="$RELEASE_DIR/skill-bill-desktop-0.0.0-smoke-${TOKEN}.tar.gz"
+mv "$DESKTOP_ARCHIVE" "$DESKTOP_ARCHIVE.unavailable"
+DESKTOP_FAILURE_STATUS=0
+DESKTOP_FAILURE_OUTPUT="$(run_install "$FAKE_HOME")" || DESKTOP_FAILURE_STATUS=$?
+mv "$DESKTOP_ARCHIVE.unavailable" "$DESKTOP_ARCHIVE"
+[[ "$DESKTOP_FAILURE_STATUS" -ne 0 ]] || fail "installer succeeded without its desktop archive"
+[[ "$DESKTOP_FAILURE_OUTPUT" == *"required desktop app step failed"* ]] || fail "desktop failure was not reported"
+[[ "$DESKTOP_FAILURE_OUTPUT" != *"Installation complete"* ]] || fail "failed desktop install reported completion"
+[[ "$(cat "$DESKTOP_EXECUTABLE")" == "existing app" ]] || fail "missing desktop archive changed the existing app"
+pass "missing desktop archive fails installation and preserves the existing app"
+
+mkdir -p "$FAKE_HOME/.skill-bill/installed-skills" "$FAKE_HOME/.skill-bill/.stale-cache"
+printf 'stale install state\n' > "$FAKE_HOME/.skill-bill/.stale-cache/entry"
 env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   HOME="$FAKE_HOME" \
   XDG_DATA_HOME="$FAKE_HOME/.local/share" \
@@ -760,6 +798,13 @@ env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   SKILL_BILL_BIN_DIR="$FAKE_HOME/.local/bin" \
   SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD=1 \
   bash "$REPO_ROOT/uninstall.sh"
+for state_file in "${STATE_FILES[@]}"; do
+  cmp "$STATE_FIXTURE/$state_file" "$FAKE_HOME/.skill-bill/$state_file" || fail "uninstall changed $state_file"
+done
+pass "uninstall preserves databases, SQLite journals, and backups"
+for install_entry in runtime installed-skills skills platform-packs orchestration agent-addons baseline-manifest.json .stale-cache; do
+  assert_file_absent "uninstall removes $install_entry" "$FAKE_HOME/.skill-bill/$install_entry"
+done
 assert_file_absent "uninstall removes the desktop app" "$DESKTOP_APP"
 if [[ "$TOKEN" == "windows-x64" ]]; then
   assert_file_absent "uninstall removes the desktop launcher" "$FAKE_HOME/.local/bin/skillbill-desktop.cmd"

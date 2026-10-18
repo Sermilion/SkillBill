@@ -21,20 +21,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 object GoalRunnerQualityGateSelectionResolver {
-  fun resolve(
-    manifest: DecompositionManifest,
-    subtaskId: Int,
-  ): FeatureTaskRuntimeQualityGateSelection {
-    val lastNonSkippedId =
-      manifest.subtasks.lastOrNull {
-        it.status.decompositionStatus() != DecompositionStatus.SKIPPED
-      }?.id
-    return if (lastNonSkippedId == subtaskId) {
-      FeatureTaskRuntimeQualityGateSelection.VALIDATE
-    } else {
-      FeatureTaskRuntimeQualityGateSelection.BUILD
-    }
-  }
+  fun resolve(): FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE
 }
 
 private val SETTLED_SUBTASK_STATUSES: Set<DecompositionStatus> =
@@ -294,7 +281,7 @@ object GoalRunnerOutcomeReconciler {
     val noChangePause = storedOutcome.noChangePause
     return if (noChangePause != null) {
       stop(
-        reason = GoalRunnerStopReason.AWAITING_NO_CHANGE_DECISION,
+        reason = GoalRunnerStopReason.RECONCILED_RESUMABLE,
         blockedReason = noChangePause.stopDetail(subtaskId),
         storedOutcome = storedOutcome,
         liveness = liveness,

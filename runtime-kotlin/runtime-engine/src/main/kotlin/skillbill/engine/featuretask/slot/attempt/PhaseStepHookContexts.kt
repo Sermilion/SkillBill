@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -58,23 +57,18 @@ internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
   /** Records that the accepted audit round in [capture] did not shrink its remaining list. */
   fun recordNonShrinkingRound(capture: ValidatedOutputCapture)
 
-  /** Settles the accepted audit round; a confirmed no-change claim passes [noChangePause] and pauses the run. */
+  /** Settles the accepted audit round before normal forward routing. */
   fun settleAuditRound(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
     progressRejection: String?,
-    noChangePause: FeatureTaskRuntimeNoChangePause?,
   ): AttemptResult?
 }
 
 internal interface PhaseFindingEvidenceContext {
   val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
   val specIntentProjectionResolver: SpecIntentProjectionResolver
-}
-
-internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
-  fun existingBundleReason(): String?
 }
 
 internal interface PhasePlanningOutputContext : PhaseStepOutputContext {

@@ -30,6 +30,53 @@ Areas: runtime-engine featuretask phase record/settlement, worker, crash reconci
 Feature flag: N/A
 Acceptance criteria: 8/8 implemented (source-based; tests unexecuted)
 
+## [2026-10-17] SKILL-427 subtask 3: status, control, recovery and public monitor cutover
+Areas: runtime-engine featuretask/phaserun and work; runtime-ports idestatus; runtime-infra sqlite status store and workflow monitor; runtime-cli phase; skills/skill-bill content; docs/runtime-command-guidance.md
+- Public phase monitor resolves its target read-only, prepares an owned worktree, then runs the internal standalone monitor. Goal monitoring and phase pr stay on the existing checkout path, and the legacy monitor strategies are unchanged.
+- Status stores an optional target tuple (pull-request key and URL, head repository and ref, caller root, worktree) plus cleanup disposition. Migration 59 adds those nullable columns. All-null remains legacy; a partial or incoherent tuple fails the read. Desktop read schema is 60 because migration 60 rewrites accepted repair rows.
+- Target rows skip branch supersession and remain visible from any caller branch under the original repository identity. History, cancellation and the work board group by pull-request key first. Target-less rows keep branch scoping.
+- Replay launches the recorded pull-request URL and does not check that head out in the caller. Retained unfinished work blocks a fresh run at ownership admission, and the report names the path and reason. The monitor-only recover-stale-owner option is not stored as a launch argument.
+- Early refusals name the selector and invent no worktree. Cleanup is recorded on the terminal update when the process finishes. An abrupt kill leaves ownership evidence for stale recovery and does not claim the worktree was removed.
+- Authored Phase Monitor guidance describes exact intake, owned worktrees, watch-first repair publication, one monitor per pull request, retention, and unchanged goal and phase-pr behavior.
+- Pattern: engine policy, SQLite tuple storage, and ownership files as the admission authority.
+- Limits: unknown owners stay alive, and retained repairs are not adopted automatically. No feature flag and no new IDE wire fields.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented
+
+## [2026-10-17] SKILL-427 subtask 2: standalone slot execution and guarded repair publication
+Areas: runtime-engine featuretask (slot/monitor/standalone, phaserun, runloop/finalization/standalone, slot/skeleton, slot/state); runtime-domain SkeletonDefinition; runtime-ports ports/monitor; runtime-infra workflow/monitor and github; runtime-core di/featuretask
+- SkeletonDefinition.STANDALONE_MONITOR (id standalone-monitor, COMMIT_PUSH + MONITOR, not standalone-invocable) traverses monitor_fix, commit_push, monitor. The public MONITOR/PR definitions and both legacy monitor strategies are untouched; runForGoal bypasses the new path.
+- PhaseRunEntry.runStandaloneMonitor runs subtask 1's preparer before the status publisher, branch capture, facts or records, runs against the owned worktree and settles ownership in finally. Public `monitor` is not rerouted; subtask 3 owns that.
+- One idempotent StandaloneMonitorService.publish serves the monitor_fix settle hook and later commit_push visits; the first commit_push visit is a no-op with no git reads. A repair counts only when its prose ends with `Repair outcome: fixed`.
+- The guard re-reads the pull request before repair launch, before commit and before push, and blocks on any head or base drift or a closed PR. The per-invocation ledger lives in InMemoryPhaseRunRecords; facts carry only an immutable optional MonitorExecutionContext.
+- Infra: GitMonitorRepairPublisher pushes non-force to the explicit head push URL through a command-scoped pre-push guard hook (one ref update, expected old SHA, chains the original hook, fails closed) and re-reads the remote head to classify Acknowledged, Rejected or Uncertain. reusable: MonitorRepairPublisher and MonitorCheckSource ports.
+- GhMonitorCheckSource fetches check logs only for own-repo workflow-run links; evidence is size-capped and fence-neutralized.
+- Limits: written without a compile, format or test run, so build fixes are expected. The 3-attempt cap relies on existing trigger declarations with no dedicated test, there is no end-to-end prepared-run test, and guard-script lines may exceed the line-length limit.
+Feature flag: N/A
+Acceptance criteria: 7 criteria implemented in source; counts deferred to audit and validate
+
+## [2026-10-16] SKILL-427 subtask 1: standalone monitor target resolution and owned worktree preparation
+Areas: runtime-engine featuretask/phaserun/monitor; runtime-ports ports/monitor; runtime-infra workflow/monitor, host, contracts; runtime-contracts; runtime-core di; orchestration/contracts
+- MonitorTargetResolver and MonitorTargetPolicy resolve a PR from intake: strict https PR URL, token-exact issue key, branch match. A URL mismatch is refused before any lookup; merged, closed, missing and ambiguous targets never reach admission.
+- StandaloneMonitorExecutionPreparer admits the target, fetches into an owned worktree and settles ownership after any failure or cancellation, keeping the primary error. MonitorCleanupOwnership is idempotent and registers a JVM shutdown hook.
+- New typed ports MonitorPullRequestSource, StandaloneMonitorResources and MonitorProcessInspector, with gh, git and JDK adapters. reusable: JdkMonitorProcessInspector shares inspectRecordedProcess with the worker supervisor.
+- Ownership is a versioned schema (standalone-monitor-ownership-schema.yaml, contract 1.0) read by a strict codec; admission uses a lock file plus atomic ownership.json keyed by canonical common git dir and PR.
+- Cleanup removes only a verified owned, clean, fully published worktree without force; otherwise it retains with a reason and path. Stale recovery needs the expected token and positive exact-process death evidence.
+- Limits: not yet wired to a public route or tracker lookup; the legacy GhPullRequestIdentityLookup is untouched. Cross-process lock contention and symlinked-worktree retention are untested; git 2.29+ is assumed.
+Feature flag: N/A
+Acceptance criteria: implemented per the subtask spec; count deferred to the audit phase
+
+## [2026-10-14] SKILL-425 subtask 1: intake slot opens the PLAN skeleton
+Areas: runtime-engine featuretask (slot/intake, slot/skeleton, slot/state, runner, lifecycle/execution, phase/core, runloop) and goalrunner (intake, plan, persist); runtime-domain PhaseSlot, SkeletonDefinition, phase workflow definition/graph/projection; runtime-core RuntimeFeatureTaskSlotProvides; orchestration/contracts/workflow-state-schema.yaml
+- PhaseSlot.INTAKE is first in canonical order with the single step `intake`. SkeletonDefinition.PLAN is now INTAKE, PREPLAN, PLAN, and the workflow definition and graph carry a first "Phase 0: Intake" step with no required artifacts.
+- RuntimeIntakeStrategy (id runtime-intake) runs no agent and does not settle. intake is runtime-settled, never launched and not agent-settleable. reusable: a runtime-owned slot strategy for deterministic work that needs no model.
+- GoalIntakePreparation replaces seedPlanSpec with plannedSpecPath and intakePlanSpec. An operator spec with a readable acceptance list is kept byte for byte. Free text, or a spec without a readable list, gets only a parent spec.md via writeParentSpecOnly. Intake never writes a manifest or a subtask spec.
+- FeatureTaskRuntimePlanSeedRecorder records the plan seed artifact (origin and hashes) after intake. StandalonePlanRun opens with a canonical-root-relative spec path and passes a settleIntake hook that the run entry calls before run invariants are read. Resume of a workflow stopped after intake finds the step complete and does not touch the spec.
+- Non-plan skeletons hide a never-run intake step from status phases, blocked-step fallback and the forwardPhaseOrder header, so existing behaviour and baselines hold.
+- Limits: workflow-state schema enums gained `intake` without a contract bump (0.3). IdeStatusService.standaloneStepPipeline(plan) still reports preplan and plan. Resume still compares raw intake text to a stored SHA-256. Snapshot baselines were hand-edited and the AUTO review-mode fallback has no direct test.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-10-10] SKILL-417 subtask 2: ide-status live goal projection
 Areas: runtime-engine work (IdeStatusProjector, IdeStatusProjectorMapping, IdeStatusSelectionPolicy); runtime-engine work tests; runtime-core di IdeStatusReadSnapshotConcurrencyTest
 - Selection ranks a goal-authoritative live candidate above a non-goal PAUSED peer before runSequence, so a parked parent seq 20 no longer beats a live FEATURE_GOAL on monitor.

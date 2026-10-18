@@ -1,9 +1,13 @@
 package skillbill.engine.featuretask.phaserun
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.model.execution.MonitorExecutionContext
+import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
@@ -22,22 +26,25 @@ class StandalonePhaseRegistrationFactory(
   private val clock: Clock,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
+  private val environment: EnvironmentContext,
 ) {
   fun workflowRegistration(
     repoRoot: Path,
     issueKey: String?,
     workflowId: String,
+    workBranch: String? = null,
   ): IdeStatusWorkflowRegistration {
     val canonicalRoot = repositories.canonicalPath(repoRoot)
     return IdeStatusWorkflowRegistration(
       repositoryIdentity = repositories.repositoryIdentity(canonicalRoot),
-      branchCorrelation = branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
+      branchCorrelation = workBranch ?: branchSource.checkedOutBranch(canonicalRoot) ?: "HEAD",
       issueKey = issueKey,
       workflowId = workflowId,
       invocationId = "workflow-$workflowId-${UUID.randomUUID()}",
       executionId = "workflow-$workflowId-${UUID.randomUUID()}",
       lifecycleState = "active",
       startedAt = clock.instant(),
+      agentEnvironment = agentEnvironment(),
     )
   }
 
@@ -64,8 +71,34 @@ class StandalonePhaseRegistrationFactory(
       leaseGeneration = 1L,
       leaseExpiresAt = now.plus(LEASE_DURATION),
       processOwner = processOwner(),
+      agentEnvironment = agentEnvironment(),
     )
   }
+
+  fun monitorRegistration(
+    context: MonitorExecutionContext,
+    phaseId: String,
+    invocationId: String,
+  ): StandalonePhaseStatusRegistration {
+    val head = context.target.head.tip
+    return phaseRegistration(context.primaryRoot, phaseId, invocationId, issueKey = null).copy(
+      branchCorrelation = head.ref,
+      monitorTarget =
+        StandaloneMonitorTarget(
+          pullRequestKey = context.target.pullRequest.targetKey,
+          pullRequestUrl = context.target.pullRequest.url,
+          headRepository = "${head.repository.host}/${head.repository.slug}",
+          headRef = head.ref,
+          callerRoot = repositories.canonicalPath(context.callerRoot).toString(),
+          worktreePath = context.worktree.path.toString(),
+        ),
+    )
+  }
+
+  private fun agentEnvironment(): Map<String, String> =
+    AgentHomeEnvironmentKeys.ALL.mapNotNull { key ->
+      environment.environment[key]?.takeIf(String::isNotBlank)?.let { key to it }
+    }.toMap()
 
   private fun processOwner(): FeatureTaskRuntimeProcessIdentity? =
     runCatching {

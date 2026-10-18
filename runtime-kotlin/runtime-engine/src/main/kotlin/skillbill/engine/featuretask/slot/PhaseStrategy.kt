@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStepRoles
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
+import skillbill.engine.featuretask.phase.core.MonitorRepairStepRoles
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
@@ -43,6 +45,10 @@ abstract class PhaseStrategy {
   }
 
   internal open val plansInFanOut: Boolean = false
+
+  internal open val acceptanceRepairSteps: AcceptanceCriterionRepairStepRoles? get() = null
+
+  internal open val monitorRepairSteps: MonitorRepairStepRoles? get() = null
 
   internal open val qualityGateOperation: PhaseQualityGateOperation? = null
 
@@ -110,6 +116,8 @@ internal enum class PhaseExecutionBindingKind {
   FINDING_VERIFICATION,
   REPAIR_RECEIPT,
   CI_MONITOR,
+  STANDALONE_MONITOR,
+  STANDALONE_PUBLICATION,
 }
 
 internal data class PhaseExecutionPlanMapping(

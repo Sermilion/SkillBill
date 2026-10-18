@@ -5,15 +5,13 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.phaserun.testStandalonePhasePublisher
-import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
-import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
-import skillbill.engine.goalrunner.execution.core.testSpecDriftRecovery
+import skillbill.engine.goalrunner.execution.core.testGoalRunnerRepairCoordinator
+import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
-import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -60,13 +58,16 @@ class BlockedWorkerCrashRecoveryTest {
       val preparation =
         GoalRunnerRunPreparation(
           TestNoopGoalPlanningManifestStore,
+          testWorkflowGoalRunnerOutcomeStore(database),
           TestRepositoryEnclosingRoot,
           execution.recoveryResolver(),
           reconciler,
-          testSpecDriftRecovery(TestNoopGoalPlanningManifestStore, RecordingOutcomeStore()),
-          GoalPlanningMigrationAdmission(database, planningMigrationForTest(), NoopRuntimeDiagnostics),
           testStandalonePhasePublisher(database, testHarnessClock, NoopRuntimeDiagnostics),
           NoopWorkflowGitOperations,
+          testGoalRunnerRepairCoordinator(
+            TestNoopGoalPlanningManifestStore,
+            testWorkflowGoalRunnerOutcomeStore(database),
+          ),
         )
       val manifest =
         DecompositionManifest(

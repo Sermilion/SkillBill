@@ -3,6 +3,7 @@ package skillbill.cli.phase
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
+import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.ConfigResolutionService
@@ -37,6 +38,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
+import java.net.URI
 import java.nio.file.Path
 
 @Inject
@@ -69,9 +71,17 @@ class PhaseCommand(
     "--agent",
     help = "Agent the phase launches. " + invokingAgentResolutionHelp("--agent"),
   )
+  private val recoverStaleOwners by option(
+    "--recover-stale-owner",
+    help =
+      "Monitor only: reclaim a stale pull request monitor owner. Pass the owner token the blocked monitor " +
+        "reported, with an explicit pull request target.",
+  ).multiple()
 
   override fun run() {
     val invocation = PhaseInvocationParser.parse(name, rest)
+    val recoverStaleOwner = PhaseInvocationParser.recoverStaleOwnerToken(recoverStaleOwners)
+    PhaseInvocationParser.requireRecoverableMonitor(invocation, recoverStaleOwner)
     val repoRoot = resolveCliRepositoryRoot(null, inputs)
     val invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent")
     if (SkeletonDefinition.byId(invocation.definitionId).runStateKind == SkeletonRunStateKind.DURABLE) {
@@ -104,6 +114,8 @@ class PhaseCommand(
             modelAssignment =
               FeatureTaskRuntimeModelAssignment(matrix = configResolution.resolveExecutionMatrix()),
             eventSink = stdoutSink,
+            activityOutput = { _, activity -> inputs.liveStdout("$activity\n") },
+            recoverStaleOwner = recoverStaleOwner,
           ),
         )
       } ?: return
@@ -180,6 +192,8 @@ object PhaseInvocationParser {
   private const val UNCOMMITTED_TARGET = "uncommitted"
   private const val COMMIT_PUSH = "commit_push"
   private const val VERIFY_NAME = "verify"
+  private const val RECOVER_STALE_OWNER_OPTION = "recover-stale-owner"
+  private const val MIN_OWNER_TOKEN_LENGTH = 16
   val SCOPED_TARGETS: List<String> = listOf("pr", "staged", "unstaged")
   private val KEYS = setOf(PhaseCommandKeys.MODE, PhaseCommandKeys.TARGET)
 
@@ -204,6 +218,33 @@ object PhaseInvocationParser {
       mode = values[PhaseCommandKeys.MODE]?.let(::mode),
       target = values[PhaseCommandKeys.TARGET]?.let(::target),
     )
+  }
+
+  fun recoverStaleOwnerToken(values: List<String>): String? {
+    if (values.size > 1) {
+      throw UsageError(
+        "--$RECOVER_STALE_OWNER_OPTION was given ${values.size} times; " +
+          "pass the one owner token the blocked monitor reported.",
+      )
+    }
+    return values.singleOrNull()
+  }
+
+  fun requireRecoverableMonitor(
+    invocation: PhaseInvocation,
+    token: String?,
+  ) {
+    if (token == null) return
+    val refusal =
+      when {
+        invocation.definitionId != SkeletonDefinition.MONITOR.id ->
+          "--$RECOVER_STALE_OWNER_OPTION applies only to `phase ${SkeletonDefinition.MONITOR.id}`."
+        invocation.intake == null -> "--$RECOVER_STALE_OWNER_OPTION needs an explicit pull request target."
+        token.length < MIN_OWNER_TOKEN_LENGTH || token.any { it.isWhitespace() || it.isISOControl() } ->
+          "--$RECOVER_STALE_OWNER_OPTION needs the owner token a blocked monitor reported."
+        else -> null
+      }
+    refusal?.let { throw UsageError(it) }
   }
 
   private fun definitionId(name: String): String {
@@ -274,6 +315,7 @@ internal fun writePhaseResult(
                 bundle.subtaskSpecPaths.map { path -> "Subtask spec: $path" }
             ).joinToString("\n")
           },
+          result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
           "Phase invocation ID: ${result.invocationId}",
         ).joinToString("\n"),
         emptyMap(),
@@ -287,6 +329,7 @@ internal fun writePhaseResult(
           review?.output?.takeIf { it.isNotBlank() && it != register }?.let { "Retained findings:\n$it" },
           "Phase '$definitionId' blocked at '${result.stepId}': ${result.reason}",
           review?.let(::blockedReviewDetails)?.takeIf(String::isNotBlank),
+          result.targetReport.takeIf { it.isNotEmpty() }?.joinToString("\n"),
           "Phase invocation ID: ${result.invocationId}",
         ).joinToString("\n"),
         emptyMap(),
@@ -317,5 +360,38 @@ internal fun FeatureTaskRuntimeRunEvent.phaseProgressLine(): String? =
     is FeatureTaskRuntimeRunEvent.PhaseCompleted -> "Phase '$phaseId' completed.\n"
     is FeatureTaskRuntimeRunEvent.PhaseBlocked -> "Phase '$phaseId' blocked: $blockedReason\n"
     is FeatureTaskRuntimeRunEvent.PhasePaused -> "Phase '$phaseId' paused: $pauseReason\n"
+    is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningLine()
     else -> null
   }
+
+private fun FeatureTaskRuntimeRunEvent.CiStillRunning.ciStillRunningLine(): String {
+  val checks =
+    pendingChecks
+      .take(MAX_VISIBLE_PROGRESS_CHECKS)
+      .joinToString(", ") { check ->
+        val name = check.name.filterNot(Char::isISOControl).take(MAX_PROGRESS_NAME_LENGTH)
+        listOf(name, boundedHttpLink(check.link)).filter(String::isNotBlank).joinToString(" ")
+      }
+  val detail = if (checks.isBlank()) "waiting for checks to be reported" else "waiting for $checks"
+  return listOf("CI is $detail", boundedHttpLink(pullRequestUrl))
+    .filter(String::isNotBlank)
+    .joinToString("; ")
+    .take(MAX_PROGRESS_LINE_LENGTH) + "\n"
+}
+
+private fun boundedHttpLink(value: String): String =
+  runCatching {
+    val uri = URI(value)
+    val scheme = uri.scheme?.takeIf { it == "http" || it == "https" }
+    val host = uri.host?.takeIf(String::isNotBlank)
+    if (scheme == null || host == null || uri.userInfo != null) {
+      ""
+    } else {
+      URI(scheme, null, host, uri.port, uri.path, null, null).toASCIIString().take(MAX_PROGRESS_LINK_LENGTH)
+    }
+  }.getOrDefault("")
+
+private const val MAX_VISIBLE_PROGRESS_CHECKS = 4
+private const val MAX_PROGRESS_NAME_LENGTH = 48
+private const val MAX_PROGRESS_LINK_LENGTH = 120
+private const val MAX_PROGRESS_LINE_LENGTH = 500

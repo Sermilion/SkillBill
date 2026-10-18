@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
+import skillbill.engine.featuretask.lifecycle.core.AcquiredFeatureTaskRuntimeWorker
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentContextTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.featureTaskRuntimePhaseStrategies
@@ -16,6 +17,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.core.PHASE_STRATEGIES_DISPATCH_JOIN_EXPECTED
 import skillbill.engine.featuretask.model.core.PHASE_STRATEGIES_DISPATCH_JOIN_SEAM
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairSession
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
@@ -26,11 +29,14 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -44,7 +50,13 @@ class FeatureTaskRuntimeRunnerExecute(
   private val executePrepared: FeatureTaskRuntimeRunnerExecutePrepared,
   private val reviewFixBudget: FeatureTaskRuntimeReviewFixBudget,
   private val agentContextTelemetry: FeatureTaskRuntimeAgentContextTelemetry,
+  private val acceptanceRecorder: AcceptanceCriterionRepairPhaseRecorder,
 ) {
+  fun intakeCompleted(workflowId: String): Boolean {
+    val records = recorder.loadPhaseRecords(workflowId).orEmpty()
+    return PhaseSlot.INTAKE.steps.all { stepId -> records[stepId]?.status == WorkflowStepStatus.COMPLETED }
+  }
+
   fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val existingMode = recorder.existingWorkflowMode(request.workflowId)
     if (existingMode == null || existingMode == FeatureTaskWorkflowMode.RUNTIME) {
@@ -81,6 +93,7 @@ class FeatureTaskRuntimeRunnerExecute(
   fun executePreparedRun(
     runRequest: FeatureTaskRuntimeRunRequest,
     reconciliation: FeatureTaskRuntimeCrashReconciliationResult,
+    repairWorker: AcquiredFeatureTaskRuntimeWorker? = null,
   ): FeatureTaskRuntimeRunReport {
     val specSource =
       specSourceResolver.resolve(
@@ -88,6 +101,7 @@ class FeatureTaskRuntimeRunnerExecute(
         specReference = runRequest.runInvariants.specReference,
         isGoalContinuation = isGoalContinuationRun(runRequest),
       )
+    if (runRequest.stopAfterIntake) return executeIntakeOnlyPass(runRequest, specSource)
     emitFeatureTaskRuntimeEventSafely(
       diagnostics = diagnostics,
       seam = "RunStarted event-sink emission",
@@ -97,19 +111,19 @@ class FeatureTaskRuntimeRunnerExecute(
       )
     }
     val telemetrySessionId = lifecycleTelemetry.started(runRequest)
+    val repairSession = repairSession(runRequest, repairWorker)
     val observability =
       FeatureTaskRuntimeRunObservability(
-        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, requireNotNull(runRequest.admittedExecution)),
+        DurablePhaseRunRecords(
+          recorder,
+          decomposeTerminalRecorder,
+          requireNotNull(runRequest.admittedExecution),
+          repairSession,
+        ),
         runRequest,
         diagnostics,
       )
-    val executionPlan =
-      requireNotNull(runRequest.admittedExecution).let { admitted ->
-        check(admitted.identity.workflowId == runRequest.workflowId) {
-          "Execution admission belongs to another workflow."
-        }
-        admitted.plan
-      }
+    val executionPlan = admittedPlan(runRequest)
     val state = executePrepared.createExecutePreparedRunState(runRequest, executionPlan, diagnostics)
     val telemetryContext =
       buildExecutePreparedRunTelemetryContext(
@@ -137,6 +151,46 @@ class FeatureTaskRuntimeRunnerExecute(
     val terminalReport = executePrepared.finalizeExecutePreparedRunReport(runRequest, report, specSource, executionPlan)
     lifecycleTelemetry.finished(terminalReport, telemetryContext)
     return terminalReport
+  }
+
+  private fun executeIntakeOnlyPass(
+    runRequest: FeatureTaskRuntimeRunRequest,
+    specSource: SpecSource,
+  ): FeatureTaskRuntimeRunReport {
+    val executionPlan = admittedPlan(runRequest)
+    val observability =
+      FeatureTaskRuntimeRunObservability(
+        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, requireNotNull(runRequest.admittedExecution)),
+        runRequest,
+        diagnostics,
+      )
+    val state = executePrepared.createExecutePreparedRunState(runRequest, executionPlan, diagnostics)
+    return executePrepared.driveExecutePreparedRunLoop(runRequest, specSource, executionPlan, observability, state)
+  }
+
+  private fun admittedPlan(runRequest: FeatureTaskRuntimeRunRequest): ResolvedPhaseExecutionPlan =
+    requireNotNull(runRequest.admittedExecution).let { admitted ->
+      check(admitted.identity.workflowId == runRequest.workflowId) {
+        "Execution admission belongs to another workflow."
+      }
+      admitted.plan
+    }
+
+  private fun repairSession(
+    runRequest: FeatureTaskRuntimeRunRequest,
+    repairWorker: AcquiredFeatureTaskRuntimeWorker?,
+  ): AcceptanceCriterionRepairSession? {
+    val session =
+      acceptanceRecorder.session(
+        runRequest.acceptanceCriterionRepair,
+        repairWorker,
+        runRequest.repoRoot,
+        executePrepared.acceptanceRepairSteps(requireNotNull(runRequest.admittedExecution).plan),
+      )
+    check(runRequest.acceptanceCriterionRepair == null || session != null) {
+      "Serial repair requires an admitted audit owner with repair step roles."
+    }
+    return session
   }
 
   private fun buildExecutePreparedRunTelemetryContext(

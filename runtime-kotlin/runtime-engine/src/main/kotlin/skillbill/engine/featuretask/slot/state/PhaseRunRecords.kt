@@ -15,8 +15,10 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionCon
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -37,6 +39,7 @@ internal interface PhaseRunRecords :
   PhaseStepRecords,
   PhaseReviewRecords,
   PhaseLaunchRecords,
+  PhasePlanRecords,
   FeatureTaskRuntimeNoChangePausePort {
   /** Appends a ledger entry. */
   fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
@@ -67,9 +70,31 @@ internal interface PhaseRunRecords :
     workflowId: String,
     ownedPaths: List<String>,
   ): Boolean
+}
 
+/** The plan bundle snapshot and decompose terminal records planning makes for one run. */
+internal interface PhasePlanRecords {
   /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
   fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
+
+  /** The bundle snapshot planning recorded for [workflowId], with the settled plan of each subtask. */
+  fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle?
+
+  /** Records the plan [bundle] snapshot. Returns false when the write did not apply. */
+  fun recordPlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): Boolean
+
+  /**
+   * Records the plan [bundle] snapshot together with the settled phase record of each planned subtask in
+   * [unitRecords], keyed by subtask id, in one write. Returns false when the write did not apply.
+   */
+  fun recordPlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean
 
   /** Records the decompose [terminal] reached at [planStepId]. Returns false when the write did not apply. */
   fun recordDecomposeTerminal(
@@ -99,8 +124,8 @@ internal interface PhaseStepRecords {
   /** Records a required step start, returning the rejection when the write did not apply. */
   fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
 
-  /** Records a completed step atomically with its output. Returns false when the write did not apply. */
-  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
+  /** Records a completed step atomically with its output, retaining the rejection when it did not apply. */
+  fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
 
   /** Records an implementation attempt that ended without output. */
   fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean
@@ -210,4 +235,15 @@ internal interface PhaseLaunchRecords {
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   )
+}
+
+internal interface AcceptanceCriterionRepairCycleRecords {
+  fun requiresExplicitStart(phaseId: String): Boolean
+
+  fun isRepairStep(phaseId: String): Boolean
+
+  fun settleUnsuccessfulRepair(
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    kind: AcceptanceCriterionRepairOutcomeKind,
+  ): Boolean?
 }

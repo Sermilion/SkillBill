@@ -19,6 +19,8 @@ import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -119,17 +121,20 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `base branch registration does not expose a goal on another branch with the same issue key`() {
-    val fixture = gitRepoFixture("ide-status-goal-unowned-branch", branch = "feat/SKILL-148-other")
+  fun `goal registered on a branch it does not own keeps its execution identity on any checkout`() {
+    val checkout = "feat/OTHER-9-stack-base"
+    val fixture = gitRepoFixture("ide-status-goal-unowned-branch", branch = checkout)
     val identity = testGoalRepositoryIdentity(fixture)
     val result =
       ideStatusService(
-        registeredGoalDatabase(identity, "main"),
+        registeredGoalDatabase(identity, "feat/OTHER-8-launch-branch"),
         manifestStore = StubGoalManifestStore(goalManifestState(fixture, identity, childWorkflowId = "w-child")),
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
-    assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
-    assertNull(result.snapshot.workflowId)
+    assertNull(result.snapshot.problem)
+    assertEquals("goal-1", result.snapshot.workflowId)
+    assertEquals("parent-execution", result.snapshot.execution?.executionId)
+    assertEquals(checkout, result.snapshot.branchCorrelation)
   }
 
   @Test
@@ -224,6 +229,68 @@ class IdeStatusServiceBranchScopingTest {
     assertEquals("goal-1", result.snapshot.workflowId)
   }
 
+  @Test
+  fun `pull request monitor is reported from an unrelated checkout with its exact target`() {
+    val fixture = gitRepoFixture("ide-status-monitor-target", branch = "feat/OTHER-9-unrelated")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val record =
+      StandalonePhaseStatusRecord(
+        repositoryIdentity = identity,
+        branchCorrelation = "feat/SKILL-427-shared",
+        issueKey = null,
+        workflowId = null,
+        invocationId = "monitor-invocation",
+        phaseId = "monitor",
+        executionId = "monitor-execution",
+        statusStoreId = "store",
+        runSequence = "1",
+        statusRevision = "1",
+        lifecycleState = "active",
+        currentStep = "monitor",
+        currentActivity = null,
+        startedAt = ideStatusObservedAt.minusSeconds(60),
+        updatedAt = ideStatusObservedAt,
+        finishedAt = null,
+        activeDurationMs = null,
+        activeDurationAsOf = null,
+        leaseOwner = "owner",
+        leaseGeneration = 1L,
+        leaseExpiresAt = ideStatusObservedAt.plusSeconds(3600),
+        terminalResult = null,
+        monitorTarget =
+          StandaloneMonitorTarget(
+            pullRequestKey = "github.com/acme/repo#7",
+            pullRequestUrl = "https://github.com/acme/repo/pull/7",
+            headRepository = "github.com/fork-a/repo",
+            headRef = "feat/SKILL-427-shared",
+            callerRoot = fixture.toString(),
+            worktreePath = "/wt/7",
+          ),
+      )
+    val base = TrackingDatabase(work = emptyList(), workflows = IdeStatusWorkflowStates())
+    val statuses =
+      object : StandalonePhaseStatusRepository by base.unitOfWork().standalonePhaseStatuses {
+        override fun readEligible(
+          repositoryIdentity: String,
+          branchCorrelation: String?,
+          now: Instant,
+          page: StandaloneEligiblePage,
+          monitorRepositoryIdentity: String,
+        ): List<StandalonePhaseStatusRecord> = listOf(record).eligiblePage(page)
+      }
+
+    val result =
+      ideStatusService(TrackingDatabase(emptyList(), base.workflows, statusRepository = statuses)).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertNull(result.snapshot.problem)
+    assertEquals("monitor-execution", result.snapshot.execution?.executionId)
+    val summary = requireNotNull(result.snapshot.summary)
+    assertEquals(true, "Pull request https://github.com/acme/repo/pull/7;" in summary, summary)
+    assertEquals(true, "worktree /wt/7" in summary, summary)
+  }
+
   private fun registeredGoalDatabase(
     identity: String,
     registeredBranch: String,
@@ -252,9 +319,11 @@ class IdeStatusServiceBranchScopingTest {
 
         override fun readEligible(
           repositoryIdentity: String,
-          branchCorrelation: String,
+          branchCorrelation: String?,
           now: Instant,
-        ): List<StandalonePhaseStatusRecord> = eligibleStandalones
+          page: StandaloneEligiblePage,
+          monitorRepositoryIdentity: String,
+        ): List<StandalonePhaseStatusRecord> = eligibleStandalones.eligiblePage(page)
       }
     return TrackingDatabase(
       listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, goalUpdatedAt)),
@@ -313,7 +382,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `base branch planning visibility does not expose unrelated or already prepared goals`() {
+  fun `goals stay visible on prepared base branches and branches that do not name their issue key`() {
     val baseBranch = "base/SKILL-380-phase-slot-strategies"
     listOf(
       baseBranch to GoalPlanningStatusState.PREPARED,
@@ -330,8 +399,8 @@ class IdeStatusServiceBranchScopingTest {
             StubGoalManifestStore(state, planning = planningSnapshot(planningState), lease = liveLease()),
         ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
-      assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
-      assertNull(result.snapshot.workflowId)
+      assertNull(result.snapshot.problem, branch)
+      assertEquals("goal-1", result.snapshot.workflowId, branch)
     }
   }
 
@@ -356,7 +425,7 @@ class IdeStatusServiceBranchScopingTest {
   }
 
   @Test
-  fun `goal with launched child projects child current_phase_execution`() {
+  fun `goal with launched child shows review despite missing goal planning checkpoints`() {
     val fixture = gitRepoFixture("ide-status-goal-child-execution")
     val identity = testGoalRepositoryIdentity(fixture)
     val database =
@@ -367,6 +436,7 @@ class IdeStatusServiceBranchScopingTest {
           phaseRecordsArtifactsJson(
             "preplan" to phaseRecordWire("preplan", "completed", null),
             "plan" to phaseRecordWire("plan", "completed", null),
+            "plan_subtasks" to phaseRecordWire("plan_subtasks", "completed", null),
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),
@@ -382,9 +452,19 @@ class IdeStatusServiceBranchScopingTest {
     val result =
       ideStatusService(
         database,
-        manifestStore = StubGoalManifestStore(goalManifestState(fixture, identity, childWorkflowId = "w-child")),
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            planning =
+              planningSnapshot(GoalPlanningStatusState.NOT_STARTED)
+                .copy(sharedPreplanPrepared = false, plannedSubtaskCount = 0),
+            lease = liveLease(),
+          ),
       ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
 
+    assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState)
+    assertEquals(GoalPlanningStatusState.NOT_STARTED, result.snapshot.planning?.state)
+    assertEquals("Goal SKILL-148 is active on review.", result.snapshot.summary)
     val execution = requireNotNull(result.snapshot.currentPhaseExecution)
     assertEquals("review", result.snapshot.currentStep.id)
     assertEquals("review", execution.phaseId)
@@ -405,6 +485,7 @@ class IdeStatusServiceBranchScopingTest {
           phaseRecordsArtifactsJson(
             "preplan" to phaseRecordWire("preplan", "completed", null),
             "plan" to phaseRecordWire("plan", "completed", null),
+            "plan_subtasks" to phaseRecordWire("plan_subtasks", "completed", null),
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),
@@ -666,6 +747,46 @@ class IdeStatusServiceBranchScopingTest {
 
     assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
     assertEquals("No recent Skill Bill work for branch 'feat/OTHER-9-unrelated'.", result.snapshot.summary)
+  }
+
+  @Test
+  fun `feature task registered before its branch was created stays selected on its issue branch`() {
+    val fixture = gitRepoFixture("ide-status-runtime-registered-on-main", branch = "feat/SKILL-148-fixture")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val workflows = IdeStatusWorkflowStates()
+    workflows.saveFeatureTaskWorkflow(runtimeRecord("w-active", "2026-08-06T10:00:00Z"), PROSE)
+    workflows.saveFeatureTaskExecutionIdentity(identityFor("w-active", identity))
+    val work = listOf(workItem("w-active", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T10:00:00Z"))
+    val statuses =
+      object : StandalonePhaseStatusRepository by TrackingDatabase(
+        work,
+        workflows,
+      ).unitOfWork().standalonePhaseStatuses {
+        override fun latestWorkflowExecution(workflowId: String): IdeStatusWorkflowExecution? =
+          IdeStatusWorkflowExecution(
+            repositoryIdentity = identity,
+            branchCorrelation = "main",
+            issueKey = "SKILL-148",
+            workflowId = "w-active",
+            invocationId = "runtime-invocation",
+            executionId = "runtime-execution",
+            statusStoreId = "status-store",
+            runSequence = "1",
+            statusRevision = "1",
+            lifecycleState = "active",
+            startedAt = ideStatusObservedAt.minusSeconds(600),
+            updatedAt = ideStatusObservedAt,
+          ).takeIf { workflowId == "w-active" }
+      }
+
+    val result =
+      ideStatusService(TrackingDatabase(work, workflows, statusRepository = statuses)).status(
+        IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt),
+      )
+
+    assertNull(result.snapshot.problem)
+    assertEquals("w-active", result.snapshot.workflowId)
+    assertEquals("runtime-execution", result.snapshot.execution?.executionId)
   }
 
   @Test

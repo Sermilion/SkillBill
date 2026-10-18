@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.persistence.DesktopReadSchema
+import skillbill.idestatus.model.IdeStatusPolicy
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.addDelegatedReviewLifecycleProjection
@@ -18,6 +19,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBack
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.StandalonePhaseStatusMigration
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.recordStandaloneMonitorTarget
 import skillbill.infrastructure.sqlite.core.migration.area.optionalRepairEvidenceColumn
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
@@ -33,6 +35,8 @@ import skillbill.infrastructure.sqlite.core.migration.persistLegacyGoalPlanningR
 import skillbill.infrastructure.sqlite.core.migration.rekeyProducerOutputEvidenceByAgent
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.installDesktopReadCompatibility
+import skillbill.infrastructure.sqlite.core.schema.recordLaunchAgentEnvironment
+import skillbill.infrastructure.sqlite.core.schema.recordStandalonePhaseLaunchScope
 import skillbill.infrastructure.sqlite.core.schema.saveStandalonePhaseLaunch
 import skillbill.infrastructure.sqlite.core.schema.separateAgentActivityRevisions
 import skillbill.infrastructure.sqlite.review.stats.migrateLegacyTelemetryOutboxLedger
@@ -782,5 +786,42 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 55,
       name = "complete-desktop-launch-schema",
       operation = ::saveStandalonePhaseLaunch,
+    ),
+    DatabaseMigration(
+      version = 56,
+      name = "abandon-stale-verify-workflows",
+      operation = { connection ->
+        connection.prepareStatement(
+          """
+          UPDATE feature_verify_workflows
+          SET workflow_status = 'abandoned',
+              updated_at = strftime('%Y-%m-%d %H:%M:%S', 'now'),
+              finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+              state_entered_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+              state_entered_at_estimated = 0
+          WHERE workflow_status IN ('running', 'pending')
+            AND finished_at IS NULL
+            AND (julianday('now') - julianday(updated_at)) * 24 > ?
+          """.trimIndent(),
+        ).use { statement ->
+          statement.setLong(1, IdeStatusPolicy.VERIFY_ABANDONED_AFTER.toHours())
+          statement.executeUpdate()
+        }
+      },
+    ),
+    DatabaseMigration(
+      version = 57,
+      name = "record-launch-agent-environment",
+      operation = ::recordLaunchAgentEnvironment,
+    ),
+    DatabaseMigration(
+      version = 58,
+      name = "record-standalone-phase-launch-scope",
+      operation = ::recordStandalonePhaseLaunchScope,
+    ),
+    DatabaseMigration(
+      version = 59,
+      name = "record-standalone-monitor-target",
+      operation = ::recordStandaloneMonitorTarget,
     ),
   )

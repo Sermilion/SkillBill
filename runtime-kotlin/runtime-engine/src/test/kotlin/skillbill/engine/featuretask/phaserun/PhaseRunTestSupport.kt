@@ -5,15 +5,19 @@ import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.featuretask.phaserun.monitor.MonitorTargetResolver
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.EnabledRuntimeTelemetrySettingsProvider
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
+import skillbill.ports.agentrun.AgentRunChildDrain
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.model.AgentRunLaunchModelRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchRequest
@@ -21,6 +25,21 @@ import skillbill.ports.agentrun.passThroughResolvedLaunchModel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.monitor.StandaloneMonitorResources
+import skillbill.ports.monitor.model.MonitorAcquireRequest
+import skillbill.ports.monitor.model.MonitorAcquisition
+import skillbill.ports.monitor.model.MonitorContextResolution
+import skillbill.ports.monitor.model.MonitorFence
+import skillbill.ports.monitor.model.MonitorFetchResult
+import skillbill.ports.monitor.model.MonitorFetchedRefs
+import skillbill.ports.monitor.model.MonitorResolvedTarget
+import skillbill.ports.monitor.model.MonitorSettleRequest
+import skillbill.ports.monitor.model.MonitorSettlement
+import skillbill.ports.monitor.model.MonitorStaleRecovery
+import skillbill.ports.monitor.model.MonitorStaleRecoveryRequest
+import skillbill.ports.monitor.model.MonitorWorktree
+import skillbill.ports.process.ShutdownHookPort
+import skillbill.ports.process.ShutdownHookRegistration
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Files
@@ -56,7 +75,18 @@ internal fun phaseRunEntry(
   database: DatabaseSessionFactory,
   clock: Clock,
   runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
-): PhaseRunEntry =
+): PhaseRunEntry = PhaseRunEntryFixture(strategies, gitOperations, database, clock, runLoopEntry).entry()
+
+internal data class PhaseRunEntryFixture(
+  val strategies: PhaseStrategyLookup,
+  val gitOperations: WorkflowGitOperations,
+  val database: DatabaseSessionFactory,
+  val clock: Clock,
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
+  val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer = refusingMonitorPreparer(),
+)
+
+internal fun PhaseRunEntryFixture.entry(): PhaseRunEntry =
   PhaseRunEntry(
     statusPublisherFactory =
       testStandalonePhasePublisher(database, clock, NoopRuntimeDiagnostics),
@@ -83,7 +113,52 @@ internal fun phaseRunEntry(
         override fun launch(request: AgentRunLaunchRequest) =
           error("A phase run fixture must not resolve launches through the test support launcher.")
       },
+    standaloneMonitorPreparer = standaloneMonitorPreparer,
   )
+
+internal fun refusingMonitorPreparer(
+  resources: StandaloneMonitorResources = UnreachableMonitorResources(),
+): StandaloneMonitorExecutionPreparer =
+  StandaloneMonitorExecutionPreparer(
+    MonitorTargetResolver(UnavailableStandaloneMonitorService.source),
+    resources,
+    NoopRuntimeDiagnostics,
+    object : ShutdownHookPort {
+      override fun register(action: () -> Unit): ShutdownHookRegistration = ShutdownHookRegistration { true }
+    },
+    AgentRunChildDrain { true },
+  )
+
+internal open class UnreachableMonitorResources : StandaloneMonitorResources {
+  override fun resolveContext(callerRoot: Path): MonitorContextResolution =
+    MonitorContextResolution.Unavailable("test runs have no caller repository")
+
+  override fun acquire(request: MonitorAcquireRequest): MonitorAcquisition = unreachable("acquire")
+
+  override fun fetchPinned(
+    fence: MonitorFence,
+    target: MonitorResolvedTarget,
+  ): MonitorFetchResult = unreachable("fetchPinned")
+
+  override fun createWorktree(
+    fence: MonitorFence,
+    target: MonitorResolvedTarget,
+    refs: MonitorFetchedRefs,
+  ): MonitorWorktree = unreachable("createWorktree")
+
+  override fun markPrepared(
+    fence: MonitorFence,
+    target: MonitorResolvedTarget,
+    worktree: MonitorWorktree,
+  ) = unreachable("markPrepared")
+
+  override fun settle(request: MonitorSettleRequest): MonitorSettlement = unreachable("settle")
+
+  override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery = unreachable("recoverStale")
+
+  private fun unreachable(operation: String): Nothing =
+    error("$operation must not run when the monitor context cannot be resolved.")
+}
 
 internal fun DatabaseSessionFactory.assertNoDurableWorkflowState() {
   DURABLE_WORKFLOW_TABLES.forEach { table ->

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.state
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
@@ -107,6 +108,8 @@ internal interface PhaseCommitStepBinding : PhaseAcceptedStepExecution {
 }
 
 internal interface PhaseMonitorStepBinding : PhaseAcceptedStepExecution {
+  fun publishRepair(run: PhaseRun): String?
+
   fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,
@@ -122,7 +125,9 @@ internal interface PhaseCiObservation {
   fun watch(
     repoRoot: Path,
     branch: String,
-    onCiRunning: (List<PullRequestCheck>) -> Unit = {},
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit = { _, _ -> },
+    expectedHeadSha: String? = null,
+    onInconclusive: (String) -> Unit = {},
   ): PullRequestCiOutcome
 
   /** Keeps the failing [checks] so the fix step for [issueKey] can name them. */
@@ -138,8 +143,97 @@ internal interface PhaseCiObservation {
   )
 }
 
+/** The accepted standalone monitor and monitor-repair steps; both act only on the invocation's own ledger. */
+internal interface PhaseStandaloneMonitorStepBinding : PhaseAcceptedStepExecution {
+  fun runStandaloneMonitor(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome
+
+  /** The evidence brief for the repair the monitor started, or an empty string when none is pending. */
+  fun standaloneRepairBrief(): String
+
+  /** The reason the repair cannot launch against the current pull request and worktree, or null when it can. */
+  fun guardStandaloneRepairLaunch(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): String?
+
+  /**
+   * The reason the settled repair cannot be published, or null when it was published or nothing was pending. A repair
+   * the agent did not report as fixed is never completed or published.
+   */
+  fun publishStandaloneRepair(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+    reportedFixed: Boolean,
+  ): String?
+}
+
+/** The accepted standalone publication step; its first visit changes nothing. */
+internal interface PhaseStandalonePublicationStepBinding : PhaseAcceptedStepExecution {
+  fun runStandalonePublication(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome
+}
+
+/** Identity-based observation, repair evidence and guarded publication the standalone monitor strategy supplies. */
+internal interface PhaseStandaloneMonitorOperations {
+  /** Watches the pinned pull request until its checks settle, it merges or closes, or it cannot be read. */
+  fun observe(
+    ledger: StandaloneMonitorLedger,
+    onCiRunning: (String, List<PullRequestCheck>) -> Unit,
+  ): PullRequestCiOutcome
+
+  /** The repair brief for [failing] checks on the last head this invocation published. */
+  fun failureEvidence(
+    ledger: StandaloneMonitorLedger,
+    failing: List<PullRequestCheck>,
+  ): String
+
+  /** The repair brief for a merge conflict with the pinned base commit. */
+  fun conflictEvidence(ledger: StandaloneMonitorLedger): String
+
+  /** The reason the pending repair cannot launch, or null when the target and worktree are unchanged. */
+  fun guardRepairLaunch(
+    ledger: StandaloneMonitorLedger,
+    worktree: StandaloneRepairWorktree,
+  ): String?
+
+  /** Publishes the completed pending repair, or reports that nothing is pending or why publication blocked. */
+  fun publish(
+    ledger: StandaloneMonitorLedger,
+    worktree: StandaloneRepairWorktree,
+  ): StandalonePublication
+}
+
+/**
+ * The owned worktree of this invocation's repair, bound to that path. It can only read HEAD, test ancestry and commit
+ * the repair's own changes; it cannot push, fetch, reset, check out, tag or address another checkout.
+ */
+internal interface StandaloneRepairWorktree {
+  fun headSha(): String?
+
+  fun descendsFrom(
+    ancestorSha: String,
+    descendantSha: String,
+  ): Boolean
+
+  /** The reason the repair's changes could not be committed, or null when committed or nothing was pending. */
+  fun commitPending(subject: String): String?
+}
+
+internal sealed interface StandalonePublication {
+  data object NothingPending : StandalonePublication
+
+  data class Published(val commitSha: String) : StandalonePublication
+
+  data class Blocked(val reason: String) : StandalonePublication
+}
+
 internal sealed interface PullRequestCiOutcome {
-  data object Passed : PullRequestCiOutcome
+  data class Passed(val headSha: String) : PullRequestCiOutcome
 
   data object Merged : PullRequestCiOutcome
 
@@ -147,7 +241,7 @@ internal sealed interface PullRequestCiOutcome {
 
   data object NoPullRequest : PullRequestCiOutcome
 
-  data class Failed(val failingChecks: List<PullRequestCheck>) : PullRequestCiOutcome
+  data class Failed(val failingChecks: List<PullRequestCheck>, val headSha: String? = null) : PullRequestCiOutcome
 
   data object Conflicted : PullRequestCiOutcome
 
@@ -161,6 +255,16 @@ internal interface PhasePullRequestStepBinding : PhaseAgentStepBinding {
 }
 
 internal interface PhasePlanningStepBinding : PhaseAgentStepBinding {
+  /**
+   * Completes the accepted plan step from the spec bundle already on disk without launching an agent, recording its
+   * snapshot. Subtasks that already carry their plan are recorded as settled units of [unitStepId]. Returns null
+   * when the step must launch an agent to author the bundle.
+   */
+  fun settleExistingBundle(
+    run: PhaseRun,
+    unitStepId: String,
+  ): PhaseOutcome?
+
   fun fanOut(stepId: String): PhaseRunFanOut
 
   fun authorizeFanOutWave(run: PhaseRun)

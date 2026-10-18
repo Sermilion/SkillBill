@@ -2,6 +2,7 @@ package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
@@ -16,12 +17,17 @@ import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strat
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyOpus55Strategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorOpus55Strategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorOpus55Strategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanOpus55Strategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionOpus55Strategy
@@ -38,7 +44,7 @@ import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReview
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
-import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
+import skillbill.engine.goalrunner.plan.FeatureTaskRuntimePlanIntake
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.MergeStatePullRequestIdentityLookup
@@ -55,14 +61,12 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
 
   @Provides
-  fun goalPlanFanOutStrategy(
-    fanOutPort: BoundedWorkFanOutPort,
-    burstSchedule: GoalPlanningBurstSchedule,
-  ): GoalPlanFanOutStrategy = GoalPlanFanOutStrategy(fanOutPort, burstSchedule.planFanOutCap)
+  fun planFanOutStrategy(fanOutPort: BoundedWorkFanOutPort): PlanFanOutStrategy =
+    PlanFanOutStrategy(fanOutPort, GOAL_PLANNING_WAVE_CAP)
 
   @Provides
-  fun goalPlanFanOutOpus55Strategy(goalPlanFanOut: GoalPlanFanOutStrategy): GoalPlanFanOutOpus55Strategy =
-    GoalPlanFanOutOpus55Strategy(goalPlanFanOut)
+  fun planFanOutOpus55Strategy(planFanOut: PlanFanOutStrategy): PlanFanOutOpus55Strategy =
+    PlanFanOutOpus55Strategy(planFanOut)
 
   @Provides
   fun prDescriptionStrategy(
@@ -85,13 +89,27 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): MonitorStrategy = MonitorStrategy(pullRequestIdentityLookup, pullRequestChecksLookup)
 
   @Provides
+  fun pullRequestPhaseStrategies(
+    prDescription: PrDescriptionStrategy,
+    monitor: MonitorStrategy,
+    standaloneMonitor: StandaloneMonitorService,
+  ): PullRequestPhaseStrategies =
+    PullRequestPhaseStrategies(
+      prDescription,
+      monitor,
+      StandaloneMonitorStrategy(standaloneMonitor),
+      StandaloneMonitorPublicationStrategy(standaloneMonitor),
+    )
+
+  @Provides
   fun phaseStrategyRegistry(
     runner: () -> PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
-    goalPlanFanOut: GoalPlanFanOutStrategy,
-    prDescription: PrDescriptionStrategy,
-    monitor: MonitorStrategy,
+    planFanOut: PlanFanOutStrategy,
+    pullRequest: PullRequestPhaseStrategies,
+    planIntake: () -> FeatureTaskRuntimePlanIntake,
   ): PhaseStrategyRegistry {
+    val prDescription = pullRequest.prDescription
     val inlineReviewRunner = runner()
     val delegatedReviewRunner = runner()
     val standaloneInlineRunner = runner()
@@ -102,12 +120,13 @@ internal interface RuntimeFeatureTaskSlotProvides {
     val opusStandaloneDelegatedRunner = runner()
     return PhaseStrategyRegistry(
       listOf(
+        PhaseStrategyRegistration(RuntimeIntakeStrategy(planIntake), runner()),
         PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPreplanOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
         PhaseStrategyRegistration(AgentPlanOpus55Strategy(), runner()),
-        PhaseStrategyRegistration(goalPlanFanOut, runner()),
-        PhaseStrategyRegistration(GoalPlanFanOutOpus55Strategy(goalPlanFanOut), runner()),
+        PhaseStrategyRegistration(planFanOut, runner()),
+        PhaseStrategyRegistration(PlanFanOutOpus55Strategy(planFanOut), runner()),
         PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
         PhaseStrategyRegistration(ImplementThenSimplifyOpus55Strategy(), runner()),
         PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
@@ -150,8 +169,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
         PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
         PhaseStrategyRegistration(prDescription, runner()),
         PhaseStrategyRegistration(PrDescriptionOpus55Strategy(prDescription), runner()),
-        PhaseStrategyRegistration(monitor, runner()),
-        PhaseStrategyRegistration(MonitorOpus55Strategy(monitor), runner()),
+        PhaseStrategyRegistration(pullRequest.monitor, runner()),
+        PhaseStrategyRegistration(MonitorOpus55Strategy(pullRequest.monitor), runner()),
+        PhaseStrategyRegistration(pullRequest.standaloneMonitor, runner()),
+        PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(pullRequest.standaloneMonitor), runner()),
+        PhaseStrategyRegistration(pullRequest.standalonePublication, runner()),
       ),
     )
   }

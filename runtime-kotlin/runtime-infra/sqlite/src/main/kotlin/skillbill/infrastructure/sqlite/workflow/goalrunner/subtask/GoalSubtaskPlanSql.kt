@@ -2,118 +2,30 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.subtask
 
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.decodeState
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.hydratedEnvelopeFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.hydratedProvenanceFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.isSha256
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.normalizedEnvelopeFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.normalizedIdentityFailure
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.normalizedProvenanceFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.optionalRepairEvidence
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.rejectLegacy
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.repairEvidenceJson
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireColumn
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireNonNegativeInt
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requireParentGoalWorkflowId
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requirePositiveInt
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requirePositiveSubtaskId
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.throwNormalizedEnvelopeFailure
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.throwNormalizedIdentityFailure
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.throwNormalizedProvenanceFailure
-import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.translateSqlFailure
-import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
-import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import java.sql.Connection
 import java.sql.ResultSet
 
 internal class GoalSubtaskPlanSql(
   private val connection: Connection,
-  private val sharedPreplan: GoalSharedPreplanSql,
-  private val diagnostics: RuntimeDiagnostics,
-  private val transactionActive: Boolean = false,
 ) {
-  fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
-    connection.prepareStatement(
-      "SELECT * FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? ORDER BY manifest_order, subtask_id",
-    ).use { statement ->
-      connection.rejectLegacy(identity.parentGoalWorkflowId)
-      statement.bindAll(identity.parentGoalWorkflowId)
-      statement.executeQuery().use { rows ->
-        buildList {
-          while (rows.next()) {
-            when (val result = rows.toPlan(identity, rows.getString("governed_sub_spec_path"))) {
-              is GoalSubtaskPlanLookupResult.Found -> add(requireNotNull(result.plan))
-              is GoalSubtaskPlanLookupResult.Conflicted ->
-                throw invalidGoalPlanningPreparationSchemaError(
-                  identity.parentGoalWorkflowId,
-                  "",
-                  result.conflict.reason,
-                )
-            }
-          }
-        }
-      }
-    }
-
-  fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
-    requireNormalizedSubtaskPlan(checkpoint)
-    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
-      governingConflict(
-        checkpoint,
-      )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
-      val inserted = connection.insertSubtaskPlanRow(checkpoint)
-      when (val stored = findSubtaskPlan(checkpoint.identity, checkpoint.subtaskId, checkpoint.governedSubSpecPath)) {
-        is GoalSubtaskPlanLookupResult.Conflicted -> GoalPlanningPreparationWriteResult.Conflicted(stored.conflict)
-        is GoalSubtaskPlanLookupResult.Found ->
-          immutableInsertConflict(checkpoint, inserted, stored.plan)
-            ?.let { GoalPlanningPreparationWriteResult.Conflicted(it) }
-            ?: GoalPlanningPreparationWriteResult.Applied
-      }
-    }
-  }
-
-  fun replaceSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
-    requireNormalizedSubtaskPlan(checkpoint)
-    return connection.inNestedWriteTransaction(diagnostics, transactionActive) {
-      governingConflict(
-        checkpoint,
-      )?.let { return@inNestedWriteTransaction GoalPlanningPreparationWriteResult.Conflicted(it) }
-      connection.prepareStatement(
-        "DELETE FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? AND subtask_id = ?",
-      ).use { s ->
-        s.bindAll(checkpoint.identity.parentGoalWorkflowId, checkpoint.subtaskId)
-        s.executeUpdate()
-      }
-      connection.insertSubtaskPlanRow(checkpoint)
-      GoalPlanningPreparationWriteResult.Applied
-    }
-  }
-
-  fun deleteSubtaskPlan(
-    parentGoalWorkflowId: String,
-    subtaskId: Int,
-  ): Int {
-    requireParentGoalWorkflowId(parentGoalWorkflowId)
-    requirePositiveSubtaskId(parentGoalWorkflowId, subtaskId)
-    return connection.prepareStatement(
-      "DELETE FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? AND subtask_id = ?",
-    ).use { statement ->
-      statement.bindAll(parentGoalWorkflowId, subtaskId)
-      statement.executeUpdate()
-    }
-  }
-
   fun findSubtaskPlan(
     expectedIdentity: GoalPlanningIdentity,
     subtaskId: Int,
@@ -202,48 +114,6 @@ internal class GoalSubtaskPlanSql(
       it.bindAll(parentGoalWorkflowId)
       it.executeUpdate()
     }
-
-  private fun governingConflict(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationConflict? {
-    val found =
-      translateSqlFailure(checkpoint.identity.parentGoalWorkflowId, 0) {
-        sharedPreplan.findSharedPreplan(checkpoint.identity)
-      }
-    val shared =
-      when (found) {
-        is SharedGoalPreplanLookupResult.Conflicted -> return found.conflict
-        is SharedGoalPreplanLookupResult.Found -> found.checkpoint
-      } ?: throw invalidGoalPlanningPreparationSchemaError(
-        "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}",
-        "parent_goal_workflow_id",
-        "shared preplan must be checkpointed first",
-      )
-    return if (shared.provenance != checkpoint.provenance) {
-      GoalPlanningPreparationConflict(
-        checkpoint.identity.parentGoalWorkflowId,
-        checkpoint.subtaskId,
-        "subtask plan provenance must exactly match the governing shared preplan",
-        null,
-      )
-    } else {
-      null
-    }
-  }
-
-  private fun immutableInsertConflict(
-    checkpoint: GoalSubtaskPlanCheckpoint,
-    inserted: Boolean,
-    stored: GoalSubtaskPlanCheckpoint?,
-  ): GoalPlanningPreparationConflict? =
-    if (!inserted && stored != checkpoint.copy(createdAt = stored?.createdAt.orEmpty())) {
-      GoalPlanningPreparationConflict(
-        checkpoint.identity.parentGoalWorkflowId,
-        checkpoint.subtaskId,
-        "subtask plan checkpoint is immutable",
-        null,
-      )
-    } else {
-      null
-    }
 }
 
 private fun uniqueDescriptorsBySubtaskId(
@@ -259,54 +129,6 @@ private fun uniqueDescriptorsBySubtaskId(
     )
   }
   return descriptors
-}
-
-internal fun Connection.insertSubtaskPlanRow(checkpoint: GoalSubtaskPlanCheckpoint): Boolean =
-  prepareStatement(
-    """INSERT INTO goal_subtask_plans
-  (parent_goal_workflow_id, normalized_issue_key, repository_identity, subtask_id,
-  manifest_order, governed_sub_spec_path, sub_spec_hash, preparation_status, contract_version, parent_spec_hash,
-  decomposition_manifest_hash, planning_contract_id, planning_contract_version, phase_output_contract_id,
-  phase_output_contract_version, payload_sha256, plan_payload_json, repair_evidence_json)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(parent_goal_workflow_id, subtask_id) DO NOTHING""",
-  ).use { s ->
-    val values: List<Any?> =
-      listOf(
-        checkpoint.identity.parentGoalWorkflowId, checkpoint.identity.normalizedIssueKey,
-        checkpoint.identity.repositoryIdentity, checkpoint.subtaskId, checkpoint.manifestOrder,
-        checkpoint.governedSubSpecPath, checkpoint.subSpecHash, checkpoint.preparationStatus.wireValue,
-        checkpoint.contractVersion,
-        checkpoint.provenance.parentSpecHash,
-        checkpoint.provenance.decompositionManifestHash,
-        checkpoint.provenance.planningContractId, checkpoint.provenance.planningContractVersion,
-        checkpoint.provenance.phaseOutputContractId, checkpoint.provenance.phaseOutputContractVersion,
-        checkpoint.payloadSha256, checkpoint.planPayload, checkpoint.repairEvidenceJson(),
-      )
-    s.bindAll(values)
-    s.executeUpdate() > 0
-  }
-
-private fun requireNormalizedSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
-  val label = "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}"
-  normalizedIdentityFailure(checkpoint.identity)?.let { throwNormalizedIdentityFailure(label, it) }
-  normalizedProvenanceFailure(checkpoint.provenance)?.let { throwNormalizedProvenanceFailure(label, it) }
-  normalizedEnvelopeFailure(
-    checkpoint.contractVersion,
-    checkpoint.preparationStatus,
-    checkpoint.payloadSha256,
-    checkpoint.planPayload,
-  )?.let { throwNormalizedEnvelopeFailure(label, it) }
-  val extras =
-    when {
-      checkpoint.subtaskId < 1 -> "subtask_id" to "subtask_id must be a positive integer"
-      checkpoint.manifestOrder < 0 -> "manifest_order" to "manifest_order must be non-negative"
-      checkpoint.governedSubSpecPath.isBlank() ->
-        "governed_sub_spec_path" to "governed_sub_spec_path is required"
-      !checkpoint.subSpecHash.isSha256() -> "sub_spec_hash" to "sub_spec_hash must be a lowercase SHA-256"
-      else -> null
-    }
-  extras?.let { throw invalidGoalPlanningPreparationSchemaError(label, it.first, it.second) }
 }
 
 private fun requireHydratedSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {

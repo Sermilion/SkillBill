@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.idestatus.model.boundedIdeStatusActivity
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -24,6 +25,12 @@ class StandalonePhaseStatusEventSink(
   private var revision: String? = null
   private var currentStep: String = "run"
   private var currentActivity: String? = null
+  private var lastCiObservedPendingSampleNames: Set<String>? = null
+  private var monitorCleanup: StandaloneMonitorCleanup? = null
+
+  fun recordMonitorCleanup(cleanup: StandaloneMonitorCleanup) {
+    monitorCleanup = cleanup
+  }
 
   override fun emit(event: FeatureTaskRuntimeRunEvent) {
     runCatching {
@@ -39,6 +46,21 @@ class StandalonePhaseStatusEventSink(
     }.onFailure { error ->
       if (error is CancellationException) throw error
       RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status publication failed", error)
+    }
+  }
+
+  fun publishActivity(
+    stepName: String,
+    activity: String,
+  ) {
+    runCatching {
+      ensureRegistered(null)
+      currentStep = stepName
+      currentActivity = boundedIdeStatusActivity(activity)
+      persist(state = "active", finishedAt = null, terminalResult = null)
+    }.onFailure { error ->
+      if (error is CancellationException) throw error
+      RuntimeDiagnosticsBestEffortWarning.record(diagnostics, "IDE status activity publication failed", error)
     }
   }
 
@@ -135,6 +157,7 @@ class StandalonePhaseStatusEventSink(
             finishedAt = finishedAt,
             terminalResult = terminalResult?.takeIf(String::isNotBlank),
             acceptedResult = acceptedResult?.takeIf(String::isNotBlank),
+            monitorCleanup = monitorCleanup,
           ),
         )
       }
@@ -166,7 +189,7 @@ class StandalonePhaseStatusEventSink(
       is FeatureTaskRuntimeRunEvent.PhaseLoopEdge -> "Loop edge: ${event.phaseId}"
       is FeatureTaskRuntimeRunEvent.PhaseFixLoopIteration -> "Fix iteration: ${event.phaseId}"
       is FeatureTaskRuntimeRunEvent.ValidationGateProgress -> "Validation gate: ${event.phaseId}"
-      is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningActivity(event.pendingChecks)
+      is FeatureTaskRuntimeRunEvent.CiStillRunning -> ciStillRunningActivity(event)
       is FeatureTaskRuntimeRunEvent.PhaseCompleted -> "Phase completed: awaiting settlement"
       is FeatureTaskRuntimeRunEvent.PhaseBlocked -> "Phase blocked"
       is FeatureTaskRuntimeRunEvent.PhasePaused -> "Phase paused"
@@ -176,9 +199,34 @@ class StandalonePhaseStatusEventSink(
       is FeatureTaskRuntimeRunEvent.DecomposedAtPlanning -> "Planning decomposed"
     }
 
-  private fun ciStillRunningActivity(pendingChecks: List<String>): String {
-    val names = pendingChecks.filter(String::isNotBlank).distinct()
-    return if (names.isEmpty()) "CI still running" else "CI still running: ${names.joinToString(", ")}"
+  private fun ciStillRunningActivity(event: FeatureTaskRuntimeRunEvent.CiStillRunning): String {
+    val observedSampleNames = event.pendingChecks.map { it.name.take(MAX_CHECK_NAME_LENGTH) }.toSet()
+    if (observedSampleNames.isEmpty()) {
+      lastCiObservedPendingSampleNames = emptySet()
+      return "CI waiting for check registration"
+    }
+    val previousSampleNames = lastCiObservedPendingSampleNames
+    lastCiObservedPendingSampleNames = observedSampleNames
+    val newlyVisible = previousSampleNames?.let { observedSampleNames - it }.orEmpty().sorted()
+    val noLongerVisible = previousSampleNames?.let { it - observedSampleNames }.orEmpty().sorted()
+    val sampleChanged = previousSampleNames != null && previousSampleNames != observedSampleNames
+    val transitionNames =
+      (
+        newlyVisible.map { "now visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" } +
+          noLongerVisible.map { "no longer visible ${it.take(MAX_VISIBLE_NAME_TEXT)}" }
+      )
+        .take(MAX_VISIBLE_TRANSITIONS)
+        .joinToString("; ")
+    val names = (newlyVisible + observedSampleNames.sorted()).distinct().take(MAX_VISIBLE_PENDING_NAMES)
+    val detail = names.joinToString(", ") { it.take(MAX_VISIBLE_NAME_TEXT) }
+    val change =
+      when {
+        transitionNames.isNotBlank() -> "; $transitionNames"
+        sampleChanged -> "; visible pending-check sample changed"
+        previousSampleNames == null -> "; pending $detail"
+        else -> "; still pending $detail"
+      }
+    return "CI waiting (pending-check sample: ${event.pendingChecks.size} checks)$change"
   }
 
   private fun incrementDecimal(value: String): String {
@@ -194,5 +242,12 @@ class StandalonePhaseStatusEventSink(
       }
     }
     return if (carry == 1) "1${digits.concatToString()}" else digits.concatToString()
+  }
+
+  private companion object {
+    const val MAX_CHECK_NAME_LENGTH = 160
+    const val MAX_VISIBLE_NAME_TEXT = 28
+    const val MAX_VISIBLE_TRANSITIONS = 2
+    const val MAX_VISIBLE_PENDING_NAMES = 2
   }
 }

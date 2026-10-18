@@ -99,7 +99,7 @@ internal class SQLiteUnitOfWork(
     WorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive)
   override val workList: WorkListRepository = SQLiteWorkListRepository(connection, diagnostics)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
-    GoalPlanningPreparationStore(connection, diagnostics, transactionActive)
+    GoalPlanningPreparationStore(connection)
   override val goalRunnerControls: GoalRunnerControlRepository =
     GoalRunnerControlStore(connection)
   override val unaddressedFindings: UnaddressedFindingsRepository = SQLiteUnaddressedFindingsRepository(connection)

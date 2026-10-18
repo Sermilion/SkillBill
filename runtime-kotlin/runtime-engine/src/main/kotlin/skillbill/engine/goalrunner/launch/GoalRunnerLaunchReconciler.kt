@@ -172,7 +172,10 @@ class GoalRunnerLaunchReconciler(
         assignedWorkflowId = assignedWorkflowId,
         codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
         validationDepth = ValidationDepth.FULL,
-        qualityGateSelection = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+        qualityGateSelection =
+          state.manifest.workflowIdFor(subtaskId)
+            ?.let(outcomeStore::recordedQualityGateSelection)
+            ?: GoalRunnerQualityGateSelectionResolver.resolve(),
         agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
         reviewBaseline =
           state.manifest.workflowIdFor(subtaskId)

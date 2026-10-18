@@ -22,6 +22,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -288,6 +289,14 @@ private class CountingWorkList(
     delegate.findByWorkflowId(workflowId).also {
       trigger()
     }
+
+  override fun repositoryIdentityForIssue(
+    normalizedIssueKey: String,
+    excludedWorkflowId: String,
+  ): IssueRepositoryIdentityLookup =
+    delegate.repositoryIdentityForIssue(normalizedIssueKey, excludedWorkflowId).also {
+      trigger()
+    }
 }
 
 private class CountingWorkflowStates(
@@ -304,6 +313,9 @@ private class CountingWorkflowStates(
 
   override fun countGoalChildIdentities(normalizedIssueKey: String): Int =
     delegate.countGoalChildIdentities(normalizedIssueKey).also { trigger() }
+
+  override fun listGoalChildWorkflowIdsByParent(parentWorkflowId: String): List<String> =
+    delegate.listGoalChildWorkflowIdsByParent(parentWorkflowId).also { trigger() }
 }
 
 private class CountingGoalRunnerControls(

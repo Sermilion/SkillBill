@@ -108,6 +108,11 @@ governedResources {
     "SKILL-120: canonical feature-task runtime worker-ownership schema",
   )
   copy(
+    "copyStandaloneMonitorOwnershipSchema",
+    "standalone-monitor-ownership-schema.yaml",
+    "SKILL-427: canonical standalone monitor ownership schema",
+  )
+  copy(
     "copyFeatureTaskExecutionIdentitySchema",
     "feature-task-execution-identity-schema.yaml",
     "SKILL-120: canonical feature-task execution-identity schema",
@@ -151,6 +156,26 @@ governedResources {
     "copyFeatureTaskRuntimeValidationEvidenceSchema",
     "feature-task-runtime-validation-evidence-schema.yaml",
     "SKILL-360: canonical validation-evidence schema",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairStateSchema",
+    "acceptance-criterion-repair-state-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-state schema",
+  )
+  copy(
+    "copyAcceptanceCriterionAuditResultSchema",
+    "acceptance-criterion-audit-result-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion audit-result schema",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairHandoffSchema",
+    "acceptance-criterion-repair-handoff-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-handoff schema",
+  )
+  copy(
+    "copyAcceptanceCriterionRepairAdoptionSchema",
+    "acceptance-criterion-repair-adoption-schema.yaml",
+    "SKILL-426: canonical acceptance-criterion repair-adoption schema",
   )
   copy(
     "copyFeatureTaskRuntimeReadinessEvidenceSchema",

@@ -2,14 +2,58 @@
 
 The desktop app uses the `desktop-tray` Gradle build and package prefix
 `dev.skillbill.tray`. Its composite build links runtime libraries from
-`../runtime-kotlin`. Work reads and controls run in process. Application use
-cases own section subscriptions, selection, settings, control requests, and
-notification transitions. Infrastructure owns Room, DataStore, and host adapters.
-Presentation and UI consume typed models and repository contracts.
+`../runtime-kotlin`. Work reads and controls run in process. The modules are
+`:core:common`, `:core:domain`, `:core:designsystem`, `:core:ui`, `:core:data`,
+`:core:datastore`, `:core:testing`, the screens `:feature:work`, `:feature:detail`,
+`:feature:history` and `:feature:settings`, and the `:composeApp` shell. There is no
+root source set: the root build is an aggregator whose `check` depends on every child
+project's `check` and on the convention build's `:convention:check`, whose `test` runs
+every module's `jvmTest`, and which aliases the `:composeApp` distribution tasks
+(`run`, `createDistributable`, `stageAppImage`, `packageAppImage`, `packagedDataSmoke`).
+[`docs/architecture-parity.md`](docs/architecture-parity.md) holds the module
+inventory, the migration inventory for the retired single-module tree and the Readian
+parity matrix.
 
-SKILL-424 owns the final KMP module graph, generated application DI, feature
-ViewModels, Navigation 3, and native host integration. This data-layer change
-keeps the existing windows and controller.
+Each feature owns one screen's typed `UiState`, `Action` and `Effect` contract, its
+ViewModel and its Compose content, all in `commonMain`. A feature depends only on
+`:core:common`, `:core:domain`, `:core:designsystem` and `:core:ui`; it never reaches
+`:core:data`, `:core:datastore`, `:core:testing` in production, the shell, or another
+feature. `:core:ui` holds what the screens share: the paged-list state, the section
+pager, effect and feedback delivery, entry-scoped ViewModel stores, formatting and the
+row and pagination components. `:composeApp` composes the windows, owns selection,
+the tray and the notification and store-session coordinators, and builds ViewModels
+through the generated `ViewModelFactory`. Architecture guards in `composeApp` enforce
+these edges with rejection fixtures.
+
+Every section list is a `PagedListState` with separate loading, empty, refreshing,
+read-error and append-error states. The board keeps paging and liveness per
+subscription, so each owner (the main window's `WorkViewModel`, the tray and the
+notification coordinator) reads the live and recent sections through its own
+`TrackedBoardSections`, the detail pane observes the sections it needs directly, and
+`HistoryViewModel` owns history. Effects are per family: navigation
+effects keep the newest one and transient effects hold at most four. Feedback the user
+must see travels in `UiState` and stays until acknowledged by id.
+
+Four lifetimes are generated with kotlin-inject and Anvil, each with a named owner.
+`AppScope` lives for the process and is owned by `AppOwner`, which ends it in order on
+quit: windows, coordinators, then the database session and settings store.
+`DatabaseSessionScope` lives for one selected database and is owned by the data layer's
+`DatabaseSession`; switching or closing it releases the runtime graph, Room handles and
+observers, and every window resets to the new generation. `WindowScope` lives while a
+window is not disposed and is owned by its `WindowOwner`; hiding keeps it. `EntryScope`
+lives while a route is on a window's back stack, through the entry's ViewModelStore.
+Navigation 3's `NavDisplay` renders each window's `WindowNavigator`; stacks are saved
+as versioned snapshots and restored only for a valid database generation. The tray, the
+notifications and the host intents reach windows through `HostIntentRouter`, which lands
+an intent in the window used last.
+
+Guards run in `:composeApp:jvmTest` over Gradle-supplied manifests, each with nonempty
+input assertions and synthetic rejection fixtures: `ModuleGraphRulesTest` (the settings
+project list and module edges), `DesktopArchitectureTest` and `SourceRulesTest` (source
+rules), `NavigationTypingRulesTest` (typed routes and arguments) and `DeletionRulesTest`
+(no combined work port, no process launcher outside the approved native files, no retired
+`cliOverride` or `pollSeconds` preference names, no repeating timers in data or feature code).
+No baseline, exemption or suppression list backs any of them.
 
 Windows and Linux use `dev.nucleusframework:composenativetray:2.1.6` with an
 app-owned Compose window for the tray popover. Linux uses its
@@ -25,6 +69,14 @@ GNOME's stock shell needs its
 AppIndicator extension to expose StatusNotifierItem icons. The app keeps its
 desktop window available when the platform reports no system tray.
 
+The application convention transforms the Compose 1.12.1 runtime jar to reset
+`SurfaceSkiaLayerComponent`'s disposed flag after its native layer reattaches.
+Skiko recreates the native layer on peer replacement, but Compose otherwise keeps
+dropping redraw requests after that replacement. The transform rejects a changed
+Compose version or class shape. `NativeWindowPeerTest` recreates a window peer twice
+and checks state updates and clicks after each replacement. Linux CI runs desktop
+checks under Xvfb so this regression test has a native display.
+
 Native notifications use `dev.nucleusframework:nucleus.notification-common`
 2.5.18. It exposes activation callbacks for opening the exact selected item.
 Start at login uses `nucleus.autolaunch` on macOS and Windows and a per-user XDG
@@ -34,14 +86,18 @@ The typed tray projection gives failed work priority, then actionable work,
 running work, and idle. Windows and Linux render the running count over the
 state icon. macOS uses the app-owned AppKit status item, marks its symbol as a
 template image, and puts the running count in the status title. The macOS
-adapter is built from `src/main/native/macos/MacStatusItemBridge.m` on macOS and
-packaged as an application resource. Its native menu groups the current Goals
-and Phases and exposes the shared app actions.
+adapter source is `composeApp/src/jvmMain/native/macos/MacStatusItemBridge.m`.
+macOS hosts compile it with `:composeApp:compileMacTrayNative` from the
+desktop-application convention plugin, and it is packaged as a jvmMain
+application resource. Its native menu groups the current Goals and Phases and
+exposes the shared app actions.
 
 The main window opens on launch and remains available when its Linux window is
 closed. With a registered tray, closing the main window hides it. Without a
-tray watcher, the app keeps the main window visible. Tray icon anchoring, native rendering, menu behavior, and packaged
-installer behavior still need verification on each supported host.
+tray watcher, the app keeps the main window visible. Tray icon anchoring, native rendering, menu behavior, notification
+display, login-start registration and installer packages are not exercised by any
+automated task on any host; verify them by hand on each supported host. CI runs the
+checks, `createDistributable` and `packagedDataSmoke` on Linux, macOS and Windows runners.
 
 The main window and tray popover follow `design/App/Skill Bill Tray v2.dc.html`.
 Their fonts and icon ship as classpath resources. On Linux, scale detection
@@ -71,13 +127,16 @@ completion.
 Needs you, live goals, live phases, History, and recent completions have separate
 desktop queries. Search runs in SQL before the ten-row result limit. The desktop
 can inspect up to forty candidate rows per request and retries up to three times
-when another process changes the observed snapshot. These limits do not bound the
-shared runtime projection: `IdeStatusService.board` still loads the full work
-list and standalone candidate set before selecting a page. The Room query and
-the JDBC projection also use separate connections. History has its own retention
-and family filter. Sidebar, history, and detail cursors are separate at the
-desktop boundary, and retained windows cap at five pages. The shared detail
-service still materializes some growing collections before paging them.
+when another process changes the observed snapshot. The shared status read is
+bounded too: it takes at most 500 workflows and 500 eligible standalone rows per
+request. Standalone execution history pages by a run-sequence anchor, so newer
+runs recorded between reads neither repeat nor skip a row, and detail phases are
+projected one page at a time. The Room query and the JDBC projection use
+separate connections. History has its own retention and family filter. Sidebar,
+history, and detail cursors are separate at the desktop boundary, and retained
+windows cap at five pages. Detail cursors carry the store id, revision,
+repository identity, list, and page size; a cursor from another store, list, or
+revision is refused and the read retries against one coherent snapshot.
 Generation-bound cursors reject stale appends and details after a path change or
 same-path replacement. Failed reads retain prior data with a stale indication.
 
@@ -91,7 +150,11 @@ query coherence. Rollbacks and unrelated table commits publish nothing.
 Registration and reconnect read a fresh baseline; watcher overflow rereads the latest signal.
 An observer failure leaves the last view stale until explicit refresh reconnects.
 Lease and retention deadlines schedule one invalidation at the known boundary.
-Elapsed-duration display ticks without database reads.
+Each board section and each detail owner has its own `DeadlineScheduler`, and a
+fired deadline reprojects only that owner. The runtime stamps time-windowed
+facts with a `membershipDeadline`, so a surface rereads at the flip instant
+instead of judging the window itself. Elapsed-duration display ticks without
+database reads.
 
 DataStore 1.2.1 stores app preferences in the injected settings file. Typed Flow
 publishes committed settings. Atomic field updates preserve concurrent choices.
@@ -99,9 +162,13 @@ Legacy preferences migrate once after a durable commit. `cliOverride` and
 `pollSeconds` are discarded, and neither becomes a database path. Corrupt files
 remain on disk and report an error. DataStore stores no workflow rows.
 
-The work-data path has no CLI or process adapter. The removed
-`CliBoardSource` call sites in `Main.kt` now use `RoomBoardSource`; its old
-`CliResolver` and `ProcessRunner` dependencies have no desktop consumers. Its
+The work-data path runs no installed CLI, does no PATH or login-shell discovery, and
+parses no command output. Runtime services reached through the in-process graph
+may run `git` or other processes (operator decision, 2026-10-15). The removed
+`CliBoardSource` call sites in `Main.kt` were first replaced by `RoomBoardSource`,
+which the feature split then retired in favour of per-section board, detail,
+policy and control repositories. The old
+`CliResolver` and `ProcessRunner` dependencies have no desktop consumers. The
 `WorkPayloadDecoder` and `WorkPayloadKeys` transport path is gone because Room
 rows map through `RuntimeWorkMapper`. The old CLI mutation, resolver, process,
 and decoder test files were removed with those adapters. Desktop preferences no
@@ -109,15 +176,34 @@ longer expose `cliOverride` or `pollSeconds`; `LegacySettingsMigration` only
 records and discards those saved values. The only process launcher in the
 desktop source set is Linux AppImage `AppRun`, which starts the packaged app.
 Native notification/autolaunch libraries, the macOS status-item JNI bridge, and
-Linux AppRun remain host integration code. Replacing host helpers belongs to
-SKILL-424. Desktop CI watches runtime-library changes and builds the composite
-dependencies from source.
+Linux AppRun are host integration code owned by `:composeApp`; `DeletionRulesTest`
+limits process use to four named files. Desktop CI watches runtime-library changes
+and builds the composite dependencies from source.
 
-The source does not yet meet every intended data-layer boundary. In particular,
-the desktop still owns grouping and control-eligibility checks, Room projection
-uses a separate runtime JDBC snapshot, and the shared live-board query still
-walks historical rows. The validation record tracks the remaining query,
-invalidation, pagination, cursor, and lifecycle gaps.
+The runtime owns shared work policy and the desktop renders its typed verdicts.
+`IdeStatusPolicy.work` emits the per-item facts (`controlEligible`, which includes
+freshness, `pauseEligible`, `running`, `recentlyFinishedPhase`, `doneWithinDay`, and
+`membershipDeadline`), and `IdeStatusPolicy.arrange` owns the board order, the
+live and finished phase lists, the counts, and the tray status. The desktop reaches
+it through `WorkPolicyRepository`, keeps the result in `TrayUiState.arrangement`,
+and only resolves identities and renders. A declaration-aware source rule in
+`DesktopArchitectureTest` walks the desktop and feature surfaces and rejects code that sorts
+work, judges lifecycle or freshness membership, or weighs a time window itself.
+Detail lists page by the identity of their last row (a per-list anchor), never by a
+shared offset, and the desktop refreshes a retained page from that anchor. The status
+read pages live work first within a fixed budget and counts the storage work it
+spends. The database session
+owner is `DatabaseSession`: it detaches under its mutex and disposes outside it,
+and a separate lifecycle lock serialises replacement and teardown. Control
+results reach the desktop as distinct outcomes (`IntentRecorded`, `Accepted`,
+`ExitConfirmed`, `TerminationAttempted`, and a typed incomplete-termination
+refusal). Some boundaries are still open: Room projection uses a separate runtime
+JDBC snapshot, the desktop and runtime candidate queries still evaluate a union of
+every work table before filtering and rely on SQLite to push the predicates down,
+and the residuals listed in the SKILL-423 handoff record remain.
+[`docs/skill-423-handoff.md`](docs/skill-423-handoff.md) holds the per-obligation
+verdicts, owners, and regression evidence; the validation record keeps the
+measured results.
 
 The disposable repository tests include 5,000 terminal records, a live goal
 with a real manifest and process lease, exact control rejection, external JVM

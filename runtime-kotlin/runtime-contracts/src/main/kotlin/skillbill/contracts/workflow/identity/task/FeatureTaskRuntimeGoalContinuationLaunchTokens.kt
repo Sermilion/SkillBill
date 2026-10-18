@@ -2,7 +2,6 @@ package skillbill.contracts.workflow.identity.task
 
 object FeatureTaskRuntimeGoalContinuationLaunchTokens {
   const val FEATURE_TASK_COMMAND: String = "feature-task"
-  const val RUN_SUBCOMMAND: String = "run"
   const val RESUME_SUBCOMMAND: String = "resume"
 
   const val GOAL_CONTINUATION_ENV: String = "SKILL_BILL_GOAL_CONTINUATION"

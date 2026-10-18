@@ -12,6 +12,18 @@ Decision: After reserveStop writes the operator pause, only confirmed process ex
 Reason: Pause is the operator request; STOPPED is an observed exit. Fabricating STOPPED hides a live worker and makes a later takeover look like a fresh start.
 Alternatives considered: Reporting STOPPED whenever pause persisted, rejected because pause does not prove the process died.
 
+## [2026-10-17] Validate every goal child and fence resumes on the recorded selection
+Context: Goal children before the last one ran compile-only build and recorded no validation result. On SKILL-422 the deferred check and detekt debt landed on the last child's validate session.
+Decision: The resolver returns VALIDATE for every child. Launch prepare, run preparation and the launch reconciler use a child's recorded quality_gate_selection when present and resolve() only when absent.
+Reason: The resolver change alone would make recorded BUILD children fail execution-plan admission, because BUILD and VALIDATE descriptors are incompatible. Honoring the recorded value lets in-flight children finish as they started.
+Alternatives considered: Migrating existing child rows to validate was rejected; the spec rules out rewriting rows or retroactive revalidation.
+
+## [2026-10-14] Plan first only when no goal and no bundle exist
+Context: A full run must go through the plan skeleton, but stored goals and hand-written bundles must keep working.
+Decision: Plan first only when loadDurableByIssueKey finds no stored goal and intakePreparation.prepare finds no bundle. Otherwise go straight to goalRunner.run.
+Reason: A stored goal resumes with no planning. A bundle on disk is imported as before, even when an incomplete plan workflow exists, so plan resume applies only without a manifest. Running hand-written bundles through plan_subtasks belongs to other parent work.
+Alternatives considered: Having the CLI choose between open and resume was rejected because StandalonePlanRun.run already does both.
+
 ## [2026-10-10] Rewrite status extras together on live goal finalization
 Context: GoalRunnerStatusProjectionRuntimeInputs keeps currentStepOverride and latestLivenessSignal as separate extras. The assembler already copied currentStepId from the goal_finalization declared event and left latestLivenessSignal on the parked parent row.
 Decision: When the parent lease is LIVE and the latest declared event is goal_finalization, copy both currentStepId and latestLivenessSignal from the same parent progress rewrite, using resolvedLivenessSignal(liveStepId).

@@ -23,16 +23,13 @@ import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationConte
 import skillbill.engine.featuretask.slot.attempt.PhaseCommitLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
-import skillbill.engine.featuretask.slot.attempt.PhasePlanningLaunchContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object FeatureTaskRuntimeRunLoopHookViews {
   internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(
@@ -44,23 +41,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.COMMIT -> CommitLaunchView(this, run)
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
       PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
-      PhaseStepHookContextKind.PLANNING -> PlanningLaunchView(this)
       else -> LaunchView(this)
     }
-  }
-
-  private class PlanningLaunchView(
-    private val context: PhaseAttemptLaunchRuntimeContext,
-  ) : LaunchView(context),
-    PhasePlanningLaunchContext {
-    override fun existingBundleReason(): String? =
-      if (request.skeletonDefinition == SkeletonDefinition.PLAN) {
-        null
-      } else {
-        context.decompositionPlanner
-          .existingManifest(request.repoRoot, request.issueKey)
-          ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
-      }
   }
 
   private open class LaunchView(
@@ -122,7 +104,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   ) : OutputView(context),
     PhasePlanningOutputContext {
     override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
-      val reason = PlanDecompositionStop.authoredBundleRejection(context, capture) ?: return null
+      val reason = PlanDecompositionStop.recordAuthoredBundleOrRejection(context, capture) ?: return null
       val coupling = context.settlementCoupling()
       return AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -157,7 +139,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
 
   private class AuditOutputView(
     private val remediation: PhaseCheckpointRemediationContext,
-    private val settlement: PhaseOutputSettlementContext,
+    settlement: PhaseOutputSettlementContext,
     private val acceptedRun: PhaseRun,
   ) : OutputView(settlement),
     PhaseAuditOutputContext {
@@ -207,12 +189,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       attested: NormalizedFeatureTaskRuntimePhaseOutput,
       outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
       progressRejection: String?,
-      noChangePause: FeatureTaskRuntimeNoChangePause?,
     ): AttemptResult? {
       val checked = capture.also { check(it.run === acceptedRun) }
-      if (noChangePause != null) {
-        return FeatureTaskRuntimeRunLoopAuditSettlement.settleNoChangePause(settlement, checked, noChangePause)
-      }
       return FeatureTaskRuntimeRunLoopAuditSettlement.settleCompletedRound(
         remediation,
         checked,

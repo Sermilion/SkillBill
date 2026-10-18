@@ -3,9 +3,16 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandaloneMonitorCleanup
+import skillbill.ports.idestatus.model.StandaloneMonitorTarget
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdateResult
+import skillbill.ports.monitor.model.MonitorRetentionReason
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Clock
@@ -25,7 +32,8 @@ class StandalonePhaseStatusStoreTest {
             "'main' AS branch_correlation, 'SKILL-418' AS issue_key, 'workflow' AS workflow_id, " +
             "'invocation' AS invocation_id, 'execution' AS execution_id, 'store' AS status_store_id, " +
             "'1' AS run_sequence, '1' AS status_revision, 'active' AS lifecycle_state, " +
-            "'2026-10-09 05:35:36' AS started_at, '2026-10-09T05:36:00Z' AS updated_at",
+            "'2026-10-09 05:35:36' AS started_at, '2026-10-09T05:36:00Z' AS updated_at, " +
+            "NULL AS agent_environment_json",
         )
       }
       val normalizations = mutableListOf<String>()
@@ -157,67 +165,187 @@ class StandalonePhaseStatusStoreTest {
   }
 
   @Test
-  fun `board candidate read keeps live rows across identities and completion bounds inclusive`() {
-    val directory = Files.createTempDirectory("standalone-board-candidates")
+  fun `eligible read pages each slice newest first strictly after an anchor`() {
+    val directory = Files.createTempDirectory("standalone-eligible-pages")
     val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
-    val finishedFrom = Instant.parse("2026-10-10T00:00:00Z")
-    val finishedThrough = Instant.parse("2026-10-11T00:00:00Z")
-    val registrationTime = finishedThrough.minusSeconds(300)
-    val names = listOf("live-old", "lower-bound", "upper-bound", "outside")
+    val now = Instant.parse("2026-10-11T00:00:00Z")
+    val finishedAt = mapOf("settled-old" to now.minusSeconds(7 * 3600), "settled-1" to now.minusSeconds(1800))
+    val names = listOf("live-1", "settled-old", "live-2", "settled-1", "live-3")
     database.transaction {
-      names.forEachIndexed { index, name ->
-        val rootIdentity = if (index % 2 == 0) "repo-a" else "repo-b"
+      names.forEach { name ->
         it.standalonePhaseStatuses.register(
           StandalonePhaseStatusRegistration(
-            repositoryIdentity = rootIdentity,
-            branchCorrelation = "branch-$index",
-            issueKey = null,
-            workflowId = null,
-            invocationId = name,
-            phaseId = "review",
-            executionId = "execution-$name",
-            lifecycleState = "active",
-            currentStep = "review",
-            startedAt = registrationTime.minusSeconds(90_000),
-            leaseOwner = "owner-$name",
-            leaseGeneration = 1,
-            leaseExpiresAt = finishedThrough.plusSeconds(86_400),
+            repositoryIdentity = "repo", branchCorrelation = "main", issueKey = null, workflowId = null,
+            invocationId = name, phaseId = "review", executionId = "execution-$name", lifecycleState = "active",
+            currentStep = "review", startedAt = now.minusSeconds(8 * 3600), leaseOwner = "owner-$name",
+            leaseGeneration = 1, leaseExpiresAt = now.plusSeconds(86_400),
           ),
         )
-        if (name != "live-old") {
-          val finishedAt =
-            when (name) {
-              "lower-bound" -> finishedFrom
-              "upper-bound" -> finishedThrough
-              else -> finishedFrom.minusNanos(1)
-            }
+        finishedAt[name]?.let { finished ->
           it.standalonePhaseStatuses.update(
             StandalonePhaseStatusUpdate(
-              executionId = "execution-$name",
-              expectedRevision = "1",
-              leaseOwner = "owner-$name",
-              leaseGeneration = 1,
-              lifecycleState = "terminal",
-              currentStep = "review",
-              currentActivity = null,
-              updatedAt = finishedAt,
-              finishedAt = finishedAt,
-              terminalResult = "done",
+              executionId = "execution-$name", expectedRevision = "1", leaseOwner = "owner-$name",
+              leaseGeneration = 1, lifecycleState = "terminal", currentStep = "review", currentActivity = null,
+              updatedAt = finished, finishedAt = finished, terminalResult = "done",
             ),
           )
         }
       }
     }
 
-    val (candidates, exactOld) =
-      database.read {
-        it.standalonePhaseStatuses.readBoardCandidates(finishedFrom, finishedThrough) to
-          it.standalonePhaseStatuses.readByInvocation("outside")
-      }
+    fun read(page: StandaloneEligiblePage) =
+      database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, page) }.map { it.invocationId }
+    val head = database.read { it.standalonePhaseStatuses.readEligible("repo", "main", now, StandaloneEligiblePage(2)) }
 
-    assertEquals(setOf("live-old", "lower-bound", "upper-bound"), candidates.map { it.invocationId }.toSet())
-    assertEquals("outside", exactOld?.invocationId)
+    assertEquals(listOf("live-3", "settled-1"), head.map { it.invocationId })
+    val live = StandaloneEligibleSlice.LIVE
+    assertEquals(listOf("live-3", "live-2", "live-1"), read(StandaloneEligiblePage(slice = live)))
+    assertEquals(listOf("settled-1"), read(StandaloneEligiblePage(slice = StandaloneEligibleSlice.SETTLED)))
+    val anchor = StandalonePhaseExecutionAnchor(head.first().runSequence, head.first().invocationId)
+    assertEquals(listOf("live-2"), read(StandaloneEligiblePage(1, anchor, live)))
   }
+
+  @Test
+  fun `recorded agent environment survives the phase and workflow round trip and stays empty when absent`() {
+    val directory = Files.createTempDirectory("standalone-agent-environment")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-14T08:00:00Z")
+    val recorded = mapOf("CLAUDE_CONFIG_DIR" to "/home/dev/.claude-work")
+    val workflow =
+      IdeStatusWorkflowRegistration(
+        "repo",
+        "main",
+        "SKILL-1",
+        "goal-parent",
+        "workflow-invocation-1",
+        "workflow-execution-1",
+        "active",
+        started,
+      )
+    database.transaction {
+      it.standalonePhaseStatuses.register(monitorRegistration("recorded", started, started.plusSeconds(60)))
+      it.standalonePhaseStatuses.register(
+        monitorRegistration("env", started, started.plusSeconds(60)).copy(agentEnvironment = recorded),
+      )
+      it.standalonePhaseStatuses.registerWorkflow(workflow)
+      it.standalonePhaseStatuses.registerWorkflow(
+        workflow.copy(
+          invocationId = "workflow-invocation-2",
+          executionId = "workflow-execution-2",
+          startedAt = started.plusSeconds(1),
+          agentEnvironment = recorded,
+        ),
+      )
+    }
+    database.read {
+      assertEquals(emptyMap(), it.standalonePhaseStatuses.readByInvocation("run-recorded")?.agentEnvironment)
+      assertEquals(recorded, it.standalonePhaseStatuses.readByInvocation("run-env")?.agentEnvironment)
+      assertEquals(recorded, it.standalonePhaseStatuses.latestWorkflowExecution("goal-parent")?.agentEnvironment)
+    }
+  }
+
+  @Test
+  fun `monitors of different pull requests sharing a branch stay active and are found from any branch`() {
+    val directory = Files.createTempDirectory("standalone-monitor-targets")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    val lease = started.plusSeconds(3600)
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, lease))
+      it.standalonePhaseStatuses.register(targetRegistration("eight", 8, started.plusSeconds(1), lease))
+      it.standalonePhaseStatuses.register(monitorRegistration("legacy", started.plusSeconds(2), lease))
+    }
+    val rows = database.read { it.standalonePhaseStatuses.readEligible("repo", "unrelated-branch", started) }
+    assertEquals(
+      setOf("execution-seven", "execution-eight"),
+      rows.map { it.executionId }.toSet(),
+    )
+    assertEquals(listOf("active", "active"), rows.map { it.lifecycleState })
+    assertEquals(
+      setOf("github.com/acme/repo#7", "github.com/acme/repo#8"),
+      rows.map { it.monitorTarget?.pullRequestKey }.toSet(),
+    )
+    val legacy = database.read { it.standalonePhaseStatuses.readEligible("repo", "feat/crashlytics", started) }
+    assertEquals("active", legacy.first { it.executionId == "execution-legacy" }.lifecycleState)
+  }
+
+  @Test
+  fun `monitor cleanup round trips on a target row and is refused on a row without a target`() {
+    val directory = Files.createTempDirectory("standalone-monitor-cleanup")
+    val database = sqliteDatabaseSessionFactory(userHome = directory, environment = mapOf("TEST" to "1"))
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, started.plusSeconds(3600)))
+      it.standalonePhaseStatuses.register(monitorRegistration("legacy", started, started.plusSeconds(3600)))
+    }
+    val retained = StandaloneMonitorCleanup.Retained(MonitorRetentionReason.DIRTY_WORKTREE, "Dirty. Path: /wt/7")
+    val result =
+      database.transaction {
+        it.standalonePhaseStatuses.update(cleanupUpdate("execution-seven", started, retained))
+      }
+    assertEquals(StandalonePhaseStatusUpdateResult.ACCEPTED, result)
+    val record = database.read { it.standalonePhaseStatuses.readByInvocation("run-seven") }
+    assertEquals(retained, record?.monitorCleanup)
+    assertEquals(targetOf(7), record?.monitorTarget)
+    assertFailsWith<IllegalArgumentException> {
+      database.transaction {
+        it.standalonePhaseStatuses.update(
+          cleanupUpdate("execution-legacy", started, StandaloneMonitorCleanup.Released),
+        )
+      }
+    }
+  }
+
+  @Test
+  fun `a partially recorded monitor target fails loudly instead of reading as a legacy row`() {
+    val directory = Files.createTempDirectory("standalone-monitor-corrupt-target")
+    val dbPath = directory.resolve("status.db")
+    val database =
+      sqliteDatabaseSessionFactory(
+        userHome = directory,
+        dbPathOverride = dbPath.toString(),
+        environment = mapOf("TEST" to "1"),
+      )
+    val started = Instant.parse("2026-10-10T11:02:24Z")
+    database.transaction {
+      it.standalonePhaseStatuses.register(targetRegistration("seven", 7, started, started.plusSeconds(3600)))
+    }
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      connection.createStatement().use {
+        it.executeUpdate("UPDATE standalone_phase_status SET monitor_head_ref = NULL")
+      }
+    }
+    assertFailsWith<SkillBillRuntimeException> {
+      database.read { it.standalonePhaseStatuses.readByInvocation("run-seven") }
+    }
+  }
+
+  private fun targetOf(number: Int) =
+    StandaloneMonitorTarget(
+      pullRequestKey = "github.com/acme/repo#$number",
+      pullRequestUrl = "https://github.com/acme/repo/pull/$number",
+      headRepository = "github.com/fork-$number/repo",
+      headRef = "feat/crashlytics",
+      callerRoot = "/caller",
+      worktreePath = "/wt/$number",
+    )
+
+  private fun targetRegistration(
+    suffix: String,
+    number: Int,
+    startedAt: Instant,
+    leaseExpiresAt: Instant,
+  ) = monitorRegistration(suffix, startedAt, leaseExpiresAt).copy(monitorTarget = targetOf(number))
+
+  private fun cleanupUpdate(
+    executionId: String,
+    at: Instant,
+    cleanup: StandaloneMonitorCleanup,
+  ) = StandalonePhaseStatusUpdate(
+    executionId = executionId, expectedRevision = "1", leaseOwner = "owner", leaseGeneration = 1,
+    lifecycleState = "terminal", currentStep = "monitor", currentActivity = null, updatedAt = at,
+    finishedAt = at, terminalResult = "done", monitorCleanup = cleanup,
+  )
 
   private fun monitorRegistration(
     suffix: String,

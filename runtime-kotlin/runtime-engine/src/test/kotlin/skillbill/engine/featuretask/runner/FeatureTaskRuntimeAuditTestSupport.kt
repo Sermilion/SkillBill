@@ -8,18 +8,34 @@ internal const val AUDIT_GAP_MESSAGE = "AC-002 acceptance criterion is not yet i
 
 internal const val AUDIT_SATISFIED_VALUE = "All acceptance criteria are met; no production criteria remain."
 
-internal fun auditSatisfiedOutput(): String =
-  """
-  {
-    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
-    "phase_id": "audit",
-    "status": "completed",
-    "summary": "Every acceptance criterion is met.",
-    "produced_outputs": {
-      "value": "$AUDIT_SATISFIED_VALUE"
-    }
-  }
-  """.trimIndent()
+internal fun noChangeImplementationOutput(): String =
+  JsonCodec.mapToJsonString(
+    mapOf(
+      SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      SharedPayloadKeys.PHASE_ID to "implement",
+      SharedPayloadKeys.STATUS to "completed",
+      SharedPayloadKeys.PRODUCED_OUTPUTS to
+        mapOf(
+          SharedPayloadKeys.VALUE to "The source already satisfies the requirements.",
+          "no_change" to
+            mapOf(
+              "reason" to "already_satisfied",
+              "criteria" to
+                listOf("AC-001", "AC-002").map { id ->
+                  mapOf(
+                    "criterion_id" to id,
+                    "verdict" to "already_satisfied",
+                    "evidence" to "The production caller meets $id.",
+                  )
+                },
+              "citations" to listOf("src/Admission.kt:12"),
+              "boundary_trace" to "The request enters the production admission owner.",
+            ),
+        ),
+    ),
+  )
+
+internal fun auditSatisfiedOutput(): String = settledAuditSatisfiedRecord()
 
 internal fun settledAuditSatisfiedRecord(): String =
   """
@@ -89,7 +105,7 @@ internal fun satisfiedAuditLauncher(): RuntimeRecordingLauncher =
   }
 
 internal fun auditRepairPlanOutput(prompt: String): String {
-  val audit = prompt.substringAfter("### from: audit\n").substringBefore("### from:").substringBefore("\n## ")
+  val audit = prompt.substringAfter("### from: audit\n", prompt).substringBefore("### from:")
   val openLines = audit.lines().filterNot { it.contains("no remaining production gap", ignoreCase = true) }
   val criteria = Regex("(?:S\\d+-)?AC-?\\d+").findAll(openLines.joinToString("\n")).map { it.value }.distinct().toList()
   return auditRepairPlanFor(criteria)

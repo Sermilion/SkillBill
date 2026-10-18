@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -45,7 +46,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
       val owned = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
       assertEquals(1, owned.generation)
       assertEquals("implement", owned.phaseId)
@@ -68,7 +69,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
       val replacement = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
       assertEquals(2, replacement.generation)
       assertNotEquals("old-owner-token-0001", replacement.ownerToken)
@@ -92,7 +93,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit }
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> Unit }
 
     assertTrue(supervisor.gracefulTerminationRequested)
     assertEquals(false, supervisor.forceTerminationRequested)
@@ -118,7 +119,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
 
     val failure =
       assertFailsWith<IllegalStateException> {
-        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit }
+        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> Unit }
       }
 
     assertTrue(failure.message.orEmpty().contains("PID was reused"))
@@ -131,7 +132,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     repository.seedWorkerOwnership(ownership(expiresAt = "2000-01-01T00:00:30Z"))
     val supervisor =
       FakeWorkerSupervisor(
-        FeatureTaskRuntimeProcessInspection.ForeignHost,
+        FeatureTaskRuntimeProcessInspection.PidReused,
       )
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
@@ -143,7 +144,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
       val replacement = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
       assertEquals(2, replacement.generation)
       assertNotEquals("old-owner-token-0001", replacement.ownerToken)
@@ -171,7 +172,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
       val replacement = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
       assertEquals(2, replacement.generation)
       assertNotEquals("old-owner-token-0001", replacement.ownerToken)
@@ -207,7 +208,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
 
     val failure =
       assertFailsWith<IllegalStateException> {
-        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit }
+        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ -> Unit }
       }
 
     assertTrue(failure.message.orEmpty().contains("Concurrent continuation"))
@@ -228,7 +229,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         NoopRuntimeDiagnostics,
       )
 
-    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+    coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
       val owned = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
       assertEquals(FeatureTaskRuntimeHeartbeatTick.Renewed, supervisor.runHeartbeatTick())
       val renewed = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID))
@@ -257,7 +258,7 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
 
     val failure =
       assertFailsWith<IllegalStateException> {
-        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) {
+        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { _, _ ->
           repository.seedWorkerOwnership(ownership(ownerToken = "usurper-token-0002", generation = 9))
           assertTrue(supervisor.runHeartbeatTick() is FeatureTaskRuntimeHeartbeatTick.FencingLost)
         }
@@ -283,6 +284,8 @@ private class FakeWorkerSupervisor(
   override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("host", "boot", 200, "birth-200")
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -326,6 +329,9 @@ private class FakeWorkerSupervisor(
 private class BumpUpdatedAtAfterReadDatabase(
   private val workflows: InMemoryRuntimeWorkflowRepository,
 ) : DatabaseSessionFactory {
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T) =
+    OwningTransactionResult.Refused(OwningTransactionResult.Refusal.ACTIVE_SESSION)
+
   private val inner = RuntimeFakeDatabaseSessionFactory(workflows)
 
   override fun resolveDbPath() = inner.resolveDbPath()

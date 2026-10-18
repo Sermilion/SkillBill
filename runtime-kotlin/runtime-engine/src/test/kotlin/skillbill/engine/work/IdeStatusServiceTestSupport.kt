@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerm
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -40,6 +41,7 @@ import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
@@ -49,6 +51,9 @@ import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
@@ -63,11 +68,14 @@ import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
 import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.work.model.WorkListListRead
+import skillbill.ports.work.model.WorkStatusCandidatePage
+import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
@@ -82,6 +90,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
@@ -92,6 +101,7 @@ import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
@@ -267,13 +277,16 @@ internal fun ideStatusService(
       testHarnessClock,
       NoopRuntimeDiagnostics,
     )
+  val runtimeWorkflowPersistence =
+    FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator, featureTaskRuntimeWireArtifactValidatorForTest())
   val runtimeStatusService =
     FeatureTaskRuntimeStatusService(
       recorder = phaseRecorder,
+      workflowPersistence = runtimeWorkflowPersistence,
       runInvariantsStore =
         FeatureTaskRuntimeRunInvariantsStore(
           database,
-          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator),
+          runtimeWorkflowPersistence,
           testHarnessClock,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
@@ -522,6 +535,9 @@ internal class TrackingDatabase(
     return block(unitOfWork())
   }
 
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
+
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     writeCalls += 1
     return block(unitOfWork())
@@ -534,24 +550,46 @@ internal class TrackingDatabase(
       override val workList: WorkListRepository =
         object : WorkListRepository by EmptyWorkListRepository {
           override fun boardCandidates(query: WorkBoardCandidateQuery): List<WorkBoardCandidateRow> {
-            val phases = statusRepository?.readBoardCandidates(query.finishedFrom, query.observedAt).orEmpty()
-            val phaseRows =
-              latestPhaseExecutions(phases).map {
-                val priority =
-                  if (it.lifecycleState in setOf("terminal", "completed", "success", "failed")) {
-                    "0"
-                  } else {
-                    "1"
-                  }
-                WorkBoardCandidateRow(it.invocationId, "$priority\n${it.startedAt}\n${it.invocationId}")
-              }
             val workRows =
-              work.filter { row -> phases.none { it.workflowId == row.workflowId } }.map {
+              work.map {
                 val priority = if (it.currentState in setOf("completed", "failed", "abandoned")) "0" else "1"
                 WorkBoardCandidateRow(it.workflowId, "$priority\n${it.startedAt}\n${it.workflowId}")
               }
-            return (phaseRows + workRows).distinctBy { it.id }.sortedByDescending { it.key }
+            return workRows.distinctBy { it.id }.sortedByDescending { it.key }
               .filter { row -> query.afterKey?.let { row.key < it } != false }.take(query.limit)
+          }
+
+          override fun statusCandidates(query: WorkStatusCandidateQuery): WorkStatusCandidatePage {
+            val rows =
+              work.map { item ->
+                val live = if (item.currentState in query.liveStates) "1" else "0"
+                val started = "%020d.%09d".format(item.startedAt.epochSecond, item.startedAt.nano)
+                item to "$live\n$started\n${item.workflowId}"
+              }.sortedByDescending { it.second }
+                .filter { (_, key) -> query.afterKey?.let { key < it } != false }.take(query.limit)
+            return WorkStatusCandidatePage(rows.map { it.first }, rows.lastOrNull()?.second)
+          }
+
+          override fun repositoryIdentityForIssue(
+            normalizedIssueKey: String,
+            excludedWorkflowId: String,
+          ): IssueRepositoryIdentityLookup {
+            val identities =
+              work.filter { item ->
+                item.workflowId != excludedWorkflowId &&
+                  item.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) == normalizedIssueKey
+              }.mapNotNull { item ->
+                when (item.workflowKind) {
+                  WorkItemKind.FEATURE_GOAL -> controls.controlState(item.workflowId).repositoryIdentity
+                  WorkItemKind.FEATURE_VERIFY -> null
+                  else -> workflows.getFeatureTaskExecutionIdentity(item.workflowId)?.repositoryIdentity
+                }
+              }.distinct()
+            return when (identities.size) {
+              0 -> IssueRepositoryIdentityLookup.Missing
+              1 -> IssueRepositoryIdentityLookup.Unique(identities.single())
+              else -> IssueRepositoryIdentityLookup.Ambiguous(identities)
+            }
           }
 
           override fun list(limit: Int?): WorkListListRead = WorkListListRead(limit?.let(work::take) ?: work)
@@ -822,6 +860,8 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
 
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = null
 
+  override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? = null
+
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> = emptyList()
 
   override fun acknowledgeGoalReviewPass(
@@ -832,4 +872,20 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
   override fun progressEvents(workflowId: String) = emptyList<GoalProgressEvent>()
 
   override fun childWorkflowLoopIterations(workflowId: String): Map<String, Int> = emptyMap()
+}
+
+internal fun List<StandalonePhaseStatusRecord>.eligiblePage(
+  page: StandaloneEligiblePage,
+): List<StandalonePhaseStatusRecord> {
+  val sliced =
+    filter { record ->
+      val live = record.lifecycleState in setOf("active", "paused", "blocked")
+      when (page.slice) {
+        StandaloneEligibleSlice.LIVE -> live
+        StandaloneEligibleSlice.SETTLED -> !live
+        null -> true
+      }
+    }
+  val anchor = page.after?.let { after -> sliced.indexOfFirst { it.invocationId == after.invocationId } } ?: -1
+  return sliced.drop(anchor + 1).take(page.limit)
 }

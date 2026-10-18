@@ -36,7 +36,6 @@ class PlanningProjectionNoopValidatorGuardTest {
       "FeatureTaskRuntimeSharedEvidenceRecorderTest.kt" to "test fixture",
       "FeatureTaskRuntimeFindingVerificationDurableDecodeTest.kt" to "test fixture",
       "FeatureTaskRuntimeRunStateReconstructionTest.kt" to "test fixture",
-      "GoalPlanningRefreshLivenessTest.kt" to "test fixture",
       "GoalRunnerRepairTest.kt" to "test fixture",
       "GoalRunnerTest.kt" to "test fixture",
       "IdeStatusServiceTestSupport.kt" to "test fixture",

@@ -45,16 +45,19 @@ class InstallerShellMaintenanceRecoveryTest {
   }
 
   @Test
-  fun `T3-04 explicit shell uninstall removes database while preserve wipe retains it`() {
+  fun `T3-04 explicit shell uninstall removes copied-in source but keeps database history`() {
     val wipe = seedStateDirForWipe()
     Files.deleteIfExists(wipe.stateDb)
-    seedMaintenanceWorkflowHistory(wipe.stateDb)
+    val snapshot = seedMaintenanceWorkflowHistory(wipe.stateDb)
     val preserved = runUninstaller(wipe, preserveSource = true, goalContinuation = false)
     assertEquals(0, preserved.exitCode, preserved.output)
-    assertTrue(Files.isRegularFile(wipe.stateDb))
+    assertTrue(Files.isRegularFile(wipe.skillContent))
 
-    val destructive = runUninstaller(wipe, preserveSource = false, goalContinuation = false)
-    assertEquals(0, destructive.exitCode, destructive.output)
-    assertFalse(Files.exists(wipe.stateDir))
+    val explicit = runUninstaller(wipe, preserveSource = false, goalContinuation = false)
+    assertEquals(0, explicit.exitCode, explicit.output)
+    assertFalse(Files.exists(wipe.skillContent))
+    assertTrue(Files.isRegularFile(wipe.stateDb))
+    assertEquals("ok", pragmaIntegrityCheck(wipe.stateDb))
+    assertEquals(snapshot, readMaintenanceWorkflowSnapshot(wipe.stateDb, snapshot))
   }
 }

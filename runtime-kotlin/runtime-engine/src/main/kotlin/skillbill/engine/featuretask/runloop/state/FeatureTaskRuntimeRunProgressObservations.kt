@@ -44,6 +44,10 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
 
   fun loop(loopId: String): LoopProgressObservation
 
+  val monitorFailedRepairCommitShas: Set<String>
+
+  val monitorFailureEvidenceUnavailable: Boolean
+
   val reviewEvidenceGeneration: Int
 
   fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict

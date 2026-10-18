@@ -93,6 +93,7 @@ internal fun runtimeStatusText(
     appendLine("current_phase: ${projection?.currentPhaseId ?: "none"}")
     appendLine("resolved_branch: ${projection?.resolvedBranch ?: "none"}")
     appendLine("finalizing_agent: ${projection?.finalizingAgentId ?: "none"}")
+    projection?.criterionExplanation?.let { appendLine("acceptance_criteria: $it") }
     appendValidationGateStatus(projection)
     appendDegradedDiagnostic(projection)
     appendDecompositionTerminal(projection)

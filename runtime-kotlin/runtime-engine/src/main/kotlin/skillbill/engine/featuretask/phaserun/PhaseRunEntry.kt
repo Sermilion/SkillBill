@@ -6,6 +6,10 @@ import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeStepLaunchAssignmentFactory
 import skillbill.engine.featuretask.lifecycle.execution.StepLaunchAssignmentInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparation
+import skillbill.engine.featuretask.phaserun.monitor.MonitorPreparationRequest
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorExecutionPreparer
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
@@ -15,6 +19,9 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.monitor.model.MonitorExpectedOwnerToken
+import skillbill.ports.monitor.model.MonitorOutcomeKind
+import skillbill.ports.monitor.model.MonitorPrimaryOutcome
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -35,22 +42,76 @@ class PhaseRunEntry(
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val agentRunLauncher: AgentRunLauncher,
   private val statusPublisherFactory: StandalonePhaseStatusPublisherFactory,
+  private val standaloneMonitorPreparer: StandaloneMonitorExecutionPreparer,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
-    val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
-    val publisher =
-      statusPublisherFactory.forPhase(
-        request.repoRoot,
-        request.definitionId,
+    if (SkeletonDefinition.preparedExecutionFor(request.definitionId) != null) return runStandaloneMonitor(request)
+    val invocationId = newInvocationId()
+    return withStatus(request, invocationId, request.definitionId) { statusRequest ->
+      runInternal(statusRequest, invocationId)
+    }
+  }
+
+  internal fun runStandaloneMonitor(request: PhaseRunRequest): PhaseRunResult {
+    val invocationId = newInvocationId()
+    val definition =
+      requireNotNull(SkeletonDefinition.preparedExecutionFor(request.definitionId)) {
+        "Phase ${request.definitionId} has no prepared standalone execution."
+      }
+    val branch = currentBranch(request)?.branch
+    val selector = request.intake?.trim()?.takeIf(String::isNotEmpty) ?: branch?.let { "branch $it" } ?: "no target"
+    if (request.recoverStaleOwner != null && request.intake.isNullOrBlank()) {
+      return monitorBlocked(
+        request,
         invocationId,
-        request.invokedAgentId,
-        request.launchArguments,
+        "Stale owner recovery needs an explicit pull request target.",
+        listOf("Selector: $selector"),
       )
-    val statusRequest = request.copy(eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher))
-    return runCatching { runInternal(statusRequest, invocationId) }
-      .onSuccess(publisher::settle)
-      .onFailure(publisher::settleFailure)
-      .getOrThrow()
+    }
+    val preparation =
+      standaloneMonitorPreparer.prepare(
+        MonitorPreparationRequest(
+          request.repoRoot,
+          request.intake,
+          branch,
+          request.recoverStaleOwner?.let(::MonitorExpectedOwnerToken),
+        ),
+      )
+    return when (preparation) {
+      is MonitorPreparation.Prepared -> runPrepared(request, definition, invocationId, preparation)
+      is MonitorPreparation.Completed ->
+        PhaseRunResult.Completed(
+          invocationId,
+          emptyList(),
+          null,
+          preparation.pullRequest
+            ?.let { "${it.targetKey} is already merged; there is nothing to monitor." }
+            ?: "No open pull request matched $selector; there is nothing to monitor.",
+          targetReport = earlyReport(selector, preparation.pullRequest),
+        )
+      is MonitorPreparation.Blocked ->
+        monitorBlocked(
+          request,
+          invocationId,
+          listOfNotNull(preparation.detail, preparation.path?.let { "Path: $it." }).joinToString(" "),
+          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+        )
+      is MonitorPreparation.Refused ->
+        monitorBlocked(
+          request,
+          invocationId,
+          (listOf("Monitor target refused (${preparation.reason}): ${preparation.detail}") + preparation.candidateUrls)
+            .joinToString(" "),
+          earlyReport(selector, null),
+        )
+      is MonitorPreparation.Failed ->
+        monitorBlocked(
+          request,
+          invocationId,
+          preparation.reason,
+          earlySetupReport(selector, preparation.pullRequest, preparation.settlement),
+        )
+    }
   }
 
   fun runForGoal(
@@ -59,17 +120,102 @@ class PhaseRunEntry(
     expectedBranch: String,
   ): PhaseRunResult = runInternal(request, parentWorkflowId, parentWorkflowId, expectedBranch)
 
+  private fun runPrepared(
+    request: PhaseRunRequest,
+    definition: SkeletonDefinition,
+    invocationId: String,
+    prepared: MonitorPreparation.Prepared,
+  ): PhaseRunResult {
+    val ownedRequest =
+      request.copy(
+        definitionId = definition.id,
+        repoRoot = prepared.context.worktree.path,
+      )
+    try {
+      return withStatus(ownedRequest, invocationId, request.definitionId, prepared) { statusRequest ->
+        runInternal(statusRequest, invocationId, standalone = prepared)
+      }
+    } finally {
+      prepared.cleanup.settle(
+        MonitorPrimaryOutcome(MonitorOutcomeKind.RUN_FAILED, "The monitor run ended before its outcome was recorded."),
+      )
+    }
+  }
+
+  private fun withStatus(
+    request: PhaseRunRequest,
+    invocationId: String,
+    publicPhaseId: String,
+    monitor: MonitorPreparation.Prepared? = null,
+    body: (PhaseRunRequest) -> PhaseRunResult,
+  ): PhaseRunResult {
+    val publisher =
+      monitor?.let {
+        statusPublisherFactory.forMonitor(
+          it.context,
+          publicPhaseId,
+          invocationId,
+          request.invokedAgentId,
+          request.launchArguments,
+        )
+      } ?: statusPublisherFactory.forPhase(
+        request.repoRoot,
+        publicPhaseId,
+        invocationId,
+        request.invokedAgentId,
+        request.launchArguments,
+      )
+    val statusRequest =
+      request.copy(
+        eventSink = statusPublisherFactory.compose(request.eventSink::emit, publisher),
+        activityOutput = { stepName, activity ->
+          publisher.publishActivity(stepName, activity)
+          request.activityOutput?.invoke(stepName, activity)
+        },
+      )
+    monitor?.cleanup?.onSettled { settlement ->
+      runCatching { publisher.recordMonitorCleanup(settlement.toStatusCleanup()) }
+    }
+    val outcome = runCatching { body(statusRequest) }
+    val settlement = monitor?.cleanup?.settle(primaryOutcomeOf(outcome))
+    return outcome
+      .map { result -> if (monitor == null) result else result.withTargetReport(monitor.context, settlement) }
+      .onSuccess(publisher::settle)
+      .onFailure(publisher::settleFailure)
+      .getOrElse { failure -> throw monitor?.let { monitorRunFailure(failure, it.context, settlement) } ?: failure }
+  }
+
+  private fun monitorBlocked(
+    request: PhaseRunRequest,
+    invocationId: String,
+    reason: String,
+    targetReport: List<String>,
+  ): PhaseRunResult.Blocked =
+    PhaseRunResult.Blocked(
+      invocationId,
+      emptyList(),
+      null,
+      request.definitionId,
+      reason,
+      targetReport = targetReport,
+    )
+
   private fun runInternal(
     request: PhaseRunRequest,
     invocationId: String,
     workflowId: String = "",
     expectedBranch: String? = null,
+    standalone: MonitorPreparation.Prepared? = null,
   ): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
     }
-    val branch = currentBranch(request)
+    val branch =
+      standalone
+        ?.context
+        ?.let { FeatureTaskRuntimeResolvedBranch(branch = it.worktree.branch, baseBranch = it.target.base.ref) }
+        ?: currentBranch(request)
     if (expectedBranch != null && branch?.branch != expectedBranch) {
       return PhaseRunResult.Blocked(
         invocationId,
@@ -80,7 +226,7 @@ class PhaseRunEntry(
       )
     }
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
-    val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId)
+    val facts = InMemoryPhaseRunFacts(request, definition, intake, workflowId, standalone?.context)
     val selection = strategySelectionFacts(facts)
     val executionPlan =
       strategies.executionPlan(
@@ -102,11 +248,16 @@ class PhaseRunEntry(
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = executionPlan.traversal,
+        transitions = executionPlan.phaseTraversal(),
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
       )
-    val records = InMemoryPhaseRunRecords(clock, branch)
+    val records =
+      InMemoryPhaseRunRecords(
+        clock,
+        branch,
+        standalone?.let { StandaloneMonitorLedger(it.context, it.cleanup) },
+      )
     val state =
       InMemoryPhaseRunState(
         facts = facts,
@@ -190,6 +341,8 @@ class PhaseRunEntry(
     return stepIds.mapNotNull { id -> outputs[id]?.outputArtifact?.takeIf(String::isNotBlank) }
   }
 }
+
+private fun newInvocationId(): String = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
 
 private const val INVOCATION_ID_PREFIX = "phr-"
 private const val DETACHED_HEAD = "HEAD"

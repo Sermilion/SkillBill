@@ -11,6 +11,8 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservatio
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorLedger
+import skillbill.engine.featuretask.phaserun.monitor.StandaloneMonitorRunRecords
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
@@ -27,12 +29,15 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.standalone.FeatureTaskRuntimeRunLoopStandaloneMonitorCycle
+import skillbill.engine.featuretask.runloop.finalization.standalone.StandaloneRepairCommit
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopReviewCompletion
 import skillbill.engine.featuretask.runloop.output.ReviewOutputPersistenceContext
 import skillbill.engine.featuretask.runloop.output.isGoalReviewRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
@@ -43,6 +48,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchCollaboration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentStepBinding
@@ -62,6 +68,9 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewFindingObservations
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorOperations
+import skillbill.engine.featuretask.slot.state.PhaseStandaloneMonitorStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseStandalonePublicationStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -218,6 +227,19 @@ private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
         loopId = reentry?.loopId,
         edgeIteration = reentry?.edgeIteration,
       )
+    val serial = environment.recorder as? AcceptanceCriterionRepairCycleRecords
+    if (serial?.requiresExplicitStart(stepId) == true) {
+      val start =
+        phaseState.copy(
+          status = STATUS_RUNNING,
+          finished = false,
+          normalizedOutput = null,
+          outputArtifact = null,
+        )
+      check(environment.recorder.recordRequiredPhaseStart(start) is RequiredPhaseWrite.Acknowledged) {
+        "Runtime-authored completion could not acquire its accounting start."
+      }
+    }
     val persisted =
       environment.coupledRunTransitions.persistCarriedForwardPhaseCompletion(
         recorder = environment.recorder,
@@ -326,16 +348,86 @@ private class FeatureTaskRuntimeRunLoopMonitorStepBinding(
   run: PhaseRun,
   fanOutUnitId: Int?,
   bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
-) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseMonitorStepBinding {
+  override fun publishRepair(run: PhaseRun): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopCommitCycle) {
+      environment.publishMonitorRepair(run, requireNotNull(acceptedOwner.monitorRepairSteps).publication)
+    }
+  }
+
   override fun runMonitor(
     run: PhaseRun,
     observation: PhaseCiObservation,
   ): PhaseOutcome {
     requireAcceptedStep(run, acceptedOwner.strategyId)
     return with(FeatureTaskRuntimeRunLoopMonitorCycle) {
-      environment.runDeclaredMonitorCycle(run, observation)
+      environment.runDeclaredMonitorCycle(run, observation, requireNotNull(acceptedOwner.monitorRepairSteps))
     }
+  }
+}
+
+private class FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseStandaloneMonitorStepBinding {
+  private val ledger: StandaloneMonitorLedger?
+    get() = (environment.recorder as? StandaloneMonitorRunRecords)?.standaloneMonitorLedger
+
+  override fun runStandaloneMonitor(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopStandaloneMonitorCycle) { environment.runStandaloneMonitor(run, operations) }
+  }
+
+  override fun standaloneRepairBrief(): String {
+    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+    return ledger?.pendingRepair?.evidence.orEmpty()
+  }
+
+  override fun guardStandaloneRepairLaunch(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    val owned = ledger ?: return "Standalone repair requires its prepared execution ledger."
+    val worktree = StandaloneRepairCommit(environment.gitOperations, owned.execution.worktree.path)
+    return operations.guardRepairLaunch(owned, worktree)
+  }
+
+  override fun publishStandaloneRepair(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+    reportedFixed: Boolean,
+  ): String? {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(FeatureTaskRuntimeRunLoopStandaloneMonitorCycle) {
+      environment.publishStandaloneRepair(operations, reportedFixed)
+    }
+  }
+}
+
+private class FeatureTaskRuntimeRunLoopStandalonePublicationStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseStandalonePublicationStepBinding {
+  override fun runStandalonePublication(
+    run: PhaseRun,
+    operations: PhaseStandaloneMonitorOperations,
+  ): PhaseOutcome {
+    requireAcceptedStep(run, acceptedOwner.strategyId)
+    return with(
+      FeatureTaskRuntimeRunLoopStandaloneMonitorCycle,
+    ) { environment.runStandalonePublication(run, operations) }
   }
 }
 
@@ -367,6 +459,37 @@ private class FeatureTaskRuntimeRunLoopPlanningStepBinding(
     environment.stepBinding,
 ) : FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhasePlanningStepBinding {
+  override fun settleExistingBundle(
+    run: PhaseRun,
+    unitStepId: String,
+  ): PhaseOutcome? {
+    bindingCoordinator.requireActiveStepBinding(this.run, fanOutUnitId)
+    check(run === this.run) { "Existing-bundle settlement must settle the accepted step '${this.run.phaseId}'." }
+    val request = environment.request
+    val planner = environment.decompositionPlanner
+    val parentSpec = planner.existingParentSpec(request.repoRoot, request.issueKey)
+    if (parentSpec == null || planner.existingManifest(request.repoRoot, request.issueKey) == null) return null
+    val rejection = PlanDecompositionStop.recordExistingBundleOrRejection(environment, unitStepId)
+    if (rejection != null) {
+      return if (environment.progress.phase(run.phaseId).nextIteration > 1) null else PhaseOutcome.blocked(rejection)
+    }
+    val bundle =
+      checkNotNull(environment.recorder.loadPlanBundle(workflowId)) {
+        "The existing plan bundle was recorded but cannot be read back."
+      }
+    val output =
+      PlanDecompositionStop.settledOutput(
+        run.phaseId,
+        "Kept the existing spec bundle of ${bundle.subtasks.size} subtasks; no agent planned it.",
+        request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString(),
+      )
+    val iteration = nextStepIteration()
+    settleRuntimeAuthoredCompletion(run.phaseId, output)
+    return PhaseOutcome.completed(
+      FeatureTaskRuntimePhaseOutput(run.phaseId, iteration, output.canonicalJson, output, null),
+    )
+  }
+
   override fun fanOut(stepId: String): PhaseRunFanOut {
     check(stepId == acceptedPhaseId) { "Fan-out belongs to the accepted planning step '$acceptedPhaseId'." }
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
@@ -493,10 +616,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
       )
     }.fold(
       onSuccess = { persisted ->
-        if (persisted) {
-          null
+        if (persisted is RequiredPhaseWrite.Rejected) {
+          persisted.message
         } else {
-          prefix
+          null
         }
       },
       onFailure = { error -> "$prefix ${error.message.orEmpty()}" },
@@ -816,7 +939,8 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     }
   }
 
-  private fun PhaseStepFileManifest.toPhaseManifest() = FeatureTaskRuntimePhaseFileManifest(before, after)
+  private fun PhaseStepFileManifest.toPhaseManifest() =
+    FeatureTaskRuntimePhaseFileManifest(before, after, reeditedPaths)
 
   private fun requireActiveReviewBinding() {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
@@ -883,6 +1007,20 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
         FeatureTaskRuntimeRunLoopQualityGateStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.slot == PhaseSlot.PULL_REQUEST ->
         FeatureTaskRuntimeRunLoopPullRequestStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.STANDALONE_MONITOR ->
+        FeatureTaskRuntimeRunLoopStandaloneMonitorStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.STANDALONE_PUBLICATION ->
+        FeatureTaskRuntimeRunLoopStandalonePublicationStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
       owner?.slot == PhaseSlot.COMMIT_PUSH ->
         FeatureTaskRuntimeRunLoopFinalizationStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.CI_MONITOR ->

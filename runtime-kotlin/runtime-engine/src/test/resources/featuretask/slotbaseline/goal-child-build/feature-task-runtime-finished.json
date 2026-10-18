@@ -9,6 +9,7 @@
     "completed_phase_ids": [
         "preplan",
         "plan",
+        "plan_subtasks",
         "implement",
         "simplify",
         "audit",
@@ -36,6 +37,7 @@
         "commit_push": "completed",
         "implement": "completed",
         "plan": "completed",
+        "plan_subtasks": "completed",
         "preplan": "completed",
         "review": "completed",
         "simplify": "completed",
@@ -60,8 +62,12 @@
             "strategy_id": "implement-then-simplify"
         },
         "plan": {
-            "semantic_revision": 1,
-            "strategy_id": "agent-plan"
+            "semantic_revision": 2,
+            "strategy_id": "goal-plan-fan-out"
+        },
+        "plan_subtasks": {
+            "semantic_revision": 2,
+            "strategy_id": "goal-plan-fan-out"
         },
         "preplan": {
             "semantic_revision": 1,
@@ -96,12 +102,11 @@
         "agent-build",
         "agent-commit_push",
         "agent-implement",
-        "agent-plan",
-        "agent-preplan",
         "agent-review",
         "agent-simplify",
         "agent-verify_findings",
-        "agent-write_history"
+        "agent-write_history",
+        "goal-planning-import"
     ],
     "resolved_branch": "feat/SKILL-380-phase-slot-strategies",
     "review_fix_cap_exhausted": false,

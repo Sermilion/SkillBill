@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -95,6 +96,7 @@ fun testGoalRunnerStatusService(
       diagnostics = ports.diagnostics,
       runtimeStatusService = ports.runtimeStatusService,
     )
+  val repairCoordinator = testGoalRunnerRepairCoordinator(manifestStore, outcomeStore, phaseRecorder, clock, ports)
   return GoalRunnerStatusService(
     manifestStore = manifestStore,
     controlVerbs =
@@ -105,12 +107,9 @@ fun testGoalRunnerStatusService(
         ports.workerSupervisor,
         TestRepositoryEnclosingRoot,
         ports.diagnostics,
+        repairCoordinator,
       ),
-    repairCoordinator =
-      GoalRunnerRepairCoordinator(
-        manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
-        ports.childRepairStore, outcomeStore, testRepositoryRoot, TestRepositoryEnclosingRoot, clock, ports.diagnostics,
-      ),
+    repairCoordinator = repairCoordinator,
     acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, outcomeStore, ports.gitOperations, clock),
     repositoryRoot = testRepositoryRoot,
     projectionAssembler = projectionAssembler,
@@ -138,6 +137,18 @@ fun testGoalRunnerStatusService(
   )
 }
 
+fun testGoalRunnerRepairCoordinator(
+  manifestStore: GoalRunnerManifestStore,
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
+  clock: Clock = testHarnessClock,
+  ports: GoalRunnerStatusTestPorts = GoalRunnerStatusTestPorts(),
+): GoalRunnerRepairCoordinator =
+  GoalRunnerRepairCoordinator(
+    manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
+    ports.childRepairStore, outcomeStore, testRepositoryRoot, TestRepositoryEnclosingRoot, clock, ports.diagnostics,
+  )
+
 private val testGoalChildPlanningHydratorPort = GoalChildPlanningHydratorPortAdapter(testHarnessClock)
 
 fun testGoalRunnerChildRepairExecutor(
@@ -148,6 +159,7 @@ fun testGoalRunnerChildRepairExecutor(
   GoalRunnerChildRepairOperations(
     database,
     testWorkflowSnapshotValidator,
+    featureTaskRuntimeWireArtifactValidatorForTest(),
     gitOperations,
     testDecompositionManifestValidator,
     clock,

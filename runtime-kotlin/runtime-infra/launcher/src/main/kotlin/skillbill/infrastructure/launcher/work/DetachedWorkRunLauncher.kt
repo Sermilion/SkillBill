@@ -2,13 +2,14 @@ package skillbill.infrastructure.launcher.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.persistence.RuntimeDatabaseEnvironmentKeys
-import skillbill.infrastructure.launcher.agentrun.AgentRunCommand
+import skillbill.contracts.system.AgentHomeEnvironmentKeys
 import skillbill.infrastructure.launcher.agentrun.workRunHarnessCommand
 import skillbill.install.model.AGENT_LAUNCHER_CLIS
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.work.WorkRunLauncher
+import skillbill.ports.work.model.WorkRunLaunchKind
 import skillbill.ports.work.model.WorkRunLaunchRequest
 import skillbill.ports.work.model.WorkRunLaunchResult
 import skillbill.ports.work.model.WorkRunStopRequest
@@ -16,22 +17,26 @@ import skillbill.ports.work.model.WorkRunStopResult
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-@Inject
-class DetachedWorkRunLauncher(
+class DetachedWorkRunLauncher internal constructor(
   private val environment: EnvironmentContext,
   private val diagnostics: RuntimeDiagnostics,
+  private val startupGrace: Duration,
 ) : WorkRunLauncher {
+  @Inject
+  constructor(environment: EnvironmentContext, diagnostics: RuntimeDiagnostics) :
+    this(environment, diagnostics, STARTUP_GRACE)
+
   override fun start(request: WorkRunLaunchRequest): WorkRunLaunchResult {
-    val agent =
-      SupportedAgent.entries.firstOrNull { it.id == request.agentId }
-        ?: return refuse("The selected agent is not supported.")
-    val executable =
-      resolveExecutable(agent)
-        ?: return refuse("The ${agent.id} harness is not installed or is not on PATH.")
-    val built = workRunHarnessCommand(request, agent, environment.environment)
+    val launchEnvironment = launchEnvironment(request)
+    val launch =
+      when (val resolved = installedLaunch(request, launchEnvironment)) {
+        is InstalledLaunch.Refused -> return refuse(resolved.reason)
+        is InstalledLaunch.Ready -> resolved
+      }
     val ownership = ownership()
     return try {
       ownership.admitted(
@@ -42,7 +47,7 @@ class DetachedWorkRunLauncher(
         if (ownership.running(owner)) {
           refuse("A run is already starting or running for this work.")
         } else {
-          startInstalled(built.copy(command = listOf(executable.toString()) + built.command.drop(1)), request, owner)
+          startInstalled(launch, request, owner, launchEnvironment)
         }
       }
     } catch (failure: IOException) {
@@ -71,10 +76,45 @@ class DetachedWorkRunLauncher(
 
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
+  private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> =
+    environment.environment + request.agentEnvironment.filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+
+  private fun installedLaunch(
+    request: WorkRunLaunchRequest,
+    launchEnvironment: Map<String, String>,
+  ): InstalledLaunch =
+    when (val kind = request.kind) {
+      is WorkRunLaunchKind.AgentHarness -> harnessLaunch(request, kind, launchEnvironment)
+      is WorkRunLaunchKind.RuntimeCommand ->
+        resolveExecutable(listOf(RUNTIME_EXECUTABLE))
+          ?.let { InstalledLaunch.Ready(listOf(it.toString()) + kind.arguments) }
+          ?: InstalledLaunch.Refused("The $RUNTIME_EXECUTABLE runtime is not installed or is not on PATH.")
+    }
+
+  private fun harnessLaunch(
+    request: WorkRunLaunchRequest,
+    harness: WorkRunLaunchKind.AgentHarness,
+    launchEnvironment: Map<String, String>,
+  ): InstalledLaunch {
+    val agent =
+      SupportedAgent.entries.firstOrNull { it.id == harness.agentId }
+        ?: return InstalledLaunch.Refused("The selected agent is not supported.")
+    val executable =
+      resolveExecutable(requireNotNull(AGENT_LAUNCHER_CLIS[agent]).executables)
+        ?: return InstalledLaunch.Refused("The ${agent.id} harness is not installed or is not on PATH.")
+    val built = workRunHarnessCommand(request, harness, agent, launchEnvironment)
+    return InstalledLaunch.Ready(
+      listOf(executable.toString()) + built.command.drop(1),
+      built.stdinText,
+      built.environment,
+    )
+  }
+
   private fun startInstalled(
-    built: AgentRunCommand,
+    built: InstalledLaunch.Ready,
     request: WorkRunLaunchRequest,
     owner: Path,
+    launchEnvironment: Map<String, String>,
   ): WorkRunLaunchResult {
     val directory = environment.userHome.resolve(".skill-bill/desktop/runs")
     var input: Path? = null
@@ -87,7 +127,7 @@ class DetachedWorkRunLauncher(
           Files.createTempFile(directory, "prompt-", ".txt").also { Files.writeString(it, prompt) }
         }
       val command = launchCommand(built.command)
-      val process = startProcess(built.copy(command = command), request, input, log)
+      val process = startProcess(built.copy(command = command), request, input, log, launchEnvironment)
       val unit = command.firstOrNull { it.startsWith("--unit=") }?.removePrefix("--unit=")?.plus(".scope")
       try {
         ownership().save(owner, process, unit)
@@ -95,29 +135,18 @@ class DetachedWorkRunLauncher(
         ownership().stopStarted(process, unit)
         throw failure
       }
-      val ownedInput = input
-      process.onExit().whenComplete { finished, error ->
-        try {
-          if (error != null || finished?.exitValue() != 0) {
-            diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log", error)
-          }
-        } finally {
-          try {
-            ownership().admitted(
-              request.databasePath,
-              request.ownershipKey,
-              { diagnostics.info("seam=work-run.launch outcome=owner_cleanup_deferred") },
-            ) {
-              ownership().clear(it, process.pid())
-            }
-            ownedInput?.let(Files::deleteIfExists)
-          } catch (failure: IOException) {
-            diagnostics.warning("seam=work-run.launch outcome=owner_cleanup_failed", failure)
-          }
+      var failedEarly = false
+      try {
+        failedEarly = process.waitFor(startupGrace.toMillis(), TimeUnit.MILLISECONDS) && process.exitValue() != 0
+      } finally {
+        if (!failedEarly) {
+          releaseOnExit(process, request, log, input)
+          handedOff = true
         }
       }
-      handedOff = true
-      if (process.waitFor(STARTUP_GRACE_MS, TimeUnit.MILLISECONDS) && process.exitValue() != 0) {
+      if (failedEarly) {
+        diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log")
+        ownership().clear(owner, process.pid())
         return refuse("The runner exited before starting. See $log")
       }
       diagnostics.info("seam=work-run.launch outcome=started log=$log")
@@ -136,18 +165,47 @@ class DetachedWorkRunLauncher(
     }
   }
 
+  private fun releaseOnExit(
+    process: Process,
+    request: WorkRunLaunchRequest,
+    log: Path,
+    input: Path?,
+  ) {
+    process.onExit().whenComplete { finished, error ->
+      try {
+        if (error != null || finished?.exitValue() != 0) {
+          diagnostics.warning("seam=work-run.launch outcome=runner_failed log=$log", error)
+        }
+      } finally {
+        try {
+          ownership().admitted(
+            request.databasePath,
+            request.ownershipKey,
+            { diagnostics.info("seam=work-run.launch outcome=owner_cleanup_deferred") },
+          ) {
+            ownership().clear(it, process.pid())
+          }
+          input?.let(Files::deleteIfExists)
+        } catch (failure: IOException) {
+          diagnostics.warning("seam=work-run.launch outcome=owner_cleanup_failed", failure)
+        }
+      }
+    }
+  }
+
   private fun startProcess(
-    built: AgentRunCommand,
+    built: InstalledLaunch.Ready,
     request: WorkRunLaunchRequest,
     input: Path?,
     log: Path,
+    launchEnvironment: Map<String, String>,
   ): Process =
     ProcessBuilder(built.command)
       .directory(request.repositoryRoot.toFile())
       .redirectInput(ProcessBuilder.Redirect.from((input ?: Path.of(if (isWindows()) "NUL" else "/dev/null")).toFile()))
       .redirectErrorStream(true).redirectOutput(log.toFile())
       .apply {
-        environment().putAll(this@DetachedWorkRunLauncher.environment.environment)
+        environment().putAll(launchEnvironment)
         environment().putAll(built.environment)
         environment()[RuntimeDatabaseEnvironmentKeys.DATABASE_PATH] = request.databasePath.toString()
       }.start()
@@ -165,18 +223,18 @@ class DetachedWorkRunLauncher(
     } ?: command
   }
 
-  private fun resolveExecutable(agent: SupportedAgent): Path? {
+  private fun resolveExecutable(executables: List<String>): Path? {
     val directories =
       listOf(environment.userHome.resolve(".local/bin")) +
         environment.environment["PATH"].orEmpty().split(if (isWindows()) ';' else ':')
           .filter(String::isNotBlank).map(Path::of)
-    val executables = requireNotNull(AGENT_LAUNCHER_CLIS[agent]).executables
     return executables.flatMap { name -> directories.map { it.resolve(name) } }
       .firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }
   }
 
   private companion object {
-    const val STARTUP_GRACE_MS = 250L
+    val STARTUP_GRACE: Duration = Duration.ofMillis(250)
+    const val RUNTIME_EXECUTABLE = "skill-bill"
   }
 
   private fun isWindows(): Boolean = environment.environment["OS"] == "Windows_NT"
@@ -185,4 +243,14 @@ class DetachedWorkRunLauncher(
     diagnostics.info("seam=work-run.launch outcome=refused reason=$reason")
     return WorkRunLaunchResult.Refused(reason)
   }
+}
+
+private sealed interface InstalledLaunch {
+  data class Ready(
+    val command: List<String>,
+    val stdinText: String? = null,
+    val environment: Map<String, String> = emptyMap(),
+  ) : InstalledLaunch
+
+  data class Refused(val reason: String) : InstalledLaunch
 }

@@ -25,8 +25,8 @@ import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
+import skillbill.di.featuretask.RuntimeStandaloneMonitorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
-import skillbill.di.goal.RuntimeGoalPlanningSweepProvides
 import skillbill.di.goal.RuntimeGoalRunnerLaunchProvides
 import skillbill.di.goal.RuntimeGoalRunnerStoreProvides
 import skillbill.di.install.RuntimeExternalPlatformPackProvides
@@ -84,6 +84,7 @@ import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
+import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
@@ -101,7 +102,6 @@ abstract class RuntimeComponent(
     RuntimeExternalPlatformPackProvides,
     RuntimeTelemetryProvides,
     RuntimeGoalPlanningProvides,
-    RuntimeGoalPlanningSweepProvides,
     RuntimeGoalRunnerStoreProvides,
     RuntimeGoalRunnerLaunchProvides,
     RuntimeReviewLaunchProvides,
@@ -109,6 +109,7 @@ abstract class RuntimeComponent(
     RuntimeReviewEvidenceProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
+    RuntimeStandaloneMonitorProvides,
     RuntimeOperationProvides,
     RuntimeFeatureSpecProvides,
     RuntimeWorkflowProvides,
@@ -181,6 +182,7 @@ abstract class RuntimeComponent(
   abstract val resolvedEnvironmentContext: EnvironmentContext
 
   abstract val repositoryEnclosingRootPort: RepositoryEnclosingRootPort
+  abstract val checkedOutBranchSource: CheckedOutBranchSource
 
   abstract val featureTaskContinuationLookupService: FeatureTaskContinuationLookupService
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService
@@ -236,4 +238,5 @@ abstract class RuntimeComponent(
 
   abstract val ideStatusService: IdeStatusService
   abstract val databaseSession: DatabaseSessionFactory
+  abstract val databaseSchema: DatabaseSchemaPort
 }

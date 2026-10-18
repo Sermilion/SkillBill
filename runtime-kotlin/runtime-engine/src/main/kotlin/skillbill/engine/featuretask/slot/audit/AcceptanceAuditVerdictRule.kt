@@ -23,8 +23,9 @@ internal class AcceptanceAuditVerdictRule(
       return FeatureTaskRuntimeVerdict.ADVANCE
     }
     return when (wireVerdict) {
-      FeatureTaskRuntimeVerdict.SATISFIED, FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED -> wireVerdict
-      FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED -> UNKNOWN_WORD_DEFAULT
+      FeatureTaskRuntimeVerdict.SATISFIED, FeatureTaskRuntimeVerdict.NO_CHANGE_CONFIRMED ->
+        FeatureTaskRuntimeVerdict.SATISFIED
+      FeatureTaskRuntimeVerdict.NO_CHANGE_REJECTED -> FeatureTaskRuntimeVerdict.ADVANCE
       else -> fallbackVerdict(wireVerdict)
     }
   }
@@ -32,8 +33,7 @@ internal class AcceptanceAuditVerdictRule(
   private fun fallbackVerdict(wireVerdict: FeatureTaskRuntimeVerdict?): FeatureTaskRuntimeVerdict {
     if (wireVerdict != null && wireVerdict != UNKNOWN_WORD_DEFAULT && recordedFallbacks.add(wireVerdict.wireValue)) {
       diagnostics.warning(
-        "Audit verdict '${wireVerdict.wireValue}' conflicts with its remaining criteria; " +
-          "using '${UNKNOWN_WORD_DEFAULT.wireValue}'.",
+        "Audit verdict '${wireVerdict.wireValue}' is unknown; using '${UNKNOWN_WORD_DEFAULT.wireValue}'.",
       )
     }
     return UNKNOWN_WORD_DEFAULT
@@ -41,14 +41,5 @@ internal class AcceptanceAuditVerdictRule(
 
   companion object {
     val UNKNOWN_WORD_DEFAULT: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict.ADVANCE
-
-    fun removedVerdictRejection(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): String? {
-      val wire = (outputMap[SharedPayloadKeys.VERDICT] as? String)?.trim()
-      if (wire == FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue) {
-        return "Feature-task-runtime verdict '${FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue}' is removed " +
-          "(audit phase output); report remaining criteria without repairing them."
-      }
-      return null
-    }
   }
 }

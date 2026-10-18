@@ -686,6 +686,7 @@ class SkillBillStatusBarPresentationTest {
         val retained = StatusUiMapper.map(
             activeOutcome(planning = null, currentSubtaskId = "subtask-1", completed = 1)
                 .copy(
+                    summary = "Focused source assessment selected. Tests and build remain pending.",
                     currentStepId = "audit",
                     currentStepLabel = "Audit",
                     diagnostic = StatusDiagnostic(timedOut = true, reasonCode = POLL_FAILED_REASON_CODE),
@@ -698,7 +699,10 @@ class SkillBillStatusBarPresentationTest {
         assertFalse(mapped.isStaleMarked)
         assertNull(mapped.details.staleNote)
         assertFalse(mapped.tooltipText.contains(SkillBillStatusBarPresentation.STALE_NOTE))
-        assertEquals(StatusUiMapper.POLL_TIMEOUT_NOTE, mapped.details.problemSummary)
+        assertTrue(mapped.details.problemSummary!!.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))
+        assertTrue(mapped.details.problemSummary!!.contains("Focused source assessment selected"))
+        assertTrue(mapped.accessibleDescription.contains("pending"))
+        assertTrue(mapped.accessibleDescription.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))
         assertTrue(mapped.tooltipText.contains(StatusUiMapper.POLL_TIMEOUT_NOTE))
     }
 
@@ -792,7 +796,8 @@ class SkillBillStatusBarPresentationTest {
             now,
         )
         assertEquals(SkillBillStatusBarPresentation.STALE_NOTE, mapped.details.staleNote)
-        assertEquals("Status is stale", mapped.details.problemSummary)
+        assertTrue(mapped.details.problemSummary.orEmpty().contains("Status is stale"))
+        assertTrue(mapped.details.problemSummary.orEmpty().contains("working"))
     }
 
     private fun activeOutcome(

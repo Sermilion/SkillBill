@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.PHASE_COMPLETE_SETTLEMENT_TOOL
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 
 internal object AcceptanceAuditPromptSections {
@@ -11,15 +12,21 @@ internal object AcceptanceAuditPromptSections {
       "gaps for audit_plan_fix."
 
   const val DIRECTIVE: String =
-    "On the first audit, verify the production behavior required by every acceptance criterion against the " +
-      "current implementation. Exclude all test requirements from audit, even when the plan or a criterion " +
+    "On the initial full audit, verify the production behavior required by every acceptance criterion " +
+      "against the current implementation, and end your prose with exactly one line " +
+      "`Open criteria: AC-002, AC-005` that names every criterion with a production source gap, or " +
+      "`Open criteria: none`. The runtime accepts every criterion that line does not name and repairs the " +
+      "named ones one at a time; a test-only criterion is never open. On a focused audit, inspect only the " +
+      "authored criterion selected by the runtime. " +
+      "Exclude all test requirements from audit, even when the plan or a criterion " +
       "explicitly requires tests. Missing tests, coverage, assertions, test quality, fixtures, and test results " +
       "never keep an acceptance criterion open. For a mixed criterion, evaluate only its production behavior. " +
       "Omit test-only criteria from the remaining list without inventing a production requirement for them. " +
       "Preserve the original criterion identifiers and spec text; this exclusion governs audit admission. " +
       "Treat upstream receipts as claims and inspect current production code. Audit is read-only: do not edit " +
-      "files or repair gaps. Do not spawn subagents or invoke repair skills. Report remaining acceptance " +
-      "criteria with criterion identifiers, concrete missing production behavior, and relevant production " +
+      "files or repair gaps. Do not spawn subagents or invoke repair skills. " +
+      "Report remaining acceptance criteria with criterion identifiers, concrete missing production behavior " +
+      "and relevant production " +
       "paths. The runtime passes those findings to audit_plan_fix using the configured reasoning " +
       "model. Report status completed when inspection finishes, including when production criteria remain " +
       "open. The runtime owns repair retries and progress limits. Do not block because finding IDs or counts " +
@@ -27,12 +34,16 @@ internal object AcceptanceAuditPromptSections {
       "production gaps and let the runtime apply its durable repair policy. " +
       "A completed inspection with open criteria routes to audit_plan_fix. Downstream review requires " +
       "a report that no production criteria remain. " +
-      "After repairs, inspect only the unresolved criteria in the last accepted audit report. Previously " +
-      "satisfied criteria stay closed and must never be rechecked or reopened. Apply the same test exclusion. " +
-      "When all required production behavior is " +
-      "implemented, including when only test requirements remain, report that no production criteria remain " +
-      "with only the line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
-      "Block with a concrete failure_disposition when the criterion list is missing or unreadable or an " +
+      "When the runtime supplies a current criterion, inspect that authored criterion and report its source gaps " +
+      "in prose. A focused audit checks every independent production requirement in that criterion; treat earlier " +
+      "audit findings as context, not as a complete list of its gaps. If the source conclusion is ambiguous, keep " +
+      "the criterion open and request read-only clarification. Criteria accepted by an earlier audit stay " +
+      "accepted and are not re-checked. " +
+      "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
+      "verdict \"satisfied\" when the inspected production scope is met and verdict \"advance\" when it has " +
+      "source gaps. A completion without a verdict is read as a clarification request and repeats this audit. " +
+      "When all required production behavior is implemented, say so in ordinary prose, including when only " +
+      "test requirements remain. Block with a concrete failure_disposition only when an " +
       "external dependency prevents inspection. " + AUDIT_READONLY_EVIDENCE_SENTENCE
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
@@ -40,26 +51,24 @@ internal object AcceptanceAuditPromptSections {
       taskDirective = DIRECTIVE + if (inputs.noChangeClaim == null) auditScope(inputs) else noChangeScope(inputs),
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. " +
-          "Inspect the unresolved criteria without " +
+          "Inspect the runtime-selected production scope without " +
           "editing files. Exclude test requirements and report production gaps for the implementation repair step. " +
           "An enforcement guard or architecture check whose implementation a criterion requires counts as " +
           "production behavior even under a test source set; its example and regression cases stay excluded.",
       valueContent =
-        "Report the remaining acceptance criteria in prose. When all production requirements are met, " +
-          "the whole value is the single line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
-          "with no rationale and no criterion list. Exclude test-only criteria and test-related parts of " +
-          "mixed criteria. Otherwise list only the open criteria: start each on its own line with its briefing " +
-          "criterion ID, then give the missing production behavior and relevant production paths. Never name " +
-          "a satisfied criterion. " +
-          "Open criteria route to audit_plan_fix. Do not repair gaps in audit. Only a report that no " +
-          "criteria remain allows downstream review. Every audit " +
-          "checks only the unresolved criterion list against the current tree after the first pass. " +
-          "Original spec labels are accepted aliases. For capability " +
+        "Report source gaps and conclusions in ordinary prose. Say when the current source meets the " +
+          "production requirements. Exclude test-only criteria and test-related parts of mixed criteria, and " +
+          "state those later test or build obligations separately when relevant. Refer to criteria using their " +
+          "briefing labels when useful; apart from the initial full audit's Open criteria line there is no " +
+          "fixed format. " +
+          "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
+          "before downstream review. Focused audits inspect the runtime-selected criterion. " +
+          "For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
           "Report the current findings even when their criterion IDs, count or descriptions repeat. " +
-          "The runtime decides whether another repair is allowed. Reserve blocked status for a missing or " +
-          "unreadable criterion list or an external dependency that prevents inspection.",
+          "The runtime decides whether another repair is allowed. Reserve blocked status for an external " +
+          "dependency that prevents inspection.",
     )
 
   private fun noChangeScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
@@ -72,18 +81,7 @@ internal object AcceptanceAuditPromptSections {
   }
 
   private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
-    val prior = inputs.priorAcceptanceAudit ?: return ""
-    val catalog =
-      AcceptanceAuditCatalog.create(inputs.briefing.acceptanceCriteria) as? AcceptanceAuditCatalog.Known
-        ?: return ""
-    return when (val remaining = AcceptanceAuditRemainingCriteriaParser.parse(prior, catalog)) {
-      is AcceptanceAuditRemainingCriteria.Known ->
-        " This round may inspect only these unresolved criterion IDs: " +
-          remaining.identities.sorted().joinToString(", ") +
-          ". All other criteria are already satisfied and stay closed. Last accepted findings:\n" + prior
-      AcceptanceAuditRemainingCriteria.Complete ->
-        " All criteria were already satisfied. Carry completion forward without reopening any criterion."
-      is AcceptanceAuditRemainingCriteria.Unusable -> ""
-    }
+    val current = inputs.currentAcceptanceCriterion ?: return ""
+    return " Runtime-selected audit context: $current. Use this context for a focused audit."
   }
 }

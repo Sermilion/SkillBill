@@ -81,7 +81,7 @@ class SkillBillUninstallService(
       removeLauncher(uninstallFileSystem, launcher, removed, skipped, recorder)
     }
     removeDesktop(uninstallFileSystem, plan.desktop, removed, skipped, recorder)
-    removeRecursively(uninstallFileSystem, plan.stateRoot, removed, recorder)
+    removeInstallState(uninstallFileSystem, plan.stateRoot, removed, recorder)
 
     return UninstallResult(
       failed = recorder.failed(),

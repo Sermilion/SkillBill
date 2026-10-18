@@ -91,6 +91,41 @@ class ReviewStackRoutingTest {
   }
 
   @Test
+  fun `ordinary Kotlin identifiers do not select the multiplatform pack`() {
+    val kotlin = pack("kotlin", path = listOf("*.kt"), content = emptyList())
+    val kmp =
+      pack("kmp", path = listOf("*.kt"), content = listOf("expect", "actual"), baselinePlatform = "kotlin")
+
+    listOf("ExpectedState", "unexpected", "actualOwner", "_actual", "actual_", "éexpect", "expecté").forEach {
+      val result =
+        ReviewStackRouting.route(
+          listOf(kmp, kotlin),
+          listOf(ReviewRoutingChangedFile("src/Admission.kt", "val $it = null")),
+        )
+
+      assertEquals(setOf("kotlin"), result.routedSlugs, it)
+    }
+  }
+
+  @Test
+  fun `multiplatform declaration tokens retain composed ownership`() {
+    val kotlin = pack("kotlin", path = listOf("*.kt"), content = emptyList())
+    val kmp =
+      pack("kmp", path = listOf("*.kt"), content = listOf("expect", "actual"), baselinePlatform = "kotlin")
+
+    listOf("expect class Platform", "actual class Platform", "\tEXPECT fun platform()").forEach {
+      val result =
+        ReviewStackRouting.route(
+          listOf(kmp, kotlin),
+          listOf(ReviewRoutingChangedFile("src/Platform.kt", it)),
+        )
+
+      assertEquals(setOf("kmp", "kotlin"), result.routedSlugs, it)
+      assertEquals(setOf("src/Platform.kt"), result.ownedPathsBySlug["kmp"])
+    }
+  }
+
+  @Test
   fun `unresolved equal positive ownership selects only declared fallback`() {
     val result =
       ReviewStackRouting.route(

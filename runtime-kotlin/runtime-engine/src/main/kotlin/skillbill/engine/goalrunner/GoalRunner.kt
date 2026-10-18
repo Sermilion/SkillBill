@@ -25,7 +25,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
+import skillbill.engine.goalrunner.planning.source.GoalPlanningSource
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
@@ -42,7 +42,7 @@ import java.time.Clock
 class GoalRunner(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
-  private val goalPlanningSweep: GoalPlanningSweep,
+  private val goalPlanningSource: GoalPlanningSource,
   private val telemetry: GoalLifecycleTelemetryEmitter,
   private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
@@ -76,18 +76,25 @@ class GoalRunner(
       ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
   }
 
+  fun requiresPlanning(request: GoalRunnerRunRequest): Boolean =
+    manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null &&
+      intakePreparation.prepare(request) == null
+
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
-    val admittedState =
+    val durableState =
       manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
+    val admittedState =
+      durableState
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     alreadyCompleteReport(admittedState)?.let { return it }
-    runPreparation.alignGoalBranch(admittedState, request)?.let { return it }
-    runPreparation.admitPlanningMigration(admittedState, request)
-    val migratedState =
-      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
-        ?: admittedState
-    val loadedState = runPreparation.refreshSpecPlanning(migratedState, request)
+    val loadedState =
+      when (
+        val start = runPreparation.prepareStart(admittedState, request, resumesExistingGoal = durableState != null)
+      ) {
+        is GoalRunPreparation.PreparationBlocked -> return start.report
+        is GoalRunPreparation.Prepared -> start.state
+      }
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     val execute = {
       val state = reconcileStateBeforeRun(loadedState)
@@ -191,11 +198,13 @@ class GoalRunner(
       if (GoalRunnerPlanner.selectNext(state.manifest) is GoalRunnerSelection.Done) {
         GoalPlanningSweepOutcome.PreparedAll()
       } else {
-        goalPlanningSweep.prepare(state, effectiveRequest)
+        goalPlanningSource.prepare(state, effectiveRequest)
       }
     if (sweepOutcome is GoalPlanningSweepOutcome.Stopped) {
       return planningStoppedReport(effectiveRequest, state, telemetryEmitter, emptyList(), sweepOutcome)
     }
+    val prepared = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll
+    state = prepared.state ?: state
     val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
     validationQualityState.bind(state.parentWorkflowId)
     val pendingState = GoalRunnerIterationPendingState(validationQualityState)
@@ -208,7 +217,7 @@ class GoalRunner(
           observability = observability,
           ledger = ledger,
           telemetryEmitter = telemetryEmitter,
-          planning = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll,
+          planning = prepared,
           pendingState = pendingState,
         ),
       )

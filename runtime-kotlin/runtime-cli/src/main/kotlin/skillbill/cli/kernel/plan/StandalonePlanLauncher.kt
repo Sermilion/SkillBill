@@ -8,8 +8,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
+import skillbill.engine.goalrunner.plan.StandalonePlanLaunch
 import skillbill.engine.goalrunner.plan.StandalonePlanResult
 import skillbill.engine.goalrunner.plan.StandalonePlanRun
+import skillbill.idestatus.model.IdeStatusLaunchScope
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -21,11 +23,6 @@ class StandalonePlanLauncher(
 ) {
   fun issueKeyOf(intake: String): String = planRun.issueKeyOf(intake)
 
-  fun incompletePlanWorkflowId(
-    issueKey: String,
-    repoRoot: Path,
-  ): String? = planRun.incompletePlanWorkflowId(issueKey, repoRoot)
-
   fun run(
     issueKey: String,
     intake: String?,
@@ -33,7 +30,7 @@ class StandalonePlanLauncher(
     invokedAgentId: String,
     options: StandalonePlanOptions = StandalonePlanOptions(),
   ): StandalonePlanResult =
-    planRun.run(issueKey, intake, repoRoot, invokedAgentId) { specPath ->
+    planRun.run(issueKey, intake, repoRoot, StandalonePlanLaunch(invokedAgentId, options.launchScope)) { specPath ->
       FeatureTaskRuntimeRunInput(
         issueKey = issueKey,
         specPath = specPath,
@@ -58,6 +55,7 @@ data class StandalonePlanOptions(
   val timeout: Duration? = null,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
+  val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
 )
 
 fun StandalonePlanResult.planReportText(issueKey: String): String =

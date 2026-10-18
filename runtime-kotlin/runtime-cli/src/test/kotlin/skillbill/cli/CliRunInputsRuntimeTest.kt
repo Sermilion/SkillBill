@@ -27,7 +27,6 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class CliRunInputsRuntimeTest {
   @Test
@@ -98,35 +97,14 @@ class CliRunInputsRuntimeTest {
     val repoRoot = Files.createTempDirectory("skillbill-cli-injected-root")
     Files.createDirectories(repoRoot.resolve(".git"))
     val realRoot = repoRoot.toRealPath()
-    val specsRoot = realRoot.resolve(".feature-specs").toString()
-    val featureTask = listOf("feature-task", "SKILL-901")
+    val scaffoldCommand = listOf("new", "--dry-run", "--format", "json")
+    val scaffoldAnswers = "horizontal\nbill-injected-root-skill\nInjected root skill.\n"
 
-    val injectedRoot = CliRuntime.run(featureTask, injectedRootContext(repoRoot))
-    val explicitRoot =
-      CliRuntime.run(
-        featureTask + listOf("--repo-root", realRoot.toString()),
-        injectedRootContext(repoRoot),
-      )
+    val scaffold = CliRuntime.run(scaffoldCommand, injectedRootContext(repoRoot).copy(stdinText = scaffoldAnswers))
     val processRoot =
       CliRuntime.run(
-        featureTask,
-        CliRuntimeContext(environment = emptyMap(), userHome = repoRoot),
-      )
-
-    val injectedRootOutput = injectedRoot.stdout + injectedRoot.stderr
-    val explicitRootOutput = explicitRoot.stdout + explicitRoot.stderr
-    assertTrue(injectedRootOutput.contains(specsRoot), injectedRootOutput)
-    assertTrue(explicitRootOutput.contains(specsRoot), explicitRootOutput)
-    assertEquals(injectedRoot.exitCode, processRoot.exitCode, processRoot.stderr)
-    val processRootOutput = processRoot.stdout + processRoot.stderr
-    assertFalse(processRootOutput.contains(specsRoot), processRootOutput)
-
-    val scaffold =
-      CliRuntime.run(
-        listOf("new", "--dry-run", "--format", "json"),
-        injectedRootContext(repoRoot).copy(
-          stdinText = "horizontal\nbill-injected-root-skill\nInjected root skill.\n",
-        ),
+        scaffoldCommand,
+        CliRuntimeContext(environment = emptyMap(), userHome = repoRoot, stdinText = scaffoldAnswers),
       )
 
     assertEquals(0, scaffold.exitCode, scaffold.stdout)
@@ -134,6 +112,8 @@ class CliRunInputsRuntimeTest {
       realRoot.resolve("skills/bill-injected-root-skill").toString(),
       decodeJsonObject(scaffold.stdout)["skill_path"],
     )
+    val processRootOutput = processRoot.stdout + processRoot.stderr
+    assertFalse(processRootOutput.contains(realRoot.resolve("skills").toString()), processRootOutput)
   }
 
   @Test

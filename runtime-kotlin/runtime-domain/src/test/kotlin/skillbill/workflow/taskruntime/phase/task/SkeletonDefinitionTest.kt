@@ -21,6 +21,7 @@ class SkeletonDefinitionTest {
     listOf(
       "preplan",
       "plan",
+      "plan_subtasks",
       "implement",
       "simplify",
       "audit_plan_fix",
@@ -93,14 +94,22 @@ class SkeletonDefinitionTest {
           triggeringVerdict = FeatureTaskRuntimeVerdict.CI_FAILED,
           destinationPhaseId = "monitor_fix",
           loopId = "monitor_fix",
-          perEdgeCap = 3,
+          perEdgeCap = 2,
           capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        ),
+        FeatureTaskRuntimeBackwardEdge(
+          fromPhaseId = "monitor",
+          triggeringVerdict = FeatureTaskRuntimeVerdict.PROGRESS,
+          destinationPhaseId = "monitor_fix",
+          loopId = "monitor_fix_trigger",
+          perEdgeCap = null,
           capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
         ),
         FeatureTaskRuntimeBackwardEdge(
           fromPhaseId = "monitor_fix",
           triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
-          destinationPhaseId = "commit_push",
+          destinationPhaseId = "monitor",
           loopId = "monitor_fix_commit",
           perEdgeCap = null,
           capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
@@ -133,9 +142,17 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `a run resolves goal-child only with a goal continuation`() {
-    assertEquals(SkeletonDefinition.GOAL_CHILD, SkeletonDefinition.forRun(goalContinuation = true))
-    assertEquals(SkeletonDefinition.STANDALONE, SkeletonDefinition.forRun(goalContinuation = false))
+  fun `the internal standalone monitor mirrors the monitor traversal but is never publicly invocable`() {
+    val standalone = SkeletonDefinition.STANDALONE_MONITOR
+
+    assertEquals("standalone-monitor", standalone.id)
+    assertEquals(SkeletonDefinition.MONITOR.stepIds, standalone.stepIds)
+    assertEquals(SkeletonDefinition.MONITOR.declaration(), standalone.declaration())
+    assertEquals(SkeletonRunStateKind.IN_MEMORY, standalone.runStateKind)
+    assertFalse(standalone.standaloneInvocable)
+    assertEquals(standalone, SkeletonDefinition.byId("standalone-monitor"))
+    assertEquals(standalone, SkeletonDefinition.preparedExecutionFor(SkeletonDefinition.MONITOR.id))
+    assertEquals(null, SkeletonDefinition.preparedExecutionFor(SkeletonDefinition.PR.id))
   }
 
   @Test
@@ -169,16 +186,22 @@ class SkeletonDefinitionTest {
   @Test
   fun `standalone plan is durable, invocable on its own, and admitted only as a standalone run`() {
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.PLAN.runStateKind)
+    assertEquals(listOf("intake", "preplan", "plan", "plan_subtasks"), SkeletonDefinition.PLAN.stepIds)
     assertEquals(
       listOf("review", "validation", "plan", "pr", "monitor"),
       SkeletonDefinition.entries.filter(SkeletonDefinition::standaloneInvocable).map(SkeletonDefinition::id),
     )
-    assertEquals(
-      setOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.PLAN),
-      SkeletonDefinition.admittedForRun(goalContinuation = false),
-    )
+    assertEquals(setOf(SkeletonDefinition.PLAN), SkeletonDefinition.admittedForRun(goalContinuation = false))
     assertEquals(setOf(SkeletonDefinition.GOAL_CHILD), SkeletonDefinition.admittedForRun(goalContinuation = true))
-    assertEquals(true, SkeletonDefinition.PLAN.requiresSpecBundle(goalContinuation = false))
+  }
+
+  @Test
+  fun `the retired standalone skeleton is decodable but never admitted for a run`() {
+    assertEquals(SkeletonDefinition.STANDALONE, SkeletonDefinition.byId("standalone"))
+    assertFalse(SkeletonDefinition.STANDALONE.standaloneInvocable)
+    listOf(true, false).forEach { goalContinuation ->
+      assertFalse(SkeletonDefinition.STANDALONE in SkeletonDefinition.admittedForRun(goalContinuation))
+    }
   }
 
   @Test
@@ -191,11 +214,10 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `goal-planning is the preplan and plan slots over the goal-planning state`() {
-    val definition = SkeletonDefinition.byId("goal-planning")
-
-    assertEquals(listOf("preplan", "plan"), definition.declaration().forwardPhaseIds)
-    assertEquals(SkeletonRunStateKind.GOAL_PLANNING, definition.runStateKind)
+  fun `planning is one plan skeleton and no goal-planning definition remains`() {
+    assertFailsWith<UnknownSkeletonDefinitionError> { SkeletonDefinition.byId("goal-planning") }
+    assertEquals(listOf(PhaseSlot.INTAKE, PhaseSlot.PREPLAN, PhaseSlot.PLAN), SkeletonDefinition.PLAN.slots)
+    assertEquals(listOf("plan", "plan_subtasks"), PhaseSlot.PLAN.steps)
   }
 
   @Test

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.core.migration
 
+import skillbill.contracts.persistence.DesktopReadSchema
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
@@ -56,5 +57,12 @@ internal object DatabaseMigrations {
     require(versions == versions.sorted()) { "Database migrations must be ordered by version." }
     require(versions.toSet().size == versions.size) { "Database migration versions must be unique." }
     require(names.toSet().size == names.size) { "Database migration names must be unique." }
+    val expectedVersions =
+      (1..DesktopReadSchema.VERSION).filter { version -> version != RETIRED_AUDIT_GENERATION_MIGRATION }
+    require(versions == expectedVersions) {
+      "Desktop schema ${DesktopReadSchema.VERSION} requires a migration for every version increase."
+    }
   }
+
+  private const val RETIRED_AUDIT_GENERATION_MIGRATION = 23
 }

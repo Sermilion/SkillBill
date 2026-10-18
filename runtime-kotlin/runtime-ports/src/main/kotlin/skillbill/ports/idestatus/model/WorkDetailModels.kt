@@ -25,6 +25,7 @@ data class WorkDetailRequest(
   val cursor: String? = null,
   val startOffset: Int = 0,
   val list: WorkDetailList? = null,
+  val anchor: String? = null,
 ) {
   init {
     require(id.isNotBlank()) { "id is required." }
@@ -71,6 +72,8 @@ data class WorkDetailItem(
   val displayPriority: Int = 5,
   val exactPauseReason: String? = null,
   val databaseFileObservation: DatabaseFileObservation? = null,
+  val pauseEligible: Boolean = false,
+  val listAnchors: Map<WorkDetailList, String> = emptyMap(),
 )
 
 data class WorkDetailRuntimeStatus(
@@ -79,6 +82,8 @@ data class WorkDetailRuntimeStatus(
   val completeCount: Int,
   val pendingCount: Int,
   val blockedCount: Int,
+  val phaseIds: List<String> = phases.map { it.phaseId },
+  val totalPhaseCount: Int = phaseIds.size,
 )
 
 data class WorkDetailPhase(
@@ -102,6 +107,7 @@ data class WorkExecutionInstance(
   val finishedAt: Instant?,
   val result: String?,
   val restoration: ExecutionReasonRestoration? = null,
+  val runSequence: String = "",
 )
 
 enum class ExecutionReasonRestoration { EXACT, RESTORED, MISSING, AMBIGUOUS, BUDGET_EXCEEDED, MISSING_CONTENT }

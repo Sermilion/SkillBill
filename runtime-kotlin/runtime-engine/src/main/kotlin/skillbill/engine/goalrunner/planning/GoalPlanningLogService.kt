@@ -6,7 +6,6 @@ import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.planning.attempt.diagnosticPhaseId
 import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptOutcome
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogAttempt

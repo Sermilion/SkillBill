@@ -1,0 +1,69 @@
+package dev.skillbill.tray.feature.detail
+
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.v2.runComposeUiTest
+import dev.skillbill.tray.core.designsystem.DesignSystemTheme
+import dev.skillbill.tray.core.domain.model.PhaseExecution
+import dev.skillbill.tray.core.domain.model.PhaseExecutionKind
+import dev.skillbill.tray.core.domain.repository.Outcome
+import dev.skillbill.tray.core.testing.detail
+import dev.skillbill.tray.core.testing.fixtureInstant
+import dev.skillbill.tray.core.testing.workItem
+import dev.skillbill.tray.core.ui.LocalRepositoryNavigation
+import dev.skillbill.tray.core.ui.RepositoryNavigation
+import kotlin.test.Test
+
+@OptIn(ExperimentalTestApi::class)
+class DetailPhaseTest {
+  private val navigation = object : RepositoryNavigation {
+    override suspend fun openRepository(root: String, branch: String?) = Outcome.Value(Unit)
+    override suspend fun openDirectory(root: String) = Outcome.Value(Unit)
+  }
+
+  @Test
+  fun `missing planning checkpoints do not hide the executing phase and its progress`() = runComposeUiTest {
+    val item = workItem("executing").copy(
+      currentSubtaskId = "2",
+      currentStepId = "audit",
+      currentStepLabel = "audit",
+      planningState = "preplanned",
+      plannedSubtasks = 0,
+      totalSubtasks = 3,
+      phaseExecution = PhaseExecution("audit", PhaseExecutionKind.PASS, 1, 2),
+    )
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail(item).copy(currentPhase = "audit"))), fixtureInstant, {})
+        }
+      }
+    }
+
+    onNodeWithText("audit").assertExists()
+    onNodeWithText("pass 1").assertExists()
+    onNodeWithText("0/3 plans saved").assertDoesNotExist()
+  }
+
+  @Test
+  fun `a planning goal still shows its saved plan count`() = runComposeUiTest {
+    val item = workItem("planning").copy(
+      currentStepId = "planning",
+      currentStepLabel = "Planning",
+      planningState = "partially_planned",
+      plannedSubtasks = 1,
+      totalSubtasks = 3,
+    )
+    setContent {
+      CompositionLocalProvider(LocalRepositoryNavigation provides navigation) {
+        DesignSystemTheme {
+          DetailContent(DetailUiState(item.identity, DetailLoad.Loaded(detail(item))), fixtureInstant, {})
+        }
+      }
+    }
+
+    onNodeWithText("Planning").assertExists()
+    onNodeWithText("1/3 plans saved").assertExists()
+  }
+}

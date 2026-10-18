@@ -5,10 +5,16 @@ import java.nio.file.Path
 data class WorkRunLaunchRequest(
   val repositoryRoot: Path,
   val databasePath: Path,
-  val agentId: String,
-  val prompt: String,
   val ownershipKey: String,
+  val kind: WorkRunLaunchKind,
+  val agentEnvironment: Map<String, String> = emptyMap(),
 )
+
+sealed interface WorkRunLaunchKind {
+  data class AgentHarness(val agentId: String, val prompt: String) : WorkRunLaunchKind
+
+  data class RuntimeCommand(val arguments: List<String>) : WorkRunLaunchKind
+}
 
 sealed interface WorkRunLaunchResult {
   data class Started(val logPath: Path) : WorkRunLaunchResult

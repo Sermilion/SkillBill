@@ -61,19 +61,6 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `plan prompt asks for a prose plan without stuffed JSON`() {
-    val prompt =
-      composePhasePrompt(
-        PROMPT_COMPOSER_ISSUE_KEY,
-        promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
-      )
-
-    assertContains(prompt, "as prose", false, "plan asks for prose")
-    assertFalse(prompt.contains("executable_plan"), "plan must not teach stuffed plan JSON")
-    assertFalse(prompt.contains("## Value content"))
-  }
-
-  @Test
   fun `implement prompt asks for a prose summary without a stuffed receipt`() {
     val prompt =
       composePhasePrompt(

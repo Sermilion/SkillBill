@@ -57,6 +57,17 @@ fun legacyProseWorkflowError(
       "`skill-bill goal ${issueKey?.trim()?.ifEmpty { null } ?: "<ISSUE_KEY>"}`.",
   )
 
+fun retiredStandaloneWorkflowError(
+  workflowId: String,
+  issueKey: String?,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW,
+    "Workflow '$workflowId' uses the retired standalone feature-task skeleton and cannot be resumed. " +
+      "Abandon it if it is still open. Run `skill-bill ${issueKey?.trim()?.ifEmpty { null } ?: "<KEY>"}` " +
+      "to plan and run this work.",
+  )
+
 fun invalidRejectedOutputDiagnosticSchemaError(message: String): SkillBillRuntimeException =
   SkillBillRuntimeException(WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA, message)
 

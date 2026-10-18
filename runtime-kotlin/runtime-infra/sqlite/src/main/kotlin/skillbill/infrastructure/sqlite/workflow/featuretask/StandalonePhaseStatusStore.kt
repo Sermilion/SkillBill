@@ -5,13 +5,28 @@ import skillbill.error.core.MalformedJsonTextError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_CLEANUP_ASSIGNMENTS
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_KEY_COLUMN
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_COLUMN_LIST
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_TARGET_PLACEHOLDERS
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.columnValues
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorCleanup
+import skillbill.infrastructure.sqlite.core.migration.area.idestatus.readMonitorTarget
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.infrastructure.sqlite.core.schema.AGENT_ENVIRONMENT_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.LAUNCH_SCOPE_COLUMN
+import skillbill.infrastructure.sqlite.core.schema.agentEnvironmentJson
+import skillbill.infrastructure.sqlite.core.schema.readAgentEnvironment
+import skillbill.infrastructure.sqlite.core.schema.readLaunchScope
 import skillbill.infrastructure.sqlite.worklist.fractionalSecondsSql
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.StandalonePhaseStatusRepository
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandaloneEligibleSlice
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -47,7 +62,7 @@ internal class StandalonePhaseStatusStore(
 
   private fun registerInTransaction(request: StandalonePhaseStatusRegistration): StandalonePhaseStatusRecord {
     readByInvocation(request.invocationId)?.let { return it }
-    if (request.phaseId == MONITOR_PHASE_ID) {
+    if (request.phaseId == MONITOR_PHASE_ID && request.monitorTarget == null) {
       supersedeActiveMonitors(
         repositoryIdentity = request.repositoryIdentity,
         branchCorrelation = request.branchCorrelation,
@@ -63,8 +78,12 @@ internal class StandalonePhaseStatusStore(
         invocation_id, phase_id, status_store_id, run_sequence, status_revision,
         lifecycle_state, current_step, started_at, updated_at, lease_owner,
         lease_generation, lease_expires_at, owner_host_identity, owner_boot_identity, owner_pid, owner_birth_token,
-        launch_agent_id, launch_arguments_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        launch_agent_id, launch_arguments_json, $AGENT_ENVIRONMENT_COLUMN, $LAUNCH_SCOPE_COLUMN,
+        $MONITOR_TARGET_COLUMN_LIST
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        $MONITOR_TARGET_PLACEHOLDERS
+      )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -91,7 +110,9 @@ internal class StandalonePhaseStatusStore(
           request.processOwner?.processBirthToken,
           request.launchAgentId,
           request.launchArguments?.let(JsonCodec::valueToJsonString),
-        ),
+          agentEnvironmentJson(request.agentEnvironment),
+          request.launchScope.wireValue,
+        ) + request.monitorTarget.columnValues(),
       )
       statement.executeUpdate()
     }
@@ -100,59 +121,59 @@ internal class StandalonePhaseStatusStore(
 
   override fun readEligible(
     repositoryIdentity: String,
-    branchCorrelation: String,
+    branchCorrelation: String?,
     now: Instant,
+    page: StandaloneEligiblePage,
+    monitorRepositoryIdentity: String,
   ): List<StandalonePhaseStatusRecord> {
+    val (limit, after, slice) = page
+    require(limit > 0) { "Eligible status page limit must be positive." }
     val liveFrom = now.minus(LIVE_RETENTION)
     val settledFrom = now.minus(SETTLED_RETENTION)
+    val liveStates = LIVE_STATES.joinToString(", ") { "'$it'" }
+    val live =
+      "(lifecycle_state IN ($liveStates) AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})"
+    val settled = "(finished_at IS NOT NULL AND ${instantAfterBoundSql("finished_at", "settled_from")})"
+    val eligible =
+      when (slice) {
+        StandaloneEligibleSlice.LIVE -> live
+        StandaloneEligibleSlice.SETTLED -> "($settled AND NOT $live)"
+        null -> "($live OR $settled)"
+      }
     return connection.prepareStatement(
       """
       WITH bounds(live_from, settled_from) AS (VALUES (?, ?))
       SELECT * FROM standalone_phase_status
-      WHERE repository_identity = ? AND branch_correlation = ?
-        AND (
-          (lifecycle_state IN (${LIVE_STATES.joinToString(", ") { "'$it'" }})
-            AND ${instantAtOrAfterBoundSql("updated_at", "live_from")})
-          OR (finished_at IS NOT NULL
-            AND ${instantAfterBoundSql("finished_at", "settled_from")})
-        )
+      WHERE ((repository_identity = ? AND ? IS NOT NULL AND branch_correlation = ?)
+          OR (repository_identity = ? AND $MONITOR_PR_KEY_COLUMN IS NOT NULL))
+        AND $eligible
+        ${if (after == null) "" else "AND $AFTER_ANCHOR_SQL"}
       ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
       """.trimIndent(),
     ).use { statement ->
-      statement.bindAll(listOf(liveFrom.toString(), settledFrom.toString(), repositoryIdentity, branchCorrelation))
-      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
+      statement.bindAll(
+        listOf(
+          liveFrom.toString(),
+          settledFrom.toString(),
+          repositoryIdentity,
+          branchCorrelation,
+          branchCorrelation,
+          monitorRepositoryIdentity,
+        ) + after.anchorBindings(),
+      )
+      statement.executeQuery().use { rows -> rows.readAggregatePage(0, limit) { tryToRecordForAggregate(it) } }
     }
   }
 
-  override fun readBoardCandidates(
-    finishedFrom: Instant,
-    finishedThrough: Instant,
-  ): List<StandalonePhaseStatusRecord> =
-    connection.prepareStatement(
-      """
-      WITH bounds(from_value, through_value) AS (VALUES (?, ?))
-      SELECT * FROM standalone_phase_status
-      WHERE workflow_id IS NOT NULL
-         OR lifecycle_state NOT IN (${BOARD_FINISHED_STATES.joinToString(", ") { "'$it'" }})
-         OR finished_at IS NULL
-         OR (
-           ${instantAtOrAfterBoundSql("finished_at", "from_value")}
-           AND ${instantAtOrBeforeBoundSql("finished_at", "through_value")}
-         )
-      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
-      """.trimIndent(),
-    ).use { statement ->
-      statement.bindAll(listOf(finishedFrom.toString(), finishedThrough.toString()))
-      statement.executeQuery().use { rows -> readAggregateRecords(rows) }
-    }
-
   override fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord> {
     require(query.offset >= 0 && query.limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    require(query.after == null || query.offset == 0) { "An anchored history page cannot also carry an offset." }
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM standalone_phase_status " +
         "WHERE repository_identity = ? AND phase_id = ? " +
-        "AND COALESCE(upper(issue_key), workflow_id, branch_correlation) = ? " +
+        "AND COALESCE($MONITOR_PR_KEY_COLUMN, upper(issue_key), workflow_id, branch_correlation) = ? " +
         "AND ${instantAtOrBeforeSql("started_at")} " +
+        (if (query.after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
       statement.bindAll(
@@ -161,7 +182,7 @@ internal class StandalonePhaseStatusStore(
           query.repositoryIdentity,
           query.phaseId,
           query.phaseGroup,
-        ),
+        ) + query.after.anchorBindings(),
       )
       statement.executeQuery().use { rows ->
         rows.readAggregatePage(query.offset, query.limit) { tryToRecordForAggregate(it) }
@@ -195,19 +216,29 @@ internal class StandalonePhaseStatusStore(
     startedThrough: Instant,
     offset: Int,
     limit: Int,
+    after: StandalonePhaseExecutionAnchor?,
   ): List<IdeStatusWorkflowExecution> {
     require(offset >= 0 && limit > 0) { "Execution history page bounds must be non-negative and positive." }
+    require(after == null || offset == 0) { "An anchored history page cannot also carry an offset." }
     return connection.prepareStatement(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM ide_status_workflow_execution " +
         "WHERE workflow_id = ? AND ${instantAtOrBeforeSql("started_at")} " +
+        (if (after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
         "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
-      statement.bindAll(listOf(startedThrough.toString(), workflowId))
+      statement.bindAll(listOf(startedThrough.toString(), workflowId) + after.anchorBindings())
       statement.executeQuery().use { rows ->
         rows.readAggregatePage(offset, limit) { tryToWorkflowExecutionForAggregate(it) }
       }
     }
   }
+
+  private fun StandalonePhaseExecutionAnchor?.anchorBindings(): List<Any> =
+    if (this == null) {
+      emptyList()
+    } else {
+      listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
+    }
 
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
@@ -260,6 +291,9 @@ internal class StandalonePhaseStatusStore(
     operatorCancellation: Boolean = false,
   ): StandalonePhaseStatusUpdateResult {
     val current = readByExecution(request.executionId) ?: return StandalonePhaseStatusUpdateResult.MISSING
+    require(request.monitorCleanup == null || current.monitorTarget != null) {
+      "Monitor cleanup can only be recorded on a target-bearing monitor execution."
+    }
     val rejected = updateRejection(current, request, operatorCancellation)
     if (rejected != null) return rejected
     val nextRevision = incrementDecimal(current.statusRevision)
@@ -270,7 +304,8 @@ internal class StandalonePhaseStatusStore(
           status_revision = ?, lifecycle_state = ?, current_step = ?, current_activity = ?,
           updated_at = ?, finished_at = ?, active_duration_ms = COALESCE(?, active_duration_ms),
           active_duration_as_of = CASE WHEN ? THEN NULL ELSE COALESCE(?, active_duration_as_of) END,
-          terminal_result = ?, accepted_result = ?
+          terminal_result = ?, accepted_result = ?,
+          $MONITOR_CLEANUP_ASSIGNMENTS
         WHERE execution_id = ? AND status_revision = ? AND lease_owner = ? AND lease_generation = ?
         """.trimIndent(),
       ).use { statement ->
@@ -287,11 +322,13 @@ internal class StandalonePhaseStatusStore(
             request.activeDurationAsOf?.toString(),
             request.terminalResult,
             request.acceptedResult,
-            request.executionId,
-            request.expectedRevision,
-            request.leaseOwner,
-            request.leaseGeneration,
-          ),
+          ) + request.monitorCleanup.columnValues() +
+            listOf(
+              request.executionId,
+              request.expectedRevision,
+              request.leaseOwner,
+              request.leaseGeneration,
+            ),
         )
         statement.executeUpdate()
       }
@@ -312,7 +349,7 @@ internal class StandalonePhaseStatusStore(
         """
         SELECT execution_id, status_revision FROM standalone_phase_status
         WHERE repository_identity = ? AND branch_correlation = ? AND phase_id = ?
-          AND lifecycle_state IN ('active', 'paused')
+          AND lifecycle_state IN ('active', 'paused') AND $MONITOR_PR_KEY_COLUMN IS NULL
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(listOf(repositoryIdentity, branchCorrelation, MONITOR_PHASE_ID))
@@ -384,8 +421,8 @@ internal class StandalonePhaseStatusStore(
       INSERT INTO ide_status_workflow_execution(
         execution_id, repository_identity, branch_correlation, issue_key, workflow_id,
         invocation_id, status_store_id, run_sequence, status_revision, lifecycle_state,
-        started_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?)
+        started_at, updated_at, $AGENT_ENVIRONMENT_COLUMN
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', ?, ?, ?, ?)
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -400,6 +437,7 @@ internal class StandalonePhaseStatusStore(
         request.lifecycleState,
         updatedAt,
         updatedAt,
+        agentEnvironmentJson(request.agentEnvironment),
       )
       statement.executeUpdate()
     }
@@ -445,6 +483,7 @@ internal class StandalonePhaseStatusStore(
       lifecycleState = getString("lifecycle_state"),
       startedAt = workflowExecutionInstant("started_at"),
       updatedAt = workflowExecutionInstant("updated_at"),
+      agentEnvironment = readAgentEnvironment("workflow-status"),
     )
 
   private fun ResultSet.workflowExecutionInstant(column: String): Instant {
@@ -535,15 +574,6 @@ internal class StandalonePhaseStatusStore(
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
-  private fun readAggregateRecords(rows: ResultSet): List<StandalonePhaseStatusRecord> {
-    val skipDiagnostics = AggregateRowSkipDiagnostics()
-    return buildList {
-      while (rows.next()) {
-        rows.tryToRecordForAggregate(skipDiagnostics)?.let(::add)
-      }
-    }
-  }
-
   private class AggregateRowSkipDiagnostics {
     var emitted: Int = 0
     var truncated: Boolean = false
@@ -608,8 +638,9 @@ internal class StandalonePhaseStatusStore(
     }
   }
 
-  private fun ResultSet.toRecord(): StandalonePhaseStatusRecord =
-    StandalonePhaseStatusRecord(
+  private fun ResultSet.toRecord(): StandalonePhaseStatusRecord {
+    val monitorTarget = readMonitorTarget("standalone-status")
+    return StandalonePhaseStatusRecord(
       repositoryIdentity = getString("repository_identity"),
       branchCorrelation = getString("branch_correlation"),
       issueKey = getString("issue_key"),
@@ -636,7 +667,12 @@ internal class StandalonePhaseStatusStore(
       processOwner = readProcessOwner(),
       launchAgentId = getString("launch_agent_id"),
       launchArguments = readLaunchArguments(),
+      agentEnvironment = readAgentEnvironment("standalone-status"),
+      launchScope = readLaunchScope("standalone-status"),
+      monitorTarget = monitorTarget,
+      monitorCleanup = readMonitorCleanup("standalone-status", monitorTarget != null),
     )
+  }
 
   private fun ResultSet.standaloneInstant(column: String): Instant {
     val raw = getString(column)
@@ -701,7 +737,9 @@ internal class StandalonePhaseStatusStore(
     const val SUPERSEDED_MONITOR_ACTIVITY = "Superseded by a later monitor run."
     val LIVE_STATES = setOf("active", "paused", "blocked")
     val TERMINAL_STATES = setOf("terminal", "failed", "blocked", "canceled")
-    val BOARD_FINISHED_STATES = setOf("terminal", "completed", "success", "failed", "canceled")
+    const val AFTER_ANCHOR_SQL: String =
+      "(length(run_sequence) < ? OR (length(run_sequence) = ? AND run_sequence < ?) " +
+        "OR (length(run_sequence) = ? AND run_sequence = ? AND invocation_id < ?))"
     val LIVE_RETENTION: Duration = Duration.ofHours(24)
     val SETTLED_RETENTION: Duration = Duration.ofHours(6)
     val UPDATE_STATUS_REGISTRY_SQL =
@@ -733,14 +771,6 @@ private fun instantAfterBoundSql(
   "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
     "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
     "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
-
-private fun instantAtOrBeforeBoundSql(
-  columnName: String,
-  boundName: String,
-): String =
-  "(unixepoch($columnName) < unixepoch((SELECT $boundName FROM bounds)) OR " +
-    "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-    "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
 
 private fun incrementDecimal(value: String): String {
   val digits = value.toCharArray()

@@ -48,10 +48,16 @@
       "strategy_id": "inline"
     },
     {
-      "semantic_revision": 1,
+      "semantic_revision": 2,
       "slot": "plan",
       "step": "plan",
-      "strategy_id": "agent-plan"
+      "strategy_id": "goal-plan-fan-out"
+    },
+    {
+      "semantic_revision": 2,
+      "slot": "plan",
+      "step": "plan_subtasks",
+      "strategy_id": "goal-plan-fan-out"
     },
     {
       "semantic_revision": 1,
@@ -168,9 +174,14 @@
       "step": "implement_fix"
     },
     {
-      "identity": "agent-plan/1:plan",
+      "identity": "goal-plan-fan-out/2:plan",
       "semantic_digest": "__NORMALIZED_SHA64__",
       "step": "plan"
+    },
+    {
+      "identity": "goal-plan-fan-out/2:plan_subtasks",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "plan_subtasks"
     },
     {
       "identity": "agent-preplan/1:preplan",
@@ -244,11 +255,12 @@
     {
       "entry_step": "plan",
       "selected_steps": [
-        "plan"
+        "plan",
+        "plan_subtasks"
       ],
-      "semantic_revision": 1,
+      "semantic_revision": 2,
       "slot": "plan",
-      "strategy_id": "agent-plan"
+      "strategy_id": "goal-plan-fan-out"
     },
     {
       "entry_step": "preplan",
@@ -318,6 +330,11 @@
       "identity": "step-policy-v2:__NORMALIZED_SHA64__",
       "semantic_digest": "__NORMALIZED_SHA64__",
       "step": "plan"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "plan_subtasks"
     },
     {
       "identity": "step-policy-v2:__NORMALIZED_SHA64__",
@@ -393,6 +410,7 @@
     "forward_steps": [
       "preplan",
       "plan",
+      "plan_subtasks",
       "implement",
       "simplify",
       "audit_plan_fix",

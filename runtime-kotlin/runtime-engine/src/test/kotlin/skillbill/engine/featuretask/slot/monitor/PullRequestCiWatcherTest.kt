@@ -26,9 +26,9 @@ class PullRequestCiWatcherTest {
         PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(2, checks.calls)
   }
 
@@ -45,7 +45,7 @@ class PullRequestCiWatcherTest {
         ),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
     assertEquals(listOf("lint"), failed.failingChecks.map(PullRequestCheck::name))
@@ -60,9 +60,9 @@ class PullRequestCiWatcherTest {
         ),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(1, checks.calls)
   }
 
@@ -79,9 +79,9 @@ class PullRequestCiWatcherTest {
         ),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
   }
 
   @Test
@@ -96,9 +96,9 @@ class PullRequestCiWatcherTest {
         ),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(2, checks.calls)
   }
 
@@ -113,15 +113,64 @@ class PullRequestCiWatcherTest {
         ),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Failed(listOf(failedCheck)), outcome)
+    assertEquals(PullRequestCiOutcome.Failed(listOf(failedCheck), HEAD_SHA), outcome)
     assertEquals(1, checks.calls)
     assertEquals(clockBefore, clock)
   }
 
   @Test
-  fun `pending checks keep reporting while ci is still running`() {
+  fun `a changed pull request head keeps watching until failing checks have a stable head`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          headSha = if (identityCalls == 1) "observed-head" else "new-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+    val inconclusive = mutableListOf<String>()
+
+    val outcome =
+      watcher(checks, identityLookup = identities).watch(
+        REPO_ROOT,
+        BRANCH,
+        expectedHeadSha = HEAD_SHA,
+        onInconclusive = inconclusive::add,
+      )
+
+    val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
+    assertEquals("new-head", failed.headSha)
+    assertEquals(2, checks.calls)
+    assertEquals(listOf("Pull request identity changed during check observation."), inconclusive)
+  }
+
+  @Test
+  fun `a merge conflict found while refreshing failed checks routes to conflict repair`() {
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        PullRequestIdentity.Found(
+          PR_URL,
+          PR_NUMBER,
+          conflicting = identityCalls == 2,
+          headSha = "same-head",
+        )
+      }
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))))
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
+
+    assertEquals(PullRequestCiOutcome.Conflicted, outcome)
+  }
+
+  @Test
+  fun `pending checks keep reporting every poll until ci settles`() {
     val pending =
       PullRequestChecks.Reported(
         listOf(check("desktop-build", CheckBucket.PENDING), check("build", CheckBucket.PASS)),
@@ -137,15 +186,18 @@ class PullRequestCiWatcherTest {
           listOf(check("desktop-build", CheckBucket.PASS), check("build", CheckBucket.PASS)),
         ),
       )
-    val reported = mutableListOf<List<String>>()
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
     val outcome =
-      watcher(checks, progressInterval = Duration.ofMinutes(1)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
-        reported += pendingChecks.map(PullRequestCheck::name)
-      }
+      watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA, onCiRunning = {
+          pullRequestUrl,
+          pendingChecks,
+        ->
+        reported += pullRequestUrl to pendingChecks
+      })
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
-    assertEquals(listOf(listOf("desktop-build"), listOf("desktop-build"), listOf("desktop-build")), reported)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
+    assertEquals(List(5) { PR_URL to listOf(check("desktop-build", CheckBucket.PENDING)) }, reported)
   }
 
   @Test
@@ -160,13 +212,60 @@ class PullRequestCiWatcherTest {
           listOf(check("build", CheckBucket.PASS), check("desktop-build", CheckBucket.PASS)),
         ),
       )
-    val reported = mutableListOf<List<String>>()
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
 
-    watcher(checks, progressInterval = Duration.ofMinutes(10)).watch(REPO_ROOT, BRANCH) { pendingChecks ->
-      reported += pendingChecks.map(PullRequestCheck::name)
-    }
+    watcher(
+      checks,
+      progressInterval = Duration.ofMinutes(10),
+    ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA, onCiRunning = { pullRequestUrl, pendingChecks ->
+      reported += pullRequestUrl to pendingChecks
+    })
 
-    assertEquals(listOf(listOf("build"), listOf("build", "desktop-build")), reported)
+    assertEquals(
+      listOf(
+        PR_URL to listOf(check("build", CheckBucket.PENDING)),
+        PR_URL to listOf(check("build", CheckBucket.PENDING), check("desktop-build", CheckBucket.PENDING)),
+      ),
+      reported,
+    )
+  }
+
+  @Test
+  fun `progress links omit user info and query parameters`() {
+    val checks =
+      ScriptedChecks(
+        PullRequestChecks.Reported(
+          listOf(
+            PullRequestCheck(
+              "build",
+              CheckBucket.PENDING,
+              "https://token@ci.example/run/1?access_token=secret",
+            ),
+          ),
+        ),
+        PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
+      )
+    val reported = mutableListOf<Pair<String, List<PullRequestCheck>>>()
+
+    watcher(
+      checks,
+      identity =
+        PullRequestIdentity.Found(
+          "https://token@github.com/acme/repo/pull/42?secret=value",
+          PR_NUMBER,
+          headSha = HEAD_SHA,
+        ),
+    ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA, onCiRunning = { pullRequestUrl, pendingChecks ->
+      reported += pullRequestUrl to pendingChecks
+    })
+
+    assertEquals(
+      listOf(
+        "https://github.com/acme/repo/pull/42" to
+          listOf(PullRequestCheck("build", CheckBucket.PENDING, "https://ci.example/run/1")),
+      ),
+      reported,
+    )
   }
 
   @Test
@@ -182,9 +281,13 @@ class PullRequestCiWatcherTest {
         PullRequestChecks.Reported(listOf(check("integration", CheckBucket.PASS))),
       )
 
-    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(2)).watch(REPO_ROOT, BRANCH)
+    val outcome =
+      watcher(
+        checks,
+        startTimeout = Duration.ofMinutes(2),
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(6, checks.calls)
   }
 
@@ -192,7 +295,11 @@ class PullRequestCiWatcherTest {
   fun `no checks within the start timeout block`() {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 
-    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(4)).watch(REPO_ROOT, BRANCH)
+    val outcome =
+      watcher(
+        checks,
+        startTimeout = Duration.ofMinutes(4),
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
     assertTrue("did not start within 4 minutes" in blocked.reason, blocked.reason)
@@ -210,9 +317,9 @@ class PullRequestCiWatcherTest {
         PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(5, checks.calls)
   }
 
@@ -220,7 +327,11 @@ class PullRequestCiWatcherTest {
   fun `an empty reported check list blocks when ci does not start`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(emptyList()))
 
-    val outcome = watcher(checks, startTimeout = Duration.ofMinutes(2)).watch(REPO_ROOT, BRANCH)
+    val outcome =
+      watcher(
+        checks,
+        startTimeout = Duration.ofMinutes(2),
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     val blocked = assertIs<PullRequestCiOutcome.Blocked>(outcome)
     assertTrue("did not start within 2 minutes" in blocked.reason, blocked.reason)
@@ -234,7 +345,7 @@ class PullRequestCiWatcherTest {
         PullRequestChecks.Reported(listOf(check("lint", CheckBucket.FAIL))),
       )
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     val failed = assertIs<PullRequestCiOutcome.Failed>(outcome)
     assertEquals(listOf("lint"), failed.failingChecks.map(PullRequestCheck::name))
@@ -248,7 +359,7 @@ class PullRequestCiWatcherTest {
       watcher(
         checks,
         identity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER, conflicting = true),
-      ).watch(REPO_ROOT, BRANCH)
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(PullRequestCiOutcome.Conflicted, outcome)
     assertEquals(0, checks.calls)
@@ -258,7 +369,11 @@ class PullRequestCiWatcherTest {
   fun `a merged pull request completes monitoring regardless of failing checks`() {
     val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.FAIL))))
 
-    val outcome = watcher(checks, identity = PullRequestIdentity.Merged(PR_URL, PR_NUMBER)).watch(REPO_ROOT, BRANCH)
+    val outcome =
+      watcher(
+        checks,
+        identity = PullRequestIdentity.Merged(PR_URL, PR_NUMBER),
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(PullRequestCiOutcome.Merged, outcome)
     assertEquals(0, checks.calls)
@@ -278,7 +393,7 @@ class PullRequestCiWatcherTest {
         }
       }
 
-    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(PullRequestCiOutcome.Merged, outcome)
     assertEquals(1, checks.calls)
@@ -299,7 +414,7 @@ class PullRequestCiWatcherTest {
           }
         }
 
-      val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+      val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
       assertEquals(PullRequestCiOutcome.Merged, outcome)
       assertEquals(if (conflicting) 0 else 1, checks.calls)
@@ -312,13 +427,13 @@ class PullRequestCiWatcherTest {
     val identities =
       PullRequestIdentityLookup { _, _ ->
         identityCalls += 1
-        PullRequestIdentity.Found(PR_URL, PR_NUMBER, conflicting = identityCalls == 1)
+        PullRequestIdentity.Found(PR_URL, PR_NUMBER, conflicting = identityCalls == 1, headSha = HEAD_SHA)
       }
     val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PASS))))
 
-    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
-    assertEquals(PullRequestCiOutcome.Passed, outcome)
+    assertEquals(PullRequestCiOutcome.Passed(HEAD_SHA), outcome)
     assertEquals(1, checks.calls)
   }
 
@@ -326,17 +441,40 @@ class PullRequestCiWatcherTest {
   fun `a missing pull request settles without reading checks`() {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 
-    val outcome = watcher(checks, identity = PullRequestIdentity.Absent).watch(REPO_ROOT, BRANCH)
+    val outcome =
+      watcher(
+        checks,
+        identity = PullRequestIdentity.Absent,
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(PullRequestCiOutcome.NoPullRequest, outcome)
     assertEquals(0, checks.calls)
   }
 
   @Test
+  fun `an unavailable identity refresh during pending CI retains its failure`() {
+    val checks = ScriptedChecks(PullRequestChecks.Reported(listOf(check("build", CheckBucket.PENDING))))
+    var identityCalls = 0
+    val identities =
+      PullRequestIdentityLookup { _, _ ->
+        identityCalls += 1
+        when (identityCalls) {
+          1 -> PullRequestIdentity.Found(PR_URL, PR_NUMBER, headSha = HEAD_SHA)
+          2 -> PullRequestIdentity.Unavailable("gh is not authenticated")
+          else -> PullRequestIdentity.Merged(PR_URL, PR_NUMBER)
+        }
+      }
+
+    val outcome = watcher(checks, identityLookup = identities).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
+
+    assertEquals(PullRequestCiOutcome.Unavailable("gh is not authenticated"), outcome)
+  }
+
+  @Test
   fun `an unavailable checks lookup reports unavailable with its reason`() {
     val checks = ScriptedChecks(PullRequestChecks.Unavailable("gh pr checks --json unsupported; upgrade gh"))
 
-    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH)
+    val outcome = watcher(checks).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(
       PullRequestCiOutcome.Unavailable("gh pr checks --json unsupported; upgrade gh"),
@@ -349,7 +487,10 @@ class PullRequestCiWatcherTest {
     val checks = ScriptedChecks(PullRequestChecks.NoChecks)
 
     val outcome =
-      watcher(checks, identity = PullRequestIdentity.Unavailable("gh is not authenticated")).watch(REPO_ROOT, BRANCH)
+      watcher(
+        checks,
+        identity = PullRequestIdentity.Unavailable("gh is not authenticated"),
+      ).watch(REPO_ROOT, BRANCH, expectedHeadSha = HEAD_SHA)
 
     assertEquals(PullRequestCiOutcome.Unavailable("gh is not authenticated"), outcome)
     assertEquals(0, checks.calls)
@@ -357,9 +498,9 @@ class PullRequestCiWatcherTest {
 
   private fun watcher(
     checks: ScriptedChecks,
-    identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER),
+    identity: PullRequestIdentity = PullRequestIdentity.Found(url = PR_URL, number = PR_NUMBER, headSha = HEAD_SHA),
     startTimeout: Duration = Duration.ofHours(1),
-    progressInterval: Duration = Duration.ofMinutes(10),
+    progressInterval: Duration = Duration.ofSeconds(30),
     identityLookup: PullRequestIdentityLookup = fixedIdentity(identity),
   ): PullRequestCiWatcher =
     PullRequestCiWatcher(
@@ -403,6 +544,7 @@ class PullRequestCiWatcherTest {
   private companion object {
     val REPO_ROOT: Path = Path.of("/repo")
     const val BRANCH = "feat/SKILL-407-monitor"
+    const val HEAD_SHA = "published-head"
     const val PR_NUMBER = 42
     const val PR_URL = "https://github.com/example/skill-bill/pull/42"
   }

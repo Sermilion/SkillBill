@@ -23,16 +23,20 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairSession
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeNoChangePausePort
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.requireCurrentWorker
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
+import skillbill.engine.featuretask.slot.state.PhasePlanRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
@@ -41,9 +45,11 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -77,9 +83,23 @@ internal class DurableOwnedNoChangePause(
 
 internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
-  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val admitted: AdmittedFeatureTaskRuntimeExecution,
+  private val acceptance: AcceptanceCriterionRepairSession? = null,
 ) : PhaseRunRecords,
+  PhasePlanRecords by DurablePhasePlanRecords(decomposeTerminalRecorder, admitted),
+  AcceptanceCriterionRepairCycleRecords by (
+    acceptance ?: object : AcceptanceCriterionRepairCycleRecords {
+      override fun requiresExplicitStart(phaseId: String): Boolean = false
+
+      override fun isRepairStep(phaseId: String): Boolean = false
+
+      override fun settleUnsuccessfulRepair(
+        phase: FeatureTaskRuntimePhaseStateRequest,
+        kind: AcceptanceCriterionRepairOutcomeKind,
+      ): Boolean? = null
+    }
+  ),
   FeatureTaskRuntimeNoChangePausePort by DurableOwnedNoChangePause(recorder, admitted) {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -101,14 +121,38 @@ internal class DurablePhaseRunRecords(
     admitted.ownedWrite({ recorder.recordOwnedPhaseState(request, it) }) { recorder.recordPhaseState(request) }
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
-    admitted.ownedWrite({ recorder.recordOwnedRequiredPhaseStart(request, it) }) {
-      recorder.recordRequiredPhaseStart(request)
+    when (acceptance?.start(request)) {
+      true -> RequiredPhaseWrite.Acknowledged
+      false ->
+        RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.START,
+          request.workflowId,
+          request.phaseId,
+          request.attemptCount,
+        )
+      null ->
+        admitted.ownedWrite({ recorder.recordOwnedRequiredPhaseStart(request, it) }) {
+          recorder.recordRequiredPhaseStart(request)
+        }
     }
 
-  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
-    admitted.ownedWrite({ recorder.recordOwnedCompletedPhase(request, it) }) {
-      recorder.recordCompletedPhase(request)
-    }
+  override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
+    acceptance?.complete(request)
+      ?: if (
+        admitted.ownedWrite({ recorder.recordOwnedCompletedPhase(request, it) }) {
+          recorder.recordCompletedPhase(request)
+        }
+      ) {
+        RequiredPhaseWrite.Acknowledged
+      } else {
+        RequiredPhaseWrite.Rejected(
+          RequiredPhaseWriteKind.COMPLETION,
+          request.workflowId,
+          request.phaseId,
+          request.attemptCount,
+          detail = "The authoritative workflow record is missing. The producer output is retained.",
+        )
+      }
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     admitted.ownedWrite({ recorder.recordOwnedIncompleteImplementationAttempt(request, it) }) {
@@ -296,6 +340,25 @@ internal class DurablePhaseRunRecords(
     admitted.ownedWrite({ recorder.recordOwnedWorkflowOwnedPaths(workflowId, ownedPaths, it) }) {
       recorder.recordWorkflowOwnedPaths(workflowId, ownedPaths)
     }
+}
+
+private class DurablePhasePlanRecords(
+  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val admitted: AdmittedFeatureTaskRuntimeExecution,
+) : PhasePlanRecords {
+  override fun loadPlanBundle(workflowId: String): FeatureTaskRuntimePlanBundle? =
+    decomposeTerminalRecorder.loadPlanBundle(workflowId)
+
+  override fun recordPlanBundle(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+  ): Boolean = decomposeTerminalRecorder.recordPlanBundle(workflowId, bundle)
+
+  override fun recordPlanBundleWithUnits(
+    workflowId: String,
+    bundle: FeatureTaskRuntimePlanBundle,
+    unitRecords: Map<Int, FeatureTaskRuntimePhaseRecord>,
+  ): Boolean = decomposeTerminalRecorder.recordPlanBundleWithUnits(workflowId, bundle, unitRecords)
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     decomposeTerminalRecorder.loadDecomposeTerminal(workflowId)

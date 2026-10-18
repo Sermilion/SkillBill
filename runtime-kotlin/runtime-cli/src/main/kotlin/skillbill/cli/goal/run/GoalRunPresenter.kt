@@ -3,15 +3,18 @@ package skillbill.cli.goal.run
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.system.RuntimeProvenanceContract
+import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
+import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.goalrunner.model.GoalRunnerStopReport
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
 class GoalRunPresenter(
@@ -38,7 +41,12 @@ class GoalRunPresenter(
     )
   }
 
-  fun eventSink(): GoalRunnerEventSink = GoalRunnerEventSink { }
+  fun eventSink(): GoalRunnerEventSink =
+    GoalRunnerEventSink { event ->
+      if (event is GoalRunnerRunEvent.ResumeRepaired) {
+        inputs.liveStdout(event.repairs.joinToString("") { goalResumeRepairLine(event.issueKey, it) + "\n" })
+      }
+    }
 
   fun outputSink(includeRawChildOutput: Boolean): AgentRunOutputSink =
     if (!liveOutput) {
@@ -142,13 +150,36 @@ internal fun GoalRunnerResumeResult.toGoalResumeCliMap(): Map<String, Any?> =
     "paused" to false,
     "pause_requested" to false,
     "cleared_pause_reason" to clearedPauseReason,
+    "refusal_reason" to refusalReason,
+    "applied_repairs" to appliedRepairs.map(GoalRunnerAppliedRepair::toAppliedRepairCliMap),
+  )
+
+internal fun GoalRunnerAppliedRepair.toAppliedRepairCliMap(): Map<String, Any?> =
+  linkedMapOf(
+    SharedPayloadKeys.SUBTASK_ID to subtaskId,
+    SharedPayloadKeys.WORKFLOW_ID to workflowId,
+    "wedge_class" to wedgeClass.wireValue,
+    "field" to field,
+    "prior_value" to priorValue,
+    "new_value" to newValue,
   )
 
 internal fun goalResumeText(result: GoalRunnerResumeResult): String =
   buildString {
+    result.appliedRepairs.forEach { appendLine(goalResumeRepairLine(result.issueKey, it)) }
     appendLine("goal ${result.issueKey}: ${result.status.wireValue}")
     result.clearedPauseReason?.let { appendLine("cleared reason: $it") }
+    result.refusalReason?.let { appendLine("refusal_reason: $it") }
   }
+
+internal fun goalResumeRepairLine(
+  issueKey: String,
+  repair: GoalRunnerAppliedRepair,
+): String {
+  val scope = if (repair.subtaskId == 0) "the parent goal" else "subtask ${repair.subtaskId}"
+  return "goal $issueKey: cleared ${repair.wedgeClass.wireValue} on $scope " +
+    "(${repair.field} was ${singleLineBounded(repair.priorValue ?: "absent")})"
+}
 
 internal fun goalRunText(report: GoalRunnerRunReport): String =
   when (report) {
@@ -174,6 +205,10 @@ internal fun goalRunText(report: GoalRunnerRunReport): String =
           append(singleLineBounded(url))
         }
         appendLine()
+        report.monitoringSummary?.takeIf(String::isNotBlank)?.let { summary ->
+          appendLine("Monitoring:")
+          appendLine(normalizeTerminalEvidence(summary))
+        }
       }
     is GoalRunnerRunReport.CompletedNoChange ->
       buildString {
@@ -229,10 +264,36 @@ private fun stoppedText(report: GoalRunnerRunReport.Stopped): String =
       }
     append("goal ${report.issueKey}: $verb")
     append(" at subtask ${report.stop.subtaskId}")
-    append(" — ")
-    append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
-    appendLine()
+    if (isGoalMonitorStop(report.stop)) {
+      appendLine()
+      appendLine("Monitoring details:")
+      appendLine(normalizeTerminalEvidence(report.stop.blockedReason.ifBlank { reason }))
+    } else {
+      append(" — ")
+      append(singleLineBounded(report.stop.blockedReason.ifBlank { reason }))
+      appendLine()
+    }
   }
+
+private fun isGoalMonitorStop(stop: GoalRunnerStopReport): Boolean =
+  stop.subtaskId == 0 &&
+    stop.lastResumableStep in
+    setOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
+    )
+
+private fun normalizeTerminalEvidence(value: String): String =
+  buildString(value.length) {
+    value.forEach { character ->
+      when {
+        character == '\n' -> append(character)
+        character == '\r' -> append('\n')
+        character.isISOControl() -> append(' ')
+        else -> append(character)
+      }
+    }
+  }.trim()
 
 internal fun singleLineBounded(
   value: String,

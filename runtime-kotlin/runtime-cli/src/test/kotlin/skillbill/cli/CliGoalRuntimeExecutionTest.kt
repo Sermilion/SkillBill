@@ -179,7 +179,9 @@ class CliGoalRuntimeExecutionTest {
     assertContains(result.stdout, "summary: ")
     assertContains(result.stdout, "2/2 subtasks complete; pending=0; blocked=0")
     assertContains(result.stdout, "PR https://github.com/example/skill-bill/pull/901")
-    assertEquals(2, result.stdout.lines().count { it.isNotBlank() })
+    assertContains(result.stdout, "Monitoring:\nPublished change: ")
+    assertContains(result.stdout, "CI result: CI passed for published commit 'test-commit'")
+    assertEquals(5, result.stdout.lines().count { it.isNotBlank() })
     assertEquals(listOf(1, 2), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
     assertContains(liveStdout.toString(), "goal SKILL-901: launched runtime executable=")
     assertContains(liveStdout.toString(), "version=${SkillBillVersion.VALUE} build_id=${SkillBillVersion.VALUE}")
@@ -201,14 +203,13 @@ class CliGoalRuntimeExecutionTest {
                 add(Triple(rows.getString(1), rows.getString(2), rows.getString(3)))
               }
             }
-          assertEquals(2, identities.size)
-          assertTrue(identities.all { it.first == "SKILL-901" && it.third == "goal_child" })
           assertEquals(
             listOf(
-              ".feature-specs/SKILL-901-goal/spec_subtask_1_part.md",
-              ".feature-specs/SKILL-901-goal/spec_subtask_2_part.md",
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec.md", "standalone"),
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_1_part.md", "goal_child"),
+              Triple("SKILL-901", ".feature-specs/SKILL-901-goal/spec_subtask_2_part.md", "goal_child"),
             ),
-            identities.map { it.second },
+            identities,
           )
         }
       }
@@ -288,7 +289,7 @@ class CliGoalRuntimeExecutionTest {
           workflowGitOperations = GoalTestWorkflowGitOperations,
           agentRunLauncher = launcher,
           goalPullRequestPort = fixture.pullRequests,
-          pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+          pullRequestIdentityLookup = OpenPullRequestIdentityLookup(GoalTestWorkflowGitOperations),
           pullRequestChecksLookup = PassingPullRequestChecksLookup,
           environment = mapOf("CLAUDECODE" to "1"),
           executableLookup = ExecutableLookup { true },
@@ -312,7 +313,7 @@ class CliGoalRuntimeExecutionTest {
           workflowGitOperations = GoalTestWorkflowGitOperations,
           agentRunLauncher = launcher,
           goalPullRequestPort = fixture.pullRequests,
-          pullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+          pullRequestIdentityLookup = OpenPullRequestIdentityLookup(GoalTestWorkflowGitOperations),
           pullRequestChecksLookup = PassingPullRequestChecksLookup,
           environment = mapOf("CLAUDECODE" to "1", "SKILL_BILL_AGENT" to "junie"),
           executableLookup = ExecutableLookup { true },

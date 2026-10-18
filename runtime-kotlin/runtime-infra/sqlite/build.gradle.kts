@@ -12,6 +12,7 @@ dependencies {
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.sqlite.jdbc)
   testImplementation(libs.junit.jupiter)
+  testImplementation(project(":runtime-infra:contracts"))
   testImplementation(libs.kotlin.test)
   testImplementation(testFixtures(project(":runtime-ports")))
   testFixturesImplementation(project(":runtime-ports"))

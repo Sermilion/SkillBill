@@ -34,6 +34,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -80,8 +81,6 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
@@ -127,11 +126,19 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalobservability.GOAL_PROGRESS_HISTORY_LIMIT
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
+import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundle
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleOrigin
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePlanBundleSubtask
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
@@ -1504,7 +1511,7 @@ class WorkflowServiceGoalManifestStoreTest {
       scopedReplanStore(workflows, before).saveScopedReplan(
         state = scopedReplanState(before, "skillbill-scoped-replan-child"),
         subtaskId = 2,
-        options = GoalRunnerScopedReplanOptions(),
+        options = GoalRunnerScopedReplanOptions(repositoryIdentity = "repo-identity"),
       )
 
     assertEquals(listOf(2), result.clearedChildSubtaskIds)
@@ -1545,7 +1552,7 @@ class WorkflowServiceGoalManifestStoreTest {
       scopedReplanStore(workflows, before).saveScopedReplan(
         state = scopedReplanState(before, "skillbill-scoped-replan-live-child"),
         subtaskId = 1,
-        options = GoalRunnerScopedReplanOptions(),
+        options = GoalRunnerScopedReplanOptions(repositoryIdentity = "repo-identity"),
       )
 
     assertEquals(emptyList(), result.clearedChildSubtaskIds)
@@ -2632,6 +2639,7 @@ class WorkflowGoalRunnerReconciliationTest {
               listOf(
                 mapOf("step_id" to "preplan", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
+                mapOf("step_id" to "plan_subtasks", "status" to "completed", "attempt_count" to 1),
               ),
             ),
           artifactsPatch =
@@ -2643,21 +2651,7 @@ class WorkflowGoalRunnerReconciliationTest {
                     "subtask_id" to 1,
                     "suppress_pr" to true,
                   ),
-                "feature_task_runtime_phase_records" to
-                  mapOf(
-                    "preplan" to
-                      completedRuntimePhaseRecord(
-                        "preplan",
-                        "2026-06-18T10:00:00Z",
-                        "2026-06-18T10:01:00Z",
-                      ),
-                    "plan" to
-                      completedRuntimePhaseRecord(
-                        "plan",
-                        "2026-06-18T10:02:00Z",
-                        "2026-06-18T10:03:00Z",
-                      ),
-                  ),
+                "feature_task_runtime_phase_records" to completedPlanningPhaseRecords(),
               ),
             ),
           sessionId = "ftr-001",
@@ -2699,6 +2693,7 @@ class WorkflowGoalRunnerReconciliationTest {
               listOf(
                 mapOf("step_id" to "preplan", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
+                mapOf("step_id" to "plan_subtasks", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "implement", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "simplify", "status" to "completed", "attempt_count" to 1),
                 mapOf("step_id" to "review", "status" to "completed", "attempt_count" to 1),
@@ -2802,6 +2797,13 @@ class WorkflowGoalRunnerReconciliationTest {
       WorkflowFamily.TASK_RUNTIME.loopOnlyStepIds,
     )
   }
+
+  private fun completedPlanningPhaseRecords(): Map<String, Any?> =
+    mapOf(
+      "preplan" to completedRuntimePhaseRecord("preplan", "2026-06-18T10:00:00Z", "2026-06-18T10:01:00Z"),
+      "plan" to completedRuntimePhaseRecord("plan", "2026-06-18T10:02:00Z", "2026-06-18T10:03:00Z"),
+      "plan_subtasks" to completedRuntimePhaseRecord("plan_subtasks", "2026-06-18T10:03:00Z", "2026-06-18T10:04:00Z"),
+    )
 
   private fun completedRuntimePhaseRecord(
     phaseId: String,
@@ -3764,25 +3766,130 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     assertEquals("implement", resumed.currentStepId)
     assertContains(resumed.artifactsJson, "shared preplan prose for hydration")
     assertContains(resumed.artifactsJson, "owned-plan-one")
-    assertEquals(2, Regex("goal-planning-import").findAll(resumed.artifactsJson).count())
-    assertEquals(2, Regex("\\\"action\\\":\\\"complete\\\"").findAll(resumed.artifactsJson).count())
+    assertEquals(3, Regex("goal-planning-import").findAll(resumed.artifactsJson).count())
+    assertEquals(3, Regex("\\\"action\\\":\\\"complete\\\"").findAll(resumed.artifactsJson).count())
   }
 
   @Test
-  fun `hydrated preplan and plan record goal-planning-hydrated provenance at attempt 1`() {
+  fun `hydrated preplan plan and plan_subtasks record goal-planning-hydrated provenance at attempt 1`() {
     val harness = hydrationHarness()
 
     harness.store.saveNewChildWorkflow(harness.state, harness.setup)
 
     val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
-    listOf("preplan", "plan").forEach { phaseId ->
+    listOf("preplan", "plan", "plan_subtasks").forEach { phaseId ->
       assertContains(child.artifactsJson, """"phase_id":"$phaseId"""")
       assertContains(child.stepsJson, """"step_id":"$phaseId","status":"completed","attempt_count":1""")
     }
     assertEquals(
-      4,
+      6,
       Regex(""""execution_origin":"goal-planning-hydrated"""").findAll(child.artifactsJson).count(),
-      "both planning phase records and both ledger prefix entries carry the hydrated origin",
+      "all three planning phase records and all three ledger prefix entries carry the hydrated origin",
+    )
+  }
+
+  @Test
+  fun `a plan workflow source hydrates the unit details without reading the legacy tables`() {
+    val harness = hydrationHarness()
+    harness.workflows.saveFeatureTaskWorkflow(
+      planWorkflowRecord(PLAN_WORKFLOW_ID, "- Details from the plan workflow."),
+      RUNTIME,
+    )
+    val setup = harness.setup.withPlanWorkflow(PLAN_WORKFLOW_ID)
+    val readsBefore = harness.preparations.readCount
+
+    harness.store.saveNewChildWorkflow(harness.state, setup)
+
+    val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    assertContains(child.artifactsJson, "- Details from the plan workflow.")
+    assertContains(child.artifactsJson, """"kind":"plan_workflow"""")
+    assertContains(child.artifactsJson, PLAN_WORKFLOW_ID)
+    assertFalse(child.artifactsJson.contains("legacy_tables"))
+    assertEquals(readsBefore, harness.preparations.readCount, "legacy goal tables must not be read")
+    val resumed = harness.newStore().saveNewChildWorkflow(harness.state, setup)
+    assertFalse(resumed is GoalRunnerChildWorkflowSaveResult.Conflicted, "an unchanged plan record resumes cleanly")
+  }
+
+  @Test
+  fun `a child hydrated from a plan workflow blocks when that unit was replanned afterwards`() {
+    val harness = hydrationHarness()
+    harness.workflows.saveFeatureTaskWorkflow(planWorkflowRecord(PLAN_WORKFLOW_ID, "- Original details."), RUNTIME)
+    val setup = harness.setup.withPlanWorkflow(PLAN_WORKFLOW_ID)
+    harness.store.saveNewChildWorkflow(harness.state, setup)
+    harness.workflows.saveFeatureTaskWorkflow(planWorkflowRecord(PLAN_WORKFLOW_ID, "- Replanned details."), RUNTIME)
+
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.newStore().saveNewChildWorkflow(harness.state, setup),
+      ).conflict
+
+    assertContains(conflict.reason, "no longer matches the linked plan workflow record")
+  }
+
+  @Test
+  fun `legacy tables hydration records legacy_tables as the import source`() {
+    val harness = hydrationHarness()
+
+    harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+
+    val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    assertContains(child.artifactsJson, """"kind":"legacy_tables"""")
+    assertFalse(child.artifactsJson.contains("plan_workflow"))
+  }
+
+  private fun GoalRunnerChildWorkflowSetup.withPlanWorkflow(planWorkflowId: String): GoalRunnerChildWorkflowSetup =
+    copy(planningHydration = requireNotNull(planningHydration).copy(planWorkflowId = planWorkflowId))
+
+  private fun planWorkflowRecord(
+    workflowId: String,
+    details: String,
+  ): WorkflowStateRecord {
+    val bundle =
+      FeatureTaskRuntimePlanBundle(
+        origin = FeatureTaskRuntimePlanBundleOrigin.AUTHORED,
+        parentSpecSha256 = "a".repeat(64),
+        manifestSha256 = "b".repeat(64),
+        subtasks =
+          listOf(
+            FeatureTaskRuntimePlanBundleSubtask(
+              id = 1,
+              specPath = descriptor(1).governedSubSpecPath,
+              scopeSha256 = "c".repeat(64),
+              detailsSha256 = sha256HexUtf8(details),
+              planText = details,
+            ),
+          ),
+      )
+    val preplan =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = "preplan",
+        status = WorkflowStepStatus.COMPLETED,
+        attemptCount = 1,
+        startedAt = Instant.EPOCH,
+        finishedAt = Instant.EPOCH,
+        durationMillis = 0,
+        resolvedAgentId = "claude",
+        outputArtifact = PREPLAN_PAYLOAD,
+      )
+    val unitRecordId = FeatureTaskRuntimePhaseWorkflowDefinition.planSubtaskUnitRecordId(1)
+    val unit =
+      preplan.copy(
+        phaseId = unitRecordId,
+        outputArtifact =
+          PlanDecompositionStop.settledOutput("plan_subtasks", "Planned subtask 1.", details).canonicalJson,
+      )
+    return workflowRecord(
+      workflowId,
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE.entry(bundle.asWorkflowArtifactEntry()),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+          mapOf(
+            "preplan" to workflowArtifactEntryMap(preplan.asWorkflowArtifactEntry()),
+            unitRecordId to workflowArtifactEntryMap(unit.asWorkflowArtifactEntry()),
+          ),
+        ),
+      ),
+      WorkflowStatus.COMPLETED.wireValue,
     )
   }
 
@@ -3978,6 +4085,58 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       conflict.reason,
       "parent planning checkpoints are missing or have incompatible provenance",
     )
+  }
+
+  @Test
+  fun `resume preserves a hydrated child after bounded ledger retention removes its import prefix`() {
+    for (firstSequence in listOf(1, 2, 17)) {
+      val harness = hydrationHarness()
+      harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+      val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+      val artifacts = parseChildArtifacts(child)
+      val ledger = retainedPlanningLedger(artifacts, firstSequence)
+      artifacts["feature_task_runtime_phase_ledger"] = ledger
+      val before = child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts))
+      harness.workflows.saveFeatureTaskWorkflow(before, RUNTIME)
+      assertEquals(FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT, ledger.size)
+      assertEquals(firstSequence, ledger.first()["sequence_number"])
+
+      assertIs<GoalRunnerChildWorkflowSaveResult.Saved>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      )
+
+      assertEquals(before, harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    }
+  }
+
+  @Test
+  fun `retained planning admission rejects incomplete windows sequence gaps and altered surviving import entries`() {
+    val harness = hydrationHarness()
+    harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+    val child = requireNotNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    val artifacts = parseChildArtifacts(child)
+    val ledger = retainedPlanningLedger(artifacts, 1)
+    val damaged =
+      listOf(
+        ledger.dropLast(1),
+        ledger.mapIndexed { index, entry ->
+          if (index == 1) entry + ("sequence_number" to 3) else entry
+        },
+        listOf(ledger.first() + ("action" to "retry")) + ledger.drop(1),
+      )
+    for (window in damaged) {
+      artifacts["feature_task_runtime_phase_ledger"] = window
+      val before = child.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts))
+      harness.workflows.saveFeatureTaskWorkflow(before, RUNTIME)
+
+      val conflict =
+        assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+        ).conflict
+
+      assertContains(conflict.reason, "phase ledger no longer opens with the goal planning import prefix")
+      assertEquals(before, harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME))
+    }
   }
 
   @Test
@@ -4242,6 +4401,31 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     )
   }
 
+  private fun retainedPlanningLedger(
+    artifacts: Map<String, Any?>,
+    firstSequence: Int,
+  ): List<Map<String, Any?>> {
+    var ledger =
+      (artifacts["feature_task_runtime_phase_ledger"] as List<*>).map {
+        requireNotNull(JsonCodec.anyToStringAnyMap(it))
+      }
+    repeat(FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT + firstSequence - ledger.size) { attempt ->
+      val entry =
+        ledger.last() +
+          mapOf(
+            "action" to "start",
+            "sequence_number" to 3 + attempt,
+            "phase_id" to "audit",
+            "resolved_agent_id" to "codex",
+            "execution_origin" to "agent-executed",
+          )
+      ledger =
+        appendBoundedHistoryBySequence(ledger, entry, FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT)
+          .map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
+    }
+    return ledger
+  }
+
   private fun hydrationHarness(
     twoSubtasks: Boolean = false,
     variant: String = "valid",
@@ -4340,6 +4524,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       }
 
     const val CHILD_ID = "wfl-child-1"
+    const val PLAN_WORKFLOW_ID = "wftr-plan-1"
     const val PAUSE_CLOCK_INSTANT = "2026-08-07T12:00:00Z"
     const val LATER_PAUSE_CLOCK_INSTANT = "2026-08-07T13:00:00Z"
     val REPOSITORY_IDENTITY = "repo-root-realpath-v1:${Path.of("").toAbsolutePath().normalize()}"
@@ -4434,20 +4619,10 @@ private class RecordingPlanningPreparations(
   val plans = mutableMapOf<Int, GoalSubtaskPlanCheckpoint>()
   var readCount = 0
 
-  override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult {
-    shared = checkpoint
-    return GoalPlanningPreparationWriteResult.Applied
-  }
-
   override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanLookupResult {
     readCount++
     check(!errorOnRead) { "standalone path read goal preparation" }
     return SharedGoalPreplanLookupResult.Found(shared?.takeIf { it.identity == expectedIdentity })
-  }
-
-  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
-    plans[checkpoint.subtaskId] = checkpoint
-    return GoalPlanningPreparationWriteResult.Applied
   }
 
   override fun findSubtaskPlan(
@@ -4468,8 +4643,6 @@ private class RecordingPlanningPreparations(
         findSubtaskPlan(expectedIdentity, it.subtaskId, it.governedSubSpecPath).foundPlan()
       },
     )
-
-  override fun markPrepared(record: GoalPlanningPreparationRecord) = GoalPlanningPreparationWriteResult.Applied
 
   override fun deleteByGoal(parentGoalWorkflowId: String) = 0
 

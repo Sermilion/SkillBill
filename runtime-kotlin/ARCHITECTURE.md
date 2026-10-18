@@ -190,8 +190,8 @@ inputs:
   the accepted step is active. `PhaseReviewExecutionContext` supplies repository
   observations, the output validator, and the clock; it has no git writer or
   attempt scope. Review launch and persistence pass through the accepted-step
-  binding and its owning recorder operations. Since SKILL-380 subtask 7, no
-  slot class takes the run-loop context.
+  binding and its owning recorder operations. No slot class takes the run-loop
+  context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -216,6 +216,12 @@ bounded diagnostic path. Follow the [observability policy](../docs/observability
 for degradation and fallback; failure must not silently become normal absence.
 
 ### Durable State And Projections
+
+Every durable schema change requires an append-only runtime migration and an
+upgrade test that preserves existing records. Installation and desktop database
+selection apply pending supported migrations before opening read-only consumers.
+Ordinary desktop reads and change observation do not migrate. Upgrade rejects
+newer or unrecognized stores without rewriting their schema or metadata.
 
 Name the authoritative store and the transaction owner for each mutation. Keep
 related database changes atomic. SQLite and a filesystem projection do not share
@@ -350,7 +356,7 @@ Decomposed goals execute discovery and preplan once at the parent, then persist 
 
 Packaged CLI and MCP candidates check their own bundled schema pins through a database-free composition root. The installer runs `--check-packaged-contracts` on both staged images before promoting either image. This check runs before normal runtime composition can open the durable database.
 
-Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. Standalone feature-task workflows retain directly executed and attributed preplan and plan phases.
+Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. A retired standalone feature-task workflow keeps its recorded preplan and plan phases, readable and abandonable, and is never resumed.
 
 Runtime worker ownership is mutable state kept separately from immutable execution identity. A worker lease records a random owner token, monotonic fencing generation, host and boot identity, PID plus process-birth evidence, heartbeat/expiry, and the incomplete phase attempt. Every heartbeat, phase write, takeover reservation, transfer, and release must match both token and generation. Process liveness is exact only when host, boot, PID, and birth evidence agree; unverifiable or mismatched ownership must fail loudly instead of terminating a process or creating a replacement workflow. Confirmed takeover first reserves ownership with compare-and-set, then requests graceful shutdown and escalates only if the same process identity remains live.
 
@@ -568,8 +574,8 @@ and `:runtime-infra:sqlite`.
   (install, telemetry, goal planning, goal runner, review, feature task,
   workflow, validators, scaffold, diagnostics); an area with more than ten
   provides splits by its own sub-area (`RuntimeFeatureSpecProvides`,
-  `RuntimeReviewAddonCatalogProvides`, `RuntimeScaffoldValidationProvides`,
-  `RuntimeGoalPlanningSweepProvides`), never by pairing two areas. Each
+  `RuntimeReviewAddonCatalogProvides`, `RuntimeScaffoldValidationProvides`),
+  never by pairing two areas. Each
   `@Provides` is declared once, and `RuntimeBootstrapBindings` holds only the
   ambient construction seam. `runtime-core` is the single composition root; the
   abstract properties on `RuntimeComponent` are the export list that generated
@@ -1206,10 +1212,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   implements those review interfaces only on review bindings. `FeatureTaskRuntimeRunLoopDurableState`
   (`runloop.durable`) adapts durable services to `FeatureTaskRuntimeRunLoopStepState`
   (`runloop.state`), while `InMemoryPhaseRunState` and
-  `GoalPlanningPhaseRunState` use the same step-state adapter with in-memory
-  records. Goal planning fan-out units run on `GoalPlanningUnitRunState` with
-  isolated progress, session, records, telemetry, and step binding. Durable
-  and in-memory storage remain distinct.
+  `DurablePlanSubtasksFanOut`'s per-unit state use the same step-state adapter.
+  Plan fan-out units run on `DurablePlanUnitRunState` with isolated progress,
+  session, telemetry, and step binding over the plan workflow's own records.
+  Durable and in-memory storage remain distinct.
 - `PhaseAttemptEnvironment` supplies request facts only. Runtime scopes retain storage and effect
   collaborators privately. Strategy hooks receive detached observations and bound role operations;
   review/PR/loop helpers receive readonly repository inspection. Step factories require coordinator
@@ -1287,34 +1293,56 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
-  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `STANDALONE` uses
-  all nine and `GOAL_CHILD` omits `pull_request`. `standalone_review` is outside
-  that list. `forRun(goalContinuation)` picks one. The declaration derived from a
-  definition equals the phase workflow's, and a reorder raises a typed error.
+  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `GOAL_CHILD` omits
+  `pull_request` and `monitor`. `standalone_review` is outside that list. The
+  retired `STANDALONE` definition still uses all nine slots. It stays declared,
+  listed in `entries` and bound to strategies so a stored `standalone` plan keeps
+  decoding, but no run is admitted on it and it is not `standaloneInvocable`.
+  The declaration derived from a definition equals the phase workflow's, and a
+  reorder raises a typed error.
   `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
-  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`preplan` and `plan`)
-  is durable: `skill-bill phase plan` runs it as a standalone workflow
+  `IN_MEMORY`) that a phase run drives on its own. `PLAN` (`intake`, `preplan`,
+  `plan`, and `plan_subtasks`) is durable: `skill-bill phase plan` runs it as a standalone workflow
   (`StandalonePlanRun`, below). `standaloneInvocable` marks the definitions the
   `phase` command lists: review, validation, plan, pr and monitor.
   `admittedForRun(goalContinuation)` is the set of definitions a recorded run may
-  carry: `{GOAL_CHILD}` for a goal child, `{STANDALONE, PLAN}` otherwise, so
+  carry: `{GOAL_CHILD}` for a goal child, `{PLAN}` otherwise, so
   admission and crash reconciliation still raise
   `IncompatibleFeatureTaskRuntimeExecutionPlanError` for any other pairing.
+  Admission and continuation claim check a recorded `standalone` plan first and
+  refuse it with `retiredStandaloneWorkflowError`
+  (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`), whose message tells the
+  operator to abandon the workflow and run `skill-bill <KEY>`. Such a row stays
+  decodable, visible in lookup and status, and abandonable; no migration rewrites
+  it. The `standalone` route scope stays, because plan workflows carry it.
   Each carries a
   `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
   existing governed spec, and the rest take an optional intake.
-  `GOAL_PLANNING` (`preplan` and `plan`) is the goal planning sweep's
-  definition. It selects `agent-preplan` for the shared preplan and
-  `goal-plan-fan-out` for the plans. `GoalPlanFanOutStrategy` runs
-  `agent-plan` once per active subtask, in waves capped by the burst
-  schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
-  `FeatureTaskRuntimeRunLoopEntry` over an in-memory
-  `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
-  gate, budget, and checkpoints, and writes no feature-task workflow row. The
-  selected `goal-plan-fan-out` strategy authorizes `agent-plan` at the attempt
-  boundary while preserving the selected step policy and request checks.
+  There is no separate goal planning definition: the `PLAN` skeleton
+  (`intake`, `preplan`, `plan`, `plan_subtasks`) is the only planning skeleton, and
+  `PhaseSlot.PLAN` owns both `plan` and `plan_subtasks`. Every skeleton that
+  binds the slot binds `PlanFanOutStrategy` (persisted id `goal-plan-fan-out`,
+  kept so recorded plans still resolve). `plan` authors the spec bundle and may
+  split. `plan_subtasks` fans `agent-plan` out once per subtask through
+  `DurablePlanSubtasksFanOut` in waves capped by `GOAL_PLANNING_WAVE_CAP`; each
+  unit writes only `## Implementation Details` into its subtask spec, and its
+  record lives in the durable `plan_bundle` artifact. A unit is complete when
+  its record exists and both its scope and details hashes match the spec on
+  disk, so a resumed workflow reuses completed units. `PlanDecompositionStop`
+  runs after `plan_subtasks`. No strategy or prompt input reads
+  `suppressDecomposition`, `specBundleRequired`, or goal continuation.
+  A goal run obtains its planning through `GoalPlanningSource`
+  (`PlanWorkflowGoalPlanningSource`): the linked plan workflow first, then the
+  read-only legacy `goal_*` tables, then a `StandalonePlanRun` of the plan
+  skeleton. Goal children hydrate `preplan`, `plan`, and `plan_subtasks` from
+  that source (`GoalChildPlanningHydrator`) and record the source in the
+  `goal_planning_import` provenance (`plan_workflow` or `legacy_tables`). The
+  legacy planning tables are read-only: the ports and sqlite stores keep the
+  lookups and the reset and purge deletes, no checkpoint writer or contract-version
+  migration remains, admission does not migrate a goal import, and tests seed
+  legacy rows with raw SQL.
   `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
@@ -1364,11 +1392,17 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` is a durable
   standalone run, not a phase run. `StandalonePlanRun`
-  (`skillbill.engine.goalrunner.plan`) seeds the parent `spec.md`
-  (`GoalIntakePreparation.seedPlanSpec`: an existing spec is operator-authored,
-  new work is seeded from the intake), opens a `standalone` workflow whose
-  execution plan names the `plan` definition, and writes a `plan_seed` artifact
-  (intake hash, spec origin, spec hash). The run requires a spec bundle
+  (`skillbill.engine.goalrunner.plan`) opens a workflow with the `standalone` route
+  scope (the `standalone` skeleton is retired; the scope stays) whose
+  execution plan names the `plan` definition before the parent `spec.md` need
+  exist, and carries the operator's intake on the run request. The plan's
+  `intake` step (`RuntimeIntakeStrategy` over `FeatureTaskRuntimePlanIntake`)
+  keeps an operator spec that has a readable acceptance list, quotes one
+  without it, or seeds a spec from the intake, then writes a `plan_seed`
+  artifact (intake hash, spec origin, spec hash). `FeatureTaskRuntimeRunEntry`
+  runs an intake-only pass first and reads the run invariants from the spec
+  only once `intake` is complete; a resume that finds a recorded seed writes
+  nothing. The run requires a spec bundle
   (`requiresSpecBundle`): the plan prompt asks for subtask specs and a manifest
   inside the existing bundle, the planning stopper verifies them through
   `FeatureSpecPreparationWriter`, and the run records a completed decompose
@@ -1413,25 +1447,34 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 | `pull_request` | pr | `pr-description` |
 | `monitor` | monitor, monitor_fix | `monitor-ci` |
 
-`monitor` runs after `pr` in standalone and PR skeletons and is excluded from
+`monitor` runs after `pr` in the PR skeleton and is excluded from
 goal children. `PullRequestCiWatcher` polls the PR checks through
-`PullRequestChecksLookup`. A failed check immediately sets verdict
-`ci_failed`, even while other checks are pending, and routes backward to
-`monitor_fix` and then to `commit_push`. Cancelled checks do not start repair.
+`PullRequestChecksLookup`. A first failed check starts repair with `progress`;
+it does not spend the failed-repair budget. A later failure spends one attempt
+only when a completed monitor repair changed source or integrated new merge
+ancestry, its commit was pushed, and CI failed on the observed PR head. The
+monitor counts distinct failed commit SHAs, so repeated observations do not
+spend again. Cancelled checks do not start repair.
 A merge conflict (`CONFLICTING` or
 `DIRTY`) does the same on that poll, before checks are read, and the repair
 merges the base branch and resolves the conflicts. The `monitor_fix` prompt carries the agent validation directive, so the repair agent runs the project's local checks and settles completed only when they pass; a blocked repair is not committed. An unknown mergeability
 result is not a conflict. Success requires every check to pass, be skipped,
 or be cancelled with none pending.
+The run state rebuilds distinct monitor failure SHAs from completed ledger
+entries and retained monitor output. Missing or unassociated monitor output stays unknown and does not exhaust the cap; missing monitor output blocks cap-sensitive resume. Historical loop ordinals do not count as failed repairs. Runtime-owned monitor and commit-push completions retain output through the existing producer output store, while the completion ledger remains the settlement authority.
 Goal monitoring requires reported checks. An empty report keeps polling until
 checks arrive or the watch timeout blocks the goal; it does not settle as
 no CI configured. IDE goal completion uses the durable `goalCompletedAt` record,
 written after all goal phases finish, rather than completed subtask counts.
 Each poll also reads PR state. A merged PR completes monitoring regardless of
 the CI verdict; a closed unmerged PR does not satisfy goal monitoring.
-The loop is capped at 3 attempts per subtask. Exhausting the cap blocks the run
-through the cap-exhaustion reason. Monitor-owned steps never emit a verdict
-other than `ci_failed` or the default advance.
+The monitor loop stops another CI repair only after three completed, published
+repair commits have failed CI. Initial CI failures trigger repair, and merge
+conflicts trigger merge repair, without spending that failure budget. The third
+published repair remains under observation until CI settles. Exhausting the cap
+blocks through the cap-exhaustion reason. Monitor-owned steps use `ci_failed` only for a
+published repair commit that CI rejected, `progress` for initial-failure or
+merge-conflict repair routing, and the default advance after monitoring succeeds.
 
 Composition:
 
@@ -1465,7 +1508,7 @@ Composition:
   (`slot.qualitygate.packbuild`) runs the runtime-owned pack build gate and
   its triage and repair sessions. `AgentValidateStrategy`
   (`slot.qualitygate.agentvalidate`) runs the agent validate step. A BUILD goal
-  child selects build; the final child and a standalone run select validate.
+  child selects build; the final child selects validate.
   Traversal filters the forward path to the selected steps, handoff projection
   omits the unselected steps' outputs, and the handoff rejects a settled output
   from an unselected step. Nothing rewrites transitions, and no shared
@@ -1481,8 +1524,7 @@ Composition:
   validation session. Resume reads success from the step status. Historical
   `progress` and `no_progress` verdicts remain readable terminal reports.
 - A phase run executes one slot's strategy outside the full graph. Phase runs
-  arrive in later SKILL-380 subtasks and reuse the same runner, state port, and
-  input and output shapes.
+  reuse the same runner, state port, and input and output shapes.
 - Operations (SKILL-382) will compose the same runner and state port, and
   name their steps with operation-local names outside the domain graph.
 - IDE status goes through the same lookup.
@@ -1493,7 +1535,7 @@ Composition:
   | Strategy | Package | Owns |
   | --- | --- | --- |
   | `agent-preplan` | `slot.preplan` | Preplan directive, ceremony line, prose settlement |
-  | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
+  | `agent-plan` | `slot.plan` | Plan directive, shared planning directive, decomposition stop |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
   | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
@@ -1848,10 +1890,10 @@ commit, and PR requests or receipts; it never substitutes the private audit,
 review, implementation, validation, or history artifacts. The `build` phase
 (SKILL-204) runs only the pack `validation_gate.build_command` for
 compile/buildability proof and never invokes the collect-all validation gate.
-Default standalone runs skip `build` (`review -> validate`); goal continuation
-stamps which quality gate a child runs (subtask 2).
+Goal continuation stamps which quality gate a child runs (subtask 2); a child
+that selects `VALIDATE` skips `build` (`review -> validate`).
 
-`SkeletonDefinition.VALIDATION`, standalone runs, and goal-child `VALIDATE` use
+`SkeletonDefinition.VALIDATION` and goal-child `VALIDATE` use
 `AgentValidateStrategy`. The agent discovers required checks from repository
 instructions, build configuration, scripts, and CI, then runs and repairs them in
 one session. No validation pack or declared command pair is required. If discovery
@@ -2059,8 +2101,10 @@ install planner/validator policy.
   identity through that port (or `goalRepositoryIdentity`, which forwards to it).
   Governed feature-task spec paths resolve in
   `skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath`.
-- **Goal-child launch protocol:** flag and environment spellings for
-  `feature-task run` / `resume` live in
+- **Goal-child launch protocol:** the goal runner opens the child row under its
+  assigned id before launch, and every goal-child launch, first or later, runs
+  `skill-bill feature-task resume <child workflow id> <KEY> <spec>` with the goal
+  flags. Flag, environment, and subcommand spellings live in
   `skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens`.
   Launcher argv/env builders and CLI option readers reference those constants only.
 - **Scaffold payload:** `skillbill.application.scaffold.decodeScaffoldCommandRequest`

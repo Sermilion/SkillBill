@@ -28,6 +28,7 @@ import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -133,7 +134,7 @@ class WorkerTakeoverFencingTest {
             original.workflowId,
             execution.inputs,
             execution.identity(original.workflowId),
-          ) { launches++ }
+          ) { _, _ -> launches++ }
         }
 
         assertEquals(0, launches, race)
@@ -176,7 +177,11 @@ class WorkerTakeoverFencingTest {
           execution.admission,
           NoopRuntimeDiagnostics,
         )
-      coordinator.runOwned(original.workflowId, execution.inputs, execution.identity(original.workflowId)) { admitted ->
+      coordinator.runOwned(
+        original.workflowId,
+        execution.inputs,
+        execution.identity(original.workflowId),
+      ) { admitted, _ ->
         assertEquals(original.workflowId, admitted.identity.workflowId)
         assertContentEquals(execution.encoded, execution.codec.encode(admitted.plan))
         database.read { unit ->
@@ -233,7 +238,7 @@ class WorkerTakeoverFencingTest {
               original.workflowId,
               execution.inputs,
               execution.identity(original.workflowId),
-            ) { launches++ }
+            ) { _, _ -> launches++ }
           }
 
           assertEquals(0, launches)
@@ -265,12 +270,12 @@ class WorkerTakeoverFencingTest {
       var launches = 0
       listOf(
         identity.copy(repositoryIdentity = "repo-root-realpath-v1:/tmp/other-repository"),
-        identity.copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+        identity.copy(routeScope = FeatureTaskRouteScope.STANDALONE),
         identity.copy(normalizedIssueKey = "SKILL-999"),
         identity.copy(governedSpecPath = ".feature-specs/SKILL-384/other.md"),
       ).forEach { expected ->
         assertFailsWith<SkillBillRuntimeException> {
-          coordinator.runOwned(original.workflowId, execution.inputs, expected) { launches++ }
+          coordinator.runOwned(original.workflowId, execution.inputs, expected) { _, _ -> launches++ }
         }
       }
       assertEquals(0, launches)
@@ -314,7 +319,7 @@ class WorkerTakeoverFencingTest {
             original.workflowId,
             execution.inputs,
             execution.identity(original.workflowId),
-          ) { launches++ }
+          ) { _, _ -> launches++ }
         }
 
         assertEquals(0, launches)
@@ -470,6 +475,8 @@ private class TakeoverSupervisor(
     stopped = true
     return true
   }
+
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership): Instant? = null
 
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,

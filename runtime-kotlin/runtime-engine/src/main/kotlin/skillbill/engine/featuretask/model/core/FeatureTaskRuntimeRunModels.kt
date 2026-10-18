@@ -5,8 +5,10 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.ports.goalrunner.runner.model.PullRequestCheck
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -40,6 +42,9 @@ data class FeatureTaskRuntimeRunRequest(
   override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
   override val skeletonDefinition: SkeletonDefinition? = null,
   override val protectedSpecSha256: String? = null,
+  override val planIntake: String? = null,
+  override val stopAfterIntake: Boolean = false,
+  val acceptanceCriterionRepair: AcceptanceCriterionRepairRunState? = null,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
@@ -69,6 +74,7 @@ data class FeatureTaskRuntimeRunInput(
   val definition: SkeletonDefinition? = null,
   val protectedSpecSha256: String? = null,
   val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
+  val planIntake: String? = null,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(
@@ -297,13 +303,14 @@ sealed interface FeatureTaskRuntimeRunEvent {
   ) : FeatureTaskRuntimeRunEvent
 
   /**
-   * Pull request checks are still pending. Emitted so IDE status stays fresh for the whole CI run
-   * instead of going stale after the freshness window with no new phase event.
+   * Pull request checks are pending or have not yet been reported. Emitted so run and IDE progress stays fresh
+   * while CI registration or checks wait, without changing the verdict.
    */
   data class CiStillRunning(
     override val workflowId: String,
     override val phaseId: String,
-    val pendingChecks: List<String>,
+    val pullRequestUrl: String,
+    val pendingChecks: List<PullRequestCheck>,
   ) : FeatureTaskRuntimeRunEvent
 
   data class PhaseCompleted(

@@ -1,6 +1,8 @@
 package skillbill.engine.goalrunner.persist
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
@@ -42,6 +44,8 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import java.time.Clock
 
@@ -119,6 +123,9 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
       review.goalSubtaskReviewState(workflowId)
+
+    override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
+      review.recordedQualityGateSelection(workflowId)
 
     override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
       review.unemittedGoalReviewPasses(workflowId)
@@ -339,6 +346,12 @@ internal class WorkflowGoalRunnerReviewBridge(
       record.artifacts.goalSubtaskReviewArtifacts()?.state
     }
 
+  override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
+    database.read { unitOfWork ->
+      val artifacts = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts ?: return@read null
+      artifacts.goalContinuationArtifact()?.qualityGateSelection ?: storedExecutionPlanQualityGate(artifacts)
+    }
+
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     database.read { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read emptyList()
@@ -468,4 +481,11 @@ internal class WorkflowGoalRunnerBlockBridge(
       )
     }
   }
+}
+
+private fun storedExecutionPlanQualityGate(artifacts: Map<String, Any?>): FeatureTaskRuntimeQualityGateSelection? {
+  val plan =
+    JsonCodec.anyToStringAnyMap(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts))
+  val token = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.QUALITY_GATE_SELECTION) as? String
+  return token?.let(FeatureTaskRuntimeQualityGateSelection::fromWire)
 }

@@ -15,7 +15,6 @@ import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestLoader
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
-import skillbill.engine.goalrunner.plan.StandalonePlanCheckpointImport
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
@@ -104,7 +103,6 @@ fun engineWorkflowGoalRunnerManifestStore(
         decompositionManifestStore,
         clock,
         Random.Default,
-        StandalonePlanCheckpointImport(AcceptingFeatureTaskRuntimeWireArtifactValidator),
       ),
     decompositionManifestWriter = decompositionManifestWriter,
     repositoryRoot = repositoryRoot,
@@ -115,7 +113,6 @@ fun engineWorkflowGoalRunnerManifestStore(
         executionPlanCompatibility,
         NoopRuntimeDiagnostics,
         ContractFeatureTaskRuntimePhaseOutputMigration(),
-        planningMigrationForTest(),
         NoopFeatureTaskRuntimeWorkerSupervisor,
       ),
   )

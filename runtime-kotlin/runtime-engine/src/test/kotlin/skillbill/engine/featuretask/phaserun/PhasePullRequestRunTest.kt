@@ -107,7 +107,7 @@ class PhasePullRequestRunTest {
     initRepoWithOrigin()
     git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
     val events = mutableListOf<FeatureTaskRuntimeRunEvent>()
-    val phaseEntry = entry(identity = OpenPullRequestIdentityLookup)
+    val phaseEntry = entry(identity = OpenPullRequestIdentityLookup(GitWorkflowGitOperations()))
     val result =
       assertIs<PhaseRunResult.Completed>(
         phaseEntry.run(prRequest().copy(eventSink = FeatureTaskRuntimeRunEventSink { events += it })),
@@ -122,7 +122,12 @@ class PhasePullRequestRunTest {
       }
     assertTrue(prCompleted >= 0 && monitorStarted > prCompleted)
     val output = result.completedOutputs.joinToString("\n")
-    assertTrue(output.contains("CI passed on branch '$FEATURE_BRANCH'"), output)
+    assertTrue(
+      output.contains(
+        "CI passed for published commit '${git(repoRoot, "rev-parse", "HEAD")}' on branch '$FEATURE_BRANCH'",
+      ),
+      output,
+    )
     assertTrue(output.contains(PULL_REQUEST_URL), output)
     assertTrue(output.indexOf(PULL_REQUEST_URL) < output.indexOf("CI passed"))
   }

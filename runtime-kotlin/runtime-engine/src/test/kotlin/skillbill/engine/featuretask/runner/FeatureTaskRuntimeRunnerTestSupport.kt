@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
@@ -72,13 +73,16 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.UnavailableStandaloneMonitorService
 import skillbill.engine.featuretask.slot.harnessPendingVerifyFindingIds
 import skillbill.engine.featuretask.slot.harnessReviewRunnerSyncingPendingVerifyFindings
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorService
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ValidationGateResolver
@@ -105,6 +109,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.db.model.OwningTransactionResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
@@ -189,7 +194,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
-import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -659,12 +663,24 @@ internal data class BranchSetupTestConfig(
   val featureSize: FeatureTaskRuntimeFeatureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
 )
 
+internal fun harnessGoalContinuation(branchSetup: BranchSetupTestConfig): FeatureTaskRuntimeGoalContinuationContext =
+  FeatureTaskRuntimeGoalContinuationContext(
+    parentIssueKey = ISSUE_KEY,
+    subtaskId = 1,
+    goalBranch = branchSetup.gitOperations.currentBranchValue,
+    suppressPr = false,
+    parentWorkflowId = "wfl-parent",
+    reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+  )
+
 internal data class RuntimeHarnessConfig(
   val seedDurableWorkflow: Boolean = true,
+  val hydratedPlanning: Boolean = true,
+  val allowOwningWrites: Boolean = false,
   val branchSetup: BranchSetupTestConfig = BranchSetupTestConfig(),
   val repoRoot: Path = Path.of("/tmp/repo"),
   val environment: Map<String, String> = emptyMap(),
-  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
+  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext = harnessGoalContinuation(branchSetup),
   val eventSink: FeatureTaskRuntimeRunEventSink? = null,
   val acceptanceCriteria: List<String> = listOf("AC-1", "AC-2"),
   val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator =
@@ -683,8 +699,10 @@ internal data class RuntimeHarnessConfig(
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
   val gitOperationsOverride: WorkflowGitOperations? = null,
-  val monitoredPullRequestLookup: PullRequestIdentityLookup = OpenPullRequestIdentityLookup,
+  val monitoredPullRequestLookup: PullRequestIdentityLookup =
+    OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
+  val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -864,7 +882,11 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
     runInvariantsStore =
       FeatureTaskRuntimeRunInvariantsStore(
         database,
-        FeatureTaskRuntimeWorkflowPersistence(database, NoopWorkflowSnapshotValidator),
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          NoopWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
+        ),
         testHarnessClock,
       ),
   )
@@ -927,6 +949,9 @@ internal fun runnerHarness(
       runtimeConfig.eventSink?.emit(event)
     }
   val runRequest = runnerHarnessRequest(runtimeConfig, agentAssignment, sink)
+  if (runtimeConfig.seedDurableWorkflow && runtimeConfig.hydratedPlanning) {
+    seedHydratedPlanning(workflow.recorder)
+  }
   val io =
     RunnerHarnessIo(
       workflow = workflow,
@@ -963,11 +988,25 @@ private data class HarnessRunnerDeps(
   val settlement: FeatureTaskPhaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
 )
 
+private fun harnessAcceptanceRecorder(deps: HarnessRunnerDeps): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(
+    deps.database,
+    deps.runtimeConfig.harnessGitOperations,
+    deps.runtimeConfig.acceptanceCriteria,
+    deps.diagnostics,
+  )
+
+private fun harnessAcceptanceRecorder(
+  database: DatabaseSessionFactory,
+  config: RuntimeHarnessConfig,
+): AcceptanceCriterionRepairPhaseRecorder =
+  harnessAcceptanceRecorder(database, config.harnessGitOperations, config.acceptanceCriteria, NoopRuntimeDiagnostics)
+
 private fun harnessGateDependencies(
   deps: HarnessRunnerDeps,
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
 ): RuntimePhaseGatesDeps {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return RuntimePhaseGatesDeps(
     branchSetupRunner =
       FeatureTaskRuntimeBranchSetupRunner(
@@ -991,7 +1030,7 @@ private fun harnessRunner(
   deps: HarnessRunnerDeps,
   runLoopEntry: FeatureTaskRuntimeRunLoopEntry? = null,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   val specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter)
   val lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database)
   val gateDeps = harnessGateDependencies(deps, lifecycleTelemetry)
@@ -1005,6 +1044,7 @@ private fun harnessRunner(
       delegatedReviewRunner = deps.runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
+      standaloneMonitorService = deps.runtimeConfig.standaloneMonitorService,
     )
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
@@ -1033,6 +1073,7 @@ private fun harnessRunner(
           NoopWorkflowGitOperations,
         ),
         entry,
+        testDecompositionPlanner(),
       ),
       deps.database,
     )
@@ -1046,7 +1087,7 @@ private fun assembleHarnessRunner(
   lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   entry: TestFeatureTaskRuntimeRunLoopEntry,
 ): AssembledFeatureTaskRuntimeRunner {
-  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val gitOperations = deps.runtimeConfig.harnessGitOperations
   return AssembledFeatureTaskRuntimeRunner(
     FeatureTaskRuntimeRunner(
       FeatureTaskRuntimeRunStartup(
@@ -1057,7 +1098,6 @@ private fun assembleHarnessRunner(
         deps.recorder,
         deps.goalContinuationRecorder,
         deps.runInvariantsStore,
-        strategies,
       ),
       FeatureTaskRuntimeRunnerExecute(
         runtimeSpecSourceResolver(),
@@ -1068,6 +1108,7 @@ private fun assembleHarnessRunner(
         executePrepared,
         FeatureTaskRuntimeReviewFixBudget(deps.recorder, deps.goalContinuationRecorder),
         FeatureTaskRuntimeAgentContextTelemetry(deps.recorder),
+        harnessAcceptanceRecorder(deps),
       ),
     ),
     strategies,
@@ -1155,6 +1196,9 @@ internal fun telemetryRunnerHarness(
       database = database,
       workflow = workflow,
     )
+  if (runtimeConfig.seedDurableWorkflow && runtimeConfig.hydratedPlanning) {
+    seedHydratedPlanning(workflow.recorder)
+  }
   return TelemetryRunnerHarness(
     assembled.runner,
     assembled.strategies,
@@ -1230,6 +1274,7 @@ private class TelemetryExecutePreparedSetup(
           NoopWorkflowGitOperations,
         ),
         configuredEntry,
+        testDecompositionPlanner(),
       ),
       database,
     )
@@ -1267,6 +1312,7 @@ private fun telemetryHarnessRunner(
       delegatedReviewRunner = runtimeConfig.delegatedReviewRunner,
       monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
+      standaloneMonitorService = runtimeConfig.standaloneMonitorService,
     )
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)
@@ -1298,7 +1344,6 @@ private fun telemetryHarnessRunner(
             workflow.recorder,
             workflow.goalContinuationRecorder,
             workflow.runInvariantsStore,
-            strategies,
           ),
         execute =
           FeatureTaskRuntimeRunnerExecute(
@@ -1310,6 +1355,7 @@ private fun telemetryHarnessRunner(
             executePrepared,
             reviewFixBudget,
             FeatureTaskRuntimeAgentContextTelemetry(workflow.recorder),
+            harnessAcceptanceRecorder(database, runtimeConfig),
           ),
       ),
     strategies = strategies,
@@ -1365,17 +1411,16 @@ private fun runnerExecutionEntry(
       repositories,
     )
   }
-  val definition = SkeletonDefinition.forRun(config.goalContinuation != null)
   val facts =
     PhaseStrategySelectionFacts(
-      definition,
-      setOfNotNull(config.codeReviewMode, config.goalContinuation?.qualityGateSelection),
+      SkeletonDefinition.GOAL_CHILD,
+      setOf(config.codeReviewMode, config.goalContinuation.qualityGateSelection),
     )
   val inputs =
     resolver.resolveInputs(
       config.repoRoot,
-      config.goalContinuation?.qualityGateSelection,
-      config.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+      config.goalContinuation.qualityGateSelection,
+      config.goalContinuation.validationDepth,
       null,
     )
   val descriptor =
@@ -1390,10 +1435,7 @@ private fun runnerExecutionEntry(
         WORKFLOW_ID,
         ISSUE_KEY,
         descriptor,
-        fixture.identity(WORKFLOW_ID, ISSUE_KEY).copy(
-          routeScope =
-            if (config.goalContinuation == null) FeatureTaskRouteScope.STANDALONE else FeatureTaskRouteScope.GOAL_CHILD,
-        ),
+        fixture.identity(WORKFLOW_ID, ISSUE_KEY),
       )
     }
   }
@@ -1869,6 +1911,22 @@ internal class RuntimeRecordingLauncher(
   }
 }
 
+internal const val HYDRATED_PLANNING_AGENT_ID = "goal-planning-import"
+
+internal fun hydratedPlanningOutputs(): Map<String, String> =
+  linkedMapOf(
+    "preplan" to PREPLAN_OUTPUT,
+    "plan" to PLAN_OUTPUT,
+    "plan_subtasks" to seededProjectionEnvelope("plan_subtasks", PlanningProjectionFixtures.PLAN_PROSE),
+  )
+
+private fun seedHydratedPlanning(recorder: FeatureTaskRuntimePhaseRecorder) {
+  recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+  hydratedPlanningOutputs().forEach { (phaseId, output) ->
+    recorder.recordPhaseStateForTest(phaseId, "completed", 1, HYDRATED_PLANNING_AGENT_ID, output)
+  }
+}
+
 private fun FeatureTaskRuntimePhaseRecorder.recordPhaseStateForTest(
   phaseId: String,
   status: String,
@@ -2003,6 +2061,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
   override fun databaseExists(): Boolean = true
 
   override fun <T> read(block: (UnitOfWork) -> T): T = block(unitOfWork())
+
+  override fun <T> owningTransaction(block: (UnitOfWork) -> T): OwningTransactionResult<T> =
+    OwningTransactionResult.Committed(transaction(block))
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
@@ -2512,6 +2573,8 @@ internal object HarnessDeadProcessSupervisor : FeatureTaskRuntimeWorkerSuperviso
 
   override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = FeatureTaskRuntimeProcessInspection.NotRunning
 
+  override fun processStartedAt(ownership: FeatureTaskRuntimeWorkerOwnership) = null
+
   override fun awaitExit(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     timeout: Duration,
@@ -2538,6 +2601,8 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
     override fun optionalRealPath(path: Path): Path? = null
 
     override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+
+    override fun primaryRepositoryRoot(repoRoot: Path): Path = canonicalPath(repoRoot)
   }
 
 internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): FeatureTaskRuntimeRunLoopContext =

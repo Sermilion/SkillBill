@@ -35,18 +35,15 @@ internal fun readWorkBoardCandidates(
       WHERE NOT EXISTS (
         SELECT 1 FROM standalone_phase_status newer
         WHERE newer.repository_identity = s.repository_identity AND newer.phase_id = s.phase_id
-          AND COALESCE(upper(newer.issue_key), newer.workflow_id, newer.branch_correlation) =
-            COALESCE(upper(s.issue_key), s.workflow_id, s.branch_correlation)
+          AND COALESCE(newer.monitor_pr_key, upper(newer.issue_key), newer.workflow_id, newer.branch_correlation) =
+            COALESCE(s.monitor_pr_key, upper(s.issue_key), s.workflow_id, s.branch_correlation)
           AND (length(newer.run_sequence) > length(s.run_sequence)
             OR (length(newer.run_sequence) = length(s.run_sequence) AND newer.run_sequence > s.run_sequence)
             OR (newer.run_sequence = s.run_sequence AND newer.invocation_id > s.invocation_id))
       )
     ), eligible AS (
       SELECT id, CASE WHEN terminal THEN '0' ELSE '1' END || char(10) ||
-        strftime('%Y-%m-%dT%H:%M:%S', started_at) || '.' ||
-        CASE WHEN substr(started_at, 20, 1) = '.' THEN
-          substr(substr(started_at, 21, instr(substr(started_at, 21), 'Z') - 1) || '000000000', 1, 9)
-        ELSE '000000000' END || char(10) || id AS paging_key
+        ${startedAtKeySql("started_at")} || char(10) || id AS paging_key
       FROM candidates
       WHERE julianday(started_at) <= julianday((SELECT through_value FROM bounds))
         AND (NOT terminal OR finished_at IS NULL OR

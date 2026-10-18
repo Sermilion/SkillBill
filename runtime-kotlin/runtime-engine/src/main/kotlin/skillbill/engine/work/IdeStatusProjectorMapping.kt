@@ -46,10 +46,12 @@ internal fun livePlanningOverlay(
   planning: IdeStatusPlanning?,
   projectedStep: String?,
   lifecycle: IdeStatusLifecycleState,
+  childPhaseId: String?,
 ): IdeStatusPlanning? =
   planning?.takeIf {
     it.state != GoalPlanningStatusState.PREPARED &&
       !lifecycle.isSettled() &&
+      childPhaseId == null &&
       projectedStep.isLivePlanningStep()
   }
 
@@ -171,7 +173,8 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
 
-internal val LIVE_PLANNING_STEP_IDS: Set<String> = setOf("plan", "preplan", "planning", "pending_launch")
+internal val LIVE_PLANNING_STEP_IDS: Set<String> =
+  setOf("plan", "preplan", "planning", "pending_launch", "initializing")
 
 private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 

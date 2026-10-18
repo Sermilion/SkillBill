@@ -1,7 +1,9 @@
 package skillbill.infrastructure.host
 
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import skillbill.error.core.DatabaseFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -12,12 +14,15 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import java.time.Instant
+import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -42,8 +47,63 @@ private class RecordingDiagnostics : RuntimeDiagnostics {
 
 class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   @Test
+  fun `Linux owner identity ignores JVM start timestamp drift and still rejects different kernel births`() {
+    assumeTrue(JdkHostPlatformPort.osName.startsWith("Linux", ignoreCase = true))
+    val diagnostics = RecordingDiagnostics()
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
+    val current = supervisor.currentProcess()
+    val handle = ProcessHandle.current()
+    val shifted =
+      object : ProcessHandle by handle {
+        override fun info(): ProcessHandle.Info =
+          object : ProcessHandle.Info by handle.info() {
+            override fun startInstant(): Optional<Instant> =
+              Optional.of(handle.info().startInstant().orElseThrow().plusSeconds(1))
+          }
+      }
+
+    assertEquals(current.processBirthToken, processBirthToken(shifted, JdkHostPlatformPort, diagnostics))
+    assertEquals(
+      FeatureTaskRuntimeProcessInspection.ExactLive,
+      supervisor.inspect(ownershipFor(current, current.bootIdentity)),
+    )
+    val differentTicks = current.processBirthToken.substringAfter(':').toLong() + 1
+    val reused = ownershipFor(current, current.bootIdentity, "linux-start-ticks:$differentTicks")
+    assertEquals(FeatureTaskRuntimeProcessInspection.PidReused, supervisor.inspect(reused))
+    assertTrue(diagnostics.warnings.isEmpty())
+  }
+
+  @Test
+  fun `a drifting legacy Linux timestamp cannot mark a live owner dead or authorize its termination`() {
+    assumeTrue(JdkHostPlatformPort.osName.startsWith("Linux", ignoreCase = true))
+    val diagnostics = RecordingDiagnostics()
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
+    val current = supervisor.currentProcess()
+    val child = ProcessBuilder("sleep", "30").start()
+    val legacyBirth = child.toHandle().info().startInstant().orElseThrow().toEpochMilli()
+    val exactLegacy = ownershipFor(current, current.bootIdentity, legacyBirth.toString()).copy(pid = child.pid())
+    val driftingLegacy = exactLegacy.copy(processBirthToken = (legacyBirth + 1000).toString())
+    val events = AtomicInteger()
+    try {
+      assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(exactLegacy))
+      assertIs<FeatureTaskRuntimeProcessInspection.Unsupported>(supervisor.inspect(driftingLegacy))
+      assertNull(supervisor.observe(driftingLegacy) { events.incrementAndGet() })
+      assertEquals(0, events.get())
+      assertNull(supervisor.processStartedAt(driftingLegacy))
+      assertEquals(false, supervisor.terminateGracefully(driftingLegacy))
+      assertEquals(false, supervisor.terminateForcibly(driftingLegacy))
+      assertTrue(child.isAlive)
+      assertTrue(diagnostics.warnings.any { it.contains("unverifiable_legacy_timestamp") })
+    } finally {
+      child.destroyForcibly()
+      assertTrue(child.waitFor(5, TimeUnit.SECONDS))
+      assertEquals(FeatureTaskRuntimeProcessInspection.NotRunning, supervisor.inspect(driftingLegacy))
+    }
+  }
+
+  @Test
   fun `worker from a previous boot on this host is not running`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
     val ownership =
       FeatureTaskRuntimeWorkerOwnership(
@@ -66,7 +126,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
   @Test
   fun `a live worker whose stored boot identity came from the drifting fallback still reads live`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
 
     val ownership = ownershipFor(current, bootIdentity = "fallback-1787579295")
@@ -76,13 +136,13 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
   @Test
   fun `owner exit delivers an event without heartbeat or database writes`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
     val child = ProcessBuilder("sleep", "30").start()
     val ownership =
       ownershipFor(current, current.bootIdentity).copy(
         pid = child.pid(),
-        processBirthToken = processBirthToken(child.toHandle())!!,
+        processBirthToken = processBirthToken(child.toHandle(), JdkHostPlatformPort, RecordingDiagnostics())!!,
       )
     val exited = CountDownLatch(1)
     val observation = supervisor.observe(ownership) { exited.countDown() }
@@ -99,31 +159,31 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
   @Test
   fun `owner death before exit registration still delivers the invalidation`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
     val child = ProcessBuilder("sleep", "30").start()
     val ownership =
       ownershipFor(current, current.bootIdentity).copy(
         pid = child.pid(),
-        processBirthToken = processBirthToken(child.toHandle())!!,
+        processBirthToken = processBirthToken(child.toHandle(), JdkHostPlatformPort, RecordingDiagnostics())!!,
       )
     child.destroyForcibly()
     assertTrue(child.waitFor(5, TimeUnit.SECONDS))
     val events = AtomicInteger()
     assertNull(supervisor.observe(ownership) { events.incrementAndGet() })
     assertEquals(1, events.get())
-    val reused = ownershipFor(current, current.bootIdentity, (current.processBirthToken.toLong() - 1).toString())
+    val reused = ownershipFor(current, current.bootIdentity, differentBirthToken(current.processBirthToken))
     assertNull(supervisor.observe(reused) { events.incrementAndGet() })
     assertEquals(2, events.get())
   }
 
   @Test
   fun `awaitExit returns after a live owned process exits`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
     val child = ProcessBuilder("sleep", "1").start()
     val childHandle = child.toHandle()
-    val birth = childHandle.info().startInstant().orElseThrow().toEpochMilli().toString()
+    val birth = processBirthToken(childHandle, JdkHostPlatformPort, RecordingDiagnostics())!!
     val ownership =
       FeatureTaskRuntimeWorkerOwnership(
         workflowId = "wftr-test",
@@ -151,11 +211,11 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   @Test
   fun `awaitExit returns on timeout while the owned process is still live`() {
     val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics)
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
     val current = supervisor.currentProcess()
     val child = ProcessBuilder("sleep", "30").start()
     val childHandle = child.toHandle()
-    val birth = childHandle.info().startInstant().orElseThrow().toEpochMilli().toString()
+    val birth = processBirthToken(childHandle, JdkHostPlatformPort, RecordingDiagnostics())!!
     val ownership =
       FeatureTaskRuntimeWorkerOwnership(
         workflowId = "wftr-test",
@@ -186,7 +246,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
   @Test
   fun `a live worker with no known boot identity still reads live`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
 
     val ownership = ownershipFor(current, bootIdentity = "boot-identity-unavailable")
@@ -195,15 +255,30 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   }
 
   @Test
+  fun `a live worker still reads live after the network renames the machine`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
+    val current = supervisor.currentProcess()
+
+    val ownership =
+      ownershipFor(
+        current,
+        bootIdentity = current.bootIdentity,
+        hostIdentity = "before-vpn-${current.hostIdentity}",
+      )
+
+    assertEquals(FeatureTaskRuntimeProcessInspection.ExactLive, supervisor.inspect(ownership))
+  }
+
+  @Test
   fun `a reused pid is still caught when the boot check abstains`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val current = supervisor.currentProcess()
 
     val ownership =
       ownershipFor(
         current,
         bootIdentity = "boot-identity-unavailable",
-        processBirthToken = (current.processBirthToken.toLong() - 1).toString(),
+        processBirthToken = differentBirthToken(current.processBirthToken),
       )
 
     assertTrue(
@@ -214,7 +289,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
 
   @Test
   fun `boot identity is a property of the machine's boot, not of the calling process`() {
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics())
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
     val kernelBootId = Path.of("/proc/sys/kernel/random/boot_id")
     val expected =
       if (Files.isReadable(kernelBootId)) {
@@ -231,15 +306,22 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     )
   }
 
+  private fun differentBirthToken(token: String): String {
+    val prefix = token.substringBeforeLast(':', "")
+    val value = token.substringAfterLast(':').toLong() - 1
+    return if (prefix.isEmpty()) value.toString() else "$prefix:$value"
+  }
+
   private fun ownershipFor(
     current: FeatureTaskRuntimeProcessIdentity,
     bootIdentity: String,
     processBirthToken: String = current.processBirthToken,
+    hostIdentity: String = current.hostIdentity,
   ) = FeatureTaskRuntimeWorkerOwnership(
     workflowId = "wftr-test",
     generation = 1,
     ownerToken = "owner-token-0001",
-    hostIdentity = current.hostIdentity,
+    hostIdentity = hostIdentity,
     bootIdentity = bootIdentity,
     pid = current.pid,
     processBirthToken = processBirthToken,
@@ -253,7 +335,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   @Test
   fun `a throwing tick is absorbed and lease renewal keeps ticking`() {
     val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics)
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
     val ticks = AtomicInteger()
     val renewedAfterFailure = CountDownLatch(2)
 
@@ -284,7 +366,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   @Test
   fun `renewal failures that outlast the lease escalate to an error`() {
     val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics)
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
     val escalated = CountDownLatch(1)
 
     val heartbeat =
@@ -308,7 +390,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   @Test
   fun `lost fencing stops renewal and is reported to the run owner`() {
     val diagnostics = RecordingDiagnostics()
-    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics)
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)
     val ticks = AtomicInteger()
     val observed = CountDownLatch(1)
 

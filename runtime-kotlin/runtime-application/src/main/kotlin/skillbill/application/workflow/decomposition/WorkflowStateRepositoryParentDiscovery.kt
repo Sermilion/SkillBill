@@ -21,6 +21,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 fun WorkflowStateRepository.findDecomposedParentOrCorruptFallback(
   issueKey: String,
@@ -133,8 +134,20 @@ fun WorkflowStateRepository.findCompletedPlanWorkflowId(
 ): String? =
   listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(issueKey), repositoryIdentity)
     .filter { it.workflowStatus.workflowStatus() == WorkflowStatus.COMPLETED && it.isPlanWorkflow() }
+    .maxWithOrNull(compareBy<WorkflowStateRecord> { it.hasPlanSubtasksStep() }.thenBy { it.updatedAt.orEmpty() })
+    ?.workflowId
+
+fun WorkflowStateRepository.findLatestPlanWorkflowId(
+  issueKey: String,
+  repositoryIdentity: String?,
+): String? =
+  listFeatureTaskWorkflowsForIssue(normalizeRequiredIssueKey(issueKey), repositoryIdentity)
+    .filter { it.isPlanWorkflow() && it.hasPlanSubtasksStep() }
     .maxByOrNull { it.updatedAt.orEmpty() }
     ?.workflowId
+
+private fun WorkflowStateRecord.hasPlanSubtasksStep(): Boolean =
+  toSnapshot().steps.any { it.stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS }
 
 fun WorkflowStateRepository.listDecomposedParentsForPurge(
   issueKey: String,

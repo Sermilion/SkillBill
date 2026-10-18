@@ -10,6 +10,7 @@ import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import java.nio.file.Path
 
@@ -54,6 +55,9 @@ class FeatureTaskRuntimeDecompositionPlanner(
     )
     return preparationWriter.verifyAuthored(repoRoot, parentSpecPath)
   }
+
+  fun authoredSubtasks(parentSpecPath: Path): List<DecompositionSubtask> =
+    preparationWriter.authoredSubtasks(parentSpecPath)
 
   fun bundleTree(directory: Path): List<Path> = preparationWriter.listTree(directory)
 

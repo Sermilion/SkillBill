@@ -12,47 +12,9 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditSessionResumeTest {
-  @Test
-  fun `operator resume establishes one audit baseline and cannot authorize another automatic repair`() {
-    var audits = 0
-    var repairs = 0
-    val launcher =
-      RuntimeRecordingLauncher { request ->
-        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
-          "audit" -> facts(auditRemainingAcOutput("AC-001: latest gap ${++audits}"))
-          "audit_implement_fix" -> {
-            repairs += 1
-            facts(defaultPhaseOutput(request))
-          }
-          else -> facts(defaultPhaseOutput(request))
-        }
-      }
-    val config = RuntimeHarnessConfig(launcher = launcher)
-    val first = runnerHarness(config)
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
-    val blockedRecord = requireNotNull(first.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
-    assertContains(requireNotNull(blockedRecord.outputArtifact), "latest gap 4")
-    reopen(first, "audit")
-
-    val resumed = runnerHarness(config, repository = first.repository)
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(resumed.runner.run(resumed.request()))
-
-    assertContains(blocked.blockedReason, "did not shrink")
-    assertEquals(6, audits)
-    assertEquals(4, repairs)
-    val lastRepair =
-      launcher.requests
-        .map { requireNotNull(it.skillRunRequest.promptOverride) }
-        .last { phaseIdFromPrompt(it) == "audit_implement_fix" }
-    assertContains(lastRepair, "latest gap 5")
-    assertNull(resumed.recorder.loadOperatorBlockRetry(WORKFLOW_ID))
-    assertTrue("review" !in resumed.launchOrder())
-  }
-
   @Test
   fun `recreated repair carries saved work after retryable failures exhaust the budget`() {
     var repairs = 0
@@ -172,33 +134,6 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     assertEquals(3, originalRepair?.attemptCount)
     assertEquals(4, resumed.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_implement_fix")?.attemptCount)
     assertTrue("implement" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))
-  }
-
-  @Test
-  fun `operator resume still rejects unknown criteria before starting repair`() {
-    var audits = 0
-    val launcher =
-      RuntimeRecordingLauncher { request ->
-        if (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) == "audit") {
-          facts(auditRemainingAcOutput(if (++audits > 4) "AC-099: invented criterion" else "AC-001: gap"))
-        } else {
-          facts(defaultPhaseOutput(request))
-        }
-      }
-    val config = RuntimeHarnessConfig(launcher = launcher)
-    val first = runnerHarness(config)
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
-    reopen(first, "audit")
-    val beforeResume = launcher.requests.size
-    val resumed = runnerHarness(config, repository = first.repository)
-
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(resumed.runner.run(resumed.request()))
-
-    assertEquals("audit", blocked.lastIncompletePhase)
-    assertEquals(5, audits)
-    assertEquals(listOf("audit"), resumed.launchedPromptPhaseOrder().drop(beforeResume))
-    assertContains(blocked.blockedReason, "AC-099")
-    assertTrue("audit_implement_fix" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))
   }
 
   private fun reopen(

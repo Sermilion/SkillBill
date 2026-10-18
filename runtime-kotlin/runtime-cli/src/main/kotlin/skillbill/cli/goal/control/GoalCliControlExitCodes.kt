@@ -16,7 +16,13 @@ internal fun goalPauseExitCode(result: GoalRunnerPauseResult): Int =
   if (result.status == GoalRunnerPauseStatus.NOT_FOUND) 1 else 0
 
 internal fun goalResumeExitCode(status: GoalRunnerResumeStatus): Int =
-  if (status == GoalRunnerResumeStatus.NOT_FOUND) 1 else 0
+  when (status) {
+    GoalRunnerResumeStatus.NOT_PAUSED,
+    GoalRunnerResumeStatus.RESUMED,
+    -> 0
+    GoalRunnerResumeStatus.NOT_FOUND -> 1
+    GoalRunnerResumeStatus.OPERATOR_REQUIRED -> 2
+  }
 
 internal fun goalStopExitCode(result: GoalRunnerStopVerbResult): Int =
   when (result.status) {

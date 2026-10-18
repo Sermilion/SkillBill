@@ -36,7 +36,11 @@ data class IdeStatusCandidate(
 )
 
 sealed class IdeStatusRepositoryResolution {
-  data class Ok(val identity: String, val repoRoot: Path) : IdeStatusRepositoryResolution()
+  data class Ok(
+    val identity: String,
+    val repoRoot: Path,
+    val monitorIdentity: String = identity,
+  ) : IdeStatusRepositoryResolution()
 
   data class Invalid(val message: String) : IdeStatusRepositoryResolution()
 
@@ -55,4 +59,5 @@ data class IdeStatusRequest(
 data class IdeStatusResult(
   val snapshot: IdeStatusSnapshot,
   val exitCode: Int,
+  val queryWork: IdeStatusQueryWorkReport = IdeStatusQueryWorkReport.NONE,
 )

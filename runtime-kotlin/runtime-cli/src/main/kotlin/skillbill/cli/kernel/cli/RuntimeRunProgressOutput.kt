@@ -31,7 +31,9 @@ internal fun FeatureTaskRuntimeRunEvent.runtimeProgressLine(): String =
     is FeatureTaskRuntimeRunEvent.ValidationGateProgress ->
       "feature-task-runtime $workflowId: phase $phaseId gate_run_count=$gateRunCount\n"
     is FeatureTaskRuntimeRunEvent.CiStillRunning ->
-      "feature-task-runtime $workflowId: phase $phaseId CI still running pending=${pendingChecks.joinToString(",")}\n"
+      "feature-task-runtime $workflowId: phase $phaseId CI waiting for checks to start or settle: " +
+        "${pendingChecks.joinToString(", ") { check -> "${check.name} ${check.link}" }} " +
+        "${pullRequestUrl.ifBlank { "" }} runner capacity unavailable\n"
     is FeatureTaskRuntimeRunEvent.PhaseCompleted ->
       "feature-task-runtime $workflowId: phase $phaseId completed agent=$resolvedAgentId attempt=$attemptCount\n"
     is FeatureTaskRuntimeRunEvent.PhaseBlocked ->

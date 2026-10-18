@@ -283,7 +283,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
         Triple(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_AUDIT_PLAN_FIX),
         Triple(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, def.PHASE_IMPLEMENT_FIX),
         Triple(def.PHASE_MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, def.PHASE_MONITOR_FIX),
-        Triple(def.PHASE_MONITOR_FIX, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_COMMIT_PUSH),
+        Triple(def.PHASE_MONITOR, FeatureTaskRuntimeVerdict.PROGRESS, def.PHASE_MONITOR_FIX),
+        Triple(def.PHASE_MONITOR_FIX, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_MONITOR),
       ),
       semantic.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) },
     )

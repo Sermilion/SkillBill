@@ -1,17 +1,30 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairRunState
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
+import skillbill.engine.featuretask.runloop.core.AttemptResult
+import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
+import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.slot.state.AcceptanceCriterionRepairCycleRecords
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairOutcomeKind
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
 internal fun interface PhaseStepAttempts {
@@ -90,6 +103,7 @@ internal object PhaseAttemptSteps {
         outputGateFailures = 0,
         semanticIteration = semanticIteration,
         continuationSegmentCount = continuationSegmentCount,
+        requiredStartAcknowledged = true,
       )
     while (outcome == null) {
       outcome =
@@ -126,12 +140,15 @@ internal object PhaseAttemptSteps {
           args.call,
           priorCorrection = loop.priorCorrection,
         ),
+        requiredStartAlreadyAcknowledged = loop.requiredStartAcknowledged,
       )
+    loop.requiredStartAcknowledged = false
     val context =
       FixLoopBranchContext(
         run,
         attempt,
         loop,
+        stepHooks(run).serialAcceptanceRepairStep,
         observability,
         agentId,
         coupling.session,
@@ -139,7 +156,7 @@ internal object PhaseAttemptSteps {
         coupling.transitions,
       )
     val phaseAttempts = PhaseAttemptContinuations
-    return attempt.settledOutcome ?: when {
+    return attempt.settledOutcome ?: AcceptanceCriterionRepairAttemptSettlement.settle(recorder, context) ?: when {
       attempt.incompleteWorkContinuationReason != null ->
         phaseAttempts.settleIncompleteWork(
           recorder,
@@ -154,5 +171,80 @@ internal object PhaseAttemptSteps {
       else ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(recorder, context)
     }
+  }
+}
+
+internal object AcceptanceCriterionRepairAttemptSettlement {
+  fun settle(
+    recorder: PhaseRunRecords,
+    context: FixLoopBranchContext,
+  ): PhaseOutcome? {
+    val run = context.run
+    val scope = (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair
+    val cycles = recorder as? AcceptanceCriterionRepairCycleRecords
+    if (scope == null || !context.serialAcceptanceRepairStep || cycles?.isRepairStep(run.phaseId) != true) return null
+    val attempt = context.attempt
+    val normalized =
+      when (attempt) {
+        is AttemptResult.IncompleteWork -> attempt.normalizedOutput
+        is AttemptResult.RetryableTerminal -> attempt.normalizedOutput
+        else -> return null
+      }
+    val kind =
+      if (attempt is AttemptResult.IncompleteWork) {
+        AcceptanceCriterionRepairOutcomeKind.INCOMPLETE
+      } else {
+        AcceptanceCriterionRepairOutcomeKind.BLOCKED
+      }
+    val phase =
+      FeatureTaskRuntimePhaseStateRequest(
+        run.request.workflowId, run.phaseId, "completed", context.loop.iteration,
+        run.resolvedAgent.resolvedAgentId, true,
+        outputArtifact = normalized.canonicalJson,
+        normalizedOutput = normalized,
+        failureDisposition = attempt.retryableTerminal?.failureDisposition,
+        loopId = run.reentry?.loopId,
+        edgeIteration = run.reentry?.edgeIteration,
+        mutating = run.policy.mutating,
+      )
+    val committed =
+      (recorder as? AcceptanceCriterionRepairCycleRecords)?.settleUnsuccessfulRepair(phase, kind)
+        ?: return null
+    return if (!committed) {
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        context.progress,
+        context.loopTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run,
+          context.loop.iteration,
+          "The repair outcome could not be committed. The reserved cycle remains unchanged.",
+          context.observability,
+          payload = BlockAndPersistPayload(normalizedOutput = normalized, fileManifest = attempt.fileManifest),
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+        ),
+      )
+    } else {
+      acknowledgeCommitted(context, phase, normalized, scope)
+    }
+  }
+
+  private fun acknowledgeCommitted(
+    context: FixLoopBranchContext,
+    phase: FeatureTaskRuntimePhaseStateRequest,
+    normalized: NormalizedFeatureTaskRuntimePhaseOutput,
+    scope: AcceptanceCriterionRepairRunState,
+  ): PhaseOutcome {
+    val run = context.run
+    val output =
+      FeatureTaskRuntimePhaseOutput(run.phaseId, context.loop.iteration, normalized.canonicalJson, normalized)
+    context.loopTransitions.applyPersistedPhaseCompletion(output, phase.reviewPassNumber)
+    if (scope.snapshot?.stage == AcceptanceCriterionRepairStage.BUDGET_BLOCKED) {
+      return PhaseOutcome.blocked(
+        "The current acceptance criterion exhausted its three unsuccessful repair attempts. " +
+          "Other criteria have separate budgets. " + scope.currentCriterionContext,
+      )
+    }
+    return PhaseOutcome.completed(output)
   }
 }

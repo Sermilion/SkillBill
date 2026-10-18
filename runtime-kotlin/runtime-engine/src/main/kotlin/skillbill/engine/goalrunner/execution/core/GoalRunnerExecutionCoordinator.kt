@@ -350,7 +350,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     if (isCurrentProcess(existing)) {
       return blockedClaim("this process already owns the execution lease")
     }
-    if (!isDuplicateLaunchRace(existing)) {
+    if (!isDuplicateLaunchRace(ownership)) {
       return blockedClaim(OWNER_LIVE)
     }
     supervisor.awaitExit(ownership, DUPLICATE_LAUNCH_WINDOW)
@@ -368,9 +368,9 @@ class DefaultGoalRunnerExecutionCoordinator(
     return existing.pid == current.pid && existing.processBirthToken == current.processBirthToken
   }
 
-  private fun isDuplicateLaunchRace(existing: GoalRunnerExecutionLease): Boolean {
-    val ownerStartMs = existing.processBirthToken.toLongOrNull() ?: return false
-    val ageMs = clock.millis() - ownerStartMs
+  private fun isDuplicateLaunchRace(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean {
+    val ownerStartedAt = supervisor.processStartedAt(ownership) ?: return false
+    val ageMs = clock.millis() - ownerStartedAt.toEpochMilli()
     return ageMs in 0 until DUPLICATE_LAUNCH_WINDOW.toMillis()
   }
 

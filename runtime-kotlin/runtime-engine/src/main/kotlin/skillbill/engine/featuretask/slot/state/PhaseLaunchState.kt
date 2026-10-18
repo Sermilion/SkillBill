@@ -4,6 +4,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
@@ -12,6 +14,12 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
  * launch observation, token accounting, and the settled envelope an attempt recorded.
  */
 interface PhaseLaunchState {
+  /** The sink a launch of this state streams its output to; a fan-out unit attributes its lines here. */
+  val launchOutputSink: AgentRunOutputSink get() = AgentRunOutputSink.NONE
+
+  /** The prompt section appended to every launch of this state; a fan-out unit names the work it owns here. */
+  val launchPromptContext: String get() = ""
+
   /**
    * Prepares [input] for launch once the runner has captured the before-state. Returns the input to launch, or
    * null when preparation rejected the launch and the step must not launch.
@@ -44,6 +52,7 @@ interface PhaseLaunchState {
 data class PhaseLaunchObservation(
   val activityStampSink: AgentRunActivityStampSink,
   val worktreeEditObserver: AgentRunWorktreeEditObserver,
+  val progressEmitter: ((AgentRunProgressEmission) -> Unit)? = null,
 )
 
 sealed interface PhaseSettledEnvelopeRead {

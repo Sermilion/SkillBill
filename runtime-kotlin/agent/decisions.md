@@ -1,5 +1,39 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-16] Missing monitor accounting evidence stays unknown
+Context: The monitor repair cap was reconstructed from retained producer, completion, publication, and Git evidence. Missing association or an older CI_FAILED report without a published-head statement was converted into a monitor block, even when fewer than three failed repair commits were proven.
+Decision: Count only distinct repair SHAs qualified by the existing completed repair, pushed publication, change, producer, and observed-head evidence. Missing or contradictory accounting evidence emits diagnostics and remains unknown. It neither fabricates a failed attempt nor blocks cap-sensitive resume. Live failures without a qualified repair association keep the existing repair transition as progress. Green completion requires stable PR number and head identity matching the latest completed pushed publication before monitor start; a stale or headless green observation returns to the same watch loop. Merged PR handling and actual lookup failures keep their existing outcomes.
+Reason: Accounting uncertainty cannot prove either a consumed attempt or successful CI. It must not replace the monitor's existing repair, timeout, or recovery owners with a new accounting refusal.
+Preserves: Producer association, accepted completion, publication ownership, change qualification, distinct failed-commit accounting, and the existing monitor transition owner.
+
+## [2026-10-14] SKILL-425: retire the standalone feature-task skeleton
+Context: With the full run planning through the plan skeleton, a single feature is a one-subtask bundle, so the `standalone` skeleton (all nine feature-run slots, no goal continuation) had no entry left but its own run command and a prose-only plan mode.
+Decision: `SkeletonDefinition.admittedForRun(goalContinuation)` is `{GOAL_CHILD}` for a goal child and `{PLAN}` otherwise, and `forRun` is removed. `STANDALONE` stays declared, in `entries`, and bound in `SkeletonStrategyBindings` as a decode-only binding, so a stored `standalone` plan still decodes, shows in lookup and status, and can be abandoned. No migration rewrites the row. Execution admission and continuation claim refuse a recorded `standalone` plan with `retiredStandaloneWorkflowError` (`WorkflowFailureCode.RETIRED_STANDALONE_WORKFLOW`, a coded `SkillBillRuntimeException`, no new exception class); the message says to abandon the workflow and run `skill-bill <KEY>`. The `standalone` route scope stays because plan workflows carry it. `FeatureTaskContinuationLookupQuery.admittedDefinition` has no default, so each caller names the definition it reads. The prose-only plan mode was already gone from `AgentPlanStrategy`. `feature-task run`, its explicit `run` subcommand and the `feature-task-runtime` run alias are removed; `feature-task` and the hidden `feature-task-runtime` alias are command groups only (status, resume, abandon, retry-blocked, repair-identity, lookup). Goal children launch through `feature-task resume <child id>` for every launch, because the goal runner opens the child row under its assigned id before launch; `RUN_SUBCOMMAND` and the `--workflow-id` run option are gone. The slot baseline drops its `standalone` bundle, and the runner test harness defaults to a goal-child continuation.
+Reason: One run path means one set of admission rules and no skeleton that only old rows can reach, while keeping old rows readable avoids a data migration.
+Alternatives considered: Rewriting stored standalone plans to goal-child or plan plans (rejected: the recorded phases and route do not match either definition) and deleting `STANDALONE` outright (rejected: stored rows and archived descriptors would stop decoding).
+Revisit when: no `standalone` workflow row remains, so the decode-only binding can go.
+
+## [2026-10-14] SKILL-425: one plan strategy, durable plan records, no goal planning sweep
+Context: Goal planning ran its own definition (`GOAL_PLANNING`), run state, sweep, and `goal_*` checkpoint tables beside the standalone plan skeleton, so planning had two strategies, two storages, and a goal-continuation constraint in the plan prompt.
+Decision: `PhaseSlot.PLAN` owns `plan` and `plan_subtasks`, and every skeleton binds `PlanFanOutStrategy` (persisted id `goal-plan-fan-out`; `AgentPlanStrategy` stays registered and is composed, not bound). `plan` authors the bundle and may split; `plan_subtasks` fans `agent-plan` out per subtask through `DurablePlanSubtasksFanOut`, and each unit writes only `## Implementation Details`. Unit, preplan, and bundle records live in the plan workflow (`plan_bundle` artifact); a unit is complete when its record exists and both its scope and details hashes match the spec on disk. A goal obtains planning through `GoalPlanningSource`: the linked plan workflow, then the legacy `goal_*` tables read-only, then a `StandalonePlanRun` of the plan skeleton. Goal children hydrate `preplan`, `plan`, and `plan_subtasks` and record the source in the import provenance. `SkeletonDefinition.GOAL_PLANNING`, `GoalPlanningPhaseRunState`, `DefaultGoalPlanningSweep`, `GoalPlanningMigration`, `GoalPlanningPreparationSourceValidator`, the legacy checkpoint writers, and the goal-continuation constraint are removed. The legacy tables are read-only: only the reset and purge deletes remain, tests seed legacy rows with raw SQL, and admission no longer migrates a goal import, so a legacy goal falls through to running the plan skeleton. A plan workflow that predates `plan_subtasks` is refused on resume with `skill-bill goal purge <KEY>` then `skill-bill phase plan <KEY>`.
+Reason: One strategy over one durable record gives resume, status, and hydration a single source, and the spec bundle on disk stays the only planning artifact.
+Supersedes: SKILL-387 "make the governed spec artifact the planning handoff" (2026-10-01), where goal planning wrote and checkpointed its own subtask spec into the legacy tables; SKILL-410 "Run standalone plan through the durable run loop" (2026-10-09), where a goal parent linked a completed plan and still ran a sweep at plan time.
+Alternatives considered: A second plan strategy for goal runs (rejected: it keeps two prompts and two storages) and migrating legacy rows into plan workflows (rejected: it invents authority for plans no plan workflow produced).
+Revisit when: the last legacy goal is gone and the read-only legacy table readers and the `goal_planning_preparations`, `goal_shared_preplans`, and `goal_subtask_plans` tables can be dropped.
+
+## [2026-10-14] Continue ambiguous review ownership through generic review and error diagnostics
+Context: The operator requires review ownership conflicts to recover through generic review without blocking. Inline review also assumed one global code-quality owner and refused independently scoped Kotlin and Python rubrics.
+Decision: Keep domain conflict detection strict, then recover only typed ambiguous ownership through the manifest-declared fallback for each affected area. Preserve all affected paths, hunks and original inputs, retain uncontested lanes, and prevent accepted quality owners from replacing a current conflict fallback. Inline prompts include every selected quality rubric with its changed-file scope. Application records routing conflicts at error severity, including discovery ties that already used fallback.
+Supersession: Production cross-root ambiguity now recovers instead of the refusal described in the preceding decision. Low-level conflict detection tests remain. Missing or malformed fallback manifests retain their existing failure contracts.
+Evidence: Domain overlap recovery preserves scope and provenance. Application regressions prove delegated completion, inline fallback, scoped mixed-stack prompts and error diagnostics. A1, A2, A5 and A11 keep pure recovery policy separate from effects. G3 and G7 retain conflict detection and record the requested behavior change without architecture baseline or exemption changes.
+
+## [2026-10-14] Reconcile review area ownership within a composition and file scope
+Context: Global cross-root area uniqueness refused a Kotlin production review when a Python fixture also declared `architecture`. The stack-routing playbook delegates independent matching packs over their own changed files.
+Decision: Group routed roots by their declared composition closure and reconcile each group with the existing nearest-depth and fallback rules. Independent groups retain separate specialist lanes. Shared fallback owners merge once with all scopes and provenance. Distinct area owners assigning the same path still fail. Quality follow-up preserves accepted owners when unresolved documentation changes require their review.
+Reason: An area name identifies a responsibility, not one global platform owner. A Kotlin baseline and its composing KMP pack compete within one composition; a Python fixture is an independent scope.
+Supersession: The former application test requiring disjoint Kotlin and Swift scopes to fail is replaced by a mixed Kotlin/KMP/Python launch and accounting regression. Domain overlap rejection, same-composition ambiguity rejection and a production no-partial-launch conflict test remain. No architecture baseline or exemption changes.
+Evidence: `ReviewCrossRootLaneReconciliationTest`, `ParallelReviewCrossRootLanePlanTest`, `PlatformPackCompositionTest`. A1, A2, A5 and A11 keep pure ownership policy in domain and rubric resolution in application. G3 and G7 retain rejecting fixtures and record the corrected acceptance scope.
+
 ## [2026-10-10] Pack build gates always use the whole branch
 Context: Changed-file routing let one edited language choose a different gate from the rest of the branch. A generic-only installation also refused the next goal child after the previous child committed and cleared the working tree.
 Decision: Goal execution-plan creation and pack build gate execution select the gate from the current branch's tracked files. Remove the changed-file fallback selector. Preserve recorded descriptors and their command policies on resume. Standalone and workflow validation discover project checks through the agent strategy.
@@ -154,10 +188,15 @@ Decision: A participating step whose resolved profile is opus-5-5 selects that s
 Reason: A manual strategy flag would diverge from the launched model. Specializing every step in the selected slot would change non-Opus repairs in the same plan.
 Alternatives considered: An operator toggle stays rejected, as in the 2026-09-26 slot-skeleton decision. Substring and agent-name matching were rejected because they are not the launched model.
 
+## [2026-10-17] Resume with a different agent uses that agent's launch assignment
+Context: Selecting Cursor on tray resume still launched Codex's recorded `gpt-6.1-sol[effort=high]`. SKILL-403 kept recorded models so a config edit could not change an admitted profile. The selected `--agent` already changed the CLI.
+Decision: Same-agent resume still launches the recorded step assignment and warns on matrix drift. When the resolved agent for a remaining step is not the recorded assignment's agent, drop that assignment and resolve the model from the selected agent's current matrix. The durable execution plan is unchanged. Diagnostics `execution_plan_resume` now reports `value_used` as the assignment that will launch.
+Reason: A recorded Codex model is not a Cursor model id. Operator agent selection is explicit intent to launch that agent, not a silent config reinterpretation of the same agent.
+
 ## [2026-10-05] Resume launches the recorded assignment
 Context: Current configuration can resolve a different model than the one admitted with the execution plan.
 Decision: Resume launches the recorded step assignment. Drift emits a diagnostics warning at seam execution_plan_resume, with expected and used set to the recorded assignment and current set to the fresh resolution. Refusal is limited to an unregistered strategy id or revision, or a record that fails validation, and it happens before workflow, parent, child, or lease mutation.
-Reason: Relaunching under today's config would change an admitted profile. Recording the drift keeps the plan immutable without treating every config edit as a hard failure.
+Reason: Relaunching under today's config would change an admitted profile. Recording the drift keeps the plan immutable without treating every config edit as a hard failure. Same-agent matrix drift still follows this rule; a later decision covers an operator-selected different agent.
 
 ## [2026-10-05] Recognize only two exact Opus 5.5 identities
 Context: Provider names, aliases, and older Opus models must stay on the canonical strategies.
@@ -2881,3 +2920,212 @@ Context: The desktop Room query Flow cannot receive invalidations from JDBC writ
 Decision: `SQLiteDatabaseSessionFactory` reads the desktop work-topic revisions inside each write transaction and compares them after the use case runs. After commit, it takes a per-store file lock, rereads the latest committed revisions, and atomically replaces a sibling signal file only when those revisions changed. A generation token distinguishes separate commits even if a restored store reaches the same revision numbers. The `DesktopCommitSignal` contract in `runtime-contracts` owns the shared file suffix and revision syntax used by SQLite and desktop. A failed signal write records a warning without changing the result of an already committed use case.
 Reason: The existing runtime revisions identify work-related commits without polling the database or adding schema objects. One coherent transaction produces one complete revision snapshot, and the file lock prevents an older writer from replacing a newer snapshot. Rollbacks and unrelated table writes stay silent.
 Review: A1 clean, the SQLite adapter owns database access. A2 clean, `runtime-infra:sqlite` and `desktop-tray` both consume `DesktopCommitSignal`. A3 clean, the composition root gains no collaborators. A4 clean, no port was added. A5 clean, no forwarding type or function was added. A6 clean, the shared file vocabulary has one owner. A7 clean, publication degradation is recorded and never changes a committed outcome. A8 clean, no ambient time, environment, property, or process read was added. A9 clean, package dependencies remain acyclic. A10 clean, publisher tests remain in `runtime-infra:sqlite`. A11 clean, new declarations stay internal. A12 clean, public inner-layer APIs expose no raw map. G1-G7 clean, no guard, fixture, baseline, or exemption changed.
+
+## [2026-10-16] Restore qualified monitor failures from existing runtime evidence
+
+Context: SKILL-428 live monitoring qualified published repairs, but resume rejected
+every historical CI_FAILED output. The publication transition also invalidates the
+repair's in-memory completion flag, so using that flag classified subsequent CI
+failures as initial failures and repeatedly launched uncharged repairs.
+
+Decision: The monitor strategy declares its accounting roles. MonitorRepairAccounting
+qualifies publications for both live and historical monitoring using those roles. It joins START and COMPLETE entries to generation-zero
+producer evidence, accepted repair completion, pushed baseline and repair outputs,
+and Git ancestry and content. The ledger identifies completed repairs even after
+traversal invalidates their in-memory flags. FeatureTaskRuntimeRunTransitionOwner still owns every
+coupled mutation. A transient map restores qualified monitor attempts into the
+existing distinct failed-commit set.
+
+Historical qualification uses only retained runtime-authored monitor output whose
+existing failed-publication report identifies that exact published commit. It does
+not parse repair-agent prose. That runtime output retains the earlier attribution
+decision after another attempt replaces the latest repair manifest. Reconstruction
+still verifies producer identity, accepted completion, publication, and Git changes.
+Missing or contradictory evidence keeps the existing recovery block and diagnostics;
+it never resets consumed attempts or invents a failed commit. Monitor accounting
+adds no durable field, schema, receipt, migration, or new block category.
+
+The installed feature runtime also carries the published main fixes 8c8cdb308,
+f37339c2d, and a3d0f98c0 for acceptance-audit resume compatibility, plus c9b3376a8
+for the already-installed database schema version 58. Explicit operator
+resume renews that separate acceptance-audit budget while preserving its outcomes.
+It does not reset the monitor's CI-confirmed failed-commit budget.
+
+The Git process adapter preserves porcelain's leading index column. Trimming it
+removed the first character of the first dirty path and prevented source attribution.
+Before/after content identities distinguish a changed pre-dirty path from an
+unrelated dirty path. Identity failures keep the existing capture failure outcomes.
+
+Review: A1-A4 preserve module, effect, and transition ownership. A5 removes duplicate
+reconstruction logic. A6 keeps existing wire owners. A7 preserves typed failures,
+cancellation, and diagnostics. A8 adds no ambient production effects. A9-A12 keep
+package direction, test placement, visibility, and typed accounting. G1-G7 require
+no guard, baseline, or exemption changes.
+
+## [2026-10-16] Govern installed compatibility prerequisites separately from S3-7
+
+Context: SKILL-428 subtask 3 stopped at audit_plan_fix because S3-7 forbids new
+durable formats while the feature checkout carries compatibility changes already
+installed from main. The operator explicitly approved the prerequisite treatment
+in the current session and then authorized resuming the existing goal.
+
+Decision: Govern the compatibility changes from 8c8cdb308, f37339c2d, a3d0f98c0,
+and c9b3376a8 as installed prerequisites outside the S3-7 feature comparison.
+Retain the acceptance-repair budget offset and resume behavior, the removed prose
+length bound, schema version 58, launch-scope persistence, and completed planning
+presentation and controls. Preserve their contracts, supported persisted-state
+admission, and historical outcomes. This boundary covers only those compatibility
+changes. Keep the audit baseline and acceptance text unchanged. It authorizes no
+guard exemption, downgrade, data rewrite, or erasure of evidence.
+
+Monitor accounting and prose-dependent recovery remain within S3-7. The previous
+entry's use of a failed-publication report as historical evidence must be repaired.
+Resume through the existing goal runtime, complete audit_plan_fix, then let the
+runtime own implementation, validation, installation refresh where required, and
+acceptance auditing. Preserve completed work and the existing workflow records.
+
+Repair planning must separate accepted historical failure decisions from live
+publication/change qualification. Investigate the immutable stored execution plan
+and existing admission checks as non-prose evidence of corrected verdict semantics:
+the current traversal has separate PROGRESS and CI_FAILED monitor repair edges,
+while the old traversal conflates failure and conflict. A newly synthesized plan
+or current strategy identity alone cannot establish historical producer semantics.
+Join matched START/COMPLETE and generation-zero producer identities, accepted
+completion, pushed publication results, and Git ancestry/content evidence. Get
+counted SHAs from publication records. Identify evidence for each historical case,
+including replaced repair manifests, before prescribing recovery. Do not count
+ambiguous legacy CI_FAILED records through verdict-only inference.
+
+Delete confirmsPublishedFailure and all prose-dependent attribution fallbacks.
+Keep failingChecksProse as reporting only. Preserve live failed-CI/head/publication
+qualification, distinct-SHA accounting, FeatureTaskRuntimeRunTransitionOwner,
+existing diagnostics and recovery behavior, check links, and optional
+monitoringSummary. Add no field, receipt, protocol, migration, or block category.
+Keep required local validation, runtime publication ownership, private-path
+exclusion, branch restrictions, and existing terminal PR behavior. Apply A1, A2,
+A5, A6, A7 and G1-G7 without weakening enforcement.
+
+This entry records operator authority and planning guidance. It does not claim
+that the production repair or its verification is complete. Other acceptance
+criteria retain their own audit obligations.
+
+## [2026-10-16] Keep monitor publication evidence inside the active phase
+
+Context: Main publishes repairs inside the monitor phase. Joining the SKILL-428
+accounting fix must retain that behavior and its completed-phase invariants.
+
+Decision: The existing commit finalization owner records publication START and
+COMPLETE entries and generation-zero producer output around the repair push.
+These records use the existing commit/push envelope and ledger. They leave the
+completed commit/push phase record and workflow position unchanged. Accounting
+reads that producer output when there is no separate phase traversal output, and
+allows publication after the repair starts and before its next CI observation.
+Accepted repair completion and source attribution remain required.
+
+Evidence: PhaseMonitorRunTest covers three published repair failures, an unchanged
+repair, a rejected push, and goal monitoring without reopening completed phases.
+MonitorRepairResumeAccountingTest covers historical identity and failure counts.
+A1-A12 and G1-G7 remain clean. This integration adds no schema, port, guard
+exception, or separate state owner.
+
+## [2026-10-16] Retain explicit operator mandates across blocked-phase recovery
+
+Context: a blocked-phase retry delivered the operator's prerequisite decision to
+audit_plan_fix, then consumed its phase-scoped reason. The following audit still
+received empty mandates and repeated the scope block. Recording the decision in
+this source log did not amend the workflow's governed briefing.
+
+Decision: `feature-task retry-blocked` accepts an optional `--mandate` supplied
+by the operator. The existing retry transaction appends that directive to the
+workflow's admitted run invariants. Existing mandates, acceptance criteria,
+spec identity and other invariant fields remain intact. Duplicate mandates
+are not appended. Later phases and resumes use the existing mandate briefing
+path. A plain retry reason keeps its existing single-phase lifetime.
+
+Missing run invariants refuse the mandate and retry together. Malformed
+invariants retain their typed admission failure. No new persisted field,
+contract version, migration, phase bypass or acceptance rewrite is involved.
+The decision applies only to the selected child workflow.
+
+Review: A1 and A2 keep the mutation in the application retry transaction and
+briefing delivery in the engine. A3-A5 add no collaborator bag, port or forwarding
+layer. A6 reuses the existing artifact family and codec. A7 retains refusal and
+typed corruption handling. A8 adds no production ambient effects. A9-A12 retain
+package direction, test placement, narrow visibility and typed interfaces.
+G1-G7 require no guard, fixture, baseline or exemption change.
+
+## [2026-10-16] Preserve source findings after malformed no-change claims
+
+Context: an audit independently found that goal monitoring lost confirmed repair
+accounting on resume. The preceding repair had submitted a malformed no-change
+claim. AcceptanceAuditRound rejected the claim but replaced the auditor's value
+with formatting errors, so the next repair plan lost the production finding.
+Audit repair also offered the no-change argument without its existing shape.
+
+Decision: keep the auditor's value and append the claim rejection reasons. Keep
+the rejected verdict and all existing claim validation. Audit repair uses the
+same claim guidance as implementation. No contract field, admission exception,
+comparison change or budget bypass is added.
+
+Review: A1, A2 and A5 retain audit settlement and transition ownership. A6 reuses
+the existing prose field and claim vocabulary. A7 preserves both refusal reasons
+and inspected evidence. A3-A4 and A8-A12 add no state, ports, ambient effects or
+module crossings. G1-G7 remain unchanged. A regression exercises a resumed
+malformed repair claim and verifies that the next plan receives both the source
+finding and the rejection reasons.
+
+
+## [2026-10-16] Continue confirmed no-change audits without operator approval
+
+Context: A completed no-change source audit paused a goal until the operator
+accepted it. The operator has removed that approval requirement. Treating the
+old accept command as automatic completion would also skip the child's remaining
+review and quality gate.
+
+Decision: delete the audit pause producer and use normal authoritative completion
+and routing. Keep the no_change_confirmed output and derive satisfied for the
+existing review entry gate after claim validation. Malformed and rejected claims
+still enter repair. Historical undecided pauses resume the child through audit
+without an operator decision. Retain the old artifact decoder and already
+recorded operator choices for compatible recovery. Legacy pause status reports
+resumable, and later pauses cannot inherit an earlier no-change approval state.
+No workflow record rewrite,
+schema change, migration or new marker is needed.
+
+Review checklist: A1 clean, policy remains in engine. A2 clean, no new shared
+owners. A3 clean, no collaborator changes. A4 clean, no new ports. A5 clean,
+active pause code is deleted. A6 clean, existing verdict and artifact vocabulary
+remain. A7 clean, claim rejection and durable completion failures still refuse.
+A8 clean, no ambient effects. A9 and A10 clean, tests stay with their owners.
+A11 and A12 clean, the audit hook loses its pause argument. G1-G7 clean, no guard,
+baseline, exemption or acceptance fixture is weakened. Regressions cover normal
+review and validation after confirmation, serial final source admission, and
+resuming an undecided historical pause without closing its child early.
+
+
+## [2026-10-16] Admit retained planning evidence after ledger compaction
+
+Context: A resumed child had 200 consecutive phase ledger entries numbered 17
+through 216. Normal bounded-history retention had removed its initial planning
+imports. GoalChildPlanningImportMatcher still required sequence zero at the
+start and reported a stale plan, although the import provenance and settled
+planning records remained intact. Scoped replan would delete that child's audit
+progress and is unnecessary for this case.
+
+Decision: decode ledger entries through the existing durable reader. Validate the
+complete surviving import prefix by sequence number. A prefix that has rolled out
+is admissible only in a full retained window at the existing ledger limit, with
+consecutive sequence numbers throughout. Keep parent planning, provenance, payload
+and settled phase admission unchanged. Do not reconstruct old entries, rewrite
+workflow records or change retention. Incomplete windows, gaps and altered
+surviving imports still fail admission.
+
+Review checklist: A1 and A2 clean, the matcher consumes existing engine decoding
+and domain retention vocabulary. A3 and A4 clean, no new collaborators or ports.
+A5 clean, the permanent sequence-zero assumption is removed at its consumer.
+A6 clean, typed ledger reads replace raw key access. A7 clean, malformed durable
+entries retain typed failures. A8 clean, no ambient reads. A9-A12 clean, no new
+packages, API or raw map boundary. G1-G7 clean, no guard, baseline or exemption
+changes. The regression failed under the old reader and now admits partially and
+fully pruned import prefixes without changing stored child bytes. Rejection cases
+cover incomplete windows, sequence gaps and changed surviving imports.

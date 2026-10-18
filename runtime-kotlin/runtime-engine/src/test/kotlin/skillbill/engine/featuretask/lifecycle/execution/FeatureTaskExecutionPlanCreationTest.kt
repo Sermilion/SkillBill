@@ -21,6 +21,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.engine.featuretask.slot.artifactValue
+import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
 import skillbill.engine.goalrunner.manifest.GoalParentProjectionWriter
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
@@ -36,6 +37,9 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.seedLegacySharedPreplan
+import skillbill.infrastructure.sqlite.seedLegacySubtaskPlan
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -144,7 +148,12 @@ class FeatureTaskExecutionPlanCreationTest {
       val bytes = execution.encoded.copyOf()
       val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(bytes, execution.validator)
       bytes.fill(0)
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
+        )
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
       val first = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(CHILD)) }
       assertTrue(persistence.ensureWorkflowOpen(CHILD, "creation-session", null, descriptor))
@@ -168,7 +177,12 @@ class FeatureTaskExecutionPlanCreationTest {
   @Test
   fun `direct executable workflow creation without a descriptor leaves no row`() =
     withDatabase { database ->
-      val persistence = FeatureTaskRuntimeWorkflowPersistence(database, testWorkflowSnapshotValidator)
+      val persistence =
+        FeatureTaskRuntimeWorkflowPersistence(
+          database,
+          testWorkflowSnapshotValidator,
+          featureTaskRuntimeWireArtifactValidatorForTest(),
+        )
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         persistence.ensureWorkflowOpen(CHILD, "creation-session")
       }
@@ -212,6 +226,7 @@ class FeatureTaskExecutionPlanCreationTest {
         val snapshot = first.toSnapshot()
         assertEquals(fixture.setup.executionPlan?.artifactValue, family.value(snapshot.artifacts))
         val records = decodePhaseRecords(snapshot.artifacts)
+        assertEquals(WorkflowStepStatus.COMPLETED, assertNotNull(records["plan_subtasks"]).status)
         listOf("preplan" to fixture.preplan, "plan" to fixture.plan).forEach { (step, output) ->
           val record = assertNotNull(records[step])
           assertEquals(WorkflowStepStatus.COMPLETED, record.status)
@@ -548,23 +563,27 @@ class FeatureTaskExecutionPlanCreationTest {
         executionPlanCompatibility = execution.compatibility,
       )
 
-    fun seed() =
-      database.selfManagedWrite { unit ->
-        val row = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, PARENT, "parent-session", "plan")
-        unit.workflowStates.saveRecord(
-          WorkflowFamily.TASK_RUNTIME,
-          row.copy(
-            artifacts =
-              DurableWorkflowArtifacts.fromMap(
-                mapOf(
-                  DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
-                    testDecompositionManifestValidator.encodeManifestWireMap(manifest),
+    fun seed() {
+      val dbPath =
+        database.selfManagedWrite { unit ->
+          val row = engine.openRecord(WorkflowFamily.TASK_RUNTIME.definition, PARENT, "parent-session", "plan")
+          unit.workflowStates.saveRecord(
+            WorkflowFamily.TASK_RUNTIME,
+            row.copy(
+              artifacts =
+                DurableWorkflowArtifacts.fromMap(
+                  mapOf(
+                    DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(
+                      testDecompositionManifestValidator.encodeManifestWireMap(manifest),
+                    ),
                   ),
                 ),
-              ),
-          ).toRecord().copy(issueKey = ISSUE),
-        )
-        unit.goalPlanningPreparations.checkpointSharedPreplan(
+            ).toRecord().copy(issueKey = ISSUE),
+          )
+          unit.dbPath
+        }
+      ensureTestDatabase(dbPath).use { connection ->
+        connection.seedLegacySharedPreplan(
           SharedGoalPreplanCheckpoint(
             identity = identity,
             provenance = provenance,
@@ -572,7 +591,7 @@ class FeatureTaskExecutionPlanCreationTest {
             preplanPayload = preplan,
           ),
         )
-        unit.goalPlanningPreparations.checkpointSubtaskPlan(
+        connection.seedLegacySubtaskPlan(
           GoalSubtaskPlanCheckpoint(
             identity = identity,
             subtaskId = 1,
@@ -585,6 +604,7 @@ class FeatureTaskExecutionPlanCreationTest {
           ),
         )
       }
+    }
 
     fun save(
       target: DatabaseSessionFactory,

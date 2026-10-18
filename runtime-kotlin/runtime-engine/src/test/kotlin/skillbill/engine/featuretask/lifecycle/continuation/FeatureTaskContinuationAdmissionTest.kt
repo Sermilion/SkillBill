@@ -104,7 +104,9 @@ class FeatureTaskContinuationAdmissionTest {
         assertEquals(expectedType, error::class)
         assertEquals(before, fixture.row())
         assertEquals(0, fixture.execution.launches)
-        assertIs<FeatureTaskContinuationLookupResult.Resumable>(fixture.lookup.lookup("SKILL-384", REPOSITORY))
+        assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+          fixture.lookup.lookupGoalChild("SKILL-384", REPOSITORY, WORKFLOW_ID),
+        )
       }
       assertEquals(cases.size, fixture.warnings.size)
       assertTrue(fixture.warnings.all { it.length < 256 })
@@ -334,12 +336,12 @@ class FeatureTaskContinuationAdmissionTest {
 
     fun candidate() =
       assertIs<FeatureTaskContinuationLookupResult.Resumable>(
-        lookup.lookup("SKILL-384", REPOSITORY),
+        lookup.lookupGoalChild("SKILL-384", REPOSITORY, WORKFLOW_ID),
       ).candidate
 
     fun candidateFrom(row: WorkflowStateRecord) =
       assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
-        lookup.lookup("SKILL-384", REPOSITORY),
+        lookup.lookupGoalChild("SKILL-384", REPOSITORY, WORKFLOW_ID),
       ).candidate.copy(
         status = row.workflowStatus,
         currentStep = row.currentStepId,
@@ -387,7 +389,7 @@ class FeatureTaskContinuationAdmissionTest {
           REPOSITORY,
           SPEC,
           FeatureTaskWorkflowMode.RUNTIME,
-          FeatureTaskRouteScope.STANDALONE,
+          FeatureTaskRouteScope.GOAL_CHILD,
         ),
       )
     }

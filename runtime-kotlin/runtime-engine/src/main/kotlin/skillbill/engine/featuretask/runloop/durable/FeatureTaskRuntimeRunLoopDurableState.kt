@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSet
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -20,6 +21,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
@@ -27,6 +29,7 @@ import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.taskruntime.FeatureTaskImplementationChecklistStore
 import skillbill.workflow.decomposition.model.SpecSource
@@ -55,7 +58,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.traversal
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.phaseTraversal()
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
 
   override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)
@@ -69,6 +72,13 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override fun stepLaunchAssignment(stepId: String) = executionPlan.stepLaunchAssignments[stepId]
 
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
+
+  override fun fanOut(stepId: String): PhaseRunFanOut =
+    if (selectedOwnerOf(stepId)?.plansInFanOut == true) {
+      launch.planSubtasksFanOut(facts, this, stepId)
+    } else {
+      throw PhaseRunFanOutUnsupportedError(stepId)
+    }
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     launch.ensureFeatureBranch(facts, telemetry, guardPhase)
@@ -107,7 +117,15 @@ class FeatureTaskRuntimeRunLoopDurableLaunch(
   private val activityStampWriter: AgentActivityStampWriter,
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+  private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
 ) {
+  internal fun planSubtasksFanOut(
+    facts: FeatureTaskRuntimeRunFacts,
+    state: PhaseRunState,
+    stepId: String,
+  ): PhaseRunFanOut =
+    FeatureTaskRuntimeRunLoopPlanSubtasksFanOut(state, facts, stepId, decompositionPlanner, runLoopEntry)
+
   internal fun step(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,

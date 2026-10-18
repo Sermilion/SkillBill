@@ -30,4 +30,35 @@ object CanonicalRepositoryRoot : RepositoryEnclosingRootPort {
     val gitRoot = canonicalPath(enclosingRepositoryRoot(repoRoot))
     return FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX + gitRoot
   }
+
+  override fun primaryRepositoryRoot(repoRoot: Path): Path {
+    val root = canonicalPath(repoRoot)
+    val marker = root.resolve(GIT_MARKER)
+    val common = (if (Files.isRegularFile(marker)) linkedWorktreeCommonDir(root, marker) else null) ?: return root
+    val primary = if (common.fileName?.toString() == GIT_MARKER) common.parent else common
+    return primary?.let(::canonicalPath) ?: root
+  }
+
+  private fun linkedWorktreeCommonDir(
+    root: Path,
+    marker: Path,
+  ): Path? {
+    val gitDir =
+      readTrimmed(marker)
+        ?.lineSequence()
+        ?.firstOrNull { it.startsWith(GITDIR_PREFIX) }
+        ?.removePrefix(GITDIR_PREFIX)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { root.resolve(it).normalize() }
+        ?: return null
+    val commonDir = readTrimmed(gitDir.resolve(COMMONDIR_FILE))?.takeIf { it.isNotEmpty() }
+    return commonDir?.let { gitDir.resolve(it).normalize() } ?: gitDir
+  }
+
+  private fun readTrimmed(path: Path): String? = runCatching { Files.readString(path).trim() }.getOrNull()
+
+  private const val GIT_MARKER = ".git"
+  private const val GITDIR_PREFIX = "gitdir:"
+  private const val COMMONDIR_FILE = "commondir"
 }

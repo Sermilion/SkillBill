@@ -15,8 +15,6 @@ import java.nio.file.Path
 data class FeatureTaskRuntimePhasePromptComposeInputs(
   val issueKey: String,
   val briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-  val suppressDecomposition: Boolean = false,
-  val specBundleRequired: Boolean = false,
   val specRewritable: Boolean = false,
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
   val reviewPassNumber: Int? = null,
@@ -27,6 +25,7 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val priorTerminalFailure: String? = null,
   val priorFindingCoverage: String? = null,
   val priorAcceptanceAudit: String? = null,
+  val currentAcceptanceCriterion: String? = null,
   val noChangeClaim: String? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,

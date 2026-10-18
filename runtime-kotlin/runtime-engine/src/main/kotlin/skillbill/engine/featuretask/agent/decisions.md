@@ -3,6 +3,51 @@ Context: A second settlement at the same workflow, phase, and attempt with a dif
 Decision: Persist treats Accepted and IdenticalReplay as OK. Conflicting maps to PHASE_SETTLEMENT_CONFLICT; Refused maps to the refusal reason name. The late envelope is withheld. The SQLite repository returns the store result and does not throw.
 Reason: Expected settlement outcomes are values. Throwing inside the sqlite repository hid Conflicting as a defect and still left the first row in place without a typed acknowledgment.
 
+## [2026-10-16] Recover failed repairs from recorded execution semantics
+Context: Resume must retain failed repairs after current phase records are replaced. Legacy monitor verdicts conflated CI failure and merge conflict, and report prose cannot establish which occurred.
+Decision: Admit historical CI_FAILED meaning only through the immutable stored monitor selection, dispatch owners and corrected traversal. Join matched START/COMPLETE and generation-zero producer identities, accepted repair completion, pushed baseline/publication outputs and Git ancestry/content evidence. Derive failed SHAs from publication records and restore the distinct failed-commit set.
+Reason: A current or synthesized plan cannot prove a historical producer's semantics. Existing accepted evidence preserves prior attribution when the latest repair manifest changes; parsing narration would invent a second protocol. Missing or contradictory evidence retains diagnostics and existing recovery behavior without resetting known failures or adding durable fields.
+Alternatives considered: Verdict-only legacy inference and prose-dependent attribution were rejected because neither proves commit-associated failed repair semantics.
+
+## [2026-10-16] Count failed repair commits independently of repair launches
+Context: Counting repair entries or merge conflicts could exhaust the budget while the third published repair still had pending CI.
+Decision: Use PROGRESS for initial failures and conflicts. Qualify a completed repair through changed attributed source paths or newly integrated merge ancestry, pushed publication and failed CI on the matching head. Count each published SHA once, observe the third result before refusing another CI repair, and keep coupled mutations with FeatureTaskRuntimeRunTransitionOwner across all monitor routes.
+Reason: A launch, metadata-only amend, local pass or merge conflict does not prove that CI rejected a changed repair. Distinct published commits preserve the accumulated budget across repeated observations and different failure causes. Unchanged publication uses the existing blocked settlement to prevent an uncharged repair loop.## [2026-10-16] Spend monitor budget from published failed repair evidence
+Context: A commit metadata amend could change SHA without changing repair content, and restored monitor loop ordinals included launches that CI had never rejected.
+Decision: Require the completed repair manifest to intersect source paths changed between the previous and pushed commit, or prove newly integrated merge ancestry from commit parents. Count distinct published SHAs from completed monitor results retained through COMPLETE ledger entries and producer outputs. Missing retained monitor results block cap-sensitive continuation.
+Reason: Commit IDs and backward-edge ordinals describe different facts from source changes and failed published repairs. Runtime-owned monitor and commit outputs use the existing producer-output store so replacement of the current phase record does not discard their reports.
+Superseded by: Recover failed repairs from recorded execution semantics (2026-10-16)
+## [2026-10-16] Reuse setup without reusing validation results
+Context: SKILL-428 observed repeated container setup mistakes. Those observations did not establish that required full validation runs were redundant.
+Decision: Retain permitted setup, caches and discovery context within the invocation, revisit changed requirements and run all required checks for each repair candidate. Preserve clean and cache-bypass requirements and invocation resource ownership.
+Reason: A working setup avoids needless reconstruction, but an earlier candidate's pass cannot prove a changed candidate. Discovery context reminds the agent to inspect current requirements rather than trusting cached command results.
+
+## [2026-10-16] Keep environment preparation in existing guidance
+Context: SKILL-428 requires prose guidance without a new environment contract or blocking condition. Missing Git/Python, unwritable Java user.home and Linux display support were concrete SkillBill failures.
+Decision: Extend the shared validation briefing for validation and monitor repair. Keep repository-specific setup examples in runtime command guidance, derive requirements from current instructions and CI, and explain setup retries through existing prose and recovery behavior.
+Reason: Repository CI owns the exact tool and setup requirements. A shared fixed tool list would misapply those requirements to other projects, while a descriptor, discovery service or readiness receipt would add contract surface the operator excluded.
+
+## [2026-10-16] Reuse existing monitor progress channels
+Context: SKILL-428 addresses silent CI waits and repair periods. The operator explicitly required prose reporting without new schemas, structured progress protocols or completion receipts.
+Decision: Forward CI observations and repair activity through existing events, callbacks, CLI/status sinks and goal heartbeat records. Agents report naturally; no consumer parses narration to settle validation or repair.
+Reason: Current facilities already carry the needed facts. Another transport or prescribed report shape would add contract surface and turn visibility into an additional success gate.
+Alternatives considered: The earlier structured-protocol draft was superseded by the operator's prose-first requirement in the parent spec.
+
+## [2026-10-16] Treat monitor liveness as an observation
+Context: Long commands, queued CI and unknown runner capacity can look like stalled work. A live process and passing local checks do not prove source changes or a successful remote CI result.
+Decision: Refresh waiting activity through current facilities at the intended 30-second cadence, bound displayed check details and links, and report only observed facts. Leave absent detail unavailable without an additional refusal or administrative lookup.
+Reason: Visibility must not invent progress, infer success from a changing pending-check sample, reset deadlines or spend repair attempts. Remote CI remains the authority for the PR's CI result.
+
+## [2026-10-14] Serial acceptance commits use a scoped acquired worker
+Context: SKILL-426's first subtask had domain records but no transaction owner coupling criterion outcomes to workflow evidence. A domain success could otherwise become visible before the database accepted it.
+Decision: The worker coordinator issues a callback-scoped capability carrying its admitted execution and private lease identity. Serial writes check that capability, expected revision, current criterion, reservation and authored source inside one required write transaction. The same transaction stores serial state, phase records, ledger, implementation evidence and workflow advancement. Callers receive detached committed facts after the transaction returns. Filesystem projection follows commit; projection failure returns committed-with-projection-failure and recovery regenerates only that projection.
+Reason: The workflow artifact row remains authoritative. Separate authoritative filesystem writes or publication from inside the transaction would make rollback and restart disagree.
+
+## [2026-10-14] Legacy adoption retains raw and admitted snapshots
+Context: Historical audit revisions 1 and 2 can normalize during execution admission. Comparing raw artifacts against the normalized row would reject supported pristine runs or encourage dropping original evidence.
+Decision: The acquired worker retains the raw snapshot and the admitted snapshot. Adoption inspects the former and fences against the latter, plus the active owner, source and checkpoint. Only the explicit nine composition/revision tuples with pristine discovery evidence admit a separate provenance receipt. The receipt retains original artifacts and prospective budget semantics. Current descriptor normalization stays intact. No historical serial attempts are invented, and this subtask does not activate audit revision 4.
+Reason: Compatibility of a descriptor alone cannot prove pristine history. Retaining both snapshots allows exact historical inspection without restoring an obsolete descriptor into the live execution.
+
 ## [2026-10-12] Validation owns checks, commit_push only publishes
 Context: SKILL-423 completed validation, then commit_push selected an Ubuntu CI dependency-install command and ran it on CachyOS. The operator required commit_push to commit and push without another gate.
 Decision: Delete local CI-command discovery and execution, readiness settlement and committed-head rebinding, and the PR readiness gate. Validation retains project-check discovery and repair. Commit_push stages, commits, pushes and records its receipt. PR retains branch and template checks, and monitor observes remote CI. Preserve legacy readiness artifact decoding so saved workflows remain readable, but ignore those artifacts during publication.
@@ -47,6 +92,14 @@ Context: A conflicting pull request reports no checks, so the watcher treated it
 Decision: An open pull request is conflicting when GitHub reports `mergeable` `CONFLICTING` or `mergeStateStatus` `DIRTY`. The watcher returns that outcome before reading checks. Monitor completes with verdict `ci_failed`, and `monitor_fix` merges the recorded base branch and resolves the conflicts. Unknown mergeability stays unsettled. The three-attempt cap is unchanged.
 Reason: Conflict repair is the same commit-and-watch cycle as a failed check. A new verdict would duplicate the backward edge and the cap.
 Alternatives considered: Waiting until checks fail, rejected because a conflict often publishes no checks. Treating `UNKNOWN` or `BEHIND` as a conflict, rejected because GitHub has not reported a conflict yet.
+Superseded by: Count failed repair commits independently of repair launches (2026-10-16)
+
+## [2026-10-16] Monitor repair budget counts CI-confirmed published commits
+Context: The monitor loop treated a merge conflict as `ci_failed` and spent budget when it launched repair. That could exhaust the cap while the third repair commit still had pending CI.
+Decision: Initial CI failure and merge conflict use the existing `progress` verdict to start uncharged repair. `ci_failed` is reserved for a failed CI result associated by head SHA with a completed repair that changed files and was pushed. The run loop counts that result once per completed repair cycle and observes the third qualifying result before blocking. Cap prose comes from the failed repair monitor outputs retained for that run.
+Reason: Local runs and repeated check polling do not establish that CI rejected a published repair commit. This keeps the loop as the single accounting owner without adding durable fields or a second state store.
+Supersedes: The 2026-10-10 decision that merge conflicts used the `ci_failed` verdict, and the 2026-10-08 decision that the capped edge counted repair entries.
+Revisit when: The existing phase output and loop records can no longer associate a repair result with its published head commit.
 
 ## [2026-10-08] Monitor fix returns to commit_push through a backward edge
 Context: The spec routed `monitor_fix` to `commit_push` as a loop-only successor. The transition declaration requires a loop-only successor to be a forward step, so the canonical transitions would throw on initialisation.
@@ -54,6 +107,7 @@ Decision: Keep a capped CI_FAILED backward edge from `monitor` to `monitor_fix` 
 Reason: The existing backward-edge machinery already handles this shape. Leaving the return uncapped means the cap counts only failed CI rounds, so exactly three repair runs are possible.
 Alternatives considered: The spec's forward loop-only successor, rejected because the declaration validator refuses it.
 Revisit when: The transition validator accepts a loop-only successor that is not forward, or a second phase needs a monitor-owned repair path.
+Superseded by: Count failed repair commits independently of repair launches (2026-10-16)
 
 ## [2026-10-08] Monitor watches CI through a port and runs without an agent
 Context: The run loop must not import the monitor slot's phase constants, and the architecture guards enforce that. CI watching has to finish without a model session.
@@ -416,3 +470,8 @@ the subtask launch, which creates it from its base.
 
 Reason: Spec hashes and plan writes refer to the goal branch's files. Reading or
 writing them on another branch produces false drift and cross-branch merges.
+
+## [2026-10-16] Completed workflow phases stay complete
+Context: The final acceptance fingerprint check ran on every forward transition. Validation, history updates, and checkpoint commits repeatedly sent SKILL-428 back to audit. Resume also unconditionally re-entered serial acceptance work, including accepted audits.
+Decision: Phase boundaries are forward-only for every phase. Remove the post-acceptance fingerprint reopening and its recorder API. Resume preserves accepted audits, and stale-evidence hooks cannot reopen a phase after a later phase has started. Cross-phase repair edges do not re-enter their target; a completed phase advances to its next forward step. Existing audit and review repair loops remain within their phase. Monitor repair commits and pushes before its completion is recorded, then returns directly to monitoring instead of reopening commit/push and PR.
+Reason: Later phases own their repairs. An earlier phase's accepted result records work already finished and must not become a new obligation because the checkout changed. This supersedes the older history-to-quality-gate regeneration routes when they attempt to cross a phase boundary.

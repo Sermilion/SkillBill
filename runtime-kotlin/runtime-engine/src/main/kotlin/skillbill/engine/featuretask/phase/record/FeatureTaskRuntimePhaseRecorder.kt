@@ -274,7 +274,11 @@ private fun phaseRecorderParts(
   injected: FeatureTaskRuntimePhaseRecorderInjected,
 ): FeatureTaskRuntimePhaseRecorderParts {
   val workflowPersistence =
-    FeatureTaskRuntimeWorkflowPersistence(injected.database, injected.workflowSnapshotValidator)
+    FeatureTaskRuntimeWorkflowPersistence(
+      injected.database,
+      injected.workflowSnapshotValidator,
+      injected.wireArtifactValidator,
+    )
   val runtimeOwnedPersistence = RuntimeOwnedPersistenceBoundary(injected.database, injected.diagnostics)
   return FeatureTaskRuntimePhaseRecorderParts(
     phaseEvidenceDelegate =
@@ -395,7 +399,7 @@ private class FeatureTaskRuntimePhaseEvidenceApiDelegate(
   private val evidence =
     FeatureTaskRuntimePhaseEvidenceRecorder(
       database,
-      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator),
+      FeatureTaskRuntimeWorkflowPersistence(database, workflowSnapshotValidator, wireArtifactValidator),
       wireArtifactValidator,
       clock,
     )

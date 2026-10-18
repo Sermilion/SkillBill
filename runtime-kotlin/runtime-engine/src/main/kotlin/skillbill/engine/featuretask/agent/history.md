@@ -1,5 +1,75 @@
 # featuretask runtime boundary history
 
+## [2026-10-16] SKILL-428 subtask 3 - Count CI-confirmed failed repairs
+Areas: runtime-engine featuretask and goalrunner monitoring, runtime-domain taskruntime, runtime-ports Git and PR identity, runtime-infra workflow, runtime-cli reporting, authored monitor guidance
+- Count each distinct completed, changed and pushed repair commit once after CI fails on its matching PR head. Initial failures and merge conflicts start uncharged repair; repeated polls, jobs and changed failure causes do not reset or multiply the count.
+- Observe the third published repair until CI settles before the cap stops another CI repair. Pending or stale observations, setup retries, incomplete repairs and failed pushes consume no failed-repair attempt.
+- MonitorRepairAccounting and its producer-evidence helpers are reusable. Live qualification joins accepted completion, attributed source paths or new merge ancestry, pushed publication and matching failed CI; FeatureTaskRuntimeRunTransitionOwner retains coupled mutations.
+- Resume uses immutable recorded execution semantics, matched ledger and producer identities, accepted completion, publication records and Git evidence. Replaced current repair manifests do not erase earlier qualified failures; narration never authorizes accounting.
+- Standalone monitor, goal monitor and phase-pr share the accounting. Reports distinguish launched work, publication, pending checks and confirmed failures, with retained failed commits and available check links at the cap.
+- Unchanged publication uses the existing blocked settlement without spending an attempt. Missing or contradictory evidence remains unknown with diagnostics and existing recovery behavior; branch, publication and local-check ownership stay intact.
+- No monitor schema, receipt, mandatory field, migration or block category was added. Operator-approved installed compatibility prerequisites, including schema version 58, remain outside this subtask's feature comparison.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented for S3-1 through S3-7; parent-feature completion remains outside this subtask.
+
+## [2026-10-16] SKILL-428 subtask 2 - Reuse a working validation environment
+Areas: runtime-engine featuretask slot/qualitygate, docs/runtime-command-guidance.md
+- Shared validation and monitor-repair guidance reads repository instructions and CI/setup scripts before choosing a host or container, then checks tools, writable home/cache/temp paths and required display support before expensive checks.
+- Keep permitted setup, caches and discovery context within the invocation. Revisit setup after relevant requirements change and run every required local check for each repair candidate, preserving clean and cache-bypass requirements.
+- The existing shared validation briefing remains the reusable instruction owner. Repository guidance records the missing Git/Python, writable Java user.home/.skiko and Linux Xvfb examples against current CI setup.
+- Setup retries use existing prose and recovery behavior. Instructions forbid automatic package installs, shared-daemon shutdown, unrelated job edits and another worktree's mutable state.
+- No breaking contract change, profile, schema, service or additional blocking gate. Setup reuse does not reuse a previous candidate's passing result; CI repair accounting belongs to subtask 3.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for S2-1 through S2-5; parent-feature completion remains outside this subtask.
+
+## [2026-10-16] SKILL-428 subtask 1 - Explain CI waits through existing progress
+Areas: runtime-engine featuretask monitor/phaserun and goalrunner monitoring, runtime-cli progress/phase output, runtime-infra launcher activity, skills/skill-bill/content.md, docs/runtime-command-guidance.md
+- CI waiting updates use the existing CiStillRunning route every 30 seconds and when pending check names change, including while checks have not registered.
+- Progress carries the observed PR URL and up to eight pending check records. Names and links are bounded; links omit user info, query parameters and fragments. Invalid or oversized watcher links are omitted.
+- Standalone CLI/status and goal output forward waiting details and repair activity. Status describes bounded pending-check sample changes without claiming that a disappearing check passed.
+- Existing progress events, activity callbacks and goal heartbeat records carry intermediate observations. reusable
+- Monitor guidance uses natural prose, names available evidence and the next useful event, and leaves unavailable runner or commit details unknown without administrative API access.
+- Child liveness does not establish source progress; passing local checks do not establish remote CI success. CI verdicts, deadlines, repair budgets and publication ownership retain their existing meaning.
+- Limits: optional observations remain unavailable when absent. Environment reuse and revised CI repair accounting belong to later SKILL-428 subtasks; no new schema, status store or prose parser was added.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented for S1-1 through S1-5; this entry does not assert parent-feature completion.
+
+## [2026-10-15] SKILL-426 subtask 3 - Criterion reporting through existing text channels
+Areas: runtime-engine featuretask and work projections, runtime-domain taskruntime, runtime-cli featuretask, desktop-tray details, intellij-plugin presentation/cache, docs/runtime-command-guidance.md
+- Status reads committed accounting for the selected workflow and explains authored criterion identity/text, retained and remaining failures, queue position, latest gap and final source-audit state.
+- CLI status and existing run-report reasons carry criterion context. Shared IDE summaries retain selected-child association; desktop details show the summary during active work alongside phase and quality sections.
+- IntelliJ tooltip, accessibility and popup details combine retained context with poll-failure and stale caveats. The existing sanitized 512-character cache marks abbreviated summaries and preserves context across restart.
+- Detached committed explanations reuse existing report/detail channels without adding transport fields or reader mutation authority. reusable
+- Runtime guidance describes prose findings/plans, focused repair, one failure per cycle, third-failure blocking and retained budgets on final regressions. Source acceptance remains separate from later quality work.
+- Supporting repairs retain ordinary routing without criterion accounting and read committed phase records for final-audit blocks. Consumer regressions cover visible context and stale/cache retention.
+- Limits: missing historical attribution remains unavailable; reporting cannot authorize prospective accounting or incident resume. Transport versions, payload shapes and phase/subtask progress keep their existing meaning.
+Feature flag: N/A
+Acceptance criteria: 6/6 implemented for S3-001 through S3-006; this entry does not assert parent-feature completion.
+
+## [2026-10-14] SKILL-426 subtask 2 - Focused audit execution and final source gate
+Areas: runtime-engine featuretask and goalrunner repair, runtime-domain taskruntime, runtime-contracts, runtime-ports gitops, runtime-infra contracts/workflow, runtime-core DI, runtime-application persistence fixtures, orchestration/contracts
+- Removed the superseded repair-state, audit-result, handoff and adoption schemas, validators, registrations, strict admission and historical tuple reconstruction. This replaces subtask 1's structured-contract and dependency-order design.
+- Audit, planning and repair use existing prose envelopes and normal verdicts. Runtime-selected authored criterion context carries retained failures, remaining allowance and latest readable gap; ambiguous reports receive read-only clarification.
+- Live repair reserves before mutation. Acquired-owner transactions couple accounting with phase records, ledger, implementation attempts and advancement; committed acknowledgements refresh memory before publication. reusable
+- Serial routing retains focus through planning, repair and targeted verification, counts unsuccessful cycles once, and blocks at three failures. Success, restart and regression retain earlier failures; shared edits do not skip other criteria.
+- Review and resumed source completion require a final full audit bound to the current source. Failed final audits trigger focused regression checks; projection recovery copies committed accounting without replaying outcomes. reusable
+- Historical aggregate attempts remain unchanged and cannot supply per-criterion authorization. Missing attribution refuses prospective accounting without an explicit operator decision; source acceptance leaves quality obligations to their owning phases.
+- Regression coverage includes focused routing, source-fingerprint refusal, retained-budget reopening, replay, rollback, stale ownership and projection recovery. Live third-failure launcher coverage remains incomplete.
+Feature flag: N/A
+Acceptance criteria: 7/8 implemented in source from the current diff; S2-008 remains partial. This entry does not assert a new audit verdict, executed quality evidence or parent-feature completion.
+
+## [2026-10-14] SKILL-426 subtask 1 - Durable serial repair admission and transactions
+Areas: runtime-domain taskruntime, runtime-engine featuretask and goalrunner repair, runtime-contracts, runtime-ports, runtime-infra contracts/SQLite/workflow, runtime-core DI, orchestration/contracts, runtime-application persistence fixtures
+- Typed admission retains authored criterion identities and text, separates source disposition from validation obligations, and orders unresolved criteria by dependencies with spec-ordinal ties. Composite criteria keep one identity and budget.
+- Pure transitions permit one current criterion and reservation, retain unsuccessful totals through success and restart, cap failures at three per criterion, and require final-full evidence for completion or reopening.
+- Acquired-worker fencing couples serial changes with phase, ledger, attempt and workflow records in one required transaction. Callers receive accepted facts after commit; identical replay preserves counters and evidence. reusable
+- Strict artifact schemas, codecs, validators and typed failures govern repair state, audit results, handoffs and adoption. Typed hydration distinguishes retained state, proven fresh discovery and legacy-adoption-required absence. reusable
+- Legacy adoption checks nine captured historical composition/revision tuples, physical stop and pristine evidence. Separate provenance retains original descriptors and supported phase-output 0.6 bytes without inventing historical per-criterion attempts.
+- Workflow-scoped projection locks protect retained revision checks and atomic replacement. Older or conflicting revisions refuse; malformed-cache recovery emits a diagnostic. Projection-only recovery regenerates committed state without replaying mutations. reusable
+- Limits: revision-4 activation, execution routing, startup/resume consumption, focused handoff delivery and final success publication belong to subtask 2. Reporting belongs to subtask 3. Unsupported repaired or ambiguously stopped legacy workflows refuse adoption.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented in source at the callable S1 boundary; this entry does not assert fresh runtime audit acceptance or parent-feature completion.
+
 ## [2026-10-10] SKILL-415 subtask 1 - Review-fallback-only catalogs are unrouted for build
 Areas: runtime-engine featuretask (lifecycle/execution, validation, runner, lifecycle/remediation), runtime-engine goalrunner (launch, repair), featuretask slot and validation tests
 - `ValidationGateResolver` returns an unrouted absence (null pack slug) when the dominant pack is the review fallback with no `validation_gate`. A concrete pack without a gate (kotlin, kmp) still resolves as selected-but-missing, so the SKILL-360 refusal stands.

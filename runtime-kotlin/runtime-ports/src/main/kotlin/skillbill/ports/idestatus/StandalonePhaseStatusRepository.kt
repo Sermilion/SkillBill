@@ -2,6 +2,8 @@ package skillbill.ports.idestatus
 
 import skillbill.ports.idestatus.model.IdeStatusWorkflowExecution
 import skillbill.ports.idestatus.model.IdeStatusWorkflowRegistration
+import skillbill.ports.idestatus.model.StandaloneEligiblePage
+import skillbill.ports.idestatus.model.StandalonePhaseExecutionAnchor
 import skillbill.ports.idestatus.model.StandalonePhaseExecutionQuery
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRecord
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
@@ -18,13 +20,10 @@ interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepositor
 
   fun readEligible(
     repositoryIdentity: String,
-    branchCorrelation: String,
+    branchCorrelation: String?,
     now: Instant,
-  ): List<StandalonePhaseStatusRecord>
-
-  fun readBoardCandidates(
-    finishedFrom: Instant,
-    finishedThrough: Instant,
+    page: StandaloneEligiblePage = StandaloneEligiblePage(),
+    monitorRepositoryIdentity: String = repositoryIdentity,
   ): List<StandalonePhaseStatusRecord>
 
   fun readPhaseExecutions(query: StandalonePhaseExecutionQuery): List<StandalonePhaseStatusRecord>
@@ -34,6 +33,7 @@ interface StandalonePhaseStatusRepository : StandalonePhaseCancellationRepositor
     startedThrough: Instant,
     offset: Int,
     limit: Int,
+    after: StandalonePhaseExecutionAnchor? = null,
   ): List<IdeStatusWorkflowExecution>
 
   fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord?

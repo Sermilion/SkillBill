@@ -7,11 +7,13 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
+import skillbill.engine.featuretask.model.audit.AcceptanceCriterionRepairStatusRead
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDecomposeTerminalStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeDegradedDiagnosticStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
+import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -23,25 +25,56 @@ import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairMode
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
+import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
+import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
+
+private const val MAX_INLINE_CRITERION_ALIAS = 32
+private const val PRE_CONTRACT_REPAIR_EXPLANATION =
+  "Acceptance repair state predates per-criterion repair and cannot resume; abandon this run or reset its subtask"
 
 @Inject
 class FeatureTaskRuntimeStatusService(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
+  private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
 ) {
   internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
   fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
-    val records = recorder.loadPhaseRecords(request.workflowId) ?: return null
+    val records = recorder.loadPhaseRecords(request.workflowId)?.withoutPlanSubtaskUnitRecords() ?: return null
     val decomposeTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
     val ledger = statusPhaseHistory(recorder.phaseQuery, request.workflowId, records, history)
     return buildStatusProjection(request, records, decomposeTerminal, ledger)
+  }
+
+  fun phasePage(
+    workflowId: String,
+    afterPhaseId: String?,
+    limit: Int,
+    offset: Int = 0,
+  ): FeatureTaskRuntimePhasePage? {
+    val projection = status(FeatureTaskRuntimeStatusRequest(workflowId)) ?: return null
+    val phaseIds = projection.phases.map { it.phaseId }
+    val start =
+      if (afterPhaseId == null) {
+        offset.coerceIn(0, phaseIds.size)
+      } else {
+        phaseIds.indexOf(afterPhaseId).let { if (it < 0) phaseIds.size else it + 1 }
+      }
+    val end = minOf(start + limit, phaseIds.size)
+    return FeatureTaskRuntimePhasePage(
+      status = projection.copy(phases = projection.phases.subList(start, end)),
+      phaseIds = phaseIds,
+      hasMore = end < phaseIds.size,
+    )
   }
 
   fun ledgerBlockedPhaseIds(
@@ -156,8 +189,69 @@ class FeatureTaskRuntimeStatusService(
         ),
       degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
       operatorDecisionPause = operatorDecisionPause(parts.records),
+      criterionExplanation =
+        when (val repair = workflowPersistence.readAcceptanceCriterionRepairStatus(request.workflowId)) {
+          null -> null
+          is AcceptanceCriterionRepairStatusRead.Current -> acceptanceCriterionRepairExplanation(repair.state)
+          AcceptanceCriterionRepairStatusRead.PreContract -> PRE_CONTRACT_REPAIR_EXPLANATION
+        },
     )
   }
+
+  private fun acceptanceCriterionRepairExplanation(state: AcceptanceCriterionRepairState): String {
+    val current = state.currentCriterionRef?.let { ref -> state.criteria.firstOrNull { it.canonicalRef == ref } }
+    val prefix =
+      listOfNotNull(
+        current?.let { criterionBudgetExplanation(state, it.canonicalRef, it.originalAlias) },
+        criterionRepairStageExplanation(state),
+        "Source acceptance is separate from later tests, build, and project-quality checks",
+      ).joinToString("; ")
+    val gap = current?.evidenceRef?.takeUnless { it == state.specDigest }
+    val detail =
+      listOfNotNull(
+        current?.originalAlias?.takeIf { it.length > MAX_INLINE_CRITERION_ALIAS }?.let { "Authored alias: $it" },
+        gap?.let { "Latest gap: $it" },
+        current?.originalText,
+        state.pendingClarificationQuestion?.let { "Clarification question: $it" },
+      )
+    return listOfNotNull(prefix, detail.takeIf { it.isNotEmpty() }?.joinToString(". ")).joinToString(". ")
+  }
+
+  private fun criterionBudgetExplanation(
+    state: AcceptanceCriterionRepairState,
+    criterionRef: String,
+    originalAlias: String?,
+  ): String {
+    val failures = state.unsuccessfulTotals.getOrDefault(criterionRef, 0)
+    val remaining = (AcceptanceCriterionRepairState.MAX_UNSUCCESSFUL_REPAIR_OUTCOMES - failures).coerceAtLeast(0)
+    val authoredQueue =
+      state.criteria
+        .filter { it.canonicalRef in state.pendingAuditRefs || it.canonicalRef in state.unresolvedQueue }
+        .sortedBy { it.ordinal }
+    val queuePosition = authoredQueue.indexOfFirst { it.canonicalRef == criterionRef }.takeIf { it >= 0 }?.plus(1)
+    val alias = originalAlias?.takeIf { it.length <= MAX_INLINE_CRITERION_ALIAS }
+    return listOfNotNull(
+      "Criterion $criterionRef${alias?.let { " ($it)" }.orEmpty()}",
+      "$failures failures used",
+      "$remaining failures remaining",
+      queuePosition?.let { "queue position $it of ${authoredQueue.size}" },
+    ).joinToString("; ")
+  }
+
+  private fun criterionRepairStageExplanation(state: AcceptanceCriterionRepairState): String =
+    if (state.mode == AcceptanceCriterionRepairMode.INITIAL_DISCOVERY) {
+      "Initial full source discovery"
+    } else {
+      when (state.stage) {
+        AcceptanceCriterionRepairStage.DISCOVERY_ADMITTED -> "Focused source assessment selected"
+        AcceptanceCriterionRepairStage.READ_ONLY_AUDIT_REQUIRED -> "Read-only source audit or clarification required"
+        AcceptanceCriterionRepairStage.REPAIR_RESERVED -> "Focused repair cycle reserved"
+        AcceptanceCriterionRepairStage.REPAIR_COMPLETED_AWAITING_TARGETED_VERIFICATION ->
+          "Repair completed; targeted verification required"
+        AcceptanceCriterionRepairStage.ACCEPTED -> "Every acceptance criterion accepted; source acceptance recorded"
+        AcceptanceCriterionRepairStage.BUDGET_BLOCKED -> "Criterion exhausted; source repair cannot advance"
+      }
+    }
 
   private fun gateRunCountFor(
     request: FeatureTaskRuntimeStatusRequest,
@@ -199,6 +293,12 @@ class FeatureTaskRuntimeStatusService(
       )
     }
 }
+
+data class FeatureTaskRuntimePhasePage(
+  val status: FeatureTaskRuntimeStatusProjection,
+  val phaseIds: List<String>,
+  val hasMore: Boolean,
+)
 
 private data class StatusProjectionParts(
   val request: FeatureTaskRuntimeStatusRequest,

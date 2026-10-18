@@ -168,6 +168,45 @@ class IdeStatusServiceGoalProjectionTest {
   }
 
   @Test
+  fun `executing child phase wins over missing planning checkpoints in status board and detail`() {
+    val fixture = gitRepoFixture("ide-status-child-phase-with-missing-plans")
+    val identity = testGoalRepositoryIdentity(fixture)
+    val priorPhases = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.takeWhile { it != "audit" }
+    val records =
+      priorPhases.map { it to phaseRecordWire(it, "completed", null) } +
+        ("audit" to phaseRecordWire("audit", "running", "gpt-6-luna"))
+    val service =
+      ideStatusService(
+        goalWithLaunchedChildDatabase(
+          identity,
+          ideStatusObservedAt.minusSeconds(300),
+          childArtifactsJson = phaseRecordsArtifactsJson(*records.toTypedArray()),
+          childCurrentStep = "audit",
+        ),
+        manifestStore =
+          StubGoalManifestStore(
+            goalManifestState(fixture, identity, childWorkflowId = "w-child"),
+            planning = planningSnapshot(GoalPlanningStatusState.PREPLANNED).copy(plannedSubtaskCount = 0),
+            lease = liveLease(),
+          ),
+      )
+
+    val status = service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+    val board = service.board(WorkBoardRequest(observedAt = ideStatusObservedAt))
+    val detail = requireNotNull(service.detail(WorkDetailRequest("goal-1", observedAt = ideStatusObservedAt)).item)
+
+    listOf(status.snapshot, board.items.single { it.snapshot.workflowId == "goal-1" }.snapshot, detail.snapshot)
+      .forEach { snapshot ->
+        assertEquals(IdeStatusLifecycleState.ACTIVE, snapshot.lifecycleState)
+        assertEquals("audit", snapshot.currentStep.id)
+        assertEquals("audit", snapshot.currentStep.label)
+        assertEquals("Goal SKILL-148 is active on audit.", snapshot.summary)
+        assertEquals(0, snapshot.planning?.plannedSubtaskCount)
+        assertEquals("audit", snapshot.currentPhaseExecution?.phaseId)
+      }
+  }
+
+  @Test
   fun `mid-wave goal passes every planning subtask and the single id through to the wire`() {
     val fixture = gitRepoFixture("ide-status-goal-planning-wave")
     val identity = testGoalRepositoryIdentity(fixture)

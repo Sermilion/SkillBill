@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCeremonyScaling
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
@@ -11,7 +12,10 @@ const val PHASE_PROMPT_TEMPLATE_INDENT = "      "
 
 val forwardPhaseOrder: String =
   FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-    .filterNot { it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds }
+    .filterNot {
+      it in FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds ||
+        PhaseSlot.slotForStep(it) == PhaseSlot.INTAKE
+    }
     .joinToString(" -> ")
 
 fun operatorBlockRetryDirective(

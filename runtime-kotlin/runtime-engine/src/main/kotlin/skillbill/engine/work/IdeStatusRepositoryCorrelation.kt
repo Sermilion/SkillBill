@@ -1,10 +1,14 @@
 package skillbill.engine.work
 
+import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkItem
-import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Path
 
 class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
@@ -49,76 +53,54 @@ class IdeStatusRepositoryCorrelation(
       return registration.repositoryIdentity == repositoryIdentity
     }
     val issueKey = item.issueKey?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return when (verifyIssueRepositoryCorrelation(issueKey)) {
-      VerifyRepoCorrelation.SAME_REPO -> true
-      VerifyRepoCorrelation.OTHER_REPO -> false
-      VerifyRepoCorrelation.UNKNOWN -> null
-    }
-  }
-
-  private fun verifyIssueRepositoryCorrelation(issueKey: String): VerifyRepoCorrelation {
     val normalized = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
-    var sawSameRepo = false
-    var sawOtherRepo = false
-    for (other in unitOfWork.workList.list(limit = null).items) {
-      if (other.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) != normalized) continue
-      when (correlateSameIssueWork(other, normalized)) {
-        VerifyRepoCorrelation.SAME_REPO -> sawSameRepo = true
-        VerifyRepoCorrelation.OTHER_REPO -> sawOtherRepo = true
-        VerifyRepoCorrelation.UNKNOWN -> Unit
-      }
-    }
-    return when {
-      sawSameRepo -> VerifyRepoCorrelation.SAME_REPO
-      sawOtherRepo -> VerifyRepoCorrelation.OTHER_REPO
-      else -> VerifyRepoCorrelation.UNKNOWN
-    }
-  }
-
-  private fun correlateSameIssueWork(
-    other: WorkItem,
-    normalizedIssueKey: String,
-  ): VerifyRepoCorrelation =
-    when (other.workflowKind) {
-      WorkItemKind.FEATURE_TASK_PROSE,
-      WorkItemKind.FEATURE_TASK_RUNTIME,
-      -> {
-        val identity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(other.workflowId)
-        when {
-          identity == null -> VerifyRepoCorrelation.UNKNOWN
-          identity.repositoryIdentity == repositoryIdentity -> VerifyRepoCorrelation.SAME_REPO
-          else -> VerifyRepoCorrelation.OTHER_REPO
-        }
-      }
-      WorkItemKind.FEATURE_GOAL -> correlateGoalForVerify(other.workflowId, normalizedIssueKey)
-      WorkItemKind.FEATURE_VERIFY -> VerifyRepoCorrelation.UNKNOWN
-    }
-
-  private fun correlateGoalForVerify(
-    workflowId: String,
-    normalizedIssueKey: String,
-  ): VerifyRepoCorrelation {
-    val bound = unitOfWork.goalRunnerControls.controlState(workflowId).repositoryIdentity
-    return when {
-      bound == repositoryIdentity -> VerifyRepoCorrelation.SAME_REPO
-      bound == null -> {
-        val childrenHere =
-          unitOfWork.workflowStates
-            .findGoalChildFeatureTaskCandidates(normalizedIssueKey, repositoryIdentity)
-        val childCountAnywhere = unitOfWork.workflowStates.countGoalChildIdentities(normalizedIssueKey)
-        when {
-          childrenHere.isNotEmpty() -> VerifyRepoCorrelation.SAME_REPO
-          childCountAnywhere > 0 -> VerifyRepoCorrelation.OTHER_REPO
-          else -> VerifyRepoCorrelation.UNKNOWN
-        }
-      }
-      else -> VerifyRepoCorrelation.OTHER_REPO
+    return when (val lookup = unitOfWork.workList.repositoryIdentityForIssue(normalized, item.workflowId)) {
+      IssueRepositoryIdentityLookup.Missing -> null
+      is IssueRepositoryIdentityLookup.Unique -> lookup.repositoryIdentity == repositoryIdentity
+      is IssueRepositoryIdentityLookup.Ambiguous -> repositoryIdentity in lookup.repositoryIdentities
     }
   }
 }
 
-private enum class VerifyRepoCorrelation {
-  SAME_REPO,
-  OTHER_REPO,
-  UNKNOWN,
+internal fun resolveRepositoryIdentity(
+  repoRootArg: String,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+): IdeStatusRepositoryResolution {
+  val resolvedStart =
+    runCatching {
+      repositoryEnclosingRootPort.canonicalPath(Path.of(repoRootArg))
+    }.getOrNull()
+      ?: return IdeStatusRepositoryResolution.Invalid("Repository root cannot be resolved: $repoRootArg")
+  val gitRoot =
+    findGitRoot(resolvedStart, repositoryEnclosingRootPort)
+      ?: return IdeStatusRepositoryResolution.Invalid("Path is not inside a Git repository: $repoRootArg")
+  val canonicalGitRoot = repositoryEnclosingRootPort.canonicalPath(gitRoot)
+  val identity = goalRepositoryIdentity(canonicalGitRoot, repositoryEnclosingRootPort)
+  return if (
+    identity.isBlank() ||
+    !identity.startsWith(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
+  ) {
+    IdeStatusRepositoryResolution.Missing(
+      "Could not form canonical repository identity for: $repoRootArg",
+    )
+  } else {
+    val primaryRoot = repositoryEnclosingRootPort.primaryRepositoryRoot(canonicalGitRoot)
+    IdeStatusRepositoryResolution.Ok(
+      identity = identity,
+      repoRoot = canonicalGitRoot,
+      monitorIdentity = goalRepositoryIdentity(primaryRoot, repositoryEnclosingRootPort),
+    )
+  }
+}
+
+private fun findGitRoot(
+  start: Path,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+): Path? {
+  var candidate: Path? = start
+  while (candidate != null) {
+    if (repositoryEnclosingRootPort.optionalRealPath(candidate.resolve(".git")) != null) return candidate
+    candidate = candidate.parent
+  }
+  return null
 }

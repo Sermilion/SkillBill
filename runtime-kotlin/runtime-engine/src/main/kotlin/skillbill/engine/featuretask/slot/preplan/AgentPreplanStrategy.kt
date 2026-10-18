@@ -48,7 +48,7 @@ class AgentPreplanStrategy : PhaseStrategy() {
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).preplanCeremony.promptLabel}. Keep the gate real: identify " +
           "concrete scope, affected boundaries, risks, and unknowns at the requested depth.",
-      stepContext = if (inputs.suppressDecomposition) "" else featureSpecIntake,
+      stepContext = featureSpecIntake,
     )
 
   override fun runStep(

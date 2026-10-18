@@ -13,11 +13,14 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.opus.DelegatedReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.opus.InlineReviewOpus55Strategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.intake.RuntimeIntakeStrategy
 import skillbill.engine.featuretask.slot.monitor.MonitorStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorPublicationStrategy
+import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanOpus55Strategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutOpus55Strategy
-import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutOpus55Strategy
+import skillbill.engine.featuretask.slot.plan.PlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateOpus55Strategy
@@ -31,6 +34,8 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN_SUBTASKS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
@@ -77,9 +82,9 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.STANDALONE,
           SkeletonDefinition.GOAL_CHILD,
           SkeletonDefinition.PLAN,
-          SkeletonDefinition.GOAL_PLANNING,
           SkeletonDefinition.PR,
           SkeletonDefinition.MONITOR,
+          SkeletonDefinition.STANDALONE_MONITOR,
         ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
           strategies.selectedStepIds(facts).forEach { step ->
@@ -94,9 +99,11 @@ class RuntimeFeatureTaskSlotProvidesTest {
   fun `plan and pr select the existing planning and publishing strategies`() {
     val expected =
       mapOf(
-        SkeletonDefinition.PLAN to setOf(AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
+        SkeletonDefinition.PLAN to setOf(RuntimeIntakeStrategy.ID, AgentPreplanStrategy.ID, PlanFanOutStrategy.ID),
         SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID, MonitorStrategy.ID),
         SkeletonDefinition.MONITOR to setOf(RuntimeCommitStrategy.ID, MonitorStrategy.ID),
+        SkeletonDefinition.STANDALONE_MONITOR to
+          setOf(StandaloneMonitorPublicationStrategy.ID, StandaloneMonitorStrategy.ID),
       )
     expected.forEach { (definition, strategyIds) ->
       val facts = PhaseStrategySelectionFacts(definition, emptySet())
@@ -109,19 +116,29 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `goal planning runs the shared preplan and fans the plan out over the agent plan`() {
-    val facts = PhaseStrategySelectionFacts(SkeletonDefinition.GOAL_PLANNING, emptySet())
+  fun `every skeleton holding the plan slot binds the one plan fan-out strategy`() {
+    val holders = SkeletonDefinition.entries.filter { PhaseSlot.PLAN in it.slots }
 
     assertEquals(
-      listOf(AgentPreplanStrategy.ID, GoalPlanFanOutStrategy.ID),
-      SkeletonDefinition.GOAL_PLANNING.stepIds.map { step -> strategies.strategyFor(step, facts).strategyId },
+      setOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.GOAL_CHILD, SkeletonDefinition.PLAN),
+      holders.toSet(),
     )
+    holders.forEach { definition ->
+      CodeReviewExecutionMode.entries.forEach { mode ->
+        val facts = PhaseStrategySelectionFacts(definition, setOf(mode, FeatureTaskRuntimeQualityGateSelection.BUILD))
+        val plan = strategies.strategyFor(PHASE_PLAN, facts)
+        val planSubtasks = strategies.strategyFor(PHASE_PLAN_SUBTASKS, facts)
+
+        assertEquals(PlanFanOutStrategy.ID, plan.strategyId, definition.id)
+        assertEquals(PlanFanOutStrategy.ID, planSubtasks.strategyId, definition.id)
+      }
+    }
     assertEquals(
       listOf(
         AgentPlanStrategy.ID,
         AgentPlanOpus55Strategy.ID,
-        GoalPlanFanOutStrategy.ID,
-        GoalPlanFanOutOpus55Strategy.ID,
+        PlanFanOutStrategy.ID,
+        PlanFanOutOpus55Strategy.ID,
       ),
       strategies.registry.strategies.filter { it.slot == PhaseSlot.PLAN }.map { it.strategyId },
     )
