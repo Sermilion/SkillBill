@@ -23,6 +23,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
@@ -70,7 +71,11 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       strategies.executionPlan(
         PhaseStrategySelectionFacts(
           definition,
-          setOfNotNull(reviewMode, plannedQualityGate(qualityGate, inputs)),
+          setOfNotNull(
+            reviewMode,
+            plannedQualityGate(qualityGate, inputs),
+            request.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
+          ),
           request.stepLaunchAssignments,
         ),
       )

@@ -43,8 +43,18 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 
 internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOperations {
-  override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult {
-    val head = runGitCommand(repoRoot, "rev-parse", "HEAD")
+  override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
+    worktreeDigest(repoRoot, "head", "HEAD")
+
+  override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
+    worktreeDigest(repoRoot, "head_tree", "HEAD^{tree}")
+
+  private fun worktreeDigest(
+    repoRoot: Path,
+    anchorLabel: String,
+    anchorRevision: String,
+  ): WorkflowGitOperationResult {
+    val head = runGitCommand(repoRoot, "rev-parse", anchorRevision)
     val staged = runGitCommand(repoRoot, "diff", "--binary", "--cached")
     val unstaged = runGitCommand(repoRoot, "diff", "--binary")
     val untracked = runGitCommand(repoRoot, "ls-files", "--others", "--exclude-standard", "-z")
@@ -52,7 +62,7 @@ internal object GitRepositoryFingerprintOperations : RepositoryFingerprintGitOpe
     if (failure != null) return failure
     return runCatching {
       val digest = newSha256Digest()
-      UntrackedFingerprintDigest.digestPart(digest, "head", head.value.orEmpty().toByteArray())
+      UntrackedFingerprintDigest.digestPart(digest, anchorLabel, head.value.orEmpty().toByteArray())
       UntrackedFingerprintDigest.digestPart(digest, "staged", staged.value.orEmpty().toByteArray())
       UntrackedFingerprintDigest.digestPart(digest, "unstaged", unstaged.value.orEmpty().toByteArray())
       val root = repoRoot.normalize()

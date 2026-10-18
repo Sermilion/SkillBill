@@ -22,7 +22,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionResult
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.declaration
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,7 +60,7 @@ class AmbientInputsAndLoudFailSeamsTest {
                 resolvedAgentId = "codex",
               )
           ),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         stepVerdictRule = { stepId ->
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
@@ -101,7 +103,7 @@ class AmbientInputsAndLoudFailSeamsTest {
                 settledAuditSatisfiedRecord(),
               ),
           ),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -136,7 +138,7 @@ class AmbientInputsAndLoudFailSeamsTest {
                 auditRemainingAcOutput("AC-007 revision editor is still unresolved."),
               ),
           ),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         stepVerdictRule = { stepId ->
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
@@ -153,7 +155,7 @@ class AmbientInputsAndLoudFailSeamsTest {
     )
     val transition =
       FeatureTaskRuntimeTransitionFunction.nextTransition(
-        declaration = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        declaration = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         currentPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
         verdict = FeatureTaskRuntimeVerdict.ADVANCE,
         edgeIterationCount = 0,
@@ -185,7 +187,7 @@ class AmbientInputsAndLoudFailSeamsTest {
                 PLAN_OUTPUT,
               ),
           ),
-        transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
+        transitions = SkeletonDefinition.STANDALONE_REVISION_2.declaration(),
         resumeRulesFn = RESUME_RULES,
       )
 

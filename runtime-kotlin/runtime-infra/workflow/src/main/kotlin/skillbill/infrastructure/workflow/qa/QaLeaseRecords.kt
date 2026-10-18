@@ -56,6 +56,8 @@ internal object QaPaths {
 
   fun ownerFile(invocationDirectory: Path): Path = invocationDirectory.resolve("owner.json")
 
+  fun evidencePrefix(invocationId: String): String = ".git/skill-bill/qa/$invocationId/"
+
   fun leaseFile(
     qaRoot: Path,
     deviceFingerprint: String,

@@ -51,6 +51,7 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -206,7 +207,8 @@ class GoalRunnerSubtaskLaunchPrepare(
     val qualityGate =
       priorWorkflowId?.let(outcomeStore::recordedQualityGateSelection)
         ?: GoalRunnerQualityGateSelectionResolver.resolve()
-    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, priorWorkflowId)
+    val qaSelection = request.childQaSelection
+    val executionPlan = childExecutionPlan(request, reviewMode, qualityGate, qaSelection, priorWorkflowId)
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
@@ -238,6 +240,7 @@ class GoalRunnerSubtaskLaunchPrepare(
               ),
             planningHydration = planning.hydrationFor(subtaskId),
             executionPlan = executionPlan,
+            qaSelection = qaSelection,
             operatorResumePhaseId =
               (
                 subtask.lastResumableStep?.takeIf(String::isNotBlank)
@@ -310,6 +313,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     request: GoalRunnerRunRequest,
     reviewMode: CodeReviewExecutionMode,
     qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+    qaSelection: FeatureTaskRuntimeQaSelection,
     priorWorkflowId: String?,
   ): ValidatedFeatureTaskRuntimeExecutionPlan {
     val assignedQualityGate =
@@ -320,6 +324,7 @@ class GoalRunnerSubtaskLaunchPrepare(
         definition = SkeletonDefinition.GOAL_CHILD,
         reviewMode = reviewMode,
         qualityGate = qualityGate,
+        qaSelection = qaSelection,
         validationDepth = ValidationDepth.FULL,
         timeout = request.timeout,
         workflowId = priorWorkflowId,
@@ -330,7 +335,7 @@ class GoalRunnerSubtaskLaunchPrepare(
             facts =
               PhaseStrategySelectionFacts(
                 SkeletonDefinition.GOAL_CHILD,
-                setOfNotNull(reviewMode, assignedQualityGate),
+                setOfNotNull(reviewMode, assignedQualityGate, qaSelection),
               ),
             inputs =
               StepLaunchAssignmentInputs(

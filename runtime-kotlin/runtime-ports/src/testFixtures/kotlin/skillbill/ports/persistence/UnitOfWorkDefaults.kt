@@ -5,6 +5,8 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.UnavailableRejectedOutputDiagnosticRepository
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.UnavailableFeatureTaskPhaseSettlementRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.UnavailableUnaddressedFindingsRepository
@@ -83,6 +85,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableRejectedOutputDiagnosticPermissions
   open override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     UnavailableFeatureTaskPhaseSettlementRepository
+  open override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = InMemoryFeatureTaskQaOutcomeRepository()
   open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
 
   override fun purgeDecomposedGoal(target: GoalPurgeTarget): GoalPurgeTableCounts = GoalPurgeTableCounts()

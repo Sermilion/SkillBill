@@ -64,7 +64,16 @@ internal class SerialRepairSqliteFixture(
   val execution =
     ExecutionPlanAdmissionFixture(
       database = database,
-      definition = if (archiveMode == "standalone") SkeletonDefinition.STANDALONE else SkeletonDefinition.GOAL_CHILD,
+      definition =
+        if (archiveRevision == null) {
+          if (archiveMode == "standalone") SkeletonDefinition.STANDALONE else SkeletonDefinition.GOAL_CHILD
+        } else {
+          if (archiveMode == "standalone") {
+            SkeletonDefinition.STANDALONE_REVISION_2
+          } else {
+            SkeletonDefinition.GOAL_CHILD_REVISION_2
+          }
+        },
       qualityGate =
         when (archiveMode) {
           "goal-child-build" -> FeatureTaskRuntimeQualityGateSelection.BUILD
@@ -171,6 +180,14 @@ internal class SerialRepairSqliteFixture(
 
   fun owned(block: (AcquiredFeatureTaskRuntimeWorker) -> Unit) =
     coordinator.runOwned(workflowId, execution.inputs, execution.identity(workflowId)) { _, worker -> block(worker) }
+
+  val workflows: FeatureTaskRuntimeWorkflowPersistence
+    get() =
+      FeatureTaskRuntimeWorkflowPersistence(
+        database,
+        WorkflowStateSchemaValidator(),
+        FeatureTaskRuntimeWireArtifactValidator(execution.validator, ContractFeatureTaskRuntimePhaseOutputMigration()),
+      )
 
   fun service(
     db: DatabaseSessionFactory = database,

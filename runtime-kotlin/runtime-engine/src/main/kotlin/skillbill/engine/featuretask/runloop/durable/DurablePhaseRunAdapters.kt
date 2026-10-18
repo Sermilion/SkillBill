@@ -56,6 +56,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.nio.file.Path
@@ -94,17 +95,7 @@ internal class DurablePhaseRunRecords(
     recorder.recordPhaseState(request)
 
   override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
-    when (acceptance?.start(request)) {
-      true -> RequiredPhaseWrite.Acknowledged
-      false ->
-        RequiredPhaseWrite.Rejected(
-          RequiredPhaseWriteKind.START,
-          request.workflowId,
-          request.phaseId,
-          request.attemptCount,
-        )
-      null -> recorder.recordRequiredPhaseStart(request)
-    }
+    acceptance?.start(request) ?: recorder.recordRequiredPhaseStart(request)
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
     acceptance?.complete(request)
@@ -128,6 +119,8 @@ internal class DurablePhaseRunRecords(
 
   override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>? =
     recorder.loadPhaseRecords(workflowId)
+
+  override fun loadQaRepairState(workflowId: String): QaRepairState? = recorder.loadQaRepairState(workflowId)
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     recorder.completeGoalReviewPhase(completion)

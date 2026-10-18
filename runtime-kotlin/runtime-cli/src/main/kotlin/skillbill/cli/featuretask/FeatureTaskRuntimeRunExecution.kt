@@ -39,6 +39,7 @@ class FeatureTaskRuntimeRunExecution(
         timeout = options.maxWallClockMinutes.takeIf { it > 0 }?.minutes,
         requestedCodeReviewMode = options.requestedCodeReviewMode(),
         goalContinuation = prepared.goalContinuation,
+        qaSelection = prepared.qaSelection,
         operatorDecision = prepared.operatorDecision,
         agentAddonSelection = prepared.agentAddonSelection,
         eventSink = runtimeRunEventSink(inputs, options.monitor),

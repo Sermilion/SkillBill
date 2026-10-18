@@ -8,3 +8,9 @@ data class QaWorkspace(
   val receiptPath: Path,
   val evidencePrefix: String,
 )
+
+data class QaReceiptSource(
+  val content: String,
+  val evidencePrefix: String,
+  val receiptReference: String? = null,
+)

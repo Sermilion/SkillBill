@@ -341,6 +341,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       putObject(Keys.DEFINITION).put(Keys.ID, "boundary").put(Keys.SEMANTIC_REVISION, 1)
       putNull(Keys.REVIEW_SELECTION)
       putNull(Keys.QUALITY_GATE_SELECTION)
+      putNull(Keys.QA_SELECTION)
       putObject(Keys.EFFECTIVE_POLICY_SETTINGS)
         .put(Keys.VALIDATION_DEPTH, "full")
         .putNull(Keys.PHASE_TIMEOUT_MILLIS)
@@ -356,6 +357,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
               .put(Keys.VERDICT, "changes_requested").put(Keys.LOOP_ID, "repair")
               .put(Keys.PER_EDGE_CAP, 1).put(Keys.CAP_EXHAUSTION_BEHAVIOR, "BLOCK")
               .put(Keys.CAP_SCOPE, "PER_SUBTASK").putNull(Keys.WARN_AFTER_ITERATIONS)
+              .putNull(Keys.CROSS_SLOT_ALLOWANCE)
           }
         }
         putArray(Keys.ENTRY_GATES).apply {

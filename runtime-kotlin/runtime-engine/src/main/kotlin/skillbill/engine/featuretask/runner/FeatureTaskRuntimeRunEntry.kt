@@ -38,6 +38,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.LaunchEnvironmentKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
@@ -97,6 +98,10 @@ class FeatureTaskRuntimeRunEntry(
         (goalContinuation?.codeReviewMode ?: input.requestedCodeReviewMode)
           ?.let { RuntimeReviewSelection.valueOf(it.name) },
     ) { admittedExecution, acquiredWorker ->
+      val requestedQaSelection = input.qaSelection ?: goalContinuation?.qaSelection
+      if (requestedQaSelection != null && requestedQaSelection != admittedExecution.plan.qaSelection) {
+        return@runOwned changedQaSelectionRefusal(input, acquiredWorker, specPath, admittedExecution)
+      }
       if (input.explicitWorkflowId != null) {
         warnIfResumeAssignmentDiffers(input, admittedExecution)
       }
@@ -129,6 +134,24 @@ class FeatureTaskRuntimeRunEntry(
       )
     }
   }
+
+  private fun changedQaSelectionRefusal(
+    input: FeatureTaskRuntimeRunInput,
+    worker: AcquiredFeatureTaskRuntimeWorker,
+    specPath: Path,
+    admittedExecution: AdmittedFeatureTaskRuntimeExecution,
+  ): FeatureTaskRuntimeRunReport.Blocked =
+    FeatureTaskRuntimeRunReport.Blocked(
+      issueKey = input.issueKey,
+      workflowId = worker.workflowId,
+      featureSize = runInvariantsSource.read(specPath).requireInvariants().featureSize.name,
+      lastIncompletePhase = worker.currentStepId,
+      blockedReason =
+        "Cannot change QA selection on resume; the recorded selection is " +
+          "'${admittedExecution.plan.qaSelection?.wireValue ?: "not composed"}'.",
+      completedPhaseIds = emptyList(),
+      resolvedBranch = null,
+    )
 
   private fun runRequest(
     input: FeatureTaskRuntimeRunInput,
@@ -246,10 +269,15 @@ class FeatureTaskRuntimeRunEntry(
           runInvariantsSource.read(specPath).requireInvariants().codeReviewMode
         }
     val qualityGate = goalContinuation?.qualityGateSelection
+    val qaSelection = input.qaSelection ?: goalContinuation?.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO
     val facts =
       PhaseStrategySelectionFacts(
         definition,
-        setOfNotNull(reviewMode, executionPlans.creationQualityGate(input.repoRoot, qualityGate)),
+        setOfNotNull(
+          reviewMode,
+          executionPlans.creationQualityGate(input.repoRoot, qualityGate),
+          qaSelection,
+        ),
       )
     val opened =
       workflowService.openFeatureTask(
@@ -269,6 +297,7 @@ class FeatureTaskRuntimeRunEntry(
                 definition = definition,
                 reviewMode = reviewMode,
                 qualityGate = qualityGate,
+                qaSelection = qaSelection,
                 validationDepth = goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
                 timeout = input.timeout,
                 stepLaunchAssignments =
@@ -301,7 +330,11 @@ class FeatureTaskRuntimeRunEntry(
     val definition = resolveRunDefinition(input.definition, goalContinuation != null)
     val reviewMode = admittedExecution.reviewMode ?: input.requestedCodeReviewMode
     val qualityGate = admittedExecution.plan.qualityGateSelection
-    val facts = PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate))
+    val facts =
+      PhaseStrategySelectionFacts(
+        definition,
+        setOfNotNull(reviewMode, qualityGate, admittedExecution.plan.qaSelection),
+      )
     val resolved =
       FeatureTaskRuntimeStepLaunchAssignmentFactory.resolve(
         launcher = agentRunLauncher,

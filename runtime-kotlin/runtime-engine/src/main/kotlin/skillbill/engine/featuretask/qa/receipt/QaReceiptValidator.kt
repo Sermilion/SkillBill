@@ -5,6 +5,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QA_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.qa.QaReceiptPayloadKeys
 import skillbill.engine.featuretask.model.execution.QaExpectedIdentity
+import skillbill.engine.featuretask.model.execution.QaPolicy
+import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.error.featuretask.qa.qaReceiptIdentityMismatch
 import skillbill.error.featuretask.qa.qaReceiptUnsupportedClaim
@@ -103,13 +105,25 @@ class QaReceiptValidator(
     receipt: QaReceipt,
     expected: QaExpectedIdentity,
   ) {
-    unsupportedClaim(receipt)?.let { throw qaReceiptUnsupportedClaim(it) }
+    unsupportedClaim(receipt)?.let { unsupported(it) }
+    val flowIds = receipt.flows.map(QaFlow::id)
+    if (flowIds.size != flowIds.toSet().size) {
+      unsupported("flow identifiers must be unique.")
+    }
+    val findingIds = receipt.findings.map(QaFinding::id)
+    if (findingIds.size != findingIds.toSet().size) {
+      unsupported("finding identifiers must be unique.")
+    }
+    val undeclaredAssertion = receipt.assertions.firstOrNull { it.flowId !in flowIds }
+    if (undeclaredAssertion != null) {
+      unsupported("assertion '${undeclaredAssertion.flowId}' references an undeclared flow.")
+    }
     val foreign =
       receipt.findings.flatMap(QaFinding::evidencePaths).firstOrNull { path ->
         !path.startsWith(expected.evidencePrefix) || path.split('/').any { it == ".." }
       }
     if (foreign != null) {
-      throw qaReceiptUnsupportedClaim(
+      unsupported(
         "evidence '$foreign' is outside this run's directory '${expected.evidencePrefix}'.",
       )
     }
@@ -117,13 +131,20 @@ class QaReceiptValidator(
 
   private fun unsupportedClaim(receipt: QaReceipt): String? {
     val exercised = receipt.flows.filter { it.status == QaFlowStatus.EXERCISED }
+    val failedFlows =
+      receipt.assertions.filter { it.outcome == QaAssertionOutcome.FAIL }.map(
+        QaAssertion::flowId,
+      ).toSet()
     val passedFlows =
-      receipt.assertions.filter { it.outcome == QaAssertionOutcome.PASS }.map(QaAssertion::flowId).toSet()
+      receipt.assertions.filter { it.outcome == QaAssertionOutcome.PASS && it.flowId !in failedFlows }
+        .map(QaAssertion::flowId).toSet()
     return when {
       receipt.target?.kind == QaTargetKind.SIMULATOR && exercised.any(QaFlow::hardwareOnly) ->
         "a simulator run cannot exercise a hardware-only flow."
       receipt.verdict == QaVerdict.FINDINGS_OPEN && receipt.findings.isEmpty() ->
         "findings_open needs at least one finding."
+      receipt.assertions.any { it.outcome == QaAssertionOutcome.FAIL } && receipt.findings.isEmpty() ->
+        "failed assertions need a finding with an affected criterion before qa_fix can repair them."
       receipt.verdict != QaVerdict.PASSED -> null
       exercised.none { it.id in passedFlows } ->
         "passed needs at least one exercised flow with a passing assertion."
@@ -133,6 +154,8 @@ class QaReceiptValidator(
       else -> null
     }
   }
+
+  private fun unsupported(reason: String): Nothing = throw qaReceiptUnsupportedClaim(reason)
 
   private fun invalid(reason: String): Nothing = throw invalidQaReceipt(reason)
 

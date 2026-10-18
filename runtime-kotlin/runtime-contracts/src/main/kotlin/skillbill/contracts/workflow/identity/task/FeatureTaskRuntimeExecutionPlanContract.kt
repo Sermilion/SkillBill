@@ -2,9 +2,10 @@ package skillbill.contracts.workflow.identity.task
 
 import skillbill.contracts.SharedPayloadKeys
 
-const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.2"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.3"
 
-const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION: String = "0.1"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION: String = "0.2"
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION: String = "0.1"
 
 object FeatureTaskRuntimeExecutionPlanKeys {
   const val CONTRACT_VERSION: String = "contract_version"
@@ -12,6 +13,7 @@ object FeatureTaskRuntimeExecutionPlanKeys {
   const val SELECTED_STRATEGIES: String = "selected_strategies"
   const val REVIEW_SELECTION: String = "review_selection"
   const val QUALITY_GATE_SELECTION: String = "quality_gate_selection"
+  const val QA_SELECTION: String = "qa_selection"
   const val TRAVERSAL: String = "traversal"
   const val DISPATCH_OWNERSHIP: String = "dispatch_ownership"
   const val STEP_POLICIES: String = "step_policies"
@@ -54,5 +56,6 @@ object FeatureTaskRuntimeExecutionPlanKeys {
   const val CAP_EXHAUSTION_BEHAVIOR: String = "cap_exhaustion_behavior"
   const val CAP_SCOPE: String = "cap_scope"
   const val WARN_AFTER_ITERATIONS: String = "warn_after_iterations"
+  const val CROSS_SLOT_ALLOWANCE: String = "cross_slot_allowance"
   const val REQUIRED_VERDICT: String = "required_verdict"
 }

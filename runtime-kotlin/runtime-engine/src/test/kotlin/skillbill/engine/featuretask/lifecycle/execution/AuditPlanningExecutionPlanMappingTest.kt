@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 class AuditPlanningExecutionPlanMappingTest {
   @Test
   fun `archived audit descriptors map to prose planning for every quality gate`() {
-    val fixture = ExecutionPlanAdmissionFixture()
+    val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)
     listOf("goal-child-build", "goal-child-validate").forEach { mode ->
       listOf(1, 2).forEach { revision ->
         val encoded = ArchivedAuditExecutionPlanFixture.archive(fixture, mode, revision)
@@ -34,7 +34,7 @@ class AuditPlanningExecutionPlanMappingTest {
 
   @Test
   fun `admission retains the original descriptor and all artifacts while binding the mapped plan`() {
-    val fixture = ExecutionPlanAdmissionFixture()
+    val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)
     val repository = InMemoryRuntimeWorkflowRepository()
     val old = fixture.codec.decode(ArchivedAuditExecutionPlanFixture.archive(fixture, "goal-child-validate"))
     val encoded =
@@ -63,7 +63,7 @@ class AuditPlanningExecutionPlanMappingTest {
     val repository = InMemoryRuntimeWorkflowRepository()
     val fixture =
       ExecutionPlanAdmissionFixture(
-        definition = SkeletonDefinition.GOAL_CHILD,
+        definition = SkeletonDefinition.GOAL_CHILD_REVISION_2,
         database = FakeDatabaseSessionFactory(repository),
         qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
       )
@@ -82,7 +82,7 @@ class AuditPlanningExecutionPlanMappingTest {
       resolver.resolveCreation(
         FeatureTaskRuntimeExecutionPlanCreationRequest(
           root,
-          SkeletonDefinition.GOAL_CHILD,
+          SkeletonDefinition.GOAL_CHILD_REVISION_2,
           CodeReviewExecutionMode.INLINE,
           FeatureTaskRuntimeQualityGateSelection.BUILD,
           ValidationDepth.FULL,
@@ -98,7 +98,7 @@ class AuditPlanningExecutionPlanMappingTest {
 
   @Test
   fun `mapping refuses changed audit caps and unrelated policy digests`() {
-    val fixture = ExecutionPlanAdmissionFixture()
+    val fixture = ExecutionPlanAdmissionFixture(definition = SkeletonDefinition.GOAL_CHILD_REVISION_2)
     val old = fixture.codec.decode(ArchivedAuditExecutionPlanFixture.archive(fixture, "goal-child-validate"))
     val changed =
       old.withTraversal(

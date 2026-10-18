@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.qa.receipt
 
+import skillbill.engine.featuretask.model.execution.QaPolicy
+import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.scaffold.model.QaPlatform
 
 enum class QaVerdict(val wireValue: String) {
@@ -11,18 +13,6 @@ enum class QaVerdict(val wireValue: String) {
 
   companion object {
     fun fromWire(value: String?): QaVerdict? = entries.firstOrNull { it.wireValue == value }
-  }
-}
-
-enum class QaPolicy(val wireValue: String) {
-  STANDALONE("standalone"),
-  AUTO("auto"),
-  ON("on"),
-  OFF("off"),
-  ;
-
-  companion object {
-    fun fromWire(value: String?): QaPolicy? = entries.firstOrNull { it.wireValue == value }
   }
 }
 
@@ -64,23 +54,6 @@ enum class QaAssertionOutcome(val wireValue: String) {
 
   companion object {
     fun fromWire(value: String?): QaAssertionOutcome? = entries.firstOrNull { it.wireValue == value }
-  }
-}
-
-enum class QaSkipReason(val wireValue: String) {
-  CAPABILITY_ABSENT("capability_absent"),
-  UNSUPPORTED_TARGET("unsupported_target"),
-  DISABLED_POLICY("disabled_policy"),
-  ISOLATION_UNAVAILABLE("isolation_unavailable"),
-  AMBIGUOUS_TARGET("ambiguous_target"),
-  UNAUTHORIZED_TARGET("unauthorized_target"),
-  OFFLINE_TARGET("offline_target"),
-  DEVICE_CONTENDED("device_contended"),
-  EMPTY_SCOPE("empty_scope"),
-  ;
-
-  companion object {
-    fun fromWire(value: String?): QaSkipReason? = entries.firstOrNull { it.wireValue == value }
   }
 }
 
@@ -136,10 +109,12 @@ data class QaFlow(
 data class QaAssertion(
   val flowId: String,
   val outcome: QaAssertionOutcome,
+  val criteria: List<String> = emptyList(),
 )
 
 data class QaFinding(
   val id: String,
+  val affectedCriteria: List<String> = emptyList(),
   val evidencePaths: List<String>,
 )
 

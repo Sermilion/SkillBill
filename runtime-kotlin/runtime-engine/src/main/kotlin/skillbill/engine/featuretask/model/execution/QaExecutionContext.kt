@@ -7,9 +7,15 @@ import skillbill.scaffold.model.QaPlatform
 data class QaExecutionContext(
   val workspace: QaWorkspace,
   val expected: QaExpectedIdentity,
-  val guidancePath: FileLocation,
-  val platforms: Set<QaPlatform>,
+  val target: QaExecutionTarget,
+  val policy: QaPolicy = QaPolicy.STANDALONE,
 )
+
+sealed interface QaExecutionTarget {
+  data class Supported(val guidancePath: FileLocation, val platforms: Set<QaPlatform>) : QaExecutionTarget
+
+  data class Skipped(val reason: QaSkipReason, val detail: String) : QaExecutionTarget
+}
 
 data class QaExpectedIdentity(
   val headRevision: String,

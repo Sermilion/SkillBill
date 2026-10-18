@@ -62,6 +62,7 @@ import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
 import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
 import skillbill.engine.featuretask.slot.state.PhasePullRequestStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseQaStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRepairReceiptState
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
@@ -82,6 +83,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
@@ -300,6 +302,19 @@ private open class FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
     environment.stepBinding,
 ) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhaseAgentStepBinding
+
+private class FeatureTaskRuntimeRunLoopQaStepBinding(
+  environment: PhaseAttemptLaunchCollaborationScope,
+  run: PhaseRun,
+  fanOutUnitId: Int?,
+  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
+) : FeatureTaskRuntimeRunLoopLaunchingStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
+  PhaseQaStepBinding {
+  override fun qaRepairState(): QaRepairState? {
+    bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
+    return environment.recorder.loadQaRepairState(workflowId)
+  }
+}
 
 private class FeatureTaskRuntimeRunLoopQualityGateStepBinding(
   environment: PhaseAttemptLaunchCollaborationScope,
@@ -1032,6 +1047,8 @@ internal object FeatureTaskRuntimeRunLoopStepBindings {
           fanOutUnitId,
           bindingCoordinator,
         )
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.QA_FINDINGS ->
+        FeatureTaskRuntimeRunLoopQaStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.PLANNING ->
         FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
       else ->

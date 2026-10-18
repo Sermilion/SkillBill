@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairResumeEvidence
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -48,6 +49,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   private val launchOutcomes: FeatureTaskRuntimeLaunchOutcomes,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
   private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
+  private val acceptanceResumeEvidence: AcceptanceCriterionRepairResumeEvidence,
 ) {
   internal fun acceptanceRepairSteps(plan: ResolvedPhaseExecutionPlan): AcceptanceCriterionRepairStepRoles? {
     val audit = plan.selectedStrategies.singleOrNull { it.slot == PhaseSlot.AUDIT } ?: return null
@@ -148,12 +150,23 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
       initialRecords = records,
       transitions = executionPlan.phaseTraversal(),
       durableInitialLedger = ledger,
-      initialRetainedOutputs = history.outputs,
+      initialRetainedOutputs =
+        history.outputs +
+          listOfNotNull(
+            acceptanceResumeEvidence.restore(
+              runRequest,
+              acceptanceRepairSteps(executionPlan),
+              records,
+              ledger,
+            ),
+          ),
       initialMonitorRepairFailures = history.failedRepairs,
       initialMonitorFailureEvidenceUnavailable = history.evidenceUnavailable,
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
       stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
       resumeRulesFn = strategies.resumeRules(executionPlan),
+      workflowId = runRequest.workflowId,
+      initialQaRepairState = recorder.loadQaRepairState(runRequest.workflowId),
     )
   }
 

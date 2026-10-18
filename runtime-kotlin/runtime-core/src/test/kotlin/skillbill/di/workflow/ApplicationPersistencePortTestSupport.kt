@@ -1372,6 +1372,9 @@ internal class FakeWorkflowGitOperations(
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "test-repository-fingerprint")
 
+  override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "test-repository-tree-identity")
+
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

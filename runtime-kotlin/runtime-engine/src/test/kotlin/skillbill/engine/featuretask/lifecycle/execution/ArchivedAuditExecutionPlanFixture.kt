@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import skillbill.contracts.JsonCodec
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStepRecords
@@ -22,10 +22,7 @@ internal object ArchivedAuditExecutionPlanFixture {
     fixture: ExecutionPlanAdmissionFixture,
     mode: String,
   ): ByteArray {
-    val snapshot = resourcePayload("featuretask/slotbaseline/$mode/workflow-snapshot.json")
-    val artifacts = JsonCodec.anyToStringAnyMap(snapshot["artifacts_json"])!!
-    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts)
-    return restoreDigests(fixture, JsonCodec.anyToStringAnyMap(descriptor)!!)
+    return restoreDigests(fixture, resourcePayload("featuretask/audit-mapping-current-$mode.json"))
   }
 
   fun legacyAuditPlan(
@@ -80,9 +77,6 @@ internal object ArchivedAuditExecutionPlanFixture {
         current.reviewSelection,
         current.qualityGateSelection,
         traversal,
-        (current.dispatchStrategyByStep - omitted).mapValues { (_, dispatch) ->
-          if (dispatch.slot == PhaseSlot.AUDIT) dispatch.copy(semanticRevision = revision) else dispatch
-        },
         ResolvedPhaseStepRecords(
           (current.stepPolicyIdentities - omitted).mapValues { (step, identity) ->
             if (step in steps) audit.policyFor(step).semanticIdentity(audit.strategyId, revision, step) else identity
@@ -93,7 +87,8 @@ internal object ArchivedAuditExecutionPlanFixture {
         ),
         current.effectivePolicies,
         current.effectivePolicySettings,
-        current.contractVersion,
+        FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION,
+        current.qaSelection,
       )
     val supportedPolicies = FeatureTaskRuntimeEffectivePolicies.resolve(recorded, fixture.inputs)
     return fixture.codec.encode(recorded.withEffectivePolicies(supportedPolicies))

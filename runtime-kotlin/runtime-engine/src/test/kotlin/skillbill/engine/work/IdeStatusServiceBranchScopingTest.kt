@@ -440,6 +440,7 @@ class IdeStatusServiceBranchScopingTest {
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),
+            "qa" to phaseRecordWire("qa", "completed", null),
             "review" to
               phaseRecordWire(
                 "review",
@@ -489,6 +490,7 @@ class IdeStatusServiceBranchScopingTest {
             "implement" to phaseRecordWire("implement", "completed", null),
             "simplify" to phaseRecordWire("simplify", "completed", null),
             "audit" to phaseRecordWire("audit", "completed", null),
+            "qa" to phaseRecordWire("qa", "completed", null),
             "review" to phaseRecordWire("review", "completed", null),
             "verify_findings" to phaseRecordWire("verify_findings", "completed", null),
           ),

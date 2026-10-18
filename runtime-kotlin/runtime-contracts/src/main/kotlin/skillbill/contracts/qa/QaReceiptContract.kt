@@ -3,6 +3,8 @@ package skillbill.contracts.qa
 import skillbill.contracts.SharedPayloadKeys
 
 const val QA_RECEIPT_CONTRACT_VERSION: String = "0.1"
+const val QA_REPAIR_STATE_CONTRACT_VERSION: String = "0.2"
+const val QA_REPAIR_STATE_PREVIOUS_CONTRACT_VERSION: String = "0.1"
 const val QA_DEVICE_LEASE_CONTRACT_VERSION: String = "0.1"
 
 object QaDeviceLeasePayloadKeys {
@@ -65,4 +67,24 @@ object QaReceiptPayloadKeys {
   const val CLEANUP = "cleanup"
   const val RETAINED_RESOURCES = "retained_resources"
   const val GUIDANCE = "guidance"
+}
+
+object QaRepairStatePayloadKeys {
+  const val CONTRACT_VERSION = SharedPayloadKeys.CONTRACT_VERSION
+  const val SUBTASK_ID = "subtask_id"
+  const val QA_FIX_STEP_ID = "qa_fix_step_id"
+  const val MAX_ATTEMPTS = "max_attempts"
+  const val CONSUMED_ATTEMPTS = "consumed_attempts"
+  const val ATTEMPTS = "attempts"
+  const val ATTEMPT_NUMBER = "attempt_number"
+  const val RECEIPT_TREE_IDENTITY = "receipt_tree_identity"
+  const val CONSUMED_FINDING_IDS = "consumed_finding_ids"
+  const val REPAIR_OUTPUT_REF = "repair_output_ref"
+  const val OUTCOME = "outcome"
+  const val OPEN_FINDINGS = "open_findings"
+  const val ID = "id"
+  const val AFFECTED_CRITERIA = "affected_criteria"
+  const val RECEIPT_REF = "receipt_ref"
+  const val RECEIPT_REFS = "receipt_refs"
+  const val LAST_RECEIPT_TREE_IDENTITY = "last_receipt_tree_identity"
 }

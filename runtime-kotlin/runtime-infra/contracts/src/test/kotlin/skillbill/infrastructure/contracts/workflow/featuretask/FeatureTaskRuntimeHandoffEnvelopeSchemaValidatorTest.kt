@@ -23,6 +23,8 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
   fun `every closed wire artifact kind dispatches to its schema validator`() {
     val expectedErrors =
       mapOf(
+        FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE to
+          "FeatureTaskRuntimeFailureCode.INVALID_QA_REPAIR_STATE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_REPAIR_STATE to
           "FeatureTaskRuntimeFailureCode.INVALID_ACCEPTANCE_CRITERION_REPAIR_STATE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.ACCEPTANCE_CRITERION_AUDIT_RESULT to

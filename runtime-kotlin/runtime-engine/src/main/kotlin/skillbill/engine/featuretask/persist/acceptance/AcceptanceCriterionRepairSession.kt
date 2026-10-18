@@ -24,7 +24,7 @@ internal class AcceptanceCriterionRepairSession(
 
   override fun isRepairStep(phaseId: String): Boolean = phaseId == steps.repair
 
-  fun start(phase: FeatureTaskRuntimePhaseStateRequest): Boolean? = recorder.start(this, phase)
+  fun start(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.start(this, phase)
 
   fun complete(phase: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite? = recorder.complete(this, phase)
 

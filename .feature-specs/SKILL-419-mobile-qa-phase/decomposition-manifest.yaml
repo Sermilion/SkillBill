@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Feature-task qa and qa_fix slot"
   spec_path: ".feature-specs/SKILL-419-mobile-qa-phase/spec_subtask_2_feature_task_qa_slot.md"
-  status: "pending"
+  status: "complete"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261018-185529-tck9"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

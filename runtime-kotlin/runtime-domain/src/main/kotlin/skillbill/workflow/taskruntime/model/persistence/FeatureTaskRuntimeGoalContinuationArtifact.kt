@@ -14,6 +14,7 @@ import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_AR
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 fun DurableWorkflowArtifacts.goalContinuationArtifact(): FeatureTaskRuntimeGoalContinuationArtifact? {
@@ -54,6 +55,7 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
   val codeReviewMode: CodeReviewExecutionMode,
   val validationDepth: ValidationDepth? = null,
   val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val parallelReviewAgent: String? = null,
   val subtaskName: String? = null,
   val agentAddonSelection: AgentAddonSelection = AgentAddonSelection(),
@@ -83,6 +85,7 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
       qualityGateSelection?.let {
         put(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QUALITY_GATE_SELECTION, it.wireValue)
       }
+      qaSelection?.let { put(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QA_SELECTION, it.wireValue) }
       subtaskName?.let { put(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_NAME, it) }
       if (agentAddonSelection.entries.isNotEmpty()) {
         put(
@@ -150,6 +153,11 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
             FeatureTaskRuntimeQualityGateSelection.entries.firstOrNull { it.wireValue == rawValue }
               ?: goalContinuationSchemaError("Goal-continuation artifact quality_gate_selection is invalid.")
           },
+        qaSelection =
+          reader.optionalString(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QA_SELECTION)?.let { rawValue ->
+            FeatureTaskRuntimeQaSelection.entries.firstOrNull { it.wireValue == rawValue }
+              ?: goalContinuationSchemaError("Goal-continuation artifact qa_selection is invalid.")
+          },
         parallelReviewAgent =
           reader.optionalString(
             FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARALLEL_REVIEW_AGENT,
@@ -171,6 +179,7 @@ private val goalContinuationKeys: Set<String> =
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE,
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QUALITY_GATE_SELECTION,
+    FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QA_SELECTION,
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARALLEL_REVIEW_AGENT,
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_NAME,
     FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION,

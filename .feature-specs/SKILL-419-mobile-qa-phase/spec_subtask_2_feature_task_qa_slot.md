@@ -17,7 +17,7 @@ Put the subtask 1 QA strategy into the full run after a satisfied acceptance aud
 - Execution plan contract: `feature-task-runtime-execution-plan.yaml` becomes "0.3" with `qa_selection`, the Kotlin version and key constants update, and the codec decodes "0.2" records with qa_selection absent, meaning "pre-QA composition, QA not composed" (decision D5), never auto.
 - Pre-QA resume (decision D3): the semanticRevision 2 GOAL_CHILD and STANDALONE definitions stay resolvable with their pre-QA slot lists, and new definitions at semanticRevision 3 include QA. The `SkeletonDefinition` lookup supports two revisions per id without `byId` picking the wrong one for new launches. A recorded revision-2 plan resumes on its recorded composition with no qa step; a new launch gets revision 3.
 - If adding a QA policy id, register it in `FeatureTaskRuntimeEffectivePolicies` and in the compatibility policy set.
-- Progress, IDE status, CLI reports, and goal telemetry distinguish attempted, passed, findings, skipped, and incomplete QA, and record each qa_fix attempt, fallback, target substitution, retry, and cleanup failure without credentials or device log bodies.
+- Each full-run QA settlement writes its outcome (attempted, passed, findings, skipped, incomplete), skip or incomplete reason, and consumed qa_fix attempts to the runtime database, and the pull request the goal opens summarizes each subtask's QA outcome. Progress, IDE status, and CLI reports do not display the full-run outcome yet; the stored record is what a later change surfaces. Every fallback, target substitution, retry, and cleanup failure emits a diagnostic record without credentials or device log bodies.
 - `skills/skill-bill/content.md` documents `qa:auto|off` on the full run, its translation to `--qa <value>`, and the usage error when `qa:` reaches a form that does not accept it. `docs/runtime-command-guidance.md` updates the child phase sequence to show audit, optional qa, then review.
 
 ## Acceptance Criteria
@@ -30,7 +30,7 @@ Put the subtask 1 QA strategy into the full run after a satisfied acceptance aud
 6. A QA receipt bound to one tree identity is treated as invalid after any tree-changing edit before write_history, which routes back to audit and qa, while a message-only amend with the same tree keeps it.
 7. `qa:auto|off` reaches the execution plan through the `--qa` flag, its environment variable, and the goal continuation artifact; omission resolves to auto; `off` yields a `disabled_policy` skip with no probing; unknown, duplicate, or conflicting values raise usage errors; and a resume with a different selection is refused.
 8. The execution-plan contract is at "0.3" with `qa_selection`, "0.2" records decode with QA not composed, and revision-2 goal-child and standalone definitions remain resolvable so a pre-QA workflow resumes on its recorded composition while new launches use the QA-bearing revision.
-9. Progress, IDE status, CLI reports, and goal telemetry distinguish attempted, passed, findings, skipped, and incomplete QA and record qa_fix attempts, fallbacks, substitutions, retries, and cleanup failures without credentials or device log bodies.
+9. Each full-run QA settlement durably records its outcome (attempted, passed, findings, skipped, or incomplete), its skip or incomplete reason, and its consumed qa_fix attempts in the runtime database; the pull request the goal opens states each subtask's QA outcome and reason; and every fallback, target substitution, retry, and cleanup failure emits a diagnostic record without credentials or device log bodies. Displaying the full-run outcome in progress, IDE status, or CLI reports is out of scope.
 10. `skills/skill-bill/content.md` and `docs/runtime-command-guidance.md` document the full-run `qa:auto|off` token and the audit, qa, review ordering.
 
 ## Non-goals
@@ -126,11 +126,12 @@ All paths below are relative to `runtime-kotlin/` unless they start with `orches
 - The qa receipt carries the tree identity from `orchestration/contracts/feature-task-runtime-checkpoint-identity-schema.yaml`. Under the existing "review-invalidation" policy, when review repair, implement_fix, or any later edit before write_history yields a tree identity different from the receipt's, the runtime marks the receipt invalid and routes back to audit through a declared cross-slot backward edge (review/implement_fix → audit, `crossSlot` set), after which audit → qa runs again. A message-only amend with the same tree keeps the receipt.
 - Assumption for implement to confirm: the invalidation check sits where review-invalidation already compares reviewed tree identity; implement extends that site instead of adding a new hook. When qa was skipped by `disabled_policy`, there is no device-bound evidence to invalidate and the edge does not fire. Re-entering audit through this edge uses the Task 8 scoping with an empty findings set, so accepted criteria are not re-checked.
 
-### Task 10. Observability (AC 9)
+### Task 10. Durable QA outcome and goal pull request (AC 9)
 
-- Progress and IDE status: extend the status projection (`PhaseStrategyStatusProjection`, `IdeStatusProjectorMapping.kt`, `orchestration/contracts/ide-status-schema.yaml`) with a QA outcome of attempted, passed, findings, skipped, incomplete, and qa_fix attempt n/3. Schema and its Kotlin version bump together with parity tests.
-- CLI reports: the goal status and run summary print the QA outcome and skip/incomplete reason.
-- Goal telemetry: add QA outcome, skip reason, qa_fix attempts, and counts of fallbacks, target substitutions, retries, and cleanup failures to the goal telemetry payload and `orchestration/contracts/telemetry-event-schema.yaml`. Device ids appear only as the redacted or hashed form from the receipt; no evidence bodies, device logs, or credentials. Each fallback, substitution, retry, and cleanup failure emits a record per `docs/observability-policy.md`.
+- Persistence: when the qa step settles in a full run, write the outcome (attempted while running, then the receipt verdict mapped to passed, findings, skipped, or incomplete), the skip or incomplete reason, and the consumed qa_fix attempts to the runtime database, keyed by workflow. A schema change follows the migration and contract-version rules; the IDE status contract (`ide-status-schema.yaml`) and its clients stay unchanged.
+- Goal pull request: the PR the goal opens lists each subtask's QA outcome and reason, read from the stored record. A pre-QA subtask states that QA was not composed.
+- Diagnostics: each fallback, target substitution, retry, and cleanup failure emits a record per `docs/observability-policy.md`. Device ids appear only in the redacted or hashed receipt form; no evidence bodies, device logs, or credentials.
+- Out of scope: showing the full-run outcome in progress, IDE status, desktop, or CLI status output.
 
 ### Task 11. Docs (AC 10)
 

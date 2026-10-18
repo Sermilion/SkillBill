@@ -117,6 +117,13 @@ The full run accepts at most one `code-review:inline|auto`, forwarded verbatim a
 tokens, each forwarded as `--agent-addon <slug>` in the given order. Omitted
 values remain omitted.
 
+The full run accepts one `qa:auto|off` token and forwards it as `--qa <value>`.
+Omission selects `auto`. In the full run, QA runs after audit and before review:
+audit, then QA (skipped when `qa:off`), then review. QA findings enter `qa_fix`,
+which gets three repair attempts, each followed by a re-audit and QA, before the
+runtime blocks the subtask. A `qa:` token on a form that does not accept it is a
+usage error.
+
 `phase:review` forwards `mode:inline|delegated` and
 `target:pr|staged|unstaged|HEAD|last|uncommitted|<sha>` verbatim as `key:value`
 tokens. Without `mode:`, the runtime reviews inline.
@@ -129,7 +136,7 @@ Stop without running any CLI command when:
 - the caller passes `parallel-review:<agent>`: name the removed dual-agent
   parallel review capability.
 - the caller passes `phase:` together with `operation:`: report a usage error.
-- a token reaches a form that does not accept it (`code-review:` or
+- a token reaches a form that does not accept it (`code-review:`, `qa:`, or
   `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`
   and `operation:verify`):
   report a usage error naming the token and the form that accepts it. Never drop

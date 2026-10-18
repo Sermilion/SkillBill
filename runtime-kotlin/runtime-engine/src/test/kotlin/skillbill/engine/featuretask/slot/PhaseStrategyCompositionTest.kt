@@ -11,6 +11,9 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_KEY
 import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
+import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.MUTATING
@@ -68,6 +71,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -130,7 +134,14 @@ class PhaseStrategyCompositionTest {
             ),
             fanOut,
             PlanFanOutOpus55Strategy(fanOut),
-            QaStrategy(unavailableQaReceiptSettlement()),
+            QaStrategy(
+              unavailableQaReceiptSettlement(),
+              QaReceiptValidator {
+                null
+              },
+              testQaExecutionLifecycle(NoopWorkflowGitOperations),
+              unusedQaOutcomeRecorder(),
+            ),
           )
       ).map { PhaseStrategyRegistration(it, runner) },
     )
@@ -313,7 +324,7 @@ class PhaseStrategyCompositionTest {
           listOf(null)
         }
       val qualityGates: List<FeatureTaskRuntimeQualityGateSelection?> =
-        if (definition == SkeletonDefinition.GOAL_CHILD) {
+        if (definition.id == SkeletonDefinition.GOAL_CHILD.id) {
           FeatureTaskRuntimeQualityGateSelection.entries.map { it }
         } else {
           listOf(null)
@@ -326,6 +337,7 @@ class PhaseStrategyCompositionTest {
               buildSet {
                 reviewMode?.let(::add)
                 qualityGate?.let(::add)
+                if (PhaseSlot.QA in definition.slots) add(FeatureTaskRuntimeQaSelection.AUTO)
               },
             )
           assertSelectedComposition(registry, lookup, facts)
@@ -368,7 +380,7 @@ class PhaseStrategyCompositionTest {
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     SkeletonDefinition.entries.forEach { definition ->
       val gates =
-        if (definition == SkeletonDefinition.GOAL_CHILD) {
+        if (definition.id == SkeletonDefinition.GOAL_CHILD.id) {
           FeatureTaskRuntimeQualityGateSelection.entries.map { it }
         } else {
           listOf(null)
@@ -386,6 +398,7 @@ class PhaseStrategyCompositionTest {
                   add(CodeReviewExecutionMode.INLINE)
                 }
                 gate?.let(::add)
+                if (PhaseSlot.QA in definition.slots) add(FeatureTaskRuntimeQaSelection.AUTO)
               },
             ),
           )
@@ -491,7 +504,11 @@ class PhaseStrategyCompositionTest {
       lookup.executionPlan(
         PhaseStrategySelectionFacts(
           SkeletonDefinition.GOAL_CHILD,
-          setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+          setOf(
+            CodeReviewExecutionMode.INLINE,
+            FeatureTaskRuntimeQualityGateSelection.BUILD,
+            FeatureTaskRuntimeQaSelection.AUTO,
+          ),
         ),
       )
     val encoded =
@@ -556,7 +573,11 @@ class PhaseStrategyCompositionTest {
     val facts =
       PhaseStrategySelectionFacts(
         SkeletonDefinition.GOAL_CHILD,
-        setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+        setOf(
+          CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+          FeatureTaskRuntimeQaSelection.AUTO,
+        ),
       )
     val resolved = lookup.executionPlan(facts)
     val override =
@@ -631,7 +652,7 @@ class PhaseStrategyCompositionTest {
     assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
     assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
     assertEquals(definition.slots, plan.selectedSlots, definition.id)
-    if (definition == SkeletonDefinition.STANDALONE || definition == SkeletonDefinition.GOAL_CHILD) {
+    if (definition == SkeletonDefinition.STANDALONE || definition.id == SkeletonDefinition.GOAL_CHILD.id) {
       val recoveryEdges =
         plan.traversal.backwardEdges.filter {
           it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED

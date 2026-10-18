@@ -26,6 +26,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
@@ -40,7 +41,19 @@ internal class FeatureTaskRuntimeRunState(
   initialReviewGeneration: Int = 0,
   private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
   private val resumeRulesFn: (String) -> PhaseResumeRules,
+  private val workflowId: String? = null,
+  initialQaRepairState: QaRepairState? = null,
 ) : FeatureTaskRuntimeProgressSnapshotAccess {
+  private val durableQaRepairState =
+    initialQaRepairState?.let { repairState ->
+      repairState.copy(
+        attempts = repairState.attempts.map { it.copy(consumedFindingIds = it.consumedFindingIds.toList()) },
+        openFindings =
+          repairState.openFindings.map {
+            it.copy(affectedCriteria = it.affectedCriteria.toList(), receiptRefs = it.receiptRefs.toList())
+          },
+      )
+    }
   private var transitionOwnership:
     Pair<FeatureTaskRuntimeRunLoopSession, FeatureTaskRuntimeRunTransitionOwner>? = null
 
@@ -67,6 +80,8 @@ internal class FeatureTaskRuntimeRunState(
     source.reviewGeneration,
     source.stepVerdictRule,
     source.resumeRulesFn,
+    source.workflowId,
+    source.durableQaRepairState,
   ) {
     inFlightReentries.replaceFrom(source.inFlightReentries)
     gateInvalidatedPhaseIds.replaceFrom(source.gateInvalidatedPhaseIds)
@@ -147,6 +162,8 @@ internal class FeatureTaskRuntimeRunState(
 
   private val hasDurableReviewInvalidationTombstone: Boolean = durableReviewInvalidationTombstone != null
 
+  private val durableQaRepairEvidence: QaRepairEvidence = QaRepairEvidence(workflowId, durableQaRepairState)
+
   private val inFlightReentries: MutableMap<String, InFlightReentry> =
     FeatureTaskRuntimeRunStateReconstruction
       .reconstructInFlightReentries(
@@ -154,10 +171,18 @@ internal class FeatureTaskRuntimeRunState(
         durableInitialLedger,
         durableInitialRecords,
         resumeRules,
+        durableQaRepairEvidence,
       ).filterKeys { loopId ->
         !hasDurableReviewInvalidationTombstone ||
           loopId != FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
       }.toMutableMap()
+
+  private val protectedCompletedReturnSources: Set<String> =
+    FeatureTaskRuntimeRunStateReconstruction.completedReturnSourcePhaseIds(
+      transitions,
+      inFlightReentries,
+      ReentryEvidence(normalizedInitialLedger, durableInitialRecords, resumeRules, durableQaRepairEvidence),
+    )
 
   private val gateInvalidatedPhaseIds: MutableSet<String> = mutableSetOf()
 
@@ -200,6 +225,7 @@ internal class FeatureTaskRuntimeRunState(
           it,
           gateInvalidatedPhaseIds,
           resumeRules,
+          protectedCompletedReturnSources,
         )
       }.also { FeatureTaskRuntimeRunStateReconstruction.invalidateIncompleteReentrySpans(inFlightReentries.values, it) }
       .also {
@@ -208,6 +234,7 @@ internal class FeatureTaskRuntimeRunState(
           it,
           gateInvalidatedPhaseIds,
           ::durableVerdictFor,
+          protectedCompletedReturnSources,
         )
       }
 
@@ -219,6 +246,15 @@ internal class FeatureTaskRuntimeRunState(
         !resumeRules(it.phaseId).buffersIncompleteOutput &&
           it.phaseId !in completedPhases
       }.filterNot { it.phaseId in gateInvalidatedPhaseIds }
+      .filterNot { output ->
+        inFlightReentries.values.any { reentry ->
+          val record = initialRecords[output.phaseId]
+          reentry.completionDerived && output.phaseId in reentry.span &&
+            output.phaseId !in reentry.completedAfterEdge &&
+            record?.status?.workflowStepStatus() == WorkflowStepStatus.COMPLETED &&
+            output.iteration == record.attemptCount
+        }
+      }
       .toCollection(outputBuffer)
     initialRetainedOutputs.map(::detachedOutput).forEach { retained ->
       if (outputBuffer.none { it.phaseId == retained.phaseId && it.iteration == retained.iteration }) {
@@ -593,6 +629,18 @@ internal class FeatureTaskRuntimeRunState(
     return span.any { phaseId -> transitions.entryGateViolation(phaseId, settledVerdicts) != null }
   }
 
+  internal fun isValidatedCompletedReturn(
+    loopId: String,
+    reentry: InFlightReentry,
+  ): Boolean =
+    reentry.completionDerived &&
+      transitions.backwardEdges.any { edge ->
+        edge.loopId == loopId &&
+          edge.destinationPhaseId == reentry.destinationPhaseId &&
+          edge.fromPhaseId in protectedCompletedReturnSources &&
+          edge.fromPhaseId in reentry.resumeCoveredPhaseIds
+      }
+
   override fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict {
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
@@ -663,6 +711,8 @@ internal data class InFlightReentry(
   val span: List<String>,
   val completedAfterEdge: Set<String>,
   val edgeSequenceNumber: Int,
+  val completionDerived: Boolean = false,
+  val resumeCoveredPhaseIds: Set<String> = emptySet(),
 ) {
   val resumePhaseId: String
     get() = span.firstOrNull { phaseId -> phaseId !in completedAfterEdge } ?: destinationPhaseId

@@ -183,6 +183,7 @@ internal fun validProducedOutputs(
 
 private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
   mapOf(
+    "qa" to """{"value":"QA exercised the selected flows and recorded its receipt."}""",
     "validate" to VALIDATE_PRODUCED_OUTPUTS,
     "write_history" to WRITE_HISTORY_PRODUCED_OUTPUTS,
     "preplan" to preplanProducedOutputs(),

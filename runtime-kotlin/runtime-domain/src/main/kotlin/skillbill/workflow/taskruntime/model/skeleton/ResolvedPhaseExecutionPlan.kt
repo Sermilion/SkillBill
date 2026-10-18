@@ -74,11 +74,11 @@ class ResolvedPhaseExecutionPlan(
   val reviewSelection: RuntimeReviewSelection?,
   val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection?,
   traversal: FeatureTaskRuntimeTransitionDeclaration,
-  dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch>,
   stepRecords: ResolvedPhaseStepRecords,
   effectivePolicies: List<ResolvedExecutionPolicy> = emptyList(),
   val effectivePolicySettings: ResolvedFeatureTaskRuntimeExecutionSettings? = null,
   val contractVersion: String = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
 ) {
   val stepPolicyIdentities: Map<String, String> = stepRecords.policyIdentities
   val resumeInterpretationIdentities: Map<String, String> = stepRecords.resumeInterpretationIdentities
@@ -90,12 +90,17 @@ class ResolvedPhaseExecutionPlan(
     Collections.unmodifiableList(this.selectedStrategies.map(ResolvedPhaseStrategyIdentity::slot))
   val selectedEntryStepIds: Set<String> =
     Collections.unmodifiableSet(this.selectedStrategies.mapTo(linkedSetOf(), ResolvedPhaseStrategyIdentity::entryStep))
-  val dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch> = immutableMap(dispatchStrategyByStep)
+  val dispatchStrategyByStep: Map<String, ResolvedPhaseStrategyDispatch> =
+    immutableMap(
+      this.selectedStrategies.flatMap { identity ->
+        identity.steps.map { step ->
+          step to ResolvedPhaseStrategyDispatch(identity.slot, identity.strategyId, identity.semanticRevision)
+        }
+      }.toMap(),
+    )
   val selectedStepIds: Set<String> = Collections.unmodifiableSet(this.dispatchStrategyByStep.keys.toSet())
   val unselectedStepIds: Set<String> =
-    Collections.unmodifiableSet(
-      SkeletonDefinition.FEATURE_RUN_SLOTS.flatMap(PhaseSlot::steps).toSet() - selectedStepIds,
-    )
+    Collections.unmodifiableSet(PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet() - selectedStepIds)
   val traversal: FeatureTaskRuntimeTransitionDeclaration =
     traversal.copy(
       forwardPhaseIds = immutableList(traversal.forwardPhaseIds),
@@ -110,7 +115,7 @@ class ResolvedPhaseExecutionPlan(
       backwardEdges =
         traversal.backwardEdges.filter { edge ->
           dispatchStrategyByStep.getValue(edge.fromPhaseId).slot ==
-            dispatchStrategyByStep.getValue(edge.destinationPhaseId).slot
+            dispatchStrategyByStep.getValue(edge.destinationPhaseId).slot || edge.crossSlotAllowance != null
         },
     )
 
@@ -121,8 +126,8 @@ class ResolvedPhaseExecutionPlan(
       selectedStrategies = selectedStrategies,
       reviewSelection = reviewSelection,
       qualityGateSelection = qualityGateSelection,
+      qaSelection = qaSelection,
       traversal = value,
-      dispatchStrategyByStep = dispatchStrategyByStep,
       stepRecords =
         ResolvedPhaseStepRecords(
           stepPolicyIdentities,
@@ -137,9 +142,9 @@ class ResolvedPhaseExecutionPlan(
   fun withEffectivePolicies(value: List<ResolvedExecutionPolicy>): ResolvedPhaseExecutionPlan =
     ResolvedPhaseExecutionPlan(
       definitionId, definitionSemanticRevision, selectedStrategies, reviewSelection, qualityGateSelection,
-      traversal, dispatchStrategyByStep,
+      traversal,
       ResolvedPhaseStepRecords(stepPolicyIdentities, resumeInterpretationIdentities, stepLaunchAssignments),
-      value, effectivePolicySettings, contractVersion,
+      value, effectivePolicySettings, contractVersion, qaSelection,
     )
 
   init {
@@ -152,19 +157,7 @@ class ResolvedPhaseExecutionPlan(
     validateResolvedTraversal(selectedStepIds, selectedEntryStepIds, this.traversal)
     val selectedSteps = this.selectedStrategies.flatMap(ResolvedPhaseStrategyIdentity::steps)
     require(selectedSteps.size == selectedSteps.toSet().size)
-    require(selectedSteps.toSet() == this.dispatchStrategyByStep.keys)
-    require(
-      this.selectedStrategies.all { identity ->
-        identity.entryStep in identity.steps &&
-          identity.steps.all {
-            this.dispatchStrategyByStep[it] ==
-              ResolvedPhaseStrategyDispatch(identity.slot, identity.strategyId, identity.semanticRevision)
-          }
-      },
-    )
-    require(this.dispatchStrategyByStep.keys.containsAll(this.stepPolicyIdentities.keys))
     require(this.dispatchStrategyByStep.keys == this.stepPolicyIdentities.keys)
-    require(this.dispatchStrategyByStep.keys.containsAll(this.resumeInterpretationIdentities.keys))
     require(this.dispatchStrategyByStep.keys == this.resumeInterpretationIdentities.keys)
     require(this.stepPolicyIdentities.values.all(String::isNotBlank))
     require(this.resumeInterpretationIdentities.values.all(String::isNotBlank))

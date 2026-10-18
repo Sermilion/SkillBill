@@ -12,6 +12,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeProjectionMeasurementSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeQuarantineSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
+import skillbill.infrastructure.contracts.workflow.featuretask.QaRepairStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalObservabilityEventSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
 import skillbill.infrastructure.contracts.workflow.goal.GoalProgressEventSchemaValidator
@@ -87,6 +88,8 @@ class FeatureTaskRuntimeWireArtifactValidator(
           executionPlans,
           phaseOutputs,
         )
+      FeatureTaskRuntimeWireArtifactKind.QA_REPAIR_STATE ->
+        QaRepairStateSchemaValidator.validate(wireMap)
       else -> error("Unexpected non-serial wire artifact $kind")
     }
   }

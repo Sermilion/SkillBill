@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
+import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
@@ -37,6 +38,7 @@ import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import java.time.Clock
@@ -116,6 +118,13 @@ class WorkflowGoalRunnerOutcomeStore
 
     override fun recordedQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
       review.recordedQualityGateSelection(workflowId)
+
+    override fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary = review.recordedQaOutcome(workflowId)
+
+    override fun childQaSelection(
+      workflowId: String,
+      requested: FeatureTaskRuntimeQaSelection?,
+    ): FeatureTaskRuntimeQaSelection? = review.childQaSelection(workflowId, requested)
 
     override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
       review.unemittedGoalReviewPasses(workflowId)
@@ -295,6 +304,32 @@ internal class WorkflowGoalRunnerReviewBridge(
       artifacts.goalContinuationArtifact()?.qualityGateSelection ?: storedExecutionPlanQualityGate(artifacts)
     }
 
+  override fun childQaSelection(
+    workflowId: String,
+    requested: FeatureTaskRuntimeQaSelection?,
+  ): FeatureTaskRuntimeQaSelection? =
+    database.read { unitOfWork ->
+      val artifacts = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts
+      val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
+      if (artifacts == null || !family.contains(artifacts)) return@read requested
+      val plan = JsonCodec.anyToStringAnyMap(family.value(artifacts))
+      val token = plan?.get(FeatureTaskRuntimeExecutionPlanKeys.QA_SELECTION) as? String
+      token?.let(FeatureTaskRuntimeQaSelection::fromWire)
+    }
+
+  override fun recordedQaOutcome(workflowId: String): GoalSubtaskQaSummary =
+    database.read { unitOfWork ->
+      unitOfWork.featureTaskQaOutcomes.find(workflowId)?.let(GoalSubtaskQaSummary::Recorded)
+        ?: if (storedExecutionPlanComposesQa(
+            taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId)?.artifacts,
+          )
+        ) {
+          GoalSubtaskQaSummary.NotRecorded
+        } else {
+          GoalSubtaskQaSummary.NotComposed
+        }
+    }
+
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
     database.read { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read emptyList()
@@ -424,6 +459,14 @@ internal class WorkflowGoalRunnerBlockBridge(
       )
     }
   }
+}
+
+private fun storedExecutionPlanComposesQa(artifacts: Map<String, Any?>?): Boolean {
+  val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
+  if (artifacts == null || !family.contains(artifacts)) return false
+  return JsonCodec.anyToStringAnyMap(
+    family.value(artifacts),
+  )?.get(FeatureTaskRuntimeExecutionPlanKeys.QA_SELECTION) != null
 }
 
 private fun storedExecutionPlanQualityGate(artifacts: Map<String, Any?>): FeatureTaskRuntimeQualityGateSelection? {

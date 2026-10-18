@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseExecutionPlanMapping
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -75,6 +76,9 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
+  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
+    if (stepId == entryStep) PhaseExecutionBindingKind.QA_FINDINGS else super.executionBindingKind(stepId)
+
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
     return when (stepId) {
@@ -100,7 +104,7 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
   override fun runStep(
     run: PhaseRun,
     state: PhaseAcceptedStepExecution,
-  ): PhaseOutcome = runAgentStep(run, state)
+  ): PhaseOutcome = AcceptanceQaReaudit.settledWithoutScope(run, state) ?: runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)

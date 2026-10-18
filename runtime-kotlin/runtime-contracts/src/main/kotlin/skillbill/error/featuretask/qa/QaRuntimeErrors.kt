@@ -85,3 +85,22 @@ fun qaRepositoryUnreadable(detail: String): SkillBillRuntimeException =
     FeatureTaskRuntimeFailureCode.QA_REPOSITORY_UNREADABLE,
     "QA could not read the repository state it tests: $detail",
   )
+
+fun unknownQaSelection(
+  value: String,
+  allowed: List<String>,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.UNKNOWN_QA_SELECTION,
+    "Unknown QA selection '$value'. Allowed: ${allowed.joinToString()}.",
+  )
+
+fun invalidQaRepairStateSchema(
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    FeatureTaskRuntimeFailureCode.INVALID_QA_REPAIR_STATE_SCHEMA,
+    "QA repair state fails schema validation: $reason",
+    cause,
+  )

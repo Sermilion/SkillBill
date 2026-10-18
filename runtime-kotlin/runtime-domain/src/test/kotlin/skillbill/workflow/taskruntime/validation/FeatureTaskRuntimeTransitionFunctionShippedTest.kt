@@ -44,7 +44,7 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   )
 
   @Test
-  fun `a clean run advances implement to simplify to audit to review to verify_findings to validate`() {
+  fun `a clean run advances implement to simplify to audit to QA to review to verify_findings to validate`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     assertEquals(
       def.PHASE_SIMPLIFY,
@@ -59,9 +59,15 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
       ).phaseId,
     )
     assertEquals(
-      def.PHASE_REVIEW,
+      def.PHASE_QA,
       assertIs<FeatureTaskRuntimeNextPhase.Next>(
         transition(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED),
+      ).phaseId,
+    )
+    assertEquals(
+      def.PHASE_REVIEW,
+      assertIs<FeatureTaskRuntimeNextPhase.Next>(
+        transition(def.PHASE_QA, FeatureTaskRuntimeVerdict.ADVANCE),
       ).phaseId,
     )
     assertEquals(
@@ -89,15 +95,15 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
-  fun `entering review with no audit verdict returns the phase-order violation`() {
+  fun `entering QA with no audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val error =
       assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
         transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, emptyMap()),
       )
-    assertEquals(def.PHASE_REVIEW, error.phaseId)
+    assertEquals(def.PHASE_QA, error.phaseId)
     assertEquals(
-      "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
+      "Feature-task-runtime phase '${def.PHASE_QA}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
         "the verdict 'satisfied', but it settled with '<no completed verdict>'; the run fails loudly rather than " +
         "silently advancing.",
       error.message,
@@ -105,16 +111,16 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
-  fun `entering review with a gaps_found audit verdict returns the phase-order violation`() {
+  fun `entering QA with a gaps_found audit verdict returns the phase-order violation`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val gapsFound = mapOf(def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.GAPS_FOUND)
     val error =
       assertIs<FeatureTaskRuntimeTransitionResult.PhaseOrderViolation>(
         transitionResult(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.SATISFIED, gapsFound),
       )
-    assertEquals(def.PHASE_REVIEW, error.phaseId)
+    assertEquals(def.PHASE_QA, error.phaseId)
     assertEquals(
-      "Feature-task-runtime phase '${def.PHASE_REVIEW}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
+      "Feature-task-runtime phase '${def.PHASE_QA}' is unreachable until '${def.PHASE_AUDIT}' settles with " +
         "the verdict 'satisfied', but it settled with 'gaps_found'; the run fails loudly rather than " +
         "silently advancing.",
       error.message,
@@ -171,12 +177,15 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
-  fun `write_history only regenerates receipts and commit_push never originates a backward edge`() {
+  fun `write_history only regenerates receipts or re-runs invalidated QA and commit_push never originates an edge`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val fromPhases = shipped.backwardEdges.map { it.fromPhaseId }.toSet()
     val historyEdges = shipped.backwardEdges.filter { it.fromPhaseId == def.PHASE_WRITE_HISTORY }
-    assertEquals(setOf(def.PHASE_BUILD, def.PHASE_VALIDATE), historyEdges.map { it.destinationPhaseId }.toSet())
-    assertTrue(historyEdges.all { it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED })
+    val regeneration = historyEdges.filter { it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED }
+    assertEquals(setOf(def.PHASE_BUILD, def.PHASE_VALIDATE), regeneration.map { it.destinationPhaseId }.toSet())
+    val invalidation = (historyEdges - regeneration.toSet()).single()
+    assertEquals(FeatureTaskRuntimeVerdict.QA_INVALIDATED, invalidation.triggeringVerdict)
+    assertEquals(def.PHASE_AUDIT, invalidation.destinationPhaseId)
     assertTrue(def.PHASE_COMMIT_PUSH !in fromPhases)
   }
 
@@ -191,7 +200,7 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
           edgeIterationCount = 0,
         ),
       )
-    assertEquals(def.PHASE_REVIEW, next.phaseId)
+    assertEquals(def.PHASE_QA, next.phaseId)
     assertEquals(null, next.loopId)
   }
 

@@ -453,6 +453,9 @@ object PhaseLaunchPreparation {
   private fun PhaseAttemptLaunchPreparationContext.auditNoChangeClaim(run: PhaseRun): String? =
     NoChangeClaimResolution.activeClaimMap(progress)
       ?.takeIf { run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
+      ?.takeUnless {
+        (run.request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.auditsNoChangeClaim == false
+      }
       ?.let(NoChangeClaimResolution::renderForAudit)
 
   private fun PhaseAttemptLaunchPreparationContext.packCommand(

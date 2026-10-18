@@ -1,3 +1,15 @@
+## [2026-10-19] SKILL-419 subtask 2: feature-task qa and qa_fix slot
+Areas: runtime-kotlin domain, contracts, ports, engine, infra (contracts, sqlite, workflow, launcher, skills), core and CLI; orchestration/contracts; skills/skill-bill; docs
+- MEDIUM feature. `PhaseSlot.QA` (qa, qa_fix) sits between audit and code review in FEATURE_RUN_SLOTS. qa needs a SATISFIED audit; findings route to qa_fix (3 attempts per subtask, then BLOCK), and qa_fix returns to audit, then qa.
+- Backward edges cross slots only with a typed `FeatureTaskRuntimeCrossSlotAllowance`; phaseTraversal drops every other cross-slot edge. The write_history `qa_invalidated` edge is composed only with qa, so pre-QA traversals stay unchanged. reusable
+- The post-qa_fix audit re-checks only criteria the open findings name, through the acceptance recorder's QaReaudit mutation, and the audit prompt states that scope.
+- qa-repair state contract 0.2 (0.1 history schema kept for decode) owns open findings, attempts and the last tested tree. `decodeQaOpenFindings` in QaRepairStateWire is the one decoder for open findings, shared by the wire codec and QaVerdictRule. reusable
+- `--qa auto|off`, its env var and the goal continuation artifact feed execution-plan contract 0.3 (`qa_selection`). 0.2 plans decode with QA not composed, and revision-2 definitions still resolve. `FeatureTaskRuntimeQaSelection.fromWire` throws the typed unknown-selection error; the CLI maps it to a usage error.
+- Schema 61 adds `feature_task_qa_outcomes`; the goal PR gets a "## Mobile QA" section. Progress, IDE and CLI status do not show the outcome yet.
+- Limits: verify integration belongs to subtask 3. Run-state reconstruction, not workflow persistence, rejects a completed qa_fix with no repair state, because the step-identity architecture test bars qa_fix ids in shared persistence.
+Feature flag: N/A (operator selection `qa:auto|off`, default auto)
+Acceptance criteria: 10/10 implemented
+
 ## [2026-10-18] SKILL-419 subtask 1: QA contracts and standalone phase
 Areas: runtime-kotlin contracts, domain, ports, engine, infra, core and CLI; orchestration/contracts; platform-packs/kmp and platform-packs/ios; skills/skill-bill; docs; README.md
 - MEDIUM feature. Added report-only `phase qa`, the in-memory QA skeleton and agent strategy. Valid receipts complete with exit 0, including findings; missing or invalid output and changed HEAD or tracked-file status block.

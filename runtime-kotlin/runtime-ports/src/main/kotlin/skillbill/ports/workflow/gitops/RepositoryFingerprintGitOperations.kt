@@ -6,6 +6,8 @@ import java.nio.file.Path
 interface RepositoryFingerprintGitOperations {
   fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult
 
+  fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult
+
   fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

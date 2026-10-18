@@ -33,6 +33,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import skillbill.workflow.taskruntime.phase.task.withoutPlanSubtaskUnitRecords
 
 private const val MAX_INLINE_CRITERION_ALIAS = 32
@@ -121,7 +122,7 @@ class FeatureTaskRuntimeStatusService(
         normalizedRecords,
         phases,
         normalizedLedger,
-        history.loopOnlyStepIds(
+        FeatureTaskRuntimePhaseWorkflowQueries.loopOnlyPhaseIds(
           recorder.loadGoalContinuation(request.workflowId)?.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION,
         ),
       )

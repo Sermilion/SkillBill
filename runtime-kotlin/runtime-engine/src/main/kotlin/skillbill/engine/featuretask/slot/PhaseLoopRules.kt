@@ -51,6 +51,16 @@ internal interface PhaseLoopRules {
     state: PhaseAcceptedStepExecution,
   ): PhaseEntrySettlement? = null
 
+  /**
+   * The verdict this slot settles another slot's [stepId] with before it launches, so a declared cross-slot edge
+   * routes the run away from it, or null when [stepId] launches as usual.
+   */
+  fun crossSlotSettlement(
+    stepId: String,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
+  ): FeatureTaskRuntimeVerdict? = null
+
   /** The verdict the run loop routes on after [stepId] completed with [verdict]. */
   fun routedVerdict(
     stepId: String,

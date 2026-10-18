@@ -32,7 +32,9 @@ internal object AcceptanceAuditLoopRules : PhaseLoopRules {
     stepId: String,
     destinationStepId: String,
   ): PhaseForwardCheckpoint? =
-    auditedImplementation.takeIf { PhaseSlot.slotForStep(destinationStepId) == PhaseSlot.CODE_REVIEW }
+    auditedImplementation.takeIf {
+      PhaseSlot.slotForStep(destinationStepId) in setOf(PhaseSlot.QA, PhaseSlot.CODE_REVIEW)
+    }
 
   override fun settleWithoutLaunch(
     stepId: String,

@@ -8,10 +8,12 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.audit.claim.NoChangeClaimResolution
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
@@ -22,6 +24,12 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 
 internal object AcceptanceAuditRound : PhaseStepHooks {
   override val contextKind = PhaseStepHookContextKind.AUDIT
+
+  override fun launchPromptSupplement(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseStepBinding,
+  ): String = AcceptanceQaReaudit.promptSupplement(state)
 
   private val NO_CHANGE_WORDS: Set<String> =
     setOf(
@@ -35,7 +43,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
-    val claimed = NoChangeClaimResolution.activeClaimMap(context.progress) != null
+    val claimed = auditsClaim(context)
     val verdict = outputMap[SharedPayloadKeys.VERDICT] as? String
     return when {
       claimed -> noChangeRoundRejection(context, outputMap)
@@ -94,11 +102,16 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
       return attested
     }
-    return if (NoChangeClaimResolution.activeClaimMap(context.progress) != null) {
+    return if (auditsClaim(context)) {
       noChangeAcceptedOutput(context, attested)
     } else {
       attested
     }
+  }
+
+  private fun auditsClaim(context: PhaseStepOutputContext): Boolean {
+    val audit = context as? PhaseAuditOutputContext ?: error("Audit output requires the accepted audit context.")
+    return audit.auditsNoChangeClaim && NoChangeClaimResolution.activeClaimMap(context.progress) != null
   }
 
   private fun noChangeAcceptedOutput(

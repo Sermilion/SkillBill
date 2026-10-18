@@ -52,6 +52,11 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val MONITOR_FIX_TRIGGER_LOOP_ID: String = "monitor_fix_trigger"
 
   const val MAX_MONITOR_FIX_ATTEMPTS: Int = 3
+  const val QA_FIX_LOOP_ID: String = "qa_fix"
+  const val QA_FIX_RETURN_LOOP_ID: String = "qa_fix_return"
+  const val MAX_QA_FIX_ATTEMPTS: Int = 3
+  const val QA_INVALIDATION_LOOP_ID: String = "qa_invalidation"
+  const val MAX_QA_INVALIDATIONS: Int = 3
   const val MONITOR_FIX_COMMIT_LOOP_ID: String = "monitor_fix_commit"
 
   const val SEMANTIC_LOOP_WARNING_THRESHOLD: Int = 3

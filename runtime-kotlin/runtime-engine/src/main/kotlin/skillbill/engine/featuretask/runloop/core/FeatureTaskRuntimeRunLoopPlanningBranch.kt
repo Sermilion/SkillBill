@@ -140,6 +140,14 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
+  ): PhaseOutcome =
+    context.runState.strategyFor(run.phaseId).withPreparedRun(run) { prepared ->
+      dispatchPreparedPhase(context, prepared)
+    }
+
+  private fun dispatchPreparedPhase(
+    context: FeatureTaskRuntimeRunLoopContext,
+    run: PhaseRun,
   ): PhaseOutcome {
     context.runState.stepBinding.authorizeCoordinatorDispatch(run)
     val state = context.acceptedStep(run)

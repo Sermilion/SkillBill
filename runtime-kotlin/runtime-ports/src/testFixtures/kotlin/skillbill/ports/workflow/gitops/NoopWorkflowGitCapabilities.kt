@@ -84,6 +84,9 @@ object UnavailableRepositoryFingerprintGitOperations : RepositoryFingerprintGitO
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     error("WorkflowGitOperations must provide a repository fingerprint implementation.")
 
+  override fun repositoryTreeIdentity(repoRoot: Path): WorkflowGitOperationResult =
+    error("WorkflowGitOperations must provide a repository tree identity implementation.")
+
   override fun repositoryCheckpointFingerprint(
     repoRoot: Path,
     baseCommit: String?,

@@ -1,11 +1,13 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.workflow.decomposition.branchForFinalPullRequest
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.nio.file.Path
 
 internal data class GoalRunnerBranchPlan(
@@ -14,7 +16,10 @@ internal data class GoalRunnerBranchPlan(
   val validateBase: Boolean,
 )
 
-fun DecompositionManifest.toPullRequestRequest(repoRoot: Path): GoalPullRequestRequest {
+fun DecompositionManifest.toPullRequestRequest(
+  repoRoot: Path,
+  qaSummary: (DecompositionSubtask) -> GoalSubtaskQaSummary? = { null },
+): GoalPullRequestRequest {
   val title = "[$issueKey] ${featureName.toPullRequestTitle()}"
   val body =
     buildString {
@@ -40,6 +45,13 @@ fun DecompositionManifest.toPullRequestRequest(repoRoot: Path): GoalPullRequestR
         "Every subtask completed the configured review, audit, validation, and history gates before " +
           "this pull request was opened.",
       )
+      val qa = subtasks.mapNotNull { subtask -> qaSummary(subtask)?.let { subtask.name to it } }
+      if (qa.isNotEmpty()) {
+        appendLine()
+        appendLine("## Mobile QA")
+        appendLine()
+        qa.forEach { (name, summary) -> appendLine("- $name: ${summary.pullRequestText()}") }
+      }
     }
   return GoalPullRequestRequest(
     repoRoot = repoRoot,
@@ -78,5 +90,17 @@ internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBran
     DecompositionExecutionModel.STACKED_BRANCHES -> {
       val stackBranch = stackBranches.first { it.subtaskId == subtaskId }
       GoalRunnerBranchPlan(branch = stackBranch.branch, baseBranch = stackBranch.baseBranch, validateBase = true)
+    }
+  }
+
+private fun GoalSubtaskQaSummary.pullRequestText(): String =
+  when (this) {
+    GoalSubtaskQaSummary.NotComposed -> "QA not composed (pre-QA workflow)"
+    GoalSubtaskQaSummary.NotRecorded -> "no QA outcome recorded"
+    is GoalSubtaskQaSummary.Recorded -> {
+      val reason = outcome.reason?.let { " ($it)" }.orEmpty()
+      val repairs =
+        outcome.qaFixAttempts.takeIf { it > 0 }?.let { ", after $it qa_fix attempt" + if (it == 1) "" else "s" }
+      "${outcome.outcome.wireValue}$reason${repairs.orEmpty()}"
     }
   }

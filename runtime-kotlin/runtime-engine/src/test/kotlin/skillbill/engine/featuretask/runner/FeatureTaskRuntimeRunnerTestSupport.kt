@@ -40,6 +40,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerReq
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairPhaseRecorder
+import skillbill.engine.featuretask.persist.acceptance.AcceptanceCriterionRepairResumeEvidence
 import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
@@ -53,6 +54,10 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
+import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
+import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
+import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewFixBudget
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
@@ -80,6 +85,7 @@ import skillbill.engine.featuretask.slot.monitor.standalone.StandaloneMonitorSer
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.featuretask.slot.unavailableQaReceiptSettlement
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.testing.featureTaskRuntimeWireArtifactValidatorForTest
@@ -122,6 +128,8 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.featuretask.FeatureTaskQaOutcomeRepository
+import skillbill.ports.featuretask.InMemoryFeatureTaskQaOutcomeRepository
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
@@ -204,6 +212,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode.CACHE_ELIGIBLE
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.FAILED
@@ -691,6 +700,8 @@ internal data class RuntimeHarnessConfig(
     OpenPullRequestIdentityLookup(gitOperationsOverride ?: branchSetup.gitOperations),
   val pullRequestChecksLookup: PullRequestChecksLookup = PassingPullRequestChecksLookup,
   val standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
+  val qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
+  val qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
 }
@@ -1032,6 +1043,9 @@ private fun harnessRunner(
       monitoredPullRequestLookup = deps.runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = deps.runtimeConfig.pullRequestChecksLookup,
       standaloneMonitorService = deps.runtimeConfig.standaloneMonitorService,
+      qaExecution = deps.runtimeConfig.qaExecution,
+      qaReceipts = deps.runtimeConfig.qaReceipts,
+      qaOutcomes = FeatureTaskQaOutcomeRecorder(deps.database, testHarnessClock),
     )
   val launchOutcomes =
     FeatureTaskRuntimeLaunchOutcomes(
@@ -1062,6 +1076,7 @@ private fun harnessRunner(
         entry,
         testDecompositionPlanner(),
       ),
+      AcceptanceCriterionRepairResumeEvidence(deps.settlement, deps.diagnostics),
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
 }
@@ -1262,6 +1277,7 @@ private class TelemetryExecutePreparedSetup(
         configuredEntry,
         testDecompositionPlanner(),
       ),
+      AcceptanceCriterionRepairResumeEvidence(settlement, NoopRuntimeDiagnostics),
     )
 }
 
@@ -1298,6 +1314,9 @@ private fun telemetryHarnessRunner(
       monitoredPullRequestLookup = runtimeConfig.monitoredPullRequestLookup,
       pullRequestChecksLookup = runtimeConfig.pullRequestChecksLookup,
       standaloneMonitorService = runtimeConfig.standaloneMonitorService,
+      qaExecution = runtimeConfig.qaExecution,
+      qaReceipts = runtimeConfig.qaReceipts,
+      qaOutcomes = FeatureTaskQaOutcomeRecorder(database, testHarnessClock),
     )
   val specGate = testSpecGate()
   val lifecycleTelemetry = enabledRuntimeLifecycleTelemetry(database)
@@ -1399,7 +1418,11 @@ private fun runnerExecutionEntry(
   val facts =
     PhaseStrategySelectionFacts(
       SkeletonDefinition.GOAL_CHILD,
-      setOf(config.codeReviewMode, config.goalContinuation.qualityGateSelection),
+      setOf(
+        config.codeReviewMode,
+        config.goalContinuation.qualityGateSelection,
+        config.goalContinuation.qaSelection ?: FeatureTaskRuntimeQaSelection.AUTO,
+      ),
     )
   val inputs =
     resolver.resolveInputs(
@@ -2053,6 +2076,8 @@ internal class RuntimeFakeDatabaseSessionFactory(
     }
   }
 
+  private val qaOutcomes = InMemoryFeatureTaskQaOutcomeRepository()
+
   private fun unitOfWork(): UnitOfWork =
     object : UnitOfWorkDefaults() {
       override val dbPath: Path = this@RuntimeFakeDatabaseSessionFactory.dbPath
@@ -2064,6 +2089,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
       override val telemetryOutbox: TelemetryOutboxRepository =
         this@RuntimeFakeDatabaseSessionFactory.telemetryOutboxPort
       override val workflowStates: WorkflowStateRepository = repository
+      override val featureTaskQaOutcomes: FeatureTaskQaOutcomeRepository = qaOutcomes
       override val rejectedOutputDiagnosticPermissions =
         RejectedOutputDiagnosticPermissions { }
       override val rejectedOutputDiagnostics =

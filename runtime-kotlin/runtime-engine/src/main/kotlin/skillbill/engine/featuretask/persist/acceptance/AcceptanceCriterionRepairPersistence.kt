@@ -41,6 +41,7 @@ import skillbill.workflow.taskruntime.artifact.asRepairWireMap
 import skillbill.workflow.taskruntime.artifact.toAcceptanceCriterionRepairState
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairStage
 import skillbill.workflow.taskruntime.model.audit.AcceptanceCriterionRepairState
+import skillbill.workflow.taskruntime.model.audit.admitQaReaudit
 import skillbill.workflow.taskruntime.model.audit.recordProseAudit
 import skillbill.workflow.taskruntime.model.audit.retainClarification
 import skillbill.workflow.taskruntime.model.audit.retainProseProgress
@@ -682,6 +683,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
+      is AcceptanceCriterionRepairMutation.QaReaudit,
       -> proseTransition(state, mutation)
       else -> repairTransition(state, mutation, auditDigest)
     }
@@ -694,6 +696,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit ->
         state?.recordProseAudit(mutation.audit)?.clearPendingClarification()
       AcceptanceCriterionRepairMutation.KeepProgress -> state?.retainProseProgress()
+      is AcceptanceCriterionRepairMutation.QaReaudit -> state?.admitQaReaudit(mutation.criterionRefs)
       is AcceptanceCriterionRepairMutation.Clarification -> state?.retainClarification(mutation.question)
       else -> null
     }
@@ -738,6 +741,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
+      is AcceptanceCriterionRepairMutation.QaReaudit,
       -> null
     }
 
@@ -761,6 +765,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
+      is AcceptanceCriterionRepairMutation.QaReaudit,
       -> proseReplayExpected(state, expected, mutation)
       else -> repairReplayExpected(state, expected, mutation)
     }
@@ -779,6 +784,8 @@ class AcceptanceCriterionRepairPersistence(
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
       -> expected.revision == state?.revision?.minus(1)
+      is AcceptanceCriterionRepairMutation.QaReaudit ->
+        expected.revision == state?.revision?.minus(1) && state?.pendingAuditRefs == mutation.criterionRefs
       else -> false
     }
 
@@ -803,6 +810,7 @@ class AcceptanceCriterionRepairPersistence(
       is AcceptanceCriterionRepairMutation.ProseAudit,
       AcceptanceCriterionRepairMutation.KeepProgress,
       is AcceptanceCriterionRepairMutation.Clarification,
+      is AcceptanceCriterionRepairMutation.QaReaudit,
       -> false
     }
 

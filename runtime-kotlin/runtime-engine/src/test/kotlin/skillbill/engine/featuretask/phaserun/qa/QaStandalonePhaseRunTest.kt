@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.phaserun.qa
 
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.model.execution.QaExecutionContext
+import skillbill.engine.featuretask.model.execution.QaExecutionTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.qa.receipt.QA_TEST_HEAD
@@ -46,7 +47,7 @@ class QaStandalonePhaseRunTest {
     assertEquals(listOf(INVOCATION), leases.releasedInvocations)
     val qa = requireNotNull(launched.single())
     assertEquals(qaTestExpected(INVOCATION), qa.expected)
-    assertEquals(setOf(QaPlatform.ANDROID), qa.platforms)
+    assertEquals(setOf(QaPlatform.ANDROID), assertIs<QaExecutionTarget.Supported>(qa.target).platforms)
   }
 
   @Test

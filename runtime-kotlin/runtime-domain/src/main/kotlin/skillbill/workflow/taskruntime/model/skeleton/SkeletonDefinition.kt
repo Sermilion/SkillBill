@@ -44,7 +44,7 @@ data class SkeletonDefinition(
   }
 
   companion object {
-    val FEATURE_RUN_SLOTS: List<PhaseSlot> =
+    val LEGACY_FEATURE_RUN_SLOTS_REVISION_2: List<PhaseSlot> =
       listOf(
         PhaseSlot.PREPLAN,
         PhaseSlot.PLAN,
@@ -58,12 +58,25 @@ data class SkeletonDefinition(
         PhaseSlot.MONITOR,
       )
 
-    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", FEATURE_RUN_SLOTS, semanticRevision = 2)
+    val FEATURE_RUN_SLOTS: List<PhaseSlot> =
+      LEGACY_FEATURE_RUN_SLOTS_REVISION_2.toMutableList().apply {
+        add(indexOf(PhaseSlot.CODE_REVIEW), PhaseSlot.QA)
+      }
+
+    val STANDALONE_REVISION_2: SkeletonDefinition =
+      SkeletonDefinition("standalone", LEGACY_FEATURE_RUN_SLOTS_REVISION_2, semanticRevision = 2)
+    val GOAL_CHILD_REVISION_2: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-child",
+        LEGACY_FEATURE_RUN_SLOTS_REVISION_2.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
+        semanticRevision = 2,
+      )
+    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", FEATURE_RUN_SLOTS, semanticRevision = 3)
     val GOAL_CHILD: SkeletonDefinition =
       SkeletonDefinition(
         "goal-child",
         FEATURE_RUN_SLOTS.filter { it != PhaseSlot.PULL_REQUEST && it != PhaseSlot.MONITOR },
-        semanticRevision = 2,
+        semanticRevision = 3,
       )
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition(
@@ -120,7 +133,20 @@ data class SkeletonDefinition(
         preparedExecutionOf = MONITOR.id,
       )
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, QA, PLAN, PR, MONITOR, STANDALONE_MONITOR)
+      get() =
+        listOf(
+          STANDALONE_REVISION_2,
+          GOAL_CHILD_REVISION_2,
+          STANDALONE,
+          GOAL_CHILD,
+          REVIEW,
+          VALIDATION,
+          QA,
+          PLAN,
+          PR,
+          MONITOR,
+          STANDALONE_MONITOR,
+        )
 
     fun admittedForRun(goalContinuation: Boolean): Set<SkeletonDefinition> =
       if (goalContinuation) setOf(GOAL_CHILD) else setOf(PLAN)
@@ -132,7 +158,7 @@ data class SkeletonDefinition(
       entries.firstOrNull { it.id == publicId }?.runHarness ?: PhaseRunHarness.NONE
 
     fun byId(id: String): SkeletonDefinition =
-      entries.firstOrNull { it.id == id }
+      entries.filter { it.id == id }.maxByOrNull(SkeletonDefinition::semanticRevision)
         ?: throw UnknownSkeletonDefinitionError(id, entries.map(SkeletonDefinition::id))
   }
 }

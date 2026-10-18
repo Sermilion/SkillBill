@@ -141,6 +141,8 @@ $defs:
           - audit_plan_fix
           - audit_implement_fix
           - audit
+          - qa
+          - qa_fix
           - validate
           - write_history
           - commit_push
@@ -169,6 +171,8 @@ $defs:
                     - audit_plan_fix
                     - audit_implement_fix
                     - audit
+                    - qa
+                    - qa_fix
                     - validate
                     - write_history
                     - commit_push

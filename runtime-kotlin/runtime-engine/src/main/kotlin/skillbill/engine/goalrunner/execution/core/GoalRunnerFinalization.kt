@@ -21,6 +21,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.model.GoalSubtaskQaSummary
 import skillbill.engine.goalrunner.monitoring.GoalRunnerCiMonitor
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
@@ -98,7 +99,13 @@ class GoalRunnerFinalization(
         ),
       )
     }
-    val result = pullRequestPort.open(finalState.manifest.toPullRequestRequest(request.repoRoot))
+    val manifest = finalState.manifest
+    val result =
+      pullRequestPort.open(
+        manifest.toPullRequestRequest(request.repoRoot) { subtask ->
+          manifest.workflowIdFor(subtask.id)?.let(outcomeStore::recordedQaOutcome) ?: GoalSubtaskQaSummary.NotRecorded
+        },
+      )
     return when (result) {
       is GoalPullRequestResult.Opened ->
         completeMonitoredGoal(finalState, request, attempted, result.url, GoalPullRequestStatus.OPENED)

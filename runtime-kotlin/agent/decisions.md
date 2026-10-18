@@ -1,5 +1,30 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-19] SKILL-419: reject a qa_fix without repair state during reconstruction
+Context: Workflow persistence rejected a completed qa_fix with no qa-repair state, but naming PHASE_QA_FIX in shared persistence breaks the feature-task step-identity architecture rule.
+Decision: Persistence keeps only the slot-neutral check, a QA receipt without repair state. Run-state reconstruction in the QA slot rejects a completed qa_fix that has no persisted repair state.
+Reason: A completed qa_fix always follows a QA receipt, so the receipt check still catches the persisted case, and step-specific rules stay inside the slot that owns the step.
+
+## [2026-10-18] SKILL-419: store full-run QA outcomes and report them in the goal pull request
+Context: Full runs settle QA, but the IDE status contract forbids a workflow-scope QA outcome, and its desktop and IDE clients pin the contract version.
+Decision: Schema 61 adds `feature_task_qa_outcomes`, one row per workflow: `attempted` when the QA agent launches, then the receipt outcome, skip or incomplete reason, consumed qa_fix attempts and tested tree when a completed output carries a QA receipt. The goal pull request lists each subtask's outcome, or that QA was not composed. Progress, IDE status and CLI status do not display it yet.
+Reason: The stored row lets a later change surface the outcome without a status-contract bump now, and the pull request gives reviewers the result today.
+
+## [2026-10-18] SKILL-419: route full-run QA through declared cross-slot edges
+Context: qa_fix returns to audit and an invalidated QA receipt must re-enter audit and QA, but phase traversal dropped every backward edge between slots, and recorded plans must keep resolving to the traversal they recorded.
+Decision: A backward edge crosses slots only with a typed `FeatureTaskRuntimeCrossSlotAllowance`. The QA invalidation edge (`write_history` `qa_invalidated` to audit, three per subtask, then block) is also listed in `composedOnlyWithSteps`, so it exists only when `qa` is composed and revision-2 pre-QA traversals stay unchanged. The QA slot settles `write_history` before launch when the latest receipt with device evidence tested a different tree; a skipped receipt has no evidence to invalidate. Review's entry gate does not require qa.
+Reason: Undeclared cross-slot routing stays impossible, and pre-QA workflows resume on their recorded composition without an incompatible-plan refusal.
+
+## [2026-10-18] SKILL-419: scope the post-QA audit with the acceptance repair state
+Context: The audit after qa_fix must check only the criteria open QA findings name, without re-checking accepted criteria or adding a second audit step.
+Decision: When audit starts on an accepted catalog, the acceptance recorder admits a focused read-only re-audit of the open findings' criteria (`AcceptanceCriterionRepairMutation.QaReaudit`). A gap reopens that criterion into its normal repair budget. With no named criterion, audit settles satisfied without an agent and QA alone decides closure. The prompt states the scope and its reason.
+Reason: The existing focused-audit and reopening transitions already enforce coherence and per-criterion budgets.
+
+## [2026-10-18] SKILL-419: QA findings stay open until verified on a changed tree
+Context: A later skip, an infrastructure-only incomplete receipt or a qa_fix claim must not clear findings, and resume must not replay a completed repair.
+Decision: The qa-repair state is the authority for open findings and qa_fix attempts. Only a passing receipt on a different tree that exercises every original flow and passes every affected criterion closes a finding. A missing retained receipt keeps its finding open and records a diagnostic instead of failing the QA pass.
+Reason: Closure needs evidence; absent evidence can only defer it.
+
 ## [2026-10-18] SKILL-419: keep device automation in pack-guided agent runs
 Context: Mobile QA must reuse available Android and iOS tooling, and later feature-task and verify entry points need the same QA foundation.
 Decision: Packs declare QA capability and guidance. The agent discovers and drives devices; the runtime resolves capability, owns leases and revision identity, and validates receipts through one shared engine validator.
@@ -3144,3 +3169,16 @@ packages, API or raw map boundary. G1-G7 clean, no guard, baseline or exemption
 changes. The regression failed under the old reader and now admits partially and
 fully pruned import prefixes without changing stored child bytes. Rejection cases
 cover incomplete windows, sequence gaps and changed surviving imports.
+# [SKILL-419] QA workflow decisions
+
+Decision D1: Cross-slot backward edges require an explicit typed allowance. `phaseTraversal()` keeps only declared cross-slot edges; `qa_fix` and QA invalidation use that allowance.
+
+Decision D2: An audit after `qa_fix` checks only criteria named by the open QA findings. An empty scope returns satisfied so QA can decide whether its findings closed.
+
+Decision D3: Revision-2 standalone and goal-child definitions keep their pre-QA slot lists. New launches use revision 3, and resume resolves the recorded revision.
+
+Decision D4: QA selection is recorded on new execution plans and goal continuations. A missing selection on a revision-2 plan means QA was not composed; new plans default to `auto`.
+
+Decision D5: Execution-plan contract `0.2` remains readable with QA unselected. Contract `0.3` records `qa_selection` and its explicit cross-slot traversal allowances.
+
+Decision D8: Code review still requires a satisfied audit. QA remains optional and does not become a new review entry gate.

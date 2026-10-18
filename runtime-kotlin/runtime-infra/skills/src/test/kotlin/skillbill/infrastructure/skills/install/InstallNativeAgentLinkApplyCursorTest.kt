@@ -7,6 +7,7 @@ import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgent
 import skillbill.infrastructure.skills.install.nativeagent.link.installNativeAgentFile
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
@@ -259,10 +260,18 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
   }
 
   @Test
-  fun `installed review catalog contains only manifest and declared review content`() {
+  fun `installed review catalog loads declared QA guidance and excludes unrelated files`() {
     val fixture = setupApplyFixture()
     Files.createDirectories(fixture.home.resolve(".codex"))
     val sourcePack = fixture.repoRoot.resolve("platform-packs/kotlin")
+    val manifest = sourcePack.resolve("platform.yaml")
+    Files.writeString(
+      manifest,
+      Files.readString(manifest) +
+        "\nqa_capability:\n  platforms: [android]\n  guidance_file: qa/android-qa.md\n",
+    )
+    Files.createDirectories(sourcePack.resolve("qa"))
+    Files.writeString(sourcePack.resolve("qa/android-qa.md"), "Exercise the declared Android flows.")
     Files.createDirectories(sourcePack.resolve("agent"))
     Files.writeString(sourcePack.resolve("agent/history.md"), "boundary history")
     Files.writeString(sourcePack.resolve("unrelated-custom-file.txt"), "not review runtime content")
@@ -280,6 +289,12 @@ class InstallNativeAgentLinkApplyCursorTest : InstallNativeAgentLinkApplyTestSup
         fixture.repoRoot.resolve("skills"),
       )
     val installedPack = cacheRoot.resolve("review-catalog/platform-packs/kotlin")
+    val capability = assertNotNull(loadPlatformManifest(installedPack).qaCapability)
+    assertEquals("qa/android-qa.md", capability.guidanceFile)
+    assertEquals(
+      "Exercise the declared Android flows.",
+      Files.readString(installedPack.resolve(capability.guidanceFile)),
+    )
     assertTrue(Files.isRegularFile(installedPack.resolve("platform.yaml")))
     assertTrue(
       Files.isRegularFile(installedPack.resolve("code-review/bill-kotlin-code-review/content.md")),

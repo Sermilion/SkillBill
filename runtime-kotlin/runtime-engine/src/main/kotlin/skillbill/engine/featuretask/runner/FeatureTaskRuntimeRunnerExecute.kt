@@ -58,7 +58,7 @@ class FeatureTaskRuntimeRunnerExecute(
   }
 
   fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
-    val existingMode = recorder.existingWorkflowMode(request.workflowId)
+    val existingMode = recorder.phaseQuery.existingWorkflowMode(request.workflowId)
     if (existingMode == null || existingMode == FeatureTaskWorkflowMode.RUNTIME) {
       return null
     }

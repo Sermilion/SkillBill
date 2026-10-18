@@ -1,8 +1,12 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
+import skillbill.engine.featuretask.qa.execution.QaExecutionLifecycle
+import skillbill.engine.featuretask.qa.execution.testQaExecutionLifecycle
+import skillbill.engine.featuretask.qa.receipt.FeatureTaskQaOutcomeRecorder
 import skillbill.engine.featuretask.qa.receipt.QaReceiptSettlement
 import skillbill.engine.featuretask.qa.receipt.QaReceiptValidator
+import skillbill.engine.featuretask.qa.unusedQaOutcomeRecorder
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.audit.opus.AcceptanceAuditOpus55Strategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
@@ -42,6 +46,7 @@ import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryOpus55Strat
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestChecksLookup
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -63,6 +68,7 @@ import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorRepositoryIdentity
 import skillbill.ports.qa.QaWorkspacePort
+import skillbill.ports.qa.model.QaReceiptSource
 import skillbill.ports.qa.model.QaWorkspace
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
@@ -95,6 +101,8 @@ fun testPhaseStrategies(
   planFanOutCap: Int = 1,
   standaloneMonitorService: StandaloneMonitorService = UnavailableStandaloneMonitorService.service,
   qaReceipts: QaReceiptSettlement = unavailableQaReceiptSettlement(),
+  qaExecution: QaExecutionLifecycle = testQaExecutionLifecycle(),
+  qaOutcomes: FeatureTaskQaOutcomeRecorder = unusedQaOutcomeRecorder(),
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val standaloneMonitor = StandaloneMonitorStrategy(standaloneMonitorService)
@@ -159,7 +167,10 @@ fun testPhaseStrategies(
         PhaseStrategyRegistration(standaloneMonitor, runner()),
         PhaseStrategyRegistration(StandaloneMonitorOpus55Strategy(standaloneMonitor), runner()),
         PhaseStrategyRegistration(StandaloneMonitorPublicationStrategy(standaloneMonitorService), runner()),
-        PhaseStrategyRegistration(QaStrategy(qaReceipts), runner()),
+        PhaseStrategyRegistration(
+          QaStrategy(qaReceipts, QaReceiptValidator { null }, qaExecution, qaOutcomes),
+          runner(),
+        ),
       ),
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
@@ -176,10 +187,16 @@ fun unavailableQaReceiptSettlement(): QaReceiptSettlement =
         invocationId: String,
       ): QaWorkspace = error("Test phase strategies do not open a QA workspace.")
 
-      override fun readReceipt(workspace: QaWorkspace): String? = null
+      override fun readReceipt(receiptPath: Path): QaReceiptSource? = null
+
+      override fun readRetainedReceipt(
+        qaRoot: Path,
+        receiptReference: String,
+      ): QaReceiptSource? = null
 
       override fun close(workspace: QaWorkspace) = Unit
     },
+    NoopRuntimeDiagnostics,
   )
 
 object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
@@ -308,46 +325,53 @@ fun testPhaseStrategyBindings(
       PhaseSlot.WRITE_HISTORY to
         PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID).withOpus(BoundaryHistoryOpus55Strategy.ID),
       PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
+      PhaseSlot.QA to PhaseStrategyBinding.Fixed(QaStrategy.ID),
     )
-  return mapOf(
-    SkeletonDefinition.STANDALONE to
-      shared +
-      mapOf(
-        PhaseSlot.QUALITY_GATE to
-          PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
-        PhaseSlot.PULL_REQUEST to
-          PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
-        PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
-      ),
-    SkeletonDefinition.GOAL_CHILD to
-      shared +
-      mapOf(
-        PhaseSlot.QUALITY_GATE to
-          PhaseStrategyBinding.ByFact(
-            mapOf(
-              FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
-              FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
+  val bindings =
+    mapOf(
+      SkeletonDefinition.STANDALONE to
+        shared +
+        mapOf(
+          PhaseSlot.QUALITY_GATE to
+            PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID).withOpus(AgentValidateOpus55Strategy.ID),
+          PhaseSlot.PULL_REQUEST to
+            PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID).withOpus(PrDescriptionOpus55Strategy.ID),
+          PhaseSlot.MONITOR to PhaseStrategyBinding.Fixed(MonitorStrategy.ID).withOpus(MonitorOpus55Strategy.ID),
+        ),
+      SkeletonDefinition.GOAL_CHILD to
+        shared +
+        mapOf(
+          PhaseSlot.QUALITY_GATE to
+            PhaseStrategyBinding.ByFact(
+              mapOf(
+                FeatureTaskRuntimeQualityGateSelection.BUILD to PackBuildStrategy.ID,
+                FeatureTaskRuntimeQualityGateSelection.VALIDATE to AgentValidateStrategy.ID,
+              ),
+            ).withOpus(
+              mapOf(
+                PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
+                AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
+              ),
             ),
-          ).withOpus(
-            mapOf(
-              PackBuildStrategy.ID to PackBuildOpus55Strategy.ID,
-              AgentValidateStrategy.ID to AgentValidateOpus55Strategy.ID,
-            ),
-          ),
-      ),
-    SkeletonDefinition.REVIEW to
-      mapOf(
-        PhaseSlot.STANDALONE_REVIEW to
-          reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
-      ),
-    SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
-    SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
-    SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
-    SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
-    SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
-    SkeletonDefinition.STANDALONE_MONITOR to
-      SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.STANDALONE_MONITOR),
-  )
+        ),
+      SkeletonDefinition.REVIEW to
+        mapOf(
+          PhaseSlot.STANDALONE_REVIEW to
+            reviewStandaloneBinding(standaloneDelegatedId, standaloneDelegatedOpusId),
+        ),
+      SkeletonDefinition.VALIDATION to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.VALIDATION),
+      SkeletonDefinition.QA to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.QA),
+      SkeletonDefinition.PLAN to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PLAN),
+      SkeletonDefinition.PR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.PR),
+      SkeletonDefinition.MONITOR to SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.MONITOR),
+      SkeletonDefinition.STANDALONE_MONITOR to
+        SkeletonStrategyBindings.bindings.getValue(SkeletonDefinition.STANDALONE_MONITOR),
+    )
+  return bindings +
+    mapOf(
+      SkeletonDefinition.STANDALONE_REVISION_2 to (bindings.getValue(SkeletonDefinition.STANDALONE) - PhaseSlot.QA),
+      SkeletonDefinition.GOAL_CHILD_REVISION_2 to (bindings.getValue(SkeletonDefinition.GOAL_CHILD) - PhaseSlot.QA),
+    )
 }
 
 private fun reviewStandaloneBinding(

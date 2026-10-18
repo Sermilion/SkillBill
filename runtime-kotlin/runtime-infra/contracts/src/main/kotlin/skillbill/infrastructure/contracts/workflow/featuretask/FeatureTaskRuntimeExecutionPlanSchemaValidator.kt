@@ -10,6 +10,7 @@ import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.error.core.UnsupportedJsonValueError
@@ -56,12 +57,13 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
     }
     val version = instance.path(FeatureTaskRuntimeExecutionPlanKeys.CONTRACT_VERSION)
     val versionText = version.takeIf { it.isTextual }?.asText()
-    val historical =
-      versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
-    if (unsupportedCurrentVersion(versionText, historical)) {
+    val supportedHistorical =
+      versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION ||
+        versionText == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
+    if (unsupportedCurrentVersion(versionText, supportedHistorical)) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
-    validateInstance(instance, historical)
+    validateInstance(instance, versionText)
     return JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(canonicalExecutionPlan(instance).toString()))
       ?: invalidPlan("execution plan must be a JSON object")
   }
@@ -88,16 +90,19 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
 
   private fun validateInstance(
     instance: JsonNode,
-    historical: Boolean,
+    contractVersion: String?,
   ) {
     val errors: Set<ValidationMessage> =
-      ClasspathContractSchemaLoader.validate(if (historical) historicalSchema() else schema(), instance)
+      ClasspathContractSchemaLoader.validate(schemaFor(contractVersion), instance)
     if (errors.isNotEmpty()) {
       throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
         "execution plan violates its schema",
       )
     }
-    validateExecutionPlanCoherence(instance, historical)
+    validateExecutionPlanCoherence(
+      instance,
+      contractVersion == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION,
+    )
   }
 }
 
@@ -110,8 +115,22 @@ private fun schema(): JsonSchema =
 private fun historicalSchema(): JsonSchema =
   compiledExecutionPlanSchema(
     FeatureTaskRuntimeExecutionPlanSchemaPaths.HISTORICAL_0_1,
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION,
+  )
+
+private fun previousExecutionPlanSchema(): JsonSchema =
+  compiledExecutionPlanSchema(
+    FeatureTaskRuntimeExecutionPlanSchemaPaths.HISTORICAL_0_2,
     FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION,
   )
+
+private fun schemaFor(contractVersion: String?): JsonSchema =
+  when (contractVersion) {
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION -> historicalSchema()
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION -> previousExecutionPlanSchema()
+    FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION -> schema()
+    else -> schema()
+  }
 
 private fun compiledExecutionPlanSchema(
   resource: String,

@@ -204,6 +204,7 @@ internal object WireVocabularyGovernedSeamInventory {
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.VALIDATION_DEPTH,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QUALITY_GATE_SELECTION,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.QA_SELECTION,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARALLEL_REVIEW_AGENT,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.SUBTASK_NAME,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION,

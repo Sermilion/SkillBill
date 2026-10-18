@@ -240,6 +240,21 @@ class CliGoalWatchRuntimeTest {
   }
 
   @Test
+  fun `goal refuses unknown and conflicting qa selections before launching a child`() {
+    val fixture = goalFixture(subtaskCount = 1)
+    for (qaArgs in listOf(listOf("--qa", "aut"), listOf("--qa", "auto", "--qa", "off"))) {
+      val run =
+        CliRuntime.run(
+          listOf("--db", fixture.dbPath.toString(), "goal", "SKILL-901") + qaArgs,
+          fixture.context(launcher = NoopGoalTestAgentRunLauncher),
+        )
+
+      assertTrue(run.exitCode != 0, run.stdout)
+      assertContains(run.stderr, "--qa")
+    }
+  }
+
+  @Test
   fun `goal watch rejects negative refresh bound`() {
     val fixture = goalFixture(subtaskCount = 1)
 

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.attempt
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.checkpoint.RuntimeCommitUpstreamHeadRecovery
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -143,6 +144,9 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     private val acceptedRun: PhaseRun,
   ) : OutputView(settlement),
     PhaseAuditOutputContext {
+    override val auditsNoChangeClaim: Boolean
+      get() = (request as? FeatureTaskRuntimeRunRequest)?.acceptanceCriterionRepair?.auditsNoChangeClaim != false
+
     override val operatorReopened: Boolean
       get() = FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(remediation.session, acceptedRun.phaseId)
 

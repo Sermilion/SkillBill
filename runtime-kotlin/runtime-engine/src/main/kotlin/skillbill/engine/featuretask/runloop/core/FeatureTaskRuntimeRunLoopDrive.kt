@@ -24,8 +24,10 @@ object FeatureTaskRuntimeRunLoopDrive {
   internal fun resumedReentry(context: FeatureTaskRuntimeRunLoopContext): PendingReentry? {
     val state = context.state
     val (loopId, reentry) = state.latestInFlightReentry ?: return null
+    val gateAdmissionSpan =
+      if (state.isValidatedCompletedReturn(loopId, reentry)) listOf(reentry.resumePhaseId) else reentry.span
     if (
-      state.spanBlockedByEntryGate(reentry.span) ||
+      state.spanBlockedByEntryGate(gateAdmissionSpan) ||
       FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules, stepState ->
         rules.discardsResumedReentry(loopId, stepState)
       } == true
@@ -40,6 +42,8 @@ object FeatureTaskRuntimeRunLoopDrive {
       loopId = loopId,
       edgeIteration = reentry.edgeIteration,
       drivingVerdict = reentry.drivingVerdict,
+      completionDerived = reentry.completionDerived,
+      resumeCoveredPhaseIds = reentry.resumeCoveredPhaseIds,
       expectedRepositoryCheckpoint =
         FeatureTaskRuntimeRunLoopPlanningBranch.decideByLoop(context, loopId) { rules, stepState ->
           rules.reentryCheckpoint(loopId, stepState)
@@ -64,6 +68,27 @@ object FeatureTaskRuntimeRunLoopDrive {
   }
 
   internal fun settleWithoutLaunch(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+  ): PhaseSettlement? =
+    crossSlotSettlement(context, phaseId)?.let { verdict -> PhaseSettlement.completed(phaseId, verdict) }
+      ?: ownSettlement(context, phaseId)
+
+  private fun crossSlotSettlement(
+    context: FeatureTaskRuntimeRunLoopContext,
+    phaseId: String,
+  ): FeatureTaskRuntimeVerdict? {
+    val owner = context.runState.selectedOwnerOf(phaseId)?.slot
+    var verdict: FeatureTaskRuntimeVerdict? = null
+    FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
+      if (verdict == null && stepState.acceptedOwner.slot != owner) {
+        verdict = rules.crossSlotSettlement(phaseId, context.phaseLoopContext(), stepState)
+      }
+    }
+    return verdict
+  }
+
+  private fun ownSettlement(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): PhaseSettlement? =
@@ -208,21 +233,8 @@ object FeatureTaskRuntimeRunLoopDrive {
     }
 
   internal fun FeatureTaskRuntimeRunLoopContext.runPhaseDriveLoop(advance: (String) -> PhaseSettlement) {
-    val explicitResume =
-      request.goalContinuation
-        ?.lastResumableStep
-        ?.takeIf(String::isNotBlank)
-        ?.let(state::explicitResumeStart)
-    if (explicitResume != null) {
-      runState.coupledRunTransitions.enterExplicitResumeStart(explicitResume)
-    }
     var phaseId: String? =
-      FeatureTaskRuntimeRunLoopAcceptanceRepair.resume(this)
-        ?: explicitResume?.phaseId
-        ?: session.pendingReentry?.phaseId
-        ?: traversal(this).forwardPhaseIds.first()
-    phaseId =
-      phaseId?.let { requested ->
+      driveStartPhaseId().let { requested ->
         traversal(this).loopOnlySuccessors.entries.singleOrNull { (predecessor, successor) ->
           successor == requested && !state.phase(predecessor).completed
         }?.key ?: requested
@@ -241,6 +253,26 @@ object FeatureTaskRuntimeRunLoopDrive {
           null
         }
     }
+  }
+
+  private fun FeatureTaskRuntimeRunLoopContext.driveStartPhaseId(): String {
+    val explicitResume =
+      request.goalContinuation
+        ?.lastResumableStep
+        ?.takeIf(String::isNotBlank)
+        ?.let(state::explicitResumeStart)
+    val acceptanceResume = FeatureTaskRuntimeRunLoopAcceptanceRepair.resume(this)
+    val recoveredReturnOverridesExplicit =
+      explicitResume != null && session.pendingReentry?.let { reentry ->
+        reentry.completionDerived && explicitResume.phaseId in reentry.resumeCoveredPhaseIds
+      } == true
+    if (explicitResume != null && acceptanceResume == null && !recoveredReturnOverridesExplicit) {
+      runState.coupledRunTransitions.enterExplicitResumeStart(explicitResume)
+    }
+    return acceptanceResume
+      ?: (if (recoveredReturnOverridesExplicit) session.pendingReentry?.phaseId else explicitResume?.phaseId)
+      ?: session.pendingReentry?.phaseId
+      ?: traversal(this).forwardPhaseIds.first()
   }
 
   internal fun advancePhaseReason(

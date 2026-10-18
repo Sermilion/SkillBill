@@ -16,6 +16,7 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -75,6 +76,7 @@ data class FeatureTaskRuntimeRunInput(
   val protectedSpecSha256: String? = null,
   val openArtifacts: WorkflowArtifactPatch = WorkflowArtifactPatch.EMPTY,
   val planIntake: String? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
 )
 
 data class FeatureTaskRuntimeGoalContinuationContext(
@@ -87,6 +89,7 @@ data class FeatureTaskRuntimeGoalContinuationContext(
   val codeReviewMode: CodeReviewExecutionMode? = null,
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
   val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val subtaskName: String? = null,
   val reviewBaseline: GoalSubtaskReviewBaseline? = null,
   val agentAddonSelection: AgentAddonSelection =

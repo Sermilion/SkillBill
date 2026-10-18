@@ -10,6 +10,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import kotlin.test.Test
@@ -377,6 +378,35 @@ class AgentRunGoalContinuationCommandTest {
         request.environmentFields.environment[tokens.QUALITY_GATE_SELECTION_ENV],
       )
     }
+  }
+
+  @Test
+  fun `goal-continuation launch forwards an explicit QA selection and omits an absent one`() {
+    val tokens = FeatureTaskRuntimeGoalContinuationLaunchTokens
+    val selected = RecordingAgentRunProcessRunner()
+    requireNotNull(adapters(selected)[SupportedAgent.CLAUDE]).launch(
+      skillRunRequest(
+        goalContinuation =
+          fullyPopulated(goalContinuationContext(childWorkflowId = "wfl-child-runtime", assignedWorkflowId = null))
+            .copy(qaSelection = FeatureTaskRuntimeQaSelection.OFF),
+      ),
+    )
+    val command = selected.requests.single().launch.command
+    assertEquals(FeatureTaskRuntimeQaSelection.OFF.wireValue, command[command.indexOf(tokens.QA_SELECTION_FLAG) + 1])
+    assertEquals(
+      FeatureTaskRuntimeQaSelection.OFF.wireValue,
+      selected.requests.single().environmentFields.environment[tokens.QA_SELECTION_ENV],
+    )
+
+    val omitted = RecordingAgentRunProcessRunner()
+    requireNotNull(adapters(omitted)[SupportedAgent.CLAUDE]).launch(
+      skillRunRequest(
+        goalContinuation =
+          fullyPopulated(goalContinuationContext(childWorkflowId = "wfl-child-runtime", assignedWorkflowId = null)),
+      ),
+    )
+    assertFalse(tokens.QA_SELECTION_FLAG in omitted.requests.single().launch.command)
+    assertNull(omitted.requests.single().environmentFields.environment[tokens.QA_SELECTION_ENV])
   }
 
   private fun fullyPopulated(context: SkillRunGoalContinuationContext): SkillRunGoalContinuationContext =

@@ -77,9 +77,6 @@ internal object AuditPlanningExecutionPlanMapping {
       current.reviewSelection,
       current.qualityGateSelection,
       traversal,
-      (current.dispatchStrategyByStep - omitted).mapValues { (_, owner) ->
-        if (owner.slot == PhaseSlot.AUDIT) owner.copy(semanticRevision = revision) else owner
-      },
       ResolvedPhaseStepRecords(
         (current.stepPolicyIdentities - omitted).mapValues { (step, identity) ->
           if (step in auditSteps) {
@@ -95,6 +92,7 @@ internal object AuditPlanningExecutionPlanMapping {
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
       recorded.contractVersion,
+      current.qaSelection,
     )
   }
 
@@ -109,12 +107,13 @@ internal object AuditPlanningExecutionPlanMapping {
       current.reviewSelection,
       current.qualityGateSelection,
       current.traversal,
-      current.dispatchStrategyByStep,
       ResolvedPhaseStepRecords(
         current.stepPolicyIdentities,
         current.resumeInterpretationIdentities,
       ),
       recorded.effectivePolicies,
       recorded.effectivePolicySettings,
+      current.contractVersion,
+      current.qaSelection,
     )
 }

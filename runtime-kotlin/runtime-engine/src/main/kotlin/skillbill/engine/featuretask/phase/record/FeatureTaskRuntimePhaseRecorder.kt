@@ -30,7 +30,6 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.review.model.ReviewFindingVerdict
-import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeDiagnosticSignal
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -43,6 +42,7 @@ import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplem
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -112,7 +112,7 @@ class FeatureTaskRuntimePhaseRecorder
       )
     private val gateProgress = FeatureTaskRuntimeGateProgressRecorder(database, workflowPersistence)
 
-    fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? = phaseQuery.existingWorkflowMode(workflowId)
+    fun loadQaRepairState(workflowId: String): QaRepairState? = workflowPersistence.readQaRepairState(workflowId)
 
     fun ensureWorkflowOpen(
       workflowId: String,

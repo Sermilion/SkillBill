@@ -11,6 +11,7 @@ import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.MAX_ACCEPTANCE_CRITERION_ORDINAL
+import skillbill.workflow.taskruntime.model.qa.QaRepairState
 
 data class FeatureTaskRuntimeRunInvariants(
   val specReference: String,
@@ -102,6 +103,7 @@ data class NormalizedFeatureTaskRuntimePhaseOutput(
   val failureDisposition: String? = null,
   internal val runtimeRecord: Map<String, Any?> = emptyMap(),
   internal val historicalRecord: Map<String, Any?>? = null,
+  val qaRepairState: QaRepairState? = null,
 ) {
   internal val envelope: Map<String, Any?>
     get() = recordView()

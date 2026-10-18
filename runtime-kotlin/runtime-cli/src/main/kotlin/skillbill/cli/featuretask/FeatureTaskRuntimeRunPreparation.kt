@@ -81,6 +81,7 @@ class FeatureTaskRuntimeRunPreparation(
     specPath: String,
   ): PreparedRuntimeRun {
     val environment = inputs.environment
+    val qaSelection = options.requestedQaSelection(environment)
     val goalContinuation = options.parseGoalContinuationContext(environment)
     val operatorDecision = options.requestedOperatorDecision()
     val invokedAgentId = resolveInvokedRuntimeAgentId(options.agent, environment)
@@ -136,6 +137,7 @@ class FeatureTaskRuntimeRunPreparation(
       compactionSettings,
       hydratedSelection,
       goalContinuation,
+      qaSelection,
       operatorDecision,
     )
   }

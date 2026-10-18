@@ -55,7 +55,13 @@ internal object FeatureTaskRuntimeRunLoopAcceptanceRepair {
           else -> steps.audit
         }
       }
-    context.runState.coupledRunTransitions.reenterAcceptanceSteps(listOf(target))
+    val reopened =
+      if (target == steps.planning) {
+        listOf(target, steps.repair, steps.audit)
+      } else {
+        listOf(target)
+      }
+    context.runState.coupledRunTransitions.reenterAcceptanceSteps(reopened)
     return target
   }
 

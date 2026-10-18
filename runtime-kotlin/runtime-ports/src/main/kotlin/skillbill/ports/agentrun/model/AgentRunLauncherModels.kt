@@ -15,6 +15,7 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.LAUNCH_MODEL_TOKEN_PATTERN
 import java.nio.file.Path
@@ -95,6 +96,7 @@ data class SkillRunGoalContinuationContext(
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
   val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection =
     FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  val qaSelection: FeatureTaskRuntimeQaSelection? = null,
   val reviewBaseline: GoalSubtaskReviewBaseline? = null,
   val agentAddonSelection: AgentAddonSelection = AgentAddonSelection(),
 ) {

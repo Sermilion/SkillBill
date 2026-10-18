@@ -469,6 +469,10 @@ Provider-neutral native-agent declarations from the resolved selection are
 rendered into an installed cache and recorded in durable link inventory;
 preflight resolves logical workers exclusively from that inventory.
 
+The installed pack catalog copies manifest-declared QA guidance alongside review
+content and add-ons. Capability discovery loads that catalog without the source
+checkout.
+
 ## Native-Agent Generation
 
 Provider-neutral native-agent sources live under `native-agents/` in source

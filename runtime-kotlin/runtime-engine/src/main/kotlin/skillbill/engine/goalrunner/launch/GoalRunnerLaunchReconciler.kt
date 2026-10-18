@@ -176,6 +176,15 @@ class GoalRunnerLaunchReconciler(
           state.manifest.workflowIdFor(subtaskId)
             ?.let(outcomeStore::recordedQualityGateSelection)
             ?: GoalRunnerQualityGateSelectionResolver.resolve(),
+        qaSelection =
+          state.manifest.workflowIdFor(subtaskId)
+            .let { workflowId ->
+              if (workflowId == null) {
+                request.qaSelection
+              } else {
+                outcomeStore.childQaSelection(workflowId, request.qaSelection)
+              }
+            },
         agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
         reviewBaseline =
           state.manifest.workflowIdFor(subtaskId)

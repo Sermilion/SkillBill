@@ -270,6 +270,11 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
           requiredVerdict = FeatureTaskRuntimeVerdict.SATISFIED,
         ),
         FeatureTaskRuntimePhaseEntryGate(
+          phaseId = def.PHASE_QA,
+          requiredPhaseId = def.PHASE_AUDIT,
+          requiredVerdict = FeatureTaskRuntimeVerdict.SATISFIED,
+        ),
+        FeatureTaskRuntimePhaseEntryGate(
           phaseId = def.PHASE_IMPLEMENT_FIX,
           requiredPhaseId = def.PHASE_VERIFY_FINDINGS,
           requiredVerdict = FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
@@ -285,6 +290,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
         Triple(def.PHASE_MONITOR, FeatureTaskRuntimeVerdict.CI_FAILED, def.PHASE_MONITOR_FIX),
         Triple(def.PHASE_MONITOR, FeatureTaskRuntimeVerdict.PROGRESS, def.PHASE_MONITOR_FIX),
         Triple(def.PHASE_MONITOR_FIX, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_MONITOR),
+        Triple(def.PHASE_QA, FeatureTaskRuntimeVerdict.QA_FINDINGS, def.PHASE_QA_FIX),
+        Triple(def.PHASE_QA_FIX, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_AUDIT),
+        Triple(def.PHASE_WRITE_HISTORY, FeatureTaskRuntimeVerdict.QA_INVALIDATED, def.PHASE_AUDIT),
       ),
       semantic.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) },
     )

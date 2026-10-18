@@ -11,6 +11,7 @@ import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -104,14 +105,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
         it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision
       } ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     if (plan.selectedSlots != definition.slots) incompatible()
-    requireSupportedStrategies(plan, definition)
-    val selectionMatches =
-      try {
-        strategies.matchesRecordedSelection(plan, definition)
-      } catch (_: InvalidPhaseStrategyCompositionError) {
-        incompatible()
-      }
-    if (!selectionMatches) incompatible()
+    requireSupportedSelections(plan, definition)
     val traversal =
       when (val result = definition.traversalOrViolation(plan.selectedStepIds, plan.selectedEntryStepIds)) {
         is SkeletonTraversalResult.Ready -> result.declaration
@@ -120,6 +114,24 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     if (plan.traversal != traversal) incompatible()
     requireSupportedPolicies(plan.effectivePolicies)
     return SupportedComposition(plan, recordedMonitorSemantics)
+  }
+
+  private fun requireSupportedSelections(
+    plan: ResolvedPhaseExecutionPlan,
+    definition: SkeletonDefinition,
+  ) {
+    val featureRun = plan.definitionId in setOf(SkeletonDefinition.GOAL_CHILD.id, SkeletonDefinition.STANDALONE.id)
+    if (featureRun && (PhaseSlot.QA in definition.slots) != (plan.qaSelection != null)) {
+      throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+    }
+    requireSupportedStrategies(plan, definition)
+    val selectionMatches =
+      try {
+        strategies.matchesRecordedSelection(plan, definition)
+      } catch (_: InvalidPhaseStrategyCompositionError) {
+        incompatible()
+      }
+    if (!selectionMatches) incompatible()
   }
 
   private data class SupportedComposition(

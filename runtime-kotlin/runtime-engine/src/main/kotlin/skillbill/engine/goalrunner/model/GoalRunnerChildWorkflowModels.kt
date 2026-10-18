@@ -8,6 +8,7 @@ import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPla
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQaSelection
 
 data class GoalRunnerChildExecutionPlanAdmission(
   val workflowId: String,
@@ -25,6 +26,7 @@ data class GoalRunnerChildWorkflowSetup(
   val reviewPolicy: GoalRunnerReviewPolicy,
   val planningHydration: GoalChildPlanningHydrationRequest? = null,
   val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
+  val qaSelection: FeatureTaskRuntimeQaSelection = FeatureTaskRuntimeQaSelection.AUTO,
   val operatorResumePhaseId: String? = null,
   val operatorResumeReason: String? = null,
 ) {

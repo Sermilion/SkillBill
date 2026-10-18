@@ -2,6 +2,8 @@ package skillbill.engine.featuretask.qa.receipt
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.qa.QaReceiptPayloadKeys
+import skillbill.engine.featuretask.model.execution.QaPolicy
+import skillbill.engine.featuretask.model.execution.QaSkipReason
 import skillbill.error.featuretask.qa.invalidQaReceipt
 import skillbill.scaffold.model.QaPlatform
 
@@ -20,12 +22,14 @@ internal fun decodeQaReceipt(wire: Map<String, Any?>): QaReceipt {
         QaAssertion(
           flowId = assertion.text(QaReceiptPayloadKeys.FLOW_ID),
           outcome = assertion.wireEnum(QaReceiptPayloadKeys.OUTCOME, QaAssertionOutcome::fromWire),
+          criteria = assertion.stringList(QaReceiptPayloadKeys.CRITERIA),
         )
       },
     findings =
       wire.mapList(QaReceiptPayloadKeys.FINDINGS).map { finding ->
         QaFinding(
           id = finding.text(QaReceiptPayloadKeys.ID),
+          affectedCriteria = finding.stringList(QaReceiptPayloadKeys.AFFECTED_CRITERIA),
           evidencePaths =
             finding.mapList(QaReceiptPayloadKeys.EVIDENCE_REFS).map { it.text(QaReceiptPayloadKeys.PATH) },
         )
@@ -89,6 +93,10 @@ private fun Map<String, Any?>.objectAt(key: String): Map<String, Any?> =
 
 private fun Map<String, Any?>.mapList(key: String): List<Map<String, Any?>> =
   JsonCodec.anyToStringAnyMapList(this[key]).orEmpty()
+
+private fun Map<String, Any?>.stringList(key: String): List<String> =
+  (this[key] as? List<*>)?.map { it as? String ?: throw invalidQaReceipt("'$key' must contain strings.") }
+    ?: throw invalidQaReceipt("'$key' must be an array.")
 
 private fun <T> Map<String, Any?>.wireEnum(
   key: String,

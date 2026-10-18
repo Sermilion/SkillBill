@@ -1,5 +1,6 @@
 package skillbill.ports.qa
 
+import skillbill.ports.qa.model.QaReceiptSource
 import skillbill.ports.qa.model.QaWorkspace
 import java.nio.file.Path
 
@@ -14,8 +15,14 @@ interface QaWorkspacePort {
     invocationId: String,
   ): QaWorkspace
 
-  /** The receipt text the run wrote into [workspace], or null when it wrote none. */
-  fun readReceipt(workspace: QaWorkspace): String?
+  /** The current or retained receipt and its owned evidence prefix, or null when no receipt exists. */
+  fun readReceipt(receiptPath: Path): QaReceiptSource?
+
+  /** Reads retained evidence only when [receiptReference] names a receipt owned by this repository. */
+  fun readRetainedReceipt(
+    qaRoot: Path,
+    receiptReference: String,
+  ): QaReceiptSource?
 
   /** Removes the invocation owner record of [workspace] so the finished invocation can no longer take a lease. */
   fun close(workspace: QaWorkspace)

@@ -2,7 +2,8 @@ package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -64,7 +65,11 @@ class FeatureTaskRuntimeExecutionPlanCodec(
             },
           Keys.REVIEW_SELECTION to plan.reviewSelection?.wireValue,
           Keys.QUALITY_GATE_SELECTION to plan.qualityGateSelection?.wireValue,
-          Keys.TRAVERSAL to encodeExecutionPlanTraversal(plan.traversal),
+          Keys.TRAVERSAL to
+            encodeExecutionPlanTraversal(
+              plan.traversal,
+              plan.contractVersion == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+            ),
           Keys.DISPATCH_OWNERSHIP to
             plan.dispatchStrategyByStep.map { (step, owner) ->
               mapOf(
@@ -85,8 +90,11 @@ class FeatureTaskRuntimeExecutionPlanCodec(
               )
             },
         ).apply {
-          if (plan.contractVersion != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_PREVIOUS_CONTRACT_VERSION) {
+          if (plan.contractVersion != FEATURE_TASK_RUNTIME_EXECUTION_PLAN_LEGACY_CONTRACT_VERSION) {
             put(Keys.STEP_LAUNCH_ASSIGNMENTS, encodeAssignments(plan))
+          }
+          if (plan.contractVersion == FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION) {
+            put(Keys.QA_SELECTION, plan.qaSelection?.wireValue)
           }
           (
             effectiveInputs?.let {

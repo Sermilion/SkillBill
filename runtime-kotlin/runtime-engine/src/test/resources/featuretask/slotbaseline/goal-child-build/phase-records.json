@@ -109,6 +109,20 @@
         "started_at": "__NORMALIZED_TIMESTAMP__",
         "status": "completed"
     },
+    "qa": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"qa\",\"status\":\"completed\",\"summary\":\"no installed pack declares qa_capability for this repository\",\"produced_outputs\":{\"qa_receipt\":{\"contract_version\":\"0.1\",\"verdict\":\"skipped\",\"identity\":{\"head_revision\":\"\",\"tree_identity\":\"__NORMALIZED_SHA64__\"},\"artifact\":null,\"policy\":\"auto\",\"target\":null,\"flows\":[],\"assertions\":[],\"findings\":[],\"skip_reason\":\"unsupported_target\",\"reason_detail\":\"no installed pack declares qa_capability for this repository\",\"cleanup\":{\"outcome\":\"released\",\"retained_resources\":[]}},\"qa_head_revision\":\"\",\"qa_tree_identity\":\"__NORMALIZED_SHA64__\",\"qa_evidence_prefix\":\".git/skill-bill/qa/qa-test-invocation/\",\"qa_receipt_ref\":\"__NORMALIZED_REPO_ROOT__/.git/skill-bill/qa/qa-test-invocation/receipt.json\",\"qa_criterion_ids\":[\"AC-001\",\"AC-002\"],\"qa_open_findings\":[]}}",
+        "phase_id": "qa",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "runtime",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
     "review": {
         "attempt_count": 1,
         "contract_version": "0.2",
