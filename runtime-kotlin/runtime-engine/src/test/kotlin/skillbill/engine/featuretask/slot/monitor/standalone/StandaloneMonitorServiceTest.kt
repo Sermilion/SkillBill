@@ -45,6 +45,7 @@ import kotlin.test.assertTrue
 private const val PUBLISHED = "1111111111111111111111111111111111111111"
 private const val TEAMMATE = "2222222222222222222222222222222222222222"
 private const val ADVANCED_BASE = "3333333333333333333333333333333333333333"
+private const val FETCHED_BASE = "4444444444444444444444444444444444444444"
 private const val PR_NUMBER = 427
 private val WORKTREE = MonitorWorktree(Path.of("/owned/worktree"), "skill-bill/monitor/service-test")
 
@@ -95,7 +96,15 @@ class StandaloneMonitorServiceTest {
     )
   private val ledger =
     StandaloneMonitorLedger(
-      MonitorExecutionContext(target, Path.of("/caller"), Path.of("/caller"), WORKTREE, "owner-token", 1L),
+      MonitorExecutionContext(
+        target,
+        Path.of("/caller"),
+        Path.of("/caller"),
+        WORKTREE,
+        "owner-token",
+        1L,
+        FETCHED_BASE,
+      ),
       MonitorCleanupOwnership(
         MonitorFence(Path.of("/fence"), "owner-token", 1L),
         UnreachableMonitorResources(),
@@ -194,11 +203,12 @@ class StandaloneMonitorServiceTest {
   }
 
   @Test
-  fun `conflict evidence directs the merge of the pinned base commit through the actual base endpoint`() {
+  fun `conflict evidence directs the merge of the fetched base tip through the actual base endpoint`() {
     val evidence = service.operations.conflictEvidence(ledger)
 
     assertTrue("git fetch https://github.com/acme/repo.git refs/heads/main" in evidence, evidence)
-    assertTrue("Merge the pinned base commit $SHA" in evidence, evidence)
+    assertTrue("Merge the pinned base commit $FETCHED_BASE" in evidence, evidence)
+    assertTrue("Merge the pinned base commit $SHA" !in evidence, "the pull request's recorded base.sha is stale")
     assertTrue("FETCH_HEAD" !in evidence, evidence)
   }
 

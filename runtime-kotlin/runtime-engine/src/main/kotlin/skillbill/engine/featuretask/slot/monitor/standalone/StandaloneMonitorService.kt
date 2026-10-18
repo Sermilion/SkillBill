@@ -68,15 +68,16 @@ class StandaloneMonitorService(
 
     override fun conflictEvidence(ledger: StandaloneMonitorLedger): String {
       val base = ledger.execution.target.base
+      val pinnedBase = ledger.execution.pinnedBaseSha
       return buildString {
         appendContext(ledger)
-        appendLine("The pull request conflicts with its base ${base.repository.slug}:${base.ref} at ${base.sha}.")
+        appendLine("The pull request conflicts with its base ${base.repository.slug}:${base.ref} at $pinnedBase.")
         appendLine(
           "Fetch that base explicitly with `git fetch ${ledger.execution.target.baseFetchUrl} refs/heads/${base.ref}`.",
         )
         appendLine(
-          "Merge the pinned base commit ${base.sha}, not a newer fetched tip, into the current branch and resolve " +
-            "every conflict. If the fetched base no longer contains ${base.sha}, stop and settle blocked.",
+          "Merge the pinned base commit $pinnedBase, not a newer fetched tip, into the current branch and resolve " +
+            "every conflict. If the fetched base no longer contains $pinnedBase, stop and settle blocked.",
         )
       }
     }
@@ -230,7 +231,7 @@ class StandaloneMonitorService(
     appendLine("## Standalone monitor repair brief")
     appendLine("Pull request: ${target.pullRequest.url} (${target.pullRequest.targetKey})")
     appendLine("Head: ${target.head.tip.repository.slug}:${target.head.tip.ref} at ${ledger.acknowledgedHeadSha}")
-    appendLine("Base: ${target.base.repository.slug}:${target.base.ref} at ${target.base.sha} when pinned")
+    appendLine("Base: ${target.base.repository.slug}:${target.base.ref} at ${execution.pinnedBaseSha} when pinned")
     appendLine("Working directory: ${execution.worktree.path} on branch ${execution.worktree.branch}")
   }
 

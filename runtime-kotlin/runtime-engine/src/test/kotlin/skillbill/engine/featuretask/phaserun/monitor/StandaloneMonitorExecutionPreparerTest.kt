@@ -64,7 +64,11 @@ private class RecordingResources : StandaloneMonitorResources {
   var context: MonitorContextResolution =
     MonitorContextResolution.Resolved(MonitorRepositoryContext(CALLER_ROOT, CALLER_ROOT, Path.of("/common")))
   var blockAcquisitionWith: MonitorAdmissionBlock? = null
-  var fetch: MonitorFetchResult = MonitorFetchResult.Fetched(MonitorFetchedRefs("refs/head", "refs/base"))
+  var fetch: MonitorFetchResult =
+    MonitorFetchResult.Fetched(
+      MonitorFetchedRefs("refs/head", "refs/base"),
+      "b".repeat(40),
+    )
   var recovery: MonitorStaleRecovery = MonitorStaleRecovery.Recovered("old-token")
   var settlement: MonitorSettlement = MonitorSettlement.Released
   var failure: Pair<String, Throwable>? = null

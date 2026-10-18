@@ -50,6 +50,12 @@ class GhMonitorPullRequestSourceTest {
     GhCommandResult(exitCode, stdout)
   }
 
+  private fun routedSource(vararg responses: Pair<String, GhCommandResult>) =
+    GhMonitorPullRequestSource { _, args ->
+      calls += args
+      responses.toMap().getValue(args.last())
+    }
+
   private fun foundPullRequest(json: String) =
     assertIs<MonitorPullRequestLookup.Found>(source(stdout = json).pullRequest(REPO, 1)).pullRequest
 
@@ -78,13 +84,58 @@ class GhMonitorPullRequestSourceTest {
   }
 
   @Test
-  fun `a deleted head repository yields no head and absent permissions yield no evidence`() {
-    val deleted = foundPullRequest(pullRequestJson(1, headRepo = null))
-    val silent = foundPullRequest(pullRequestJson(1, push = null, maintainerCanModify = null))
+  fun `a deleted head repository yields no head`() {
+    assertNull(foundPullRequest(pullRequestJson(1, headRepo = null)).head)
+    assertEquals(1, calls.size)
+  }
 
-    assertNull(deleted.head)
-    assertNull(silent.head?.writeEvidence?.repositoryPush)
-    assertNull(silent.head?.writeEvidence?.maintainerCanModify)
+  @Test
+  fun `push permission missing from the pull request is read from the head repository endpoint`() {
+    val pullRequest = pullRequestJson(480, push = null)
+    val lookup =
+      routedSource(
+        "repos/acme/repo/pulls/480" to GhCommandResult(0, pullRequest),
+        "repos/acme/repo" to GhCommandResult(0, """{"full_name":"acme/repo","permissions":{"push":true}}""""),
+      ).pullRequest(REPO, 480)
+
+    val found = assertIs<MonitorPullRequestLookup.Found>(lookup).pullRequest
+    assertEquals(true, found.head?.writeEvidence?.repositoryPush)
+    assertEquals(listOf("api", "--hostname", "github.com", "--method", "GET", "repos/acme/repo"), calls.last())
+  }
+
+  @Test
+  fun `a fork head reads push permission from the fork repository`() {
+    val pullRequest = pullRequestJson(7, headRepo = "Fork/Repo", push = null, maintainerCanModify = false)
+    val lookup =
+      routedSource(
+        "repos/acme/repo/pulls/7" to GhCommandResult(0, pullRequest),
+        "repos/fork/repo" to GhCommandResult(0, """{"permissions":{"push":false}}""""),
+      ).pullRequest(REPO, 7)
+
+    assertEquals(
+      false,
+      assertIs<MonitorPullRequestLookup.Found>(lookup).pullRequest.head?.writeEvidence?.repositoryPush,
+    )
+  }
+
+  @Test
+  fun `a failed or silent head repository lookup leaves push evidence absent`() {
+    val pullRequest = pullRequestJson(1, push = null, maintainerCanModify = null)
+    listOf(
+      GhCommandResult(1, "gh: boom (HTTP 500)"),
+      GhCommandResult(0, """{"full_name":"acme/repo"}""""),
+      GhCommandResult(0, "not json"),
+    ).forEach { repositoryResponse ->
+      val lookup =
+        routedSource(
+          "repos/acme/repo/pulls/1" to GhCommandResult(0, pullRequest),
+          "repos/acme/repo" to repositoryResponse,
+        ).pullRequest(REPO, 1)
+
+      val evidence = assertIs<MonitorPullRequestLookup.Found>(lookup).pullRequest.head?.writeEvidence
+      assertNull(evidence?.repositoryPush)
+      assertNull(evidence?.maintainerCanModify)
+    }
   }
 
   @Test

@@ -74,6 +74,7 @@ class PhaseStandaloneMonitorExecutionTest {
   private val repairCwds = mutableListOf<Path>()
   private val repairPrompts = mutableListOf<String>()
   private var duringRepair: (Path) -> Unit = {}
+  private var reportedBase: String? = null
   private var repairCount = 0
   private var repairOutcome = FIXED
   private val launcher =
@@ -233,6 +234,25 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
+  fun `a conflict merges the fetched base tip when the pull request reports an older base commit`() {
+    git(caller, "checkout", "-q", "main")
+    reportedBase = git(caller, "rev-parse", "HEAD")
+    commit(caller, "Base.kt", "class Base\n")
+    git(caller, "push", "-q", "origin", "main")
+    val baseTip = git(caller, "rev-parse", "HEAD")
+    duringRepair = { cwd ->
+      git(cwd, "fetch", "-q", BASE_URL, "refs/heads/main")
+      git(cwd, "merge", "-q", "--no-commit", "--no-ff", baseTip)
+    }
+
+    val result = run()
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertTrue("Merge the pinned base commit $baseTip" in repairPrompts.single(), repairPrompts.single())
+    assertEquals(listOf(headSha, baseTip), git(fork, "rev-list", "--parents", "-n", "1", forkHead()).split(" ").drop(1))
+  }
+
+  @Test
   fun `every published repair that still fails CI counts toward the three-attempt cap`() {
     val result = run(checks = { failing() })
 
@@ -368,7 +388,7 @@ class PhaseStandaloneMonitorExecutionTest {
               FORK_URL,
               MonitorWriteEvidence(repositoryPush = false, maintainerCanModify = true),
             ),
-            MonitorBranchTip(ACME, "main", git(origin, "rev-parse", "main")),
+            MonitorBranchTip(ACME, "main", reportedBase ?: git(origin, "rev-parse", "main")),
             conflicting = !isAncestor(git(origin, "rev-parse", "main"), forkHead()),
           ),
         )
