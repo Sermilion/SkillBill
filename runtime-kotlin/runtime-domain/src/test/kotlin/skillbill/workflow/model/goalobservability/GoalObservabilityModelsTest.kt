@@ -206,6 +206,35 @@ class GoalObservabilityModelsTest {
     assertEquals(listOf(progress), artifacts.goalProgressHistory())
   }
 
+  @Test
+  fun `goal progress agent id round-trips and stays absent for events written without it`() {
+    val withAgent =
+      GoalProgressEvent(
+        eventKind = GoalProgressEventKind.OPERATION_HEARTBEAT,
+        workflowId = "wf-372",
+        workflowPhase = "monitor_fix",
+        processAlive = true,
+        sequenceNumber = 3,
+        timestamp = "2026-06-01T00:00:00Z",
+        operationName = "monitor_fix",
+        agentId = "claude",
+      )
+    val legacy = withAgent.copy(agentId = null)
+
+    val decoded =
+      DurableWorkflowArtifacts.fromMap(
+        mapOf(GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY to withAgent.toPersistenceWire()),
+      ).goalProgressLatestEvent()
+    val decodedLegacy =
+      DurableWorkflowArtifacts.fromMap(
+        mapOf(GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY to legacy.toPersistenceWire()),
+      ).goalProgressLatestEvent()
+
+    assertEquals("claude", decoded?.agentId)
+    assertEquals(null, decodedLegacy?.agentId)
+    assertFalse("agent_id" in legacy.toArtifactMap())
+  }
+
   private fun event(
     sequence: Int,
     changedFiles: List<String> = emptyList(),

@@ -64,6 +64,7 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
   val operationName = reader.optionalString("operation_name")
   val operationKind = reader.optionalString("operation_kind")
   val expectedLong = reader.optionalBoolean("expected_long") ?: false
+  val agentId = reader.optionalString("agent_id")
   GoalProgressEvent.violation(eventKind, workflowId, workflowPhase, sequenceNumber, operationName)?.let { reason ->
     invalidDeclaredGoalProgressEvent(sourceLabel, "<root>", reason)
   }
@@ -79,6 +80,7 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
     operationKind = operationKind,
     expectedLong = expectedLong,
     outcome = outcome,
+    agentId = agentId,
   )
 }
 

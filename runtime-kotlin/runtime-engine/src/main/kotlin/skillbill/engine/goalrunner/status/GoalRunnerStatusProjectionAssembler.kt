@@ -83,7 +83,7 @@ class GoalRunnerStatusProjectionAssembler(
       }
     return GoalRunnerStatusProjector.project(
       manifest = manifest,
-      activeAgent = resolveActiveAgent(currentSubtask),
+      activeAgent = resolveActiveAgent(currentSubtask, loadedState.parentWorkflowId),
       extras =
         statusProjectionRuntimeInputs(
           loadedState = loadedState,
@@ -143,7 +143,7 @@ class GoalRunnerStatusProjectionAssembler(
         request.issueKey,
         subject.current,
         subject.counts,
-        resolveActiveAgent(subject.current),
+        resolveActiveAgent(subject.current, parentWorkflowId),
         inputs,
       )
     }
@@ -218,6 +218,12 @@ class GoalRunnerStatusProjectionAssembler(
     }
     return liveParent
   }
+
+  private fun goalFinalizationAgent(parentWorkflowId: String): String? =
+    liveGoalFinalizationProgress(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
+      ?.latestDeclaredProgressEvent
+      ?.agentId
+      ?.takeIf(String::isNotBlank)
 
   private fun liveGoalFinalizationProgress(
     parentWorkflowId: String,
@@ -601,8 +607,11 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
 
-  private fun resolveActiveAgent(currentSubtask: DecompositionSubtask?): String? {
-    if (currentSubtask == null) return null
+  private fun resolveActiveAgent(
+    currentSubtask: DecompositionSubtask?,
+    parentWorkflowId: String,
+  ): String? {
+    if (currentSubtask == null) return goalFinalizationAgent(parentWorkflowId)
     val workflowId = currentSubtask.workflowId?.takeIf(String::isNotBlank)
     if (workflowId != null &&
       phaseQuery.existingWorkflowMode(workflowId) == FeatureTaskWorkflowMode.RUNTIME

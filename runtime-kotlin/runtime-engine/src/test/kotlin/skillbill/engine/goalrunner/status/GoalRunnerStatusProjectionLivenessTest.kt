@@ -20,6 +20,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -171,6 +172,36 @@ class GoalRunnerStatusProjectionLivenessTest {
     assertTrue(status.paused)
     assertEquals("operator requested pause", status.pauseReason)
     assertEquals("monitor", status.currentStep)
+  }
+
+  @Test
+  fun `live goal finalization reports its agent once every subtask is complete`() {
+    val finished = manifest(subtaskCount = 1)
+    val store =
+      InMemoryGoalManifestStore(
+        manifest =
+          finished.copy(
+            status = "complete",
+            currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "complete"),
+            subtasks = finished.subtasks.map { it.copy(status = "complete", commitSha = "sha-1") },
+          ),
+      ).apply { executionLeaseForTest = liveLease() }
+    val outcomes = RecordingOutcomeStore()
+    val parked = parkedParentWithGoalFinalizationOnMonitor()
+    outcomes.progresses["wfl-parent"] =
+      parked.copy(latestDeclaredProgressEvent = parked.latestDeclaredProgressEvent?.copy(agentId = "claude"))
+    val status =
+      requireNotNull(
+        testGoalRunnerStatusService(
+          manifestStore = store,
+          ports = GoalRunnerStatusTestPorts(workerSupervisor = liveSupervisor),
+          outcomeStore = outcomes,
+          phaseRecorder = goalRunnerDefaultPhaseRecorder(),
+        ).status(GoalRunnerStatusRequest(issueKey = "SKILL-56", invokedAgentId = "codex")),
+      )
+
+    assertEquals("monitor", status.currentStep)
+    assertEquals("claude", status.activeAgent)
   }
 
   private fun parkedParentWithGoalFinalizationOnMonitor(): GoalRunnerWorkflowProgress =
