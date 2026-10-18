@@ -19,6 +19,7 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -87,6 +88,25 @@ class PlanBundleSnapshotsTest {
     assertTrue(unitComplete(requireNotNull(rebased.subtask(1))))
     assertFalse(unitComplete(requireNotNull(rebased.subtask(2))))
     assertNull(requireNotNull(rebased.subtask(2)).detailsSha256)
+  }
+
+  @Test
+  fun `a rebase adopts a spec whose scope and details were both edited instead of replanning it`() {
+    val written = writePlanBundle(repoRoot, ISSUE_KEY)
+    written.subtaskSpecPaths.indices.forEach { appendDetails(written, it, "- Planned task.") }
+    val bundle = snapshots.capture(repoRoot, written, FeatureTaskRuntimePlanBundleOrigin.EXISTING)
+    val secondSpec = repoRoot.resolve(written.subtaskSpecPaths[1])
+    val edited =
+      "Scope note added after planning.\n" +
+        Files.readString(secondSpec).replace("- Planned task.", "- Operator-revised task.")
+    Files.writeString(secondSpec, edited)
+
+    val rebased = requireNotNull(snapshots.rebase(repoRoot, ISSUE_KEY, bundle, settledSubtaskIds = emptySet()))
+
+    val second = requireNotNull(rebased.subtask(2))
+    assertEquals("- Operator-revised task.", second.planText)
+    assertTrue(unitComplete(second))
+    assertEquals(edited, Files.readString(secondSpec))
   }
 
   @Test

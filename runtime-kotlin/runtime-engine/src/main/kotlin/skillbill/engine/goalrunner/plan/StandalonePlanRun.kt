@@ -97,8 +97,7 @@ class StandalonePlanRun(
         launch = StandalonePlanLaunch(replan.agentId, IdeStatusLaunchScope.GOAL).forPhase(issueKey),
       )
     return runCatching {
-      reopening.rebasePlanBundle(replan)
-      if (!reopening.reopenAtPlanSubtasks(planWorkflowId)) {
+      if (!reopening.reopenWithRebasedBundle(replan)) {
         return@runCatching refused(
           publisher,
           "Plan workflow '$planWorkflowId' for $issueKey has no `plan_subtasks` step to re-plan.",

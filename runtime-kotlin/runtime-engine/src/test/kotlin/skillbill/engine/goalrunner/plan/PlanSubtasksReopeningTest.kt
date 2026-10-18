@@ -19,6 +19,7 @@ import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.source.findImportedSubtaskPlanWorkflowIds
 import skillbill.engine.goalrunner.planning.source.findLinkedSubtaskPlanWorkflowId
 import skillbill.engine.goalrunner.planning.source.findReopenedSubtaskPlanWorkflowId
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -45,6 +46,7 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -111,6 +113,41 @@ class PlanSubtasksReopeningTest {
           it.workflowStates.findReopenedSubtaskPlanWorkflowId(identity.normalizedIssueKey, identity.repositoryIdentity)
         },
       )
+    } finally {
+      home.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `spec drift replanning reopens a completed plan before it rewrites the plan bundle`() {
+    val home = Files.createTempDirectory("plan-subtasks-rebase")
+    try {
+      val database = phaseRunDatabase(home, testHarnessClock)
+      val execution = ExecutionPlanAdmissionFixture(SkeletonDefinition.PLAN, database = database)
+      val selectedId = "wftr-drifted-plan"
+      seedPlans(database, execution, selectedId, "wftr-older-plan", acceptedRecords())
+      val recorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock)
+      val rebased =
+        FeatureTaskRuntimePlanBundle(
+          FeatureTaskRuntimePlanBundleOrigin.EXISTING,
+          "drifted-spec",
+          "manifest",
+          emptyList(),
+        )
+
+      assertFailsWith<SkillBillRuntimeException> { recorder.recordPlanBundle(selectedId, rebased) }
+
+      val identity = execution.identity(selectedId)
+      assertTrue(
+        reopening(database).reopenWithRebasedBundle(
+          PlanSubtasksReplan(identity.normalizedIssueKey, selectedId, home, settledSubtaskIds = emptySet()),
+        ),
+      )
+      assertTrue(recorder.recordPlanBundle(selectedId, rebased))
+      database.read { unit ->
+        val reopened = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, selectedId))
+        assertEquals(WorkflowStatus.PENDING, reopened.workflowStatus)
+      }
     } finally {
       home.toFile().deleteRecursively()
     }
