@@ -1,5 +1,6 @@
 package skillbill.idestatus.model
 
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -38,6 +39,29 @@ class IdeStatusWorkPolicyControlTest {
     assertEquals(IdeStatusLiveSection.GOALS, goalLaunched.liveSection)
     assertEquals(IdeStatusDisplayGroup.GOALS, goalLaunched.displayGroup)
     assertFalse(goalLaunched.controlEligible)
+  }
+
+  @Test
+  fun `an unfinished goal with no live runner needs you instead of leaving the board`() {
+    val idle = IdeStatusPolicy.work(goalFacts().copy(lifecycle = IdeStatusLifecycleState.IDLE))
+    assertEquals(IdeStatusLiveSection.NEEDS_YOU, idle.liveSection)
+    assertTrue(idle.requiresAttention)
+    assertFalse(idle.running)
+    assertFalse(idle.controlEligible)
+
+    val finished =
+      IdeStatusPolicy.work(
+        goalFacts().copy(lifecycle = IdeStatusLifecycleState.IDLE, finishedAt = Instant.EPOCH),
+      )
+    assertEquals(null, finished.liveSection)
+    assertFalse(finished.requiresAttention)
+
+    val idleTask =
+      IdeStatusPolicy.work(
+        goalFacts().copy(lifecycle = IdeStatusLifecycleState.IDLE, family = IdeStatusWorkflowFamily.FEATURE_VERIFY),
+      )
+    assertEquals(null, idleTask.liveSection)
+    assertFalse(idleTask.requiresAttention)
   }
 
   private fun goalFacts(

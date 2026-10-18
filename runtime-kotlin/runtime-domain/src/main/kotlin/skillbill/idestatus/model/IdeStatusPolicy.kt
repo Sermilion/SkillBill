@@ -213,7 +213,8 @@ object IdeStatusPolicy {
       pauseEligible = controlEligible && !facts.pauseRequested,
       requiresAttention =
         facts.lifecycle in setOf(IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED) ||
-          facts.awaitingOperatorDecision,
+          facts.awaitingOperatorDecision ||
+          (goal && facts.lifecycle == IdeStatusLifecycleState.IDLE && facts.finishedAt == null),
       displayGroup = displayGroup,
       displayPriority = displayPriority(facts),
       running = liveSection == IdeStatusLiveSection.GOALS || liveSection == IdeStatusLiveSection.PHASES,
@@ -251,6 +252,7 @@ object IdeStatusPolicy {
         IdeStatusLifecycleState.BLOCKED, IdeStatusLifecycleState.FAILED, IdeStatusLifecycleState.PAUSED ->
           IdeStatusLiveSection.NEEDS_YOU
         IdeStatusLifecycleState.ACTIVE -> if (goal) IdeStatusLiveSection.GOALS else IdeStatusLiveSection.PHASES
+        IdeStatusLifecycleState.IDLE -> IdeStatusLiveSection.NEEDS_YOU.takeIf { goal }
         else -> null
       }
     }
