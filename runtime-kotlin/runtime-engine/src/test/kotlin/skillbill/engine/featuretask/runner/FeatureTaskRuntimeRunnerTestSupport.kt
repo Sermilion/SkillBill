@@ -2208,12 +2208,15 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       true
     }
 
+  var beforeReserveTakeover: ((String) -> Unit)? = null
+
   override fun reserveFeatureTaskRuntimeWorkerTakeover(
     workflowId: String,
     expectedOwnerToken: String,
     expectedGeneration: Long,
   ): Boolean =
     synchronized(this) {
+      beforeReserveTakeover?.invoke(workflowId)
       val current = workerOwnership[workflowId] ?: return false
       if (!current.matchesActiveOwnership(workflowId, expectedOwnerToken, expectedGeneration)) return false
       workerOwnership[workflowId] =

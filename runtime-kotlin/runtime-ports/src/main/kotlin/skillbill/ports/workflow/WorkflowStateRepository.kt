@@ -35,6 +35,16 @@ interface WorkflowStateRepository :
     snapshot: WorkflowStateSnapshot,
   )
 
+  /**
+   * Persist a snapshot the engine already accepted as an operator or repair mutation,
+   * including replacement of a previously terminal outcome. Ordinary [save] and
+   * [saveOrdinary] continue to refuse those writes.
+   */
+  fun saveAcceptedSnapshotMutation(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  )
+
   fun saveOrdinary(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,

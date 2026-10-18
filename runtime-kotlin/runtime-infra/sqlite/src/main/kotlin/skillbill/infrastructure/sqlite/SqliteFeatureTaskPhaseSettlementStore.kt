@@ -17,6 +17,7 @@ import skillbill.ports.featuretask.model.parseFeatureTaskRuntimeWorkerLeaseInsta
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.isTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.phaseartifacts.featureTaskRuntimePhaseRecordAttemptCount
 import java.sql.Connection
 import java.sql.ResultSet
@@ -211,7 +212,12 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
             JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(json))
           }
         val durableAttempt =
-          artifacts?.let { featureTaskRuntimePhaseRecordAttemptCount(it, settlement.phaseId) }
+          artifacts?.let {
+            featureTaskRuntimePhaseRecordAttemptCount(
+              FeatureTaskRuntimeWorkflowArtifactMap.from(it),
+              settlement.phaseId,
+            )
+          }
         if (durableAttempt != null && settlement.attempt < durableAttempt) {
           return FeatureTaskPhaseSettlementRefusalReason.STALE_ATTEMPT
         }

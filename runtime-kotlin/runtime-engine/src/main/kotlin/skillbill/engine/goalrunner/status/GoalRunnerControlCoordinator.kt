@@ -71,7 +71,10 @@ internal class GoalRunnerControlCoordinator(
   ): Boolean =
     database.transaction { unitOfWork ->
       val currentLease = unitOfWork.goalRunnerControls.controlState(parentWorkflowId).executionLease
-      if (currentLease?.ownerToken != expectedOwnerToken || currentLease?.generation != expectedOwnerGeneration) {
+      if (currentLease?.ownerToken != expectedOwnerToken) {
+        return@transaction false
+      }
+      if (expectedOwnerGeneration != null && currentLease?.generation != expectedOwnerGeneration) {
         return@transaction false
       }
       if (unitOfWork.workflowStates.get(

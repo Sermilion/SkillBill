@@ -78,7 +78,12 @@ class GoalRunnerChildRepairWedgeApplyLoop(
     state.patch.putAll(
       FeatureTaskRuntimeWorkflowArtifactPatches.goalChildRepairEvidence(priorEvidence + state.evidenceEntries),
     )
-    workflowPersistence.persistArtifactsPatch(workflowStates, record, state.patch)
+    workflowPersistence.persistArtifactsPatch(
+      workflowStates,
+      record,
+      state.patch,
+      acceptedSnapshotMutation = true,
+    )
     val updated = workflowStates.get(WorkflowFamily.TASK_RUNTIME, request.workflowId) ?: record
     return GoalRunnerChildRepairApplyResult(
       repairs = state.applied,
@@ -108,7 +113,8 @@ class GoalRunnerChildRepairWedgeApplyLoop(
           engine = engine,
           decompositionManifestValidator = decompositionManifestValidator,
         )
-      GoalRunnerWedgeClass.STALE_CHILD_WORKER_LEASE -> Unit
+      GoalRunnerWedgeClass.STALE_CHILD_WORKER_LEASE ->
+        applyStaleChildWorkerLease(state, workflowStates)
       GoalRunnerWedgeClass.STALE_EXECUTION_LEASE,
       GoalRunnerWedgeClass.STALE_RUNNER_INTERRUPTED_PAUSE,
       -> Unit
@@ -143,6 +149,31 @@ class GoalRunnerChildRepairWedgeApplyLoop(
       FeatureTaskRuntimeWorkflowArtifactPatches.goalContinuationArtifact(healed.asWorkflowArtifactEntry()),
     )
     recordChildRepairWedge(state, wedgeClass, priorValue = null, newValue = selection.wireValue)
+  }
+
+  private fun applyStaleChildWorkerLease(
+    state: ApplyState,
+    workflowStates: WorkflowStateRepository,
+  ) {
+    val ownership = workflowStates.getFeatureTaskRuntimeWorkerOwnership(state.request.workflowId) ?: return
+    val now = clock.instant()
+    if (ownership.expiresAtInstant.isAfter(now)) return
+    if (
+      !workflowStates.releaseFeatureTaskRuntimeWorkerIfExpired(
+        state.request.workflowId,
+        ownership.ownerToken,
+        ownership.generation,
+        now.toString(),
+      )
+    ) {
+      return
+    }
+    recordChildRepairWedge(
+      state,
+      GoalRunnerWedgeClass.STALE_CHILD_WORKER_LEASE,
+      priorValue = ownership.expiresAt,
+      newValue = null,
+    )
   }
 
   private fun applyUnreachableReviewBase(
@@ -367,7 +398,7 @@ internal fun applyCompletedUpstreamChildRepairWedge(
       ),
     )
   val updated = engine.updateRecord(WorkflowFamily.TASK_RUNTIME.definition, state.record, input)
-  workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+  workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
   state.record = updated
   state.artifacts = updated.artifacts
   state.workingContinuation = continuationArtifactFromMap(state.artifacts)

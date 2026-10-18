@@ -618,6 +618,11 @@ internal class IdeStatusWorkflowStates : WorkflowStateRepositoryDefaults() {
       it.normalizedIssueKey == normalizedIssueKey && it.routeScope == FeatureTaskRouteScope.GOAL_CHILD
     }
 
+  override fun listGoalChildWorkflowIdsByParent(parentWorkflowId: String): List<String> =
+    identities.values
+      .filter { it.routeScope == FeatureTaskRouteScope.GOAL_CHILD }
+      .map { it.workflowId }
+
   override fun saveFeatureTaskWorkflow(
     row: WorkflowStateRecord,
     mode: FeatureTaskWorkflowMode,

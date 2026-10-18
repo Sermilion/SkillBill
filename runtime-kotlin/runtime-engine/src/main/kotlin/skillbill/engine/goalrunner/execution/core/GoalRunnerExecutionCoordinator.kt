@@ -331,14 +331,12 @@ class DefaultGoalRunnerExecutionCoordinator(
     existing: GoalRunnerExecutionLease,
   ): LeaseClaim {
     val ownership = existing.asWorkerOwnership(parentWorkflowId)
+    if (leaseIsExpired(existing)) {
+      return LeaseClaim.Reclaimable(existing.ownerToken)
+    }
     return when (supervisor.inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning -> LeaseClaim.Reclaimable(existing.ownerToken)
-      FeatureTaskRuntimeProcessInspection.ExactLive ->
-        if (leaseIsExpired(existing)) {
-          blockedClaim(OWNER_LIVE_EXPIRED)
-        } else {
-          reclaimAfterLiveOwner(existing, ownership)
-        }
+      FeatureTaskRuntimeProcessInspection.ExactLive -> reclaimAfterLiveOwner(existing, ownership)
       FeatureTaskRuntimeProcessInspection.ForeignHost -> blockedClaim(OWNER_FOREIGN_HOST)
       FeatureTaskRuntimeProcessInspection.PidReused -> blockedClaim(OWNER_PID_REUSED)
       is FeatureTaskRuntimeProcessInspection.Unsupported -> blockedClaim(OWNER_UNINSPECTABLE)

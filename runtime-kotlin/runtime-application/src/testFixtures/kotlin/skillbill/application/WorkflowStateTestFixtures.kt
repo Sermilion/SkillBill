@@ -209,6 +209,13 @@ class InMemoryWorkflowStates : WorkflowStateRepositoryDefaults() {
   override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? =
     taskRuntime[workflowId] ?: implement[workflowId]
 
+  override fun readGoalStatusSnapshot(workflowId: String): WorkflowStateSnapshot? {
+    val row = getFeatureTaskWorkflow(workflowId) ?: return null
+    val mode = row.mode ?: FeatureTaskWorkflowMode.PROSE
+    if (mode != FeatureTaskWorkflowMode.RUNTIME) return null
+    return row.toSnapshot()
+  }
+
   override fun getFeatureTaskWorkflowAsMode(
     workflowId: String,
     mode: FeatureTaskWorkflowMode,

@@ -3,6 +3,7 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.system.UpdateCheckPayloadKeys
+import skillbill.infrastructure.sqlite.seedRunningRuntimeWorkflow
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.assertStrictSchemaCoveragePublished
 import skillbill.mcp.shared.callTool
@@ -25,8 +26,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class McpStdioServerTest {
+  private val tempDir: Path by lazy { Files.createTempDirectory("skillbill-mcp-stdio") }
+
   private val context: McpRuntimeContext by lazy {
-    val tempDir = Files.createTempDirectory("skillbill-mcp-stdio")
     McpRuntimeContext(environment = disabledTelemetryEnvironment(tempDir), userHome = tempDir)
   }
 
@@ -98,6 +100,7 @@ class McpStdioServerTest {
   @Test
   fun `audit repair can complete and block through the advertised settlement tools`() {
     val phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
+    seedRunningRuntimeWorkflow(tempDir.resolve("metrics.db"), "wftr-audit-repair", phaseId)
     val identity =
       mapOf(
         SharedPayloadKeys.WORKFLOW_ID to "wftr-audit-repair",

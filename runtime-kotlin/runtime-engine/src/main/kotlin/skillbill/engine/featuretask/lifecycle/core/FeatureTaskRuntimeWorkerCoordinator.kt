@@ -204,7 +204,8 @@ class FeatureTaskRuntimeWorkerCoordinator(
         if (!reserved) {
           val current = it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(existing.workflowId)
           val leftoverReservation =
-            current != null &&
+            existing.leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED &&
+              current != null &&
               current.workflowId == existing.workflowId &&
               current.ownerToken == existing.ownerToken &&
               current.generation == existing.generation &&

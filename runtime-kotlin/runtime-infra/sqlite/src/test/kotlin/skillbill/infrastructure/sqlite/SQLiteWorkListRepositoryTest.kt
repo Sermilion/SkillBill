@@ -161,8 +161,9 @@ class SQLiteWorkListRepositoryTest {
     connection.prepareStatement(
       """
       INSERT INTO feature_task_workflows (
-        workflow_id, mode, contract_version, workflow_status, issue_key, started_at, state_entered_at
-      ) VALUES (?, ?, '1.0.0', 'running', 'SKILL-117', ?, ?)
+        workflow_id, mode, contract_version, workflow_status, issue_key, started_at, state_entered_at,
+        state_entered_at_estimated
+      ) VALUES (?, ?, '1.0.0', 'running', 'SKILL-117', ?, ?, 0)
       """.trimIndent(),
     ).use { statement ->
       statement.setString(1, workflowId)

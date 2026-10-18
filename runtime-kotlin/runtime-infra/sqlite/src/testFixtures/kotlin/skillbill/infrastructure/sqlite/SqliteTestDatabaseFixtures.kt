@@ -161,6 +161,37 @@ fun attemptBaselineReviewMetricsRestore(userHome: Path): SkillBillRuntimeExcepti
   return error
 }
 
+fun seedRunningRuntimeWorkflow(
+  dbPath: Path,
+  workflowId: String,
+  currentStepId: String,
+) {
+  ensureTestDatabase(dbPath).use { connection ->
+    WorkflowStateStore(
+      connection,
+      Clock.systemUTC(),
+      SqliteTestWorkflowSnapshotValidator,
+      SqliteTestDiagnostics,
+    ).saveFeatureTaskWorkflow(
+      WorkflowStateRecord(
+        workflowId = workflowId,
+        sessionId = "ftr-$workflowId",
+        workflowName = "bill-feature-task",
+        contractVersion = "0.1",
+        workflowStatus = WorkflowStatus.RUNNING.wireValue,
+        currentStepId = currentStepId,
+        stepsJson = """[{"step_id":"$currentStepId","status":"running","attempt_count":1}]""",
+        artifactsJson = "{}",
+        startedAt = "2026-10-17T12:00:00Z",
+        updatedAt = "2026-10-17T12:00:00Z",
+        finishedAt = null,
+        mode = RUNTIME,
+      ),
+      RUNTIME,
+    )
+  }
+}
+
 fun seedMaintenanceWorkflowHistory(
   dbPath: Path,
   workflowId: String = "wftr-maint-422",

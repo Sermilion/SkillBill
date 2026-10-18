@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.OpenPullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.PassingPullRequestChecksLookup
 import skillbill.infrastructure.host.JdkFeatureTaskRuntimeWorkerSupervisor
 import skillbill.infrastructure.sqlite.ensureTestDatabase
+import skillbill.infrastructure.sqlite.withGoalRunnerControlRepository
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
@@ -308,6 +309,32 @@ internal fun completeRunningGoalChild(
         ),
     ),
   )
+}
+
+internal fun recordGoalCompletion(
+  fixture: GoalCliFixture,
+  childWorkflowId: String,
+  completedAt: String,
+) {
+  val parentWorkflowId =
+    ensureTestDatabase(fixture.dbPath).use { connection ->
+      connection.prepareStatement(
+        "SELECT workflow_id FROM feature_task_workflows WHERE issue_key = ? AND workflow_id <> ?",
+      ).use { statement ->
+        statement.setString(1, "SKILL-901")
+        statement.setString(2, childWorkflowId)
+        statement.executeQuery().use { rows ->
+          check(rows.next()) { "goal completion needs the decomposed parent workflow" }
+          rows.getString(1)
+        }
+      }
+    }
+  withGoalRunnerControlRepository(fixture.dbPath) { controls ->
+    controls.persistControlState(
+      parentWorkflowId,
+      controls.controlState(parentWorkflowId).copy(goalCompletedAt = completedAt),
+    )
+  }
 }
 
 internal fun seedAuthoritativeCompleteChild(fixture: GoalCliFixture) {

@@ -64,6 +64,17 @@ class WorkflowEngineUpdateTest {
     }.also {
       assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
     }
+    val repaired =
+      engine.updateRecord(
+        definition,
+        completed,
+        terminal.copy(
+          terminalInstant = time,
+          artifactsPatch = WorkflowArtifactPatch.from(mapOf("repair" to true)),
+          acceptedSnapshotMutation = true,
+        ),
+      )
+    assertEquals(mapOf("repair" to true), repaired.artifacts.toMap())
   }
 
   @Test

@@ -23,11 +23,16 @@ internal fun requireCurrentWorker(
   clock: Clock,
 ): Boolean {
   admitted.requireCurrent(states, workflowId)
-  val expected = admitted.workerOwnership
+  val expected = admitted.workerOwnership ?: return true
   val workflow = states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
   val current = states.getFeatureTaskRuntimeWorkerOwnership(workflowId)
-  if (expected == null || workflow == null || current == null) return false
-  if (workflow.workflowStatus.workflowStatus() in WORKER_TERMINAL_STATUSES) return false
+  if (
+    workflow == null ||
+    current == null ||
+    workflow.workflowStatus.workflowStatus() in WORKER_TERMINAL_STATUSES
+  ) {
+    return false
+  }
   return current.ownerToken == expected.ownerToken &&
     current.generation == expected.generation &&
     current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
@@ -39,10 +44,17 @@ internal fun phaseEventAdmissible(
   previous: FeatureTaskRuntimePhaseRecord?,
   phaseStart: Boolean,
 ): Boolean {
-  if (previous == null) return request.status.workflowStepStatus() == WorkflowStepStatus.RUNNING
+  if (previous == null) {
+    val status = request.status.workflowStepStatus()
+    return status == WorkflowStepStatus.RUNNING ||
+      status == WorkflowStepStatus.BLOCKED ||
+      (!phaseStart && status == WorkflowStepStatus.COMPLETED && request.finished)
+  }
   if (request.attemptCount < previous.attemptCount) return false
   if (request.attemptCount > previous.attemptCount) {
-    return phaseStart && request.status.workflowStepStatus() == WorkflowStepStatus.RUNNING
+    val status = request.status.workflowStepStatus()
+    return status == WorkflowStepStatus.RUNNING ||
+      (!phaseStart && status == WorkflowStepStatus.BLOCKED)
   }
   return previous.status != WorkflowStepStatus.COMPLETED || completedPhaseRequestMatches(request, previous)
 }

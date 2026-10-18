@@ -1,3 +1,13 @@
+## [2026-10-18] SKILL-422 subtask 3: validate repairs to fencing, leases and status
+Areas: runtime-engine featuretask phase record and persist, goalrunner repair, status and execution; runtime-engine work; runtime-domain WorkflowEngine; runtime-ports WorkflowStateRepository; runtime-infra/sqlite workflow and worker stores
+- New WorkflowStateRepository.saveAcceptedSnapshotMutation persists engine-accepted operator or repair snapshots, including terminal replacement. Ordinary save and saveOrdinary still refuse. The repair wedge loop and artifact patches use it.
+- Owned phase write fences admit a first BLOCKED or finished COMPLETED write and pass when no worker ownership is admitted. An expired lease is reclaimable even if the old process still looks live, so LIVE_EXPIRED is gone from status.
+- Repair wedge STALE_CHILD_WORKER_LEASE now releases an expired ACTIVE lease by owner token and generation and records the wedge.
+- Goal status no longer invents a monitor step for settled children without a goal-completion record (SKILL-418). IdeStatusProjectorMapping treats pending_launch as a live planning step.
+- Limitation: desktop-tray WorkModels and IntelliJ StatusUiMapper copies of LIVE_PLANNING_STEP_IDS still lack pending_launch. They only drive display labels.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented (validate ran full check green)
+
 ## [2026-10-17] SKILL-422 subtask 2: goal finalization and public state
 Areas: runtime-engine goalrunner status and work projection; runtime-infra/sqlite worklist and goal telemetry; runtime-ports work/idestatus; runtime-cli goal status; runtime-application work; desktop-tray; orchestration/contracts work-board; IntelliJ and VS Code status mappers
 - Status projection no longer prunes checkpoint refs; authorized prune stays on finalization, reset, and purge. pruneCheckpointRefs defaults to false on requests, CLI, and ide-status.

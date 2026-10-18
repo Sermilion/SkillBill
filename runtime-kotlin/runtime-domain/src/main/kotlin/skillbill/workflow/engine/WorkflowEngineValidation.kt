@@ -46,7 +46,11 @@ internal fun validateWorkflowUpdate(
   if (input.currentStepId.isNotBlank()) {
     validateWorkflowEnum(input.currentStepId, definition.stepIds, "current_step_id")?.let { return it }
   }
-  if (definition.isTerminalStatus(existing.workflowStatus) && input.workflowStatus != existing.workflowStatus) {
+  if (
+    definition.isTerminalStatus(existing.workflowStatus) &&
+    input.workflowStatus != existing.workflowStatus &&
+    !input.acceptedSnapshotMutation
+  ) {
     return "A terminal workflow cannot transition from '${existing.workflowStatus.wireValue}' " +
       "to '${input.workflowStatus.wireValue}' through an ordinary update."
   }

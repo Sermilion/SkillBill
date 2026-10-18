@@ -47,13 +47,11 @@ internal object WorkflowStateSqlWrites
 internal fun Connection.upsertWorkflowRow(
   tableName: String,
   row: WorkflowStateRecord,
-  defaultContractVersion: String,
-  clock: Clock,
-  workflowSnapshotValidator: WorkflowSnapshotValidator,
+  request: WorkflowRowUpsertRequest,
 ) {
-  workflowSnapshotValidator.validate(row.toSnapshot(), row.workflowName)
+  request.workflowSnapshotValidator.validate(row.toSnapshot(), row.workflowName)
   val transitionTimestamp = nextStateEnteredAtSql(tableName)
-  val insertionTimestamp = row.startedAt.orInsertionTimestamp(clock)
+  val insertionTimestamp = row.startedAt.orInsertionTimestamp(request.clock)
   prepareStatement(
     """
     INSERT INTO $tableName (
@@ -80,24 +78,11 @@ internal fun Connection.upsertWorkflowRow(
         WHEN $tableName.workflow_status != excluded.workflow_status THEN 0
         ELSE $tableName.state_entered_at_estimated
       END,
-      finished_at = CASE
-        WHEN $tableName.workflow_status IN ($terminalWorkflowStatusSqlValues)
-          THEN $tableName.finished_at
-        WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
-          THEN COALESCE(NULLIF(excluded.finished_at, ''), CURRENT_TIMESTAMP)
-        ELSE NULL
-      END
-    WHERE $tableName.workflow_status NOT IN ($terminalWorkflowStatusSqlValues)
-      OR (
-        $tableName.workflow_status = excluded.workflow_status
-        AND $tableName.current_step_id = excluded.current_step_id
-        AND $tableName.steps_json = excluded.steps_json
-        AND $tableName.artifacts_json = excluded.artifacts_json
-        AND $tableName.finished_at IS excluded.finished_at
-      )
+      ${conflictFinishedAtSql(tableName, request.acceptedSnapshotMutation)}
+    ${ordinaryTerminalConflictPredicate(tableName, request.acceptedSnapshotMutation)}
     """.trimIndent(),
   ).use { statement ->
-    statement.bindWorkflowRow(row, defaultContractVersion, insertionTimestamp)
+    statement.bindWorkflowRow(row, request.defaultContractVersion, insertionTimestamp)
     if (statement.executeUpdate() != 1) {
       throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
@@ -138,23 +123,10 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
         WHEN feature_task_workflows.workflow_status != excluded.workflow_status THEN 0
         ELSE feature_task_workflows.state_entered_at_estimated
       END,
-      finished_at = CASE
-        WHEN feature_task_workflows.workflow_status IN ($terminalWorkflowStatusSqlValues)
-          THEN feature_task_workflows.finished_at
-        WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
-          THEN COALESCE(NULLIF(excluded.finished_at, ''), CURRENT_TIMESTAMP)
-        ELSE NULL
-      END,
+      ${conflictFinishedAtSql("feature_task_workflows", request.acceptedSnapshotMutation)},
       mode = excluded.mode,
       implementation_skill = excluded.implementation_skill
-    WHERE feature_task_workflows.workflow_status NOT IN ($terminalWorkflowStatusSqlValues)
-      OR (
-        feature_task_workflows.workflow_status = excluded.workflow_status
-        AND feature_task_workflows.current_step_id = excluded.current_step_id
-        AND feature_task_workflows.steps_json = excluded.steps_json
-        AND feature_task_workflows.artifacts_json = excluded.artifacts_json
-        AND feature_task_workflows.finished_at IS excluded.finished_at
-      )
+    ${ordinaryTerminalConflictPredicate("feature_task_workflows", request.acceptedSnapshotMutation)}
     """.trimIndent(),
   ).use { statement ->
     statement.bindFeatureTaskWorkflowRow(
@@ -170,13 +142,64 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
   }
 }
 
+internal data class WorkflowRowUpsertRequest(
+  val defaultContractVersion: String,
+  val clock: Clock,
+  val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  val acceptedSnapshotMutation: Boolean = false,
+)
+
 internal data class FeatureTaskWorkflowUpsertRequest(
   val mode: FeatureTaskWorkflowMode,
   val implementationSkill: String,
   val defaultContractVersion: String,
   val clock: Clock,
   val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  val acceptedSnapshotMutation: Boolean = false,
 )
+
+private fun conflictFinishedAtSql(
+  tableName: String,
+  acceptedSnapshotMutation: Boolean,
+): String =
+  if (acceptedSnapshotMutation) {
+    """
+    finished_at = CASE
+      WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
+        THEN COALESCE(NULLIF(excluded.finished_at, ''), $tableName.finished_at, CURRENT_TIMESTAMP)
+      ELSE NULL
+    END
+    """.trimIndent()
+  } else {
+    """
+    finished_at = CASE
+      WHEN $tableName.workflow_status IN ($terminalWorkflowStatusSqlValues)
+        THEN $tableName.finished_at
+      WHEN excluded.workflow_status IN ($terminalWorkflowStatusSqlValues)
+        THEN COALESCE(NULLIF(excluded.finished_at, ''), CURRENT_TIMESTAMP)
+      ELSE NULL
+    END
+    """.trimIndent()
+  }
+
+private fun ordinaryTerminalConflictPredicate(
+  tableName: String,
+  acceptedSnapshotMutation: Boolean,
+): String =
+  if (acceptedSnapshotMutation) {
+    ""
+  } else {
+    """
+    WHERE $tableName.workflow_status NOT IN ($terminalWorkflowStatusSqlValues)
+      OR (
+        $tableName.workflow_status = excluded.workflow_status
+        AND $tableName.current_step_id = excluded.current_step_id
+        AND $tableName.steps_json = excluded.steps_json
+        AND $tableName.artifacts_json = excluded.artifacts_json
+        AND $tableName.finished_at IS excluded.finished_at
+      )
+    """.trimIndent()
+  }
 
 internal fun Connection.terminalizeLegacyProseFeatureTaskWorkflowRow(row: WorkflowStateRecord) {
   val transitionTimestamp = nextStateEnteredAtSql("feature_task_workflows")

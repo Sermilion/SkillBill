@@ -73,6 +73,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
     record: WorkflowStateSnapshot,
     request: FeatureTaskRuntimePhaseLedgerRequest,
   ): Boolean {
+    if (record.workflowStatus in WORKER_TERMINAL_STATUSES) return false
     val artifacts = record.artifacts
     val existingEntries = decodePhaseLedger(artifacts)
     val nextSequence = (existingEntries.maxOfOrNull { it.sequenceNumber } ?: -1) + 1

@@ -10,7 +10,6 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import java.time.Clock
 
 fun interface GoalPlanningRefreshLiveness {
   fun resolve(state: GoalRunnerManifestState): ExecutionLiveness
@@ -20,7 +19,6 @@ fun interface GoalPlanningRefreshLiveness {
 class ChildAwareGoalPlanningRefreshLiveness(
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
-  private val clock: Clock,
   private val diagnostics: RuntimeDiagnostics,
 ) : GoalPlanningRefreshLiveness {
   override fun resolve(state: GoalRunnerManifestState): ExecutionLiveness {
@@ -28,7 +26,7 @@ class ChildAwareGoalPlanningRefreshLiveness(
       state.manifest.subtasks.firstOrNull { subtask ->
         subtask.id == state.manifest.currentSubtaskIntent.subtaskId
       }
-    return resolveChildExecutionLiveness(currentSubtask, phaseQuery, workerSupervisor, clock, diagnostics)
+    return resolveChildExecutionLiveness(currentSubtask, phaseQuery, workerSupervisor, diagnostics)
   }
 }
 
@@ -36,12 +34,11 @@ fun resolveChildExecutionLiveness(
   currentSubtask: DecompositionSubtask?,
   phaseQuery: FeatureTaskRuntimePhaseQuery,
   workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
-  clock: Clock,
   diagnostics: RuntimeDiagnostics,
 ): ExecutionLiveness {
   val workflowId = currentSubtask?.workflowId?.takeIf(String::isNotBlank) ?: return ExecutionLiveness.IDLE
   return GoalRunnerBestEffortEmission.runCancellable {
-    resolveRuntimeWorkflowExecutionLiveness(workflowId, phaseQuery, workerSupervisor, clock)
+    resolveRuntimeWorkflowExecutionLiveness(workflowId, phaseQuery, workerSupervisor)
   }.getOrElse { error ->
     GoalRunnerBestEffortEmission.rethrowIfCancellation(error)
     GoalRunnerBestEffortEmission.recordWarning(

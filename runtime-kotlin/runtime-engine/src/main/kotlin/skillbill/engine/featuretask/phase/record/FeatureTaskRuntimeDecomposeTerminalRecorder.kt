@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phase.record
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -44,7 +45,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
     }
 
   private fun recordDecomposeTerminalInTransaction(
-    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    unitOfWork: UnitOfWork,
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,

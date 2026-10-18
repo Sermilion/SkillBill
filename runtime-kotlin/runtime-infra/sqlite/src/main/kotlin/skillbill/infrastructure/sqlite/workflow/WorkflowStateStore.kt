@@ -116,6 +116,14 @@ internal class WorkflowStateStore private constructor(
     }
   }
 
+  override fun saveAcceptedSnapshotMutation(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ) {
+    val source = currentRecord(family, snapshot.workflowId)
+    persistRecord(family, snapshot.toRecord(source), acceptedSnapshotMutation = true)
+  }
+
   override fun saveOrdinary(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
@@ -155,11 +163,16 @@ internal class WorkflowStateStore private constructor(
   private fun persistRecord(
     family: WorkflowFamily,
     record: WorkflowStateRecord,
+    acceptedSnapshotMutation: Boolean = false,
   ) {
     when (family) {
-      WorkflowFamily.VERIFY -> verifyStore.saveWorkflow(record)
+      WorkflowFamily.VERIFY -> verifyStore.saveWorkflow(record, acceptedSnapshotMutation)
       WorkflowFamily.TASK_RUNTIME ->
-        featureTaskStore.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
+        featureTaskStore.saveFeatureTaskWorkflow(
+          record,
+          FeatureTaskWorkflowMode.RUNTIME,
+          acceptedSnapshotMutation,
+        )
     }
   }
 
@@ -281,6 +294,12 @@ internal class FeatureTaskWorkflowStateStore(
     row: WorkflowStateRecord,
     mode: FeatureTaskWorkflowMode,
   ) = rows.saveFeatureTaskWorkflow(row, mode)
+
+  fun saveFeatureTaskWorkflow(
+    row: WorkflowStateRecord,
+    mode: FeatureTaskWorkflowMode,
+    acceptedSnapshotMutation: Boolean,
+  ) = rows.saveFeatureTaskWorkflow(row, mode, acceptedSnapshotMutation)
 
   override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? =
     rows.getFeatureTaskWorkflow(workflowId)

@@ -18,7 +18,9 @@ import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.review.repository.ReviewRepository
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -37,9 +39,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import java.nio.file.Path
-import java.time.Clock
 import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -48,11 +48,10 @@ import kotlin.test.assertTrue
 
 class GoalPlanningRefreshLivenessTest {
   private val now = Instant.parse("2026-08-11T00:00:00Z")
-  private val clock = Clock.fixed(now, ZoneOffset.UTC)
 
   @Test
   fun `no child workflow id is IDLE without consulting a parent lease`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     val state = manifestState(childWorkflowId = null)
 
     assertEquals(ExecutionLiveness.IDLE, harness.liveness.resolve(state))
@@ -62,7 +61,6 @@ class GoalPlanningRefreshLivenessTest {
         state.manifest.subtasks.first(),
         harness.recorder.phaseQuery,
         harness.supervisor,
-        clock,
         NoopRuntimeDiagnostics,
       ),
     )
@@ -70,7 +68,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `blank child workflow id is IDLE`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     val state = manifestState(childWorkflowId = "  ")
 
     assertEquals(ExecutionLiveness.IDLE, harness.liveness.resolve(state))
@@ -78,7 +76,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `current child with unexpired RUNTIME lease is LIVE`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     harness.seedRuntimeChild("wfl-child", expiresAt = now.plusSeconds(60).toString())
     val state = manifestState(childWorkflowId = "wfl-child")
 
@@ -91,7 +89,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `current child with expired RUNTIME lease is IDLE`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness(FeatureTaskRuntimeProcessInspection.NotRunning)
     harness.seedRuntimeChild("wfl-child", expiresAt = now.minusSeconds(1).toString())
     val state = manifestState(childWorkflowId = "wfl-child")
 
@@ -101,7 +99,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `current child whose workflow mode is not RUNTIME is UNKNOWN`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
 
     val state = manifestState(childWorkflowId = "wfl-missing")
 
@@ -114,7 +112,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `corrupt child row degrades to UNKNOWN and records the seam`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     harness.repository.readFailure = IllegalStateException("malformed feature_task_runtime row")
     val state = manifestState(childWorkflowId = "wfl-child")
 
@@ -128,7 +126,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `interrupt during the child read is rethrown with the interrupt flag set`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     harness.repository.readFailure = InterruptedException("read interrupted")
     val state = manifestState(childWorkflowId = "wfl-child")
     Thread.interrupted()
@@ -140,7 +138,7 @@ class GoalPlanningRefreshLivenessTest {
 
   @Test
   fun `intent naming a missing subtask falls through to IDLE`() {
-    val harness = RefreshLivenessHarness(clock)
+    val harness = RefreshLivenessHarness()
     val base = manifest(subtaskCount = 1)
     val state =
       GoalRunnerManifestState(
@@ -171,7 +169,9 @@ class GoalPlanningRefreshLivenessTest {
   }
 }
 
-private class RefreshLivenessHarness(clock: Clock) {
+private class RefreshLivenessHarness(
+  inspection: FeatureTaskRuntimeProcessInspection = FeatureTaskRuntimeProcessInspection.ExactLive,
+) {
   val repository = SeedableRefreshLivenessWorkflowStates()
   private val database = SeedableRefreshLivenessDatabase(repository)
   val recorder =
@@ -184,8 +184,8 @@ private class RefreshLivenessHarness(clock: Clock) {
       NoopRuntimeDiagnostics,
     )
   val diagnostics = RecordingRefreshLivenessDiagnostics()
-  val supervisor = NoopFeatureTaskRuntimeWorkerSupervisor
-  val liveness = ChildAwareGoalPlanningRefreshLiveness(recorder.phaseQuery, supervisor, clock, diagnostics)
+  val supervisor: FeatureTaskRuntimeWorkerSupervisor = RefreshLivenessWorkerSupervisor(inspection)
+  val liveness = ChildAwareGoalPlanningRefreshLiveness(recorder.phaseQuery, supervisor, diagnostics)
 
   fun seedRuntimeChild(
     workflowId: String,
@@ -210,6 +210,12 @@ private class RefreshLivenessHarness(clock: Clock) {
     )
     repository.seedOwnership(workflowId, expiresAt)
   }
+}
+
+private class RefreshLivenessWorkerSupervisor(
+  private val inspection: FeatureTaskRuntimeProcessInspection,
+) : FeatureTaskRuntimeWorkerSupervisor by NoopFeatureTaskRuntimeWorkerSupervisor {
+  override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection = inspection
 }
 
 private class RecordingRefreshLivenessDiagnostics : RuntimeDiagnostics {

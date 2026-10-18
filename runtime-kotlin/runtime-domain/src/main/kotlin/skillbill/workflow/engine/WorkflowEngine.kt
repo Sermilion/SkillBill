@@ -76,7 +76,7 @@ class WorkflowEngine {
           },
         finishedAt = if (terminal) requireTerminalFinishedAt(existing, input) else null,
       )
-    if (definition.isTerminalStatus(existing.workflowStatus)) {
+    if (definition.isTerminalStatus(existing.workflowStatus) && !input.acceptedSnapshotMutation) {
       refuseChangedOrdinaryTerminalReplay(existing, updated)
       return existing
     }

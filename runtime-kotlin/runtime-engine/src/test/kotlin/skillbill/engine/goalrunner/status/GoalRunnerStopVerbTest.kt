@@ -248,7 +248,7 @@ class GoalRunnerStopVerbTest {
           ),
       ).stop("SKILL-168", null)
 
-    assertEquals(GoalRunnerStopStatus.IDENTITY_MISMATCH, result.status)
+    assertEquals(GoalRunnerStopStatus.UNINSPECTABLE, result.status)
     assertFalse(result.terminationAttempted)
   }
 

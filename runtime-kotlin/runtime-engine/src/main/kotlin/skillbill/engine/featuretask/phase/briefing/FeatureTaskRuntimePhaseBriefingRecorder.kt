@@ -27,12 +27,13 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProdu
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import java.time.Clock
 
 class FeatureTaskRuntimePhaseBriefingRecorder(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val clock: java.time.Clock,
+  private val clock: Clock,
 ) {
   fun recordOwnedPhaseBriefing(
     workflowId: String,

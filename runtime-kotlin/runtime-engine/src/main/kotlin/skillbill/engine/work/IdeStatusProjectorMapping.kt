@@ -171,7 +171,7 @@ internal fun GoalRunnerStatusProjection.toIdeStatusProgress(): IdeStatusProgress
 
 internal const val OPEN_CI_MONITOR_STEP: String = "monitor"
 
-internal val LIVE_PLANNING_STEP_IDS: Set<String> = setOf("plan", "preplan", "planning")
+internal val LIVE_PLANNING_STEP_IDS: Set<String> = setOf("plan", "preplan", "planning", "pending_launch")
 
 private val LIVE_GOAL_FINALIZATION_STEP_IDS: Set<String> = setOf(OPEN_CI_MONITOR_STEP, "pr", "monitor_fix")
 

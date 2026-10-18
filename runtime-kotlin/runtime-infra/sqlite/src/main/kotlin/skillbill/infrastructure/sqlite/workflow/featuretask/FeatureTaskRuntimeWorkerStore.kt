@@ -302,14 +302,14 @@ internal class FeatureTaskRuntimeWorkerStore(
       ).use { statement ->
         val current = connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics) ?: return false
         val now = parseFeatureTaskRuntimeWorkerLeaseInstant(workflowId, "now", nowInstant)
-        if (current.ownerToken != ownerToken || current.generation != generation || current.expiresAtInstant > now) {
+        if (!current.matchesExpiredActiveOwner(ownerToken, generation, now)) {
           return false
         }
         statement.bindAll(
           workflowId,
           ownerToken,
           generation,
-          current.leaseState.wireValue,
+          FeatureTaskRuntimeWorkerLeaseState.ACTIVE.wireValue,
           current.heartbeatAt,
           current.expiresAt,
         )
@@ -335,6 +335,20 @@ internal class FeatureTaskRuntimeWorkerStore(
     return true
   }
 }
+
+private fun FeatureTaskRuntimeWorkerOwnership.matchesExpiredActiveOwner(
+  ownerToken: String,
+  generation: Long,
+  now: Instant,
+): Boolean = matchesActiveOwner(ownerToken, generation) && !expiresAtInstant.isAfter(now)
+
+private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwner(
+  ownerToken: String,
+  generation: Long,
+): Boolean =
+  this.ownerToken == ownerToken &&
+    this.generation == generation &&
+    leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE
 
 private fun FeatureTaskRuntimeWorkerOwnership.heartbeatIsStale(
   current: FeatureTaskRuntimeWorkerOwnership,

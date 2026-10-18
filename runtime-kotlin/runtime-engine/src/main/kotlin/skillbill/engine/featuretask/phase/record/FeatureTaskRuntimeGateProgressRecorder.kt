@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -79,7 +80,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
   }
 
   private fun persistValidationGateProgressInTransaction(
-    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    unitOfWork: UnitOfWork,
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
@@ -191,7 +192,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
   }
 
   private fun persistNoChangePauseInTransaction(
-    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    unitOfWork: UnitOfWork,
     workflowId: String,
     pause: FeatureTaskRuntimeNoChangePause,
   ) {
@@ -232,7 +233,7 @@ class FeatureTaskRuntimeGateProgressRecorder(
   }
 
   private fun persistBuildGateProgressInTransaction(
-    unitOfWork: skillbill.ports.persistence.UnitOfWork,
+    unitOfWork: UnitOfWork,
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {

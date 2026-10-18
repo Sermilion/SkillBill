@@ -100,6 +100,7 @@ fun completedUpstreamRepairWorkflowUpdate(
         ),
       ),
     sessionId = "",
+    acceptedSnapshotMutation = true,
   )
 
 fun completedUpstreamRepairRetryEntry(request: CompletedUpstreamRepairRequest): FeatureTaskRuntimePhaseLedgerEntry =

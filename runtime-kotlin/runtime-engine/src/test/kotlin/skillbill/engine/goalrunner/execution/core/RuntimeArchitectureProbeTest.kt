@@ -55,7 +55,11 @@ class RuntimeArchitectureProbeTest {
       proxy<GoalRunnerManifestStore> { name, args ->
         when (name) {
           "executionLease" -> state.lease
-          "acquireExecutionLease" -> {
+          "acquireExecutionLease",
+          "acquireExecutionLeaseFenced",
+          "acquireExecutionLeaseWithChildAdmission",
+          "acquireExecutionLeaseWithChildAdmissionFenced",
+          -> {
             state.lease = args[1] as GoalRunnerExecutionLease
             true
           }

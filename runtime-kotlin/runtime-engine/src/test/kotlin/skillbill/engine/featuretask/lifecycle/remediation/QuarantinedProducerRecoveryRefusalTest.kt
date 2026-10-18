@@ -553,19 +553,22 @@ class QuarantinedProducerRecoveryRefusalTest {
           ),
         )
       } else {
-        assertTrue(
-          recorder.recordPhaseState(
-            FeatureTaskRuntimePhaseStateRequest(
-              workflowId = workflowId,
-              phaseId = phase,
-              status = case.finalizationStatus,
-              attemptCount = 2,
-              resolvedAgentId = "original-finalizer",
-              finished = case.finalizationStatus == "completed",
-              outputArtifact = "retained-finalization-output",
+        val statuses = listOf("running", case.finalizationStatus).distinct()
+        statuses.forEach { status ->
+          assertTrue(
+            recorder.recordPhaseState(
+              FeatureTaskRuntimePhaseStateRequest(
+                workflowId = workflowId,
+                phaseId = phase,
+                status = status,
+                attemptCount = 2,
+                resolvedAgentId = "original-finalizer",
+                finished = status == "completed",
+                outputArtifact = "retained-finalization-output",
+              ),
             ),
-          ),
-        )
+          )
+        }
       }
     }
   }

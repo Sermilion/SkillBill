@@ -53,7 +53,7 @@ internal fun phaseRecordsFrom(artifacts: Map<String, Any?>): Map<String, Feature
   }
 
 fun featureTaskRuntimePhaseRecordAttemptCount(
-  artifacts: Map<String, Any?>,
+  artifacts: FeatureTaskRuntimeWorkflowArtifactMap,
   phaseId: String,
 ): Int? = phaseRecordsFrom(artifacts)[phaseId]?.attemptCount
 

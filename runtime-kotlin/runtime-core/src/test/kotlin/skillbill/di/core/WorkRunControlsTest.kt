@@ -362,7 +362,7 @@ class WorkRunControlsTest {
             component.ideStatusService.detail(WorkDetailRequest("interrupted")).item?.snapshot?.lifecycleState,
           )
         } else {
-          assertEquals(WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH), result)
+          assertEquals(WorkControlResult.Rejected(WorkControlRejection.PID_REUSED), result)
           assertEquals(0, stopped)
           assertEquals(
             IdeStatusLifecycleState.PAUSED,

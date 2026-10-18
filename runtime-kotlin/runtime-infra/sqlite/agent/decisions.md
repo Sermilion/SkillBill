@@ -1,5 +1,16 @@
 # SQLite boundary decisions
 
+## [2026-10-18] Close the maintenance audit with regressions, not a production repair
+Context: SKILL-422 subtask 3 audited reinstall, uninstall and maintenance against SQLite data, WAL, SHM, journals and backups.
+Decision: Keep install.sh preservation and destructive shell and application uninstall unchanged. Add integrity and exact-row regressions and record F13-F15 as verified no-finding rows.
+Reason: The spec allows repair only for demonstrated defects, and source review found the preserve and destructive contracts already correct. File presence or a copied .db cannot prove recovery, so tests reopen and check content.
+Revisit when: a regression shows a maintenance path losing committed WAL rows or a journal.
+
+## [2026-10-18] Repair and operator snapshots replace terminal rows through a separate save
+Context: The repair wedge loop and operator artifact patches must write to terminal task-runtime rows, which ordinary saves refuse.
+Decision: Add saveAcceptedSnapshotMutation for snapshots the engine already accepted as operator or repair mutations. WorkflowEngine skips the terminal replay refusal only for those inputs.
+Reason: Ordinary late writes must keep failing on terminal rows. A named path keeps the exception explicit instead of loosening ordinary save.
+
 ## [2026-10-17] Isolate malformed work-list rows in aggregate list
 Context: SQLiteWorkListRepository.list threw INVALID_WORK_LIST_ROW on the first bad toWorkItem parse and aborted the whole board and list.
 Decision: list skips that code through tryWorkItemOrReject, keeps healthy items, and records rejectedRows. findByWorkflowId still typed-rejects a corrupt target.

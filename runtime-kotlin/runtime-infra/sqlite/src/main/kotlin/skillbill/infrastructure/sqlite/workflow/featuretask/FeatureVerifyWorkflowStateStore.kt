@@ -4,6 +4,7 @@ import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.terminalWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.schema.FEATURE_VERIFY_WORKFLOW_CONTRACT_VERSION
+import skillbill.infrastructure.sqlite.workflow.WorkflowRowUpsertRequest
 import skillbill.infrastructure.sqlite.workflow.getWorkflowRow
 import skillbill.infrastructure.sqlite.workflow.getWorkflowRows
 import skillbill.infrastructure.sqlite.workflow.listWorkflowRows
@@ -20,18 +21,29 @@ internal class FeatureVerifyWorkflowStateStore(
   private val clock: Clock,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
 ) {
-  fun saveWorkflow(row: WorkflowStateRecord) {
+  fun saveWorkflow(
+    row: WorkflowStateRecord,
+    acceptedSnapshotMutation: Boolean = false,
+  ) {
     val current = connection.getWorkflowRow("feature_verify_workflows", row.workflowId)
-    if (current != null && WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true) {
+    if (
+      !acceptedSnapshotMutation &&
+      current != null &&
+      WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true
+    ) {
       if (current.sameTerminalSnapshot(row)) return
       throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
     connection.upsertWorkflowRow(
       tableName = "feature_verify_workflows",
       row = row,
-      defaultContractVersion = FEATURE_VERIFY_WORKFLOW_CONTRACT_VERSION,
-      clock = clock,
-      workflowSnapshotValidator = workflowSnapshotValidator,
+      request =
+        WorkflowRowUpsertRequest(
+          defaultContractVersion = FEATURE_VERIFY_WORKFLOW_CONTRACT_VERSION,
+          clock = clock,
+          workflowSnapshotValidator = workflowSnapshotValidator,
+          acceptedSnapshotMutation = acceptedSnapshotMutation,
+        ),
     )
   }
 

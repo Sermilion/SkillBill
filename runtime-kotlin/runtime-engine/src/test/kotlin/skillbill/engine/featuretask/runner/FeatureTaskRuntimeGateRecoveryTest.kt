@@ -44,12 +44,12 @@ class FeatureTaskRuntimeGateRecoveryTest {
               )
             val payload = rejectedGate(phase, corruption)
             harness.seedPhase(phase, "completed", 3, "claude", payload)
+            seedGateCheckpointAndLedger(harness.recorder, phase)
             harness.seedPhase("commit_push", finalizationStatus, 2, "runtime", validJsonOutput("commit_push"))
             if (finalizationStatus == "completed") {
               harness.seedPhase("pr", "completed", 1, "runtime", validJsonOutput("pr"))
               harness.seedPhase("monitor", "completed", 1, "runtime", validJsonOutput("monitor"))
             }
-            seedGateCheckpointAndLedger(harness.recorder, phase)
             val beforeWorkflow =
               harness.database.read {
                 it.workflowStates.get(

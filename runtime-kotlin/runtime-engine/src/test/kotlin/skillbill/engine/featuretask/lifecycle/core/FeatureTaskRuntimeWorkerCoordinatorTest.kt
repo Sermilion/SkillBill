@@ -186,7 +186,15 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
     val repository = InMemoryRuntimeWorkflowRepository()
     val stale = ownership()
     repository.seedWorkerOwnership(stale)
-    assertTrue(repository.reserveFeatureTaskRuntimeWorkerTakeover(WORKFLOW_ID, stale.ownerToken, stale.generation))
+    repository.beforeReserveTakeover = { workflowId ->
+      val current = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(workflowId))
+      repository.seedWorkerOwnership(
+        current.copy(
+          ownerToken = "other-recovery-owner-0001",
+          leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED,
+        ),
+      )
+    }
     execution.seed(repository, WORKFLOW_ID)
     val coordinator =
       FeatureTaskRuntimeWorkerCoordinator(

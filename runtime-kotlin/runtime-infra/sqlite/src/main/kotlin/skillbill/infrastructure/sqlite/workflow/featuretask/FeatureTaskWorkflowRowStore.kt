@@ -25,12 +25,17 @@ internal class FeatureTaskWorkflowRowStore(
   fun saveFeatureTaskWorkflow(
     row: WorkflowStateRecord,
     mode: FeatureTaskWorkflowMode,
+    acceptedSnapshotMutation: Boolean = false,
   ) {
     if (mode == FeatureTaskWorkflowMode.PROSE) {
       throw proseFeatureTaskWorkflowWriteRefusedError(row.workflowId)
     }
     val current = connection.getFeatureTaskWorkflowRow(row.workflowId)
-    if (current != null && WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true) {
+    if (
+      !acceptedSnapshotMutation &&
+      current != null &&
+      WorkflowStatus.fromWire(current.workflowStatus)?.isTerminal == true
+    ) {
       if (current.sameTerminalSnapshot(row)) return
       throw terminalWorkflowWriteRefusedError(row.workflowId)
     }
@@ -43,6 +48,7 @@ internal class FeatureTaskWorkflowRowStore(
           defaultContractVersion = mode.defaultContractVersion,
           clock = clock,
           workflowSnapshotValidator = workflowSnapshotValidator,
+          acceptedSnapshotMutation = acceptedSnapshotMutation,
         ),
     )
   }

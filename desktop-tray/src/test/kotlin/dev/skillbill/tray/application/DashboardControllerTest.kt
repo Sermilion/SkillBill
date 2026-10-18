@@ -207,7 +207,12 @@ class DashboardControllerTest {
   @Test
   fun `confirmed completion notifies once while history and reconnect remain baseline`() = runBlocking {
     val active = item("live-goal")
-    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, finishedAt = active.updatedAt, updatedAt = active.updatedAt.plusSeconds(1))
+    val completed = active.copy(
+      lifecycle = Lifecycle.TERMINAL,
+      finishedAt = active.updatedAt,
+      finishedAtSource = "goal_completion",
+      updatedAt = active.updatedAt.plusSeconds(1),
+    )
     val historical = item("historical").copy(lifecycle = Lifecycle.TERMINAL)
     val values = java.util.concurrent.ConcurrentHashMap<WorkSection, Board>()
     WorkSection.entries.forEach { values[it] = board(Retention.DAY, emptyList()) }
@@ -239,7 +244,11 @@ class DashboardControllerTest {
   @Test
   fun `deferred completion notification is rejected after switching stores`() = runBlocking {
     val active = item("old-store-goal")
-    val completed = active.copy(lifecycle = Lifecycle.TERMINAL, updatedAt = active.updatedAt.plusSeconds(1))
+    val completed = active.copy(
+      lifecycle = Lifecycle.TERMINAL,
+      finishedAtSource = "goal_completion",
+      updatedAt = active.updatedAt.plusSeconds(1),
+    )
     val newStoreItem = item("new-store-goal")
     val boards = java.util.concurrent.ConcurrentHashMap<WorkSection, Board>()
     WorkSection.entries.forEach { boards[it] = board(Retention.DAY, emptyList()) }

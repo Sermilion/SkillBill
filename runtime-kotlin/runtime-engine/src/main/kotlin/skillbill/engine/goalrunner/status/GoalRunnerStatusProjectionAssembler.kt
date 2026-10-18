@@ -30,7 +30,6 @@ import skillbill.goalrunner.model.GoalNoChangeState
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerNoChangeStatus
-import skillbill.goalrunner.model.GoalRunnerStatusCounts
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs
 import skillbill.goalrunner.model.GoalRunnerStatusProjector
@@ -58,7 +57,6 @@ import skillbill.workflow.taskruntime.artifact.decodeNoChangePauseFromArtifact
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeNoChangePause
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
-import java.time.Clock
 
 @Inject
 class GoalRunnerStatusProjectionAssembler(
@@ -70,7 +68,6 @@ class GoalRunnerStatusProjectionAssembler(
   private val gitOperations: WorkflowGitOperations,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val diagnostics: RuntimeDiagnostics,
-  private val clock: Clock,
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
 ) {
   fun project(
@@ -294,21 +291,8 @@ class GoalRunnerStatusProjectionAssembler(
     assembly: GoalStatusProjectionRuntimeAssembly,
   ): GoalRunnerStatusProjectionRuntimeInputs {
     val goalCompletedAt = assembly.loadedState.controlState.goalCompletedAt
-    val admittedComplete =
-      !goalCompletedAt.isNullOrBlank() ||
-        assembly.noChangeStatus?.state == GoalNoChangeState.COMPLETED_NO_CHANGE
-    val operatorPaused = assembly.loadedState.controlState.paused
-    val statusCounts = GoalRunnerStatusCounts.fromSubtasks(assembly.loadedState.manifest.subtasks)
-    val childrenSettled =
-      assembly.currentSubtask == null && statusCounts.pending == 0 && statusCounts.blocked == 0
-    val progressStep = assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
     val currentStepOverride =
-      if (!admittedComplete && !operatorPaused && childrenSettled) {
-        progressStep?.takeIf(String::isNotBlank)
-          ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR
-      } else {
-        progressStep
-      }
+      assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
     return GoalRunnerStatusProjectionRuntimeInputs(
       executionLiveness =
         resolveExecutionLiveness(
@@ -610,7 +594,7 @@ class GoalRunnerStatusProjectionAssembler(
         ExecutionLiveness.UNKNOWN
       }
       else ->
-        executionLivenessFromWorkerInspection(ownership, inspection, clock.instant())
+        executionLivenessFromWorkerInspection(inspection)
     }
 
   private fun resolveActiveAgent(currentSubtask: DecompositionSubtask?): String? {

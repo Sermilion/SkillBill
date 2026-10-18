@@ -97,8 +97,9 @@ class FeatureTaskRuntimePhaseStateRecorder(
         return@transaction false
       }
       if (admitted != null && phaseStart) {
-        val ownership = admitted.workerOwnership ?: return@transaction false
+        val ownership = admitted.workerOwnership
         if (
+          ownership != null &&
           !unitOfWork.workflowStates.bindFeatureTaskRuntimeWorkerPhaseCoordinates(
             request.workflowId,
             ownership.ownerToken,
@@ -117,7 +118,10 @@ class FeatureTaskRuntimePhaseStateRecorder(
       val existingRecords = decodePhaseRecords(artifacts)
       val now = clock.instant()
       val previous = existingRecords[request.phaseId]
-      if (previous?.status == WorkflowStepStatus.COMPLETED) {
+      if (
+        previous?.status == WorkflowStepStatus.COMPLETED &&
+        !(phaseStart && request.attemptCount > previous.attemptCount)
+      ) {
         return@transaction completedPhaseRequestMatches(request, previous)
       }
       if (!phaseEventAdmissible(request, previous, phaseStart)) return@transaction false

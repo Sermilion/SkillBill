@@ -224,6 +224,13 @@ abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
     snapshot: WorkflowStateSnapshot,
   ) = Unit
 
+  open override fun saveAcceptedSnapshotMutation(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ) {
+    save(family, snapshot)
+  }
+
   open override fun saveOrdinary(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
