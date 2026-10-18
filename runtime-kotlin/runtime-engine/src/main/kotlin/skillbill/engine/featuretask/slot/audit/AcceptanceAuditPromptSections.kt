@@ -11,6 +11,13 @@ internal object AcceptanceAuditPromptSections {
       "command: build owns compilation and build proof, validate owns tests and failures, and audit reports " +
       "gaps for audit_plan_fix."
 
+  const val DEFECT_CLASS_FANOUT_SENTENCE: String =
+    "Treat each named production gap as one instance of a remaining defect class. Name the forbidden " +
+      "pattern and report every remaining sibling production path in this criterion's family: the same " +
+      "store, the same list, board, status, or history seam, and callers of the function you would change. " +
+      "Do not leave a cousin path for the next audit round. Do not open a different criterion to chase " +
+      "unrelated work. The latest reported gap is context, not a scope limit."
+
   const val DIRECTIVE: String =
     "On the initial full audit, verify the production behavior required by every acceptance criterion " +
       "against the current implementation, and end your prose with exactly one line " +
@@ -36,7 +43,8 @@ internal object AcceptanceAuditPromptSections {
       "a report that no production criteria remain. " +
       "When the runtime supplies a current criterion, inspect that authored criterion and report its source gaps " +
       "in prose. A focused audit checks every independent production requirement in that criterion; treat earlier " +
-      "audit findings as context, not as a complete list of its gaps. If the source conclusion is ambiguous, keep " +
+      "audit findings as context, not as a complete list of its gaps. $DEFECT_CLASS_FANOUT_SENTENCE " +
+      "If the source conclusion is ambiguous, keep " +
       "the criterion open and request read-only clarification. Criteria accepted by an earlier audit stay " +
       "accepted and are not re-checked. " +
       "Settle with an explicit verdict: when you complete through $PHASE_COMPLETE_SETTLEMENT_TOOL, pass " +
@@ -63,6 +71,7 @@ internal object AcceptanceAuditPromptSections {
           "fixed format. " +
           "Source gaps route to audit_plan_fix. Do not repair gaps in audit. Every criterion must be accepted " +
           "before downstream review. Focused audits inspect the runtime-selected criterion. " +
+          "List every remaining sibling of that criterion's defect class, not only the last named gap. " +
           "For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +

@@ -1,3 +1,8 @@
+## [2026-10-17] Focused audit reports a defect class, not only the latest gap
+Context: Per-criterion audit still looped when a focused pass named one production path, repair fixed that path, and the next audit found a sibling of the same forbidden pattern (SQL LIMIT before parse isolation on a cousin store method).
+Decision: Keep one-criterion serial repair and the existing strategy revision. Instruct audit, `audit_plan_fix`, and `audit_implement_fix` that a named gap is an example of a remaining defect class. Audit reports every remaining sibling in that criterion's family. Plan and repair cover that set in one round. Do not open another criterion.
+Reason: The runtime already allowed several independent gaps under one criterion. Agents treated the latest-gap briefing as the work item. Prompt text is enough; a semantic revision bump would remap in-flight runs for a wording change.
+
 ## [2026-10-17] Goal children stamp validate, not last-child-only build
 Context: `GoalRunnerQualityGateSelectionResolver` stamped BUILD for every non-final child and VALIDATE only for the last non-skipped subtask. BUILD is compile-only, so completed earlier subtasks had no boolean validation result and the last child inherited accumulated check/detekt debt.
 Decision: `resolve()` returns VALIDATE for every new goal child, so goal children run `review -> validate -> write_history`. A resumed child keeps the selection recorded in its goal continuation. BUILD remains an explicit CLI/env selection and PackBuildStrategy is unchanged. SKILL-415's unrouted BUILD-to-agent-validate fallback stays for explicit BUILD requests.

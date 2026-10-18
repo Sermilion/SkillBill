@@ -274,8 +274,9 @@ accounting. The runtime keeps authored text and aliases with that accounting. It
 does not require headings, field labels, IDs written by the agent, coverage
 markers, or a strict adoption receipt in an audit or repair plan.
 
-`audit_plan_fix` is a read-only reasoning step. Its prose plan explains the latest
-gap and a focused repair for the selected criterion. A repair may include shared
+`audit_plan_fix` is a read-only reasoning step. Its prose plan covers the selected
+criterion's remaining defect class: the latest gap plus sibling production paths of
+the same forbidden pattern. A repair may include shared
 prerequisite edits, but those edits do not accept another criterion. Each reserved
 repair cycle records at most one unsuccessful outcome. The third unsuccessful
 outcome blocks that criterion. Explicit operator resume of the blocked goal resets
