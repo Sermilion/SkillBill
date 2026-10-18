@@ -45,6 +45,7 @@ import kotlin.test.assertTrue
 private const val PUBLISHED = "1111111111111111111111111111111111111111"
 private const val TEAMMATE = "2222222222222222222222222222222222222222"
 private const val ADVANCED_BASE = "3333333333333333333333333333333333333333"
+private const val FETCHED_BASE = "4444444444444444444444444444444444444444"
 private const val PR_NUMBER = 427
 private val WORKTREE = MonitorWorktree(Path.of("/owned/worktree"), "skill-bill/monitor/service-test")
 
@@ -95,7 +96,15 @@ class StandaloneMonitorServiceTest {
     )
   private val ledger =
     StandaloneMonitorLedger(
-      MonitorExecutionContext(target, Path.of("/caller"), Path.of("/caller"), WORKTREE, "owner-token", 1L),
+      MonitorExecutionContext(
+        target,
+        Path.of("/caller"),
+        Path.of("/caller"),
+        WORKTREE,
+        "owner-token",
+        1L,
+        FETCHED_BASE,
+      ),
       MonitorCleanupOwnership(
         MonitorFence(Path.of("/fence"), "owner-token", 1L),
         UnreachableMonitorResources(),
@@ -162,15 +171,14 @@ class StandaloneMonitorServiceTest {
   }
 
   @Test
-  fun `a base that advanced past the pinned commit blocks before anything is committed or pushed`() {
+  fun `a base that advanced during the repair does not block publication`() {
     completedRepair(dirtyPath = "src/Fix.kt")
     remoteBase = MonitorBranchTip(ACME, "main", ADVANCED_BASE)
 
-    val blocked = assertIs<StandalonePublication.Blocked>(service.operations.publish(ledger, repairWorktree))
+    val published = assertIs<StandalonePublication.Published>(service.operations.publish(ledger, repairWorktree))
 
-    assertTrue(ADVANCED_BASE in blocked.reason && SHA in blocked.reason, blocked.reason)
-    assertNothingTouched()
-    assertEquals(true, ledger.pendingRepair?.completed, "the blocked repair stays retained")
+    assertEquals(published.commitSha, publisherRequests.single().repairSha)
+    assertEquals(published.commitSha, ledger.acknowledgedHeadSha)
   }
 
   @Test
@@ -181,25 +189,24 @@ class StandaloneMonitorServiceTest {
   }
 
   @Test
-  fun `a repair launch is refused when the base advanced, the head moved, or no repair is pending`() {
+  fun `a repair launch is refused when the head moved or no repair is pending, but not when the base advanced`() {
     assertTrue("No repair is pending" in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
 
     ledger.beginRepair(StandalonePendingRepair("CI failed", PUBLISHED))
     remoteBase = MonitorBranchTip(ACME, "main", ADVANCED_BASE)
-    assertTrue(ADVANCED_BASE in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
+    assertNull(service.operations.guardRepairLaunch(ledger, repairWorktree))
 
-    remoteBase = MonitorBranchTip(ACME, "main", SHA)
     remoteHead = TEAMMATE
     assertTrue(TEAMMATE in service.operations.guardRepairLaunch(ledger, repairWorktree).orEmpty())
   }
 
   @Test
-  fun `conflict evidence directs the merge of the pinned base commit through the actual base endpoint`() {
+  fun `conflict evidence directs the merge of the fetched base tip through the actual base endpoint`() {
     val evidence = service.operations.conflictEvidence(ledger)
 
     assertTrue("git fetch https://github.com/acme/repo.git refs/heads/main" in evidence, evidence)
-    assertTrue("Merge the pinned base commit $SHA" in evidence, evidence)
-    assertTrue("FETCH_HEAD" !in evidence, evidence)
+    assertTrue("Merge the fetched base tip (`FETCH_HEAD`)" in evidence, evidence)
+    assertTrue("Merge the pinned base commit" !in evidence, "a pinned commit goes stale when the base moves")
   }
 
   @Test

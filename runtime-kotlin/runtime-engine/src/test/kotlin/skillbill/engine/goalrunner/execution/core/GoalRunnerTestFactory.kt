@@ -233,6 +233,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     runPreparation =
       GoalRunnerRunPreparation(
         wiring.manifestStore,
+        wiring.outcomeStore,
         TestRepositoryEnclosingRoot,
         executionPlans,
         crashReconciler,
@@ -429,7 +430,8 @@ private fun goalRunnerExecutionPlans(
           Path.of("/tmp/skillbill-goal-runner"),
           SkeletonDefinition.GOAL_CHILD,
           CodeReviewExecutionMode.DEFAULT,
-          GoalRunnerQualityGateSelectionResolver.resolve(manifest, subtask.id),
+          wiring.outcomeStore.recordedQualityGateSelection(workflowId)
+            ?: GoalRunnerQualityGateSelectionResolver.resolve(),
           ValidationDepth.FULL,
           null,
         ),

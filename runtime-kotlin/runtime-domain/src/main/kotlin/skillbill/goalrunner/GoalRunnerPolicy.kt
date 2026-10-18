@@ -21,15 +21,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 object GoalRunnerQualityGateSelectionResolver {
-  fun resolve(
-    manifest: DecompositionManifest,
-    subtaskId: Int,
-  ): FeatureTaskRuntimeQualityGateSelection {
-    require(manifest.subtasks.any { it.id == subtaskId }) {
-      "Quality-gate selection requires subtask $subtaskId in the decomposition manifest."
-    }
-    return FeatureTaskRuntimeQualityGateSelection.VALIDATE
-  }
+  fun resolve(): FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE
 }
 
 private val SETTLED_SUBTASK_STATUSES: Set<DecompositionStatus> =

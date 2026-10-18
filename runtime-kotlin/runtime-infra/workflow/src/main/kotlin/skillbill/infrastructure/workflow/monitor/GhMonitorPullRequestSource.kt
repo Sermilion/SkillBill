@@ -9,6 +9,7 @@ import skillbill.infrastructure.workflow.github.describeFailure
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.monitor.MonitorPullRequestSource
 import skillbill.ports.monitor.model.MonitorCallerRepository
+import skillbill.ports.monitor.model.MonitorPullRequest
 import skillbill.ports.monitor.model.MonitorPullRequestListing
 import skillbill.ports.monitor.model.MonitorPullRequestLookup
 import skillbill.ports.monitor.model.MonitorPullRequestSummary
@@ -58,9 +59,26 @@ class GhMonitorPullRequestSource internal constructor(
         runCatching { mapper.readTree(result.stdout) }.getOrNull()
           ?.takeIf(JsonNode::isObject)
           ?.let { parseMonitorPullRequest(it, repository) }
-          ?.let { MonitorPullRequestLookup.Found(it) }
+          ?.let { MonitorPullRequestLookup.Found(withRepositoryPush(it)) }
           ?: MonitorPullRequestLookup.Failed("GitHub returned an unparsable or incomplete pull request.")
     }
+  }
+
+  private fun withRepositoryPush(pullRequest: MonitorPullRequest): MonitorPullRequest {
+    val head = pullRequest.head ?: return pullRequest
+    if (head.writeEvidence.repositoryPush != null) return pullRequest
+    val push = repositoryPush(head.tip.repository) ?: return pullRequest
+    return pullRequest.copy(head = head.copy(writeEvidence = head.writeEvidence.copy(repositoryPush = push)))
+  }
+
+  private fun repositoryPush(repository: MonitorRepositoryIdentity): Boolean? {
+    val result = gh.run(Path.of("."), getArgs(repository.host, "repos/${repository.slug}"))
+    if (result.exitCode != 0) return null
+    return runCatching { mapper.readTree(result.stdout) }.getOrNull()
+      ?.path("permissions")
+      ?.path("push")
+      ?.takeIf(JsonNode::isBoolean)
+      ?.asBoolean()
   }
 
   override fun pullRequests(repository: MonitorRepositoryIdentity): MonitorPullRequestListing =
@@ -102,6 +120,11 @@ class GhMonitorPullRequestSource internal constructor(
     repository: MonitorRepositoryIdentity,
     resource: String,
     options: List<String> = emptyList(),
-  ): List<String> =
-    listOf("api", "--hostname", repository.host, "--method", "GET") + options + "repos/${repository.slug}/$resource"
+  ): List<String> = getArgs(repository.host, "repos/${repository.slug}/$resource", options)
+
+  private fun getArgs(
+    host: String,
+    path: String,
+    options: List<String> = emptyList(),
+  ): List<String> = listOf("api", "--hostname", host, "--method", "GET") + options + path
 }

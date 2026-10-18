@@ -58,6 +58,7 @@ class BlockedWorkerCrashRecoveryTest {
       val preparation =
         GoalRunnerRunPreparation(
           TestNoopGoalPlanningManifestStore,
+          testWorkflowGoalRunnerOutcomeStore(database),
           TestRepositoryEnclosingRoot,
           execution.recoveryResolver(),
           reconciler,

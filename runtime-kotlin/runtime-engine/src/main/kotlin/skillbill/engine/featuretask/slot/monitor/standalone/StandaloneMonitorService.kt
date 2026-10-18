@@ -70,13 +70,14 @@ class StandaloneMonitorService(
       val base = ledger.execution.target.base
       return buildString {
         appendContext(ledger)
-        appendLine("The pull request conflicts with its base ${base.repository.slug}:${base.ref} at ${base.sha}.")
+        appendLine("The pull request conflicts with its base ${base.repository.slug}:${base.ref}.")
         appendLine(
-          "Fetch that base explicitly with `git fetch ${ledger.execution.target.baseFetchUrl} refs/heads/${base.ref}`.",
+          "Fetch the current base explicitly with " +
+            "`git fetch ${ledger.execution.target.baseFetchUrl} refs/heads/${base.ref}`.",
         )
         appendLine(
-          "Merge the pinned base commit ${base.sha}, not a newer fetched tip, into the current branch and resolve " +
-            "every conflict. If the fetched base no longer contains ${base.sha}, stop and settle blocked.",
+          "Merge the fetched base tip (`FETCH_HEAD`) into the current branch and resolve every conflict. The base " +
+            "may have moved since monitoring began; always merge the tip you just fetched.",
         )
       }
     }
@@ -168,10 +169,7 @@ class StandaloneMonitorService(
       is MonitorPullRequestLookup.Failed -> "The pull request could not be re-read: ${lookup.reason}"
       MonitorPullRequestLookup.Missing -> "The pull request ${pullRequest.url} no longer exists."
       is MonitorPullRequestLookup.Found ->
-        headDrift(
-          lookup.pullRequest,
-          ledger,
-        ) ?: baseDrift(lookup.pullRequest, ledger)
+        headDrift(lookup.pullRequest, ledger)
     }
   }
 
@@ -200,20 +198,6 @@ class StandaloneMonitorService(
     }
   }
 
-  private fun baseDrift(
-    current: MonitorPullRequest,
-    ledger: StandaloneMonitorLedger,
-  ): String? {
-    val pinned = ledger.execution.target.base
-    val base = current.base
-    return when {
-      base == null || base.repository != pinned.repository || base.ref != pinned.ref ->
-        "The pull request base is no longer ${pinned.repository.slug}:${pinned.ref}."
-      base.sha != pinned.sha -> "The pull request base advanced to ${base.sha} from the pinned ${pinned.sha}."
-      else -> null
-    }
-  }
-
   private fun blocked(
     ledger: StandaloneMonitorLedger,
     reason: String,
@@ -230,7 +214,9 @@ class StandaloneMonitorService(
     appendLine("## Standalone monitor repair brief")
     appendLine("Pull request: ${target.pullRequest.url} (${target.pullRequest.targetKey})")
     appendLine("Head: ${target.head.tip.repository.slug}:${target.head.tip.ref} at ${ledger.acknowledgedHeadSha}")
-    appendLine("Base: ${target.base.repository.slug}:${target.base.ref} at ${target.base.sha} when pinned")
+    appendLine(
+      "Base: ${target.base.repository.slug}:${target.base.ref} at ${execution.pinnedBaseSha} when monitoring began",
+    )
     appendLine("Working directory: ${execution.worktree.path} on branch ${execution.worktree.branch}")
   }
 
