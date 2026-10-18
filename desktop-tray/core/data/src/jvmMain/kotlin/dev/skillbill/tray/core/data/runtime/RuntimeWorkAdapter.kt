@@ -14,6 +14,7 @@ import dev.skillbill.tray.core.data.port.SnapshotReads
 import dev.skillbill.tray.core.data.port.StoreObservation
 import dev.skillbill.tray.core.domain.model.Detail
 import dev.skillbill.tray.core.domain.model.DetailList
+import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Retention
 import dev.skillbill.tray.core.domain.model.RunOptions
 import dev.skillbill.tray.core.domain.model.WorkIdentity
@@ -175,7 +176,11 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
         domain.runTarget()?.let(runtime.workControlService::options)
       }
       val detail: Detail? = result.item?.toDomain(result.observedAt.toKotlinInstant(), null)?.let { mapped ->
-        mapped.copy(item = mapped.item.withCheckedOutBranch(runtime.checkedOutBranchSource))
+        val standaloneAgent = options?.agentId.takeIf { mapped.item.scope == ExecutionScope.STANDALONE_PHASE }
+        mapped.copy(
+          item = mapped.item.withCheckedOutBranch(runtime.checkedOutBranchSource),
+          activeAgent = mapped.activeAgent ?: standaloneAgent,
+        )
       }
       return DetailProjection(
         problemCode = result.problem?.code?.wireValue,
