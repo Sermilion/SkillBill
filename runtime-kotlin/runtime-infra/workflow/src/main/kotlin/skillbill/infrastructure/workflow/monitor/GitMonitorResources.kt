@@ -88,27 +88,32 @@ class GitMonitorResources(
     request: MonitorAcquireRequest,
   ): MonitorAcquisition {
     val directory = admission.directory
-    val existing =
-      try {
-        MonitorAdmissionFiles.read(directory)
-      } catch (failure: SkillBillRuntimeException) {
-        admission.close()
-        return MonitorAcquisition.Blocked(
-          MonitorAdmissionBlock.CORRUPT_OWNERSHIP,
-          MonitorAdmissionFiles.recordFile(directory),
-          failure.message.orEmpty(),
-          null,
-        )
-      }
-    val block = existing?.let(::admissionBlock)
-    if (block != null) {
-      admission.close()
-      val path = if (block == MonitorAdmissionBlock.RETAINED_WORK) retainedPath(existing, directory) else directory
-      return MonitorAcquisition.Blocked(block, path, blockDetail(existing, block), summaryOf(existing))
-    }
-    val generation = (existing?.generation ?: 0) + 1
     var admitted = false
     try {
+      var existing =
+        try {
+          MonitorAdmissionFiles.read(directory)
+        } catch (failure: SkillBillRuntimeException) {
+          return MonitorAcquisition.Blocked(
+            MonitorAdmissionBlock.CORRUPT_OWNERSHIP,
+            MonitorAdmissionFiles.recordFile(directory),
+            failure.message.orEmpty(),
+            null,
+          )
+        }
+      if (existing?.hasRecheckablePublication() == true &&
+        inspector.currentProcess().hostIdentity == existing.process.hostIdentity &&
+        inspector.inspect(existing.process).isConfirmedDead()
+      ) {
+        cleanup.settle(directory, existing, request.target, existing.outcome)
+        existing = MonitorAdmissionFiles.read(directory)
+      }
+      val block = existing?.let(::admissionBlock)
+      if (block != null) {
+        val path = if (block == MonitorAdmissionBlock.RETAINED_WORK) retainedPath(existing, directory) else directory
+        return MonitorAcquisition.Blocked(block, path, blockDetail(existing, block), summaryOf(existing))
+      }
+      val generation = (existing?.generation ?: 0) + 1
       MonitorAdmissionFiles.write(directory, acquiringRecord(request, generation))
       held[directory] = HeldOwnership(admission, request.ownerToken, generation)
       admitted = true
@@ -270,7 +275,7 @@ class GitMonitorResources(
   }
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery {
-    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.pullRequest)
+    val directory = MonitorAdmissionFiles.directoryFor(request.context.commonDir, request.target.pullRequest)
     if (!Files.exists(MonitorAdmissionFiles.recordFile(directory))) {
       return refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
     }
@@ -298,7 +303,7 @@ class GitMonitorResources(
       record == null -> refusal(MonitorRecoveryRefusal.NO_OWNERSHIP, directory, "No ownership record exists.")
       refused != null -> refused
       else ->
-        when (val settled = cleanup.settle(directory, record, null, abandonedOutcome(record))) {
+        when (val settled = cleanup.settle(directory, record, request.target, abandonedOutcome(record))) {
           MonitorSettlement.Released -> MonitorStaleRecovery.Recovered(record.ownerToken)
           is MonitorSettlement.Retained ->
             refusal(
@@ -311,6 +316,11 @@ class GitMonitorResources(
         }
     }
   }
+
+  private fun MonitorOwnershipRecord.hasRecheckablePublication(): Boolean =
+    state == MonitorOwnershipState.RETAINED &&
+      retention?.reason == MonitorRetentionReason.PUBLICATION_UNKNOWN &&
+      outcome?.kind == MonitorOutcomeKind.ABANDONED
 
   private fun abandonedOutcome(record: MonitorOwnershipRecord): MonitorPrimaryOutcome =
     MonitorPrimaryOutcome(
@@ -340,7 +350,7 @@ class GitMonitorResources(
           directory,
           "The recorded owner token differs from the expected one.",
         )
-      record.state == MonitorOwnershipState.RETAINED ->
+      record.state == MonitorOwnershipState.RETAINED && !record.hasRecheckablePublication() ->
         MonitorStaleRecovery.Refused(
           MonitorRecoveryRefusal.RETAINED_UNFINISHED,
           retainedPath(record, directory),

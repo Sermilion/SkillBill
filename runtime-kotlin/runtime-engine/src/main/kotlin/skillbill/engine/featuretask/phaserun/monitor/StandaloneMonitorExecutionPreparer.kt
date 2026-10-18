@@ -30,7 +30,7 @@ class StandaloneMonitorExecutionPreparer(
   private val shutdownHooks: ShutdownHookPort,
   private val childDrain: AgentRunChildDrain,
 ) {
-  fun prepare(request: MonitorPreparationRequest): MonitorPreparation =
+  internal fun prepare(request: MonitorPreparationRequest): MonitorPreparation =
     when (val parsed = parseMonitorIntake(request.intake, request.currentBranch)) {
       is MonitorIntakeParse.Refused -> MonitorPreparation.Refused(parsed.reason, parsed.detail)
       is MonitorIntakeParse.Selected ->
@@ -69,13 +69,14 @@ class StandaloneMonitorExecutionPreparer(
   ): MonitorPreparation {
     request.expectedStaleOwner?.let { expected ->
       val recovery =
-        resources.recoverStale(MonitorStaleRecoveryRequest(context, target.pullRequest, expected))
+        resources.recoverStale(MonitorStaleRecoveryRequest(context, target, expected))
       if (recovery is MonitorStaleRecovery.Refused) {
         return MonitorPreparation.Blocked(
           MonitorBlockKind.RECOVERY_REFUSED,
           "Stale recovery was refused (${recovery.reason}): ${recovery.detail}",
           target.pullRequest,
           recovery.path,
+          attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot),
         )
       }
     }
@@ -87,6 +88,7 @@ class StandaloneMonitorExecutionPreparer(
           acquisition.detail,
           target.pullRequest,
           acquisition.path,
+          attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot),
         )
       is MonitorAcquisition.Acquired -> prepareOwned(acquisition.fence, context, target)
     }
@@ -106,7 +108,13 @@ class StandaloneMonitorExecutionPreparer(
         MonitorPrimaryOutcome(MonitorOutcomeKind.SETUP_FAILED, "Monitor preparation ended before handing off."),
       )
     }
-    return prepared
+    return when (prepared) {
+      is MonitorPreparation.Blocked ->
+        prepared.copy(attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot))
+      is MonitorPreparation.Failed ->
+        prepared.copy(attempt = MonitorAttemptTarget(target, context.callerRoot, context.primaryRoot))
+      else -> prepared
+    }
   }
 
   private fun setupFailure(

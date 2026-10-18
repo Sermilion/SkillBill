@@ -39,7 +39,7 @@ data class StandaloneMonitorTarget(
   val headRepository: String,
   val headRef: String,
   val callerRoot: String,
-  val worktreePath: String,
+  val worktreePath: String?,
 ) {
   init {
     val match =
@@ -51,9 +51,10 @@ data class StandaloneMonitorTarget(
       "Monitor pull request URL '$pullRequestUrl' does not match key '$pullRequestKey'."
     }
     require(
-      headRepository.isNotBlank() && headRef.isNotBlank() && callerRoot.isNotBlank() && worktreePath.isNotBlank(),
+      headRepository.isNotBlank() && headRef.isNotBlank() && callerRoot.isNotBlank() &&
+        (worktreePath == null || worktreePath.isNotBlank()),
     ) {
-      "A monitor target needs a head repository, head ref, caller root and worktree path."
+      "A monitor target needs a head repository, head ref and caller root; worktree path must be nonblank if present."
     }
   }
 

@@ -57,7 +57,7 @@ class GitMonitorResourcesLifecycleTest {
   private fun staleRequest(
     fixture: MonitorRepoFixture,
     token: String,
-  ) = MonitorStaleRecoveryRequest(fixture.context(), fixture.target().pullRequest, MonitorExpectedOwnerToken(token))
+  ) = MonitorStaleRecoveryRequest(fixture.context(), fixture.target(), MonitorExpectedOwnerToken(token))
 
   private fun prepare(
     fixture: MonitorRepoFixture,
@@ -125,6 +125,103 @@ class GitMonitorResourcesLifecycleTest {
       val blocked = assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
       assertEquals(MonitorAdmissionBlock.RETAINED_WORK, blocked.reason, name)
     }
+  }
+
+  @Test
+  fun `unknown publication from an abandoned owner is rechecked only with positive death evidence`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("published.txt", "repair", worktree.path)
+    runGit(worktree.path, "push", fixture.remote.toString(), "HEAD:refs/heads/$FEATURE_BRANCH")
+    val offline = fixture.remote.resolveSibling("offline.git")
+    Files.move(fixture.remote, offline)
+    val retained =
+      resources.settle(
+        MonitorSettleRequest(fence, MonitorPrimaryOutcome(MonitorOutcomeKind.ABANDONED, "owner ended before settling")),
+      )
+    assertEquals(MonitorRetentionReason.PUBLICATION_UNKNOWN, assertIs<MonitorSettlement.Retained>(retained).reason)
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+    assertTrue(Files.exists(worktree.path))
+    Files.move(offline, fixture.remote)
+
+    for (inspection in listOf(
+      FeatureTaskRuntimeProcessInspection.ExactLive,
+      FeatureTaskRuntimeProcessInspection.Unsupported("unknown"),
+    )) {
+      inspector.inspection = inspection
+      assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+      assertTrue(Files.exists(worktree.path))
+    }
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+    Files.writeString(worktree.path.resolve("published.txt"), "unfinished")
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+    assertEquals("unfinished", Files.readString(worktree.path.resolve("published.txt")))
+    runGit(worktree.path, "restore", "published.txt")
+    MonitorAdmissionFiles.write(
+      fence.directory,
+      assertNotNull(MonitorAdmissionFiles.read(fence.directory)).copy(
+        retention =
+          MonitorRetentionRecord(
+            MonitorRetentionReason.PUBLICATION_UNKNOWN,
+            "publication needs verification",
+            worktree.path.toString(),
+          ),
+      ),
+    )
+
+    val next = acquiredFence(acquireFor(resources, fixture))
+    assertEquals(fence.generation + 1, next.generation)
+    assertFalse(Files.exists(worktree.path))
+    assertEquals(MonitorSettlement.Released, resources.settle(next))
+  }
+
+  @Test
+  fun `cancellation with an undrained child stays retained after the parent exits`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    val retained =
+      resources.settle(
+        MonitorSettleRequest(
+          fence,
+          MonitorPrimaryOutcome(MonitorOutcomeKind.CANCELLED, "cancelled"),
+          removalAllowed = false,
+        ),
+      )
+    assertEquals(MonitorRetentionReason.PUBLICATION_UNKNOWN, assertIs<MonitorSettlement.Retained>(retained).reason)
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+
+    assertIs<MonitorAcquisition.Blocked>(acquireFor(resources, fixture))
+    assertRefusal(
+      MonitorRecoveryRefusal.RETAINED_UNFINISHED,
+      resources.recoverStale(staleRequest(fixture, fence.ownerToken)),
+    )
+    assertTrue(Files.exists(worktree.path))
+  }
+
+  @Test
+  fun `stale recovery verifies published repairs against the resolved remote even if the worktree vanished`() {
+    val fixture = fixture()
+    val fence = acquiredFence(acquireFor(resources, fixture))
+    val worktree = prepare(fixture, fence)
+    fixture.commitFile("published.txt", "repair", worktree.path)
+    runGit(worktree.path, "push", fixture.remote.toString(), "HEAD:refs/heads/$FEATURE_BRANCH")
+    val prepared = assertNotNull(MonitorAdmissionFiles.read(fence.directory))
+    val offline = fixture.remote.resolveSibling("offline.git")
+    Files.move(fixture.remote, offline)
+    assertIs<MonitorSettlement.Retained>(resources.settle(fence))
+    Files.move(offline, fixture.remote)
+    worktree.path.toFile().deleteRecursively()
+    MonitorAdmissionFiles.write(fence.directory, prepared)
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.NotRunning
+
+    assertEquals(
+      MonitorStaleRecovery.Recovered(fence.ownerToken),
+      resources.recoverStale(staleRequest(fixture, fence.ownerToken)),
+    )
+    assertEquals(MonitorOwnershipState.RELEASED, assertNotNull(MonitorAdmissionFiles.read(fence.directory)).state)
+    assertEquals(emptyList(), fixture.refs("refs/heads/skill-bill"))
   }
 
   @Test

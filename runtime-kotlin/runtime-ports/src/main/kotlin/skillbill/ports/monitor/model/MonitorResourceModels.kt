@@ -139,7 +139,7 @@ data class MonitorExpectedOwnerToken(val value: String)
 
 data class MonitorStaleRecoveryRequest(
   val context: MonitorRepositoryContext,
-  val pullRequest: MonitorPullRequestIdentity,
+  val target: MonitorResolvedTarget,
   val expectedOwner: MonitorExpectedOwnerToken,
 )
 
