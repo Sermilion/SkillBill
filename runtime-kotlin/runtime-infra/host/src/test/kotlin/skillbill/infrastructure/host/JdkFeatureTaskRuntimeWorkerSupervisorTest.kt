@@ -364,6 +364,40 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
   }
 
   @Test
+  fun `stopping renewal waits for an active tick before lease release`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
+    val tickEntered = CountDownLatch(1)
+    val finishTick = CountDownLatch(1)
+    val stopReturned = CountDownLatch(1)
+    val ticks = AtomicInteger()
+    val heartbeat =
+      supervisor.startHeartbeat(plan()) {
+        ticks.incrementAndGet()
+        tickEntered.countDown()
+        assertTrue(finishTick.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the test never released the tick")
+        FeatureTaskRuntimeHeartbeatTick.Renewed
+      }
+
+    assertTrue(tickEntered.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first tick never ran")
+    val stopper =
+      Thread {
+        heartbeat.stop()
+        stopReturned.countDown()
+      }
+    stopper.start()
+    try {
+      assertTrue(!stopReturned.await(100, TimeUnit.MILLISECONDS), "stop returned while renewal was still active")
+    } finally {
+      finishTick.countDown()
+    }
+
+    assertTrue(stopReturned.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "stop did not finish after the tick")
+    stopper.join(TimeUnit.SECONDS.toMillis(TICK_TIMEOUT_SECONDS))
+    assertEquals(1, ticks.get(), "no renewal may start after stop returns")
+    assertNull(heartbeat.fencingLostReason())
+  }
+
+  @Test
   fun `renewal failures that outlast the lease escalate to an error`() {
     val diagnostics = RecordingDiagnostics()
     val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(diagnostics, JdkHostPlatformPort)

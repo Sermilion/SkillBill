@@ -286,19 +286,31 @@ private class HeartbeatLoop(
   private val diagnostics: RuntimeDiagnostics,
   private val executor: ScheduledExecutorService,
 ) : FeatureTaskRuntimeHeartbeat {
+  private val lifecycleLock = Any()
   private val consecutiveFailures = AtomicInteger()
   private val lastRenewalNanos = AtomicLong(System.nanoTime())
   private val fencingLost = AtomicReference<String?>(null)
+  private var stopped = false
 
   fun start() = scheduleNext(plan.intervalSeconds)
 
   override fun stop() {
-    executor.shutdownNow()
+    synchronized(lifecycleLock) {
+      stopped = true
+      executor.shutdownNow()
+    }
   }
 
   override fun fencingLostReason(): String? = fencingLost.get()
 
   private fun runTick() {
+    synchronized(lifecycleLock) {
+      if (stopped) return
+      runTickWhileActive()
+    }
+  }
+
+  private fun runTickWhileActive() {
     val tick =
       try {
         heartbeat()
@@ -326,7 +338,9 @@ private class HeartbeatLoop(
   }
 
   private fun scheduleNext(delaySeconds: Long) {
-    runCatching { executor.schedule(::runTick, delaySeconds, TimeUnit.SECONDS) }
+    synchronized(lifecycleLock) {
+      if (!stopped) runCatching { executor.schedule(::runTick, delaySeconds, TimeUnit.SECONDS) }
+    }
   }
 
   private fun reportFailure(error: Throwable) {
