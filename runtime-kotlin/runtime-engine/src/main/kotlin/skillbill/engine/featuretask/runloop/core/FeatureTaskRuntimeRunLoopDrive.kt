@@ -213,11 +213,12 @@ object FeatureTaskRuntimeRunLoopDrive {
         ?.lastResumableStep
         ?.takeIf(String::isNotBlank)
         ?.let(state::explicitResumeStart)
-    if (explicitResume != null) {
+    val acceptanceResume = FeatureTaskRuntimeRunLoopAcceptanceRepair.resume(this)
+    if (explicitResume != null && acceptanceResume == null) {
       runState.coupledRunTransitions.enterExplicitResumeStart(explicitResume)
     }
     var phaseId: String? =
-      FeatureTaskRuntimeRunLoopAcceptanceRepair.resume(this)
+      acceptanceResume
         ?: explicitResume?.phaseId
         ?: session.pendingReentry?.phaseId
         ?: traversal(this).forwardPhaseIds.first()

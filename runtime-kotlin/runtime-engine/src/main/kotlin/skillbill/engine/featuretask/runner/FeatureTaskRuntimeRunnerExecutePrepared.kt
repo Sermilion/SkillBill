@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
+import skillbill.engine.featuretask.persist.acceptance.restoreAcceptanceRepairResumeEvidence
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.MonitorRepairAccounting
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -156,7 +157,17 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
       initialRecords = records,
       transitions = executionPlan.phaseTraversal(),
       durableInitialLedger = ledger,
-      initialRetainedOutputs = history.outputs,
+      initialRetainedOutputs =
+        history.outputs +
+          listOfNotNull(
+            phaseSettlementService.restoreAcceptanceRepairResumeEvidence(
+              runRequest,
+              acceptanceRepairSteps(executionPlan),
+              records,
+              ledger,
+              diagnostics,
+            ),
+          ),
       initialMonitorRepairFailures = history.failedRepairs,
       initialMonitorFailureEvidenceUnavailable = history.evidenceUnavailable,
       initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
