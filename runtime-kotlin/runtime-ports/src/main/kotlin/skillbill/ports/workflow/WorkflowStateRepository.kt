@@ -8,6 +8,7 @@ import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
 import skillbill.ports.workflow.model.mapToRecord
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -33,6 +34,21 @@ interface WorkflowStateRepository :
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
   )
+
+  /**
+   * Persist a snapshot the engine already accepted as an operator or repair mutation,
+   * including replacement of a previously terminal outcome. Ordinary [save] and
+   * [saveOrdinary] continue to refuse those writes.
+   */
+  fun saveAcceptedSnapshotMutation(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  )
+
+  fun saveOrdinary(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ): WorkflowStateWriteResult
 
   fun saveRecord(
     family: WorkflowFamily,

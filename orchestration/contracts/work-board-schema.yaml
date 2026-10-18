@@ -7,7 +7,7 @@ required: [contract_version, items, observed_at, finished_within, diagnostics, p
 properties:
   contract_version:
     type: string
-    const: "1.1"
+    const: "1.2"
   page_size:
     type: integer
     minimum: 1
@@ -37,7 +37,13 @@ properties:
         repository_identity: {type: [string, "null"]}
         reason:
           type: string
-          enum: [missing_repository_identity, invalid_repository_identity, missing_completion_time]
+          enum:
+            [
+              missing_repository_identity,
+              invalid_repository_identity,
+              missing_completion_time,
+              incompatible_record,
+            ]
   problem:
     type: object
     additionalProperties: false

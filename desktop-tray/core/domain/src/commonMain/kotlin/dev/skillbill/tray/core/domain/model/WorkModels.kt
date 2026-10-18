@@ -292,6 +292,11 @@ val defaultNotifications = mapOf("blocked" to true, "failed" to true, "goal_comp
 fun WorkItem.needsAttention(): Boolean =
   requiresAttention
 
+fun WorkItem.successfulGoalCompletion(): Boolean =
+  family == WorkFamily.FEATURE_GOAL &&
+    lifecycle == Lifecycle.TERMINAL &&
+    finishedAtSource == "goal_completion"
+
 fun WorkItem.isPhase(): Boolean = displayGroup == WorkSection.PHASES
 
 /** Whether the item reads as a standalone phase; a goal's plan that runs before its goal exists reads as that goal. */

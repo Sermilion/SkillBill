@@ -1,3 +1,9 @@
+## [2026-10-17] Recover through named resume on the existing workflow row
+Context: Explicit recovery and rerun have no separate recovery-history artifact table.
+Decision: Keep recovery as WorkflowEngine resume or continue on the same workflow id and embedded artifacts. Do not add a recovery ledger in this subtask.
+Reason: A second history table would split identity from the row that already carries steps, artifacts, and session. Named transitions already distinguish intentional recovery from late ordinary writes.
+Revisit when: parent aggregate in subtask 2 requires a shared recovery ledger.
+
 ## [2026-10-16] Explicit resume renews an exhausted acceptance repair budget
 Context: Resuming a budget-blocked goal reopened its child phase but retained three active failures, so the child immediately blocked again.
 Decision: Keep every accepted outcome and record the start index of the current budget in the repair aggregate. Explicit operator resume resets exhausted active totals and advances that index in the same transaction that reopens the child phase. The final audit phase may already be completed when aggregate accounting blocks the workflow, so resume also reopens that completed phase when it renews the exhausted budget. Ordinary hydration and repeated resume admission do not renew the budget. The optional index defaults to zero for existing 0.1 records, preserving their accounting without a schema rewrite.

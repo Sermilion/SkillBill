@@ -2,7 +2,9 @@ package skillbill.engine.featuretask.runloop.durable
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.phase.record.requireCurrentWorker
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -10,17 +12,20 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import java.time.Clock
 
 @Inject
 class FeatureTaskRuntimeRunInvariantsStore(
   private val database: DatabaseSessionFactory,
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
+  private val clock: Clock,
 ) {
   fun resolve(
     workflowId: String,
     proposed: FeatureTaskRuntimeRunInvariants? = null,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): FeatureTaskRuntimeRunInvariants? {
-    proposed?.let { persistOrUpdateAgentAddons(workflowId, it) }
+    proposed?.let { persistOrUpdateAgentAddons(workflowId, it, admitted) }
     return database.read { unitOfWork ->
       val artifacts =
         unitOfWork.workflowStates.readFeatureTaskArtifacts(
@@ -35,11 +40,17 @@ class FeatureTaskRuntimeRunInvariantsStore(
   private fun persistOrUpdateAgentAddons(
     workflowId: String,
     proposed: FeatureTaskRuntimeRunInvariants,
+    admitted: AdmittedFeatureTaskRuntimeExecution?,
   ) {
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@transaction
+      if (admitted != null &&
+        !requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)
+      ) {
+        return@transaction
+      }
       val artifacts = record.artifacts
       val existing = runInvariantsFrom(artifacts)
       when {

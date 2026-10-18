@@ -5,14 +5,22 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 class InMemoryFeatureTaskPhaseSettlementRepository : FeatureTaskPhaseSettlementRepository {
   private val rows = ConcurrentHashMap<String, FeatureTaskPhaseSettlement>()
 
-  override fun upsert(settlement: FeatureTaskPhaseSettlement) {
-    rows[key(settlement.workflowId, settlement.phaseId, settlement.attempt)] = settlement
+  override fun upsert(settlement: FeatureTaskPhaseSettlement): FeatureTaskPhaseSettlementWriteResult {
+    val key = key(settlement.workflowId, settlement.phaseId, settlement.attempt)
+    val previous = rows.putIfAbsent(key, settlement)
+    return when {
+      previous == null -> FeatureTaskPhaseSettlementWriteResult.Accepted
+      previous.kind == settlement.kind && previous.envelopeJson == settlement.envelopeJson ->
+        FeatureTaskPhaseSettlementWriteResult.IdenticalReplay
+      else -> FeatureTaskPhaseSettlementWriteResult.Conflicting
+    }
   }
 
   override fun find(

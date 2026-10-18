@@ -1,3 +1,35 @@
+## [2026-10-18] SKILL-422 subtask 3: validate repairs to fencing, leases and status
+Areas: runtime-engine featuretask phase record and persist, goalrunner repair, status and execution; runtime-engine work; runtime-domain WorkflowEngine; runtime-ports WorkflowStateRepository; runtime-infra/sqlite workflow and worker stores
+- New WorkflowStateRepository.saveAcceptedSnapshotMutation persists engine-accepted operator or repair snapshots, including terminal replacement. Ordinary save and saveOrdinary still refuse. The repair wedge loop and artifact patches use it.
+- Owned phase write fences admit a first BLOCKED or finished COMPLETED write and pass when no worker ownership is admitted. An expired lease is reclaimable even if the old process still looks live, so LIVE_EXPIRED is gone from status.
+- Repair wedge STALE_CHILD_WORKER_LEASE now releases an expired ACTIVE lease by owner token and generation and records the wedge.
+- Goal status no longer invents a monitor step for settled children without a goal-completion record (SKILL-418). IdeStatusProjectorMapping treats pending_launch as a live planning step.
+- Limitation: desktop-tray WorkModels and IntelliJ StatusUiMapper copies of LIVE_PLANNING_STEP_IDS still lack pending_launch. They only drive display labels.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented (validate ran full check green)
+
+## [2026-10-17] SKILL-422 subtask 2: goal finalization and public state
+Areas: runtime-engine goalrunner status and work projection; runtime-infra/sqlite worklist and goal telemetry; runtime-ports work/idestatus; runtime-cli goal status; runtime-application work; desktop-tray; orchestration/contracts work-board; IntelliJ and VS Code status mappers
+- Status projection no longer prunes checkpoint refs; authorized prune stays on finalization, reset, and purge. pruneCheckpointRefs defaults to false on requests, CLI, and ide-status.
+- Work-list list skips INVALID_WORK_LIST_ROW and records rejectedRows; findByWorkflowId still typed-rejects a corrupt target. Work-board 1.2 adds incompatible_record for skipped board rows.
+- Tray goal_completed notifications and 24h Done counts require finishedAtSource=goal_completion, not generic TERMINAL.
+- Issue-finish overwrite guard is finished_at IS NULL plus terminal status exclusion; emission still follows save so unavailable emission can retry.
+- Pattern: read-only status cannot own mutation; aggregate reads isolate malformed rows; successful completion uses existing provenance. reusable
+- reusable: WorkListListRead.rejectedRows, WorkItem.successfulGoalCompletion, skipIncompatibleBoardItem.
+- Breaking: work-board contract 1.2 adds incompatible_record. Limits: F11 parent-vs-children completion, F12 board-limit scan, planning-bundle refusal, IntelliJ T2-10, and test execution wait for validate.
+Feature flag: N/A
+Acceptance criteria: 5/9 implemented (source-based; tests unexecuted)
+
+## [2026-10-17] SKILL-422 subtask 1: durable state and ownership
+Areas: runtime-engine featuretask phase record/settlement, worker, crash reconcile; goalrunner stop and persist; runtime-infra/sqlite workflow and phase settlements; runtime-domain WorkflowEngine; runtime-ports, runtime-contracts, runtime-mcp, runtime-application workflow
+- Inventory, transition matrix, and findings F1–F7 classify every discovered store and artifact family, then rank terminal reopen, settlement overwrite, stale-owner writes, and false STOPPED.
+- Ordinary workflow writes refuse a non-identical terminal replacement. Settlement INSERT is gated on missing, terminal, stale-attempt, and lease state, then compares kind and envelope after ON CONFLICT DO NOTHING. reusable
+- Owned phase writes require the current worker token and generation. Goal stop keeps the operator pause and reports incomplete termination unless process exit is confirmed.
+- Pattern: expected ownership refusals are sealed write results, not overwrites or false success. Direct MCP settlement uses the same store admission as the phase loop.
+- Breaking: callers must handle TerminalRefused and settlement Conflicting or Refused; a successful SQL upsert is not an accepted settlement. Limits: no new recovery-history artifact (F4); not every artifact writer uses recorder fencing (F5); T1-03 fault injection and test execution wait for validate; parent and projection closure is subtask 2.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented (source-based; tests unexecuted)
+
 ## [2026-10-17] SKILL-427 subtask 3: status, control, recovery and public monitor cutover
 Areas: runtime-engine featuretask/phaserun and work; runtime-ports idestatus; runtime-infra sqlite status store and workflow monitor; runtime-cli phase; skills/skill-bill content; docs/runtime-command-guidance.md
 - Public phase monitor resolves its target read-only, prepares an owned worktree, then runs the internal standalone monitor. Goal monitoring and phase pr stay on the existing checkout path, and the legacy monitor strategies are unchanged.

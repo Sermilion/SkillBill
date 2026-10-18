@@ -1262,6 +1262,7 @@ internal fun statusHarness(): StatusHarness {
         StatusNoopSnapshotValidator,
         featureTaskRuntimeWireArtifactValidatorForTest(),
       ),
+      testHarnessClock,
     )
   return StatusHarness(
     recorder,
@@ -1308,35 +1309,41 @@ internal class StatusHarness(
     phaseId: String,
     attemptCount: Int,
     resolvedAgentId: String = "claude",
-  ) = recorder.recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = WORKFLOW_ID,
-      phaseId = phaseId,
-      status = "completed",
-      attemptCount = attemptCount,
-      resolvedAgentId = resolvedAgentId,
-      finished = true,
-      outputArtifact = """{"contract_version":"0.1"}""",
-    ),
-  )
+  ): Boolean {
+    recordRunning(phaseId, attemptCount, resolvedAgentId)
+    return recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = phaseId,
+        status = "completed",
+        attemptCount = attemptCount,
+        resolvedAgentId = resolvedAgentId,
+        finished = true,
+        outputArtifact = """{"contract_version":"0.1"}""",
+      ),
+    )
+  }
 
   fun recordBlocked(
     phaseId: String,
     attemptCount: Int,
     blockedReason: String,
     resolvedAgentId: String = "claude",
-  ) = recorder.recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = WORKFLOW_ID,
-      phaseId = phaseId,
-      status = "blocked",
-      attemptCount = attemptCount,
-      resolvedAgentId = resolvedAgentId,
-      finished = false,
-      outputArtifact = null,
-      blockedReason = blockedReason,
-    ),
-  )
+  ): Boolean {
+    recordRunning(phaseId, attemptCount, resolvedAgentId)
+    return recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = phaseId,
+        status = "blocked",
+        attemptCount = attemptCount,
+        resolvedAgentId = resolvedAgentId,
+        finished = false,
+        outputArtifact = null,
+        blockedReason = blockedReason,
+      ),
+    )
+  }
 
   fun recordLedger(
     action: FeatureTaskRuntimePhaseLedgerAction,

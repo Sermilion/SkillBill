@@ -77,13 +77,15 @@ class WorkControlService(
         if (result.terminationAttempted) {
           WorkControlResult.TerminationAttempted
         } else {
-          WorkControlResult.Rejected(WorkControlRejection.OWNERSHIP_MISMATCH)
+          WorkControlResult.Rejected(WorkControlRejection.IDENTITY_MISMATCH)
         }
       GoalRunnerStopStatus.CHANGED_TARGET -> WorkControlResult.Rejected(WorkControlRejection.CHANGED_TARGET)
       GoalRunnerStopStatus.TERMINATION_INCOMPLETE ->
         WorkControlResult.Rejected(WorkControlRejection.TERMINATION_INCOMPLETE)
       GoalRunnerStopStatus.STOPPED -> WorkControlResult.ExitConfirmed
-      GoalRunnerStopStatus.ALREADY_STOPPED, GoalRunnerStopStatus.NO_LIVE_LEASE -> WorkControlResult.Accepted
+      else ->
+        goalRunnerStopWorkControlRejection(result.status)?.let { WorkControlResult.Rejected(it) }
+          ?: WorkControlResult.Accepted
     }
   }
 

@@ -452,6 +452,18 @@ internal class RunnerHarness(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
         phaseId = "review",
+        status = "running",
+        attemptCount = attemptCount,
+        resolvedAgentId = phaseAgent("review"),
+        finished = false,
+        outputArtifact = null,
+        reviewPassNumber = reviewPassNumber,
+      ),
+    )
+    recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = "review",
         status = status,
         attemptCount = attemptCount,
         resolvedAgentId = phaseAgent("review"),
@@ -875,6 +887,7 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
           NoopWorkflowSnapshotValidator,
           featureTaskRuntimeWireArtifactValidatorForTest(),
         ),
+        testHarnessClock,
       ),
   )
 
@@ -1062,6 +1075,7 @@ private fun harnessRunner(
         entry,
         testDecompositionPlanner(),
       ),
+      deps.database,
     )
   return assembleHarnessRunner(deps, strategies, executePrepared, lifecycleTelemetry, entry)
 }
@@ -1262,6 +1276,7 @@ private class TelemetryExecutePreparedSetup(
         configuredEntry,
         testDecompositionPlanner(),
       ),
+      database,
     )
 }
 
@@ -1918,8 +1933,21 @@ private fun FeatureTaskRuntimePhaseRecorder.recordPhaseStateForTest(
   attemptCount: Int,
   resolvedAgentId: String,
   outputArtifact: String?,
-): Boolean =
-  recordPhaseState(
+): Boolean {
+  if (status != "running") {
+    recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = phaseId,
+        status = "running",
+        attemptCount = attemptCount,
+        resolvedAgentId = resolvedAgentId,
+        finished = false,
+        outputArtifact = null,
+      ),
+    )
+  }
+  return recordPhaseState(
     FeatureTaskRuntimePhaseStateRequest(
       workflowId = WORKFLOW_ID,
       phaseId = phaseId,
@@ -1930,6 +1958,7 @@ private fun FeatureTaskRuntimePhaseRecorder.recordPhaseStateForTest(
       outputArtifact = outputArtifact,
     ),
   )
+}
 
 internal object NoopWorkflowSnapshotValidator : WorkflowSnapshotValidator {
   override fun validate(
@@ -2240,12 +2269,15 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       true
     }
 
+  var beforeReserveTakeover: ((String) -> Unit)? = null
+
   override fun reserveFeatureTaskRuntimeWorkerTakeover(
     workflowId: String,
     expectedOwnerToken: String,
     expectedGeneration: Long,
   ): Boolean =
     synchronized(this) {
+      beforeReserveTakeover?.invoke(workflowId)
       val current = workerOwnership[workflowId] ?: return false
       if (!current.matchesActiveOwnership(workflowId, expectedOwnerToken, expectedGeneration)) return false
       workerOwnership[workflowId] =
@@ -2277,6 +2309,22 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       val current = workerOwnership[ownership.workflowId] ?: return false
       if (current.ownerToken != ownership.ownerToken || current.generation != ownership.generation) return false
       workerOwnership[ownership.workflowId] = ownership
+      true
+    }
+
+  override fun bindFeatureTaskRuntimeWorkerPhaseCoordinates(
+    workflowId: String,
+    ownerToken: String,
+    generation: Long,
+    phaseId: String,
+    phaseAttempt: Int,
+  ): Boolean =
+    synchronized(this) {
+      val current = workerOwnership[workflowId] ?: return false
+      val row = taskRuntimeRows[workflowId] ?: return false
+      if (!current.matchesActiveOwnership(workflowId, ownerToken, generation)) return false
+      if (WorkflowStatus.fromWire(row.workflowStatus) in WorkflowStatus.terminalStatuses) return false
+      workerOwnership[workflowId] = current.copy(phaseId = phaseId, phaseAttempt = phaseAttempt)
       true
     }
 

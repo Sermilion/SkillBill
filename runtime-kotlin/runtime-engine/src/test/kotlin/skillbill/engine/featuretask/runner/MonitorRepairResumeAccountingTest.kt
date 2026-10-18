@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopMonitorCycle
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -73,8 +74,11 @@ class MonitorRepairResumeAccountingTest {
   fun `restart retains three failed published repairs after their phase records have been replaced`() {
     seedThreeFailures()
     complete("monitor", 5, failedMonitor(commits.last()))
-    recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(WORKFLOW_ID, "monitor_fix", "running", 4, "claude", false),
+    assertEquals(
+      RequiredPhaseWrite.Acknowledged,
+      recorder.recordRequiredPhaseStart(
+        FeatureTaskRuntimePhaseStateRequest(WORKFLOW_ID, "monitor_fix", "running", 4, "claude", false),
+      ),
     )
 
     repeat(2) {
@@ -212,7 +216,7 @@ class MonitorRepairResumeAccountingTest {
         )
       val output =
         NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(
-          JsonCodec.mapToJsonString(settlement.envelope),
+          JsonCodec.mapToJsonString(assertNotNull(settlement.envelope)),
           "monitor_fix",
         )
       complete("monitor_fix", attempt, output)
@@ -251,6 +255,12 @@ class MonitorRepairResumeAccountingTest {
           attempt,
           "claude",
         ),
+      ),
+    )
+    assertEquals(
+      RequiredPhaseWrite.Acknowledged,
+      recorder.recordRequiredPhaseStart(
+        FeatureTaskRuntimePhaseStateRequest(WORKFLOW_ID, phase, "running", attempt, "claude", false),
       ),
     )
     val payload = output.canonicalJson

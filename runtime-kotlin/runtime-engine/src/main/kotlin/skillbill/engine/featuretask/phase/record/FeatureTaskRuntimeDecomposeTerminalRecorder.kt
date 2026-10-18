@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.phase.record
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -25,38 +27,60 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
 ) {
   private val engine: WorkflowEngine = WorkflowEngine()
 
+  fun recordOwnedDecomposeTerminal(
+    workflowId: String,
+    terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
+    admitted: AdmittedFeatureTaskRuntimeExecution,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      if (!requireCurrentWorker(admitted, unitOfWork.workflowStates, workflowId, clock)) {
+        return@transaction false
+      }
+      recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)
+    }
+
   fun recordDecomposeTerminal(
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean =
     database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction false
-      val updated =
-        engine.updateRecord(
-          WorkflowFamily.TASK_RUNTIME.definition,
-          record,
-          WorkflowUpdateInput(
-            terminalInstant = clock.instant(),
-            workflowStatus = WorkflowStatus.COMPLETED,
-            currentStepId = planStepId,
-            stepUpdates = null,
-            artifactsPatch =
-              WorkflowArtifactPatch.from(
-                mapOf(
-                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(
-                    terminal.asWorkflowArtifactEntry(),
-                  ),
+      recordDecomposeTerminalInTransaction(unitOfWork, workflowId, terminal, planStepId)
+    }
+
+  private fun recordDecomposeTerminalInTransaction(
+    unitOfWork: UnitOfWork,
+    workflowId: String,
+    terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
+  ): Boolean {
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return false
+    val updated =
+      engine.updateRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        record,
+        WorkflowUpdateInput(
+          terminalInstant = clock.instant(),
+          workflowStatus = WorkflowStatus.COMPLETED,
+          currentStepId = planStepId,
+          stepUpdates = null,
+          artifactsPatch =
+            WorkflowArtifactPatch.from(
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL.entry(
+                  terminal.asWorkflowArtifactEntry(),
                 ),
               ),
-            sessionId = record.sessionId.orEmpty(),
-          ),
-        )
-      unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
-      true
-    }
+            ),
+          sessionId = record.sessionId.orEmpty(),
+        ),
+      )
+    unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+    return true
+  }
 
   fun recordPlanBundle(
     workflowId: String,

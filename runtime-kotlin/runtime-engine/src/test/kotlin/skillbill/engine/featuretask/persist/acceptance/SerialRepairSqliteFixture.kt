@@ -24,6 +24,7 @@ import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidato
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.AcceptanceCriterionRepairProjection
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -154,6 +155,7 @@ internal class SerialRepairSqliteFixture(
       supervisor,
       clock,
       execution.admission,
+      NoopRuntimeDiagnostics,
     )
 
   init {

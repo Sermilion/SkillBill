@@ -22,7 +22,9 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.work.WorkListRepository
+import skillbill.ports.work.model.IssueRepositoryIdentityLookup
 import skillbill.ports.work.model.WorkItem
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -213,6 +215,7 @@ private class SnapshotFixture(
       featureTaskRuntimeStatusService = component.featureTaskRuntimeStatusService,
       goalRunnerStatusService = component.goalRunnerStatusService,
       workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+      diagnostics = NoopRuntimeDiagnostics,
     )
   }
 }
@@ -280,10 +283,18 @@ private class CountingWorkList(
   private val delegate: WorkListRepository,
   private val trigger: () -> Unit,
 ) : WorkListRepository by delegate {
-  override fun list(limit: Int?): List<WorkItem> = delegate.list(limit).also { trigger() }
+  override fun list(limit: Int?): WorkListListRead = delegate.list(limit).also { trigger() }
 
   override fun findByWorkflowId(workflowId: String): List<WorkItem> =
     delegate.findByWorkflowId(workflowId).also {
+      trigger()
+    }
+
+  override fun repositoryIdentityForIssue(
+    normalizedIssueKey: String,
+    excludedWorkflowId: String,
+  ): IssueRepositoryIdentityLookup =
+    delegate.repositoryIdentityForIssue(normalizedIssueKey, excludedWorkflowId).also {
       trigger()
     }
 }
@@ -302,6 +313,9 @@ private class CountingWorkflowStates(
 
   override fun countGoalChildIdentities(normalizedIssueKey: String): Int =
     delegate.countGoalChildIdentities(normalizedIssueKey).also { trigger() }
+
+  override fun listGoalChildWorkflowIdsByParent(parentWorkflowId: String): List<String> =
+    delegate.listGoalChildWorkflowIdsByParent(parentWorkflowId).also { trigger() }
 }
 
 private class CountingGoalRunnerControls(

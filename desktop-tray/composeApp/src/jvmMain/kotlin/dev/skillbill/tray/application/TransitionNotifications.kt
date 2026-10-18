@@ -4,11 +4,11 @@ import dev.skillbill.tray.core.domain.model.AppSettings
 import dev.skillbill.tray.core.domain.model.ExecutionScope
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.SettingsState
-import dev.skillbill.tray.core.domain.model.WorkFamily
 import dev.skillbill.tray.core.domain.model.WorkIdentity
 import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.domain.model.allowedTransitions
 import dev.skillbill.tray.core.domain.model.isFresh
+import dev.skillbill.tray.core.domain.model.successfulGoalCompletion
 import dev.skillbill.tray.core.domain.repository.SettingsRepository
 import dev.skillbill.tray.core.domain.repository.WorkBoardRepository
 import dev.skillbill.tray.core.ui.StoreObservation
@@ -130,7 +130,7 @@ class TransitionTracker {
       val event = when {
         item.lifecycle == Lifecycle.BLOCKED && prior.lifecycle != Lifecycle.BLOCKED -> "blocked"
         item.lifecycle == Lifecycle.FAILED && prior.lifecycle != Lifecycle.FAILED -> "failed"
-        item.family == WorkFamily.FEATURE_GOAL && item.lifecycle == Lifecycle.TERMINAL && prior.lifecycle != Lifecycle.TERMINAL -> "goal_completed"
+        item.successfulGoalCompletion() && prior.lifecycle != Lifecycle.TERMINAL -> "goal_completed"
         item.lifecycle == Lifecycle.PAUSED && prior.lifecycle != Lifecycle.PAUSED -> "pause_took_effect"
         item.scope == ExecutionScope.STANDALONE_PHASE && item.lifecycle == Lifecycle.TERMINAL && prior.lifecycle != Lifecycle.TERMINAL -> "standalone_phase_finished"
         else -> null

@@ -91,6 +91,22 @@ class RuntimeWorkControlRepository(
       ProblemCode.STALE_TARGET,
       "The goal runner's identity could not be confirmed. Refresh before retrying.",
     )
+    ControlRefusal.FOREIGN_HOST -> Problem(
+      ProblemCode.STALE_TARGET,
+      "The goal runner process is on another host. Refresh before retrying stop or pause.",
+    )
+    ControlRefusal.PID_REUSED -> Problem(
+      ProblemCode.STALE_TARGET,
+      "The goal runner's PID was reused by a different process. Refresh before retrying stop or pause.",
+    )
+    ControlRefusal.UNINSPECTABLE -> Problem(
+      ProblemCode.STALE_TARGET,
+      "The goal runner process could not be inspected. Refresh before retrying stop or pause.",
+    )
+    ControlRefusal.IDENTITY_MISMATCH -> Problem(
+      ProblemCode.STALE_TARGET,
+      "The goal runner's identity no longer matches this goal. Refresh before retrying stop or pause.",
+    )
     else -> Problem(
       ProblemCode.STALE_TARGET,
       "This goal changed or cannot accept this control. Refresh before retrying.",
@@ -105,6 +121,10 @@ class RuntimeWorkControlRepository(
       "Cannot read this run's checkout branch. Restore its checkout or check out its recorded branch before starting it again."
     ControlRefusal.TERMINATION_INCOMPLETE -> "The runner has not stopped yet. Refresh and retry cancellation."
     ControlRefusal.OWNERSHIP_MISMATCH -> "The runner's identity could not be confirmed. Refresh before retrying."
+    ControlRefusal.FOREIGN_HOST -> "The runner process is on another host. Refresh before retrying cancellation."
+    ControlRefusal.PID_REUSED -> "The runner PID was reused by a different process. Refresh before retrying cancellation."
+    ControlRefusal.UNINSPECTABLE -> "The runner process could not be inspected. Refresh before retrying cancellation."
+    ControlRefusal.IDENTITY_MISMATCH -> "The runner identity no longer matches this run. Refresh before retrying cancellation."
     ControlRefusal.OTHER -> "This run changed or cannot accept this action. Refresh before retrying."
   }
 }

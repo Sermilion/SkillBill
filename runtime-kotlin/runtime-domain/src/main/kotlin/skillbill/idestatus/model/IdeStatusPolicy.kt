@@ -77,6 +77,7 @@ data class IdeStatusWorkPolicyFacts(
   val pauseRequested: Boolean = false,
   val observedAt: Instant? = null,
   val launchScope: IdeStatusLaunchScope = IdeStatusLaunchScope.STANDALONE,
+  val successfulGoalCompletion: Boolean = false,
 )
 
 enum class IdeStatusLiveSection { NEEDS_YOU, GOALS, PHASES }
@@ -200,7 +201,12 @@ object IdeStatusPolicy {
     val liveSection = liveSection(facts, goal)
     val displayGroup = displayGroup(facts, goal)
     val recent = windowed(facts, RECENT_PHASE_WINDOW, displayGroup == IdeStatusDisplayGroup.PHASES)
-    val done = windowed(facts, DONE_WINDOW, facts.lifecycle == IdeStatusLifecycleState.TERMINAL)
+    val done =
+      windowed(
+        facts,
+        DONE_WINDOW,
+        facts.lifecycle == IdeStatusLifecycleState.TERMINAL && facts.successfulGoalCompletion,
+      )
     return IdeStatusWorkPolicy(
       liveSection = liveSection,
       controlEligible = controlEligible,

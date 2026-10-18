@@ -2,6 +2,8 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_CLEANUP_ASSIGNMENTS
 import skillbill.infrastructure.sqlite.core.migration.area.idestatus.MONITOR_PR_KEY_COLUMN
@@ -146,7 +148,7 @@ internal class StandalonePhaseStatusStore(
           OR (repository_identity = ? AND $MONITOR_PR_KEY_COLUMN IS NOT NULL))
         AND $eligible
         ${if (after == null) "" else "AND $AFTER_ANCHOR_SQL"}
-      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ?
+      ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -157,11 +159,9 @@ internal class StandalonePhaseStatusStore(
           branchCorrelation,
           branchCorrelation,
           monitorRepositoryIdentity,
-        ) + after.anchorBindings() + limit,
+        ) + after.anchorBindings(),
       )
-      statement.executeQuery().use { rows ->
-        buildList { while (rows.next()) add(rows.toRecord()) }
-      }
+      statement.executeQuery().use { rows -> rows.readAggregatePage(0, limit) { tryToRecordForAggregate(it) } }
     }
   }
 
@@ -174,7 +174,7 @@ internal class StandalonePhaseStatusStore(
         "AND COALESCE($MONITOR_PR_KEY_COLUMN, upper(issue_key), workflow_id, branch_correlation) = ? " +
         "AND ${instantAtOrBeforeSql("started_at")} " +
         (if (query.after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
       statement.bindAll(
         listOf(
@@ -182,10 +182,33 @@ internal class StandalonePhaseStatusStore(
           query.repositoryIdentity,
           query.phaseId,
           query.phaseGroup,
-        ) + query.after.anchorBindings() + listOf(query.limit, query.offset),
+        ) + query.after.anchorBindings(),
       )
-      statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toRecord()) } }
+      statement.executeQuery().use { rows ->
+        rows.readAggregatePage(query.offset, query.limit) { tryToRecordForAggregate(it) }
+      }
     }
+  }
+
+  private fun <T> ResultSet.readAggregatePage(
+    offset: Int,
+    limit: Int,
+    parse: ResultSet.(AggregateRowSkipDiagnostics) -> T?,
+  ): List<T> {
+    val skipDiagnostics = AggregateRowSkipDiagnostics()
+    val items = mutableListOf<T>()
+    var healthySkipped = 0
+    while (next() && items.size < limit) {
+      val parsed = parse(skipDiagnostics)
+      if (parsed != null) {
+        if (healthySkipped < offset) {
+          healthySkipped++
+        } else {
+          items += parsed
+        }
+      }
+    }
+    return items
   }
 
   override fun readWorkflowExecutions(
@@ -201,10 +224,12 @@ internal class StandalonePhaseStatusStore(
       "WITH cutoff(value) AS (VALUES (?)) SELECT * FROM ide_status_workflow_execution " +
         "WHERE workflow_id = ? AND ${instantAtOrBeforeSql("started_at")} " +
         (if (after == null) "" else "AND $AFTER_ANCHOR_SQL ") +
-        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC LIMIT ? OFFSET ?",
+        "ORDER BY length(run_sequence) DESC, run_sequence DESC, invocation_id DESC",
     ).use { statement ->
-      statement.bindAll(listOf(startedThrough.toString(), workflowId) + after.anchorBindings() + listOf(limit, offset))
-      statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toWorkflowExecution()) } }
+      statement.bindAll(listOf(startedThrough.toString(), workflowId) + after.anchorBindings())
+      statement.executeQuery().use { rows ->
+        rows.readAggregatePage(offset, limit) { tryToWorkflowExecutionForAggregate(it) }
+      }
     }
   }
 
@@ -214,27 +239,6 @@ internal class StandalonePhaseStatusStore(
     } else {
       listOf(runSequence.length, runSequence.length, runSequence, runSequence.length, runSequence, invocationId)
     }
-
-  private fun instantAtOrBeforeSql(columnName: String): String =
-    "(unixepoch($columnName) < unixepoch((SELECT value FROM cutoff)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT value FROM cutoff)) AND " +
-      "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT value FROM cutoff)")}))"
-
-  private fun instantAtOrAfterBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} >= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
-
-  private fun instantAfterBoundSql(
-    columnName: String,
-    boundName: String,
-  ): String =
-    "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
-      "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
-      "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
 
   override fun readByInvocation(invocationId: String): StandalonePhaseStatusRecord? =
     readOne("invocation_id", invocationId)
@@ -570,6 +574,70 @@ internal class StandalonePhaseStatusStore(
       statement.executeQuery().use { rows -> if (rows.next()) rows.toRecord() else null }
     }
 
+  private class AggregateRowSkipDiagnostics {
+    var emitted: Int = 0
+    var truncated: Boolean = false
+  }
+
+  private fun ResultSet.tryToRecordForAggregate(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+  ): StandalonePhaseStatusRecord? =
+    try {
+      toRecord()
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      emitAggregateRowSkip(
+        skipDiagnostics,
+        seam = "standalone_phase_status",
+        rowKind = "readable_standalone_row",
+        identity =
+          "invocation_id=${getString("invocation_id") ?: "<unknown>"}",
+        error = error,
+      )
+      null
+    }
+
+  private fun ResultSet.tryToWorkflowExecutionForAggregate(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+  ): IdeStatusWorkflowExecution? =
+    try {
+      toWorkflowExecution()
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code != InstallFailureCode.INVALID_IDE_STATUS_SCHEMA) throw error
+      val workflowId = getString("workflow_id") ?: "<unknown>"
+      val invocationId = getString("invocation_id") ?: "<unknown>"
+      val executionId = getString("execution_id") ?: "<unknown>"
+      emitAggregateRowSkip(
+        skipDiagnostics,
+        seam = "ide_status_workflow_execution",
+        rowKind = "readable_workflow_execution_row",
+        identity = "workflow_id=$workflowId invocation_id=$invocationId execution_id=$executionId",
+        error = error,
+      )
+      null
+    }
+
+  private fun emitAggregateRowSkip(
+    skipDiagnostics: AggregateRowSkipDiagnostics,
+    seam: String,
+    rowKind: String,
+    identity: String,
+    error: SkillBillRuntimeException,
+  ) {
+    if (skipDiagnostics.emitted < MAX_AGGREGATE_ROW_DIAGNOSTICS) {
+      diagnostics.warning(
+        "seam=$seam value_expected=$rowKind value_used=skipped $identity error=${error.message.orEmpty()}",
+      )
+      skipDiagnostics.emitted++
+    } else if (!skipDiagnostics.truncated) {
+      diagnostics.warning(
+        "seam=$seam value_expected=$rowKind value_used=truncated " +
+          "skipped_diagnostics_cap=$MAX_AGGREGATE_ROW_DIAGNOSTICS",
+      )
+      skipDiagnostics.truncated = true
+    }
+  }
+
   private fun ResultSet.toRecord(): StandalonePhaseStatusRecord {
     val monitorTarget = readMonitorTarget("standalone-status")
     return StandalonePhaseStatusRecord(
@@ -586,14 +654,14 @@ internal class StandalonePhaseStatusStore(
       lifecycleState = getString("lifecycle_state"),
       currentStep = getString("current_step"),
       currentActivity = getString("current_activity"),
-      startedAt = Instant.parse(getString("started_at")),
-      updatedAt = Instant.parse(getString("updated_at")),
-      finishedAt = getString("finished_at")?.let(Instant::parse),
+      startedAt = standaloneInstant("started_at"),
+      updatedAt = standaloneInstant("updated_at"),
+      finishedAt = standaloneInstantOrNull("finished_at"),
       activeDurationMs = getLong("active_duration_ms").takeIf { !wasNull() },
-      activeDurationAsOf = getString("active_duration_as_of")?.let(Instant::parse),
+      activeDurationAsOf = standaloneInstantOrNull("active_duration_as_of"),
       leaseOwner = getString("lease_owner"),
       leaseGeneration = getLong("lease_generation"),
-      leaseExpiresAt = Instant.parse(getString("lease_expires_at")),
+      leaseExpiresAt = standaloneInstant("lease_expires_at"),
       terminalResult = getString("terminal_result"),
       acceptedResult = getString("accepted_result"),
       processOwner = readProcessOwner(),
@@ -604,6 +672,26 @@ internal class StandalonePhaseStatusStore(
       monitorTarget = monitorTarget,
       monitorCleanup = readMonitorCleanup("standalone-status", monitorTarget != null),
     )
+  }
+
+  private fun ResultSet.standaloneInstant(column: String): Instant {
+    val raw = getString(column)
+    return parsePersistedInstantOrNull(raw.orEmpty())
+      ?: throw invalidIdeStatusSchemaError(
+        sourceLabel = "standalone status '${getString("invocation_id")}'",
+        fieldPath = column,
+        reason = "Invalid persisted timestamp.",
+      )
+  }
+
+  private fun ResultSet.standaloneInstantOrNull(column: String): Instant? {
+    val raw = getString(column) ?: return null
+    return parsePersistedInstantOrNull(raw)
+      ?: throw invalidIdeStatusSchemaError(
+        sourceLabel = "standalone status '${getString("invocation_id")}'",
+        fieldPath = column,
+        reason = "Invalid persisted timestamp.",
+      )
   }
 
   private fun ResultSet.readLaunchArguments(): List<String>? {
@@ -619,13 +707,14 @@ internal class StandalonePhaseStatusStore(
           failure,
         )
       }
-    if (values == null || values.size > MAX_LAUNCH_ARGUMENTS || values.any { !validLaunchArgument(it) }) {
+    if (values == null ||
+      values.size > MAX_LAUNCH_ARGUMENTS ||
+      values.any { !validLaunchArgument(it, MAX_LAUNCH_ARGUMENT_LENGTH) }
+    ) {
       throw invalidIdeStatusSchemaError("standalone-status", "launch_arguments_json", "Invalid launch arguments.")
     }
     return values.filterIsInstance<String>()
   }
-
-  private fun validLaunchArgument(value: Any?): Boolean = value is String && value.length <= MAX_LAUNCH_ARGUMENT_LENGTH
 
   private fun ResultSet.readProcessOwner(): FeatureTaskRuntimeProcessIdentity? {
     val host = getString("owner_host_identity")
@@ -640,22 +729,8 @@ internal class StandalonePhaseStatusStore(
     return FeatureTaskRuntimeProcessIdentity(requireNotNull(host), requireNotNull(boot), pid, requireNotNull(birth))
   }
 
-  private fun incrementDecimal(value: String): String {
-    val digits = value.toCharArray()
-    var carry = 1
-    for (index in digits.lastIndex downTo 0) {
-      if (carry == 0) break
-      if (digits[index] == '9') {
-        digits[index] = '0'
-      } else {
-        digits[index] = (digits[index].code + 1).toChar()
-        carry = 0
-      }
-    }
-    return if (carry == 1) "1${digits.concatToString()}" else String(digits)
-  }
-
   private companion object {
+    const val MAX_AGGREGATE_ROW_DIAGNOSTICS = 32
     const val MAX_LAUNCH_ARGUMENTS = 128
     const val MAX_LAUNCH_ARGUMENT_LENGTH = 16384
     const val MONITOR_PHASE_ID = "monitor"
@@ -675,3 +750,44 @@ internal class StandalonePhaseStatusStore(
       """.trimIndent()
   }
 }
+
+private fun instantAtOrBeforeSql(columnName: String): String =
+  "(unixepoch($columnName) < unixepoch((SELECT value FROM cutoff)) OR " +
+    "(unixepoch($columnName) = unixepoch((SELECT value FROM cutoff)) AND " +
+    "${fractionalSecondsSql(columnName)} <= ${fractionalSecondsSql("(SELECT value FROM cutoff)")}))"
+
+private fun instantAtOrAfterBoundSql(
+  columnName: String,
+  boundName: String,
+): String =
+  "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
+    "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
+    "${fractionalSecondsSql(columnName)} >= ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
+
+private fun instantAfterBoundSql(
+  columnName: String,
+  boundName: String,
+): String =
+  "(unixepoch($columnName) > unixepoch((SELECT $boundName FROM bounds)) OR " +
+    "(unixepoch($columnName) = unixepoch((SELECT $boundName FROM bounds)) AND " +
+    "${fractionalSecondsSql(columnName)} > ${fractionalSecondsSql("(SELECT $boundName FROM bounds)")}))"
+
+private fun incrementDecimal(value: String): String {
+  val digits = value.toCharArray()
+  var carry = 1
+  for (index in digits.lastIndex downTo 0) {
+    if (carry == 0) break
+    if (digits[index] == '9') {
+      digits[index] = '0'
+    } else {
+      digits[index] = (digits[index].code + 1).toChar()
+      carry = 0
+    }
+  }
+  return if (carry == 1) "1${digits.concatToString()}" else String(digits)
+}
+
+private fun validLaunchArgument(
+  value: Any?,
+  maxLength: Int,
+): Boolean = value is String && value.length <= maxLength

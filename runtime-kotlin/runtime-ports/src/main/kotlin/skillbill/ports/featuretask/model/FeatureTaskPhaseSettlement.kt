@@ -17,6 +17,25 @@ data class FeatureTaskPhaseSettlement(
   }
 }
 
+sealed interface FeatureTaskPhaseSettlementWriteResult {
+  data object Accepted : FeatureTaskPhaseSettlementWriteResult
+
+  data object IdenticalReplay : FeatureTaskPhaseSettlementWriteResult
+
+  data object Conflicting : FeatureTaskPhaseSettlementWriteResult
+
+  data class Refused(val reason: FeatureTaskPhaseSettlementRefusalReason) : FeatureTaskPhaseSettlementWriteResult
+}
+
+enum class FeatureTaskPhaseSettlementRefusalReason {
+  STALE_ATTEMPT,
+  TERMINAL_WORKFLOW,
+  WRONG_PHASE,
+  OWNER_MISMATCH,
+  LEASE_EXPIRED,
+  WORKFLOW_NOT_SETTLEABLE,
+}
+
 sealed interface FeatureTaskPhaseSettlementReasonLookup {
   data class Unique(val settlement: FeatureTaskPhaseSettlement) : FeatureTaskPhaseSettlementReasonLookup
 

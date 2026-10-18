@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.review.core.isAuditGapRound
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.manifest.pruneEligibleCheckpointRefsForManifest
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -76,7 +75,13 @@ class GoalRunnerStatusProjectionAssembler(
     request: GoalRunnerStatusRequest,
   ): GoalRunnerStatusProjection {
     val acceptances = manifestStore.outOfBandAcceptances(loadedState.parentWorkflowId)
-    val manifest = reconcileStatusManifest(loadedState, request, acceptances)
+    val manifest =
+      reconcileGoalManifest(
+        manifest = loadedState.manifest,
+        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(loadedState.manifest.issueKey),
+        acceptances = acceptances,
+        outcomeStore = outcomeStore,
+      )
     val currentSubtask =
       manifest.subtasks.firstOrNull { subtask ->
         subtask.id == manifest.currentSubtaskIntent.subtaskId
@@ -167,7 +172,7 @@ class GoalRunnerStatusProjectionAssembler(
       currentSubtask?.workflowId?.takeIf(String::isNotBlank)
         ?: return resolveParentExecutionLiveness(parentWorkflowId, durableRead)
     val childLiveness = resolveChildExecutionLiveness(workflowId, durableRead)
-    if (childLiveness == ExecutionLiveness.LIVE || childLiveness == ExecutionLiveness.UNKNOWN) {
+    if (childLiveness != ExecutionLiveness.IDLE) {
       return childLiveness
     }
     return resolveParentExecutionLiveness(parentWorkflowId, durableRead)
@@ -179,7 +184,7 @@ class GoalRunnerStatusProjectionAssembler(
   ): ExecutionLiveness? {
     val durableRead = GoalRunnerStatusDurableReadTracker(diagnostics)
     val parentLiveness = resolveParentExecutionLiveness(parentWorkflowId, durableRead)
-    if (parentLiveness == ExecutionLiveness.LIVE || parentLiveness == ExecutionLiveness.UNKNOWN) {
+    if (executionLivenessBlocksIdleSafeRefresh(parentLiveness)) {
       return parentLiveness
     }
     return firstBlockingWorkerLiveness(childWorkflowIds, durableRead)
@@ -194,7 +199,7 @@ class GoalRunnerStatusProjectionAssembler(
   ): ExecutionLiveness? =
     workflowIds.firstNotNullOfOrNull { workflowId ->
       resolveChildExecutionLiveness(workflowId, durableRead)
-        .takeIf { it == ExecutionLiveness.LIVE || it == ExecutionLiveness.UNKNOWN }
+        .takeIf { executionLivenessBlocksIdleSafeRefresh(it) }
     }
 
   private fun resolveStatusWorkflowProgress(
@@ -212,7 +217,7 @@ class GoalRunnerStatusProjectionAssembler(
       }
     }
     val liveParent =
-      liveGoalFinalizationProgress(parentWorkflowId, durableRead)
+      liveGoalFinalizationProgress(parentWorkflowId)
     if (childProgress != null && liveParent == null) {
       return childProgress
     }
@@ -220,18 +225,15 @@ class GoalRunnerStatusProjectionAssembler(
   }
 
   private fun goalFinalizationAgent(parentWorkflowId: String): String? =
-    liveGoalFinalizationProgress(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
+    resolveParentExecutionLiveness(parentWorkflowId, GoalRunnerStatusDurableReadTracker(diagnostics))
+      .takeIf { it == ExecutionLiveness.LIVE }
+      ?.let { liveGoalFinalizationProgress(parentWorkflowId) }
       ?.latestDeclaredProgressEvent
       ?.agentId
       ?.takeIf(String::isNotBlank)
 
-  private fun liveGoalFinalizationProgress(
-    parentWorkflowId: String,
-    durableRead: GoalRunnerStatusDurableReadTracker,
-  ): GoalRunnerWorkflowProgress? =
-    resolveParentExecutionLiveness(parentWorkflowId, durableRead)
-      .takeIf { it == ExecutionLiveness.LIVE }
-      ?.let { outcomeStore.progress(parentWorkflowId) }
+  private fun liveGoalFinalizationProgress(parentWorkflowId: String): GoalRunnerWorkflowProgress? =
+    outcomeStore.progress(parentWorkflowId)
       ?.takeIf { it.latestDeclaredProgressEvent?.operationKind == GOAL_FINALIZATION_OPERATION_KIND }
       ?.let { parent ->
         val liveStepId = parent.latestDeclaredProgressEvent?.stepId.orEmpty()
@@ -294,8 +296,11 @@ class GoalRunnerStatusProjectionAssembler(
 
   private fun buildStatusProjectionRuntimeInputs(
     assembly: GoalStatusProjectionRuntimeAssembly,
-  ): GoalRunnerStatusProjectionRuntimeInputs =
-    GoalRunnerStatusProjectionRuntimeInputs(
+  ): GoalRunnerStatusProjectionRuntimeInputs {
+    val goalCompletedAt = assembly.loadedState.controlState.goalCompletedAt
+    val currentStepOverride =
+      assembly.progress?.currentStepId ?: derivedChildCurrentStep(assembly.childWorkflowId)
+    return GoalRunnerStatusProjectionRuntimeInputs(
       executionLiveness =
         resolveExecutionLiveness(
           parentWorkflowId = assembly.loadedState.parentWorkflowId,
@@ -303,9 +308,7 @@ class GoalRunnerStatusProjectionAssembler(
           durableRead = assembly.durableRead,
         ),
       planning = assembly.planning,
-      currentStepOverride =
-        assembly.progress?.currentStepId
-          ?: derivedChildCurrentStep(assembly.childWorkflowId),
+      currentStepOverride = currentStepOverride,
       currentWorkflowStatus = assembly.progress?.workflowStatus,
       latestLivenessSignal = assembly.progress?.latestLivenessSignal,
       latestObservabilityEvent = assembly.progress?.latestGoalObservabilityEvent?.toObservabilityEvent(),
@@ -332,7 +335,9 @@ class GoalRunnerStatusProjectionAssembler(
       latestWorktreeEdit = assembly.latestWorktreeEdit,
       auditAcRetryCount = assembly.auditAcRetryCount,
       noChangeStatus = assembly.noChangeStatus,
+      goalCompletedAt = goalCompletedAt,
     )
+  }
 
   private fun readLedgerSummary(
     issueKey: String,
@@ -487,29 +492,6 @@ class GoalRunnerStatusProjectionAssembler(
     )
   }
 
-  private fun reconcileStatusManifest(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerStatusRequest,
-    acceptances: Map<Int, GoalRunnerOutOfBandAcceptance>,
-  ): DecompositionManifest {
-    val reconciled =
-      reconcileGoalManifest(
-        manifest = state.manifest,
-        authoritativeOutcomes = outcomeStore.authoritativeOutcomes(state.manifest.issueKey),
-        acceptances = acceptances,
-        outcomeStore = outcomeStore,
-      )
-    request.repoRoot?.takeIf { request.pruneCheckpointRefs }?.let { repoRoot ->
-      pruneEligibleCheckpointRefsForManifest(
-        manifest = reconciled,
-        gitOperations = gitOperations,
-        repoRoot = repoRoot,
-        record = {},
-      )
-    }
-    return reconciled
-  }
-
   private fun derivedChildCurrentStep(childWorkflowId: String?): String? {
     val workflowId = childWorkflowId?.takeIf(String::isNotBlank) ?: return null
     val statusService = runtimeStatusService ?: return null
@@ -588,15 +570,6 @@ class GoalRunnerStatusProjectionAssembler(
     durableRead: GoalRunnerStatusDurableReadTracker,
   ): ExecutionLiveness =
     when (val inspection = workerSupervisor.inspect(ownership)) {
-      FeatureTaskRuntimeProcessInspection.NotRunning -> ExecutionLiveness.IDLE
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> {
-        diagnostics.info(
-          "seam=goal-status.execution_liveness workflow_id=${ownership.workflowId} " +
-            "value_used=idle reason=${inspection.reason}",
-        )
-        ExecutionLiveness.IDLE
-      }
-      FeatureTaskRuntimeProcessInspection.ExactLive -> ExecutionLiveness.LIVE
       is FeatureTaskRuntimeProcessInspection.Unsupported -> {
         durableRead.recordDegradedRead(
           seam = "goal-status.execution_liveness",
@@ -605,6 +578,8 @@ class GoalRunnerStatusProjectionAssembler(
         )
         ExecutionLiveness.UNKNOWN
       }
+      else ->
+        executionLivenessFromWorkerInspection(inspection)
     }
 
   private fun resolveActiveAgent(

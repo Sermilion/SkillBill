@@ -9,6 +9,16 @@ fun invalidWorkflowStateSchemaError(
 ): SkillBillRuntimeException =
   SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, message, cause)
 
+fun terminalWorkflowWriteRefusedError(
+  workflowId: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    WorkflowFailureCode.TERMINAL_WORKFLOW_WRITE_REFUSED,
+    "An ordinary workflow write cannot replace a terminal outcome for workflow '$workflowId'.",
+    cause,
+  )
+
 fun proseFeatureTaskWorkflowWriteRefusedError(
   workflowId: String,
   cause: Throwable? = null,

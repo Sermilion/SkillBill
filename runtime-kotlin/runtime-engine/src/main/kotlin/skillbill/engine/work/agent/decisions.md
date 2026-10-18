@@ -1,3 +1,8 @@
+## [2026-10-17] Diagnose skipped board rows as incompatible_record
+Context: Board consumers had only missing or invalid repository identity and missing completion time, so a skipped malformed work-list row had no coordinated diagnostic.
+Decision: Work-board contract 1.2 adds incompatible_record. Kotlin WorkBoardDiagnosticReason, schema const, and skipIncompatibleBoardItem emit it; ide-status stays 0.3.
+Reason: Incompatible-record output needs a versioned enum, schema, and pin together. Keeping 0.3 avoids a second lifecycle formula for a parse skip.
+
 ## [2026-10-11] Keep board and detail envelopes separate from ide-status
 Context: SKILL-418 needs machine-wide lists and detail panels while existing consumers use ide-status 0.3.
 Decision: Put the unchanged snapshot inside new 1.0 board/detail wrappers; keep completion metadata and detail extras on those wrappers.

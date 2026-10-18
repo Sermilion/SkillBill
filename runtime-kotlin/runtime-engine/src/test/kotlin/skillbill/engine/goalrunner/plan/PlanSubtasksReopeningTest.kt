@@ -184,7 +184,7 @@ class PlanSubtasksReopeningTest {
       database.transaction { unit ->
         val source = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, sourceId))
         val older = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, olderId))
-        unit.workflowStates.save(
+        unit.workflowStates.saveAcceptedSnapshotMutation(
           WorkflowFamily.TASK_RUNTIME,
           source.copy(workflowStatus = WorkflowStatus.RUNNING, finishedAt = null),
         )
@@ -193,7 +193,7 @@ class PlanSubtasksReopeningTest {
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS,
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PLAN_BUNDLE,
           ).associate { family -> family.entry(family.value(source.artifacts)) }
-        unit.workflowStates.save(
+        unit.workflowStates.saveAcceptedSnapshotMutation(
           WorkflowFamily.TASK_RUNTIME,
           older.copy(artifacts = DurableWorkflowArtifacts.fromMap(older.artifacts + planning)),
         )

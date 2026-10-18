@@ -118,36 +118,13 @@ class GoalRunnerStatusControlVerbs(
     if (lease == null) return outcome(noLiveLease)
     val ownership = lease.asWorkerOwnership(reservation.parentWorkflowId)
     return runCatching {
-      when (workerSupervisor.inspect(ownership)) {
-        is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
-        is FeatureTaskRuntimeProcessInspection.Unsupported,
-        -> outcome(GoalRunnerStopStatus.IDENTITY_MISMATCH)
-        FeatureTaskRuntimeProcessInspection.NotRunning -> {
-          outcome(
-            if (releaseStoppedLease(reservation.parentWorkflowId, lease, databaseFileObservation)) {
-              noLiveLease
-            } else {
-              GoalRunnerStopStatus.CHANGED_TARGET
-            },
-          )
-        }
-        FeatureTaskRuntimeProcessInspection.ExactLive -> {
-          when (terminateOwner(ownership)) {
-            TerminationOutcome.EXIT_CONFIRMED -> outcome(GoalRunnerStopStatus.STOPPED, terminationAttempted = true)
-            TerminationOutcome.OWNERSHIP_CHANGED ->
-              outcome(
-                GoalRunnerStopStatus.IDENTITY_MISMATCH,
-                terminationAttempted = true,
-              )
-            TerminationOutcome.STILL_LIVE ->
-              outcome(
-                GoalRunnerStopStatus.TERMINATION_INCOMPLETE,
-                terminationAttempted = true,
-                terminationFailureCode = "owner_still_live",
-              )
-          }
-        }
-      }
+      ownership.stopInspected(
+        lease,
+        reservation.parentWorkflowId,
+        noLiveLease,
+        databaseFileObservation,
+        ::outcome,
+      )
     }.getOrElse { failure ->
       rethrowCooperativeTerminationFailure(failure)
       RuntimeDiagnosticsBestEffortWarning.record(
@@ -162,6 +139,36 @@ class GoalRunnerStatusControlVerbs(
       )
     }
   }
+
+  private fun FeatureTaskRuntimeWorkerOwnership.stopInspected(
+    lease: GoalRunnerExecutionLease,
+    parentWorkflowId: String,
+    noLiveLease: GoalRunnerStopStatus,
+    databaseFileObservation: DatabaseFileObservation?,
+    outcome: (GoalRunnerStopStatus, Boolean, String?) -> GoalRunnerStopVerbResult,
+  ): GoalRunnerStopVerbResult =
+    when (workerSupervisor.inspect(this)) {
+      FeatureTaskRuntimeProcessInspection.ForeignHost -> outcome(GoalRunnerStopStatus.FOREIGN_HOST, false, null)
+      FeatureTaskRuntimeProcessInspection.PidReused -> outcome(GoalRunnerStopStatus.PID_REUSED, false, null)
+      is FeatureTaskRuntimeProcessInspection.Unsupported -> outcome(GoalRunnerStopStatus.UNINSPECTABLE, false, null)
+      FeatureTaskRuntimeProcessInspection.NotRunning ->
+        outcome(
+          if (releaseStoppedLease(parentWorkflowId, lease, databaseFileObservation)) {
+            noLiveLease
+          } else {
+            GoalRunnerStopStatus.CHANGED_TARGET
+          },
+          false,
+          null,
+        )
+      FeatureTaskRuntimeProcessInspection.ExactLive ->
+        when (terminateOwner(this)) {
+          TerminationOutcome.EXIT_CONFIRMED -> outcome(GoalRunnerStopStatus.STOPPED, true, null)
+          TerminationOutcome.OWNERSHIP_CHANGED -> outcome(GoalRunnerStopStatus.IDENTITY_MISMATCH, true, null)
+          TerminationOutcome.STILL_LIVE ->
+            outcome(GoalRunnerStopStatus.TERMINATION_INCOMPLETE, true, "owner_still_live")
+        }
+    }
 
   private fun rethrowCooperativeTerminationFailure(failure: Throwable) {
     when (failure) {

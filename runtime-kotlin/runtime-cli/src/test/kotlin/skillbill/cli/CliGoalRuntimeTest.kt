@@ -289,6 +289,7 @@ class CliGoalWatchRuntimeTest {
             liveStdout.append(it)
             if (it.startsWith("watch_refresh:") && ++refreshesObserved == 1) {
               completeRunningGoalChild(fixture, childWorkflowId)
+              recordGoalCompletion(fixture, childWorkflowId, completedAt = "2026-06-01T00:05:00Z")
             }
           },
         ),

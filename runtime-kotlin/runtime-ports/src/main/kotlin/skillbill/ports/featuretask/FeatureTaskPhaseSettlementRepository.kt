@@ -2,10 +2,11 @@ package skillbill.ports.featuretask
 
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
 import java.time.Instant
 
 interface FeatureTaskPhaseSettlementRepository {
-  fun upsert(settlement: FeatureTaskPhaseSettlement)
+  fun upsert(settlement: FeatureTaskPhaseSettlement): FeatureTaskPhaseSettlementWriteResult
 
   fun find(
     workflowId: String,

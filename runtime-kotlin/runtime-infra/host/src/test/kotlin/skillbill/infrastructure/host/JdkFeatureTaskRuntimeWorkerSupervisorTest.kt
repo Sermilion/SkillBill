@@ -69,7 +69,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     )
     val differentTicks = current.processBirthToken.substringAfter(':').toLong() + 1
     val reused = ownershipFor(current, current.bootIdentity, "linux-start-ticks:$differentTicks")
-    assertIs<FeatureTaskRuntimeProcessInspection.OwnershipMismatch>(supervisor.inspect(reused))
+    assertEquals(FeatureTaskRuntimeProcessInspection.PidReused, supervisor.inspect(reused))
     assertTrue(diagnostics.warnings.isEmpty())
   }
 
@@ -282,7 +282,7 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
       )
 
     assertTrue(
-      supervisor.inspect(ownership) is FeatureTaskRuntimeProcessInspection.OwnershipMismatch,
+      supervisor.inspect(ownership) is FeatureTaskRuntimeProcessInspection.PidReused,
       "a different process occupying the pid must not read as the original worker",
     )
   }
@@ -361,6 +361,40 @@ class JdkFeatureTaskRuntimeWorkerSupervisorTest {
     assertTrue(warning.contains("wftr-label"), "the warning must name the lease: $warning")
     assertTrue(warning.contains("consecutive failures=1"), "the warning must count failures: $warning")
     assertTrue(diagnostics.errors.isEmpty(), "a single transient failure must not escalate")
+  }
+
+  @Test
+  fun `stopping renewal waits for an active tick before lease release`() {
+    val supervisor = JdkFeatureTaskRuntimeWorkerSupervisor(RecordingDiagnostics(), JdkHostPlatformPort)
+    val tickEntered = CountDownLatch(1)
+    val finishTick = CountDownLatch(1)
+    val stopReturned = CountDownLatch(1)
+    val ticks = AtomicInteger()
+    val heartbeat =
+      supervisor.startHeartbeat(plan()) {
+        ticks.incrementAndGet()
+        tickEntered.countDown()
+        assertTrue(finishTick.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the test never released the tick")
+        FeatureTaskRuntimeHeartbeatTick.Renewed
+      }
+
+    assertTrue(tickEntered.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "the first tick never ran")
+    val stopper =
+      Thread {
+        heartbeat.stop()
+        stopReturned.countDown()
+      }
+    stopper.start()
+    try {
+      assertTrue(!stopReturned.await(100, TimeUnit.MILLISECONDS), "stop returned while renewal was still active")
+    } finally {
+      finishTick.countDown()
+    }
+
+    assertTrue(stopReturned.await(TICK_TIMEOUT_SECONDS, TimeUnit.SECONDS), "stop did not finish after the tick")
+    stopper.join(TimeUnit.SECONDS.toMillis(TICK_TIMEOUT_SECONDS))
+    assertEquals(1, ticks.get(), "no renewal may start after stop returns")
+    assertNull(heartbeat.fencingLostReason())
   }
 
   @Test

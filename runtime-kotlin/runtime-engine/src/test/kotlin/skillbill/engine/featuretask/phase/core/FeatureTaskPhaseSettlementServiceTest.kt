@@ -4,8 +4,10 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementAckStatus
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -32,7 +34,7 @@ class FeatureTaskPhaseSettlementServiceTest {
           value = """{"projection_kind":"implementation_receipt","completed_task_ids":["task-1"]}""",
         ),
       )
-    assertEquals("ok", acknowledgment.status)
+    assertEquals(FeatureTaskPhaseSettlementAckStatus.OK, acknowledgment.status)
     assertEquals("wftr-test", acknowledgment.workflowId)
     assertEquals("implement", acknowledgment.phaseId)
     assertEquals(1, acknowledgment.attempt)
@@ -43,7 +45,7 @@ class FeatureTaskPhaseSettlementServiceTest {
   }
 
   @Test
-  fun `last write wins for the same attempt`() {
+  fun `contradictory complete for the same attempt keeps the first accepted value`() {
     val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
     service.complete(
       FeatureTaskPhaseSettlementCompleteRequest(
@@ -53,17 +55,20 @@ class FeatureTaskPhaseSettlementServiceTest {
         value = "first",
       ),
     )
-    service.complete(
-      FeatureTaskPhaseSettlementCompleteRequest(
-        workflowId = "wftr-test",
-        phaseId = "plan",
-        attempt = 1,
-        value = "second",
-      ),
-    )
+    val second =
+      service.complete(
+        FeatureTaskPhaseSettlementCompleteRequest(
+          workflowId = "wftr-test",
+          phaseId = "plan",
+          attempt = 1,
+          value = "second",
+        ),
+      )
+    assertEquals(FeatureTaskPhaseSettlementAckStatus.ERROR, second.status)
+    assertEquals(FeatureTaskRuntimeFailureCode.PHASE_SETTLEMENT_CONFLICT.name, second.diagnosticCode)
     val envelope = assertNotNull(service.findEnvelope("wftr-test", "plan", 1)).envelope
     val produced = assertNotNull(JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]))
-    assertEquals("second", produced[SharedPayloadKeys.VALUE])
+    assertEquals("first", produced[SharedPayloadKeys.VALUE])
   }
 
   @Test

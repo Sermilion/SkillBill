@@ -331,7 +331,7 @@ class GitMonitorResourcesLifecycleTest {
     assertRefusal(MonitorRecoveryRefusal.TOKEN_MISMATCH, resources.recoverStale(staleRequest(fixture, "other")))
     inspector.inspection = FeatureTaskRuntimeProcessInspection.ExactLive
     assertRefusal(MonitorRecoveryRefusal.LIVE_OWNER, resources.recoverStale(request))
-    inspector.inspection = FeatureTaskRuntimeProcessInspection.OwnershipMismatch("pid reused")
+    inspector.inspection = FeatureTaskRuntimeProcessInspection.PidReused
     assertRefusal(MonitorRecoveryRefusal.UNKNOWN_OWNER, resources.recoverStale(request))
     inspector.inspection = FeatureTaskRuntimeProcessInspection.Unsupported("no birth evidence")
     assertRefusal(MonitorRecoveryRefusal.UNKNOWN_OWNER, resources.recoverStale(request))

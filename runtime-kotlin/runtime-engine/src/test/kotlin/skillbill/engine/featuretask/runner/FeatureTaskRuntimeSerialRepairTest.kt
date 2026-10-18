@@ -289,6 +289,7 @@ class FeatureTaskRuntimeSerialRepairTest {
         NoopFeatureTaskRuntimeWorkerSupervisor,
         testHarnessClock,
         admission.admission,
+        NoopRuntimeDiagnostics,
       )
     val inputs =
       admission.creationResolver().resolveInputs(

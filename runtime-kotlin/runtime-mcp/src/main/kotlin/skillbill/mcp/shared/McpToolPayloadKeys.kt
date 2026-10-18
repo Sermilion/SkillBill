@@ -6,6 +6,7 @@ internal object McpToolPayloadKeys {
   const val TEXT: String = "text"
   const val TYPE: String = "type"
   const val IS_ERROR: String = "isError"
+  const val DIAGNOSTIC_CODE: String = "diagnostic_code"
   const val ENVELOPE: String = "envelope"
   const val PAYLOAD: String = "payload"
   const val ORCHESTRATED: String = "orchestrated"

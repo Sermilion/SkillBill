@@ -123,7 +123,10 @@ class FeatureTaskRuntimeExecutionAdmission(
         requireNotNull(descriptor),
         supportedExecution.recordedMonitorSemantics,
         phaseOutputs.receipt ?: currentReceipt(),
-      )
+      ).let { accepted ->
+        states.getFeatureTaskRuntimeWorkerOwnership(workflowId)?.let { accepted.withWorkerOwnership(it) }
+          ?: accepted
+      }
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
       throw error

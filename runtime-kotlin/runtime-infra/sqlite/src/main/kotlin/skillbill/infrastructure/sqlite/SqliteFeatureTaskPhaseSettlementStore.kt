@@ -1,27 +1,44 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.featuretask.decodeWorkerLeaseState
+import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementReasonLookup
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementRefusalReason
+import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementWriteResult
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
+import skillbill.ports.featuretask.model.parseFeatureTaskRuntimeWorkerLeaseInstant
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.isTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.phaseartifacts.featureTaskRuntimePhaseRecordAttemptCount
 import java.sql.Connection
+import java.sql.ResultSet
+import java.time.Clock
 import java.time.Instant
 
 internal class SqliteFeatureTaskPhaseSettlementStore(
   private val connection: Connection,
+  private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
 ) : FeatureTaskPhaseSettlementRepository {
-  override fun upsert(settlement: FeatureTaskPhaseSettlement) {
+  override fun upsert(settlement: FeatureTaskPhaseSettlement): FeatureTaskPhaseSettlementWriteResult {
+    settlementAdmissionRefusal(settlement)?.let {
+      return FeatureTaskPhaseSettlementWriteResult.Refused(it)
+    }
     connection.prepareStatement(
       """
       INSERT INTO feature_task_phase_settlements (
         workflow_id, phase_id, attempt, kind, envelope_json, recorded_at
       ) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(workflow_id, phase_id, attempt) DO UPDATE SET
-        kind = excluded.kind,
-        envelope_json = excluded.envelope_json,
-        recorded_at = excluded.recorded_at
+      ON CONFLICT(workflow_id, phase_id, attempt) DO NOTHING
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -32,7 +49,17 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
         settlement.envelopeJson,
         settlement.recordedAt,
       )
-      statement.executeUpdate()
+      if (statement.executeUpdate() == 1) return FeatureTaskPhaseSettlementWriteResult.Accepted
+    }
+    val accepted = find(settlement.workflowId, settlement.phaseId, settlement.attempt)
+    return if (
+      accepted != null &&
+      accepted.kind == settlement.kind &&
+      accepted.envelopeJson == settlement.envelopeJson
+    ) {
+      FeatureTaskPhaseSettlementWriteResult.IdenticalReplay
+    } else {
+      FeatureTaskPhaseSettlementWriteResult.Conflicting
     }
   }
 
@@ -163,6 +190,79 @@ internal class SqliteFeatureTaskPhaseSettlementStore(
       "CASE WHEN substr(recorded_at, 20, 1) = '.' THEN " +
         "CAST(substr(substr(recorded_at, 21, instr(substr(recorded_at, 21), 'Z') - 1) || " +
         "'000000000', 1, 9) AS INTEGER) ELSE 0 END"
+  }
+
+  private fun settlementAdmissionRefusal(
+    settlement: FeatureTaskPhaseSettlement,
+  ): FeatureTaskPhaseSettlementRefusalReason? {
+    connection.prepareStatement(
+      """
+      SELECT workflow_status, artifacts_json
+      FROM feature_task_workflows
+      WHERE workflow_id = ? AND mode = ?
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(settlement.workflowId, FeatureTaskWorkflowMode.RUNTIME.wireValue)
+      statement.executeQuery().use { rows ->
+        if (!rows.next()) return FeatureTaskPhaseSettlementRefusalReason.WORKFLOW_NOT_SETTLEABLE
+        val status = WorkflowStatus.fromWire(rows.getString("workflow_status"))
+        if (status?.isTerminal == true) return FeatureTaskPhaseSettlementRefusalReason.TERMINAL_WORKFLOW
+        val artifacts =
+          rows.getString("artifacts_json")?.let { json ->
+            JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(json))
+          }
+        val durableAttempt =
+          artifacts?.let {
+            featureTaskRuntimePhaseRecordAttemptCount(
+              FeatureTaskRuntimeWorkflowArtifactMap.from(it),
+              settlement.phaseId,
+            )
+          }
+        if (durableAttempt != null && settlement.attempt < durableAttempt) {
+          return FeatureTaskPhaseSettlementRefusalReason.STALE_ATTEMPT
+        }
+      }
+    }
+    return settlementWorkerLeaseRefusal(settlement)
+  }
+
+  private fun settlementWorkerLeaseRefusal(
+    settlement: FeatureTaskPhaseSettlement,
+  ): FeatureTaskPhaseSettlementRefusalReason? {
+    connection.prepareStatement(
+      """
+      SELECT lease_state, expires_at, phase_id, phase_attempt
+      FROM feature_task_runtime_worker_leases
+      WHERE workflow_id = ?
+      """.trimIndent(),
+    ).use { statement ->
+      statement.bindAll(settlement.workflowId)
+      statement.executeQuery().use { rows ->
+        if (!rows.next()) return null
+        return activeSettlementLeaseRefusal(settlement, rows)
+      }
+    }
+    return null
+  }
+
+  private fun activeSettlementLeaseRefusal(
+    settlement: FeatureTaskPhaseSettlement,
+    rows: ResultSet,
+  ): FeatureTaskPhaseSettlementRefusalReason? {
+    val leaseState = decodeWorkerLeaseState(settlement.workflowId, rows.getString("lease_state"))
+    if (leaseState == FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED) {
+      return FeatureTaskPhaseSettlementRefusalReason.OWNER_MISMATCH
+    }
+    if (leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE) return null
+    val expiresAt = rows.getString("expires_at")
+    parseWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt, diagnostics)
+    val expiresInstant = parseFeatureTaskRuntimeWorkerLeaseInstant(settlement.workflowId, "expires_at", expiresAt)
+    return when {
+      !expiresInstant.isAfter(clock.instant()) -> FeatureTaskPhaseSettlementRefusalReason.LEASE_EXPIRED
+      settlement.phaseId != rows.getString("phase_id") -> FeatureTaskPhaseSettlementRefusalReason.WRONG_PHASE
+      settlement.attempt != rows.getInt("phase_attempt") -> FeatureTaskPhaseSettlementRefusalReason.STALE_ATTEMPT
+      else -> null
+    }
   }
 
   override fun delete(

@@ -2,6 +2,7 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
+import skillbill.contracts.workflow.identity.status.WORK_BOARD_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.idestatus.model.StandalonePhaseStatusRegistration
 import skillbill.ports.idestatus.model.StandalonePhaseStatusUpdate
@@ -160,7 +161,7 @@ class CliWorkBoardTest {
       setOf(repoOne.toRealPath().toString(), repoTwo.toRealPath().toString()),
       items.map { (it as Map<*, *>)["repository_root"] }.toSet(),
     )
-    assertEquals("1.1", payload["contract_version"])
+    assertEquals(WORK_BOARD_CONTRACT_VERSION, payload["contract_version"])
   }
 
   @Test

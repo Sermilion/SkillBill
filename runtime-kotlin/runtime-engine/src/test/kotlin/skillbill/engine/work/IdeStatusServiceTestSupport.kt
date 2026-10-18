@@ -73,6 +73,7 @@ import skillbill.ports.work.model.WorkBoardCandidateQuery
 import skillbill.ports.work.model.WorkBoardCandidateRow
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.ports.work.model.WorkListListRead
 import skillbill.ports.work.model.WorkStatusCandidatePage
 import skillbill.ports.work.model.WorkStatusCandidateQuery
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -286,6 +287,7 @@ internal fun ideStatusService(
         FeatureTaskRuntimeRunInvariantsStore(
           database,
           runtimeWorkflowPersistence,
+          testHarnessClock,
         ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
@@ -324,6 +326,7 @@ internal fun ideStatusService(
     featureTaskRuntimeStatusService = runtimeStatusService,
     goalRunnerStatusService = goalStatusService,
     workerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
+    diagnostics = NoopRuntimeDiagnostics,
   )
 }
 
@@ -589,7 +592,7 @@ internal class TrackingDatabase(
             }
           }
 
-          override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+          override fun list(limit: Int?): WorkListListRead = WorkListListRead(limit?.let(work::take) ?: work)
 
           override fun findByWorkflowId(workflowId: String): List<WorkItem> =
             work.filter { it.workflowId == workflowId }
@@ -652,6 +655,11 @@ internal class IdeStatusWorkflowStates : WorkflowStateRepositoryDefaults() {
     identities.values.count {
       it.normalizedIssueKey == normalizedIssueKey && it.routeScope == FeatureTaskRouteScope.GOAL_CHILD
     }
+
+  override fun listGoalChildWorkflowIdsByParent(parentWorkflowId: String): List<String> =
+    identities.values
+      .filter { it.routeScope == FeatureTaskRouteScope.GOAL_CHILD }
+      .map { it.workflowId }
 
   override fun saveFeatureTaskWorkflow(
     row: WorkflowStateRecord,

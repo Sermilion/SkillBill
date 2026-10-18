@@ -109,6 +109,10 @@ class RuntimeWorkAdapter(private val runtime: RuntimeComponent) : RuntimeWorkGat
     WorkControlRejection.BRANCH_UNAVAILABLE -> ControlRefusal.BRANCH_UNAVAILABLE
     WorkControlRejection.TERMINATION_INCOMPLETE -> ControlRefusal.TERMINATION_INCOMPLETE
     WorkControlRejection.OWNERSHIP_MISMATCH -> ControlRefusal.OWNERSHIP_MISMATCH
+    WorkControlRejection.FOREIGN_HOST -> ControlRefusal.FOREIGN_HOST
+    WorkControlRejection.PID_REUSED -> ControlRefusal.PID_REUSED
+    WorkControlRejection.UNINSPECTABLE -> ControlRefusal.UNINSPECTABLE
+    WorkControlRejection.IDENTITY_MISMATCH -> ControlRefusal.IDENTITY_MISMATCH
     else -> ControlRefusal.OTHER
   }
 

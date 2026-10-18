@@ -149,7 +149,10 @@ class CliGoalRepairRuntimeTest {
         fixture.context(launcher = NoopGoalTestAgentRunLauncher),
       )
 
-    assertEquals(0, result.exitCode, result.stdout)
+    assertTrue(
+      result.exitCode == 0,
+      "exit=${result.exitCode} stdout=${result.stdout} stderr=${result.stderr}",
+    )
     assertContains(result.stdout, "status: repaired")
     assertContains(result.stdout, "applied_repairs:")
     assertContains(result.stdout, "validation_depth")
@@ -212,7 +215,10 @@ class CliGoalRepairRuntimeTest {
         fixture.context(launcher = NoopGoalTestAgentRunLauncher),
       )
 
-    assertEquals(0, result.exitCode, result.stdout)
+    assertTrue(
+      result.exitCode == 0,
+      "exit=${result.exitCode} stdout=${result.stdout} stderr=${result.stderr}",
+    )
     assertContains(result.stdout, "status: repaired")
     assertEquals(0, workerLeaseRowCount(fixture, childWorkflowId))
     val controlState =
@@ -247,7 +253,10 @@ class CliGoalRepairRuntimeTest {
         fixture.context(launcher = NoopGoalTestAgentRunLauncher),
       )
 
-    assertEquals(0, result.exitCode, result.stdout)
+    assertTrue(
+      result.exitCode == 0,
+      "exit=${result.exitCode} stdout=${result.stdout} stderr=${result.stderr}",
+    )
     assertContains(result.stdout, "status: repaired")
     assertContains(result.stdout, "completed_upstream_missing_output")
     val repairedRecords =

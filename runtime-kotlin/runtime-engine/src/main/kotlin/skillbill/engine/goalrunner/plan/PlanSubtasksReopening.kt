@@ -68,7 +68,7 @@ class PlanSubtasksReopening(
             snapshot,
             update.copy(workflowStatus = WorkflowStatus.PENDING),
           )
-        unitOfWork.workflowStates.save(WorkflowFamily.TASK_RUNTIME, updated)
+        unitOfWork.workflowStates.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, updated)
         true
       }
     }

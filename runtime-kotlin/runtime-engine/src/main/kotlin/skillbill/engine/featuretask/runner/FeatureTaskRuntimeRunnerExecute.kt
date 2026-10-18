@@ -117,7 +117,7 @@ class FeatureTaskRuntimeRunnerExecute(
         DurablePhaseRunRecords(
           recorder,
           decomposeTerminalRecorder,
-          runRequest.admittedExecution,
+          requireNotNull(runRequest.admittedExecution),
           repairSession,
         ),
         runRequest,
@@ -160,7 +160,7 @@ class FeatureTaskRuntimeRunnerExecute(
     val executionPlan = admittedPlan(runRequest)
     val observability =
       FeatureTaskRuntimeRunObservability(
-        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, runRequest.admittedExecution),
+        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, requireNotNull(runRequest.admittedExecution)),
         runRequest,
         diagnostics,
       )

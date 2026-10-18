@@ -131,6 +131,7 @@ class FeatureTaskRuntimeLaunchOutcomes(
                 -> "blocked"
               },
           ),
+        admitted = requireNotNull(request.admittedExecution),
       )
     }
     return when {

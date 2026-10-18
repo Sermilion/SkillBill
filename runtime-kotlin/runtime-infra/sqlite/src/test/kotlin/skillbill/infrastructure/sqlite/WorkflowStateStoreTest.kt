@@ -11,8 +11,11 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.WorkflowStateWriteResult
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
@@ -392,7 +395,11 @@ class WorkflowStateStoreTest {
       val replacement = workerOwnership(row.workflowId, generation = 2, ownerToken = "owner-token-0002")
       assertTrue(store.transferFeatureTaskRuntimeWorker(replacement, initial.ownerToken, 1))
       assertEquals(replacement, store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId))
-      assertTrue(store.heartbeatFeatureTaskRuntimeWorker(replacement.copy(heartbeatAt = "2026-07-14T10:01:00Z")))
+      assertTrue(
+        store.heartbeatFeatureTaskRuntimeWorker(
+          replacement.copy(heartbeatAt = "2026-07-14T10:01:00Z", expiresAt = "2026-07-14T10:06:00Z"),
+        ),
+      )
       assertTrue(store.releaseFeatureTaskRuntimeWorker(row.workflowId, replacement.ownerToken, 2))
       assertEquals(null, store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId))
     }
@@ -620,6 +627,101 @@ class WorkflowStateStoreTest {
   }
 
   @Test
+  fun `late running update cannot reopen a completed runtime workflow`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-db-workflow-terminal-reopen").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val initialRow =
+        workflowRow(
+          workflowId = "wftr-terminal-reopen",
+          sessionId = "ftr-terminal-reopen",
+          workflowName = "bill-feature-task",
+          currentStepId = "implement",
+          mode = RUNTIME,
+        )
+      store.saveFeatureTaskWorkflow(initialRow, RUNTIME)
+      store.saveFeatureTaskWorkflow(
+        initialRow.copy(
+          workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+          currentStepId = "pr",
+          finishedAt = "2026-10-13T12:00:00Z",
+        ),
+        RUNTIME,
+      )
+      val terminal = assertNotNull(store.getFeatureTaskWorkflowAsMode("wftr-terminal-reopen", RUNTIME))
+      val lateReopen =
+        terminal.toSnapshot().copy(
+          workflowStatus = WorkflowStatus.RUNNING,
+          currentStepId = "implement",
+          finishedAt = null,
+        )
+      assertEquals(
+        WorkflowStateWriteResult.TerminalRefused,
+        store.saveOrdinary(WorkflowFamily.TASK_RUNTIME, lateReopen),
+      )
+      val afterReopen = assertNotNull(store.getFeatureTaskWorkflowAsMode("wftr-terminal-reopen", RUNTIME))
+      assertEquals(WorkflowStatus.COMPLETED.wireValue, afterReopen.workflowStatus)
+      assertEquals("2026-10-13T12:00:00Z", afterReopen.finishedAt)
+    }
+  }
+
+  @Test
+  fun `accepted snapshot mutation can reopen a completed runtime workflow while ordinary writes stay refused`() {
+    val dbPath =
+      Files.createTempDirectory("runtime-kotlin-db-workflow-accepted-terminal-mutation").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      val initialRow =
+        workflowRow(
+          workflowId = "wftr-accepted-terminal",
+          sessionId = "ftr-accepted-terminal",
+          workflowName = "bill-feature-task",
+          currentStepId = "implement",
+          mode = RUNTIME,
+        )
+      store.saveFeatureTaskWorkflow(initialRow, RUNTIME)
+      store.saveFeatureTaskWorkflow(
+        initialRow.copy(
+          workflowStatus = WorkflowStatus.COMPLETED.wireValue,
+          currentStepId = "pr",
+          artifactsJson = """{"goal_continuation":{"issue_key":"SKILL-901"}}""",
+          finishedAt = "2026-10-13T12:00:00Z",
+        ),
+        RUNTIME,
+      )
+      val terminal = assertNotNull(store.get(WorkflowFamily.TASK_RUNTIME, "wftr-accepted-terminal"))
+      val patched =
+        terminal.copy(
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              terminal.artifacts +
+                ("goal_child_repair_evidence" to listOf(mapOf("field" to "validation_depth"))),
+            ),
+        )
+      assertEquals(
+        WorkflowStateWriteResult.TerminalRefused,
+        store.saveOrdinary(WorkflowFamily.TASK_RUNTIME, patched),
+      )
+      store.saveAcceptedSnapshotMutation(WorkflowFamily.TASK_RUNTIME, patched)
+      val afterPatch = assertNotNull(store.get(WorkflowFamily.TASK_RUNTIME, "wftr-accepted-terminal"))
+      assertEquals(WorkflowStatus.COMPLETED, afterPatch.workflowStatus)
+      assertTrue(afterPatch.artifacts.containsKey("goal_child_repair_evidence"))
+      store.saveAcceptedSnapshotMutation(
+        WorkflowFamily.TASK_RUNTIME,
+        afterPatch.copy(
+          workflowStatus = WorkflowStatus.RUNNING,
+          currentStepId = "implement",
+          finishedAt = null,
+        ),
+      )
+      val afterReopen = assertNotNull(store.get(WorkflowFamily.TASK_RUNTIME, "wftr-accepted-terminal"))
+      assertEquals(WorkflowStatus.RUNNING, afterReopen.workflowStatus)
+      assertEquals("implement", afterReopen.currentStepId)
+      assertEquals(null, afterReopen.finishedAt)
+    }
+  }
+
+  @Test
   fun `terminal workflow update records finished timestamp when caller leaves it empty`() {
     val dbPath = Files.createTempDirectory("runtime-kotlin-db-workflow-terminal").resolve("metrics.db")
 
@@ -772,7 +874,7 @@ class WorkflowStateStoreLifecycleTest {
     val executor = Executors.newFixedThreadPool(2)
     try {
       val transitions =
-        listOf("blocked", "failed").map { status ->
+        listOf("blocked", "paused").map { status ->
           executor.submit {
             ready.countDown()
             check(start.await(5, TimeUnit.SECONDS)) { "Concurrent transition start timed out." }

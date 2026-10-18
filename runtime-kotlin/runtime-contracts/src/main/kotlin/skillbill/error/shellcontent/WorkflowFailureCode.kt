@@ -4,6 +4,7 @@ import skillbill.error.core.RuntimeFailureCode
 
 enum class WorkflowFailureCode : RuntimeFailureCode {
   INVALID_WORKFLOW_STATE_SCHEMA,
+  TERMINAL_WORKFLOW_WRITE_REFUSED,
   PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED,
   INVALID_WORK_LIST_ROW,
   WORKFLOW_ISSUE_KEY_CONFLICT,

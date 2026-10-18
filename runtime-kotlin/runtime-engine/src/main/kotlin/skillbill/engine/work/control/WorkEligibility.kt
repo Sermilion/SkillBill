@@ -36,12 +36,14 @@ internal fun workPolicy(
   snapshot: IdeStatusSnapshot,
   finishedAt: Instant?,
   observedAt: Instant,
-): IdeStatusWorkPolicy = policy(snapshot, finishedAt, observedAt)
+  successfulGoalCompletion: Boolean,
+): IdeStatusWorkPolicy = policy(snapshot, finishedAt, observedAt, successfulGoalCompletion)
 
 private fun policy(
   snapshot: IdeStatusSnapshot,
   finishedAt: Instant?,
   observedAt: Instant? = null,
+  successfulGoalCompletion: Boolean = false,
 ) = IdeStatusPolicy.work(
   IdeStatusWorkPolicyFacts(
     lifecycle = snapshot.lifecycleState,
@@ -55,5 +57,6 @@ private fun policy(
     pauseRequested = snapshot.pauseRequested == true,
     observedAt = observedAt,
     launchScope = snapshot.execution?.launchScope ?: IdeStatusLaunchScope.STANDALONE,
+    successfulGoalCompletion = successfulGoalCompletion,
   ),
 )

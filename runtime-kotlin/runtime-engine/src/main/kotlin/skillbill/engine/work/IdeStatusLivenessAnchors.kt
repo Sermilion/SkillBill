@@ -1,20 +1,35 @@
 package skillbill.engine.work
 
+import skillbill.idestatus.model.IdeStatusLifecycleState
 import skillbill.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.time.Instant
 
 class IdeStatusLivenessAnchors(
   private val unitOfWork: UnitOfWork,
-  private val repositoryIdentity: String,
 ) {
   fun authoritativeUpdatedAt(
     item: WorkItem,
     family: IdeStatusWorkflowFamily,
   ): Instant? {
+    if (family == IdeStatusWorkflowFamily.FEATURE_GOAL) {
+      val durableLifecycle =
+        IdeStatusSelectionPolicy.lifecycleFromDurableStateWire(family, item.currentState)
+      if (durableLifecycle == IdeStatusLifecycleState.TERMINAL ||
+        durableLifecycle == IdeStatusLifecycleState.CANCELED ||
+        durableLifecycle == IdeStatusLifecycleState.FAILED
+      ) {
+        return item.stateEnteredAt
+      }
+      return listOfNotNull(
+        item.stateEnteredAt,
+        latestParentGoalChildUpdatedAt(item),
+        goalLeaseHeartbeatAt(item),
+      ).maxOrNull()
+    }
+
     val fromWorkflow =
       when (family) {
         IdeStatusWorkflowFamily.FEATURE_TASK_RUNTIME ->
@@ -23,34 +38,22 @@ class IdeStatusLivenessAnchors(
           unitOfWork.workflowStates.get(WorkflowFamily.VERIFY, item.workflowId)
         IdeStatusWorkflowFamily.FEATURE_GOAL -> null
       }?.updatedAt
-        ?: latestGoalChildUpdatedAt(item, family)
 
-    return listOfNotNull(fromWorkflow, item.stateEnteredAt, goalLeaseHeartbeatAt(item, family))
-      .maxOrNull()
+    return listOfNotNull(fromWorkflow, item.stateEnteredAt).maxOrNull()
   }
 
-  private fun goalLeaseHeartbeatAt(
-    item: WorkItem,
-    family: IdeStatusWorkflowFamily,
-  ): Instant? {
-    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL) return null
+  private fun goalLeaseHeartbeatAt(item: WorkItem): Instant? {
     val lease = unitOfWork.goalRunnerControls.controlState(item.workflowId).executionLease ?: return null
     return lease.heartbeatAt
   }
 
-  private fun latestGoalChildUpdatedAt(
-    item: WorkItem,
-    family: IdeStatusWorkflowFamily,
-  ): Instant? {
-    if (family != IdeStatusWorkflowFamily.FEATURE_GOAL) return null
-    val issueKey =
-      item.issueKey
-        ?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
-        ?.takeIf { it.isNotEmpty() }
-        ?: return null
+  private fun latestParentGoalChildUpdatedAt(item: WorkItem): Instant? {
+    val childIds = unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(item.workflowId)
+    if (childIds.isEmpty()) return null
     return unitOfWork.workflowStates
-      .findGoalChildFeatureTaskCandidates(issueKey, repositoryIdentity)
-      .mapNotNull { parseInstantOrNull(it.workflow.updatedAt) }
+      .getAll(WorkflowFamily.TASK_RUNTIME, childIds.toSet())
+      .values
+      .mapNotNull { it.updatedAt }
       .maxOrNull()
   }
 }

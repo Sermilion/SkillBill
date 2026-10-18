@@ -58,7 +58,9 @@ class RequiredPhasePersistenceTest {
   @Test
   fun rejectedStartPreventsOrdinaryAuditReviewGateAndCommitEffects() {
     listOf("preplan", "implement", "audit", "review", "validate", "build", "commit_push").forEach { phase ->
-      withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
+      withCapturedContext(
+        hydratedPlanning = phase != "preplan",
+      ) { context, launcherCount, gateCount, assertNoGitEffects ->
         val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, phase, 1)
         val records = rejectingRecords(context.recorder, rejection)
         val strategy =
@@ -196,7 +198,7 @@ class RequiredPhasePersistenceTest {
 
   @Test
   fun terminalPersistenceKeepsTheRejectedChildAttemptInsteadOfTheOuterIteration() {
-    withCapturedContext { context, launcherCount, _, _ ->
+    withCapturedContext(hydratedPlanning = false) { context, launcherCount, _, _ ->
       val run = phaseRun(context, "preplan")
       val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 7)
 
