@@ -61,6 +61,13 @@ properties:
     description: >
       Optional classification of the operation, for example `build`, `test`,
       or `command`.
+  agent_id:
+    type: string
+    minLength: 1
+    description: >
+      Optional runtime agent that owns the step this event reports, for example
+      the agent running goal finalization. Readers treat an absent value as
+      unknown.
   expected_long:
     type: boolean
     description: >

@@ -212,14 +212,14 @@ class PhaseStandaloneMonitorExecutionTest {
   }
 
   @Test
-  fun `a conflict is repaired by merging the pinned base commit and the merge lands on the fork head`() {
+  fun `a conflict is repaired by merging the fetched base tip and the merge lands on the fork head`() {
     git(caller, "checkout", "-q", "main")
     commit(caller, "Base.kt", "class Base\n")
     git(caller, "push", "-q", "origin", "main")
     val pinnedBase = git(caller, "rev-parse", "HEAD")
     duringRepair = { cwd ->
       git(cwd, "fetch", "-q", BASE_URL, "refs/heads/main")
-      git(cwd, "merge", "-q", "--no-commit", "--no-ff", pinnedBase)
+      git(cwd, "merge", "-q", "--no-commit", "--no-ff", "FETCH_HEAD")
     }
 
     val result = run()
@@ -229,7 +229,7 @@ class PhaseStandaloneMonitorExecutionTest {
     val merge = forkHead()
     assertEquals(listOf(headSha, pinnedBase), git(fork, "rev-list", "--parents", "-n", "1", merge).split(" ").drop(1))
     assertEquals("class Base", git(fork, "show", "$merge:Base.kt"))
-    assertTrue("Merge the pinned base commit $pinnedBase" in repairPrompts.single(), repairPrompts.single())
+    assertTrue("Merge the fetched base tip (`FETCH_HEAD`)" in repairPrompts.single(), repairPrompts.single())
     assertEquals(pinnedBase, git(origin, "rev-parse", "main"), "the base repository is never pushed to")
   }
 
@@ -242,14 +242,43 @@ class PhaseStandaloneMonitorExecutionTest {
     val baseTip = git(caller, "rev-parse", "HEAD")
     duringRepair = { cwd ->
       git(cwd, "fetch", "-q", BASE_URL, "refs/heads/main")
-      git(cwd, "merge", "-q", "--no-commit", "--no-ff", baseTip)
+      git(cwd, "merge", "-q", "--no-commit", "--no-ff", "FETCH_HEAD")
     }
 
     val result = run()
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertTrue("Merge the pinned base commit $baseTip" in repairPrompts.single(), repairPrompts.single())
+    assertTrue(reportedBase.orEmpty() !in repairPrompts.single(), "the stale base.sha must not be named")
     assertEquals(listOf(headSha, baseTip), git(fork, "rev-list", "--parents", "-n", "1", forkHead()).split(" ").drop(1))
+  }
+
+  @Test
+  fun `a base that moves during a merge repair publishes the merge and repairs again against the newer base`() {
+    git(caller, "checkout", "-q", "main")
+    commit(caller, "Base.kt", "class Base\n")
+    git(caller, "push", "-q", "origin", "main")
+    val firstBase = git(caller, "rev-parse", "HEAD")
+    duringRepair = { cwd ->
+      git(cwd, "fetch", "-q", BASE_URL, "refs/heads/main")
+      git(cwd, "merge", "-q", "--no-commit", "--no-ff", "FETCH_HEAD")
+      if (repairCount == 1) {
+        commit(caller, "Later.kt", "class Later\n")
+        git(caller, "push", "-q", "origin", "main")
+      }
+    }
+
+    val result = run()
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    val secondBase = git(origin, "rev-parse", "main")
+    assertEquals(2, repairPrompts.size, "the newer base starts a second merge repair")
+    val secondMerge = forkHead()
+    val firstMerge = git(fork, "rev-parse", "$secondMerge^1")
+    assertEquals(
+      listOf(headSha, firstBase),
+      git(fork, "rev-list", "--parents", "-n", "1", firstMerge).split(" ").drop(1),
+    )
+    assertEquals(secondBase, git(fork, "rev-parse", "$secondMerge^2"))
   }
 
   @Test

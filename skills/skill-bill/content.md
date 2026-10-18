@@ -368,7 +368,10 @@ of failing or pending checks. When a check fails, `monitor_fix` starts repair on
 while other checks are pending. This initial failure starts repair and does not
 count against the failed repair budget. A merge conflict starts merge repair on
 that poll, even when no checks are reported: the fix merges the base branch and
-resolves every conflict without spending a CI repair attempt. For failing checks,
+resolves every conflict without spending a CI repair attempt. A merge repair
+fetches and merges the base tip current at that moment. A base that moves during
+a repair does not block it; when the published merge still conflicts with the
+newer base, the next poll starts another merge repair. For failing checks,
 the repair agent reads each failing job's CI logs, identifies the failed command or assertion, and traces the cause
 through the repository before editing. A passing local rerun does not resolve
 the CI failure. Intermittent failures require investigation of timing,

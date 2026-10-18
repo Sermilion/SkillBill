@@ -263,6 +263,7 @@ class PhaseMonitorRunTest {
     assertTrue(outcomes.progressEvents.isNotEmpty())
     assertTrue(outcomes.progressEvents.all { it.workflowId == "goal-parent" })
     assertTrue(outcomes.progressEvents.any { it.stepId == MONITOR_FIX })
+    assertTrue(outcomes.progressEvents.all { it.agentId == "claude" }, "finalization events name the goal agent")
     assertEquals(
       1,
       outcomes.progressEvents.count {
