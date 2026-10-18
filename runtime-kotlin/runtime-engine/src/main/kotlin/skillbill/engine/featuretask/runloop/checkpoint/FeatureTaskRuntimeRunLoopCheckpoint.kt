@@ -45,6 +45,10 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 object FeatureTaskRuntimeRunLoopCheckpoint {
+  internal const val CHECKPOINT_IDENTITY_WRITE_REFUSED: String =
+    "the identity write was refused: the worker lease is not current, the workflow row is missing, " +
+      "or the recorded attempt is older than the preceding phase's durable record"
+
   internal fun concurrentlyModifiedOwnedPaths(
     request: FeatureTaskRuntimeRunFacts,
     session: FeatureTaskRuntimeRunSessionObservations,
@@ -628,7 +632,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
             precedingPhaseId,
             branch,
             "checkpoint commit '$commitSha' was created but its durable identity record could not be " +
-              "written (${recorded.exceptionOrNull()?.message ?: "the workflow row was absent"}), so the " +
+              "written (${recorded.exceptionOrNull()?.message ?: CHECKPOINT_IDENTITY_WRITE_REFUSED}), so the " +
               "commit cannot be attributed to this workflow's authority boundary",
             blockedReason,
           )

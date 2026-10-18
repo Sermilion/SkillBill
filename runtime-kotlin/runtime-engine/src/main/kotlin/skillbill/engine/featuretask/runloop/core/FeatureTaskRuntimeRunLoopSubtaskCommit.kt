@@ -90,7 +90,9 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
         )
       }
     if (appended.getOrDefault(false)) return null
-    val cause = appended.exceptionOrNull()?.message ?: "the workflow row was absent"
+    val cause =
+      appended.exceptionOrNull()?.message
+        ?: FeatureTaskRuntimeRunLoopCheckpoint.CHECKPOINT_IDENTITY_WRITE_REFUSED
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
       "seam=FeatureTaskRuntimeRunLoop.recordFinalisedCheckpointIdentity " +

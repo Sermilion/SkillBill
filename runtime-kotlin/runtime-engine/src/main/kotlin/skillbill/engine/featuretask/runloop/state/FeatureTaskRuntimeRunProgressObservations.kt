@@ -87,7 +87,8 @@ internal fun durablePhaseAttemptCount(
   phaseId: String,
 ): Int {
   val observation = progress.phase(phaseId)
-  return observation.record?.attemptCount ?: observation.nextIteration
+  return listOfNotNull(observation.record?.attemptCount, observation.output?.iteration).maxOrNull()
+    ?: observation.nextIteration
 }
 
 internal data class PhaseProgressObservation(
