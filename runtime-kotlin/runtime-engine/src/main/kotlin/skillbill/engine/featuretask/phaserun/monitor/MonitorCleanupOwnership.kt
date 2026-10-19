@@ -43,6 +43,8 @@ class MonitorCleanupOwnership internal constructor(
     knownPath = path
   }
 
+  fun adoptHead(headSha: String): String? = resources.adoptHead(fence, headSha)
+
   @Synchronized
   fun onSettled(listener: (MonitorSettlement) -> Unit) {
     this.listener = listener

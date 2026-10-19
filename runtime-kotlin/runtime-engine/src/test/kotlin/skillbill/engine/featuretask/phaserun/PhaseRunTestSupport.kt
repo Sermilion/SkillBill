@@ -159,6 +159,11 @@ internal open class UnreachableMonitorResources : StandaloneMonitorResources {
     worktree: MonitorWorktree,
   ) = unreachable("markPrepared")
 
+  override fun adoptHead(
+    fence: MonitorFence,
+    headSha: String,
+  ): String? = unreachable("adoptHead")
+
   override fun settle(request: MonitorSettleRequest): MonitorSettlement = unreachable("settle")
 
   override fun recoverStale(request: MonitorStaleRecoveryRequest): MonitorStaleRecovery = unreachable("recoverStale")

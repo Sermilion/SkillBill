@@ -47,8 +47,8 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         drivingVerdict = edge.triggeringVerdict,
         expectedRepositoryCheckpoint = reentryCheckpoint(context, edge),
       )
-    context.runState.coupledRunTransitions.resumeInFlightReentry(
-      fromPhaseId = edge.fromPhaseId,
+    context.runState.coupledRunTransitions.enterBackwardEdgeReentry(
+      reopenedPhaseIds = spanBetween(context.transitions, edge.destinationPhaseId, edge.fromPhaseId),
       loopId = edge.loopId,
       edgeIteration = edgeIteration,
       pendingReentry = pendingReentry,

@@ -53,6 +53,17 @@ interface StandaloneMonitorResources {
   )
 
   /**
+   * Moves the owned branch and worktree to [headSha] after the pull request head moved to a commit this invocation
+   * did not publish. Fetches the head into the owned ref, requires it to still be [headSha] and the worktree to have
+   * no tracked changes, then resets the owned branch to it and records it as published. Returns the refusal, or null
+   * once the worktree is at [headSha].
+   */
+  fun adoptHead(
+    fence: MonitorFence,
+    headSha: String,
+  ): String?
+
+  /**
    * Removes only verified owned clean work whose commits are all published, otherwise retains the worktree and
    * refs with an exact reason, then releases the fence. The primary outcome is persisted next to the retention or
    * release, and `removalAllowed = false` forces retention. Never forces removal and never throws for a retained

@@ -38,6 +38,7 @@ class StandaloneMonitorService(
         .watch(
           ledger.execution.target.pullRequest,
           StandaloneWatchHeads(ledger.acknowledgedHeadSha, ledger.supersededHeadShas),
+          ledger::adopt,
           onCiRunning,
         )
 

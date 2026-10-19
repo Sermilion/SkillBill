@@ -14,6 +14,7 @@ import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -121,6 +122,25 @@ class DetachedWorkRunLauncherTest {
   }
 
   @Test
+  fun `a runtime command finds the agent harness installed beside it when the tray PATH lacks that directory`() {
+    val home = Files.createTempDirectory("runtime-work-path")
+    executable(home, "#!/bin/sh\nprintf 'harness-ran\\n'\n")
+    val runtime = home.resolve(".local/bin/skill-bill")
+    Files.writeString(runtime, "#!/bin/sh\nclaude\nprintf 'done\\n'\n")
+    assertTrue(runtime.toFile().setExecutable(true))
+    val request =
+      WorkRunLaunchRequest(
+        home,
+        home.resolve("metrics.db"),
+        "work",
+        WorkRunLaunchKind.RuntimeCommand(listOf("goal", "SKILL-9", "--agent", "claude")),
+      )
+    val started = assertIs<WorkRunLaunchResult.Started>(launcher(home).start(request))
+    await { Files.readString(started.logPath).endsWith("done\n") }
+    assertEquals("harness-ran\ndone\n", Files.readString(started.logPath))
+  }
+
+  @Test
   fun `a missing runtime refuses a runtime command without falling back to the agent harness`() {
     val home = Files.createTempDirectory("missing-runtime")
     executable(home, "#!/bin/sh\ntouch harness-was-started\n")
@@ -191,7 +211,12 @@ class DetachedWorkRunLauncherTest {
     val launcher =
       DetachedWorkRunLauncher(
         EnvironmentContext(
-          environment = mapOf("CLAUDE_CONFIG_DIR" to "/tray/.claude", "CODEX_HOME" to "/tray/.codex"),
+          environment =
+            TRAY_ENVIRONMENT +
+              mapOf(
+                "CLAUDE_CONFIG_DIR" to "/tray/.claude",
+                "CODEX_HOME" to "/tray/.codex",
+              ),
           userHome = home,
         ),
         NoopRuntimeDiagnostics,
@@ -215,7 +240,7 @@ class DetachedWorkRunLauncherTest {
     executable(home, "#!/bin/sh\nprintf 'invalid intake\\n'\nexit 7\n")
     val launcher =
       DetachedWorkRunLauncher(
-        EnvironmentContext(environment = emptyMap(), userHome = home),
+        EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
         NoopRuntimeDiagnostics,
         Duration.ofSeconds(10),
       )
@@ -245,7 +270,7 @@ class DetachedWorkRunLauncherTest {
 
   private fun launcher(home: Path) =
     DetachedWorkRunLauncher(
-      EnvironmentContext(environment = emptyMap(), userHome = home),
+      EnvironmentContext(environment = TRAY_ENVIRONMENT, userHome = home),
       NoopRuntimeDiagnostics,
     )
 
@@ -255,5 +280,9 @@ class DetachedWorkRunLauncherTest {
       assertTrue(Instant.now().isBefore(deadline), "The runner did not settle within three seconds.")
       Thread.sleep(10)
     }
+  }
+
+  private companion object {
+    val TRAY_ENVIRONMENT = mapOf("PATH" to "/usr/bin:/bin")
   }
 }

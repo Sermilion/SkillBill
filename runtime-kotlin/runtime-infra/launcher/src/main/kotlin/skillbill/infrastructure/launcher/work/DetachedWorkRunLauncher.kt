@@ -77,7 +77,8 @@ class DetachedWorkRunLauncher internal constructor(
   private fun ownership() = WorkHarnessOwnership(environment.userHome.resolve(".skill-bill/desktop/runs"), diagnostics)
 
   private fun launchEnvironment(request: WorkRunLaunchRequest): Map<String, String> =
-    environment.environment + request.agentEnvironment.filterKeys { it in AgentHomeEnvironmentKeys.ALL }
+    environment.environment + request.agentEnvironment.filterKeys { it in AgentHomeEnvironmentKeys.ALL } +
+      ("PATH" to searchDirectories().joinToString(pathSeparator().toString()))
 
   private fun installedLaunch(
     request: WorkRunLaunchRequest,
@@ -224,13 +225,18 @@ class DetachedWorkRunLauncher internal constructor(
   }
 
   private fun resolveExecutable(executables: List<String>): Path? {
-    val directories =
-      listOf(environment.userHome.resolve(".local/bin")) +
-        environment.environment["PATH"].orEmpty().split(if (isWindows()) ';' else ':')
-          .filter(String::isNotBlank).map(Path::of)
+    val directories = searchDirectories()
     return executables.flatMap { name -> directories.map { it.resolve(name) } }
       .firstOrNull { Files.isRegularFile(it) && Files.isExecutable(it) }
   }
+
+  private fun searchDirectories(): List<Path> =
+    (
+      listOf(environment.userHome.resolve(".local/bin")) +
+        environment.environment["PATH"].orEmpty().split(pathSeparator()).filter(String::isNotBlank).map(Path::of)
+    ).distinct()
+
+  private fun pathSeparator(): Char = if (isWindows()) ';' else ':'
 
   private companion object {
     val STARTUP_GRACE: Duration = Duration.ofMillis(250)
