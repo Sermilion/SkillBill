@@ -269,13 +269,16 @@ private fun LoadedDetail(
               HorizontalDivider(color = dev.skillbill.tray.core.designsystem.border)
             }
             this.item(key = detail.key("goal-finish", "")) {
-              if (detail.goalFinishPipeline.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("—", Modifier.width(18.dp), color = dim, fontFamily = mono, fontSize = 11.sp)
-                WorkDot(Lifecycle.IDLE, Modifier.padding(top = 5.dp))
+              val finishSteps = goalFinishSteps(item, detail.goalFinishPipeline)
+              val finishActive = finishSteps.any { it.state == GoalFinishStepState.ACTIVE }
+              val finishDone = finishSteps.isNotEmpty() && finishSteps.all { it.state == GoalFinishStepState.COMPLETE }
+              if (finishSteps.isNotEmpty()) Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("—", Modifier.width(18.dp), color = if (finishActive) blue else dim, fontFamily = mono, fontSize = 11.sp)
+                WorkDot(if (finishActive) Lifecycle.ACTIVE else if (finishDone) Lifecycle.TERMINAL else Lifecycle.IDLE, Modifier.padding(top = 5.dp))
                 Column(Modifier.weight(1f)) {
-                  Text("Goal finish", color = ink.copy(alpha = .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                  Text("Goal finish", color = ink.copy(alpha = if (finishActive || finishDone) 1f else .55f), fontFamily = body, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                   FlowRow(Modifier.padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    detail.goalFinishPipeline.forEach { PhaseChip(it, false, it == item.currentStepId, 0) }
+                    finishSteps.forEach { PhaseChip(it.id, it.state == GoalFinishStepState.COMPLETE, it.state == GoalFinishStepState.ACTIVE, 0) }
                   }
                 }
               }

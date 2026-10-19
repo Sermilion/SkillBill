@@ -66,6 +66,25 @@ internal fun restorationNote(restoration: ReasonRestoration?): String? = when (r
   ReasonRestoration.BUDGET_EXCEEDED -> "The full original reason was not restored within the read budget; this text may be shortened."
 }
 
+internal enum class GoalFinishStepState { PENDING, ACTIVE, COMPLETE }
+
+internal data class GoalFinishStep(val id: String, val state: GoalFinishStepState)
+
+/** Places the goal on its finish pipeline: steps before the current one are done, and a finished goal completes them all. */
+internal fun goalFinishSteps(item: WorkItem, pipeline: List<String>): List<GoalFinishStep> {
+  val current = if (item.currentSubtaskId == null) pipeline.indexOf(item.currentStepId) else -1
+  return pipeline.mapIndexed { index, id ->
+    val state = when {
+      item.lifecycle == Lifecycle.TERMINAL -> GoalFinishStepState.COMPLETE
+      current < 0 -> GoalFinishStepState.PENDING
+      index < current -> GoalFinishStepState.COMPLETE
+      index == current && item.lifecycle == Lifecycle.ACTIVE -> GoalFinishStepState.ACTIVE
+      else -> GoalFinishStepState.PENDING
+    }
+    GoalFinishStep(id, state)
+  }
+}
+
 /** A scroll state that stays on the same row when pages arrive or rows disappear above it. */
 @Composable
 internal fun rememberAnchoredListState(

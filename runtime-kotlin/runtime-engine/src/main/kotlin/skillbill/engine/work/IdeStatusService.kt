@@ -1175,4 +1175,5 @@ private val GOAL_FINISH_PIPELINE =
   listOf(
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
     FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR,
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_MONITOR_FIX,
   )

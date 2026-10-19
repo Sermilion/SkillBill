@@ -5,6 +5,7 @@ import dev.skillbill.tray.core.domain.model.Freshness
 import dev.skillbill.tray.core.domain.model.Lifecycle
 import dev.skillbill.tray.core.domain.model.ReasonRestoration
 import dev.skillbill.tray.core.domain.model.WorkFamily
+import dev.skillbill.tray.core.domain.model.WorkItem
 import dev.skillbill.tray.core.testing.detail
 import dev.skillbill.tray.core.testing.fixtureInstant
 import dev.skillbill.tray.core.testing.workItem
@@ -109,5 +110,24 @@ class DetailPresentationTest {
     assertNull(restorationNote(ReasonRestoration.RESTORED))
     listOf(ReasonRestoration.MISSING, ReasonRestoration.MISSING_CONTENT, ReasonRestoration.AMBIGUOUS, ReasonRestoration.BUDGET_EXCEEDED)
       .forEach { assertNotNull(restorationNote(it), "$it") }
+  }
+
+  @Test
+  fun `goal finish marks the steps before monitor_fix done and keeps highlighting through repair`() {
+    val pipeline = listOf("pr", "monitor", "monitor_fix")
+    fun states(item: WorkItem) = goalFinishSteps(item, pipeline).map { it.state }
+
+    assertEquals(
+      listOf(GoalFinishStepState.COMPLETE, GoalFinishStepState.COMPLETE, GoalFinishStepState.ACTIVE),
+      states(workItem("a").copy(currentStepId = "monitor_fix")),
+    )
+    assertEquals(
+      List(3) { GoalFinishStepState.PENDING },
+      states(workItem("a").copy(currentStepId = "monitor", currentSubtaskId = "2")),
+    )
+    assertEquals(
+      List(3) { GoalFinishStepState.COMPLETE },
+      states(workItem("a", lifecycle = Lifecycle.TERMINAL).copy(currentStepId = "complete")),
+    )
   }
 }
